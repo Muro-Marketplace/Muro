@@ -181,15 +181,28 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Trust bar at bottom of hero */}
-        <div className="absolute bottom-20 left-0 right-0 z-10">
-          <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p className="text-sm text-white/50">
-                <span className="text-white/80 font-medium">30+ curated artists</span>{" "}
+        {/* Scroll indicator + trust bar — anchored to bottom of hero */}
+        <div className="relative z-10 mt-auto">
+          {/* Scroll to see more */}
+          <button
+            onClick={scrollToContent}
+            className="w-full flex flex-col items-center gap-2 py-4 text-white/50 hover:text-white transition-colors duration-300 cursor-pointer"
+          >
+            <span className="text-xs tracking-[0.2em] uppercase font-medium">Scroll to see more</span>
+            <div className="w-8 h-8 rounded-full border border-white/25 flex items-center justify-center animate-bounce">
+              <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 7l5 5 5-5" />
+              </svg>
+            </div>
+          </button>
+          {/* Dark trust bar */}
+          <div className="border-t border-white/10 bg-black/50 backdrop-blur-sm">
+            <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <p className="text-sm text-white/60">
+                <span className="text-white/90 font-medium">30+ curated artists</span>{" "}
                 and growing
               </p>
-              <div className="flex items-center gap-4 text-xs text-white/30 tracking-widest uppercase">
+              <div className="flex items-center gap-4 text-xs text-white/40 tracking-widest uppercase">
                 <span>Original work only</span>
                 <span className="w-1 h-1 rounded-full bg-white/30" />
                 <span>No AI art</span>
@@ -199,33 +212,12 @@ export default function Home() {
             </div>
           </div>
         </div>
-
-        {/* Scroll indicator */}
-        <button
-          onClick={scrollToContent}
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2 text-white/50 hover:text-white transition-colors duration-300 cursor-pointer"
-        >
-          <div className="w-8 h-8 rounded-full border border-white/25 flex items-center justify-center animate-bounce">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 18 18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M4 7l5 5 5-5" />
-            </svg>
-          </div>
-        </button>
       </section>
 
       {/* ─── CONTENT SECTIONS ─── clean solid background */}
       <div ref={contentRef} className="bg-background">
           {/* ─── QUICK NAV: WHAT ARE YOU LOOKING FOR? ─── */}
-          <section className="py-16 lg:py-20 border-b border-border">
+          <section className="py-12 lg:py-16 border-b border-border">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <NavCard
@@ -295,7 +287,7 @@ export default function Home() {
           </section>
 
           {/* ─── VENUE PROPOSITION ─── */}
-          <section className="py-20 lg:py-28">
+          <section className="py-16 lg:py-20">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
                 <div>
@@ -394,7 +386,7 @@ export default function Home() {
           </section>
 
           {/* ─── SELECTED ARTISTS ─── */}
-          <section className="py-20 lg:py-28 bg-foreground">
+          <section className="py-16 lg:py-20 bg-foreground">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
               <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-12">
                 <div>
@@ -458,8 +450,20 @@ export default function Home() {
             </div>
           </section>
 
+          {/* Image break */}
+          <section className="relative h-48 lg:h-64 overflow-hidden">
+            <Image src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=400&fit=crop&crop=center" alt="Art being created" fill className="object-cover" />
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative h-full flex items-center justify-center text-center px-6">
+              <div>
+                <p className="text-white text-2xl lg:text-3xl font-serif mb-2">Curated, not crowded.</p>
+                <p className="text-white/50 text-sm">Every artist personally reviewed. No AI art.</p>
+              </div>
+            </div>
+          </section>
+
           {/* ─── ARTIST PROPOSITION ─── */}
-          <section className="py-20 lg:py-28">
+          <section className="py-16 lg:py-20">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
                 <div className="grid grid-cols-3 gap-2 order-2 lg:order-1">
@@ -484,7 +488,7 @@ export default function Home() {
                 </div>
 
                 <div className="order-1 lg:order-2">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-[#C17C5A] mb-4">
                     For Artists
                   </p>
                   <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mb-6">
@@ -524,7 +528,7 @@ export default function Home() {
           </section>
 
           {/* ─── SPACES LOOKING FOR ART ─── */}
-          <section className="py-20 lg:py-28 bg-surface border-y border-border">
+          <section className="py-16 lg:py-20 bg-background">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
               <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-12">
                 <div>
@@ -615,30 +619,33 @@ export default function Home() {
           </section>
 
           {/* ─── HOW IT WORKS ─── */}
-          <section className="py-20 lg:py-28 bg-white">
+          <section className="py-16 lg:py-20 bg-foreground">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
               <div className="text-center mb-16">
-                <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground">
+                <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white">
                   How Wallspace works
                 </h2>
               </div>
               <div className="grid md:grid-cols-2 gap-12 lg:gap-20 max-w-4xl mx-auto">
                 <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-border pb-4 mb-8">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-[#C17C5A] border-b border-white/10 pb-4 mb-8">
                     For Venues
                   </p>
                   <div className="space-y-8 flex-1">
                     <Step
+                      dark
                       number="01"
                       title="Browse &amp; Filter"
                       description="Search curated artists by location, style, theme, and availability. Completely free."
                     />
                     <Step
+                      dark
                       number="02"
                       title="Enquire"
                       description="Contact artists directly through the platform. Discuss terms and fit."
                     />
                     <Step
+                      dark
                       number="03"
                       title="Arrange"
                       description="Agree on free loan, revenue share, or purchase. Get art on your walls."
@@ -647,7 +654,7 @@ export default function Home() {
                   <div className="mt-10">
                     <Link
                       href="/browse"
-                      className="inline-flex items-center justify-center px-7 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors"
+                      className="inline-flex items-center justify-center px-7 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
                     >
                       Start Browsing
                     </Link>
@@ -655,21 +662,24 @@ export default function Home() {
                 </div>
 
                 <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-border pb-4 mb-8">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-[#C17C5A] border-b border-white/10 pb-4 mb-8">
                     For Artists
                   </p>
                   <div className="space-y-8 flex-1">
                     <Step
+                      dark
                       number="01"
                       title="Apply"
                       description="Submit your portfolio for review. We respond within 5 business days."
                     />
                     <Step
+                      dark
                       number="02"
                       title="Get Accepted"
                       description="Pass our curation review. Choose a plan. First month free."
                     />
                     <Step
+                      dark
                       number="03"
                       title="Get Discovered"
                       description="Your profile goes live. Venues browse, filter, and enquire directly."
@@ -678,7 +688,7 @@ export default function Home() {
                   <div className="mt-10">
                     <Link
                       href="/apply"
-                      className="inline-flex items-center justify-center px-7 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors"
+                      className="inline-flex items-center justify-center px-7 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
                     >
                       Apply to Join
                     </Link>
@@ -689,7 +699,7 @@ export default function Home() {
           </section>
 
           {/* ─── VALUE PROPS ─── */}
-          <section className="py-16 lg:py-20 border-y border-border bg-surface">
+          <section className="py-12 lg:py-16 bg-surface">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8">
                 <ValueBlock
@@ -709,7 +719,7 @@ export default function Home() {
           </section>
 
           {/* ─── FINAL CTA ─── */}
-          <section className="py-24 lg:py-32 bg-white">
+          <section className="py-24 lg:py-32">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10 text-center">
               <h2 className="font-serif text-4xl md:text-5xl lg:text-6xl text-foreground mb-4">
                 Ready to get started?
@@ -809,7 +819,7 @@ function DealCard({
   );
 }
 
-function BulletPoint({ text }: { text: string }) {
+function BulletPoint({ text, dark }: { text: string; dark?: boolean }) {
   return (
     <li className="flex items-start gap-3">
       <svg
@@ -825,7 +835,7 @@ function BulletPoint({ text }: { text: string }) {
       >
         <polyline points="4 9 7.5 12.5 14 5.5" />
       </svg>
-      <span className="text-foreground/80 leading-relaxed">{text}</span>
+      <span className={`${dark ? "text-white/80" : "text-foreground/80"} leading-relaxed`}>{text}</span>
     </li>
   );
 }
@@ -834,10 +844,12 @@ function Step({
   number,
   title,
   description,
+  dark,
 }: {
   number: string;
   title: string;
   description: string;
+  dark?: boolean;
 }) {
   return (
     <div className="flex gap-5">
@@ -845,8 +857,8 @@ function Step({
         {number}
       </span>
       <div>
-        <p className="font-serif text-lg text-foreground">{title}</p>
-        <p className="mt-1.5 text-sm text-muted leading-relaxed">
+        <p className={`font-serif text-lg ${dark ? "text-white" : "text-foreground"}`}>{title}</p>
+        <p className={`mt-1.5 text-sm ${dark ? "text-white/50" : "text-muted"} leading-relaxed`}>
           {description}
         </p>
       </div>
