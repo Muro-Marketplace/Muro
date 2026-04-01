@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-type ButtonVariant = "primary" | "secondary" | "ghost";
+type ButtonVariant = "primary" | "accent" | "secondary" | "ghost";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonBaseProps {
@@ -27,11 +27,13 @@ type ButtonProps = ButtonAsLink | ButtonAsButton;
 const sizeClasses: Record<ButtonSize, string> = {
   sm: "px-4 py-1.5 text-sm",
   md: "px-6 py-2.5 text-sm",
-  lg: "px-8 py-3 text-base",
+  lg: "px-8 py-3.5 text-sm font-semibold tracking-wider uppercase",
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
+    "bg-foreground text-white hover:bg-foreground/90 active:bg-foreground",
+  accent:
     "bg-accent text-white hover:bg-accent-hover active:bg-accent-hover",
   secondary:
     "border border-foreground/20 text-foreground hover:border-foreground/40 active:border-foreground/50",

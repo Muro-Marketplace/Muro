@@ -128,109 +128,83 @@ export default async function ArtistProfilePage({
 
   return (
     <div className="bg-background">
-      {/* Back link */}
-      <div className="border-b border-border">
-        <div className="max-w-[1200px] mx-auto px-6 py-3">
-          <Link
-            href="/browse"
-            className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors duration-200"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+      {/* Banner — uses first work as cover image */}
+      <section className="relative -mt-14 lg:-mt-16 h-52 lg:h-64 overflow-hidden">
+        <Image
+          src={artist.works[0]?.image || artist.image}
+          alt={`${artist.name} banner`}
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
+        {/* Back link overlaid */}
+        <div className="absolute top-20 lg:top-24 left-0 right-0 z-10">
+          <div className="max-w-[1200px] mx-auto px-6">
+            <Link
+              href="/browse"
+              className="inline-flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors duration-200"
             >
-              <path d="M9 11L5 7l4-4" />
-            </svg>
-            Browse Portfolios
-          </Link>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 11L5 7l4-4" />
+              </svg>
+              Back to Marketplace
+            </Link>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Hero */}
-      <section className="py-14 lg:py-20">
+      {/* Profile header — overlaps the banner */}
+      <section className="relative -mt-16 pb-0">
         <div className="max-w-[1200px] mx-auto px-6">
-          <div className="flex flex-col md:flex-row gap-8 lg:gap-14 items-start">
-            {/* Profile image */}
-            <div className="relative w-36 h-36 lg:w-48 lg:h-48 rounded-full overflow-hidden shrink-0 bg-border/30">
-              <Image
-                src={
-                  artist.image ||
-                  `https://picsum.photos/seed/${artist.slug}/400/400`
-                }
-                alt={artist.name}
-                fill
-                className="object-cover"
-                sizes="(max-width: 1024px) 144px, 192px"
-                priority
-              />
-            </div>
+          {/* Profile pic — overlapping banner */}
+          <div className="relative w-28 h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shrink-0 bg-border/30 border-4 border-background shadow-lg mb-4">
+                  <Image
+                    src={artist.image || `https://picsum.photos/seed/${artist.slug}/400/400`}
+                    alt={artist.name}
+                    fill
+                    className="object-cover"
+                    sizes="128px"
+                  />
+          </div>
 
-            {/* Identity */}
-            <div className="flex-1">
-              <div className="flex flex-wrap items-center gap-3 mb-2">
-                <h1 className="text-4xl lg:text-5xl leading-none">
-                  {artist.name}
-                </h1>
-                {artist.isFoundingArtist && (
-                  <span className="inline-block px-3 py-1 bg-accent/10 text-accent text-xs font-medium rounded-sm border border-accent/20">
-                    Founding Artist
-                  </span>
-                )}
-              </div>
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-stretch">
+            {/* Left: identity + bio */}
+            <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h1 className="text-2xl lg:text-3xl leading-none">{artist.name}</h1>
+                    {artist.isFoundingArtist && (
+                      <span className="inline-block px-2 py-0.5 bg-accent/10 text-accent text-[10px] font-medium rounded-sm border border-accent/20">
+                        Founding Artist
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-muted text-sm">
+                    {artist.primaryMedium} &middot; {artist.location}
+                  </p>
 
-              <p className="text-muted text-lg mb-5">
-                {artist.primaryMedium} &middot; {artist.location}
-              </p>
-
-              <p className="text-foreground/80 leading-relaxed max-w-xl mb-6">
+              <p className="text-foreground/80 leading-relaxed max-w-lg text-base mb-4 mt-3">
                 {artist.shortBio}
               </p>
 
-              {/* Style tags */}
-              <div className="flex flex-wrap gap-2 mb-7">
+              {/* Style tags + social — single row */}
+              <div className="flex flex-wrap items-center gap-2 mb-4">
                 {artist.styleTags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-block px-3 py-1 text-xs text-muted bg-surface border border-border rounded-sm"
-                  >
+                  <span key={tag} className="inline-block px-2.5 py-0.5 text-[11px] text-muted bg-surface border border-border rounded-sm">
                     {tag}
                   </span>
                 ))}
-              </div>
-
-              {/* Social links */}
-              <div className="flex items-center gap-5">
+                <span className="text-border mx-1">|</span>
                 <a
                   href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-muted hover:text-foreground transition-colors duration-200"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="2" width="20" height="20" rx="5" />
                     <circle cx="12" cy="12" r="5" />
-                    <circle
-                      cx="17.5"
-                      cy="6.5"
-                      r="1"
-                      fill="currentColor"
-                      stroke="none"
-                    />
+                    <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
                   </svg>
                   {artist.instagram}
                 </a>
@@ -239,18 +213,9 @@ export default async function ArtistProfilePage({
                     href={artist.website}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-muted hover:text-foreground transition-colors duration-200"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors"
                   >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="12" r="10" />
                       <path d="M2 12h20" />
                       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
@@ -259,115 +224,43 @@ export default async function ArtistProfilePage({
                   </a>
                 )}
               </div>
+
+              <Button href="/contact" variant="accent" size="md">
+                Message This Artist
+              </Button>
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Commercial Summary Strip */}
-      <section className="py-10 lg:py-14 border-t border-border bg-surface/50">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-xl mb-8 text-foreground/80">
-            Commercial Overview
-          </h2>
-
-          {/* Row 1: Key info cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-3">
-            <InfoCard
-              icon={
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
-                  <circle cx="12" cy="9" r="2.5" />
-                </svg>
-              }
-              label="Location"
-              value={`${artist.location} · ${artist.deliveryRadius}`}
-            />
-            <InfoCard
-              icon={
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <path d="M3 9h18" />
-                  <path d="M9 21V9" />
-                </svg>
-              }
-              label="Available Sizes"
-              value={artist.availableSizes.join(", ")}
-            />
-            <InfoCard
-              icon={
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                  <line x1="4" y1="22" x2="4" y2="15" />
-                </svg>
-              }
-              label="Themes"
-              value={artist.themes.slice(0, 3).join(", ")}
-            />
-            <InfoCard
-              icon={
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-              }
-              label="Suited For"
-              value={artist.venueTypesSuitedFor.join(", ")}
-            />
-          </div>
-
-          {/* Row 2: Bool cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-            <BoolCard label="Originals" yes={artist.offersOriginals} />
-            <BoolCard label="Prints" yes={artist.offersPrints} />
-            <BoolCard label="Framed works" yes={artist.offersFramed} />
-            <BoolCard label="Free loan" yes={artist.openToFreeLoan} />
-            <BoolCard label="Revenue share" yes={artist.openToRevenueShare} />
-            <BoolCard
-              label="Outright purchase"
-              yes={artist.openToOutrightPurchase}
-            />
-            <BoolCard label="Provides frames" yes={artist.canProvideFrames} />
-            <BoolCard
-              label="Arranges framing"
-              yes={artist.canArrangeFraming}
-            />
+            {/* Right: commercial details — clean & light */}
+            <div className="w-full lg:w-[400px] shrink-0 lg:mt-16">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-4">
+                {[
+                  { label: "Location", value: artist.location },
+                  { label: "Delivery", value: artist.deliveryRadius },
+                  { label: "Sizes", value: artist.availableSizes.slice(0, 3).join(", ") },
+                  { label: "Suited for", value: artist.venueTypesSuitedFor.slice(0, 3).join(", ") },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <p className="text-[11px] text-muted uppercase tracking-wider mb-0.5">{item.label}</p>
+                    <p className="text-sm font-medium text-foreground">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "Originals", yes: artist.offersOriginals },
+                  { label: "Prints", yes: artist.offersPrints },
+                  { label: "Framed", yes: artist.offersFramed },
+                  { label: "Free loan", yes: artist.openToFreeLoan },
+                  { label: "Revenue share", yes: artist.openToRevenueShare },
+                  { label: "Purchase", yes: artist.openToOutrightPurchase },
+                ].filter(item => item.yes).map((item) => (
+                  <span key={item.label} className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-full bg-accent/10 text-accent border border-accent/20">
+                    <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -392,7 +285,7 @@ export default async function ArtistProfilePage({
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button href="/contact" variant="primary" size="lg">
-                Enquire About This Artist
+                Message This Artist
               </Button>
               <Button href="/apply" variant="ghost" size="lg">
                 Are you an artist? Apply to join

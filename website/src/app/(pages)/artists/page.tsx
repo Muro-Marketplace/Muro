@@ -1,6 +1,8 @@
 import { Metadata } from "next";
+import Image from "next/image";
 import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
+import ScrollButton from "@/components/ScrollButton";
 
 export const metadata: Metadata = {
   title: "For Artists — Wallspace",
@@ -197,49 +199,69 @@ const faqItems = [
 
 export default function ArtistsPage() {
   return (
-    <>
-      {/* Hero */}
-      <section className="py-24 lg:py-32">
-        <div className="max-w-[1200px] mx-auto px-6">
+    <div className="relative">
+      {/* Immersive Hero */}
+      <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col justify-center pt-28 lg:pt-32 pb-32">
+        {/* Hero background image */}
+        <div className="absolute inset-0 -z-10">
+          <Image
+            src="https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=1920&h=1080&fit=crop&crop=center"
+            alt="Photographer with camera"
+            fill
+            className="object-cover"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/65 to-black/50" />
+        </div>
+        <div className="max-w-[1200px] mx-auto px-6 w-full">
           <div className="max-w-2xl">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl tracking-tight">
+            <p className="text-xs font-medium tracking-[0.25em] uppercase text-[#C17C5A] mb-5">
+              For Artists
+            </p>
+            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
               Your work, matched to spaces that want it.
             </h1>
-            <p className="mt-6 text-lg lg:text-xl text-muted leading-relaxed max-w-xl">
+            <p className="text-lg lg:text-xl text-white/60 leading-relaxed max-w-xl mb-10">
               Wallspace is the curated art marketplace for independent venues.
               Access high-intent venue demand. Get discovered by cafés, restaurants,
               hotels, galleries, offices, and salons looking for original artwork.
             </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-4">
-              <Button href="/apply" size="lg">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button href="/apply" size="lg" variant="accent">
                 Apply to Join
               </Button>
             </div>
           </div>
         </div>
+
+        {/* Scroll indicator */}
+        <ScrollButton targetId="artist-content" label="See what you get" />
       </section>
 
+      {/* Content sections with solid backgrounds */}
+      <div id="artist-content" className="bg-background">
+
       {/* Early Access Banner */}
-      <section className="py-6 bg-accent/5 border-y border-accent/20">
+      <section className="py-6 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-accent uppercase tracking-wider mb-1">
+              <p className="text-sm font-medium text-[#C17C5A] uppercase tracking-wider mb-1">
                 Limited founding spots
               </p>
-              <p className="text-foreground">
-                First 20 approved artists get <strong>6 months free</strong>. All artists get their <strong>first month free</strong>.
+              <p className="text-white/80">
+                First 20 approved artists get <strong className="text-white">6 months free</strong>. All artists get their <strong className="text-white">first month free</strong>.
               </p>
             </div>
-            <Button href="/apply" size="md" variant="secondary">
+            <a href="/apply" className="inline-flex items-center justify-center px-6 py-2.5 bg-white text-foreground text-sm font-medium rounded-sm hover:bg-white/90 transition-colors">
               Apply Now
-            </Button>
+            </a>
           </div>
         </div>
       </section>
 
       {/* What You Get */}
-      <section className="py-20 lg:py-24">
+      <section className="py-16 lg:py-20">
         <div className="max-w-[1200px] mx-auto px-6">
           <h2 className="text-3xl md:text-4xl mb-14">What you get</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -259,23 +281,32 @@ export default function ArtistsPage() {
         </div>
       </section>
 
+      {/* Image Break 1 */}
+      <section className="relative h-64 lg:h-80 overflow-hidden">
+        <Image src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=400&fit=crop&crop=center" alt="Artist painting" fill className="object-cover" />
+        <div className="absolute inset-0 bg-black/50" />
+        <div className="relative h-full flex items-center justify-center text-center px-6">
+          <p className="text-white/80 text-lg lg:text-xl font-serif italic max-w-xl">&ldquo;Your studio is not a showroom. Independent venues are.&rdquo;</p>
+        </div>
+      </section>
+
       {/* How It Works */}
-      <section className="py-20 lg:py-24 bg-surface border-y border-border">
+      <section className="py-16 lg:py-20 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl mb-14">How it works</h2>
+          <h2 className="text-3xl md:text-4xl mb-14 text-white">How it works</h2>
           <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-0">
             {pipelineSteps.map((step, i) => (
               <div key={step} className="flex items-center gap-4 md:gap-0">
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center justify-center w-10 h-10 rounded-full bg-accent text-white text-sm font-medium shrink-0">
+                  <span className="flex items-center justify-center w-10 h-10 rounded-full bg-white text-foreground text-sm font-medium shrink-0">
                     {i + 1}
                   </span>
-                  <span className="text-sm font-medium whitespace-nowrap">
+                  <span className="text-sm font-medium whitespace-nowrap text-white">
                     {step}
                   </span>
                 </div>
                 {i < pipelineSteps.length - 1 && (
-                  <div className="hidden md:block w-12 lg:w-16 h-px bg-border mx-4" />
+                  <div className="hidden md:block w-12 lg:w-16 h-px bg-white/20 mx-4" />
                 )}
               </div>
             ))}
@@ -284,7 +315,7 @@ export default function ArtistsPage() {
       </section>
 
       {/* Pricing */}
-      <section className="py-20 lg:py-24">
+      <section className="py-16 lg:py-20">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl mb-4">Membership</h2>
@@ -434,50 +465,62 @@ export default function ArtistsPage() {
         </div>
       </section>
 
+      {/* Image Break 2 */}
+      <section className="relative h-64 lg:h-80 overflow-hidden">
+        <Image src="https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=1920&h=400&fit=crop&crop=center" alt="Art materials" fill className="object-cover" />
+        <div className="absolute inset-0 bg-black/50" />
+        <div className="relative h-full flex items-center justify-center text-center px-6">
+          <div>
+            <p className="text-white text-3xl lg:text-4xl font-serif mb-3">0&ndash;10% platform fee</p>
+            <p className="text-white/60 text-sm lg:text-base">No gallery taking 50%. Keep most of what you earn.</p>
+          </div>
+        </div>
+      </section>
+
       {/* Value Anchoring */}
-      <section className="py-20 lg:py-24 bg-surface border-y border-border">
+      <section className="py-16 lg:py-20 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl mb-10">
+          <h2 className="text-3xl md:text-4xl mb-10 text-white text-center">
             What &pound;9.99 a month gets you
           </h2>
-          <div className="max-w-xl space-y-4">
-            <div className="flex items-center justify-between py-3 border-b border-border">
+          <div className="max-w-xl mx-auto space-y-4">
+            <div className="flex items-center justify-between py-3 border-b border-white/10">
               <div>
-                <p className="text-sm font-medium text-foreground/60">
+                <p className="text-sm font-medium text-white/60">
                   Gallery hire
                 </p>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-white/40">
                   &pound;200&ndash;1,000/week
                 </p>
               </div>
               <span className="text-red-400 text-lg">&times;</span>
             </div>
-            <div className="flex items-center justify-between py-3 border-b border-border">
+            <div className="flex items-center justify-between py-3 border-b border-white/10">
               <div>
-                <p className="text-sm font-medium text-foreground/60">
+                <p className="text-sm font-medium text-white/60">
                   Art fair table
                 </p>
-                <p className="text-sm text-muted">&pound;300&ndash;500/day</p>
+                <p className="text-sm text-white/40">&pound;300&ndash;500/day</p>
               </div>
               <span className="text-red-400 text-lg">&times;</span>
             </div>
-            <div className="flex items-center justify-between py-3 border-b border-border">
+            <div className="flex items-center justify-between py-3 border-b border-white/10">
               <div>
-                <p className="text-sm font-medium text-foreground/60">
+                <p className="text-sm font-medium text-white/60">
                   Instagram promotion
                 </p>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-white/40">
                   &pound;50&ndash;200/month, no physical presence
                 </p>
               </div>
               <span className="text-red-400 text-lg">&times;</span>
             </div>
-            <div className="flex items-center justify-between py-3 border-b border-border">
+            <div className="flex items-center justify-between py-3 border-b border-white/10">
               <div>
                 <p className="text-sm font-medium text-accent">
                   Wallspace Core
                 </p>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-white/40">
                   &pound;9.99/month. Access high-intent venue demand. First month free.
                 </p>
               </div>
@@ -500,7 +543,7 @@ export default function ArtistsPage() {
       </section>
 
       {/* How Curation Works */}
-      <section className="py-20 lg:py-24">
+      <section className="py-16 lg:py-20">
         <div className="max-w-[1200px] mx-auto px-6">
           <h2 className="text-3xl md:text-4xl mb-10">How curation works</h2>
           <div className="max-w-xl space-y-6">
@@ -537,7 +580,7 @@ export default function ArtistsPage() {
       </section>
 
       {/* Comparison Table */}
-      <section className="py-20 lg:py-24 bg-surface border-y border-border">
+      <section className="py-16 lg:py-20 bg-surface border-y border-border">
         <div className="max-w-[1200px] mx-auto px-6">
           <h2 className="text-3xl md:text-4xl mb-10">
             How this is different
@@ -586,7 +629,7 @@ export default function ArtistsPage() {
       </section>
 
       {/* FAQs */}
-      <section className="py-20 lg:py-24">
+      <section className="py-16 lg:py-20">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-2xl mx-auto">
             <h2 className="text-3xl md:text-4xl mb-10 text-center">
@@ -598,24 +641,26 @@ export default function ArtistsPage() {
       </section>
 
       {/* Final CTA */}
-      <section className="py-24 lg:py-32 bg-surface border-t border-border">
+      <section className="py-16 lg:py-20 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6 text-center">
-          <p className="text-muted mb-4">
+          <p className="text-white/60 mb-4">
             Your studio is not a showroom. Independent venues are.
           </p>
-          <h2 className="text-3xl md:text-4xl lg:text-5xl mb-4 max-w-2xl mx-auto">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl mb-4 max-w-2xl mx-auto text-white">
             Apply to Wallspace. Get discovered by the spaces that want your work.
           </h2>
           <div className="mt-8">
-            <Button href="/apply" size="lg">
+            <a href="/apply" className="inline-flex items-center justify-center px-8 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
               Apply to Join
-            </Button>
+            </a>
           </div>
-          <p className="mt-6 text-sm text-muted">
+          <p className="mt-6 text-sm text-white/40">
             First month free. First 20 approved artists get 6 months free. Membership from &pound;9.99/month.
           </p>
         </div>
       </section>
-    </>
+
+      </div>
+    </div>
   );
 }

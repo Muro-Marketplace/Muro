@@ -1,6 +1,9 @@
 import { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
 import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
+import ScrollButton from "@/components/ScrollButton";
 
 export const metadata: Metadata = {
   title: "For Venues — Wallspace",
@@ -111,16 +114,16 @@ const steps = [
 
 const venues = [
   {
-    caption: "Independent café, Peckham",
-    gradient: "from-amber-200/60 via-orange-100/40 to-stone-200/60",
+    caption: "Independent cafe, Peckham",
+    image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&h=450&fit=crop&crop=center",
   },
   {
     caption: "Wine bar, Bermondsey",
-    gradient: "from-rose-200/50 via-amber-100/40 to-stone-200/60",
+    image: "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=600&h=450&fit=crop&crop=center",
   },
   {
     caption: "Brunch spot, Hackney",
-    gradient: "from-teal-100/40 via-amber-100/40 to-stone-200/60",
+    image: "https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=600&h=450&fit=crop&crop=center",
   },
 ];
 
@@ -175,21 +178,35 @@ const neighbourhoods = [
 
 export default function VenuesPage() {
   return (
-    <>
-      {/* Hero */}
-      <section className="py-24 lg:py-32">
-        <div className="max-w-[1200px] mx-auto px-6">
+    <div className="relative">
+      {/* Immersive Hero — pulls behind the header with negative margin */}
+      <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col justify-center pt-28 lg:pt-32 pb-32">
+        {/* Hero background image */}
+        <div className="absolute inset-0 -z-10">
+          <Image
+            src="https://images.unsplash.com/photo-1572947650440-e8a97ef053b2?w=1920&h=1080&fit=crop&crop=center"
+            alt="Art displayed on venue walls"
+            fill
+            className="object-cover"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/65 to-black/50" />
+        </div>
+        <div className="max-w-[1200px] mx-auto px-6 w-full">
           <div className="max-w-2xl">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl tracking-tight">
+            <p className="text-xs font-medium tracking-[0.25em] uppercase text-[#C17C5A] mb-5">
+              For Venues
+            </p>
+            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
               Discover art for your space.
             </h1>
-            <p className="mt-6 text-lg lg:text-xl text-muted leading-relaxed max-w-xl">
+            <p className="text-lg lg:text-xl text-white/60 leading-relaxed max-w-xl mb-10">
               Browse portfolios from our curated independent artists.
               Filter by style, theme, and location. Enquire directly.
               No curation fee. No middleman. Free to use.
             </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-4">
-              <Button href="/browse" size="lg">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button href="/browse" size="lg" variant="accent">
                 Browse Portfolios
               </Button>
               <Button href="/get-art" size="lg" variant="secondary">
@@ -198,54 +215,71 @@ export default function VenuesPage() {
             </div>
           </div>
         </div>
+
+        {/* Scroll indicator */}
+        <ScrollButton targetId="venue-content" label="See what you get" />
       </section>
 
+      {/* Content sections with solid backgrounds */}
+      <div id="venue-content" className="bg-background">
+
       {/* Free Tier — What You Get */}
-      <section className="py-20 lg:py-24">
+      <section className="py-16 lg:py-20">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="mb-10">
             <span className="text-xs font-medium text-accent uppercase tracking-wider">Free tier</span>
             <h2 className="text-3xl md:text-4xl mt-2">What you get for free</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {freeBenefits.map((benefit) => (
               <div
                 key={benefit.title}
-                className="bg-surface border border-border rounded-sm p-7 hover:shadow-sm transition-shadow duration-300"
+                className="flex items-start gap-4 bg-surface border border-border rounded-sm p-5 hover:shadow-sm transition-shadow duration-300"
               >
-                <div className="text-accent mb-4">{benefit.icon}</div>
-                <h3 className="text-lg mb-2">{benefit.title}</h3>
-                <p className="text-muted text-sm leading-relaxed">
-                  {benefit.description}
-                </p>
+                <div className="text-accent shrink-0 mt-0.5">{benefit.icon}</div>
+                <div>
+                  <h3 className="text-base font-medium mb-1">{benefit.title}</h3>
+                  <p className="text-muted text-sm leading-relaxed">
+                    {benefit.description}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
+      {/* Image Break 1 */}
+      <section className="relative h-64 lg:h-80 overflow-hidden">
+        <Image src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1920&h=400&fit=crop&crop=center" alt="Cafe interior" fill className="object-cover" />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative h-full flex items-center justify-center">
+          <p className="text-white/80 text-lg lg:text-xl font-serif italic">&ldquo;Art transforms a space from forgettable to unforgettable.&rdquo;</p>
+        </div>
+      </section>
+
       {/* How It Works */}
-      <section className="py-20 lg:py-24 bg-surface border-y border-border">
+      <section className="py-16 lg:py-20 bg-foreground text-white">
         <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl mb-14">How it works</h2>
+          <h2 className="text-3xl md:text-4xl mb-14 text-white">How it works</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-6">
             {steps.map((step) => (
               <div key={step.number}>
-                <span className="text-accent text-sm font-medium tracking-wider">
+                <span className="text-[#C17C5A] text-sm font-medium tracking-wider">
                   {step.number}
                 </span>
-                <h3 className="text-xl mt-2 mb-3">{step.title}</h3>
-                <p className="text-muted text-sm leading-relaxed">
+                <h3 className="text-xl mt-2 mb-3 text-white">{step.title}</h3>
+                <p className="text-white/60 text-sm leading-relaxed">
                   {step.description}
                 </p>
               </div>
             ))}
           </div>
           <div className="mt-14 flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            <p className="text-muted text-sm italic">
+            <p className="text-white/60 text-sm italic">
               Total time to get started: under 5 minutes.
             </p>
-            <Button href="/browse" size="lg">
+            <Button href="/browse" size="lg" variant="accent">
               Browse Portfolios
             </Button>
           </div>
@@ -253,19 +287,20 @@ export default function VenuesPage() {
       </section>
 
       {/* Venue Photos */}
-      <section className="py-20 lg:py-24">
+      <section className="py-16 lg:py-20">
         <div className="max-w-[1200px] mx-auto px-6">
           <h2 className="text-3xl md:text-4xl mb-14">Where art goes up</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {venues.map((venue) => (
               <div key={venue.caption} className="group">
-                <div
-                  className={`aspect-[4/3] rounded-sm bg-gradient-to-br ${venue.gradient} flex items-end p-6`}
-                >
-                  <div className="w-full">
-                    <div className="w-16 h-20 bg-white/60 rounded-sm mb-3 border border-white/40" />
-                    <div className="w-24 h-16 bg-white/50 rounded-sm border border-white/30 ml-auto -mt-12" />
-                  </div>
+                <div className="aspect-[4/3] rounded-sm overflow-hidden relative">
+                  <Image
+                    src={venue.image}
+                    alt={venue.caption}
+                    fill
+                    className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                    sizes="33vw"
+                  />
                 </div>
                 <p className="mt-3 text-sm text-muted">{venue.caption}</p>
               </div>
@@ -275,7 +310,7 @@ export default function VenuesPage() {
       </section>
 
       {/* Premium Tier */}
-      <section className="py-20 lg:py-24 bg-surface border-y border-border">
+      <section className="py-16 lg:py-20 bg-surface">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-2xl">
             <span className="text-xs font-medium text-accent uppercase tracking-wider">Coming soon</span>
@@ -311,31 +346,43 @@ export default function VenuesPage() {
         </div>
       </section>
 
+      {/* Image Break 2 */}
+      <section className="relative h-64 lg:h-80 overflow-hidden">
+        <Image src="https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=1920&h=400&fit=crop&crop=center" alt="Wine bar with art" fill className="object-cover" />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative h-full flex items-center justify-center text-center px-6">
+          <div>
+            <p className="text-white text-3xl lg:text-4xl font-serif mb-3">Zero upfront cost</p>
+            <p className="text-white/60 text-sm lg:text-base">Browse, enquire, and arrange — completely free for venues</p>
+          </div>
+        </div>
+      </section>
+
       {/* Revenue Share */}
-      <section className="py-20 lg:py-24">
+      <section className="py-16 lg:py-20 bg-foreground text-white">
         <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl mb-10">
+          <h2 className="text-3xl md:text-4xl mb-10 text-white">
             Optional: earn from your walls
           </h2>
           <div className="max-w-3xl">
-            <div className="flex flex-wrap items-center gap-3 text-sm md:text-base mb-8">
-              <span className="bg-surface border border-border rounded-sm px-4 py-2">
+            <div className="flex items-center gap-2 text-xs md:text-sm mb-8 overflow-x-auto">
+              <span className="bg-white/10 border border-white/20 text-white rounded-sm px-3 py-1.5 whitespace-nowrap">
                 Customer sees art
               </span>
-              <span className="text-muted">&rarr;</span>
-              <span className="bg-surface border border-border rounded-sm px-4 py-2">
+              <span className="text-white/40 shrink-0">&rarr;</span>
+              <span className="bg-white/10 border border-white/20 text-white rounded-sm px-3 py-1.5 whitespace-nowrap">
                 Scans QR
               </span>
-              <span className="text-muted">&rarr;</span>
-              <span className="bg-surface border border-border rounded-sm px-4 py-2">
-                Buys through Wallspace
+              <span className="text-white/40 shrink-0">&rarr;</span>
+              <span className="bg-white/10 border border-white/20 text-white rounded-sm px-3 py-1.5 whitespace-nowrap">
+                Buys via Wallspace
               </span>
-              <span className="text-muted">&rarr;</span>
-              <span className="bg-accent/10 border border-accent/30 text-accent rounded-sm px-4 py-2 font-medium">
+              <span className="text-white/40 shrink-0">&rarr;</span>
+              <span className="bg-[#C17C5A]/20 border border-[#C17C5A]/40 text-[#C17C5A] rounded-sm px-3 py-1.5 font-medium whitespace-nowrap">
                 You share in the sale
               </span>
             </div>
-            <p className="text-muted leading-relaxed">
+            <p className="text-white/60 leading-relaxed">
               Revenue share is optional and agreed directly between you and the artist when arranging
               a placement. A common arrangement is 10% to the venue on any sale made from your space.
               Your walls are already earning nothing &mdash; this is a way to change that.
@@ -345,7 +392,7 @@ export default function VenuesPage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 lg:py-24 bg-surface border-y border-border">
+      <section className="py-16 lg:py-20">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-2xl mx-auto">
             <h2 className="text-3xl md:text-4xl mb-10 text-center">
@@ -356,46 +403,28 @@ export default function VenuesPage() {
         </div>
       </section>
 
-      {/* Who We Work With */}
-      <section className="py-20 lg:py-24">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl mb-6">Who we work with</h2>
-          <p className="text-muted leading-relaxed max-w-xl mb-8">
-            Independent cafés, restaurants, wine bars, hotels, offices, and salons — and growing.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {neighbourhoods.map((hood) => (
-              <span
-                key={hood}
-                className="bg-background border border-border rounded-full px-4 py-1.5 text-sm text-foreground/80"
-              >
-                {hood}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Final CTA */}
-      <section className="py-24 lg:py-32 border-t border-border">
+      <section className="py-16 lg:py-20 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6 text-center">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl mb-6">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl mb-6 text-white">
             Discover art for your space. Free.
           </h2>
-          <p className="text-muted max-w-lg mx-auto mb-10 leading-relaxed">
+          <p className="text-white/60 max-w-lg mx-auto mb-10 leading-relaxed">
             Browse portfolios, filter by style, and enquire directly with artists.
             No curation fee. No contract.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button href="/browse" size="lg">
+            <Link href="/browse" className="inline-flex items-center justify-center px-8 py-3 text-sm font-medium bg-white text-foreground rounded-sm hover:bg-white/90 transition-colors">
               Browse Portfolios
-            </Button>
-            <Button href="/get-art" size="lg" variant="secondary">
+            </Link>
+            <Link href="/get-art" className="inline-flex items-center justify-center px-8 py-3 text-sm font-medium border border-white/30 text-white rounded-sm hover:bg-white/10 transition-colors">
               Post Your Space
-            </Button>
+            </Link>
           </div>
         </div>
       </section>
-    </>
+
+      </div>
+    </div>
   );
 }

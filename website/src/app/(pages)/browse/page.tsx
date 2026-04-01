@@ -93,7 +93,11 @@ function CheckPill({
   label: string;
 }) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer group">
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex items-center gap-2 cursor-pointer group text-left"
+    >
       <span
         className={`w-4 h-4 rounded-sm border flex items-center justify-center shrink-0 transition-colors duration-150 ${
           checked
@@ -116,13 +120,10 @@ function CheckPill({
           </svg>
         )}
       </span>
-      <span
-        className="text-sm text-foreground/70 group-hover:text-foreground transition-colors duration-150"
-        onClick={() => onChange(!checked)}
-      >
+      <span className="text-sm text-foreground/70 group-hover:text-foreground transition-colors duration-150">
         {label}
       </span>
-    </label>
+    </button>
   );
 }
 
@@ -285,10 +286,10 @@ export default function BrowsePortfoliosPage() {
         )}
       </div>
 
-      {/* Style / Medium */}
+      {/* Style */}
       <div>
         <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
-          Style / Medium
+          Style
         </p>
         <select
           value={filters.styleMedium}
@@ -409,15 +410,27 @@ export default function BrowsePortfoliosPage() {
 
   return (
     <div className="bg-background">
-      {/* Hero */}
-      <section className="py-16 lg:py-20 border-b border-border">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="max-w-2xl">
-            <h1 className="text-4xl lg:text-5xl mb-5">Browse Art</h1>
-            <p className="text-lg text-muted leading-relaxed">
+      {/* Hero — compact with background image */}
+      <section className="relative -mt-14 lg:-mt-16 overflow-hidden border-b border-border">
+        <div className="absolute inset-0">
+          <Image
+            src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=1920&h=600&fit=crop&crop=center"
+            alt="Abstract art"
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-black/75" />
+        </div>
+
+        <div className="relative max-w-[1400px] mx-auto px-6 pt-28 lg:pt-24 pb-10 lg:pb-12">
+          <div className="py-4">
+            <h1 className="font-serif text-3xl lg:text-4xl text-white mb-3 leading-tight">
+              The Marketplace
+            </h1>
+            <p className="text-sm lg:text-base text-white/50 leading-relaxed max-w-md">
               {browseMode === "portfolios"
-                ? "Explore curated artist profiles — discover commercial terms, styles, and availability all in one place."
-                : "Browse individual artworks across our curated artists — filter by theme, medium, or price."}
+                ? "Explore curated artist profiles — discover commercial terms, styles, and availability."
+                : "Browse individual artworks — filter by theme, medium, or price."}
             </p>
           </div>
         </div>
@@ -717,14 +730,17 @@ export default function BrowsePortfoliosPage() {
                 </select>
 
                 {/* Available only */}
-                <label className="flex items-center gap-2 cursor-pointer group">
+                <button
+                  type="button"
+                  onClick={() => setGalleryAvailableOnly(!galleryAvailableOnly)}
+                  className="flex items-center gap-2 cursor-pointer group"
+                >
                   <span
                     className={`w-4 h-4 rounded-sm border flex items-center justify-center shrink-0 transition-colors duration-150 ${
                       galleryAvailableOnly
                         ? "bg-accent border-accent"
                         : "border-border group-hover:border-muted"
                     }`}
-                    onClick={() => setGalleryAvailableOnly(!galleryAvailableOnly)}
                   >
                     {galleryAvailableOnly && (
                       <svg
@@ -741,13 +757,10 @@ export default function BrowsePortfoliosPage() {
                       </svg>
                     )}
                   </span>
-                  <span
-                    className="text-sm text-foreground/70"
-                    onClick={() => setGalleryAvailableOnly(!galleryAvailableOnly)}
-                  >
+                  <span className="text-sm text-foreground/70 group-hover:text-foreground transition-colors duration-150">
                     Available only
                   </span>
-                </label>
+                </button>
 
                 {/* Results count + clear */}
                 <div className="ml-auto flex items-center gap-4">

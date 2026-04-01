@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 
 const navLinks = [
@@ -10,17 +11,40 @@ const navLinks = [
   { label: "Spaces", href: "/spaces" },
 ];
 
+const immersiveRoutes = ["/venues", "/artists", "/browse", "/about", "/how-it-works"];
+
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const pathname = usePathname();
+  const isImmersive = immersiveRoutes.includes(pathname);
+
+  useEffect(() => {
+    if (!isImmersive) return;
+    const handleScroll = () => setScrolled(window.scrollY > 80);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isImmersive]);
+
+  const showSolid = !isImmersive || scrolled;
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-border">
+    <header
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        showSolid
+          ? "bg-white border-b border-border"
+          : "bg-transparent border-b border-transparent"
+      }`}
+    >
       <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
         <div className="flex items-center justify-between h-14 lg:h-16">
           {/* Logo */}
           <Link
             href="/"
-            className="font-serif text-xl lg:text-2xl tracking-tight text-foreground"
+            className={`font-serif text-xl lg:text-2xl tracking-tight transition-colors duration-300 ${
+              showSolid ? "text-foreground" : "text-white"
+            }`}
           >
             Wallspace
           </Link>
@@ -31,7 +55,11 @@ export default function Header() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-sm text-muted hover:text-foreground transition-colors duration-200"
+                className={`text-sm transition-colors duration-300 ${
+                  showSolid
+                    ? "text-muted hover:text-foreground"
+                    : "text-white/60 hover:text-white"
+                }`}
               >
                 {link.label}
               </Link>
@@ -42,13 +70,21 @@ export default function Header() {
           <div className="hidden lg:flex items-center gap-2.5">
             <Link
               href="/login"
-              className="text-sm px-4 py-2 text-muted hover:text-foreground transition-colors duration-200"
+              className={`text-sm px-4 py-2 transition-colors duration-300 ${
+                showSolid
+                  ? "text-muted hover:text-foreground"
+                  : "text-white/50 hover:text-white/80"
+              }`}
             >
               Login
             </Link>
             <Link
               href="/apply"
-              className="text-sm text-muted hover:text-foreground transition-colors duration-200"
+              className={`text-sm transition-colors duration-300 ${
+                showSolid
+                  ? "text-muted hover:text-foreground"
+                  : "text-white/60 hover:text-white"
+              }`}
             >
               Apply as Artist
             </Link>
@@ -57,7 +93,9 @@ export default function Header() {
           {/* Mobile Menu Toggle */}
           <button
             type="button"
-            className="lg:hidden p-2 -mr-2 text-foreground"
+            className={`lg:hidden p-2 -mr-2 transition-colors duration-300 ${
+              showSolid ? "text-foreground" : "text-white"
+            }`}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileMenuOpen}
@@ -90,7 +128,9 @@ export default function Header() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-border bg-white">
+        <>
+        <div className="lg:hidden fixed inset-0 bg-black/20 z-40" onClick={() => setMobileMenuOpen(false)} />
+        <div className="lg:hidden border-t border-border bg-white relative z-50">
           <div className="mx-auto max-w-[1400px] px-6 py-6 space-y-6">
             <nav className="flex flex-col gap-4">
               {navLinks.map((link) => (
@@ -122,6 +162,7 @@ export default function Header() {
             </div>
           </div>
         </div>
+        </>
       )}
     </header>
   );

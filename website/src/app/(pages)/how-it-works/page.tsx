@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Metadata } from "next";
 import Button from "@/components/Button";
 
@@ -71,12 +72,21 @@ export default function HowItWorksPage() {
   return (
     <>
       {/* Hero */}
-      <section className="py-24 md:py-32">
+      <section className="relative py-24 md:py-32 -mt-14 lg:-mt-16 pt-28 lg:pt-32 overflow-hidden">
+        <div className="absolute inset-0 -z-10">
+          <Image
+            src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=600&fit=crop&crop=center"
+            alt="Art being created"
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-black/60" />
+        </div>
         <div className="max-w-[1200px] mx-auto px-6 text-center">
-          <h1 className="font-serif text-5xl md:text-6xl text-foreground tracking-tight">
+          <h1 className="font-serif text-5xl md:text-6xl text-white tracking-tight">
             How Wallspace Works
           </h1>
-          <p className="mt-6 text-lg text-muted max-w-lg mx-auto">
+          <p className="mt-6 text-lg text-white/60 max-w-lg mx-auto">
             A simple process for artists and venues.
           </p>
         </div>

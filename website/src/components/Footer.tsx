@@ -33,7 +33,7 @@ const footerColumns = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-border mt-auto">
+    <footer className="border-t border-border mt-auto bg-background">
       <div className="mx-auto max-w-[1200px] px-6 py-16 lg:py-20">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 lg:gap-8">
           {/* Brand Column */}

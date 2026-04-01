@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Button from "@/components/Button";
 import type { Metadata } from "next";
 
@@ -11,11 +12,20 @@ export default function AboutPage() {
   return (
     <div className="bg-background">
       {/* Hero */}
-      <section className="py-20 lg:py-24">
+      <section className="relative py-20 lg:py-28 -mt-14 lg:-mt-16 pt-28 lg:pt-32 overflow-hidden">
+        <div className="absolute inset-0 -z-10">
+          <Image
+            src="https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&h=600&fit=crop&crop=center"
+            alt="Art on cafe wall"
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-black/60" />
+        </div>
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-3xl">
-            <h1 className="text-4xl lg:text-5xl mb-6">About Wallspace</h1>
-            <p className="text-xl text-muted leading-relaxed">
+            <h1 className="text-4xl lg:text-5xl mb-6 text-white">About Wallspace</h1>
+            <p className="text-xl text-white/60 leading-relaxed">
               Wallspace exists because thousands of incredible photographs sit
               in artists&rsquo; studios while thousands of bare walls in
               cafes could be transformed by them. We make the
