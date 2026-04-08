@@ -7,29 +7,6 @@ export const metadata: Metadata = {
     "Apply to join Wallspace, the curated platform connecting artists with independent venues. First month free for all accepted artists.",
 };
 
-const differentiators = [
-  {
-    title: "Genuine curation, not an open marketplace",
-    description:
-      "Every artist on Wallspace has been personally reviewed. We maintain a small, high-quality roster because venues trust us to send them only excellent work. Being accepted means something.",
-  },
-  {
-    title: "Real venue demand, not passive listings",
-    description:
-      "We work with venues who are actively seeking artwork – cafes, restaurants, hotels, coworking spaces. Your profile goes in front of decision-makers who want to fill their walls.",
-  },
-  {
-    title: "You control your terms",
-    description:
-      "You decide what you offer: free loan, revenue share, or direct purchase. You set your prices. You choose your delivery radius and the venue types that suit your work.",
-  },
-  {
-    title: "No exclusivity",
-    description:
-      "Wallspace is an additional channel. You keep full control of your work and can sell through galleries, fairs, your own website, or anywhere else at the same time.",
-  },
-];
-
 export default function ApplyPage() {
   return (
     <div className="bg-background">
@@ -78,35 +55,6 @@ export default function ApplyPage() {
                 early.
               </p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* What Makes Us Different */}
-      <section className="py-20 lg:py-24">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-2xl mb-12">
-            <h2 className="text-3xl mb-4">What makes Wallspace different</h2>
-            <p className="text-muted leading-relaxed">
-              There are plenty of places to list your work online. Wallspace is
-              not a listing site.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {differentiators.map((item, i) => (
-              <div
-                key={i}
-                className="bg-surface border border-border rounded-sm p-8"
-              >
-                <div className="text-accent text-sm font-medium mb-3">
-                  0{i + 1}
-                </div>
-                <h3 className="text-xl mb-3">{item.title}</h3>
-                <p className="text-sm text-muted leading-relaxed">
-                  {item.description}
-                </p>
-              </div>
-            ))}
           </div>
         </div>
       </section>

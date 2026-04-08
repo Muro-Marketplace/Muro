@@ -175,6 +175,20 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               </span>
             ))}
           </div>
+          {/* Commercial terms */}
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {artist.openToFreeLoan && (
+              <span className="text-[10px] text-accent bg-accent/5 border border-accent/15 px-1.5 py-0.5 rounded-sm">Free loan</span>
+            )}
+            {artist.openToRevenueShare && (
+              <span className="text-[10px] text-accent bg-accent/5 border border-accent/15 px-1.5 py-0.5 rounded-sm">
+                Rev share{artist.revenueSharePercent ? ` ${artist.revenueSharePercent}%` : ""}
+              </span>
+            )}
+            {artist.openToOutrightPurchase && (
+              <span className="text-[10px] text-accent bg-accent/5 border border-accent/15 px-1.5 py-0.5 rounded-sm">Purchase</span>
+            )}
+          </div>
           {/* Hover action CTAs */}
           <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <button

@@ -83,7 +83,6 @@ const freeBenefits = [
 const premiumBenefits = [
   "Professional curation for your space",
   "AI-powered search and recommendations",
-  "AI visualiser – see artwork on your wall before committing",
   "Curated shortlists tailored to your venue",
   "Optional installation packages (paid add-on)",
   "Priority access to new artists",
@@ -181,7 +180,7 @@ export default function VenuesPage() {
   return (
     <div className="relative">
       {/* Immersive Hero – pulls behind the header with negative margin */}
-      <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col justify-center pt-28 lg:pt-32 pb-32">
+      <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col justify-center pt-28 lg:pt-32 pb-56">
         {/* Hero background image */}
         <div className="absolute inset-0 -z-10">
           <Image
@@ -191,7 +190,7 @@ export default function VenuesPage() {
             className="object-cover"
             priority
           />
-          <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/65 to-black/50" />
+          <div className="absolute inset-0 bg-gradient-to-br from-black/65 via-black/50 to-black/35" />
         </div>
         <div className="max-w-[1200px] mx-auto px-6 w-full">
           <div className="max-w-2xl">

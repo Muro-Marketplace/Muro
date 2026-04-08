@@ -215,18 +215,19 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── CONTENT SECTIONS ─── clean solid background */}
+      {/* ─── CONTENT SECTIONS ─── */}
       <div ref={contentRef} className="bg-background">
-          {/* ─── VENUE PROPOSITION ─── */}
-          <section className="py-16 lg:py-20 bg-surface">
-            <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
+
+          {/* ─── FOR VENUES ─── */}
+          <section className="py-20 lg:py-28 bg-surface">
+            <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
+              <AnimateIn>
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-                <AnimateIn>
                 <div>
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
                     For Venues
                   </p>
-                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mb-6">
+                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mb-6 leading-tight">
                     Art for your space. Zero risk.
                   </h2>
                   <p className="text-lg text-muted leading-relaxed mb-8">
@@ -235,467 +236,165 @@ export default function Home() {
                     Completely free to browse and enquire.
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-10">
-                    <DealCard
-                      title="Free Loan"
-                      description="Display artwork at no cost. Return or rotate any time."
-                    />
-                    <DealCard
-                      title="Revenue Share"
-                      description="If it sells from your wall, you earn a share."
-                    />
-                    <DealCard
-                      title="Direct Purchase"
-                      description="Buy artwork outright for your permanent collection."
-                    />
+                  <div className="grid grid-cols-3 gap-3 mb-10">
+                    <DealCard title="Free Loan" description="Display at no cost. Rotate any time." />
+                    <DealCard title="Revenue Share" description="Earn a share if it sells from your wall." />
+                    <DealCard title="Purchase" description="Buy outright for your collection." />
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <Link
-                      href="/browse"
-                      className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
-                    >
+                    <Link href="/browse" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Discover Art
                     </Link>
-                    <Link
-                      href="/venues"
-                      className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors"
-                    >
+                    <Link href="/venues" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
                       Learn More
                     </Link>
                   </div>
                 </div>
-                </AnimateIn>
 
-                <AnimateIn delay={150} direction="right">
                 <div className="grid grid-cols-5 grid-rows-4 gap-2 aspect-square">
                   <div className="col-span-3 row-span-2 relative rounded-sm overflow-hidden">
-                    <Image
-                      src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&h=400&fit=crop"
-                      alt="Moody urban street photography"
-                      fill
-                      className="object-cover"
-                      sizes="25vw"
-                    />
+                    <Image src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&h=400&fit=crop" alt="Moody urban street photography" fill className="object-cover" sizes="25vw" />
                   </div>
                   <div className="col-span-2 row-span-1 relative rounded-sm overflow-hidden">
-                    <Image
-                      src="https://images.unsplash.com/photo-1418065460487-3e41a6c84dc5?w=400&h=400&fit=crop"
-                      alt="Misty forest landscape"
-                      fill
-                      className="object-cover"
-                      sizes="15vw"
-                    />
+                    <Image src="https://images.unsplash.com/photo-1418065460487-3e41a6c84dc5?w=400&h=400&fit=crop" alt="Misty forest landscape" fill className="object-cover" sizes="15vw" />
                   </div>
                   <div className="col-span-2 row-span-1 relative rounded-sm overflow-hidden">
-                    <Image
-                      src="https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=400&h=200&fit=crop"
-                      alt="Vintage film camera"
-                      fill
-                      className="object-cover"
-                      sizes="15vw"
-                    />
+                    <Image src="https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=400&h=200&fit=crop" alt="Vintage film camera" fill className="object-cover" sizes="15vw" />
                   </div>
                   <div className="col-span-2 row-span-2 relative rounded-sm overflow-hidden">
-                    <Image
-                      src="https://images.unsplash.com/photo-1484406566174-9da000fda645?w=400&h=400&fit=crop"
-                      alt="Deer in misty woodland"
-                      fill
-                      className="object-cover"
-                      sizes="15vw"
-                    />
+                    <Image src="https://images.unsplash.com/photo-1484406566174-9da000fda645?w=400&h=400&fit=crop" alt="Deer in misty woodland" fill className="object-cover" sizes="15vw" />
                   </div>
                   <div className="col-span-3 row-span-2 relative rounded-sm overflow-hidden">
-                    <Image
-                      src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop"
-                      alt="Mountain landscape at night"
-                      fill
-                      className="object-cover"
-                      sizes="25vw"
-                    />
+                    <Image src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop" alt="Mountain landscape at night" fill className="object-cover" sizes="25vw" />
                   </div>
                 </div>
-                </AnimateIn>
               </div>
+              </AnimateIn>
             </div>
           </section>
 
-          {/* ─── ARTIST PROPOSITION ─── */}
-          <section className="py-16 lg:py-20">
-            <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
+          {/* ─── FOR ARTISTS ─── */}
+          <section className="py-20 lg:py-28">
+            <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
+              <AnimateIn>
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-                <AnimateIn delay={100} direction="left">
-                <div className="grid grid-cols-3 gap-2 order-2 lg:order-1">
+                <div className="order-2 lg:order-1 grid grid-cols-3 gap-2">
                   {artists.slice(0, 6).map((a) => (
-                    <div
-                      key={a.slug}
-                      className="aspect-[4/5] relative rounded-sm overflow-hidden"
-                    >
-                      <Image
-                        src={a.image}
-                        alt={a.name}
-                        fill
-                        className="object-cover"
-                        sizes="20vw"
-                      />
+                    <Link key={a.slug} href={`/browse/${a.slug}`} className="aspect-[4/5] relative rounded-sm overflow-hidden group">
+                      <Image src={a.image} alt={a.name} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-500" sizes="20vw" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                      <p className="absolute bottom-2 left-2 text-white text-xs font-medium">
-                        {a.name}
-                      </p>
-                    </div>
+                      <p className="absolute bottom-2 left-2 text-white text-xs font-medium">{a.name}</p>
+                    </Link>
                   ))}
                 </div>
-                </AnimateIn>
 
-                <AnimateIn delay={0}>
                 <div className="order-1 lg:order-2">
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
                     For Artists
                   </p>
-                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mb-6">
+                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mb-6 leading-tight">
                     Get discovered by commercial spaces
                   </h2>
-                  <p className="text-lg text-muted leading-relaxed mb-6">
-                    Wallspace puts your work in front of caf&eacute;s,
-                    restaurants, hotels, galleries, offices, and salons that are
-                    actively looking for art.
+                  <p className="text-lg text-muted leading-relaxed mb-8">
+                    Wallspace puts your work in front of venues that are
+                    actively looking for art. No exclusivity. Keep selling
+                    through your own channels.
                   </p>
 
-                  <ul className="space-y-4 mb-10">
-                    <BulletPoint text="Display your work in cafés, restaurants, hotels, and salons through free-loan, revenue-share, or purchase arrangements" />
-                    <BulletPoint text="Earn from customer purchases via QR-code discovery or in-store purchases – right from the venue wall" />
+                  <ul className="space-y-3 mb-10">
+                    <BulletPoint text="Free loan, revenue share, or outright purchase arrangements" />
                     <BulletPoint text="0–10% platform fee. No gallery taking 50%." />
-                    <BulletPoint text="First month free. First 20 approved artists get 6 months free." />
-                    <BulletPoint text="Keep selling through your own channels – no exclusivity" />
+                    <BulletPoint text="First month free. First 20 artists get 6 months free." />
                   </ul>
 
                   <div className="flex items-center gap-3">
-                    <Link
-                      href="/apply"
-                      className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
-                    >
+                    <Link href="/apply" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Apply to Join
                     </Link>
-                    <Link
-                      href="/pricing"
-                      className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors"
-                    >
+                    <Link href="/pricing" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
                       View Pricing
                     </Link>
                   </div>
                 </div>
-                </AnimateIn>
               </div>
-            </div>
-          </section>
-
-          {/* ─── SELECTED ARTISTS ─── */}
-          <section className="py-16 lg:py-20 bg-foreground">
-            <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
-              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-12">
-                <div>
-                  <p className="text-xs tracking-[0.2em] uppercase text-white/40 mb-3">
-                    Selected Artists
-                  </p>
-                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white">
-                    Curated for commercial spaces
-                  </h2>
-                </div>
-                <Link
-                  href="/browse"
-                  className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors shrink-0"
-                >
-                  Browse all art
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M6 4l4 4-4 4" />
-                  </svg>
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {featuredArtists.map((artist) => (
-                  <ArtistCarousel
-                    key={artist.slug}
-                    name={artist.name}
-                    slug={artist.slug}
-                    medium={artist.primaryMedium}
-                    location={artist.location}
-                    images={artist.works.map((w) => w.image)}
-                    profileImage={artist.image}
-                    isFoundingArtist={artist.isFoundingArtist}
-                    styleTags={artist.styleTags}
-                    offersOriginals={artist.offersOriginals}
-                    offersPrints={artist.offersPrints}
-                    offersFramed={artist.offersFramed}
-                    openToFreeLoan={artist.openToFreeLoan}
-                    openToRevenueShare={artist.openToRevenueShare}
-                    openToOutrightPurchase={artist.openToOutrightPurchase}
-                  />
-                ))}
-              </div>
-
-              <div className="mt-10 flex justify-center">
-                <Link
-                  href="/browse"
-                  className="inline-flex items-center justify-center px-8 py-4 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
-                >
-                  Browse All Art
-                </Link>
-              </div>
-            </div>
-          </section>
-
-          {/* ─── SPACES LOOKING FOR ART ─── */}
-          <section className="py-16 lg:py-20 bg-background">
-            <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
-              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-12">
-                <div>
-                  <p className="text-xs tracking-[0.2em] uppercase text-accent mb-3">
-                    Active Demand
-                  </p>
-                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground">
-                    Spaces looking for art
-                  </h2>
-                  <p className="mt-3 text-muted max-w-lg">
-                    Real venues actively seeking artwork for their walls right
-                    now.
-                  </p>
-                </div>
-                <Link
-                  href="/spaces"
-                  className="inline-flex items-center gap-2 text-sm text-accent hover:text-accent-hover transition-colors shrink-0"
-                >
-                  See all spaces
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M6 4l4 4-4 4" />
-                  </svg>
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {venues.slice(0, 4).map((venue) => (
-                  <Link
-                    key={venue.slug}
-                    href={`/spaces/${venue.slug}`}
-                    className="group"
-                  >
-                    <div className="bg-background border border-border rounded-sm overflow-hidden hover:border-accent/30 hover:shadow-sm transition-all duration-300">
-                      <div className="aspect-[3/2] relative overflow-hidden">
-                        <Image
-                          src={venue.image}
-                          alt={venue.name}
-                          fill
-                          className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
-                          sizes="25vw"
-                        />
-                        <div className="absolute top-3 left-3">
-                          <span className="inline-block px-2.5 py-1 bg-white/90 text-xs font-medium text-foreground rounded-sm">
-                            {venue.type}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="p-4">
-                        <h3 className="font-medium text-foreground text-sm mb-1">
-                          {venue.name}
-                        </h3>
-                        <p className="text-xs text-muted mb-2">
-                          {venue.location} &middot;{" "}
-                          {venue.approximateFootfall} footfall
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {venue.interestedInFreeLoan && (
-                            <span className="px-2 py-0.5 text-[10px] bg-accent/10 text-accent rounded-sm">
-                              Free loan
-                            </span>
-                          )}
-                          {venue.interestedInRevenueShare && (
-                            <span className="px-2 py-0.5 text-[10px] bg-accent/10 text-accent rounded-sm">
-                              Revenue share
-                            </span>
-                          )}
-                          {venue.interestedInDirectPurchase && (
-                            <span className="px-2 py-0.5 text-[10px] bg-accent/10 text-accent rounded-sm">
-                              Purchase
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+              </AnimateIn>
             </div>
           </section>
 
           {/* ─── HOW IT WORKS ─── */}
-          <section className="py-16 lg:py-20 bg-foreground">
-            <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
-              <div className="text-center mb-16">
-                <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white">
-                  How Wallspace works
-                </h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-12 lg:gap-20 max-w-4xl mx-auto">
+          <section className="py-20 lg:py-28 bg-foreground">
+            <div className="max-w-[1000px] mx-auto px-6 lg:px-10">
+              <AnimateIn>
+              <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white text-center mb-16">
+                How Wallspace works
+              </h2>
+              <div className="grid md:grid-cols-2 gap-16">
                 <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">
-                    For Venues
-                  </p>
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Venues</p>
                   <div className="space-y-8 flex-1">
-                    <Step
-                      dark
-                      number="01"
-                      title="Browse &amp; Filter"
-                      description="Search curated artists by location, style, theme, and availability. Completely free."
-                    />
-                    <Step
-                      dark
-                      number="02"
-                      title="Enquire"
-                      description="Contact artists directly through the platform. Discuss terms and fit."
-                    />
-                    <Step
-                      dark
-                      number="03"
-                      title="Arrange"
-                      description="Agree on free loan, revenue share, or purchase. Get art on your walls."
-                    />
+                    <Step dark number="01" title="Browse &amp; Filter" description="Search curated artists by style, theme, and location. Free." />
+                    <Step dark number="02" title="Enquire" description="Contact artists directly. Discuss terms and fit." />
+                    <Step dark number="03" title="Arrange" description="Agree on free loan, revenue share, or purchase." />
                   </div>
                   <div className="mt-10">
-                    <Link
-                      href="/browse"
-                      className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
-                    >
+                    <Link href="/browse" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Start Browsing
                     </Link>
                   </div>
                 </div>
-
                 <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">
-                    For Artists
-                  </p>
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Artists</p>
                   <div className="space-y-8 flex-1">
-                    <Step
-                      dark
-                      number="01"
-                      title="Apply"
-                      description="Submit your portfolio for review. We respond within 5 business days."
-                    />
-                    <Step
-                      dark
-                      number="02"
-                      title="Get Accepted"
-                      description="Pass our curation review. Choose a plan. First month free."
-                    />
-                    <Step
-                      dark
-                      number="03"
-                      title="Get Discovered"
-                      description="Your profile goes live. Venues browse, filter, and enquire directly."
-                    />
+                    <Step dark number="01" title="Apply" description="Submit your portfolio. We respond within 5 business days." />
+                    <Step dark number="02" title="Get Accepted" description="Pass our curation review. First month free." />
+                    <Step dark number="03" title="Get Discovered" description="Your profile goes live. Venues enquire directly." />
                   </div>
                   <div className="mt-10">
-                    <Link
-                      href="/apply"
-                      className="inline-flex items-center justify-center px-7 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
-                    >
+                    <Link href="/apply" className="inline-flex items-center justify-center px-7 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
                       Apply to Join
                     </Link>
                   </div>
                 </div>
               </div>
-            </div>
-          </section>
-
-          {/* ─── VALUE PROPS ─── */}
-          <section className="py-12 lg:py-16 bg-surface">
-            <div className="max-w-[1400px] mx-auto px-6 lg:px-10">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8">
-                <ValueBlock
-                  title="Curated, Not Crowded"
-                  description="Every artist is personally reviewed. This is a curated marketplace, not a passive directory."
-                />
-                <ValueBlock
-                  title="Fair for Everyone"
-                  description="0–10% platform fees on sales. Venues browse for free. No gallery taking half."
-                />
-                <ValueBlock
-                  title="Commercial by Design"
-                  description="Artist profiles show commercial availability, pricing, delivery, and venue suitability. Built for real transactions."
-                />
-              </div>
+              </AnimateIn>
             </div>
           </section>
 
           {/* ─── FINAL CTA ─── */}
           <section className="py-24 lg:py-32">
-            <div className="max-w-[1400px] mx-auto px-6 lg:px-10 text-center">
+            <div className="max-w-[1200px] mx-auto px-6 lg:px-10 text-center">
+              <AnimateIn>
               <h2 className="font-serif text-4xl md:text-5xl lg:text-6xl text-foreground mb-4">
                 Ready to get started?
               </h2>
               <p className="text-muted text-lg mb-12 max-w-lg mx-auto">
-                Whether you&rsquo;re looking for art or looking to be
-                discovered.
+                Whether you&rsquo;re looking for art or looking to be discovered.
               </p>
               <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto items-stretch">
                 <div className="bg-surface border border-border rounded-sm p-8 text-center flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">
-                    Venues
-                  </p>
-                  <h3 className="font-serif text-xl mb-3">
-                    Source artwork risk-free
-                  </h3>
-                  <p className="text-sm text-muted mb-6 flex-1">
-                    Free to browse and enquire. No contracts.
-                  </p>
-                  <Link
-                    href="/browse"
-                    className="inline-flex items-center justify-center w-full px-6 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
-                  >
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Venues</p>
+                  <h3 className="font-serif text-xl mb-3">Source artwork risk-free</h3>
+                  <p className="text-sm text-muted mb-6 flex-1">Free to browse and enquire. No contracts.</p>
+                  <Link href="/browse" className="inline-flex items-center justify-center w-full px-6 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                     Discover Art
                   </Link>
                 </div>
                 <div className="bg-surface border border-border rounded-sm p-8 text-center flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">
-                    Artists
-                  </p>
-                  <h3 className="font-serif text-xl mb-3">
-                    Get discovered by venues
-                  </h3>
-                  <p className="text-sm text-muted mb-6 flex-1">
-                    First month free. From &pound;9.99/month.
-                  </p>
-                  <Link
-                    href="/apply"
-                    className="inline-flex items-center justify-center w-full px-6 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors"
-                  >
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Artists</p>
+                  <h3 className="font-serif text-xl mb-3">Get discovered by venues</h3>
+                  <p className="text-sm text-muted mb-6 flex-1">First month free. From &pound;9.99/month.</p>
+                  <Link href="/apply" className="inline-flex items-center justify-center w-full px-6 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors">
                     Apply to Join
                   </Link>
                 </div>
               </div>
+              </AnimateIn>
             </div>
           </section>
 
-          {/* Image break */}
-          <section className="relative h-48 lg:h-64 overflow-hidden">
+          {/* ─── CURATED BANNER ─── */}
+          <section className="relative h-48 lg:h-56 overflow-hidden">
             <Image src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=400&fit=crop&crop=center" alt="Art being created" fill className="object-cover" />
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative h-full flex items-center justify-center text-center px-6">

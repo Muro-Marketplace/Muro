@@ -5,6 +5,7 @@ import { useState } from "react";
 
 const navItems = [
   { label: "Dashboard", href: "/artist-portal" },
+  { label: "Edit Profile", href: "/artist-portal/profile" },
   { label: "My Portfolio", href: "/artist-portal/portfolio" },
   { label: "Collections", href: "/artist-portal/collections" },
   { label: "QR Labels", href: "/artist-portal/labels" },

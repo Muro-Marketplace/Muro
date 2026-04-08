@@ -256,7 +256,7 @@ export default async function ArtistProfilePage({
                   { label: "Prints", yes: artist.offersPrints },
                   { label: "Framed", yes: artist.offersFramed },
                   { label: "Free loan", yes: artist.openToFreeLoan },
-                  { label: "Revenue share", yes: artist.openToRevenueShare },
+                  { label: artist.revenueSharePercent ? `Revenue share (${artist.revenueSharePercent}%)` : "Revenue share", yes: artist.openToRevenueShare },
                   { label: "Purchase", yes: artist.openToOutrightPurchase },
                 ].filter(item => item.yes).map((item) => (
                   <span key={item.label} className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-full bg-accent/10 text-accent border border-accent/20">

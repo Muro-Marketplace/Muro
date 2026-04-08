@@ -202,7 +202,7 @@ export default function ArtistsPage() {
   return (
     <div className="relative">
       {/* Immersive Hero */}
-      <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col justify-center pt-28 lg:pt-32 pb-32">
+      <section className="relative -mt-14 lg:-mt-16 min-h-[90vh] flex flex-col justify-center pt-28 lg:pt-32 pb-24">
         {/* Hero background image */}
         <div className="absolute inset-0 -z-10">
           <Image
@@ -279,15 +279,6 @@ export default function ArtistsPage() {
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Image Break 1 */}
-      <section className="relative h-64 lg:h-80 overflow-hidden">
-        <Image src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=400&fit=crop&crop=center" alt="Artist painting" fill className="object-cover" />
-        <div className="absolute inset-0 bg-black/50" />
-        <div className="relative h-full flex items-center justify-center text-center px-6">
-          <p className="text-white/80 text-lg lg:text-xl font-serif italic max-w-xl">&ldquo;Your studio is not a showroom. Independent venues are.&rdquo;</p>
         </div>
       </section>
 
@@ -617,6 +608,15 @@ export default function ArtistsPage() {
         </div>
       </section>
 
+      {/* Image Break */}
+      <section className="relative h-64 lg:h-80 overflow-hidden">
+        <Image src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=400&fit=crop&crop=center" alt="Artist painting" fill className="object-cover" />
+        <div className="absolute inset-0 bg-black/50" />
+        <div className="relative h-full flex items-center justify-center text-center px-6">
+          <p className="text-white/80 text-lg lg:text-xl font-serif italic max-w-xl">&ldquo;Your studio is not a showroom. Independent venues are.&rdquo;</p>
+        </div>
+      </section>
+
       {/* FAQs */}
       <section className="py-16 lg:py-20">
         <div className="max-w-[1200px] mx-auto px-6">
@@ -632,9 +632,6 @@ export default function ArtistsPage() {
       {/* Final CTA */}
       <section className="py-16 lg:py-20 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6 text-center">
-          <p className="text-white/60 mb-4">
-            Your studio is not a showroom. Independent venues are.
-          </p>
           <h2 className="text-3xl md:text-4xl lg:text-5xl mb-4 max-w-2xl mx-auto text-white">
             Apply to Wallspace. Get discovered by the spaces that want your work.
           </h2>

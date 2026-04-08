@@ -66,6 +66,7 @@ interface Filters {
   framing: boolean;
   freeLoan: boolean;
   revenueShare: boolean;
+  revenueShareMin: number;
   outrightPurchase: boolean;
   venueTypes: string[];
   styleMedium: string;
@@ -80,6 +81,7 @@ const DEFAULT_FILTERS: Filters = {
   framing: false,
   freeLoan: false,
   revenueShare: false,
+  revenueShareMin: 0,
   outrightPurchase: false,
   venueTypes: [],
   styleMedium: "",
@@ -136,6 +138,8 @@ export default function BrowsePortfoliosPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"compact" | "expanded">("compact");
 
+  const [revShareInput, setRevShareInput] = useState("");
+
   // Gallery mode filters
   const [galleryTheme, setGalleryTheme] = useState("");
   const [galleryMedium, setGalleryMedium] = useState("");
@@ -174,6 +178,7 @@ export default function BrowsePortfoliosPage() {
     filters.framing ||
     filters.freeLoan ||
     filters.revenueShare ||
+    filters.revenueShareMin > 0 ||
     filters.outrightPurchase ||
     filters.venueTypes.length > 0 ||
     filters.styleMedium !== "";
@@ -197,6 +202,7 @@ export default function BrowsePortfoliosPage() {
       if (filters.framing && !artist.offersFramed) return false;
       if (filters.freeLoan && !artist.openToFreeLoan) return false;
       if (filters.revenueShare && !artist.openToRevenueShare) return false;
+      if (filters.revenueShareMin > 0 && (!artist.openToRevenueShare || !artist.revenueSharePercent || artist.revenueSharePercent < filters.revenueShareMin)) return false;
       if (filters.outrightPurchase && !artist.openToOutrightPurchase)
         return false;
       if (
@@ -334,20 +340,34 @@ export default function BrowsePortfoliosPage() {
         </p>
         <div className="space-y-2.5">
           <CheckPill
-            label="Open to free loan"
+            label="Free loan"
             checked={filters.freeLoan}
             onChange={(v) => setFilter("freeLoan", v)}
           />
           <CheckPill
-            label="Open to revenue share"
-            checked={filters.revenueShare}
-            onChange={(v) => setFilter("revenueShare", v)}
-          />
-          <CheckPill
-            label="Open to outright purchase"
+            label="Outright purchase"
             checked={filters.outrightPurchase}
             onChange={(v) => setFilter("outrightPurchase", v)}
           />
+          <CheckPill
+            label="Revenue share"
+            checked={filters.revenueShare}
+            onChange={(v) => setFilter("revenueShare", v)}
+          />
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-muted">Min share</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={revShareInput}
+              onChange={(e) => setRevShareInput(e.target.value.replace(/[^0-9]/g, ""))}
+              onBlur={() => setFilter("revenueShareMin", Number(revShareInput) || 0)}
+              onKeyDown={(e) => { if (e.key === "Enter") setFilter("revenueShareMin", Number(revShareInput) || 0); }}
+              placeholder="e.g. 10"
+              className="w-20 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-foreground text-center focus:outline-none focus:border-accent/50"
+            />
+            <span className="text-[10px] text-muted">%</span>
+          </div>
         </div>
       </div>
 
@@ -502,6 +522,7 @@ export default function BrowsePortfoliosPage() {
                           filters.framing,
                           filters.freeLoan,
                           filters.revenueShare,
+                          filters.revenueShareMin > 0,
                           filters.outrightPurchase,
                           ...filters.venueTypes.map(() => true),
                           !!filters.styleMedium,
