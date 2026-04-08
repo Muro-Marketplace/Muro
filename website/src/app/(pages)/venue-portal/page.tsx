@@ -25,7 +25,7 @@ const recentActivity = [
   },
   {
     id: 3,
-    text: "Order #1024 shipped — estimated delivery 27 Mar",
+    text: "Order #1024 shipped – estimated delivery 27 Mar",
     time: "2 days ago",
     type: "order",
   },
@@ -195,7 +195,7 @@ export default function VenueDashboardPage() {
             <ul className="space-y-1.5">
               {[
                 "AI-powered art search tailored to your space",
-                "AI Visualiser — see artwork on your walls before you commit",
+                "AI Visualiser – see artwork on your walls before you commit",
                 "Curated recommendations updated weekly",
                 "Optional installation packages",
                 "Priority support",

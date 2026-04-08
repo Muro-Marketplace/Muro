@@ -123,7 +123,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             {artist.isFoundingArtist && (
               <span
                 className="inline-block px-2.5 py-1 bg-white/95 text-xs font-medium text-foreground rounded-sm cursor-help"
-                title="One of the first 20 artists on Wallspace — free access for life"
+                title="One of the first 20 artists on Wallspace – free access for life"
               >
                 Founding Artist
               </span>

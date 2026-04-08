@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms & Privacy — Wallspace",
+  title: "Terms & Privacy – Wallspace",
   description: "Terms of service and privacy policy for Wallspace.",
 };
 

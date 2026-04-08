@@ -191,7 +191,7 @@ export default function WaitlistPage() {
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * HOW IT WORKS — scroll-reveal sections with shared background
+ * HOW IT WORKS – scroll-reveal sections with shared background
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 function HowItWorks() {

@@ -44,7 +44,7 @@ export const collections: ArtistCollection[] = [
     artistName: "Priya Kapoor",
     name: "The Archive Collection",
     description:
-      "Priya's most striking documentary work — raw, unfiltered South Asian narratives that spark conversation in any space.",
+      "Priya's most striking documentary work – raw, unfiltered South Asian narratives that spark conversation in any space.",
     workIds: ["priya-kapoor-1", "priya-kapoor-2", "priya-kapoor-4"],
     bundlePrice: 520,
     bundlePriceBand: "£520",

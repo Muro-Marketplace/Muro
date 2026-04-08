@@ -337,7 +337,7 @@ export default function ArtistProfileClient({
                     }}
                     className="w-full px-5 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
                   >
-                    Buy Now — £{(currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0]).price}
+                    Buy Now – £{(currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0]).price}
                   </button>
                 )}
                 <div className="flex gap-2">

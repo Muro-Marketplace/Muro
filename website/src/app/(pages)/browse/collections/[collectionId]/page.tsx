@@ -129,7 +129,7 @@ export default function CollectionDetailPage() {
                     onClick={handleBuyCollection}
                     className="w-full px-5 py-3 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
                   >
-                    Buy Collection — {collection.bundlePriceBand}
+                    Buy Collection – {collection.bundlePriceBand}
                   </button>
                 )}
                 <div className="flex gap-2">

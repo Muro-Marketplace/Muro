@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const venue = venues.find((v) => v.slug === slug);
   if (!venue) return {};
   return {
-    title: `${venue.name} — Wallspace`,
+    title: `${venue.name} – Wallspace`,
     description: `${venue.name} in ${venue.location} is looking for artwork on Wallspace. ${venue.description.slice(0, 120)}...`,
   };
 }

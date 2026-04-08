@@ -132,7 +132,7 @@ export default function PlacementsPage() {
         })}
       </div>
 
-      {/* Table — desktop */}
+      {/* Table – desktop */}
       <div className="bg-surface border border-border rounded-sm hidden sm:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -183,7 +183,7 @@ export default function PlacementsPage() {
         )}
       </div>
 
-      {/* Cards — mobile */}
+      {/* Cards – mobile */}
       <div className="sm:hidden space-y-3">
         {filtered.map((placement) => (
           <div key={placement.id} className="bg-surface border border-border rounded-sm p-4">

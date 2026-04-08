@@ -19,7 +19,7 @@ const enquiries: Enquiry[] = [
   {
     id: 1,
     artist: "Maya Chen",
-    subject: "Golden Hour, Borough Market — free loan for 6 months",
+    subject: "Golden Hour, Borough Market – free loan for 6 months",
     type: "Free Loan",
     dateSent: "18 Mar 2026",
     status: "Responded",
@@ -27,7 +27,7 @@ const enquiries: Enquiry[] = [
   {
     id: 2,
     artist: "James Okafor",
-    subject: "Southbank Reflections series — revenue share arrangement",
+    subject: "Southbank Reflections series – revenue share arrangement",
     type: "Revenue Share",
     dateSent: "14 Mar 2026",
     status: "Pending",
@@ -35,7 +35,7 @@ const enquiries: Enquiry[] = [
   {
     id: 3,
     artist: "Sofia Andersen",
-    subject: "Tidal Study No. 4 — outright purchase",
+    subject: "Tidal Study No. 4 – outright purchase",
     type: "Purchase",
     dateSent: "10 Mar 2026",
     status: "Closed",
@@ -43,7 +43,7 @@ const enquiries: Enquiry[] = [
   {
     id: 4,
     artist: "Ravi Patel",
-    subject: "Urban Fragments III — enquiry about availability",
+    subject: "Urban Fragments III – enquiry about availability",
     type: "Free Loan",
     dateSent: "5 Mar 2026",
     status: "Pending",
@@ -51,7 +51,7 @@ const enquiries: Enquiry[] = [
   {
     id: 5,
     artist: "Lena Bauer",
-    subject: "Winter Light series — purchase of 2 prints",
+    subject: "Winter Light series – purchase of 2 prints",
     type: "Purchase",
     dateSent: "28 Feb 2026",
     status: "Responded",

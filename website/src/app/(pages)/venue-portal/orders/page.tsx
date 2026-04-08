@@ -45,7 +45,7 @@ const orders: Order[] = [
   {
     id: "1008",
     artist: "James Okafor",
-    title: "Southbank Reflections — Revenue Share",
+    title: "Southbank Reflections – Revenue Share",
     type: "Loan",
     amount: "15% rev. share",
     status: "Processing",

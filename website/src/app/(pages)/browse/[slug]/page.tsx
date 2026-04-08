@@ -23,11 +23,11 @@ export async function generateMetadata({
   const artist = artists.find((a) => a.slug === slug);
 
   if (!artist) {
-    return { title: "Artist Not Found — Wallspace" };
+    return { title: "Artist Not Found – Wallspace" };
   }
 
   return {
-    title: `${artist.name} — Wallspace`,
+    title: `${artist.name} – Wallspace`,
     description: artist.shortBio,
   };
 }
@@ -130,7 +130,7 @@ export default async function ArtistProfilePage({
 
   return (
     <div className="bg-background">
-      {/* Banner — uses first work as cover image */}
+      {/* Banner – uses first work as cover image */}
       <section className="relative -mt-14 lg:-mt-16 h-52 lg:h-64 overflow-hidden">
         <Image
           src={artist.works[0]?.image || artist.image}
@@ -156,10 +156,10 @@ export default async function ArtistProfilePage({
         </div>
       </section>
 
-      {/* Profile header — overlaps the banner */}
+      {/* Profile header – overlaps the banner */}
       <section className="relative -mt-16 pb-0">
         <div className="max-w-[1200px] mx-auto px-6">
-          {/* Profile pic — overlapping banner */}
+          {/* Profile pic – overlapping banner */}
           <div className="relative w-28 h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shrink-0 bg-border/30 border-4 border-background shadow-lg mb-4">
                   <Image
                     src={artist.image || `https://picsum.photos/seed/${artist.slug}/400/400`}
@@ -178,7 +178,7 @@ export default async function ArtistProfilePage({
                     {artist.isFoundingArtist && (
                       <span
                         className="inline-block px-2 py-0.5 bg-accent/10 text-accent text-[10px] font-medium rounded-sm border border-accent/20 cursor-help"
-                        title="One of the first 20 artists on Wallspace — free access for life and priority venue matching"
+                        title="One of the first 20 artists on Wallspace – free access for life and priority venue matching"
                       >
                         Founding Artist
                       </span>
@@ -192,7 +192,7 @@ export default async function ArtistProfilePage({
                 {artist.shortBio}
               </p>
 
-              {/* Style tags + social — single row */}
+              {/* Style tags + social – single row */}
               <div className="flex flex-wrap items-center gap-2 mb-4">
                 {artist.styleTags.map((tag) => (
                   <span key={tag} className="inline-block px-2.5 py-0.5 text-[11px] text-muted bg-surface border border-border rounded-sm">
@@ -235,7 +235,7 @@ export default async function ArtistProfilePage({
               </Button>
             </div>
 
-            {/* Right: commercial details — clean & light */}
+            {/* Right: commercial details – clean & light */}
             <div className="w-full lg:w-[400px] shrink-0 lg:mt-16">
               <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-4">
                 {[

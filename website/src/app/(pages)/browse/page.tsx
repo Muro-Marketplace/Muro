@@ -308,7 +308,7 @@ export default function BrowsePortfoliosPage() {
         </select>
       </div>
 
-      {/* Themes — dropdown */}
+      {/* Themes – dropdown */}
       <div>
         <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
           Theme
@@ -327,7 +327,7 @@ export default function BrowsePortfoliosPage() {
         </select>
       </div>
 
-      {/* Commercial Terms — moved above Availability */}
+      {/* Commercial Terms – moved above Availability */}
       <div>
         <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
           Commercial Terms
@@ -351,7 +351,7 @@ export default function BrowsePortfoliosPage() {
         </div>
       </div>
 
-      {/* Availability — commissions removed */}
+      {/* Availability – commissions removed */}
       <div>
         <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
           Availability
@@ -413,7 +413,7 @@ export default function BrowsePortfoliosPage() {
 
   return (
     <div className="bg-background">
-      {/* Hero — compact with background image */}
+      {/* Hero – compact with background image */}
       <section className="relative -mt-14 lg:-mt-16 overflow-hidden border-b border-border">
         <div className="absolute inset-0">
           <Image
@@ -432,14 +432,14 @@ export default function BrowsePortfoliosPage() {
             </h1>
             <p className="text-sm lg:text-base text-white/50 leading-relaxed max-w-md">
               {browseMode === "portfolios"
-                ? "Explore curated artist profiles — discover commercial terms, styles, and availability."
-                : "Browse individual artworks — filter by theme, medium, or price."}
+                ? "Explore curated artist profiles. Discover commercial terms, styles, and availability."
+                : "Browse individual artworks. Filter by theme, medium, or price."}
             </p>
           </div>
         </div>
       </section>
 
-      {/* Mode toggle — tab style, visually distinct from filter toggles */}
+      {/* Mode toggle – tab style, visually distinct from filter toggles */}
       <div className="border-b border-border">
         <div className="max-w-[1400px] mx-auto px-6">
           <div className="flex items-center gap-8">
@@ -485,7 +485,7 @@ export default function BrowsePortfoliosPage() {
         <section className="py-10 lg:py-14">
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
-              {/* Sidebar — desktop */}
+              {/* Sidebar – desktop */}
               <aside className="hidden lg:block w-56 shrink-0 sticky top-8">
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm font-medium text-foreground">
@@ -551,7 +551,7 @@ export default function BrowsePortfoliosPage() {
                   </div>
                 )}
 
-                {/* Result count + view toggle — desktop */}
+                {/* Result count + view toggle – desktop */}
                 <div className="hidden lg:flex items-center justify-between mb-6">
                   <p className="text-sm text-muted">
                     {filteredArtists.length} artist

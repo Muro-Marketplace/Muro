@@ -84,7 +84,7 @@ export const venues: Venue[] = [
     preferredStyles: ["Moody", "Intimate", "Fine Art"],
     preferredThemes: ["Black and White", "Portraits", "Fine Art", "Still Life"],
     description:
-      "An intimate natural wine bar on Mare Street with a carefully curated list of European producers. The candlelit interior has a warm, cave-like quality and the owners are looking for photography that complements their considered aesthetic — moody, characterful, and conversation-starting.",
+      "An intimate natural wine bar on Mare Street with a carefully curated list of European producers. The candlelit interior has a warm, cave-like quality and the owners are looking for photography that complements their considered aesthetic – moody, characterful, and conversation-starting.",
     image: "https://picsum.photos/seed/venue-cork-and-vine/800/600",
   },
   {
@@ -172,7 +172,7 @@ export const venues: Venue[] = [
     preferredStyles: ["Natural", "Organic", "Warm"],
     preferredThemes: ["Nature", "Landscapes", "Coastal", "Still Life"],
     description:
-      "A plant-forward restaurant in Camberwell with a menu driven by the seasons and a dining room that reflects that philosophy. The exposed timber and natural linen interior calls for artwork that brings the outside in — greenery, landscape, and the textures of the natural world.",
+      "A plant-forward restaurant in Camberwell with a menu driven by the seasons and a dining room that reflects that philosophy. The exposed timber and natural linen interior calls for artwork that brings the outside in – greenery, landscape, and the textures of the natural world.",
     image: "https://picsum.photos/seed/venue-trellis/800/600",
   },
   {
@@ -282,7 +282,7 @@ export const venues: Venue[] = [
     preferredStyles: ["Bold", "Dramatic", "Moody"],
     preferredThemes: ["Still Life", "Colour", "Abstract", "Hospitality-friendly"],
     description:
-      "A fire-focused restaurant on Curtain Road with a dramatic, dark-toned interior and open kitchen. The owners want photography that matches the intensity of their cooking — bold, rich, and full of flavour. The exposed brick walls and dramatic lighting create a gallery-like atmosphere in the evening.",
+      "A fire-focused restaurant on Curtain Road with a dramatic, dark-toned interior and open kitchen. The owners want photography that matches the intensity of their cooking – bold, rich, and full of flavour. The exposed brick walls and dramatic lighting create a gallery-like atmosphere in the evening.",
     image: "https://picsum.photos/seed/venue-ember/800/600",
   },
   {
@@ -304,7 +304,7 @@ export const venues: Venue[] = [
     preferredStyles: ["Elegant", "Natural", "Soft"],
     preferredThemes: ["Nature", "Still Life", "Colour", "Abstract"],
     description:
-      "A plant-filled natural wine bar tucked behind Portobello Road, with a lush, garden-like interior. The owners are looking for photography that complements the botanical theme — images of nature, texture, and organic forms that feel like extensions of the living greenery already on the walls.",
+      "A plant-filled natural wine bar tucked behind Portobello Road, with a lush, garden-like interior. The owners are looking for photography that complements the botanical theme – images of nature, texture, and organic forms that feel like extensions of the living greenery already on the walls.",
     image: "https://picsum.photos/seed/venue-botanica/800/600",
   },
   {
@@ -458,7 +458,7 @@ export const venues: Venue[] = [
     preferredStyles: ["Soft", "Elegant", "Nordic"],
     preferredThemes: ["Still Life", "Hospitality-friendly", "Colour", "Nature"],
     description:
-      "A Scandinavian-inspired café and provisions shop on a quiet Marylebone side street. The minimalist interior — pale wood, white walls, and natural light — creates an ideal gallery space, and the owners are particularly drawn to still life photography that complements the carefully curated food and homeware on their shelves.",
+      "A Scandinavian-inspired café and provisions shop on a quiet Marylebone side street. The minimalist interior – pale wood, white walls, and natural light – creates an ideal gallery space, and the owners are particularly drawn to still life photography that complements the carefully curated food and homeware on their shelves.",
     image: "https://picsum.photos/seed/venue-provisions/800/600",
   },
 ];

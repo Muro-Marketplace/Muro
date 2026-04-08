@@ -130,7 +130,7 @@ export default function RegisterVenuePage() {
             <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">For Venues</p>
             <h1 className="text-4xl lg:text-5xl font-serif mb-4 text-white">Register Your Venue</h1>
             <p className="text-lg text-white/60 leading-relaxed">
-              Tell us about your space and we&rsquo;ll match you with artists whose work fits your environment. Completely free — no contracts, no commitments.
+              Tell us about your space and we&rsquo;ll match you with artists whose work fits your environment. Completely free – no contracts, no commitments.
             </p>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy — Wallspace",
+  title: "Cookie Policy – Wallspace",
   description:
     "Wallspace Cookie Policy. Learn about the cookies we use and how to control them.",
 };
@@ -33,7 +33,7 @@ const cookies = [
     name: "_ga",
     category: "Analytics",
     purpose:
-      "Google Analytics — used to distinguish users and generate statistical reports about website usage.",
+      "Google Analytics – used to distinguish users and generate statistical reports about website usage.",
     duration: "2 years",
     provider: "Google Analytics",
   },
@@ -41,7 +41,7 @@ const cookies = [
     name: "_ga_*",
     category: "Analytics",
     purpose:
-      "Google Analytics — stores and counts page views for the current session.",
+      "Google Analytics – stores and counts page views for the current session.",
     duration: "2 years",
     provider: "Google Analytics",
   },

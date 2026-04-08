@@ -32,7 +32,7 @@ export default function LabelPreview({ labels: initialLabels, availableSizes, on
       <div className="label-preview-toolbar no-print border-b border-border bg-surface px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <h2 className="text-sm font-medium text-foreground">
-            Print Preview — {totalCount} label{totalCount !== 1 ? "s" : ""}
+            Print Preview – {totalCount} label{totalCount !== 1 ? "s" : ""}
           </h2>
           <span className="text-xs text-muted">
             {pageCount} page{pageCount !== 1 ? "s" : ""}
@@ -166,7 +166,7 @@ export default function LabelPreview({ labels: initialLabels, availableSizes, on
               ))}
 
               {labels.length === 0 && (
-                <p className="text-sm text-muted text-center py-8">No labels — close and select some works.</p>
+                <p className="text-sm text-muted text-center py-8">No labels – close and select some works.</p>
               )}
             </div>
           )}

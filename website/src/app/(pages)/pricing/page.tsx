@@ -3,15 +3,15 @@ import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
 
 export const metadata: Metadata = {
-  title: "Pricing — Wallspace",
+  title: "Pricing – Wallspace",
   description:
-    "Transparent pricing for artists on Wallspace. First month free. Choose Core, Premium, or Pro — all with access to our curated venue network.",
+    "Transparent pricing for artists on Wallspace. First month free. Choose Core, Premium, or Pro – all with access to our curated venue network.",
 };
 
 const coreFeatures = [
   "Standard artist profile",
   "Visibility to venues browsing the platform",
-  "Curated matching — we surface you to relevant venues",
+  "Curated matching – we surface you to relevant venues",
   "10% platform fee on sales",
   "Basic analytics dashboard",
   "Access to Wallspace venue network",
@@ -22,7 +22,7 @@ const premiumFeatures = [
   "Priority visibility in venue recommendations",
   "Proactive venue matching and introductions",
   "5% platform fee on sales",
-  "Full analytics — views, enquiries, conversion",
+  "Full analytics – views, enquiries, conversion",
   "Featured in curated venue suggestion lists",
   "Priority response from Wallspace team",
 ];
@@ -86,12 +86,12 @@ const faqItems = [
   {
     question: "What is a platform fee?",
     answer:
-      "The platform fee is the percentage Wallspace takes when a sale is made through the platform — whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is separate from your membership cost. Core artists pay 10%, Premium 5%, and Pro artists pay 0%. You keep the rest.",
+      "The platform fee is the percentage Wallspace takes when a sale is made through the platform – whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is separate from your membership cost. Core artists pay 10%, Premium 5%, and Pro artists pay 0%. You keep the rest.",
   },
   {
     question: "Is the first month really free?",
     answer:
-      "Yes. Every approved artist gets their first month at no cost, on any tier. You can start with Core and upgrade later, or begin on Premium or Pro — the first month is always free. After that, billing begins on your chosen plan.",
+      "Yes. Every approved artist gets their first month at no cost, on any tier. You can start with Core and upgrade later, or begin on Premium or Pro – the first month is always free. After that, billing begins on your chosen plan.",
   },
   {
     question: "What do the first 20 artists get?",
@@ -106,7 +106,7 @@ const faqItems = [
   {
     question: "Is placement guaranteed?",
     answer:
-      "No. We are a platform that connects artists with venues — we do not guarantee placement in any specific venue. What we do is ensure your profile is in front of venues that are actively looking for artwork, and we work to match you with the right spaces for your practice.",
+      "No. We are a platform that connects artists with venues – we do not guarantee placement in any specific venue. What we do is ensure your profile is in front of venues that are actively looking for artwork, and we work to match you with the right spaces for your practice.",
   },
   {
     question: "What happens when I cancel?",
@@ -116,7 +116,7 @@ const faqItems = [
   {
     question: "Are there any other fees?",
     answer:
-      "No hidden fees. Your monthly membership and the platform fee on sales are the only costs. Delivery, framing, and any materials are your own costs as an artist — Wallspace does not add charges for these.",
+      "No hidden fees. Your monthly membership and the platform fee on sales are the only costs. Delivery, framing, and any materials are your own costs as an artist – Wallspace does not add charges for these.",
   },
 ];
 
@@ -419,7 +419,7 @@ export default function PricingPage() {
               <p className="text-muted leading-relaxed mb-4">
                 At £100/month, Pro pays for itself quickly for any artist with
                 regular sales. On a £500 sale, Core would cost you £50 in
-                platform fees, Premium £25. Pro costs nothing — keeping the
+                platform fees, Premium £25. Pro costs nothing – keeping the
                 full £500.
               </p>
               <p className="text-muted leading-relaxed mb-6">
