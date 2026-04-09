@@ -7,6 +7,7 @@ import { artists } from "@/data/artists";
 import { themes } from "@/data/themes";
 import { getGalleryWorks } from "@/data/galleries";
 import { collections } from "@/data/collections";
+import { slugify } from "@/lib/slugify";
 import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
@@ -137,8 +138,6 @@ export default function BrowsePortfoliosPage() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"compact" | "expanded">("compact");
-
-  const [revShareInput, setRevShareInput] = useState("");
 
   // Gallery mode filters
   const [galleryTheme, setGalleryTheme] = useState("");
@@ -359,10 +358,20 @@ export default function BrowsePortfoliosPage() {
             <input
               type="text"
               inputMode="numeric"
-              value={revShareInput}
-              onChange={(e) => setRevShareInput(e.target.value.replace(/[^0-9]/g, ""))}
-              onBlur={() => setFilter("revenueShareMin", Number(revShareInput) || 0)}
-              onKeyDown={(e) => { if (e.key === "Enter") setFilter("revenueShareMin", Number(revShareInput) || 0); }}
+              defaultValue=""
+              ref={(el) => { if (el && filters.revenueShareMin > 0 && !el.dataset.init) { el.value = String(filters.revenueShareMin); el.dataset.init = "1"; } }}
+              onBlur={(e) => {
+                const val = Number(e.target.value) || 0;
+                setFilter("revenueShareMin", val);
+                if (val > 0 && !filters.revenueShare) setFilter("revenueShare", true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const val = Number((e.target as HTMLInputElement).value) || 0;
+                  setFilter("revenueShareMin", val);
+                  if (val > 0 && !filters.revenueShare) setFilter("revenueShare", true);
+                }
+              }}
               placeholder="e.g. 10"
               className="w-20 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-foreground text-center focus:outline-none focus:border-accent/50"
             />
@@ -447,13 +456,15 @@ export default function BrowsePortfoliosPage() {
 
         <div className="relative max-w-[1400px] mx-auto px-6 pt-30 lg:pt-28 pb-12 lg:pb-14">
           <div className="py-4">
-            <h1 className="font-serif text-3xl lg:text-4xl text-white mb-3 leading-tight">
+            <h1 className="font-serif text-4xl lg:text-5xl text-white mb-3 leading-tight">
               The Marketplace
             </h1>
             <p className="text-sm lg:text-base text-white/50 leading-relaxed max-w-md">
               {browseMode === "portfolios"
                 ? "Explore curated artist profiles. Discover commercial terms, styles, and availability."
-                : "Browse individual artworks. Filter by theme, medium, or price."}
+                : browseMode === "gallery"
+                ? "Browse individual artworks. Filter by theme, medium, or price."
+                : "Themed bundles of artwork at a set price. Ready to transform your space."}
             </p>
           </div>
         </div>
@@ -722,7 +733,7 @@ export default function BrowsePortfoliosPage() {
         /* ── Gallery mode ── */
         <>
           {/* Gallery filter bar */}
-          <section className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
+          <section className="sticky top-14 lg:top-16 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
             <div className="max-w-[1400px] mx-auto px-6 py-3">
               <div className="flex flex-wrap items-center gap-3">
                 {/* Theme */}
@@ -850,7 +861,7 @@ export default function BrowsePortfoliosPage() {
                   {filteredGalleryWorks.map((work) => (
                     <Link
                       key={work.id}
-                      href={`/browse/${work.artistSlug}`}
+                      href={`/browse/${work.artistSlug}#work-${slugify(work.title)}`}
                       className="group break-inside-avoid block"
                     >
                       <div className="bg-surface border border-border rounded-sm overflow-hidden hover:border-accent/30 hover:shadow-sm transition-all duration-300">
@@ -868,7 +879,7 @@ export default function BrowsePortfoliosPage() {
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 flex items-end">
                             <div className="p-4 w-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 translate-y-1 group-hover:translate-y-0">
                               <p className="text-white text-xs font-medium">
-                                View Artist →
+                                {work.artistName} →
                               </p>
                             </div>
                           </div>
@@ -955,8 +966,8 @@ export default function BrowsePortfoliosPage() {
                 Whether you run a café, restaurant, coworking space, or office,
                 we can help you find the right artwork for your walls.
               </p>
-              <Button href="/spaces" variant="secondary" size="md">
-                Request Artwork for Your Venue
+              <Button href="/register-venue" variant="secondary" size="md">
+                Register Your Venue
               </Button>
             </div>
           </div>

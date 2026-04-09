@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 const valueBlocks = [
   {
     icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 7l9-4 9 4v10l-9 4-9-4V7z" />
         <path d="M3 7l9 4 9-4M12 11v10" />
       </svg>
@@ -24,17 +24,17 @@ const valueBlocks = [
   },
   {
     icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M9 12l2 2 4-4" />
         <circle cx="12" cy="12" r="9" />
       </svg>
     ),
     title: "Curated marketplace",
-    description: "Not a listing site. Your work is matched to relevant spaces that suit your style and medium.",
+    description: "Every artist is reviewed. Your work is matched to relevant spaces that suit your style and medium.",
   },
   {
     icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" rx="1" />
         <rect x="14" y="3" width="7" height="7" rx="1" />
         <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -46,7 +46,7 @@ const valueBlocks = [
   },
   {
     icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="9" />
         <path d="M8 12h8M12 8v8" />
       </svg>
@@ -56,7 +56,7 @@ const valueBlocks = [
   },
   {
     icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
       </svg>
     ),
@@ -65,7 +65,7 @@ const valueBlocks = [
   },
   {
     icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 3h18v18H3zM3 9h18M9 3v18" />
       </svg>
     ),
@@ -216,7 +216,7 @@ export default function ArtistsPage() {
         </div>
         <div className="max-w-[1200px] mx-auto px-6 w-full">
           <div className="max-w-2xl">
-            <p className="text-xs font-medium tracking-[0.25em] uppercase text-[#C17C5A] mb-5">
+            <p className="text-xs font-medium tracking-[0.25em] uppercase text-accent mb-5">
               For Artists
             </p>
             <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
@@ -239,52 +239,39 @@ export default function ArtistsPage() {
         <ScrollButton targetId="artist-content" label="See what you get" />
       </section>
 
-      {/* Content sections with solid backgrounds */}
+      {/* Content sections */}
       <div id="artist-content" className="bg-background">
 
-      {/* Early Access Banner */}
-      <section className="py-6 bg-foreground">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-[#C17C5A] uppercase tracking-wider mb-1">
-                Limited founding spots
-              </p>
-              <p className="text-white/80">
-                First 20 approved artists get <strong className="text-white">6 months free</strong>. All artists get their <strong className="text-white">first month free</strong>.
-              </p>
-            </div>
-            <a href="/apply" className="inline-flex items-center justify-center px-6 py-2.5 bg-white text-foreground text-sm font-medium rounded-sm hover:bg-white/90 transition-colors">
-              Apply Now
-            </a>
-          </div>
-        </div>
-      </section>
-
       {/* What You Get */}
-      <section className="py-16 lg:py-20">
+      <section className="py-20 lg:py-28">
         <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl mb-14">What you get</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimateIn>
+          <h2 className="text-3xl md:text-4xl mb-10">What you get</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {valueBlocks.map((block) => (
               <div
                 key={block.title}
-                className="bg-surface border border-border rounded-sm p-7 hover:shadow-sm transition-shadow duration-300"
+                className="bg-surface border border-border rounded-sm p-6 hover:shadow-sm transition-shadow duration-300"
               >
-                <div className="text-accent mb-4">{block.icon}</div>
-                <h3 className="text-lg mb-2">{block.title}</h3>
+                <div className="text-accent mb-3">{block.icon}</div>
+                <h3 className="text-base font-medium mb-1.5">{block.title}</h3>
                 <p className="text-muted text-sm leading-relaxed">
                   {block.description}
                 </p>
               </div>
             ))}
           </div>
+          <p className="mt-8 text-sm text-muted max-w-2xl">
+            We review every application for quality, consistency, and commercial viability. No AI-generated work. This is how we maintain venue trust and ensure your work reaches spaces that genuinely want it.
+          </p>
+          </AnimateIn>
         </div>
       </section>
 
       {/* How It Works */}
-      <section className="py-16 lg:py-20 bg-foreground">
+      <section className="py-20 lg:py-28 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6">
+          <AnimateIn>
           <h2 className="text-3xl md:text-4xl mb-14 text-white">How it works</h2>
           <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-0">
             {pipelineSteps.map((step, i) => (
@@ -303,11 +290,13 @@ export default function ArtistsPage() {
               </div>
             ))}
           </div>
+          </AnimateIn>
         </div>
       </section>
 
       {/* Pricing */}
-      <section className="py-16 lg:py-20">
+      <section className="py-20 lg:py-28">
+        <AnimateIn>
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl mb-4">Membership</h2>
@@ -455,10 +444,11 @@ export default function ArtistsPage() {
             </div>
           </div>
         </div>
-      </section>
+        </AnimateIn>
+        </section>
 
       {/* Value Anchoring */}
-      <section className="py-16 lg:py-20 bg-foreground">
+      <section className="py-20 lg:py-28 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6">
           <h2 className="text-3xl md:text-4xl mb-10 text-white text-center">
             What &pound;9.99 a month gets you
@@ -522,45 +512,8 @@ export default function ArtistsPage() {
         </div>
       </section>
 
-      {/* How Curation Works */}
-      <section className="py-16 lg:py-20">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl mb-10">How curation works</h2>
-          <div className="max-w-xl space-y-6">
-            <p className="text-muted leading-relaxed">
-              We review every application. Roughly half are accepted.
-            </p>
-            <div>
-              <p className="font-medium mb-3">We look for:</p>
-              <ul className="space-y-2">
-                {[
-                  "Technical quality",
-                  "Coherent body of work",
-                  "Commercial viability",
-                  "Professional presentation",
-                ].map((item) => (
-                  <li
-                    key={item}
-                    className="flex items-center gap-2 text-sm text-muted"
-                  >
-                    <span className="w-1 h-1 rounded-full bg-accent shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p className="text-muted leading-relaxed">
-              No AI-generated work. Every piece is original.
-            </p>
-            <p className="text-sm text-muted italic">
-              Being selective is how we maintain venue trust and ensure your work reaches spaces that genuinely want it.
-            </p>
-          </div>
-        </div>
-      </section>
-
       {/* Comparison Table */}
-      <section className="py-16 lg:py-20 bg-surface border-y border-border">
+      <section className="py-20 lg:py-28 bg-surface border-y border-border">
         <div className="max-w-[1200px] mx-auto px-6">
           <h2 className="text-3xl md:text-4xl mb-10">
             How this is different
@@ -618,7 +571,7 @@ export default function ArtistsPage() {
       </section>
 
       {/* FAQs */}
-      <section className="py-16 lg:py-20">
+      <section className="py-20 lg:py-28">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-2xl mx-auto">
             <h2 className="text-3xl md:text-4xl mb-10 text-center">
@@ -630,7 +583,7 @@ export default function ArtistsPage() {
       </section>
 
       {/* Final CTA */}
-      <section className="py-16 lg:py-20 bg-foreground">
+      <section className="py-20 lg:py-28 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-4xl lg:text-5xl mb-4 max-w-2xl mx-auto text-white">
             Apply to Wallspace. Get discovered by the spaces that want your work.

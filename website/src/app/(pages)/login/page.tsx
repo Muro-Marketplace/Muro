@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Button from "@/components/Button";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -9,18 +10,30 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] bg-background flex items-center justify-center px-6 py-16">
+    <div className="relative min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex items-center justify-center px-6 py-16">
+      {/* Background image */}
+      <div className="absolute inset-0 -z-10">
+        <Image
+          src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop&crop=center"
+          alt="Mountain landscape"
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-black/55" />
+      </div>
+
       <div className="w-full max-w-2xl">
         {/* Heading */}
         <div className="text-center mb-10">
-          <h1 className="text-3xl lg:text-4xl mb-3">Welcome back</h1>
-          <p className="text-muted">Choose how you would like to log in.</p>
+          <h1 className="text-3xl lg:text-4xl mb-3 text-white">Welcome back</h1>
+          <p className="text-white/50">Choose how you would like to log in.</p>
         </div>
 
         {/* Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
           {/* Artist card */}
-          <div className="bg-surface border border-border rounded-sm p-8 flex flex-col items-center text-center gap-5 hover:border-accent/40 transition-colors duration-200">
+          <div className="bg-white/95 backdrop-blur-sm border border-white/20 rounded-sm p-8 flex flex-col items-center text-center gap-5 hover:bg-white transition-colors duration-200">
             <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center">
               <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
                 <circle cx="14" cy="10" r="5" stroke="#C17C5A" strokeWidth="1.5" />
@@ -28,7 +41,7 @@ export default function LoginPage() {
               </svg>
             </div>
             <div>
-              <h2 className="text-xl mb-2">Artist Login</h2>
+              <h2 className="text-xl mb-2 text-foreground">Artist Login</h2>
               <p className="text-sm text-muted leading-relaxed">
                 Access your portfolio, analytics, and placements.
               </p>
@@ -39,7 +52,7 @@ export default function LoginPage() {
           </div>
 
           {/* Venue card */}
-          <div className="bg-surface border border-border rounded-sm p-8 flex flex-col items-center text-center gap-5 hover:border-accent/40 transition-colors duration-200">
+          <div className="bg-white/95 backdrop-blur-sm border border-white/20 rounded-sm p-8 flex flex-col items-center text-center gap-5 hover:bg-white transition-colors duration-200">
             <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center">
               <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
                 <rect x="4" y="12" width="20" height="12" rx="1" stroke="#C17C5A" strokeWidth="1.5" />
@@ -48,7 +61,7 @@ export default function LoginPage() {
               </svg>
             </div>
             <div>
-              <h2 className="text-xl mb-2">Venue Login</h2>
+              <h2 className="text-xl mb-2 text-foreground">Venue Login</h2>
               <p className="text-sm text-muted leading-relaxed">
                 Access your saved artists, enquiries, and orders.
               </p>
@@ -61,7 +74,7 @@ export default function LoginPage() {
 
         {/* Sign-up links */}
         <div className="text-center space-y-2">
-          <p className="text-sm text-muted">
+          <p className="text-sm text-white/50">
             Don&rsquo;t have an account?{" "}
             <Link href="/apply" className="text-accent hover:underline underline-offset-4">
               Apply to join as an artist

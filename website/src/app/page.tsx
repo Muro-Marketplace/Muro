@@ -219,7 +219,7 @@ export default function Home() {
       <div ref={contentRef} className="bg-background">
 
           {/* ─── FOR VENUES ─── */}
-          <section className="py-20 lg:py-28 bg-surface">
+          <section className="py-20 lg:py-28 bg-surface border-b border-border">
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
               <AnimateIn>
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
@@ -242,12 +242,12 @@ export default function Home() {
                     <DealCard title="Purchase" description="Buy outright for your collection." />
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <Link href="/browse" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Discover Art
                     </Link>
-                    <Link href="/venues" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
-                      Learn More
+                    <Link href="/register-venue" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                      Register Your Venue
                     </Link>
                   </div>
                 </div>
@@ -312,8 +312,8 @@ export default function Home() {
                     <Link href="/apply" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Apply to Join
                     </Link>
-                    <Link href="/pricing" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
-                      View Pricing
+                    <Link href="/artists" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                      Learn More
                     </Link>
                   </div>
                 </div>
@@ -394,7 +394,7 @@ export default function Home() {
           </section>
 
           {/* ─── CURATED BANNER ─── */}
-          <section className="relative h-48 lg:h-56 overflow-hidden">
+          <section className="relative h-56 lg:h-72 overflow-hidden">
             <Image src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=400&fit=crop&crop=center" alt="Art being created" fill className="object-cover" />
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative h-full flex items-center justify-center text-center px-6">

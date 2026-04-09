@@ -80,15 +80,6 @@ const freeBenefits = [
   },
 ];
 
-const premiumBenefits = [
-  "Professional curation for your space",
-  "AI-powered search and recommendations",
-  "Curated shortlists tailored to your venue",
-  "Optional installation packages (paid add-on)",
-  "Priority access to new artists",
-  "Premium support",
-];
-
 const steps = [
   {
     number: "01",
@@ -194,7 +185,7 @@ export default function VenuesPage() {
         </div>
         <div className="max-w-[1200px] mx-auto px-6 w-full">
           <div className="max-w-2xl">
-            <p className="text-xs font-medium tracking-[0.25em] uppercase text-[#C17C5A] mb-5">
+            <p className="text-xs font-medium tracking-[0.25em] uppercase text-accent mb-5">
               For Venues
             </p>
             <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
@@ -224,8 +215,9 @@ export default function VenuesPage() {
       <div id="venue-content" className="bg-background">
 
       {/* Free Tier – What You Get */}
-      <section className="py-16 lg:py-20">
+      <section className="py-20 lg:py-28">
         <div className="max-w-[1200px] mx-auto px-6">
+          <AnimateIn>
           <div className="mb-10">
             <span className="text-xs font-medium text-accent uppercase tracking-wider">Free tier</span>
             <h2 className="text-3xl md:text-4xl mt-2">What you get for free</h2>
@@ -246,112 +238,14 @@ export default function VenuesPage() {
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="py-16 lg:py-20 bg-foreground text-white">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl mb-14 text-white">How it works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-6">
-            {steps.map((step) => (
-              <div key={step.number}>
-                <span className="text-[#C17C5A] text-sm font-medium tracking-wider">
-                  {step.number}
-                </span>
-                <h3 className="text-xl mt-2 mb-3 text-white">{step.title}</h3>
-                <p className="text-white/60 text-sm leading-relaxed">
-                  {step.description}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-14 flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            <p className="text-white/60 text-sm italic">
-              Total time to get started: under 5 minutes.
-            </p>
-            <Button href="/browse" size="lg" variant="accent">
-              Browse Portfolios
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Venue Photos */}
-      <section className="py-16 lg:py-20">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl mb-14">Where art goes up</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {venues.map((venue) => (
-              <div key={venue.caption} className="group">
-                <div className="aspect-[4/3] rounded-sm overflow-hidden relative">
-                  <Image
-                    src={venue.image}
-                    alt={venue.caption}
-                    fill
-                    className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
-                    sizes="33vw"
-                  />
-                </div>
-                <p className="mt-3 text-sm text-muted">{venue.caption}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Premium Tier */}
-      <section className="py-16 lg:py-20 bg-surface">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-2xl">
-            <span className="text-xs font-medium text-accent uppercase tracking-wider">Coming soon</span>
-            <h2 className="text-3xl md:text-4xl mt-2 mb-4">Premium for venues</h2>
-            <p className="text-muted leading-relaxed mb-8">
-              For venues that want a more hands-on curation experience. Premium adds AI-powered tools,
-              a dedicated curator, and optional installation support.
-            </p>
-            <ul className="space-y-3 mb-8">
-              {premiumBenefits.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm text-foreground/80">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-accent mt-0.5 shrink-0"
-                  >
-                    <path d="M3 8.5l3.5 3.5L13 4" />
-                  </svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <Button href="/contact" size="md" variant="secondary">
-              Contact Us to Learn More
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Image Break 2 */}
-      <section className="relative h-64 lg:h-80 overflow-hidden">
-        <Image src="https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=1920&h=400&fit=crop&crop=center" alt="Wine bar with art" fill className="object-cover" />
-        <div className="absolute inset-0 bg-black/40" />
-        <div className="relative h-full flex items-center justify-center text-center px-6">
-          <div>
-            <p className="text-white text-3xl lg:text-4xl font-serif mb-3">Zero upfront cost</p>
-            <p className="text-white/60 text-sm lg:text-base">Browse, enquire, and arrange – completely free for venues</p>
-          </div>
+          </AnimateIn>
         </div>
       </section>
 
       {/* Revenue Share */}
-      <section className="py-16 lg:py-20 bg-surface">
+      <section className="py-20 lg:py-28 bg-surface">
         <div className="max-w-[1200px] mx-auto px-6">
+          <AnimateIn>
           <h2 className="text-3xl md:text-4xl mb-10">
             Earn from your walls
           </h2>
@@ -379,11 +273,80 @@ export default function VenuesPage() {
               Your walls are already earning nothing – this is a way to change that.
             </p>
           </div>
+          </AnimateIn>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-20 lg:py-28 bg-foreground text-white">
+        <div className="max-w-[1200px] mx-auto px-6">
+          <AnimateIn>
+          <h2 className="text-3xl md:text-4xl mb-14 text-white">How it works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-6">
+            {steps.map((step) => (
+              <div key={step.number}>
+                <span className="text-accent text-sm font-medium tracking-wider">
+                  {step.number}
+                </span>
+                <h3 className="text-xl mt-2 mb-3 text-white">{step.title}</h3>
+                <p className="text-white/60 text-sm leading-relaxed">
+                  {step.description}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-14 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            <p className="text-white/60 text-sm italic">
+              Total time to get started: under 5 minutes.
+            </p>
+            <Button href="/browse" size="lg" variant="accent">
+              Browse Portfolios
+            </Button>
+            <a href="/register-venue" className="inline-flex items-center justify-center px-8 py-3.5 text-sm font-semibold tracking-wider uppercase border border-white/30 text-white rounded-sm hover:bg-white/10 transition-colors">
+              Register Your Venue
+            </a>
+          </div>
+          </AnimateIn>
+        </div>
+      </section>
+
+      {/* Venue Photos */}
+      <section className="py-20 lg:py-28">
+        <div className="max-w-[1200px] mx-auto px-6">
+          <h2 className="text-3xl md:text-4xl mb-14">Where art goes up</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {venues.map((venue) => (
+              <div key={venue.caption} className="group">
+                <div className="aspect-[4/3] rounded-sm overflow-hidden relative">
+                  <Image
+                    src={venue.image}
+                    alt={venue.caption}
+                    fill
+                    className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                    sizes="33vw"
+                  />
+                </div>
+                <p className="mt-3 text-sm text-muted">{venue.caption}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Image Break */}
+      <section className="relative h-64 lg:h-80 overflow-hidden">
+        <Image src="https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=1920&h=400&fit=crop&crop=center" alt="Wine bar with art" fill className="object-cover" />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative h-full flex items-center justify-center text-center px-6">
+          <div>
+            <p className="text-white text-3xl lg:text-4xl font-serif mb-3">Zero upfront cost</p>
+            <p className="text-white/60 text-sm lg:text-base">Browse, enquire, and arrange – completely free for venues</p>
+          </div>
         </div>
       </section>
 
       {/* FAQ */}
-      <section className="py-16 lg:py-20">
+      <section className="py-20 lg:py-28">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-2xl mx-auto">
             <h2 className="text-3xl md:text-4xl mb-10 text-center">
@@ -395,7 +358,7 @@ export default function VenuesPage() {
       </section>
 
       {/* Final CTA */}
-      <section className="py-16 lg:py-20 bg-foreground">
+      <section className="py-20 lg:py-28 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-4xl lg:text-5xl mb-6 text-white">
             Discover art for your space. Free.

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { venues } from "@/data/venues";
 import Button from "@/components/Button";
 
@@ -37,16 +38,25 @@ export default function SpacesPage() {
   return (
     <div className="bg-background">
       {/* Hero */}
-      <section className="py-20 lg:py-24">
-        <div className="max-w-[1200px] mx-auto px-6">
+      <section className="relative -mt-14 lg:-mt-16 pt-28 lg:pt-32 pb-16 lg:pb-20 overflow-hidden">
+        <div className="absolute inset-0">
+          <Image
+            src="https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=1920&h=600&fit=crop&crop=center"
+            alt="Minimal restaurant interior"
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-black/65" />
+        </div>
+        <div className="relative z-10 max-w-[1200px] mx-auto px-6">
           <div className="max-w-3xl">
             <p className="text-accent text-sm font-medium uppercase tracking-wider mb-4">
               Venue Demand
             </p>
-            <h1 className="text-4xl lg:text-5xl mb-6">
+            <h1 className="text-4xl lg:text-5xl mb-6 text-white">
               Spaces looking for art
             </h1>
-            <p className="text-xl text-muted leading-relaxed">
+            <p className="text-xl text-white/60 leading-relaxed">
               These are real venues actively seeking artwork for their
               walls. Cafes, restaurants, hotels, coworking spaces – all with
               genuine interest in displaying and acquiring original art. Get your

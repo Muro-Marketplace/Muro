@@ -391,7 +391,7 @@ export default function ArtistProfileClient({
                   <select className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm text-muted focus:outline-none focus:border-accent/50">
                     <option>I&apos;m a venue looking for art</option>
                     <option>I&apos;m interested in purchasing</option>
-                    <option>Commission enquiry</option>
+                    <option>Request a custom piece</option>
                     <option>General question</option>
                   </select>
                   <textarea placeholder="Your message..." rows={3} required className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
