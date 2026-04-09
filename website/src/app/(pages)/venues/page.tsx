@@ -188,7 +188,7 @@ export default function VenuesPage() {
             <p className="text-xs font-medium tracking-[0.25em] uppercase text-accent mb-5">
               For Venues
             </p>
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
+            <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
               Discover art for your space.
             </h1>
             <p className="text-lg lg:text-xl text-white/60 leading-relaxed max-w-xl mb-10">
@@ -196,13 +196,13 @@ export default function VenuesPage() {
               Filter by style, theme, and location. Enquire directly.
               No curation fee. No middleman. Free to use.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <Button href="/browse" size="lg" variant="accent">
                 Browse Portfolios
               </Button>
-              <Button href="/register-venue" size="lg" variant="secondary">
+              <a href="/register-venue" className="inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-3.5 text-sm font-semibold tracking-wider uppercase border-2 border-white text-white rounded-sm hover:bg-white hover:text-foreground transition-colors">
                 Register Your Venue
-              </Button>
+              </a>
             </div>
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function VenuesPage() {
             <span className="text-xs font-medium text-accent uppercase tracking-wider">Free tier</span>
             <h2 className="text-3xl md:text-4xl mt-2">What you get for free</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
             {freeBenefits.map((benefit) => (
               <div
                 key={benefit.title}
@@ -250,22 +250,24 @@ export default function VenuesPage() {
             Earn from your walls
           </h2>
           <div className="max-w-3xl">
-            <div className="flex items-center gap-2 text-xs md:text-sm mb-8 overflow-x-auto">
-              <span className="bg-background border border-border text-foreground rounded-sm px-3 py-1.5 whitespace-nowrap">
-                Customer sees art
-              </span>
+            {/* Vertical on mobile, horizontal on desktop */}
+            <div className="hidden sm:flex items-center gap-2 text-xs md:text-sm mb-8">
+              <span className="bg-background border border-border text-foreground rounded-sm px-3 py-1.5 whitespace-nowrap">Customer sees art</span>
               <span className="text-muted shrink-0">&rarr;</span>
-              <span className="bg-background border border-border text-foreground rounded-sm px-3 py-1.5 whitespace-nowrap">
-                Scans QR
-              </span>
+              <span className="bg-background border border-border text-foreground rounded-sm px-3 py-1.5 whitespace-nowrap">Scans QR</span>
               <span className="text-muted shrink-0">&rarr;</span>
-              <span className="bg-background border border-border text-foreground rounded-sm px-3 py-1.5 whitespace-nowrap">
-                Buys via Wallspace
-              </span>
+              <span className="bg-background border border-border text-foreground rounded-sm px-3 py-1.5 whitespace-nowrap">Buys via Wallspace</span>
               <span className="text-muted shrink-0">&rarr;</span>
-              <span className="bg-accent/10 border border-accent/30 text-accent rounded-sm px-3 py-1.5 font-medium whitespace-nowrap">
-                You share in the sale
-              </span>
+              <span className="bg-accent/10 border border-accent/30 text-accent rounded-sm px-3 py-1.5 font-medium whitespace-nowrap">You share in the sale</span>
+            </div>
+            <div className="flex sm:hidden flex-col items-start gap-1.5 mb-8 text-xs">
+              <span className="bg-background border border-border text-foreground rounded-sm px-3 py-2 w-full">Customer sees art</span>
+              <span className="text-muted pl-3">&darr;</span>
+              <span className="bg-background border border-border text-foreground rounded-sm px-3 py-2 w-full">Scans QR code</span>
+              <span className="text-muted pl-3">&darr;</span>
+              <span className="bg-background border border-border text-foreground rounded-sm px-3 py-2 w-full">Buys via Wallspace</span>
+              <span className="text-muted pl-3">&darr;</span>
+              <span className="bg-accent/10 border border-accent/30 text-accent rounded-sm px-3 py-2 w-full font-medium">You share in the sale</span>
             </div>
             <p className="text-muted leading-relaxed">
               Revenue share is agreed directly between you and the artist when arranging
@@ -282,7 +284,7 @@ export default function VenuesPage() {
         <div className="max-w-[1200px] mx-auto px-6">
           <AnimateIn>
           <h2 className="text-3xl md:text-4xl mb-14 text-white">How it works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 lg:gap-6">
             {steps.map((step) => (
               <div key={step.number}>
                 <span className="text-accent text-sm font-medium tracking-wider">
@@ -295,14 +297,14 @@ export default function VenuesPage() {
               </div>
             ))}
           </div>
-          <div className="mt-14 flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            <p className="text-white/60 text-sm italic">
-              Total time to get started: under 5 minutes.
-            </p>
+          <p className="mt-10 text-white/60 text-sm italic mb-4">
+            Total time to get started: under 5 minutes.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button href="/browse" size="lg" variant="accent">
               Browse Portfolios
             </Button>
-            <a href="/register-venue" className="inline-flex items-center justify-center px-8 py-3.5 text-sm font-semibold tracking-wider uppercase border border-white/30 text-white rounded-sm hover:bg-white/10 transition-colors">
+            <a href="/register-venue" className="inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-3.5 text-sm font-semibold tracking-wider uppercase border border-white/30 text-white rounded-sm hover:bg-white/10 transition-colors">
               Register Your Venue
             </a>
           </div>

@@ -473,7 +473,7 @@ export default function BrowsePortfoliosPage() {
       {/* Mode toggle – tab style, visually distinct from filter toggles */}
       <div className="border-b border-border">
         <div className="max-w-[1400px] mx-auto px-6">
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-4 sm:gap-8 overflow-x-auto">
             <button
               type="button"
               onClick={() => setBrowseMode("portfolios")}

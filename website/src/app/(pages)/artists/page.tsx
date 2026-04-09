@@ -219,7 +219,7 @@ export default function ArtistsPage() {
             <p className="text-xs font-medium tracking-[0.25em] uppercase text-accent mb-5">
               For Artists
             </p>
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
+            <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
               Your work, matched to spaces that want it.
             </h1>
             <p className="text-lg lg:text-xl text-white/60 leading-relaxed max-w-xl mb-10">
@@ -247,11 +247,11 @@ export default function ArtistsPage() {
         <div className="max-w-[1200px] mx-auto px-6">
           <AnimateIn>
           <h2 className="text-3xl md:text-4xl mb-10">What you get</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
             {valueBlocks.map((block) => (
               <div
                 key={block.title}
-                className="bg-surface border border-border rounded-sm p-6 hover:shadow-sm transition-shadow duration-300"
+                className="bg-surface border border-border rounded-sm p-4 sm:p-6 hover:shadow-sm transition-shadow duration-300"
               >
                 <div className="text-accent mb-3">{block.icon}</div>
                 <h3 className="text-base font-medium mb-1.5">{block.title}</h3>
@@ -321,7 +321,7 @@ export default function ArtistsPage() {
           {/* Pricing Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Core */}
-            <div className="bg-surface border border-border rounded-sm p-8 flex flex-col">
+            <div className="bg-surface border border-border rounded-sm p-5 sm:p-6 md:p-8 flex flex-col">
               <h3 className="text-2xl mb-1">Core</h3>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-3xl font-serif text-foreground">
@@ -361,7 +361,7 @@ export default function ArtistsPage() {
             </div>
 
             {/* Premium */}
-            <div className="bg-surface border-2 border-accent rounded-sm p-8 flex flex-col relative">
+            <div className="bg-surface border-2 border-accent rounded-sm p-5 sm:p-6 md:p-8 flex flex-col relative">
               <div className="absolute -top-3 left-6 bg-accent text-white text-xs font-medium px-3 py-1 rounded-sm">
                 Most Popular
               </div>
@@ -404,7 +404,7 @@ export default function ArtistsPage() {
             </div>
 
             {/* Pro */}
-            <div className="bg-surface border border-border rounded-sm p-8 flex flex-col">
+            <div className="bg-surface border border-border rounded-sm p-5 sm:p-6 md:p-8 flex flex-col">
               <h3 className="text-2xl mb-1">Pro</h3>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-3xl font-serif text-foreground">

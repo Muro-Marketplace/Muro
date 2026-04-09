@@ -98,7 +98,7 @@ export default function ArtistProfileClient({
           </div>
 
           {/* Masonry grid */}
-          <div className="columns-1 sm:columns-2 lg:columns-3 gap-5 space-y-5">
+          <div className="columns-1 sm:columns-2 lg:columns-3 gap-3 sm:gap-5 space-y-3 sm:space-y-5">
             {filteredWorks.map((work, index) => (
               <div
                 key={work.id}
@@ -207,12 +207,12 @@ export default function ArtistProfileClient({
 
           {/* Content */}
           <div
-            className="relative z-10 flex flex-col lg:flex-row max-w-5xl w-full mx-4 max-h-[90vh] bg-white rounded-sm overflow-hidden shadow-2xl"
+            className="relative z-10 flex flex-col lg:flex-row max-w-5xl w-full mx-2 sm:mx-4 max-h-[90vh] bg-white rounded-sm overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Image side */}
             <div
-              className="relative flex-1 min-h-[350px] lg:min-h-[500px] bg-[#f5f5f3] select-none"
+              className="relative flex-1 min-h-[250px] sm:min-h-[350px] lg:min-h-[500px] bg-[#f5f5f3] select-none"
               onContextMenu={(e) => e.preventDefault()}
               draggable={false}
             >
@@ -248,7 +248,7 @@ export default function ArtistProfileClient({
             </div>
 
             {/* Details side */}
-            <div className="lg:w-80 shrink-0 p-6 lg:p-8 flex flex-col border-t lg:border-t-0 lg:border-l border-border">
+            <div className="lg:w-80 shrink-0 p-4 sm:p-6 lg:p-8 flex flex-col border-t lg:border-t-0 lg:border-l border-border">
               {/* Close button */}
               <button
                 onClick={() => setLightboxIndex(null)}

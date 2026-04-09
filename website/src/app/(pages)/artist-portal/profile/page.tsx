@@ -194,7 +194,7 @@ export default function ProfileEditorPage() {
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/profile">
-      <div className="max-w-3xl">
+      <div className="max-w-5xl">
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>

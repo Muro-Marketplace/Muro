@@ -153,27 +153,27 @@ export default function Home() {
         <div className="flex-1 flex items-center px-6 lg:px-10 pb-32">
           <div className="max-w-[1400px] mx-auto w-full">
             <div className="max-w-2xl">
-              <h1 className="font-serif text-[clamp(3rem,8vw,6rem)] leading-[0.9] tracking-[-0.02em] text-white mb-6">
+              <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[0.9] tracking-[-0.02em] text-white mb-6">
                 WALLSPACE
               </h1>
-              <p className="text-xl lg:text-2xl text-white/90 font-light leading-snug mb-3">
+              <p className="text-lg sm:text-xl lg:text-2xl text-white/90 font-light leading-snug mb-3">
                 The curated art marketplace for commercial spaces.
               </p>
-              <p className="text-base lg:text-lg text-white/60 leading-relaxed mb-10 max-w-lg">
+              <p className="text-base lg:text-lg text-white/60 leading-relaxed mb-12 sm:mb-10 max-w-lg">
                 Venues source original artwork risk-free. Artists access
                 high-intent commercial demand. Every artist reviewed. No
                 AI-generated work.
               </p>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <Link
                   href="/browse"
-                  className="inline-flex items-center justify-center px-8 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
+                  className="inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
                 >
                   Discover Art
                 </Link>
                 <Link
                   href="/apply"
-                  className="inline-flex items-center justify-center px-8 py-4 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
+                  className="inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-4 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
                 >
                   Apply to Join
                 </Link>
@@ -236,23 +236,23 @@ export default function Home() {
                     Completely free to browse and enquire.
                   </p>
 
-                  <div className="grid grid-cols-3 gap-3 mb-10">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-8 sm:mb-10">
                     <DealCard title="Free Loan" description="Display at no cost. Rotate any time." />
                     <DealCard title="Revenue Share" description="Earn a share if it sells from your wall." />
                     <DealCard title="Purchase" description="Buy outright for your collection." />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Link href="/browse" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <Link href="/browse" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Discover Art
                     </Link>
-                    <Link href="/register-venue" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                    <Link href="/register-venue" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
                       Register Your Venue
                     </Link>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-5 grid-rows-4 gap-2 aspect-square">
+                <div className="hidden sm:grid grid-cols-5 grid-rows-4 gap-2 aspect-square">
                   <div className="col-span-3 row-span-2 relative rounded-sm overflow-hidden">
                     <Image src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&h=400&fit=crop" alt="Moody urban street photography" fill className="object-cover" sizes="25vw" />
                   </div>
@@ -279,7 +279,7 @@ export default function Home() {
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
               <AnimateIn>
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-                <div className="order-2 lg:order-1 grid grid-cols-3 gap-2">
+                <div className="order-2 lg:order-1 grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2">
                   {artists.slice(0, 6).map((a) => (
                     <Link key={a.slug} href={`/browse/${a.slug}`} className="aspect-[4/5] relative rounded-sm overflow-hidden group">
                       <Image src={a.image} alt={a.name} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-500" sizes="20vw" />
@@ -308,11 +308,11 @@ export default function Home() {
                     <BulletPoint text="First month free. First 20 artists get 6 months free." />
                   </ul>
 
-                  <div className="flex items-center gap-3">
-                    <Link href="/apply" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <Link href="/apply" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Apply to Join
                     </Link>
-                    <Link href="/artists" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                    <Link href="/artists" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
                       Learn More
                     </Link>
                   </div>
@@ -372,7 +372,7 @@ export default function Home() {
                 Whether you&rsquo;re looking for art or looking to be discovered.
               </p>
               <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto items-stretch">
-                <div className="bg-surface border border-border rounded-sm p-8 text-center flex flex-col">
+                <div className="bg-surface border border-border rounded-sm p-5 sm:p-8 text-center flex flex-col">
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Venues</p>
                   <h3 className="font-serif text-xl mb-3">Source artwork risk-free</h3>
                   <p className="text-sm text-muted mb-6 flex-1">Free to browse and enquire. No contracts.</p>
@@ -380,7 +380,7 @@ export default function Home() {
                     Discover Art
                   </Link>
                 </div>
-                <div className="bg-surface border border-border rounded-sm p-8 text-center flex flex-col">
+                <div className="bg-surface border border-border rounded-sm p-5 sm:p-8 text-center flex flex-col">
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Artists</p>
                   <h3 className="font-serif text-xl mb-3">Get discovered by venues</h3>
                   <p className="text-sm text-muted mb-6 flex-1">First month free. From &pound;9.99/month.</p>
