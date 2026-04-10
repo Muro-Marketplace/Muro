@@ -377,7 +377,7 @@ export default function ApplicationForm() {
               Website
             </label>
             <input
-              type="url"
+              type="text"
               id="website"
               name="website"
               value={form.website}
@@ -452,7 +452,7 @@ export default function ApplicationForm() {
               Portfolio Link <span className="text-accent">*</span>
             </label>
             <input
-              type="url"
+              type="text"
               id="portfolioLink"
               name="portfolioLink"
               value={form.portfolioLink}
