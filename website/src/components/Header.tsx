@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import CartIndicator from "./CartIndicator";
+import { useAuth } from "@/context/AuthContext";
 
 const navLinks = [
   { label: "Discover Art", href: "/browse" },
@@ -19,6 +20,7 @@ export default function Header() {
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
   const isImmersive = immersiveRoutes.includes(pathname);
+  const { user, userType, signOut, loading: authLoading } = useAuth();
 
   useEffect(() => {
     if (!isImmersive) return;
@@ -69,26 +71,45 @@ export default function Header() {
 
           {/* Desktop CTAs */}
           <div className="hidden lg:flex items-center gap-2.5">
-            <Link
-              href="/login"
-              className={`text-sm px-4 py-2 transition-colors duration-300 ${
-                showSolid
-                  ? "text-muted hover:text-foreground"
-                  : "text-white/90 hover:text-white"
-              }`}
-            >
-              Login
-            </Link>
-            <Link
-              href="/apply"
-              className={`text-sm transition-colors duration-300 ${
-                showSolid
-                  ? "text-muted hover:text-foreground"
-                  : "text-white/90 hover:text-white"
-              }`}
-            >
-              Apply to Join
-            </Link>
+            {!authLoading && user ? (
+              <>
+                <Link
+                  href={userType === "venue" ? "/venue-portal" : "/artist-portal"}
+                  className={`text-sm px-4 py-2 transition-colors duration-300 ${
+                    showSolid ? "text-muted hover:text-foreground" : "text-white/90 hover:text-white"
+                  }`}
+                >
+                  {userType === "venue" ? "Venue Portal" : "Artist Portal"}
+                </Link>
+                <button
+                  onClick={() => signOut()}
+                  className={`text-sm transition-colors duration-300 ${
+                    showSolid ? "text-muted hover:text-foreground" : "text-white/90 hover:text-white"
+                  }`}
+                >
+                  Logout
+                </button>
+              </>
+            ) : !authLoading ? (
+              <>
+                <Link
+                  href="/login"
+                  className={`text-sm px-4 py-2 transition-colors duration-300 ${
+                    showSolid ? "text-muted hover:text-foreground" : "text-white/90 hover:text-white"
+                  }`}
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/apply"
+                  className={`text-sm transition-colors duration-300 ${
+                    showSolid ? "text-muted hover:text-foreground" : "text-white/90 hover:text-white"
+                  }`}
+                >
+                  Apply to Join
+                </Link>
+              </>
+            ) : null}
             <CartIndicator />
           </div>
 
@@ -147,20 +168,40 @@ export default function Header() {
               ))}
             </nav>
             <div className="flex flex-col gap-3 pt-4 border-t border-border">
-              <Link
-                href="/login"
-                className="text-center text-sm px-5 py-3 rounded-sm border border-border text-foreground hover:bg-foreground/5"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Login
-              </Link>
-              <Link
-                href="/apply"
-                className="text-base text-muted hover:text-foreground transition-colors duration-200"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Apply to Join
-              </Link>
+              {user ? (
+                <>
+                  <Link
+                    href={userType === "venue" ? "/venue-portal" : "/artist-portal"}
+                    className="text-center text-sm px-5 py-3 rounded-sm border border-border text-foreground hover:bg-foreground/5"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {userType === "venue" ? "Venue Portal" : "Artist Portal"}
+                  </Link>
+                  <button
+                    onClick={() => { signOut(); setMobileMenuOpen(false); }}
+                    className="text-base text-muted hover:text-foreground transition-colors duration-200"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="text-center text-sm px-5 py-3 rounded-sm border border-border text-foreground hover:bg-foreground/5"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    href="/apply"
+                    className="text-base text-muted hover:text-foreground transition-colors duration-200"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Apply to Join
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { label: "Dashboard", href: "/venue-portal" },
@@ -18,7 +19,6 @@ const navItems = [
 
 const bottomItems = [
   { label: "Browse Site", href: "/" },
-  { label: "Logout", href: "/login" },
 ];
 
 interface VenuePortalLayoutProps {
@@ -30,7 +30,25 @@ export default function VenuePortalLayout({
   children,
 }: VenuePortalLayoutProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading, userType, displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!loading && (!user || userType !== "venue")) {
+      router.replace("/login");
+    }
+  }, [loading, user, userType, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted text-sm">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user || userType !== "venue") return null;
 
   function isActive(href: string) {
     if (href === "/venue-portal") return pathname === "/venue-portal";
@@ -79,6 +97,14 @@ export default function VenuePortalLayout({
               </Link>
             </li>
           ))}
+          <li>
+            <button
+              onClick={() => signOut()}
+              className="w-full text-left flex items-center gap-3 px-4 py-2.5 text-sm text-muted hover:text-foreground hover:bg-background transition-colors duration-150 rounded-sm mx-1"
+            >
+              Logout
+            </button>
+          </li>
         </ul>
       </div>
     </nav>

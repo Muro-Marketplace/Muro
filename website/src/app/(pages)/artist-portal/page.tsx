@@ -3,6 +3,7 @@
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 
 const stats = [
   { label: "Active Placements", value: "3" },
@@ -59,12 +60,13 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function ArtistPortalPage() {
+  const { displayName } = useAuth();
   return (
     <ArtistPortalLayout activePath="/artist-portal">
       {/* Welcome header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl lg:text-3xl mb-1">Welcome back, Maya</h1>
+          <h1 className="text-2xl lg:text-3xl mb-1">Welcome back, {displayName?.split(" ")[0] || "Artist"}</h1>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-accent/10 text-accent px-2.5 py-1 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />

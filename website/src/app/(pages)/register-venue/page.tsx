@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { Metadata } from "next";
+import Image from "next/image";
+import { supabase } from "@/lib/supabase";
 
 const venueTypes = [
   "Café / Coffee Shop",
@@ -55,6 +56,8 @@ interface VenueFormState {
   artInterests: string[];
   message: string;
   hearAbout: string;
+  password: string;
+  confirmPassword: string;
 }
 
 const initialState: VenueFormState = {
@@ -71,11 +74,15 @@ const initialState: VenueFormState = {
   artInterests: [],
   message: "",
   hearAbout: "",
+  password: "",
+  confirmPassword: "",
 };
 
 export default function RegisterVenuePage() {
   const [form, setForm] = useState(initialState);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   function updateField(field: keyof VenueFormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -90,10 +97,55 @@ export default function RegisterVenuePage() {
     }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitted(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setSubmitting(true);
+    setError("");
+
+    if (form.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      setSubmitting(false);
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/register-venue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+        setSubmitting(false);
+        return;
+      }
+
+      // Create auth account
+      const { error: authError } = await supabase.auth.signUp({
+        email: form.email,
+        password: form.password,
+        options: {
+          data: { user_type: "venue", display_name: form.contactName },
+        },
+      });
+
+      if (authError) {
+        console.error("Auth signup error:", authError);
+      }
+
+      setSubmitted(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      setError("Network error. Please try again.");
+      setSubmitting(false);
+    }
   }
 
   const inputClass =
@@ -202,6 +254,14 @@ export default function RegisterVenuePage() {
                     <label className="block text-sm font-medium mb-2">Phone</label>
                     <input type="tel" value={form.phone} onChange={(e) => updateField("phone", e.target.value)} placeholder="Optional" className={inputClass} />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Password <span className="text-accent">*</span></label>
+                    <input type="password" value={form.password} onChange={(e) => updateField("password", e.target.value)} required minLength={6} placeholder="At least 6 characters" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Confirm Password <span className="text-accent">*</span></label>
+                    <input type="password" value={form.confirmPassword} onChange={(e) => updateField("confirmPassword", e.target.value)} required placeholder="Confirm your password" className={inputClass} />
+                  </div>
                 </div>
               </div>
 
@@ -264,10 +324,17 @@ export default function RegisterVenuePage() {
                 </select>
               </div>
 
+              {/* Error */}
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+
               {/* Submit */}
               <div className="pt-2">
-                <button type="submit" className="px-8 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
-                  Register Your Venue
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-8 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? "Registering..." : "Register Your Venue"}
                 </button>
                 <p className="mt-4 text-xs text-muted max-w-md">
                   By submitting you agree to Wallspace contacting you about art for your venue. We will not share your details with third parties.

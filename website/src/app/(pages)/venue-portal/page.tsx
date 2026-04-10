@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import { useAuth } from "@/context/AuthContext";
 
 const stats = [
   { label: "Saved Artists", value: "8" },
@@ -86,6 +87,7 @@ const activityIcon = (type: string) => {
 };
 
 export default function VenueDashboardPage() {
+  const { displayName } = useAuth();
   return (
     <VenuePortalLayout>
       {/* Header */}
@@ -93,7 +95,7 @@ export default function VenueDashboardPage() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h1 className="font-serif text-2xl lg:text-3xl text-foreground">
-              Welcome back, The Copper Kettle
+              Welcome back, {displayName || "there"}
             </h1>
           </div>
           <p className="text-sm text-muted">Here&apos;s what&apos;s happening with your account.</p>

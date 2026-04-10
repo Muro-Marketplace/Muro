@@ -1,12 +1,15 @@
 "use client";
 
+import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { SavedProvider } from "@/context/SavedContext";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <CartProvider>
-      <SavedProvider>{children}</SavedProvider>
-    </CartProvider>
+    <AuthProvider>
+      <CartProvider>
+        <SavedProvider>{children}</SavedProvider>
+      </CartProvider>
+    </AuthProvider>
   );
 }

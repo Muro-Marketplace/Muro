@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { label: "Dashboard", href: "/artist-portal" },
@@ -17,7 +19,6 @@ const navItems = [
 
 const secondaryItems = [
   { label: "Browse Site", href: "/" },
-  { label: "Logout", href: "/login" },
 ];
 
 interface ArtistPortalLayoutProps {
@@ -29,7 +30,25 @@ export default function ArtistPortalLayout({
   children,
   activePath,
 }: ArtistPortalLayoutProps) {
+  const router = useRouter();
+  const { user, loading, userType, displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!loading && (!user || userType !== "artist")) {
+      router.replace("/login");
+    }
+  }, [loading, user, userType, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted text-sm">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user || userType !== "artist") return null;
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -90,17 +109,25 @@ export default function ArtistPortalLayout({
                 </Link>
               </li>
             ))}
+            <li>
+              <button
+                onClick={() => signOut()}
+                className="w-full text-left text-sm py-2 px-3 rounded-sm text-muted hover:bg-background transition-colors duration-150"
+              >
+                Logout
+              </button>
+            </li>
           </ul>
         </nav>
 
         <div className="px-4 py-4 border-t border-border">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent text-sm font-medium">
-              M
+              {displayName?.charAt(0)?.toUpperCase() || "A"}
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground leading-tight">Maya Chen</p>
-              <p className="text-xs text-muted">Premium</p>
+              <p className="text-sm font-medium text-foreground leading-tight">{displayName || "Artist"}</p>
+              <p className="text-xs text-muted">Artist</p>
             </div>
           </div>
         </div>

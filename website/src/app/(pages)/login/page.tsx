@@ -1,14 +1,49 @@
-import Image from "next/image";
-import Button from "@/components/Button";
-import Link from "next/link";
-import type { Metadata } from "next";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Login – Wallspace",
-  description: "Log in to your Wallspace account as an artist or venue.",
-};
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { signIn, user, userType, loading: authLoading } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace(userType === "venue" ? "/venue-portal" : "/artist-portal");
+    }
+  }, [authLoading, user, userType, router]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const { error: authError } = await signIn(email, password);
+
+    if (authError) {
+      setError(authError.message === "Invalid login credentials"
+        ? "Invalid email or password"
+        : authError.message
+      );
+      setLoading(false);
+      return;
+    }
+
+    // Redirect happens via the useEffect above when user state updates
+  }
+
+  // Don't render form while checking auth
+  if (authLoading) return null;
+  if (user) return null;
+
   return (
     <div className="relative min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex items-center justify-center px-6 py-16">
       {/* Background image */}
@@ -23,57 +58,56 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-black/55" />
       </div>
 
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-md">
         {/* Heading */}
-        <div className="text-center mb-10">
-          <h1 className="text-3xl lg:text-4xl mb-3 text-white">Welcome back</h1>
-          <p className="text-white/50">Choose how you would like to log in.</p>
+        <div className="text-center mb-8">
+          <h1 className="text-3xl lg:text-4xl mb-2 text-white">Welcome back</h1>
+          <p className="text-white/50 text-sm">Sign in to your Wallspace account</p>
         </div>
 
-        {/* Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
-          {/* Artist card */}
-          <div className="bg-white/95 backdrop-blur-sm border border-white/20 rounded-sm p-8 flex flex-col items-center text-center gap-5 hover:bg-white transition-colors duration-200">
-            <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                <circle cx="14" cy="10" r="5" stroke="#C17C5A" strokeWidth="1.5" />
-                <path d="M4 24c0-5.523 4.477-10 10-10s10 4.477 10 10" stroke="#C17C5A" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+        {/* Login form */}
+        <div className="bg-white/95 backdrop-blur-sm rounded-sm p-6 sm:p-8">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="you@example.com"
+                className="w-full px-4 py-3 bg-background border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/60 transition-colors"
+              />
             </div>
             <div>
-              <h2 className="text-xl mb-2 text-foreground">Artist Login</h2>
-              <p className="text-sm text-muted leading-relaxed">
-                Access your portfolio, analytics, and placements.
-              </p>
+              <label className="block text-sm font-medium text-foreground mb-2">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="Your password"
+                minLength={6}
+                className="w-full px-4 py-3 bg-background border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/60 transition-colors"
+              />
             </div>
-            <Button href="/artist-portal" variant="primary" size="md" className="w-full">
-              Login as Artist
-            </Button>
-          </div>
 
-          {/* Venue card */}
-          <div className="bg-white/95 backdrop-blur-sm border border-white/20 rounded-sm p-8 flex flex-col items-center text-center gap-5 hover:bg-white transition-colors duration-200">
-            <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                <rect x="4" y="12" width="20" height="12" rx="1" stroke="#C17C5A" strokeWidth="1.5" />
-                <path d="M4 12l10-8 10 8" stroke="#C17C5A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <rect x="11" y="17" width="6" height="7" rx="0.5" stroke="#C17C5A" strokeWidth="1.5" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-xl mb-2 text-foreground">Venue Login</h2>
-              <p className="text-sm text-muted leading-relaxed">
-                Access your saved artists, enquiries, and orders.
-              </p>
-            </div>
-            <Button href="/venue-portal" variant="secondary" size="md" className="w-full">
-              Login as Venue
-            </Button>
-          </div>
+            {error && (
+              <p className="text-red-500 text-sm text-center">{error}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
         </div>
 
         {/* Sign-up links */}
-        <div className="text-center space-y-2">
+        <div className="text-center mt-6 space-y-2">
           <p className="text-sm text-white/50">
             Don&rsquo;t have an account?{" "}
             <Link href="/apply" className="text-accent hover:underline underline-offset-4">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Button from "@/components/Button";
+import { supabase } from "@/lib/supabase";
 
 const primaryMediums = [
   "Oil Painting",
@@ -119,6 +120,8 @@ interface FormState {
   themes: string[];
   hearAbout: string;
   selectedPlan: string;
+  password: string;
+  confirmPassword: string;
 }
 
 const initialState: FormState = {
@@ -142,11 +145,15 @@ const initialState: FormState = {
   themes: [],
   hearAbout: "",
   selectedPlan: "core",
+  password: "",
+  confirmPassword: "",
 };
 
 export default function ApplicationForm() {
   const [form, setForm] = useState<FormState>(initialState);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -174,11 +181,58 @@ export default function ApplicationForm() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In production this would POST to an API endpoint
-    setSubmitted(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setSubmitting(true);
+    setError("");
+
+    // Password validation
+    if (form.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      setSubmitting(false);
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      // Submit application data
+      const res = await fetch("/api/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+        setSubmitting(false);
+        return;
+      }
+
+      // Create auth account
+      const { error: authError } = await supabase.auth.signUp({
+        email: form.email,
+        password: form.password,
+        options: {
+          data: { user_type: "artist", display_name: form.name },
+        },
+      });
+
+      if (authError) {
+        // Application saved but auth failed — still show success
+        console.error("Auth signup error:", authError);
+      }
+
+      setSubmitted(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      setError("Network error. Please try again.");
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -305,6 +359,37 @@ export default function ApplicationForm() {
               value={form.website}
               onChange={handleChange}
               placeholder="https://yourwebsite.com"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className={labelClass}>
+              Password <span className="text-accent">*</span>
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={form.password}
+              onChange={handleChange}
+              required
+              minLength={6}
+              placeholder="At least 6 characters"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="confirmPassword" className={labelClass}>
+              Confirm Password <span className="text-accent">*</span>
+            </label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              value={form.confirmPassword}
+              onChange={handleChange}
+              required
+              placeholder="Confirm your password"
               className={inputClass}
             />
           </div>
@@ -581,11 +666,18 @@ export default function ApplicationForm() {
         </div>
       </div>
 
+      {/* Error */}
+      {error && <p className="text-red-500 text-sm">{error}</p>}
+
       {/* Submit */}
       <div className="pt-2">
-        <Button type="submit" size="lg">
-          Submit Application
-        </Button>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="px-8 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {submitting ? "Submitting..." : "Submit Application"}
+        </button>
         <p className="mt-4 text-xs text-muted leading-relaxed max-w-md">
           By submitting this form you agree to Wallspace reviewing your
           application and contacting you about your submission. We will not
