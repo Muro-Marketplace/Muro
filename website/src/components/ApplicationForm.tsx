@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Button from "@/components/Button";
 import { supabase } from "@/lib/supabase";
+import { slugify } from "@/lib/slugify";
 
 const primaryMediums = [
   "Oil Painting",
@@ -214,17 +215,40 @@ export default function ApplicationForm() {
       }
 
       // Create auth account
-      const { error: authError } = await supabase.auth.signUp({
+      const artistSlug = slugify(form.name);
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
         options: {
-          data: { user_type: "artist", display_name: form.name },
+          data: { user_type: "artist", display_name: form.name, artist_slug: artistSlug },
         },
       });
 
       if (authError) {
-        // Application saved but auth failed — still show success
         console.error("Auth signup error:", authError);
+      }
+
+      // Create artist profile in database so portal works immediately
+      if (authData?.user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          await fetch("/api/artist-profile", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              name: form.name,
+              slug: artistSlug,
+              location: form.location,
+              primaryMedium: form.primaryMedium,
+              shortBio: form.artistStatement?.slice(0, 200) || "",
+              instagram: form.instagram || "",
+              website: form.website || "",
+            }),
+          }).catch((err) => console.error("Profile creation error:", err));
+        }
       }
 
       setSubmitted(true);

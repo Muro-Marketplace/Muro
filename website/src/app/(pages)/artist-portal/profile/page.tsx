@@ -4,11 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
-import { artists, type ArtistWork } from "@/data/artists";
+import { type ArtistWork, type Artist } from "@/data/artists";
 import { themes as allThemes } from "@/data/themes";
 import { uploadImage } from "@/lib/upload";
-
-const artist = artists[0];
+import { useCurrentArtist } from "@/hooks/useCurrentArtist";
+import { authFetch } from "@/lib/api-client";
 
 const primaryMediums = [
   "Oil Painting", "Watercolour", "Acrylic Painting", "Drawing & Illustration",
@@ -58,41 +58,60 @@ interface ProfileState {
   venueTypesSuitedFor: string[];
 }
 
-function initProfile(): ProfileState {
+function initProfile(a: Artist): ProfileState {
   return {
-    name: artist.name,
-    location: artist.location,
-    primaryMedium: artist.primaryMedium,
-    shortBio: artist.shortBio,
-    extendedBio: artist.extendedBio,
-    instagram: artist.instagram,
-    website: artist.website || "",
-    styleTags: [...artist.styleTags],
-    themes: [...artist.themes],
-    bannerImage: artist.works[0]?.image || "",
-    profileImage: artist.image,
-    offersOriginals: artist.offersOriginals,
-    offersPrints: artist.offersPrints,
-    offersFramed: artist.offersFramed,
-    openToCommissions: artist.openToCommissions,
-    openToFreeLoan: artist.openToFreeLoan,
-    openToRevenueShare: artist.openToRevenueShare,
-    revenueSharePercent: artist.revenueSharePercent || 10,
-    openToOutrightPurchase: artist.openToOutrightPurchase,
-    canProvideFrames: artist.canProvideFrames,
-    canArrangeFraming: artist.canArrangeFraming,
-    availableSizes: [...artist.availableSizes],
-    deliveryRadius: artist.deliveryRadius,
-    venueTypesSuitedFor: [...artist.venueTypesSuitedFor],
+    name: a.name,
+    location: a.location,
+    primaryMedium: a.primaryMedium,
+    shortBio: a.shortBio,
+    extendedBio: a.extendedBio,
+    instagram: a.instagram,
+    website: a.website || "",
+    styleTags: [...a.styleTags],
+    themes: [...a.themes],
+    bannerImage: a.works[0]?.image || "",
+    profileImage: a.image,
+    offersOriginals: a.offersOriginals,
+    offersPrints: a.offersPrints,
+    offersFramed: a.offersFramed,
+    openToCommissions: a.openToCommissions,
+    openToFreeLoan: a.openToFreeLoan,
+    openToRevenueShare: a.openToRevenueShare,
+    revenueSharePercent: a.revenueSharePercent || 10,
+    openToOutrightPurchase: a.openToOutrightPurchase,
+    canProvideFrames: a.canProvideFrames,
+    canArrangeFraming: a.canArrangeFraming,
+    availableSizes: [...a.availableSizes],
+    deliveryRadius: a.deliveryRadius,
+    venueTypesSuitedFor: [...a.venueTypesSuitedFor],
   };
 }
 
 export default function ProfileEditorPage() {
-  const [profile, setProfile] = useState<ProfileState>(initProfile);
+  const { artist, loading: artistLoading, profileId, refetch } = useCurrentArtist();
+  const [profile, setProfile] = useState<ProfileState | null>(null);
   const [saved, setSaved] = useState(false);
   const [newTag, setNewTag] = useState("");
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (artist && !profile) {
+      const stored = localStorage.getItem("wallspace-artist-profile");
+      if (stored) {
+        try { setProfile(JSON.parse(stored)); return; } catch { /* ignore */ }
+      }
+      setProfile(initProfile(artist));
+    }
+  }, [artist, profile]);
+
+  if (artistLoading || !artist || !profile) {
+    return (
+      <ArtistPortalLayout activePath="/artist-portal/profile">
+        <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found."}</p>
+      </ArtistPortalLayout>
+    );
+  }
 
   // Works management
   const [works, setWorks] = useState<ArtistWork[]>([]);
@@ -101,22 +120,14 @@ export default function ProfileEditorPage() {
   const [workForm, setWorkForm] = useState<{ title: string; medium: string; dimensions: string; image: string; orientation: "portrait" | "landscape" | "square"; available: boolean; sizes: { label: string; price: number }[] }>({ title: "", medium: "", dimensions: "", image: "", orientation: "landscape", available: true, sizes: [{ label: '8\u00d710" (A4)', price: 0 }] });
   const workImageRef = useRef<HTMLInputElement>(null);
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem("wallspace-artist-profile");
-    if (stored) {
-      try { setProfile(JSON.parse(stored)); } catch { /* ignore */ }
-    }
-  }, []);
-
-  // Load works
+  // Load works (artist is guaranteed non-null past the guard above)
   useEffect(() => {
     const stored = localStorage.getItem("wallspace-artist-works");
     if (stored) {
       try { setWorks(JSON.parse(stored)); return; } catch { /* ignore */ }
     }
-    setWorks([...artist.works]);
-  }, []);
+    if (artist) setWorks([...artist.works]);
+  }, [artist]);
 
   const [uploading, setUploading] = useState(false);
 
@@ -161,7 +172,7 @@ export default function ProfileEditorPage() {
     if (!workForm.title || !workForm.medium || validSizes.length === 0) return;
     const lowestPrice = Math.min(...validSizes.map((s) => s.price));
     const newWork: ArtistWork = {
-      id: editingWorkIndex !== null ? works[editingWorkIndex].id : `${artist.slug}-${Date.now()}`,
+      id: editingWorkIndex !== null ? works[editingWorkIndex].id : `${artist!.slug}-${Date.now()}`,
       title: workForm.title, medium: workForm.medium, dimensions: workForm.dimensions,
       priceBand: `From \u00a3${lowestPrice}`,
       pricing: validSizes.map((s) => ({ label: s.label, price: s.price })),
@@ -175,21 +186,64 @@ export default function ProfileEditorPage() {
   }
 
   function update<K extends keyof ProfileState>(key: K, value: ProfileState[K]) {
-    setProfile((prev) => ({ ...prev, [key]: value }));
+    setProfile((prev) => prev ? { ...prev, [key]: value } : prev);
     setSaved(false);
   }
 
   function toggleArrayItem(key: "styleTags" | "themes" | "availableSizes" | "venueTypesSuitedFor", item: string) {
-    setProfile((prev) => ({
-      ...prev,
-      [key]: prev[key].includes(item) ? prev[key].filter((i) => i !== item) : [...prev[key], item],
-    }));
+    setProfile((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        [key]: prev[key].includes(item) ? prev[key].filter((i) => i !== item) : [...prev[key], item],
+      };
+    });
     setSaved(false);
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (!profile) return;
+
+    // Save to Supabase
+    try {
+      await authFetch("/api/artist-profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          name: profile.name,
+          slug: artist!.slug,
+          profile_image: profile.profileImage,
+          banner_image: profile.bannerImage,
+          short_bio: profile.shortBio,
+          extended_bio: profile.extendedBio,
+          location: profile.location,
+          primary_medium: profile.primaryMedium,
+          style_tags: profile.styleTags,
+          themes: profile.themes,
+          instagram: profile.instagram,
+          website: profile.website,
+          offers_originals: profile.offersOriginals,
+          offers_prints: profile.offersPrints,
+          offers_framed: profile.offersFramed,
+          available_sizes: profile.availableSizes,
+          open_to_commissions: profile.openToCommissions,
+          open_to_free_loan: profile.openToFreeLoan,
+          open_to_revenue_share: profile.openToRevenueShare,
+          revenue_share_percent: profile.revenueSharePercent,
+          open_to_outright_purchase: profile.openToOutrightPurchase,
+          can_provide_frames: profile.canProvideFrames,
+          can_arrange_framing: profile.canArrangeFraming,
+          delivery_radius: profile.deliveryRadius,
+          venue_types_suited_for: profile.venueTypesSuitedFor,
+        }),
+      });
+    } catch (err) {
+      console.error("Profile save error:", err);
+    }
+
+    // Also keep localStorage as fallback
     localStorage.setItem("wallspace-artist-profile", JSON.stringify(profile));
     setSaved(true);
+    refetch();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 

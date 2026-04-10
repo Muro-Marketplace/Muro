@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 
 const STYLE_TAGS = [
   "Contemporary",
@@ -90,6 +91,7 @@ function TagPill({
 }
 
 export default function VenueProfilePage() {
+  const { venue } = useCurrentVenue();
   const [editing, setEditing] = useState<string | null>(null);
   const [freeLoan, setFreeLoan] = useState(true);
   const [revenueShare, setRevenueShare] = useState(true);
@@ -148,10 +150,10 @@ export default function VenueProfilePage() {
           </div>
           <div className="p-5 space-y-4">
             {[
-              { label: "Venue Name", value: "The Copper Kettle" },
-              { label: "Venue Type", value: "Café / Coffee Shop" },
-              { label: "Address", value: "12 Bermondsey Street, London SE1 3UQ" },
-              { label: "Website", value: "www.copperkettle.co.uk" },
+              { label: "Venue Name", value: venue?.name || "Your Venue" },
+              { label: "Venue Type", value: venue?.type || "Not set" },
+              { label: "Location", value: venue?.location || "Not set" },
+              { label: "Wall Space", value: venue?.wallSpace || "Not set" },
             ].map(({ label, value }) => (
               <div key={label}>
                 <p className="text-xs font-medium text-muted mb-1">{label}</p>

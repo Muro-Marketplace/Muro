@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { waitlistSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, userType } = body;
+    const parsed = waitlistSchema.safeParse(body);
 
-    if (!name || !email || !userType) {
+    if (!parsed.success) {
       return NextResponse.json(
         { error: "Name, email, and user type are required" },
         { status: 400 }
       );
     }
+
+    const { name, email, userType } = parsed.data;
 
     const { error } = await supabase.from("waitlist_signups").insert({
       name,
@@ -21,7 +24,6 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      // Duplicate email
       if (error.code === "23505") {
         return NextResponse.json(
           { error: "This email is already on the waitlist" },

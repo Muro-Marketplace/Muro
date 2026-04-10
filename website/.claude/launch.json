@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "wallspace-dev",
-      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeExecutable": "/opt/homebrew/Cellar/node/25.8.2/bin/node",
       "runtimeArgs": ["node_modules/.bin/next", "dev"],
       "port": 3000
     }

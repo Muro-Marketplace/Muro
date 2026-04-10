@@ -4,10 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
-import { artists, type ArtistWork, type SizePricing } from "@/data/artists";
+import { type ArtistWork, type SizePricing } from "@/data/artists";
 import { uploadImage } from "@/lib/upload";
-
-const artist = artists[0];
+import { useCurrentArtist } from "@/hooks/useCurrentArtist";
+import { authFetch } from "@/lib/api-client";
 
 interface SizeEntry {
   label: string;
@@ -44,25 +44,65 @@ const statusColors: Record<string, string> = {
 };
 
 export default function PortfolioPage() {
+  const { artist, loading: artistLoading } = useCurrentArtist();
   const [works, setWorks] = useState<ArtistWork[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [form, setForm] = useState<WorkFormState>(emptyWork);
   const [hoveredWork, setHoveredWork] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [initialised, setInitialised] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!artist || initialised) return;
     const stored = localStorage.getItem("wallspace-artist-works");
     if (stored) {
-      try { setWorks(JSON.parse(stored)); return; } catch { /* ignore */ }
+      try { setWorks(JSON.parse(stored)); setInitialised(true); return; } catch { /* ignore */ }
     }
     setWorks([...artist.works]);
-  }, []);
+    setInitialised(true);
+  }, [artist, initialised]);
+
+  if (artistLoading || !artist) {
+    return (
+      <ArtistPortalLayout activePath="/artist-portal/portfolio">
+        <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found."}</p>
+      </ArtistPortalLayout>
+    );
+  }
 
   function saveWorks(updated: ArtistWork[]) {
     setWorks(updated);
     localStorage.setItem("wallspace-artist-works", JSON.stringify(updated));
+
+    // Sync each work to Supabase
+    updated.forEach((work, index) => {
+      authFetch("/api/artist-works", {
+        method: "POST",
+        body: JSON.stringify({
+          id: work.id,
+          title: work.title,
+          medium: work.medium,
+          dimensions: work.dimensions,
+          priceBand: work.priceBand,
+          pricing: work.pricing,
+          available: work.available,
+          color: work.color || "#C17C5A",
+          image: work.image,
+          orientation: work.orientation || "landscape",
+          sortOrder: index,
+        }),
+      }).catch((err) => console.error("Work sync error:", err));
+    });
+  }
+
+  function handleDeleteWork(index: number) {
+    const work = works[index];
+    // Delete from Supabase
+    authFetch(`/api/artist-works?id=${work.id}`, { method: "DELETE" })
+      .catch((err) => console.error("Work delete error:", err));
+    saveWorks(works.filter((_, i) => i !== index));
   }
 
   function openAdd() {
@@ -110,14 +150,38 @@ export default function PortfolioPage() {
     setForm((p) => ({ ...p, sizes: p.sizes.filter((_, i) => i !== index) }));
   }
 
+  const [formError, setFormError] = useState("");
+
   function handleSubmit() {
+    setFormError("");
+
+    if (!form.title.trim()) {
+      setFormError("Title is required");
+      return;
+    }
+    if (form.title.length > 200) {
+      setFormError("Title must be under 200 characters");
+      return;
+    }
+    if (!form.medium.trim()) {
+      setFormError("Medium is required");
+      return;
+    }
+
     const validSizes = form.sizes.filter((s) => s.label && s.price > 0);
-    if (validSizes.length === 0) return;
+    if (validSizes.length === 0) {
+      setFormError("At least one size with a price above £0 is required");
+      return;
+    }
+    if (validSizes.some((s) => s.price > 100000)) {
+      setFormError("Price must be under £100,000");
+      return;
+    }
 
     const lowestPrice = Math.min(...validSizes.map((s) => s.price));
 
     const newWork: ArtistWork = {
-      id: editingIndex !== null ? works[editingIndex].id : `${artist.slug}-${Date.now()}`,
+      id: editingIndex !== null ? works[editingIndex].id : `${artist!.slug}-${Date.now()}`,
       title: form.title,
       medium: form.medium,
       dimensions: form.dimensions,
@@ -142,7 +206,7 @@ export default function PortfolioPage() {
   }
 
   function deleteWork(index: number) {
-    saveWorks(works.filter((_, i) => i !== index));
+    handleDeleteWork(index);
   }
 
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
@@ -324,6 +388,14 @@ export default function PortfolioPage() {
                 <span className="text-sm">Available for purchase</span>
               </label>
             </div>
+
+            {/* Error message */}
+            {formError && (
+              <p className="text-sm text-red-500 flex items-center gap-1">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                {formError}
+              </p>
+            )}
 
             {/* Submit */}
             <div className="flex gap-3 pt-2">

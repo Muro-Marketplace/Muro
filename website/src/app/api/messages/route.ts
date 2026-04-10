@@ -1,21 +1,29 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { getAuthenticatedUser } from "@/lib/api-auth";
+import { messageSchema } from "@/lib/validations";
 
-// GET: fetch conversations for a user (pass ?slug=artist-slug or ?type=venue)
+// GET: fetch conversations for the authenticated user
 export async function GET(request: Request) {
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
   try {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get("slug");
 
-    if (!slug) {
+    if (!slug || slug.length > 100) {
       return NextResponse.json({ error: "slug parameter required" }, { status: 400 });
     }
+
+    // Sanitize slug — strip anything that isn't alphanumeric, dash, or underscore
+    const safeSlug = slug.replace(/[^a-zA-Z0-9_-]/g, "");
 
     // Get all messages where this user is sender or recipient
     const { data, error } = await supabase
       .from("messages")
       .select("*")
-      .or(`recipient_slug.eq.${slug},sender_name.eq.${slug}`)
+      .or(`recipient_slug.eq.${safeSlug},sender_name.eq.${safeSlug}`)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -38,7 +46,7 @@ export async function GET(request: Request) {
     (data || []).forEach((msg) => {
       const cid = msg.conversation_id;
       if (!conversations[cid]) {
-        const otherParty = msg.recipient_slug === slug ? msg.sender_name : msg.recipient_slug;
+        const otherParty = msg.recipient_slug === safeSlug ? msg.sender_name : msg.recipient_slug;
         conversations[cid] = {
           conversationId: cid,
           latestMessage: msg.content,
@@ -51,7 +59,7 @@ export async function GET(request: Request) {
         };
       }
       conversations[cid].messageCount++;
-      if (!msg.is_read && msg.recipient_slug === slug) {
+      if (!msg.is_read && msg.recipient_slug === safeSlug) {
         conversations[cid].unreadCount++;
       }
     });
@@ -68,20 +76,25 @@ export async function GET(request: Request) {
 
 // POST: send a new message
 export async function POST(request: Request) {
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
   try {
     const body = await request.json();
-    const { conversationId, senderId, senderName, senderType, recipientSlug, content } = body;
+    const parsed = messageSchema.safeParse(body);
 
-    if (!senderName || !recipientSlug || !content) {
+    if (!parsed.success) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    const { conversationId, senderName, senderType, recipientSlug, content } = parsed.data;
 
     // Generate conversation ID if not provided (new conversation)
     const cid = conversationId || `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const { error } = await supabase.from("messages").insert({
       conversation_id: cid,
-      sender_id: senderId || null,
+      sender_id: auth.user!.id,
       sender_name: senderName,
       sender_type: senderType || "anonymous",
       recipient_slug: recipientSlug,

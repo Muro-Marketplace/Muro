@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { contactSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, type, message } = body;
+    const parsed = contactSchema.safeParse(body);
 
-    if (!name || !email || !type || !message) {
-      return NextResponse.json(
-        { error: "All fields are required" },
-        { status: 400 }
-      );
+    if (!parsed.success) {
+      return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
+
+    const { name, email, type, message } = parsed.data;
 
     const { error } = await supabase.from("contact_submissions").insert({
       name,

@@ -2,13 +2,15 @@
 
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import MessageInbox from "@/components/MessageInbox";
+import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useAuth } from "@/context/AuthContext";
+import { slugify } from "@/lib/slugify";
 
 export default function VenueMessagesPage() {
+  const { venue } = useCurrentVenue();
   const { displayName } = useAuth();
 
-  // Use display name as slug identifier — in production would be venue slug
-  const userSlug = displayName || "venue";
+  const userSlug = venue?.slug || (displayName ? slugify(displayName) : "venue");
 
   return (
     <VenuePortalLayout>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 
 interface Conversation {
   conversationId: string;
@@ -46,7 +47,7 @@ export default function MessageInbox({ userSlug, portalType }: MessageInboxProps
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/messages?slug=${userSlug}`);
+        const res = await authFetch(`/api/messages?slug=${userSlug}`);
         const data = await res.json();
         if (data.conversations) setConversations(data.conversations);
       } catch (err) {
@@ -64,12 +65,12 @@ export default function MessageInbox({ userSlug, portalType }: MessageInboxProps
 
     async function loadThread() {
       try {
-        const res = await fetch(`/api/messages/${selectedConv}`);
+        const res = await authFetch(`/api/messages/${selectedConv}`);
         const data = await res.json();
         if (data.messages) setMessages(data.messages);
 
         // Mark as read
-        await fetch(`/api/messages/${selectedConv}`, {
+        await authFetch(`/api/messages/${selectedConv}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ readerSlug: userSlug }),
@@ -103,7 +104,7 @@ export default function MessageInbox({ userSlug, portalType }: MessageInboxProps
     const recipientSlug = conv?.otherParty || "";
 
     try {
-      await fetch("/api/messages", {
+      await authFetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

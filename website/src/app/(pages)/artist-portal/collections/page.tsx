@@ -3,10 +3,8 @@
 import { useState } from "react";
 import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
-import { artists } from "@/data/artists";
 import { collections as seedCollections } from "@/data/collections";
-
-const artist = artists[0];
+import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 
 interface CollectionForm {
   name: string;
@@ -16,6 +14,16 @@ interface CollectionForm {
 }
 
 export default function CollectionsPage() {
+  const { artist, loading: artistLoading } = useCurrentArtist();
+
+  if (artistLoading || !artist) {
+    return (
+      <ArtistPortalLayout activePath="/artist-portal/collections">
+        <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found."}</p>
+      </ArtistPortalLayout>
+    );
+  }
+
   const artistCollections = seedCollections.filter((c) => c.artistSlug === artist.slug);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CollectionForm>({

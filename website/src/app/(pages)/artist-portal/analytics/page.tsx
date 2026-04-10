@@ -1,40 +1,92 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 
 const dateRanges = ["Last 7 days", "Last 30 days", "Last 3 months", "Last 12 months", "All time"];
 
-const topWorks = [
-  { title: "Last Light on Mare Street", venue: "Ozone Coffee", views: 184, enquiries: 7, sales: 2, revenue: "£560" },
-  { title: "Hackney Wick, Dawn", venue: "The Copper Kettle", views: 142, enquiries: 5, sales: 1, revenue: "£320" },
-  { title: "Canal Series No. 4", venue: "Workshop Coffee", views: 98, enquiries: 3, sales: 1, revenue: "£280" },
-  { title: "Bermondsey Rooftops", venue: "Redemption Roasters", views: 76, enquiries: 2, sales: 0, revenue: "—" },
-  { title: "Sunday Market, E8", venue: "Climpson & Sons", views: 62, enquiries: 1, sales: 0, revenue: "—" },
-];
-
-const venuePerformance = [
-  { venue: "Ozone Coffee", pieces: 3, sales: 2, revenue: "£560", status: "Active" },
-  { venue: "The Copper Kettle", pieces: 2, sales: 1, revenue: "£320", status: "Active" },
-  { venue: "Workshop Coffee", pieces: 1, sales: 1, revenue: "£280", status: "Completed" },
-];
-
-const placementSummary = [
-  { label: "Active", count: 5, color: "bg-green-100 text-green-700" },
-  { label: "Pending", count: 2, color: "bg-amber-100 text-amber-700" },
-  { label: "Completed", count: 8, color: "bg-gray-100 text-gray-600" },
-];
+interface Placement {
+  id: string;
+  workTitle: string;
+  workImage: string;
+  venue: string;
+  type: string;
+  revenueSharePercent?: number;
+  status: string;
+  date: string;
+  revenue: string | null;
+}
 
 export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState("Last 30 days");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [placements, setPlacements] = useState<Placement[]>([]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("wallspace-placements");
+    if (stored) {
+      try { setPlacements(JSON.parse(stored)); } catch { /* ignore */ }
+    }
+  }, []);
+
+  const orders = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem("wallspace-orders") || "[]"); } catch { return []; }
+  }, []);
+
+  const activePlacements = placements.filter((p) => p.status === "Active").length;
+  const pendingPlacements = placements.filter((p) => p.status === "Pending").length;
+  const completedPlacements = placements.filter((p) => p.status === "Completed" || p.status === "Sold").length;
+  const totalEarnings = orders.reduce((sum: number, o: { total?: number }) => sum + (o.total || 0), 0);
+  const uniqueVenues = new Set(placements.map((p) => p.venue)).size;
+
+  // Group placements by venue
+  const venuePerformance = useMemo(() => {
+    const map: Record<string, { venue: string; pieces: number; sales: number; revenue: number; status: string }> = {};
+    placements.forEach((p) => {
+      if (!map[p.venue]) map[p.venue] = { venue: p.venue, pieces: 0, sales: 0, revenue: 0, status: "Active" };
+      map[p.venue].pieces++;
+      if (p.status === "Sold" && p.revenue) {
+        map[p.venue].sales++;
+        map[p.venue].revenue += parseFloat(p.revenue.replace(/[^0-9.]/g, "")) || 0;
+      }
+      if (p.status === "Completed") map[p.venue].status = "Completed";
+    });
+    return Object.values(map);
+  }, [placements]);
+
+  // Derive earnings data for chart from orders
+  const earningsData = useMemo(() => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const now = new Date();
+    const data: { month: string; earnings: number; sales: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthStr = months[d.getMonth()];
+      const monthOrders = orders.filter((o: { createdAt?: string }) => {
+        if (!o.createdAt) return false;
+        const od = new Date(o.createdAt);
+        return od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
+      });
+      data.push({
+        month: monthStr,
+        earnings: monthOrders.reduce((s: number, o: { total?: number }) => s + (o.total || 0), 0),
+        sales: monthOrders.length,
+      });
+    }
+    return data;
+  }, [orders]);
+
+  const placementSummary = [
+    { label: "Active", count: activePlacements, color: "bg-green-100 text-green-700" },
+    { label: "Pending", count: pendingPlacements, color: "bg-amber-100 text-amber-700" },
+    { label: "Completed", count: completedPlacements, color: "bg-gray-100 text-gray-600" },
+  ];
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/analytics">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl lg:text-3xl">Analytics</h1>
-        {/* Date range selector */}
         <div className="relative">
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -70,29 +122,24 @@ export default function AnalyticsPage() {
       {/* Key metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-surface border border-border rounded-sm p-5">
-          <p className="text-sm text-muted mb-1">Monthly Earnings</p>
-          <div className="flex items-end gap-2">
-            <p className="text-2xl font-medium">£1,420</p>
-            <span className="mb-0.5 text-xs font-medium bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">+12%</span>
-          </div>
-          <p className="text-xs text-muted mt-1">vs. last month</p>
-        </div>
-        <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Total Earnings</p>
-          <p className="text-2xl font-medium">£2,840</p>
+          <p className="text-2xl font-medium">£{totalEarnings.toLocaleString()}</p>
           <p className="text-xs text-muted mt-1">All time</p>
         </div>
         <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Pieces Placed</p>
-          <p className="text-2xl font-medium">8</p>
-          <p className="text-xs text-muted mt-1">Across 4 venues</p>
+          <p className="text-2xl font-medium">{placements.length}</p>
+          <p className="text-xs text-muted mt-1">Across {uniqueVenues} venue{uniqueVenues !== 1 ? "s" : ""}</p>
         </div>
         <div className="bg-surface border border-border rounded-sm p-5">
-          <p className="text-sm text-muted mb-1">Conversion Rate</p>
-          <div className="flex items-end gap-2">
-            <p className="text-2xl font-medium">23%</p>
-          </div>
-          <p className="text-xs text-muted mt-1">Enquiry to placement</p>
+          <p className="text-sm text-muted mb-1">Active</p>
+          <p className="text-2xl font-medium">{activePlacements}</p>
+          <p className="text-xs text-muted mt-1">Currently on display</p>
+        </div>
+        <div className="bg-surface border border-border rounded-sm p-5">
+          <p className="text-sm text-muted mb-1">Orders</p>
+          <p className="text-2xl font-medium">{orders.length}</p>
+          <p className="text-xs text-muted mt-1">All time</p>
         </div>
       </div>
 
@@ -103,7 +150,7 @@ export default function AnalyticsPage() {
           <span className="text-xs text-muted">{dateRange}</span>
         </div>
         <div className="px-6 py-6">
-          <EarningsChart />
+          <EarningsChart data={earningsData} />
         </div>
       </div>
 
@@ -111,9 +158,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-3 gap-4 mb-6">
         {placementSummary.map((item) => (
           <div key={item.label} className="bg-surface border border-border rounded-sm p-5 flex items-center gap-4">
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${item.color}`}>
-              {item.label}
-            </span>
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${item.color}`}>{item.label}</span>
             <p className="text-2xl font-medium">{item.count}</p>
           </div>
         ))}
@@ -122,94 +167,89 @@ export default function AnalyticsPage() {
       {/* Top Performing Works */}
       <div className="bg-surface border border-border rounded-sm mb-6">
         <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-base font-medium">Top Performing Works</h2>
+          <h2 className="text-base font-medium">Placements</h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-background">
-                <th className="text-left text-xs text-muted font-medium px-6 py-3">Title</th>
-                <th className="text-left text-xs text-muted font-medium px-4 py-3">Venue</th>
-                <th className="text-right text-xs text-muted font-medium px-4 py-3">Views</th>
-                <th className="text-right text-xs text-muted font-medium px-4 py-3">Enquiries</th>
-                <th className="text-right text-xs text-muted font-medium px-4 py-3">Sales</th>
-                <th className="text-right text-xs text-muted font-medium px-6 py-3">Revenue</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {topWorks.map((work) => (
-                <tr key={work.title} className="hover:bg-background/60 transition-colors">
-                  <td className="px-6 py-3.5 font-medium text-foreground whitespace-nowrap">{work.title}</td>
-                  <td className="px-4 py-3.5 text-muted whitespace-nowrap">{work.venue}</td>
-                  <td className="px-4 py-3.5 text-right text-foreground">{work.views}</td>
-                  <td className="px-4 py-3.5 text-right text-foreground">{work.enquiries}</td>
-                  <td className="px-4 py-3.5 text-right text-foreground">{work.sales}</td>
-                  <td className="px-6 py-3.5 text-right font-medium text-foreground">{work.revenue}</td>
+        {placements.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-muted">
+            No placements logged yet. Go to <a href="/artist-portal/placements" className="text-accent hover:underline">Placements</a> to log your first.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-background">
+                  <th className="text-left text-xs text-muted font-medium px-6 py-3">Title</th>
+                  <th className="text-left text-xs text-muted font-medium px-4 py-3">Venue</th>
+                  <th className="text-left text-xs text-muted font-medium px-4 py-3">Type</th>
+                  <th className="text-left text-xs text-muted font-medium px-4 py-3">Status</th>
+                  <th className="text-right text-xs text-muted font-medium px-6 py-3">Revenue</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {placements.slice(0, 10).map((p) => (
+                  <tr key={p.id} className="hover:bg-background/60 transition-colors">
+                    <td className="px-6 py-3.5 font-medium text-foreground whitespace-nowrap">{p.workTitle}</td>
+                    <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.venue}</td>
+                    <td className="px-4 py-3.5 text-muted text-xs">{p.type}</td>
+                    <td className="px-4 py-3.5">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        p.status === "Active" ? "bg-green-100 text-green-700" :
+                        p.status === "Sold" ? "bg-blue-100 text-blue-700" :
+                        p.status === "Pending" ? "bg-amber-100 text-amber-700" :
+                        "bg-gray-100 text-gray-600"
+                      }`}>{p.status}</span>
+                    </td>
+                    <td className="px-6 py-3.5 text-right font-medium text-foreground">{p.revenue ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Performance by Venue */}
-      <div className="bg-surface border border-border rounded-sm">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-base font-medium">Performance by Venue</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-background">
-                <th className="text-left text-xs text-muted font-medium px-6 py-3">Venue</th>
-                <th className="text-right text-xs text-muted font-medium px-4 py-3">Pieces</th>
-                <th className="text-right text-xs text-muted font-medium px-4 py-3">Sales</th>
-                <th className="text-right text-xs text-muted font-medium px-4 py-3">Revenue</th>
-                <th className="text-left text-xs text-muted font-medium px-6 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {venuePerformance.map((row) => (
-                <tr key={row.venue} className="hover:bg-background/60 transition-colors">
-                  <td className="px-6 py-3.5 font-medium text-foreground">{row.venue}</td>
-                  <td className="px-4 py-3.5 text-right text-foreground">{row.pieces}</td>
-                  <td className="px-4 py-3.5 text-right text-foreground">{row.sales}</td>
-                  <td className="px-4 py-3.5 text-right font-medium text-foreground">{row.revenue}</td>
-                  <td className="px-6 py-3.5">
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        row.status === "Active"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {row.status}
-                    </span>
-                  </td>
+      {venuePerformance.length > 0 && (
+        <div className="bg-surface border border-border rounded-sm">
+          <div className="px-6 py-4 border-b border-border">
+            <h2 className="text-base font-medium">Performance by Venue</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-background">
+                  <th className="text-left text-xs text-muted font-medium px-6 py-3">Venue</th>
+                  <th className="text-right text-xs text-muted font-medium px-4 py-3">Pieces</th>
+                  <th className="text-right text-xs text-muted font-medium px-4 py-3">Sales</th>
+                  <th className="text-right text-xs text-muted font-medium px-4 py-3">Revenue</th>
+                  <th className="text-left text-xs text-muted font-medium px-6 py-3">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {venuePerformance.map((row) => (
+                  <tr key={row.venue} className="hover:bg-background/60 transition-colors">
+                    <td className="px-6 py-3.5 font-medium text-foreground">{row.venue}</td>
+                    <td className="px-4 py-3.5 text-right text-foreground">{row.pieces}</td>
+                    <td className="px-4 py-3.5 text-right text-foreground">{row.sales}</td>
+                    <td className="px-4 py-3.5 text-right font-medium text-foreground">£{row.revenue}</td>
+                    <td className="px-6 py-3.5">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        row.status === "Active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+                      }`}>{row.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </ArtistPortalLayout>
   );
 }
 
-/* ── Earnings Chart (pure SVG, no dependencies) ── */
-
-// Mock data — replace with real API data when backend is ready
-const earningsData = [
-  { month: "Oct", earnings: 120, sales: 1 },
-  { month: "Nov", earnings: 280, sales: 2 },
-  { month: "Dec", earnings: 0, sales: 0 },
-  { month: "Jan", earnings: 320, sales: 1 },
-  { month: "Feb", earnings: 560, sales: 2 },
-  { month: "Mar", earnings: 480, sales: 2 },
-  { month: "Apr", earnings: 1080, sales: 3 },
-];
-
-function EarningsChart() {
+/* ── Earnings Chart (pure SVG) ── */
+function EarningsChart({ data }: { data: { month: string; earnings: number; sales: number }[] }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(700);
@@ -223,80 +263,54 @@ function EarningsChart() {
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  const maxEarnings = Math.max(...earningsData.map((d) => d.earnings), 100);
+  const maxEarnings = Math.max(...data.map((d) => d.earnings), 100);
   const chartHeight = 220;
   const padding = { top: 20, right: 20, bottom: 30, left: 50 };
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = chartHeight - padding.top - padding.bottom;
+  const xStep = data.length > 1 ? innerWidth / (data.length - 1) : innerWidth;
 
-  const xStep = innerWidth / (earningsData.length - 1);
-
-  const points = earningsData.map((d, i) => ({
+  const points = data.map((d, i) => ({
     x: padding.left + i * xStep,
     y: padding.top + innerHeight - (d.earnings / maxEarnings) * innerHeight,
   }));
 
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
   const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + innerHeight} L ${points[0].x} ${padding.top + innerHeight} Z`;
-
   const yTicks = [0, Math.round(maxEarnings / 2), maxEarnings];
 
   return (
     <div ref={containerRef} className="w-full">
       <svg width={width} height={chartHeight}>
-        {/* Grid lines */}
         {yTicks.map((tick) => {
           const y = padding.top + innerHeight - (tick / maxEarnings) * innerHeight;
           return (
             <g key={tick}>
               <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#E5E2DD" strokeWidth="0.5" />
               <text x={padding.left - 8} y={y + 4} textAnchor="end" className="fill-muted" fontSize="10">
-                &pound;{tick}
+                £{tick}
               </text>
             </g>
           );
         })}
-
-        {/* Area fill */}
         <path d={areaPath} fill="#C17C5A" fillOpacity="0.08" />
-
-        {/* Line */}
         <path d={linePath} fill="none" stroke="#C17C5A" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-
-        {/* Data points + hover targets */}
         {points.map((p, i) => (
           <g key={i}>
-            {/* Invisible hover target */}
-            <rect
-              x={p.x - xStep / 2}
-              y={padding.top}
-              width={xStep}
-              height={innerHeight}
-              fill="transparent"
-              onMouseEnter={() => setHoveredIndex(i)}
-              onMouseLeave={() => setHoveredIndex(null)}
-            />
-            {/* Dot */}
-            <circle
-              cx={p.x}
-              cy={p.y}
-              r={hoveredIndex === i ? 5 : 3}
-              fill={hoveredIndex === i ? "#C17C5A" : "#fff"}
-              stroke="#C17C5A"
-              strokeWidth="2"
-            />
-            {/* Hover tooltip */}
+            <rect x={p.x - xStep / 2} y={padding.top} width={xStep} height={innerHeight} fill="transparent"
+              onMouseEnter={() => setHoveredIndex(i)} onMouseLeave={() => setHoveredIndex(null)} />
+            <circle cx={p.x} cy={p.y} r={hoveredIndex === i ? 5 : 3}
+              fill={hoveredIndex === i ? "#C17C5A" : "#fff"} stroke="#C17C5A" strokeWidth="2" />
             {hoveredIndex === i && (
               <g>
                 <rect x={p.x - 40} y={p.y - 38} width="80" height="28" rx="4" fill="#1A1A1A" />
                 <text x={p.x} y={p.y - 20} textAnchor="middle" fill="white" fontSize="11" fontWeight="500">
-                  &pound;{earningsData[i].earnings}
+                  £{data[i].earnings}
                 </text>
               </g>
             )}
-            {/* X-axis label */}
             <text x={p.x} y={chartHeight - 5} textAnchor="middle" className="fill-muted" fontSize="10">
-              {earningsData[i].month}
+              {data[i].month}
             </text>
           </g>
         ))}

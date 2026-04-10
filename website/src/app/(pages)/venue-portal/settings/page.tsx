@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import { useCurrentVenue } from "@/hooks/useCurrentVenue";
+import { useAuth } from "@/context/AuthContext";
 
 function SectionCard({
   title,
@@ -84,6 +86,8 @@ const defaultNotifs: NotifPref[] = [
 ];
 
 export default function VenueSettingsPage() {
+  const { venue } = useCurrentVenue();
+  const { user } = useAuth();
   const [notifs, setNotifs] = useState<NotifPref[]>(defaultNotifs);
   const [saved, setSaved] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -95,6 +99,7 @@ export default function VenueSettingsPage() {
   };
 
   const handleSave = () => {
+    localStorage.setItem("wallspace-venue-notif-prefs", JSON.stringify(notifs));
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -114,23 +119,23 @@ export default function VenueSettingsPage() {
         {/* Account details */}
         <SectionCard title="Account Details">
           <div className="space-y-4">
-            <Field label="Venue Name" defaultValue="The Copper Kettle" />
+            <Field label="Venue Name" defaultValue={venue?.name || "Your Venue"} />
             <Field
               label="Email Address"
-              defaultValue="hello@copperkettle.co.uk"
+              defaultValue={user?.email || ""}
               type="email"
             />
-            <Field label="Phone Number" defaultValue="+44 20 7123 4567" type="tel" />
+            <Field label="Phone Number" defaultValue="" type="tel" />
             <div className="pt-2">
               <label className="block text-xs font-medium text-muted mb-1">
                 Password
               </label>
-              <button
-                type="button"
+              <a
+                href="/forgot-password"
                 className="text-sm text-accent hover:underline cursor-pointer"
               >
                 Change password
-              </button>
+              </a>
             </div>
           </div>
         </SectionCard>

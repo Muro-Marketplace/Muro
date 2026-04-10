@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { enquirySchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { senderName, senderEmail, artistSlug, workTitle, enquiryType, message } = body;
+    const parsed = enquirySchema.safeParse(body);
 
-    if (!senderName || !senderEmail || !artistSlug || !enquiryType || !message) {
+    if (!parsed.success) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
+
+    const { senderName, senderEmail, artistSlug, workTitle, enquiryType, message } = parsed.data;
 
     const { error } = await supabase.from("enquiries").insert({
       sender_name: senderName,

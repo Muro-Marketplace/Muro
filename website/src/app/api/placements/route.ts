@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { getAuthenticatedUser } from "@/lib/api-auth";
+import { placementSchema, placementUpdateSchema } from "@/lib/validations";
+import { z } from "zod";
 
 export async function POST(request: Request) {
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
   try {
     const body = await request.json();
     const { placements } = body;
@@ -10,9 +16,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No placements provided" }, { status: 400 });
     }
 
-    const rows = placements.map((p: Record<string, unknown>) => ({
+    const parsed = z.array(placementSchema).safeParse(placements);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid placement data" }, { status: 400 });
+    }
+
+    const rows = parsed.data.map((p) => ({
       id: p.id,
-      artist_user_id: p.artistUserId || null,
+      artist_user_id: auth.user!.id,
       work_title: p.workTitle,
       work_image: p.workImage || null,
       venue: p.venue,
@@ -38,12 +49,28 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
   try {
     const body = await request.json();
-    const { id, status } = body;
+    const parsed = placementUpdateSchema.safeParse(body);
 
-    if (!id || !status) {
-      return NextResponse.json({ error: "ID and status required" }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json({ error: "ID and valid status required" }, { status: 400 });
+    }
+
+    const { id, status } = parsed.data;
+
+    // Verify ownership before updating
+    const { data: existing } = await supabase
+      .from("placements")
+      .select("artist_user_id")
+      .eq("id", id)
+      .single();
+
+    if (!existing || existing.artist_user_id !== auth.user!.id) {
+      return NextResponse.json({ error: "Not authorised" }, { status: 403 });
     }
 
     const { error } = await supabase
@@ -63,12 +90,26 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
-    if (!id) {
-      return NextResponse.json({ error: "ID required" }, { status: 400 });
+    if (!id || id.length > 100) {
+      return NextResponse.json({ error: "Valid ID required" }, { status: 400 });
+    }
+
+    // Verify ownership before deleting
+    const { data: existing } = await supabase
+      .from("placements")
+      .select("artist_user_id")
+      .eq("id", id)
+      .single();
+
+    if (!existing || existing.artist_user_id !== auth.user!.id) {
+      return NextResponse.json({ error: "Not authorised" }, { status: 403 });
     }
 
     const { error } = await supabase

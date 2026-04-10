@@ -5,9 +5,7 @@ import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
 import type { LabelData } from "@/components/labels/LabelSheet";
-import { artists } from "@/data/artists";
-
-const artist = artists[0];
+import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 
 interface LabelOptions {
   showMedium: boolean;
@@ -16,6 +14,7 @@ interface LabelOptions {
 }
 
 export default function LabelsPage() {
+  const { artist, loading: artistLoading } = useCurrentArtist();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [showPreview, setShowPreview] = useState(false);
@@ -28,7 +27,17 @@ export default function LabelsPage() {
   // Portfolio label
   const [portfolioQty, setPortfolioQty] = useState(0);
 
-  const allSelected = selected.size === artist.works.length;
+  if (artistLoading || !artist) {
+    return (
+      <ArtistPortalLayout activePath="/artist-portal/labels">
+        <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found."}</p>
+      </ArtistPortalLayout>
+    );
+  }
+
+  // artist is guaranteed non-null past the guard above
+  const currentArtist = artist!;
+  const allSelected = selected.size === currentArtist.works.length;
 
   function getQty(index: number) {
     return quantities[index] ?? 1;
@@ -49,7 +58,7 @@ export default function LabelsPage() {
 
   function toggleAll() {
     if (allSelected) setSelected(new Set());
-    else setSelected(new Set(artist.works.map((_, i) => i)));
+    else setSelected(new Set(currentArtist.works.map((_, i) => i)));
   }
 
   function buildLabels(indices: number[]): LabelData[] {
@@ -58,18 +67,18 @@ export default function LabelsPage() {
     // Portfolio labels first
     if (portfolioQty > 0) {
       labels.push({
-        artistName: artist.name,
-        artistSlug: artist.slug,
+        artistName: currentArtist.name,
+        artistSlug: currentArtist.slug,
         quantity: portfolioQty,
         isPortfolioLabel: true,
       });
     }
 
     indices.forEach((i) => {
-      const work = artist.works[i];
+      const work = currentArtist.works[i];
       labels.push({
-        artistName: artist.name,
-        artistSlug: artist.slug,
+        artistName: currentArtist.name,
+        artistSlug: currentArtist.slug,
         workTitle: work.title,
         workMedium: options.showMedium ? work.medium : undefined,
         workDimensions: options.showDimensions ? work.dimensions : undefined,
@@ -169,7 +178,7 @@ export default function LabelsPage() {
 
         {/* Works grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {artist.works.map((work, index) => {
+          {currentArtist.works.map((work, index) => {
             const isSelected = selected.has(index);
             const qty = getQty(index);
             return (
@@ -289,7 +298,7 @@ export default function LabelsPage() {
       {showPreview && (
         <LabelPreview
           labels={previewLabels}
-          availableSizes={artist.availableSizes}
+          availableSizes={currentArtist.availableSizes}
           onClose={() => setShowPreview(false)}
         />
       )}

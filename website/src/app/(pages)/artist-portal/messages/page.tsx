@@ -2,16 +2,16 @@
 
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import MessageInbox from "@/components/MessageInbox";
-import { useAuth } from "@/context/AuthContext";
-import { artists } from "@/data/artists";
-
-const artist = artists[0];
+import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 
 export default function ArtistMessagesPage() {
-  const { displayName } = useAuth();
+  const { artist, loading } = useCurrentArtist();
 
-  // Use the artist slug - in production this would come from the user's profile
-  const userSlug = artist.slug;
+  if (loading) {
+    return <ArtistPortalLayout activePath="/artist-portal/messages"><p className="text-muted text-sm py-12 text-center">Loading...</p></ArtistPortalLayout>;
+  }
+
+  const userSlug = artist?.slug || "unknown";
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/messages">

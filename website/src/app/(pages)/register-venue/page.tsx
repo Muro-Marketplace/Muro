@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
+import { slugify } from "@/lib/slugify";
 
 const venueTypes = [
   "Café / Coffee Shop",
@@ -128,16 +129,44 @@ export default function RegisterVenuePage() {
       }
 
       // Create auth account
-      const { error: authError } = await supabase.auth.signUp({
+      const venueSlug = slugify(form.venueName);
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
         options: {
-          data: { user_type: "venue", display_name: form.contactName },
+          data: { user_type: "venue", display_name: form.contactName, venue_slug: venueSlug },
         },
       });
 
       if (authError) {
         console.error("Auth signup error:", authError);
+        setError("Your venue details were saved but we couldn't create your login account. Please contact support@wallspace.art.");
+        setSubmitting(false);
+        return;
+      }
+
+      // Create venue profile in database so portal works immediately
+      if (authData?.user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          await fetch("/api/venue-profile", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              name: form.venueName,
+              slug: venueSlug,
+              type: form.venueType,
+              location: form.city,
+              contactName: form.contactName,
+              email: form.email,
+              phone: form.phone,
+              wallSpace: form.wallSpace,
+            }),
+          }).catch((err) => console.error("Venue profile creation error:", err));
+        }
       }
 
       setSubmitted(true);

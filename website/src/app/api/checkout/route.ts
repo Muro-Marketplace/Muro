@@ -1,24 +1,20 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { checkoutSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, shipping } = body;
+    const parsed = checkoutSchema.safeParse(body);
 
-    if (!items || items.length === 0 || !shipping) {
+    if (!parsed.success) {
       return NextResponse.json({ error: "Cart items and shipping required" }, { status: 400 });
     }
 
+    const { items, shipping } = parsed.data;
+
     // Build Stripe line items from cart
-    const lineItems = items.map((item: {
-      title: string;
-      artistName: string;
-      size: string;
-      price: number;
-      quantity: number;
-      image?: string;
-    }) => ({
+    const lineItems = items.map((item) => ({
       price_data: {
         currency: "gbp",
         product_data: {
@@ -26,14 +22,14 @@ export async function POST(request: Request) {
           description: `${item.artistName} – ${item.size}`,
           ...(item.image && !item.image.startsWith("data:") ? { images: [item.image] } : {}),
         },
-        unit_amount: Math.round(item.price * 100), // Convert £ to pence
+        unit_amount: Math.round(item.price * 100),
       },
       quantity: item.quantity,
     }));
 
     // Calculate shipping
     const subtotal = items.reduce(
-      (sum: number, item: { price: number; quantity: number }) => sum + item.price * item.quantity,
+      (sum, item) => sum + item.price * item.quantity,
       0
     );
     const shippingCost = subtotal >= 300 ? 0 : 9.95;
@@ -53,8 +49,8 @@ export async function POST(request: Request) {
       });
     }
 
-    // Determine base URL
-    const origin = request.headers.get("origin") || "http://localhost:3000";
+    // Use fixed base URL — never trust Origin header for redirect URLs
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -72,7 +68,7 @@ export async function POST(request: Request) {
         shipping_postcode: shipping.postcode,
         shipping_country: shipping.country || "United Kingdom",
         shipping_notes: shipping.notes || "",
-        cart_items: JSON.stringify(items).slice(0, 500), // Metadata limited to 500 chars
+        cart_items: JSON.stringify(items.map(i => ({ title: i.title, qty: i.quantity, price: i.price }))).slice(0, 500),
       },
       success_url: `${origin}/checkout/confirmation?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout`,

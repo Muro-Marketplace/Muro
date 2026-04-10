@@ -15,48 +15,8 @@ interface Enquiry {
   status: Status;
 }
 
-const enquiries: Enquiry[] = [
-  {
-    id: 1,
-    artist: "Maya Chen",
-    subject: "Golden Hour, Borough Market – free loan for 6 months",
-    type: "Free Loan",
-    dateSent: "18 Mar 2026",
-    status: "Responded",
-  },
-  {
-    id: 2,
-    artist: "James Okafor",
-    subject: "Southbank Reflections series – revenue share arrangement",
-    type: "Revenue Share",
-    dateSent: "14 Mar 2026",
-    status: "Pending",
-  },
-  {
-    id: 3,
-    artist: "Sofia Andersen",
-    subject: "Tidal Study No. 4 – outright purchase",
-    type: "Purchase",
-    dateSent: "10 Mar 2026",
-    status: "Closed",
-  },
-  {
-    id: 4,
-    artist: "Ravi Patel",
-    subject: "Urban Fragments III – enquiry about availability",
-    type: "Free Loan",
-    dateSent: "5 Mar 2026",
-    status: "Pending",
-  },
-  {
-    id: 5,
-    artist: "Lena Bauer",
-    subject: "Winter Light series – purchase of 2 prints",
-    type: "Purchase",
-    dateSent: "28 Feb 2026",
-    status: "Responded",
-  },
-];
+// TODO: Replace with Supabase query for the logged-in venue's enquiries
+const enquiries: Enquiry[] = [];
 
 const statusBadge = (status: Status) => {
   const styles: Record<Status, string> = {

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { artists } from "@/data/artists";
+import { artists as staticArtists, type Artist } from "@/data/artists";
 import { themes } from "@/data/themes";
 import { getGalleryWorks } from "@/data/galleries";
 import { collections } from "@/data/collections";
@@ -136,6 +136,19 @@ export default function BrowsePortfoliosPage() {
   const initialMode = typeof window !== "undefined" && window.location.hash === "#collections" ? "collections" : "portfolios";
   const [browseMode, setBrowseMode] = useState<"portfolios" | "gallery" | "collections">(initialMode);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [artists, setArtists] = useState<Artist[]>(staticArtists);
+
+  // Fetch database artists and merge with static on mount
+  useEffect(() => {
+    fetch("/api/browse-artists")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.artists && data.artists.length > staticArtists.length) {
+          setArtists(data.artists);
+        }
+      })
+      .catch(() => { /* keep static data */ });
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"compact" | "expanded">("compact");
   const [mobileGrid, setMobileGrid] = useState<1 | 2>(1);

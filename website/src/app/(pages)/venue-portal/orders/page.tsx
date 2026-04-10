@@ -14,44 +14,8 @@ interface Order {
   date: string;
 }
 
-const orders: Order[] = [
-  {
-    id: "1024",
-    artist: "Maya Chen",
-    title: "Golden Hour, Borough Market",
-    type: "Purchase",
-    amount: "£520",
-    status: "In Transit",
-    date: "20 Mar 2026",
-  },
-  {
-    id: "1019",
-    artist: "Sofia Andersen",
-    title: "Tidal Study No. 4",
-    type: "Loan",
-    amount: "£0 (Free Loan)",
-    status: "Delivered",
-    date: "4 Mar 2026",
-  },
-  {
-    id: "1012",
-    artist: "Lena Bauer",
-    title: "Winter Light I & II (2 prints)",
-    type: "Purchase",
-    amount: "£280",
-    status: "Delivered",
-    date: "14 Feb 2026",
-  },
-  {
-    id: "1008",
-    artist: "James Okafor",
-    title: "Southbank Reflections – Revenue Share",
-    type: "Loan",
-    amount: "15% rev. share",
-    status: "Processing",
-    date: "2 Feb 2026",
-  },
-];
+// TODO: Replace with Supabase query for the logged-in venue's orders
+const orders: Order[] = [];
 
 const statusBadge = (status: OrderStatus) => {
   const styles: Record<OrderStatus, string> = {

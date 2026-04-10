@@ -77,6 +77,30 @@ function ConfirmationContent() {
     );
   }
 
+  // Session ID provided but order fetch failed
+  if (!order && sessionId) {
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-16 text-center">
+        <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+        <h1 className="text-3xl font-serif mb-2">Thank You!</h1>
+        <p className="text-muted mb-4">Your payment was received successfully.</p>
+        <p className="text-sm text-muted/70 mb-8">
+          We couldn&apos;t load the full order details right now, but your order is confirmed. You&apos;ll receive a confirmation email shortly.
+        </p>
+        <Link
+          href="/browse"
+          className="inline-flex items-center justify-center px-6 py-3 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-background transition-colors"
+        >
+          Continue Browsing
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-6 py-16 text-center">
       {/* Success icon */}

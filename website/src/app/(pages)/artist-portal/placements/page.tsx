@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
-import { artists, type ArtistWork } from "@/data/artists";
-
-const artist = artists[0];
+import { useCurrentArtist } from "@/hooks/useCurrentArtist";
+import { authFetch } from "@/lib/api-client";
 
 type FilterTab = "All" | "Active" | "Pending" | "Completed";
 type ArrangementType = "Free Loan" | "Revenue Share" | "Direct Purchase";
@@ -24,13 +23,17 @@ interface Placement {
   notes?: string;
 }
 
-const seedPlacements: Placement[] = [
-  { id: "p1", workTitle: "Last Light on Mare Street", workImage: artist.works[0]?.image || "", venue: "Ozone Coffee", type: "Revenue Share", revenueSharePercent: 10, status: "Active", date: "12 Jan 2026", revenue: null },
-  { id: "p2", workTitle: "Hackney Wick, Dawn", workImage: artist.works[1]?.image || "", venue: "The Copper Kettle", type: "Direct Purchase", status: "Sold", date: "8 Jan 2026", revenue: "£320" },
-  { id: "p3", workTitle: "Canal Series No. 4", workImage: artist.works[2]?.image || "", venue: "Workshop Coffee", type: "Free Loan", status: "Completed", date: "15 Nov 2025", revenue: null },
-  { id: "p4", workTitle: "Bermondsey Rooftops", workImage: artist.works[3]?.image || "", venue: "Redemption Roasters", type: "Revenue Share", revenueSharePercent: 15, status: "Pending", date: "20 Mar 2026", revenue: null },
-  { id: "p5", workTitle: "Sunday Market, E8", workImage: artist.works[4]?.image || "", venue: "Climpson & Sons", type: "Free Loan", status: "Active", date: "3 Feb 2026", revenue: null },
-];
+function getSeedPlacements(works: { title: string; image: string }[]): Placement[] {
+  if (works.length === 0) return [];
+  const seeds: Placement[] = [
+    { id: "p1", workTitle: works[0]?.title || "Untitled", workImage: works[0]?.image || "", venue: "Ozone Coffee", type: "Revenue Share" as ArrangementType, revenueSharePercent: 10, status: "Active" as PlacementStatus, date: "12 Jan 2026", revenue: null },
+    { id: "p2", workTitle: works[1]?.title || "Untitled", workImage: works[1]?.image || "", venue: "The Copper Kettle", type: "Direct Purchase" as ArrangementType, status: "Sold" as PlacementStatus, date: "8 Jan 2026", revenue: "£320" },
+    { id: "p3", workTitle: works[2]?.title || "Untitled", workImage: works[2]?.image || "", venue: "Workshop Coffee", type: "Free Loan" as ArrangementType, status: "Completed" as PlacementStatus, date: "15 Nov 2025", revenue: null },
+    { id: "p4", workTitle: works[3]?.title || "Untitled", workImage: works[3]?.image || "", venue: "Redemption Roasters", type: "Revenue Share" as ArrangementType, revenueSharePercent: 15, status: "Pending" as PlacementStatus, date: "20 Mar 2026", revenue: null },
+    { id: "p5", workTitle: works[4]?.title || "Untitled", workImage: works[4]?.image || "", venue: "Climpson & Sons", type: "Free Loan" as ArrangementType, status: "Active" as PlacementStatus, date: "3 Feb 2026", revenue: null },
+  ];
+  return seeds.filter((_, i) => i < works.length);
+}
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -45,9 +48,11 @@ const statusBadge = (status: string) => {
 const tabs: FilterTab[] = ["All", "Active", "Pending", "Completed"];
 
 export default function PlacementsPage() {
+  const { artist, loading: artistLoading } = useCurrentArtist();
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
-  const [placements, setPlacements] = useState<Placement[]>(seedPlacements);
+  const [placements, setPlacements] = useState<Placement[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [initialised, setInitialised] = useState(false);
 
   // Form state
   const [venueName, setVenueName] = useState("");
@@ -57,13 +62,16 @@ export default function PlacementsPage() {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<PlacementStatus>("Active");
 
-  // Load from localStorage
+  // Load from localStorage once artist is known
   useEffect(() => {
+    if (!artist || initialised) return;
     const stored = localStorage.getItem("wallspace-placements");
     if (stored) {
-      try { setPlacements(JSON.parse(stored)); } catch { /* ignore */ }
+      try { setPlacements(JSON.parse(stored)); setInitialised(true); return; } catch { /* ignore */ }
     }
-  }, []);
+    setPlacements(getSeedPlacements(artist.works));
+    setInitialised(true);
+  }, [artist, initialised]);
 
   function savePlacements(updated: Placement[]) {
     setPlacements(updated);
@@ -83,7 +91,7 @@ export default function PlacementsPage() {
     if (!venueName || selectedWorks.size === 0) return;
 
     const newPlacements: Placement[] = Array.from(selectedWorks).map((workIndex) => {
-      const work = artist.works[workIndex];
+      const work = works[workIndex];
       return {
         id: `p-${Date.now()}-${workIndex}`,
         workTitle: work.title,
@@ -100,9 +108,8 @@ export default function PlacementsPage() {
 
     // Save to Supabase
     try {
-      await fetch("/api/placements", {
+      await authFetch("/api/placements", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           placements: newPlacements.map((p) => ({
             ...p,
@@ -127,9 +134,8 @@ export default function PlacementsPage() {
   function updateStatus(id: string, newStatus: PlacementStatus) {
     savePlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
     // Sync to Supabase
-    fetch("/api/placements", {
+    authFetch("/api/placements", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, status: newStatus }),
     }).catch((err) => console.error("Status update error:", err));
   }
@@ -137,7 +143,7 @@ export default function PlacementsPage() {
   function removePlacement(id: string) {
     savePlacements(placements.filter((p) => p.id !== id));
     // Sync to Supabase
-    fetch(`/api/placements?id=${id}`, { method: "DELETE" })
+    authFetch(`/api/placements?id=${id}`, { method: "DELETE" })
       .catch((err) => console.error("Placement delete error:", err));
   }
 
@@ -148,6 +154,16 @@ export default function PlacementsPage() {
   });
 
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
+
+  if (artistLoading || !artist) {
+    return (
+      <ArtistPortalLayout activePath="/artist-portal/placements">
+        <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found. Complete your profile setup first."}</p>
+      </ArtistPortalLayout>
+    );
+  }
+
+  const works = artist.works;
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/placements">
@@ -258,7 +274,7 @@ export default function PlacementsPage() {
                 )}
               </label>
               <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
-                {artist.works.map((work, i) => {
+                {works.map((work, i) => {
                   const selected = selectedWorks.has(i);
                   return (
                     <button
