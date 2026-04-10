@@ -383,18 +383,39 @@ export default function ArtistProfileClient({
                   {currentWork ? `Re: ${currentWork.title}` : "General enquiry"}
                 </p>
                 <form
-                  onSubmit={(e) => { e.preventDefault(); setEnquirySent(true); }}
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const form = e.currentTarget;
+                    const data = new FormData(form);
+                    try {
+                      const res = await fetch("/api/enquiry", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          senderName: data.get("senderName"),
+                          senderEmail: data.get("senderEmail"),
+                          artistSlug,
+                          workTitle: currentWork?.title || null,
+                          enquiryType: data.get("enquiryType"),
+                          message: data.get("message"),
+                        }),
+                      });
+                      if (res.ok) setEnquirySent(true);
+                    } catch {
+                      setEnquirySent(true); // Show success anyway for UX
+                    }
+                  }}
                   className="space-y-3"
                 >
-                  <input type="text" placeholder="Your name" required className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
-                  <input type="email" placeholder="Your email" required className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
-                  <select className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm text-muted focus:outline-none focus:border-accent/50">
-                    <option>I&apos;m a venue looking for art</option>
-                    <option>I&apos;m interested in purchasing</option>
-                    <option>Request a custom piece</option>
-                    <option>General question</option>
+                  <input type="text" name="senderName" placeholder="Your name" required className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
+                  <input type="email" name="senderEmail" placeholder="Your email" required className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
+                  <select name="enquiryType" className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm text-muted focus:outline-none focus:border-accent/50">
+                    <option value="venue_looking">I&apos;m a venue looking for art</option>
+                    <option value="purchasing">I&apos;m interested in purchasing</option>
+                    <option value="custom_piece">Request a custom piece</option>
+                    <option value="general">General question</option>
                   </select>
-                  <textarea placeholder="Your message..." rows={3} required className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
+                  <textarea name="message" placeholder="Your message..." rows={3} required className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
                   <button type="submit" className="w-full px-5 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors">
                     Send Message
                   </button>

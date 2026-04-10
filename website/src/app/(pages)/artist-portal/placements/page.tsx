@@ -79,7 +79,7 @@ export default function PlacementsPage() {
     });
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!venueName || selectedWorks.size === 0) return;
 
     const newPlacements: Placement[] = Array.from(selectedWorks).map((workIndex) => {
@@ -98,6 +98,23 @@ export default function PlacementsPage() {
       };
     });
 
+    // Save to Supabase
+    try {
+      await fetch("/api/placements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          placements: newPlacements.map((p) => ({
+            ...p,
+            workTitle: p.workTitle,
+            workImage: p.workImage,
+          })),
+        }),
+      });
+    } catch (err) {
+      console.error("Placement save error:", err);
+    }
+
     savePlacements([...newPlacements, ...placements]);
     setShowForm(false);
     setVenueName("");
@@ -109,10 +126,19 @@ export default function PlacementsPage() {
 
   function updateStatus(id: string, newStatus: PlacementStatus) {
     savePlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
+    // Sync to Supabase
+    fetch("/api/placements", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status: newStatus }),
+    }).catch((err) => console.error("Status update error:", err));
   }
 
   function removePlacement(id: string) {
     savePlacements(placements.filter((p) => p.id !== id));
+    // Sync to Supabase
+    fetch(`/api/placements?id=${id}`, { method: "DELETE" })
+      .catch((err) => console.error("Placement delete error:", err));
   }
 
   const filtered = placements.filter((p) => {

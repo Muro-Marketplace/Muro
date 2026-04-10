@@ -72,6 +72,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const history = JSON.parse(localStorage.getItem("wallspace-orders") || "[]");
       history.push(order);
       localStorage.setItem("wallspace-orders", JSON.stringify(history));
+      // Save to Supabase
+      fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: order.id,
+          items: order.items,
+          shipping: order.shipping,
+          subtotal: order.subtotal,
+          shippingCost: order.shippingCost,
+          total: order.total,
+          buyerEmail: shipping.email,
+        }),
+      }).catch((err) => console.error("Order save error:", err));
       setItems([]);
       return order;
     },
