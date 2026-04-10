@@ -382,7 +382,7 @@ export default function ProfileEditorPage() {
             </div>
             <div>
               <label className={labelClass}>Website</label>
-              <input type="url" value={profile.website} onChange={(e) => update("website", e.target.value)} placeholder="https://yoursite.com" className={inputClass} />
+              <input type="text" value={profile.website} onChange={(e) => update("website", e.target.value)} placeholder="https://yoursite.com" className={inputClass} />
             </div>
           </div>
         </div>
