@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 
 const dateRanges = ["Last 7 days", "Last 30 days", "Last 3 months", "Last 12 months", "All time"];
@@ -96,28 +96,14 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Earnings chart placeholder */}
+      {/* Earnings chart */}
       <div className="bg-surface border border-border rounded-sm mb-6 overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <h2 className="text-base font-medium">Earnings Over Time</h2>
-          <span className="text-xs text-muted">Last 30 days</span>
+          <span className="text-xs text-muted">{dateRange}</span>
         </div>
-        <div className="relative h-48 bg-gradient-to-b from-accent/8 to-transparent flex items-end justify-center pb-8">
-          {/* Simulated chart bars */}
-          <div className="flex items-end gap-2 px-8 w-full h-full pt-6">
-            {[30, 55, 40, 70, 45, 85, 60, 95, 50, 75, 65, 100, 55, 80, 45, 90, 70, 55, 85, 60, 75, 50, 95, 65, 80, 45, 70, 55, 90, 75].map((h, i) => (
-              <div
-                key={i}
-                className="flex-1 rounded-t-sm bg-accent/25"
-                style={{ height: `${h}%` }}
-              />
-            ))}
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="bg-white/80 backdrop-blur-sm border border-border rounded-sm px-4 py-2">
-              <p className="text-sm text-muted">Chart coming soon</p>
-            </div>
-          </div>
+        <div className="px-6 py-6">
+          <EarningsChart />
         </div>
       </div>
 
@@ -207,5 +193,114 @@ export default function AnalyticsPage() {
         </div>
       </div>
     </ArtistPortalLayout>
+  );
+}
+
+/* ── Earnings Chart (pure SVG, no dependencies) ── */
+
+// Mock data — replace with real API data when backend is ready
+const earningsData = [
+  { month: "Oct", earnings: 120, sales: 1 },
+  { month: "Nov", earnings: 280, sales: 2 },
+  { month: "Dec", earnings: 0, sales: 0 },
+  { month: "Jan", earnings: 320, sales: 1 },
+  { month: "Feb", earnings: 560, sales: 2 },
+  { month: "Mar", earnings: 480, sales: 2 },
+  { month: "Apr", earnings: 1080, sales: 3 },
+];
+
+function EarningsChart() {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(700);
+
+  useEffect(() => {
+    function measure() {
+      if (containerRef.current) setWidth(containerRef.current.offsetWidth);
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  const maxEarnings = Math.max(...earningsData.map((d) => d.earnings), 100);
+  const chartHeight = 220;
+  const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+  const innerWidth = width - padding.left - padding.right;
+  const innerHeight = chartHeight - padding.top - padding.bottom;
+
+  const xStep = innerWidth / (earningsData.length - 1);
+
+  const points = earningsData.map((d, i) => ({
+    x: padding.left + i * xStep,
+    y: padding.top + innerHeight - (d.earnings / maxEarnings) * innerHeight,
+  }));
+
+  const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + innerHeight} L ${points[0].x} ${padding.top + innerHeight} Z`;
+
+  const yTicks = [0, Math.round(maxEarnings / 2), maxEarnings];
+
+  return (
+    <div ref={containerRef} className="w-full">
+      <svg width={width} height={chartHeight}>
+        {/* Grid lines */}
+        {yTicks.map((tick) => {
+          const y = padding.top + innerHeight - (tick / maxEarnings) * innerHeight;
+          return (
+            <g key={tick}>
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#E5E2DD" strokeWidth="0.5" />
+              <text x={padding.left - 8} y={y + 4} textAnchor="end" className="fill-muted" fontSize="10">
+                &pound;{tick}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Area fill */}
+        <path d={areaPath} fill="#C17C5A" fillOpacity="0.08" />
+
+        {/* Line */}
+        <path d={linePath} fill="none" stroke="#C17C5A" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Data points + hover targets */}
+        {points.map((p, i) => (
+          <g key={i}>
+            {/* Invisible hover target */}
+            <rect
+              x={p.x - xStep / 2}
+              y={padding.top}
+              width={xStep}
+              height={innerHeight}
+              fill="transparent"
+              onMouseEnter={() => setHoveredIndex(i)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            />
+            {/* Dot */}
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={hoveredIndex === i ? 5 : 3}
+              fill={hoveredIndex === i ? "#C17C5A" : "#fff"}
+              stroke="#C17C5A"
+              strokeWidth="2"
+            />
+            {/* Hover tooltip */}
+            {hoveredIndex === i && (
+              <g>
+                <rect x={p.x - 40} y={p.y - 38} width="80" height="28" rx="4" fill="#1A1A1A" />
+                <text x={p.x} y={p.y - 20} textAnchor="middle" fill="white" fontSize="11" fontWeight="500">
+                  &pound;{earningsData[i].earnings}
+                </text>
+              </g>
+            )}
+            {/* X-axis label */}
+            <text x={p.x} y={chartHeight - 5} textAnchor="middle" className="fill-muted" fontSize="10">
+              {earningsData[i].month}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
   );
 }

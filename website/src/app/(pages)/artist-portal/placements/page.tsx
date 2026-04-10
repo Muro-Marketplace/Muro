@@ -1,79 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import { artists, type ArtistWork } from "@/data/artists";
+
+const artist = artists[0];
 
 type FilterTab = "All" | "Active" | "Pending" | "Completed";
+type ArrangementType = "Free Loan" | "Revenue Share" | "Direct Purchase";
+type PlacementStatus = "Active" | "Pending" | "Completed" | "Sold";
 
-const placements = [
-  {
-    id: 1,
-    title: "Last Light on Mare Street",
-    venue: "Ozone Coffee",
-    type: "Revenue Share",
-    status: "Active",
-    date: "12 Jan 2026",
-    revenue: null,
-  },
-  {
-    id: 2,
-    title: "Hackney Wick, Dawn",
-    venue: "The Copper Kettle",
-    type: "Sale",
-    status: "Sold",
-    date: "8 Jan 2026",
-    revenue: "£320",
-  },
-  {
-    id: 3,
-    title: "Canal Series No. 4",
-    venue: "Workshop Coffee",
-    type: "Free Loan",
-    status: "Completed",
-    date: "15 Nov 2025",
-    revenue: null,
-  },
-  {
-    id: 4,
-    title: "Bermondsey Rooftops",
-    venue: "Redemption Roasters",
-    type: "Revenue Share",
-    status: "Pending",
-    date: "20 Mar 2026",
-    revenue: null,
-  },
-  {
-    id: 5,
-    title: "Sunday Market, E8",
-    venue: "Climpson & Sons",
-    type: "Free Loan",
-    status: "Active",
-    date: "3 Feb 2026",
-    revenue: null,
-  },
-  {
-    id: 6,
-    title: "Golden Hour, Peckham Rye",
-    venue: "Ozone Coffee",
-    type: "Sale",
-    status: "Sold",
-    date: "28 Oct 2025",
-    revenue: "£280",
-  },
+interface Placement {
+  id: string;
+  workTitle: string;
+  workImage: string;
+  venue: string;
+  type: ArrangementType;
+  revenueSharePercent?: number;
+  status: PlacementStatus;
+  date: string;
+  revenue: string | null;
+  notes?: string;
+}
+
+const seedPlacements: Placement[] = [
+  { id: "p1", workTitle: "Last Light on Mare Street", workImage: artist.works[0]?.image || "", venue: "Ozone Coffee", type: "Revenue Share", revenueSharePercent: 10, status: "Active", date: "12 Jan 2026", revenue: null },
+  { id: "p2", workTitle: "Hackney Wick, Dawn", workImage: artist.works[1]?.image || "", venue: "The Copper Kettle", type: "Direct Purchase", status: "Sold", date: "8 Jan 2026", revenue: "£320" },
+  { id: "p3", workTitle: "Canal Series No. 4", workImage: artist.works[2]?.image || "", venue: "Workshop Coffee", type: "Free Loan", status: "Completed", date: "15 Nov 2025", revenue: null },
+  { id: "p4", workTitle: "Bermondsey Rooftops", workImage: artist.works[3]?.image || "", venue: "Redemption Roasters", type: "Revenue Share", revenueSharePercent: 15, status: "Pending", date: "20 Mar 2026", revenue: null },
+  { id: "p5", workTitle: "Sunday Market, E8", workImage: artist.works[4]?.image || "", venue: "Climpson & Sons", type: "Free Loan", status: "Active", date: "3 Feb 2026", revenue: null },
 ];
 
 const statusBadge = (status: string) => {
   switch (status) {
-    case "Active":
-      return "bg-green-100 text-green-700";
-    case "Pending":
-      return "bg-amber-100 text-amber-700";
-    case "Sold":
-      return "bg-blue-100 text-blue-700";
-    case "Completed":
-      return "bg-gray-100 text-gray-600";
-    default:
-      return "bg-gray-100 text-gray-600";
+    case "Active": return "bg-green-100 text-green-700";
+    case "Pending": return "bg-amber-100 text-amber-700";
+    case "Sold": return "bg-blue-100 text-blue-700";
+    case "Completed": return "bg-gray-100 text-gray-600";
+    default: return "bg-gray-100 text-gray-600";
   }
 };
 
@@ -81,6 +46,74 @@ const tabs: FilterTab[] = ["All", "Active", "Pending", "Completed"];
 
 export default function PlacementsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
+  const [placements, setPlacements] = useState<Placement[]>(seedPlacements);
+  const [showForm, setShowForm] = useState(false);
+
+  // Form state
+  const [venueName, setVenueName] = useState("");
+  const [arrangementType, setArrangementType] = useState<ArrangementType>("Free Loan");
+  const [revenuePercent, setRevenuePercent] = useState(10);
+  const [selectedWorks, setSelectedWorks] = useState<Set<number>>(new Set());
+  const [notes, setNotes] = useState("");
+  const [status, setStatus] = useState<PlacementStatus>("Active");
+
+  // Load from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem("wallspace-placements");
+    if (stored) {
+      try { setPlacements(JSON.parse(stored)); } catch { /* ignore */ }
+    }
+  }, []);
+
+  function savePlacements(updated: Placement[]) {
+    setPlacements(updated);
+    localStorage.setItem("wallspace-placements", JSON.stringify(updated));
+  }
+
+  function toggleWork(index: number) {
+    setSelectedWorks((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  function handleSubmit() {
+    if (!venueName || selectedWorks.size === 0) return;
+
+    const newPlacements: Placement[] = Array.from(selectedWorks).map((workIndex) => {
+      const work = artist.works[workIndex];
+      return {
+        id: `p-${Date.now()}-${workIndex}`,
+        workTitle: work.title,
+        workImage: work.image,
+        venue: venueName,
+        type: arrangementType,
+        revenueSharePercent: arrangementType === "Revenue Share" ? revenuePercent : undefined,
+        status,
+        date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        revenue: null,
+        notes: notes || undefined,
+      };
+    });
+
+    savePlacements([...newPlacements, ...placements]);
+    setShowForm(false);
+    setVenueName("");
+    setSelectedWorks(new Set());
+    setNotes("");
+    setArrangementType("Free Loan");
+    setStatus("Active");
+  }
+
+  function updateStatus(id: string, newStatus: PlacementStatus) {
+    savePlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
+  }
+
+  function removePlacement(id: string) {
+    savePlacements(placements.filter((p) => p.id !== id));
+  }
 
   const filtered = placements.filter((p) => {
     if (activeTab === "All") return true;
@@ -88,17 +121,170 @@ export default function PlacementsPage() {
     return p.status === activeTab;
   });
 
+  const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
+
   return (
     <ArtistPortalLayout activePath="/artist-portal/placements">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl lg:text-3xl">Placements</h1>
-        <div className="flex items-center gap-3 text-sm text-muted">
-          <span>{placements.filter(p => p.status === "Active").length} active</span>
-          <span>·</span>
-          <span>{placements.filter(p => p.status === "Pending").length} pending</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted">
+            {placements.filter((p) => p.status === "Active").length} active
+          </span>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
+          >
+            + Log Placement
+          </button>
         </div>
       </div>
+
+      {/* Log Placement Form */}
+      {showForm && (
+        <div className="bg-surface border border-border rounded-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-base font-medium">Log New Placement</h2>
+            <button onClick={() => setShowForm(false)} className="text-xs text-muted hover:text-foreground transition-colors">Cancel</button>
+          </div>
+
+          <div className="space-y-5">
+            {/* Venue name */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Venue Name <span className="text-accent">*</span></label>
+              <input
+                type="text"
+                value={venueName}
+                onChange={(e) => setVenueName(e.target.value)}
+                placeholder="e.g. Ozone Coffee, Shoreditch"
+                className={inputClass}
+              />
+            </div>
+
+            {/* Arrangement type */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Arrangement Type</label>
+              <div className="flex gap-2">
+                {(["Free Loan", "Revenue Share", "Direct Purchase"] as ArrangementType[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setArrangementType(type)}
+                    className={`px-4 py-2 text-xs rounded-sm border transition-colors ${
+                      arrangementType === type
+                        ? "bg-foreground text-white border-foreground"
+                        : "border-border text-muted hover:border-foreground/30"
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Revenue share % */}
+            {arrangementType === "Revenue Share" && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Venue Revenue Share %</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={revenuePercent}
+                    onChange={(e) => setRevenuePercent(Number(e.target.value) || 0)}
+                    className="w-20 bg-background border border-border rounded-sm px-3 py-3 text-sm text-center focus:outline-none focus:border-accent/60"
+                  />
+                  <span className="text-sm text-muted">% to the venue on sales from their space</span>
+                </div>
+              </div>
+            )}
+
+            {/* Status */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Status</label>
+              <div className="flex gap-2">
+                {(["Active", "Pending"] as PlacementStatus[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatus(s)}
+                    className={`px-4 py-2 text-xs rounded-sm border transition-colors ${
+                      status === s
+                        ? "bg-foreground text-white border-foreground"
+                        : "border-border text-muted hover:border-foreground/30"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted mt-1">Active = already on the wall. Pending = agreed but not yet installed.</p>
+            </div>
+
+            {/* Select works */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Select Works to Place <span className="text-accent">*</span>
+                {selectedWorks.size > 0 && (
+                  <span className="text-accent ml-2 font-normal">{selectedWorks.size} selected</span>
+                )}
+              </label>
+              <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
+                {artist.works.map((work, i) => {
+                  const selected = selectedWorks.has(i);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => toggleWork(i)}
+                      className={`relative aspect-square rounded-sm overflow-hidden border-2 transition-all ${
+                        selected ? "border-accent shadow-sm" : "border-transparent hover:border-border"
+                      }`}
+                    >
+                      <Image src={work.image} alt={work.title} fill className="object-cover" sizes="80px" />
+                      {selected && (
+                        <div className="absolute inset-0 bg-accent/20 flex items-center justify-center">
+                          <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center">
+                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
+                          </div>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Notes (optional)</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Any details about the arrangement, delivery date, contact person..."
+                rows={2}
+                className={`${inputClass} resize-none`}
+              />
+            </div>
+
+            {/* Submit */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleSubmit}
+                disabled={!venueName || selectedWorks.size === 0}
+                className="px-6 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Log {selectedWorks.size} Placement{selectedWorks.size !== 1 ? "s" : ""}
+              </button>
+              <button onClick={() => setShowForm(false)} className="px-6 py-2.5 text-sm text-muted border border-border rounded-sm hover:text-foreground transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filter tabs */}
       <div className="flex gap-1 mb-6 border-b border-border">
@@ -107,8 +293,8 @@ export default function PlacementsPage() {
             tab === "All"
               ? placements.length
               : tab === "Completed"
-              ? placements.filter(p => p.status === "Completed" || p.status === "Sold").length
-              : placements.filter(p => p.status === tab).length;
+              ? placements.filter((p) => p.status === "Completed" || p.status === "Sold").length
+              : placements.filter((p) => p.status === tab).length;
           return (
             <button
               key={tab}
@@ -120,11 +306,7 @@ export default function PlacementsPage() {
               }`}
             >
               {tab}
-              <span
-                className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
-                  activeTab === tab ? "bg-accent/10 text-accent" : "bg-border text-muted"
-                }`}
-              >
+              <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab ? "bg-accent/10 text-accent" : "bg-border text-muted"}`}>
                 {count}
               </span>
             </button>
@@ -132,7 +314,7 @@ export default function PlacementsPage() {
         })}
       </div>
 
-      {/* Table – desktop */}
+      {/* Table - desktop */}
       <div className="bg-surface border border-border rounded-sm hidden sm:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -143,33 +325,50 @@ export default function PlacementsPage() {
                 <th className="text-left text-xs text-muted font-medium px-4 py-3">Type</th>
                 <th className="text-left text-xs text-muted font-medium px-4 py-3">Status</th>
                 <th className="text-left text-xs text-muted font-medium px-4 py-3">Date</th>
-                <th className="text-right text-xs text-muted font-medium px-6 py-3">Revenue</th>
+                <th className="text-right text-xs text-muted font-medium px-4 py-3">Revenue</th>
+                <th className="text-right text-xs text-muted font-medium px-6 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map((placement) => (
-                <tr key={placement.id} className="hover:bg-background/60 transition-colors">
-                  <td className="px-6 py-4">
-                    <span className="font-medium text-foreground">{placement.title}</span>
+              {filtered.map((p) => (
+                <tr key={p.id} className="hover:bg-background/60 transition-colors">
+                  <td className="px-6 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
+                        <Image src={p.workImage} alt={p.workTitle} fill className="object-cover" sizes="32px" />
+                      </div>
+                      <span className="font-medium text-foreground">{p.workTitle}</span>
+                    </div>
                   </td>
-                  <td className="px-4 py-4 text-muted whitespace-nowrap">{placement.venue}</td>
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.venue}</td>
+                  <td className="px-4 py-3.5">
                     <span className="text-xs border border-border rounded-sm px-2 py-0.5 text-muted">
-                      {placement.type}
+                      {p.type}{p.revenueSharePercent ? ` (${p.revenueSharePercent}%)` : ""}
                     </span>
                   </td>
-                  <td className="px-4 py-4">
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadge(
-                        placement.status
-                      )}`}
+                  <td className="px-4 py-3.5">
+                    <select
+                      value={p.status}
+                      onChange={(e) => updateStatus(p.id, e.target.value as PlacementStatus)}
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full border-none cursor-pointer ${statusBadge(p.status)}`}
                     >
-                      {placement.status}
-                    </span>
+                      <option value="Active">Active</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Sold">Sold</option>
+                    </select>
                   </td>
-                  <td className="px-4 py-4 text-muted whitespace-nowrap">{placement.date}</td>
-                  <td className="px-6 py-4 text-right font-medium text-foreground">
-                    {placement.revenue ?? <span className="text-muted">—</span>}
+                  <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.date}</td>
+                  <td className="px-4 py-3.5 text-right font-medium text-foreground">
+                    {p.revenue ?? <span className="text-muted">-</span>}
+                  </td>
+                  <td className="px-6 py-3.5 text-right">
+                    <button
+                      onClick={() => { if (confirm("Remove this placement?")) removePlacement(p.id); }}
+                      className="text-xs text-muted hover:text-red-500 transition-colors"
+                    >
+                      Remove
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -177,35 +376,36 @@ export default function PlacementsPage() {
           </table>
         </div>
         {filtered.length === 0 && (
-          <div className="px-6 py-12 text-center text-muted text-sm">
-            No placements found.
-          </div>
+          <div className="px-6 py-12 text-center text-muted text-sm">No placements found.</div>
         )}
       </div>
 
-      {/* Cards – mobile */}
+      {/* Cards - mobile */}
       <div className="sm:hidden space-y-3">
-        {filtered.map((placement) => (
-          <div key={placement.id} className="bg-surface border border-border rounded-sm p-4">
+        {filtered.map((p) => (
+          <div key={p.id} className="bg-surface border border-border rounded-sm p-4">
             <div className="flex items-start justify-between gap-3 mb-2">
-              <p className="font-medium text-foreground text-sm leading-snug">{placement.title}</p>
-              <span
-                className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${statusBadge(
-                  placement.status
-                )}`}
-              >
-                {placement.status}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
+                  <Image src={p.workImage} alt={p.workTitle} fill className="object-cover" sizes="40px" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground text-sm leading-snug">{p.workTitle}</p>
+                  <p className="text-xs text-muted">{p.venue}</p>
+                </div>
+              </div>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${statusBadge(p.status)}`}>
+                {p.status}
               </span>
             </div>
-            <p className="text-sm text-muted mb-3">{placement.venue}</p>
-            <div className="flex items-center justify-between text-xs text-muted">
+            <div className="flex items-center justify-between text-xs text-muted mt-2">
               <div className="flex items-center gap-2">
-                <span className="border border-border rounded-sm px-1.5 py-0.5">{placement.type}</span>
-                <span>{placement.date}</span>
+                <span className="border border-border rounded-sm px-1.5 py-0.5">
+                  {p.type}{p.revenueSharePercent ? ` ${p.revenueSharePercent}%` : ""}
+                </span>
+                <span>{p.date}</span>
               </div>
-              {placement.revenue && (
-                <span className="font-medium text-foreground">{placement.revenue}</span>
-              )}
+              {p.revenue && <span className="font-medium text-foreground">{p.revenue}</span>}
             </div>
           </div>
         ))}

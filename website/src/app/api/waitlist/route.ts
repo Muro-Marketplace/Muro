@@ -1,0 +1,45 @@
+import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { name, email, userType } = body;
+
+    if (!name || !email || !userType) {
+      return NextResponse.json(
+        { error: "Name, email, and user type are required" },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabase.from("waitlist_signups").insert({
+      name,
+      email,
+      user_type: userType,
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      // Duplicate email
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: "This email is already on the waitlist" },
+          { status: 409 }
+        );
+      }
+      console.error("Supabase error:", error);
+      return NextResponse.json(
+        { error: "Something went wrong. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request" },
+      { status: 400 }
+    );
+  }
+}

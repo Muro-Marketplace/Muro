@@ -11,12 +11,35 @@ export default function WaitlistPage() {
   const [email, setEmail] = useState("");
   const [userType, setUserType] = useState<UserType>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const howItWorksRef = useRef<HTMLDivElement>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !email || !userType) return;
-    setSubmitted(true);
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, userType }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+        setSubmitting(false);
+        return;
+      }
+
+      setSubmitted(true);
+    } catch {
+      setError("Network error. Please try again.");
+      setSubmitting(false);
+    }
   }
 
   function scrollToHowItWorks() {
@@ -142,13 +165,18 @@ export default function WaitlistPage() {
                     </div>
                   </div>
 
+                  {/* Error */}
+                  {error && (
+                    <p className="text-red-400 text-sm text-center">{error}</p>
+                  )}
+
                   {/* Submit */}
                   <button
                     type="submit"
-                    disabled={!name || !email || !userType}
+                    disabled={!name || !email || !userType || submitting}
                     className="w-full mt-2 py-3.5 px-6 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Join the Waitlist
+                    {submitting ? "Joining..." : "Join the Waitlist"}
                   </button>
                 </form>
 
