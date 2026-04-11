@@ -22,7 +22,7 @@ Studies consistently show that environments with curated artwork increase dwell 
 The best part? With platforms like Wallplace, you don't need to buy art outright. Free loan and revenue share arrangements mean you can rotate artwork regularly, keeping your space fresh without the upfront cost.
 
 Whether you run a neighbourhood coffee shop or a boutique hotel, the art on your walls tells your customers who you are. Make it count.`,
-    image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=800&h=500&fit=crop",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&h=500&fit=crop",
     date: "2026-04-08",
     readTime: "4 min read",
     author: "Wallplace Team",
