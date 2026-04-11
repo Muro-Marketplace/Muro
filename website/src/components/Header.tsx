@@ -67,7 +67,7 @@ export default function Header() {
       {isPortal && (
         <div className="absolute inset-0 -z-10">
           <img src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=200&fit=crop&crop=center" alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/65 to-black/75" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/45 to-black/55" />
         </div>
       )}
       <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
