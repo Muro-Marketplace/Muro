@@ -14,7 +14,7 @@ interface ProfileSubscription {
 }
 
 const PLAN_DETAILS: Record<string, { name: string; price: string; fee: string }> = {
-  core: { name: "Core", price: "\u00a39.99/month", fee: "15%" },
+  core: { name: "Core", price: "\u00a39.99/month", fee: "10%" },
   premium: { name: "Premium", price: "\u00a329.99/month", fee: "5%" },
   pro: { name: "Pro", price: "\u00a369.99/month", fee: "0%" },
   none: { name: "No plan", price: "\u2014", fee: "\u2014" },
