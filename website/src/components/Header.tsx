@@ -56,17 +56,26 @@ export default function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isImmersive]);
 
-  // Resolve the user's actual slug from their profile
+  // Resolve the user's actual slug from their profile (try both endpoints)
   useEffect(() => {
     if (!user) { setResolvedSlug(""); return; }
-    const endpoint = userType === "venue" ? "/api/venue-profile" : "/api/artist-profile";
-    authFetch(endpoint)
-      .then((r) => r.json())
-      .then((data) => {
-        const slug = data.profile?.slug;
-        if (slug) setResolvedSlug(slug);
-      })
-      .catch(() => {});
+    async function resolve() {
+      // Try the expected endpoint first
+      const primary = userType === "venue" ? "/api/venue-profile" : "/api/artist-profile";
+      try {
+        const res = await authFetch(primary);
+        const data = await res.json();
+        if (data.profile?.slug) { setResolvedSlug(data.profile.slug); return; }
+      } catch { /* continue */ }
+      // Fallback: try the other endpoint
+      const fallback = userType === "venue" ? "/api/artist-profile" : "/api/venue-profile";
+      try {
+        const res = await authFetch(fallback);
+        const data = await res.json();
+        if (data.profile?.slug) { setResolvedSlug(data.profile.slug); return; }
+      } catch { /* give up */ }
+    }
+    resolve();
   }, [user, userType]);
 
   // Load conversations when dropdown opens (also retries when slug resolves)
