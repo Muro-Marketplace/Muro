@@ -8,13 +8,13 @@ interface AuthContextValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  userType: "artist" | "venue" | null;
+  userType: "artist" | "venue" | "admin" | null;
   displayName: string | null;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (
     email: string,
     password: string,
-    metadata: { user_type: "artist" | "venue"; display_name: string }
+    metadata: { user_type: "artist" | "venue" | "admin"; display_name: string }
   ) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 }
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (
       email: string,
       password: string,
-      metadata: { user_type: "artist" | "venue"; display_name: string }
+      metadata: { user_type: "artist" | "venue" | "admin"; display_name: string }
     ) => {
       const { error } = await supabase.auth.signUp({
         email,
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
-  const userType = (user?.user_metadata?.user_type as "artist" | "venue") ?? null;
+  const userType = (user?.user_metadata?.user_type as "artist" | "venue" | "admin") ?? null;
   const displayName = (user?.user_metadata?.display_name as string) ?? null;
 
   return (

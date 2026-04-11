@@ -1,9 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Button from "@/components/Button";
-import { supabase } from "@/lib/supabase";
-import { slugify } from "@/lib/slugify";
 
 const primaryMediums = [
   "Oil Painting",
@@ -121,8 +118,6 @@ interface FormState {
   themes: string[];
   hearAbout: string;
   selectedPlan: string;
-  password: string;
-  confirmPassword: string;
 }
 
 const initialState: FormState = {
@@ -146,8 +141,6 @@ const initialState: FormState = {
   themes: [],
   hearAbout: "",
   selectedPlan: "core",
-  password: "",
-  confirmPassword: "",
 };
 
 export default function ApplicationForm() {
@@ -187,20 +180,7 @@ export default function ApplicationForm() {
     setSubmitting(true);
     setError("");
 
-    // Password validation
-    if (form.password.length < 6) {
-      setError("Password must be at least 6 characters");
-      setSubmitting(false);
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match");
-      setSubmitting(false);
-      return;
-    }
-
     try {
-      // Submit application data
       const res = await fetch("/api/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -212,43 +192,6 @@ export default function ApplicationForm() {
         setError(data.error || "Something went wrong");
         setSubmitting(false);
         return;
-      }
-
-      // Create auth account
-      const artistSlug = slugify(form.name);
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: {
-          data: { user_type: "artist", display_name: form.name, artist_slug: artistSlug },
-        },
-      });
-
-      if (authError) {
-        console.error("Auth signup error:", authError);
-      }
-
-      // Create artist profile in database so portal works immediately
-      if (authData?.user) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          await fetch("/api/artist-profile", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              name: form.name,
-              slug: artistSlug,
-              location: form.location,
-              primaryMedium: form.primaryMedium,
-              shortBio: form.artistStatement?.slice(0, 200) || "",
-              instagram: form.instagram || "",
-              website: form.website || "",
-            }),
-          }).catch((err) => console.error("Profile creation error:", err));
-        }
       }
 
       setSubmitted(true);
@@ -283,7 +226,8 @@ export default function ApplicationForm() {
           review it personally.
         </p>
         <p className="text-muted leading-relaxed">
-          We aim to respond within 5 business days. In the meantime, if you have any
+          We aim to respond within 5 business days. When accepted, you will receive
+          an email with a link to set up your account and profile. In the meantime, if you have any
           questions, email us at{" "}
           <a
             href="mailto:hello@wallspace.co"
@@ -383,37 +327,6 @@ export default function ApplicationForm() {
               value={form.website}
               onChange={handleChange}
               placeholder="https://yourwebsite.com"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className={labelClass}>
-              Password <span className="text-accent">*</span>
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              minLength={6}
-              placeholder="At least 6 characters"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="confirmPassword" className={labelClass}>
-              Confirm Password <span className="text-accent">*</span>
-            </label>
-            <input
-              type="password"
-              id="confirmPassword"
-              name="confirmPassword"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              required
-              placeholder="Confirm your password"
               className={inputClass}
             />
           </div>

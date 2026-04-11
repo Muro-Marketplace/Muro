@@ -17,7 +17,11 @@ export default function LoginPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (!authLoading && user) {
-      router.replace(userType === "venue" ? "/venue-portal" : "/artist-portal");
+      router.replace(
+        userType === "admin" ? "/admin" :
+        userType === "venue" ? "/venue-portal" :
+        "/artist-portal"
+      );
     }
   }, [authLoading, user, userType, router]);
 

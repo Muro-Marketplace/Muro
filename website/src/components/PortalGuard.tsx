@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 interface PortalGuardProps {
-  allowedType: "artist" | "venue";
+  allowedType: "artist" | "venue" | "admin";
   children: React.ReactNode;
 }
 
@@ -17,7 +17,11 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
     if (!loading && !user) {
       router.replace("/login");
     } else if (!loading && user && userType && userType !== allowedType) {
-      router.replace(userType === "artist" ? "/artist-portal" : "/venue-portal");
+      router.replace(
+        userType === "admin" ? "/admin" :
+        userType === "artist" ? "/artist-portal" :
+        "/venue-portal"
+      );
     }
   }, [user, loading, userType, allowedType, router]);
 
