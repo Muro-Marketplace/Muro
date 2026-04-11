@@ -62,30 +62,17 @@ export default function WaitlistPage() {
 
       {/* ─── HERO / WAITLIST ─── */}
       <section className="relative min-h-screen flex flex-col">
-        {/* Top bar: Wordmark + Already have access */}
-        <div className="flex items-center justify-between px-8 pt-8 lg:px-12 lg:pt-10">
-          <span className="font-serif text-2xl lg:text-3xl tracking-tight text-white">
-            Wallspace
-          </span>
-          <Link
-            href="/login"
-            className="text-sm text-white/50 hover:text-white/80 transition-colors duration-200"
-          >
-            Already have access? Sign in &rarr;
-          </Link>
-        </div>
-
-        {/* Main content – pushed up with less bottom padding */}
-        <div className="flex-1 flex items-center justify-center px-6 pb-28 pt-4">
-          <div className="w-full max-w-md lg:max-w-lg">
+        {/* Main content */}
+        <div className="flex-1 flex items-center justify-center px-6 pb-28 pt-8">
+          <div className="w-full max-w-md lg:max-w-lg text-center">
             {submitted ? (
               <SuccessState />
             ) : (
               <>
-                {/* Eyebrow */}
-                <p className="text-xs font-medium tracking-[0.25em] uppercase text-white/50 mb-5">
-                  Coming Soon &nbsp;·&nbsp; Private Beta
-                </p>
+                {/* Logo */}
+                <h2 className="font-serif text-4xl lg:text-5xl tracking-tight text-white mb-8">
+                  Wallspace
+                </h2>
 
                 {/* Headline */}
                 <h1 className="font-serif text-[clamp(2rem,5vw,3.25rem)] lg:text-[2.75rem] leading-[1.05] tracking-[-0.02em] text-white mb-3">
@@ -93,7 +80,7 @@ export default function WaitlistPage() {
                 </h1>
 
                 {/* Subhead */}
-                <p className="text-base text-white/60 leading-relaxed mb-8">
+                <p className="text-base text-white/60 leading-relaxed mb-8 mx-auto max-w-sm">
                   Connecting artists with venues that want
                   original work on their walls. Join the waitlist to be first
                   in.
@@ -102,7 +89,7 @@ export default function WaitlistPage() {
                 {/* Form card */}
                 <form
                   onSubmit={handleSubmit}
-                  className="bg-black/30 backdrop-blur-md border border-white/10 rounded-sm p-4 sm:p-6 lg:p-8 space-y-3 sm:space-y-4"
+                  className="bg-black/30 backdrop-blur-md border border-white/10 rounded-sm p-4 sm:p-6 lg:p-8 space-y-3 sm:space-y-4 text-left"
                 >
                   {/* Name */}
                   <div>
@@ -180,6 +167,14 @@ export default function WaitlistPage() {
                   </button>
                 </form>
 
+                <p className="text-center mt-4">
+                  <Link
+                    href="/login"
+                    className="text-xs text-white/30 hover:text-white/60 transition-colors duration-200"
+                  >
+                    Already have access? Sign in
+                  </Link>
+                </p>
               </>
             )}
           </div>
