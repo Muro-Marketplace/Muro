@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
 import { z } from "zod";
@@ -35,7 +35,8 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     }));
 
-    const { error } = await supabase.from("placements").insert(rows);
+    const db = getSupabaseAdmin();
+    const { error } = await db.from("placements").insert(rows);
 
     if (error) {
       console.error("Supabase error:", error);
@@ -63,7 +64,8 @@ export async function PATCH(request: Request) {
     const { id, status } = parsed.data;
 
     // Verify ownership before updating
-    const { data: existing } = await supabase
+    const db = getSupabaseAdmin();
+    const { data: existing } = await db
       .from("placements")
       .select("artist_user_id")
       .eq("id", id)
@@ -73,7 +75,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from("placements")
       .update({ status })
       .eq("id", id);
@@ -102,7 +104,8 @@ export async function DELETE(request: Request) {
     }
 
     // Verify ownership before deleting
-    const { data: existing } = await supabase
+    const db = getSupabaseAdmin();
+    const { data: existing } = await db
       .from("placements")
       .select("artist_user_id")
       .eq("id", id)
@@ -112,7 +115,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from("placements")
       .delete()
       .eq("id", id);

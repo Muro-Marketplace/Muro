@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { messageSchema } from "@/lib/validations";
 
@@ -20,7 +20,8 @@ export async function GET(request: Request) {
     const safeSlug = slug.replace(/[^a-zA-Z0-9_-]/g, "");
 
     // Get all messages where this user is sender or recipient
-    const { data, error } = await supabase
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
       .from("messages")
       .select("*")
       .or(`recipient_slug.eq.${safeSlug},sender_name.eq.${safeSlug}`)
@@ -92,7 +93,8 @@ export async function POST(request: Request) {
     // Generate conversation ID if not provided (new conversation)
     const cid = conversationId || `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const { error } = await supabase.from("messages").insert({
+    const db = getSupabaseAdmin();
+    const { error } = await db.from("messages").insert({
       conversation_id: cid,
       sender_id: auth.user!.id,
       sender_name: senderName,

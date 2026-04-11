@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 
 // GET: fetch all messages in a conversation
@@ -17,7 +17,8 @@ export async function GET(
       return NextResponse.json({ error: "Valid conversation ID required" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
       .from("messages")
       .select("*")
       .eq("conversation_id", conversationId)
@@ -53,7 +54,8 @@ export async function PATCH(
 
     const safeSlug = readerSlug.replace(/[^a-zA-Z0-9_-]/g, "");
 
-    const { error } = await supabase
+    const db = getSupabaseAdmin();
+    const { error } = await db
       .from("messages")
       .update({ is_read: true })
       .eq("conversation_id", conversationId)

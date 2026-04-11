@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request: Request) {
   try {
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing order data" }, { status: 400 });
     }
 
-    const { error } = await supabase.from("orders").insert({
+    const { error } = await getSupabaseAdmin().from("orders").insert({
       id,
       buyer_email: buyerEmail,
       items,
