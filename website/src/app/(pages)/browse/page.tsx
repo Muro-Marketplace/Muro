@@ -496,8 +496,8 @@ export default function BrowsePortfoliosPage() {
             checked={filters.freeLoan}
             onChange={(v) => { setFilter("freeLoan", v); if (v) setFilter("revenueShare", true); }}
           />
-          <div className="flex items-center gap-2 pl-6">
-              <span className="text-sm text-foreground/70">Min Revenue Share</span>
+          <div className="flex items-center gap-1.5 pl-6">
+              <span className="text-xs text-muted">Min Revenue Share</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -516,7 +516,7 @@ export default function BrowsePortfoliosPage() {
                 placeholder="e.g. 10"
                 className="w-16 px-2 py-1.5 bg-surface border border-border rounded-sm text-sm text-foreground text-center focus:outline-none focus:border-accent/50"
               />
-              <span className="text-sm text-foreground/70">%</span>
+              <span className="text-xs text-muted">%</span>
           </div>
           <CheckPill
             label="Purchase"
@@ -981,7 +981,7 @@ export default function BrowsePortfoliosPage() {
                       <CheckPill checked={galleryFreeLoan} onChange={setGalleryFreeLoan} label="Display" />
                       <div className="flex items-center gap-2 text-sm text-foreground/70">
                         <span>Min Revenue Share</span>
-                        <input type="number" min={0} max={50} value={galleryRevenueShareMin || ""} onChange={(e) => setGalleryRevenueShareMin(Number(e.target.value) || 0)} placeholder="e.g. 10" className="w-16 px-2 py-1.5 bg-surface border border-border rounded-sm text-sm text-center focus:outline-none focus:border-accent/50" />
+                        <input type="number" min={0} max={50} value={galleryRevenueShareMin || ""} onChange={(e) => setGalleryRevenueShareMin(Number(e.target.value) || 0)} placeholder="e.g. 10" className="w-16 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-center focus:outline-none focus:border-accent/50" />
                         <span>%</span>
                       </div>
                       <CheckPill checked={galleryPurchase} onChange={setGalleryPurchase} label="Purchase" />
