@@ -127,23 +127,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
     }
 
-    // Notify recipient by email (fire-and-forget)
+    // Notify recipient by email (fire-and-forget) — respects opt-out preference
     const { data: recipientArtist } = await db
       .from("artist_profiles")
-      .select("name, slug")
+      .select("name, slug, user_id, message_notifications_enabled")
       .eq("slug", recipientSlug)
       .single();
 
     if (recipientArtist) {
-      // Look up the artist's user email
-      const { data: artistProfileFull } = await db
-        .from("artist_profiles")
-        .select("user_id")
-        .eq("slug", recipientSlug)
-        .single();
-
-      if (artistProfileFull?.user_id) {
-        const { data: { user: recipientUser } } = await db.auth.admin.getUserById(artistProfileFull.user_id);
+      if (recipientArtist.message_notifications_enabled !== false && recipientArtist.user_id) {
+        const { data: { user: recipientUser } } = await db.auth.admin.getUserById(recipientArtist.user_id);
         if (recipientUser?.email) {
           notifyNewMessage({
             email: recipientUser.email,
@@ -157,11 +150,11 @@ export async function POST(request: Request) {
       // Recipient might be a venue
       const { data: venueProfile } = await db
         .from("venue_profiles")
-        .select("name, user_id")
+        .select("name, user_id, message_notifications_enabled")
         .eq("slug", recipientSlug)
         .single();
 
-      if (venueProfile?.user_id) {
+      if (venueProfile?.user_id && venueProfile.message_notifications_enabled !== false) {
         const { data: { user: recipientUser } } = await db.auth.admin.getUserById(venueProfile.user_id);
         if (recipientUser?.email) {
           notifyNewMessage({

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { authFetch } from "@/lib/api-client";
 
 const notifications = [
   { id: "new_enquiry", label: "New enquiries", description: "When a venue enquires about your work" },
@@ -39,6 +40,19 @@ export default function SettingsPage() {
   const [notifSaved, setNotifSaved] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [messageNotifsEnabled, setMessageNotifsEnabled] = useState(true);
+
+  // Load message notification preference from DB
+  useEffect(() => {
+    authFetch("/api/artist-profile")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.profile?.message_notifications_enabled !== undefined) {
+          setMessageNotifsEnabled(data.profile.message_notifications_enabled);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const toggleNotif = (id: string) => {
     setNotifState((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -93,6 +107,11 @@ export default function SettingsPage() {
 
   function handleNotifSave() {
     localStorage.setItem("wallspace-notif-prefs", JSON.stringify(notifState));
+    // Persist message notification preference to DB
+    authFetch("/api/artist-profile", {
+      method: "PUT",
+      body: JSON.stringify({ message_notifications_enabled: messageNotifsEnabled }),
+    }).catch(() => {});
     setNotifSaved(true);
     setTimeout(() => setNotifSaved(false), 3000);
   }
@@ -144,6 +163,27 @@ export default function SettingsPage() {
           <h2 className="text-base font-medium">Notification Preferences</h2>
         </div>
         <div className="space-y-4">
+          {/* Message notifications — persisted to DB */}
+          <div className="flex items-start justify-between gap-4 py-1">
+            <div>
+              <p className="text-sm font-medium text-foreground leading-snug">Message notifications</p>
+              <p className="text-xs text-muted mt-0.5">Email when you receive a new message</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={messageNotifsEnabled}
+              onClick={() => { setMessageNotifsEnabled(!messageNotifsEnabled); setNotifSaved(false); }}
+              className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200 focus:outline-none mt-0.5 ${
+                messageNotifsEnabled ? "bg-accent" : "bg-border"
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 mt-0.5 ${
+                messageNotifsEnabled ? "translate-x-4" : "translate-x-0.5"
+              }`} />
+            </button>
+          </div>
+          <div className="border-t border-border" />
           {notifications.map((notif) => (
             <div key={notif.id} className="flex items-start justify-between gap-4 py-1">
               <div>

@@ -71,3 +71,7 @@ ALTER TABLE placements ADD COLUMN IF NOT EXISTS responded_at timestamptz;
 ALTER TABLE placements ADD COLUMN IF NOT EXISTS message text;
 CREATE INDEX IF NOT EXISTS idx_placements_venue_user ON placements(venue_user_id) WHERE venue_user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_placements_status ON placements(status);
+
+-- Message notification preferences
+ALTER TABLE artist_profiles ADD COLUMN IF NOT EXISTS message_notifications_enabled boolean DEFAULT true;
+ALTER TABLE venue_profiles ADD COLUMN IF NOT EXISTS message_notifications_enabled boolean DEFAULT true;

@@ -27,6 +27,7 @@ export interface DbVenueProfile {
   interested_in_collections: boolean;
   preferred_styles: string[];
   preferred_themes: string[];
+  message_notifications_enabled?: boolean;
 }
 
 export function dbVenueToVenue(v: DbVenueProfile): Venue {

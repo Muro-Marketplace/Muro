@@ -39,6 +39,7 @@ export interface DbArtistProfile {
   total_placements?: number;
   total_sales?: number;
   total_enquiries?: number;
+  message_notifications_enabled?: boolean;
 }
 
 export interface DbArtistWork {

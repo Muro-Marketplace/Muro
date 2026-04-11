@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 
 function SectionCard({
   title,
@@ -91,6 +92,19 @@ export default function VenueSettingsPage() {
   const [notifs, setNotifs] = useState<NotifPref[]>(defaultNotifs);
   const [saved, setSaved] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [messageNotifsEnabled, setMessageNotifsEnabled] = useState(true);
+
+  // Load message notification preference from DB
+  useEffect(() => {
+    authFetch("/api/venue-profile")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.profile?.message_notifications_enabled !== undefined) {
+          setMessageNotifsEnabled(data.profile.message_notifications_enabled);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const toggleNotif = (id: string) => {
     setNotifs((prev) =>
@@ -100,6 +114,11 @@ export default function VenueSettingsPage() {
 
   const handleSave = () => {
     localStorage.setItem("wallspace-venue-notif-prefs", JSON.stringify(notifs));
+    // Persist message notification preference to DB
+    authFetch("/api/venue-profile", {
+      method: "PUT",
+      body: JSON.stringify({ message_notifications_enabled: messageNotifsEnabled }),
+    }).catch(() => {});
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -143,6 +162,24 @@ export default function VenueSettingsPage() {
         {/* Notification preferences */}
         <SectionCard title="Notification Preferences">
           <div className="space-y-4">
+            {/* Message notifications — persisted to DB */}
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <span
+                className={`mt-0.5 w-4 h-4 rounded-sm border flex items-center justify-center shrink-0 transition-colors duration-150 ${
+                  messageNotifsEnabled ? "bg-accent border-accent" : "border-border group-hover:border-muted"
+                }`}
+                onClick={() => setMessageNotifsEnabled(!messageNotifsEnabled)}
+              >
+                {messageNotifsEnabled && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
+                )}
+              </span>
+              <div>
+                <p className="text-sm text-foreground">Message notifications</p>
+                <p className="text-xs text-muted mt-0.5">Email when you receive a new message</p>
+              </div>
+            </label>
+            <div className="border-t border-border" />
             {notifs.map((notif) => (
               <label
                 key={notif.id}
@@ -177,6 +214,10 @@ export default function VenueSettingsPage() {
                 </div>
               </label>
             ))}
+          </div>
+          <div className="pt-4 border-t border-border mt-4 flex items-center gap-3">
+            <button type="button" onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors">Save Preferences</button>
+            {saved && <span className="text-sm text-green-600">Saved!</span>}
           </div>
         </SectionCard>
 

@@ -6,6 +6,7 @@ import { artists } from "@/data/artists";
 import { getCollectionsByArtist } from "@/data/collections";
 import Button from "@/components/Button";
 import CollectionCard from "@/components/CollectionCard";
+import MessageArtistButton from "@/components/MessageArtistButton";
 import ArtistProfileClient from "./ArtistProfileClient";
 import { getArtistBySlug } from "@/lib/db/merged-data";
 import { trackEvent, extractTrackingContext, generateVisitorId } from "@/lib/analytics";
@@ -149,7 +150,7 @@ export default async function ArtistProfilePage({
                   </a>
                 )}
               </div>
-              <Button href={`/contact?artist=${artist.slug}`} variant="accent" size="md">Message This Artist</Button>
+              <MessageArtistButton artistSlug={artist.slug} artistName={artist.name} variant="accent" size="md" />
             </div>
 
             <div className="w-full lg:w-[400px] shrink-0 lg:mt-16">
@@ -245,7 +246,7 @@ export default async function ArtistProfilePage({
               Get in touch to discuss pricing, availability, and how this artist&rsquo;s work could transform your venue.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button href={`/contact?artist=${artist.slug}`} variant="primary" size="lg">Message This Artist</Button>
+              <MessageArtistButton artistSlug={artist.slug} artistName={artist.name} variant="primary" size="lg" />
               <Button href="/browse" variant="ghost" size="lg">Browse more artists</Button>
             </div>
           </div>
