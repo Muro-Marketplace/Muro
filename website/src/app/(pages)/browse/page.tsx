@@ -654,7 +654,7 @@ export default function BrowsePortfoliosPage() {
       </section>
 
       {/* Category tabs */}
-      <div className="border-b border-border">
+      <div className="border-b border-border bg-[#FAF8F5]">
         <div className="max-w-[1400px] mx-auto px-6">
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
             {/* All */}
@@ -722,7 +722,7 @@ export default function BrowsePortfoliosPage() {
 
       {/* Subcategory pills — only when a category is selected */}
       {activeCategoryObj && activeCategory !== "collections" && (
-        <div className="border-b border-border bg-[#FAF8F5]">
+        <div className="border-b border-border bg-white">
           <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center gap-2 overflow-x-auto scrollbar-none">
             <button
               type="button"
