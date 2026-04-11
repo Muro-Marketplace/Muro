@@ -461,9 +461,18 @@ export default function PlacementsPage() {
                       {p.status === "Active" && (
                         <Link
                           href={`/artist-portal/labels?venue=${encodeURIComponent(p.venue)}&works=${encodeURIComponent(p.workTitle)}`}
-                          className="text-xs text-accent hover:text-accent-hover transition-colors"
+                          className="w-8 h-8 flex items-center justify-center rounded-sm border border-border hover:border-accent hover:bg-accent/5 transition-colors"
+                          title="Generate QR Label"
                         >
-                          QR Label
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <rect x="2" y="2" width="8" height="8" rx="1" />
+                            <rect x="14" y="2" width="8" height="8" rx="1" />
+                            <rect x="2" y="14" width="8" height="8" rx="1" />
+                            <rect x="14" y="14" width="4" height="4" />
+                            <rect x="20" y="14" width="2" height="2" />
+                            <rect x="14" y="20" width="2" height="2" />
+                            <rect x="20" y="20" width="2" height="2" />
+                          </svg>
                         </Link>
                       )}
                       <button
