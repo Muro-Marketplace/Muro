@@ -147,7 +147,7 @@ function CheckPill({
 export default function BrowsePortfoliosPage() {
   const initialMode = typeof window !== "undefined" && window.location.hash === "#collections" ? "collections" : "";
   const [activeCategory, setActiveCategory] = useState<string>(initialMode);
-  const [activeSubcategory, setActiveSubcategory] = useState<string>("");
+  const [activeSubcategories, setActiveSubcategories] = useState<Set<string>>(new Set());
   const [viewAs, setViewAs] = useState<"artists" | "works">("artists");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [artists, setArtists] = useState<Artist[]>(staticArtists);
@@ -283,8 +283,8 @@ export default function BrowsePortfoliosPage() {
     return artists.filter((artist) => {
       // Category filter
       if (activeCategoryObj && !activeCategoryObj.mediums.includes(artist.primaryMedium)) return false;
-      // Subcategory filter
-      if (activeSubcategory && !matchesSubcategory(activeSubcategory, artist.styleTags, artist.themes)) return false;
+      // Subcategory filter (any selected subcategory must match)
+      if (activeSubcategories.size > 0 && !Array.from(activeSubcategories).some((sub) => matchesSubcategory(sub, artist.styleTags, artist.themes))) return false;
 
       if (filters.mode === "local") {
         if (!userCoords || !artist.coordinates) return false;
@@ -325,7 +325,7 @@ export default function BrowsePortfoliosPage() {
         return false;
       return true;
     });
-  }, [artists, filters, userCoords, activeCategoryObj, activeSubcategory]);
+  }, [artists, filters, userCoords, activeCategoryObj, activeSubcategories]);
 
   const allMediums = useMemo(
     () => Array.from(new Set(artists.map((a) => a.primaryMedium))).sort(),
@@ -343,10 +343,13 @@ export default function BrowsePortfoliosPage() {
     return allGalleryWorks.filter((work) => {
       // Category filter
       if (activeCategoryObj && !activeCategoryObj.mediums.includes(work.artistPrimaryMedium)) return false;
-      // Subcategory filter (check themes as proxy for styleTags on works)
-      if (activeSubcategory) {
-        const lower = activeSubcategory.toLowerCase();
-        if (!work.themes.some((t) => t.toLowerCase().includes(lower)) && !work.medium.toLowerCase().includes(lower) && !work.artistPrimaryMedium.toLowerCase().includes(lower)) return false;
+      // Subcategory filter
+      if (activeSubcategories.size > 0) {
+        const matchesAny = Array.from(activeSubcategories).some((sub) => {
+          const lower = sub.toLowerCase();
+          return work.themes.some((t) => t.toLowerCase().includes(lower)) || work.medium.toLowerCase().includes(lower) || work.artistPrimaryMedium.toLowerCase().includes(lower);
+        });
+        if (!matchesAny) return false;
       }
       // Theme
       if (galleryTheme && !work.themes.includes(galleryTheme)) return false;
@@ -374,7 +377,7 @@ export default function BrowsePortfoliosPage() {
       }
       return true;
     });
-  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceFilter, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, galleryLocationMode, userCoords, filters.maxDistance, activeCategoryObj, activeSubcategory]);
+  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceFilter, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, galleryLocationMode, userCoords, filters.maxDistance, activeCategoryObj, activeSubcategories]);
 
   const hasGalleryFilters =
     !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || !!galleryPriceFilter || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || galleryLocationMode === "local";
@@ -657,7 +660,7 @@ export default function BrowsePortfoliosPage() {
             {/* All */}
             <button
               type="button"
-              onClick={() => { setActiveCategory(""); setActiveSubcategory(""); }}
+              onClick={() => { setActiveCategory(""); setActiveSubcategories(new Set()); }}
               className={`py-4 px-3 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
                 activeCategory === ""
                   ? "border-foreground text-foreground"
@@ -670,7 +673,7 @@ export default function BrowsePortfoliosPage() {
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => { setActiveCategory(cat.id); setActiveSubcategory(""); }}
+                onClick={() => { setActiveCategory(cat.id); setActiveSubcategories(new Set()); }}
                 className={`py-4 px-3 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
                   activeCategory === cat.id
                     ? "border-foreground text-foreground"
@@ -682,7 +685,7 @@ export default function BrowsePortfoliosPage() {
             ))}
             <button
               type="button"
-              onClick={() => { setActiveCategory("collections"); setActiveSubcategory(""); }}
+              onClick={() => { setActiveCategory("collections"); setActiveSubcategories(new Set()); }}
               className={`py-4 px-3 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
                 activeCategory === "collections"
                   ? "border-foreground text-foreground"
@@ -696,35 +699,43 @@ export default function BrowsePortfoliosPage() {
       </div>
 
       {/* Subcategory pills + view toggle */}
-      {activeCategoryObj && activeCategory !== "collections" && (
+      {activeCategory !== "collections" && (
         <div className="border-b border-border bg-[#FAF8F5]">
           <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
-              <button
-                type="button"
-                onClick={() => setActiveSubcategory("")}
-                className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
-                  activeSubcategory === ""
-                    ? "bg-foreground text-white border-foreground"
-                    : "border-border text-muted hover:border-foreground/30"
-                }`}
-              >
-                All {activeCategoryObj.label}
-              </button>
-              {availableSubcategories.map((sub) => (
-                <button
-                  key={sub}
-                  type="button"
-                  onClick={() => setActiveSubcategory(activeSubcategory === sub ? "" : sub)}
-                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
-                    activeSubcategory === sub
-                      ? "bg-foreground text-white border-foreground"
-                      : "border-border text-muted hover:border-foreground/30"
-                  }`}
-                >
-                  {sub}
-                </button>
-              ))}
+              {activeCategoryObj ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubcategories(new Set())}
+                    className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
+                      activeSubcategories.size === 0
+                        ? "bg-foreground text-white border-foreground"
+                        : "border-border text-muted hover:border-foreground/30"
+                    }`}
+                  >
+                    All {activeCategoryObj.label}
+                  </button>
+                  {availableSubcategories.map((sub) => (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => setActiveSubcategories((prev) => { const next = new Set(prev); if (next.has(sub)) next.delete(sub); else next.add(sub); return next; })}
+                      className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
+                        activeSubcategories.has(sub)
+                          ? "bg-foreground text-white border-foreground"
+                          : "border-border text-muted hover:border-foreground/30"
+                      }`}
+                    >
+                      {sub}
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <span className="text-xs text-muted">
+                  {viewAs === "artists" ? `${filteredArtists.length} artists` : `${filteredGalleryWorks.length} works`}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
@@ -734,7 +745,7 @@ export default function BrowsePortfoliosPage() {
                   viewAs === "artists" ? "bg-foreground text-white border-foreground" : "border-border text-muted"
                 }`}
               >
-                Artists
+                Portfolios
               </button>
               <button
                 type="button"
@@ -743,7 +754,7 @@ export default function BrowsePortfoliosPage() {
                   viewAs === "works" ? "bg-foreground text-white border-foreground" : "border-border text-muted"
                 }`}
               >
-                Works
+                Gallery
               </button>
             </div>
           </div>
