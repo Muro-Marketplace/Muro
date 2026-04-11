@@ -3,7 +3,7 @@
 import { useSaved } from "@/context/SavedContext";
 
 interface SaveButtonProps {
-  type: "work" | "collection";
+  type: "work" | "collection" | "artist";
   itemId: string;
   size?: "sm" | "md";
   className?: string;

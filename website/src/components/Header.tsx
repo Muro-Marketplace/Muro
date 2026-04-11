@@ -27,7 +27,6 @@ export default function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [msgDropdownOpen, setMsgDropdownOpen] = useState(false);
   const [conversations, setConversations] = useState<{ conversationId: string; otherPartyDisplayName: string; otherPartyImage: string | null; otherParty: string; latestMessage: string; unreadCount: number; lastActivity: string }[]>([]);
-  const [convsLoaded, setConvsLoaded] = useState(false);
   const msgDropdownRef = useRef<HTMLDivElement>(null);
 
   const portalBase = userType === "venue" ? "/venue-portal" : "/artist-portal";
@@ -70,20 +69,14 @@ export default function Header() {
       .catch(() => {});
   }, [user, userType]);
 
-  // Load conversations when dropdown opens
+  // Load conversations when dropdown opens (also retries when slug resolves)
   useEffect(() => {
-    if (!msgDropdownOpen || convsLoaded || !user || !resolvedSlug) return;
+    if (!msgDropdownOpen || !user || !resolvedSlug) return;
     authFetch(`/api/messages?slug=${resolvedSlug}`)
       .then((r) => r.json())
       .then((data) => { if (data.conversations) setConversations(data.conversations.slice(0, 6)); })
-      .catch(() => {})
-      .finally(() => setConvsLoaded(true));
-  }, [msgDropdownOpen, convsLoaded, user, resolvedSlug]);
-
-  // Refresh conversations on open
-  useEffect(() => {
-    if (msgDropdownOpen) setConvsLoaded(false);
-  }, [msgDropdownOpen]);
+      .catch(() => {});
+  }, [msgDropdownOpen, user, resolvedSlug]);
 
   // Close dropdown on click outside
   useEffect(() => {

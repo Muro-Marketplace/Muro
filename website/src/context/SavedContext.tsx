@@ -5,8 +5,8 @@ import type { SavedItem } from "@/lib/types";
 
 interface SavedContextValue {
   savedItems: SavedItem[];
-  toggleSaved: (type: "work" | "collection", id: string) => void;
-  isSaved: (type: "work" | "collection", id: string) => boolean;
+  toggleSaved: (type: "work" | "collection" | "artist", id: string) => void;
+  isSaved: (type: "work" | "collection" | "artist", id: string) => boolean;
   savedCount: number;
   clearSaved: () => void;
 }
@@ -31,7 +31,7 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
     }
   }, [savedItems]);
 
-  const toggleSaved = useCallback((type: "work" | "collection", id: string) => {
+  const toggleSaved = useCallback((type: "work" | "collection" | "artist", id: string) => {
     setSavedItems((prev) => {
       const exists = prev.find((s) => s.type === type && s.id === id);
       if (exists) return prev.filter((s) => !(s.type === type && s.id === id));
@@ -40,7 +40,7 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isSaved = useCallback(
-    (type: "work" | "collection", id: string) => {
+    (type: "work" | "collection" | "artist", id: string) => {
       return savedItems.some((s) => s.type === type && s.id === id);
     },
     [savedItems]

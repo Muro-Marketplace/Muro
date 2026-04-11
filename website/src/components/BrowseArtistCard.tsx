@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import type { Artist } from "@/data/artists";
+import SaveButton from "./SaveButton";
+import { useAuth } from "@/context/AuthContext";
 
 interface BrowseArtistCardProps {
   artist: Artist;
@@ -13,6 +15,7 @@ interface BrowseArtistCardProps {
 
 export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardProps) {
   const router = useRouter();
+  const { user, userType } = useAuth();
   const [imgIndex, setImgIndex] = useState(0);
   const images = artist.works.map((w) => w.image);
 
@@ -130,8 +133,13 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             )}
           </div>
 
-          {/* Availability mini-badges top-right */}
-          <div className="absolute top-3 right-3 flex flex-col gap-1 z-10">
+          {/* Save/heart button top-right */}
+          <div className="absolute top-3 right-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <SaveButton type="artist" itemId={artist.slug} />
+          </div>
+
+          {/* Availability mini-badges top-right below heart */}
+          <div className="absolute top-14 right-3 flex flex-col gap-1 z-10">
             {artist.offersOriginals && (
               <span className="inline-block px-2 py-0.5 bg-black/60 text-white text-[10px] rounded-sm backdrop-blur-sm">
                 Originals
@@ -184,11 +192,18 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                router.push(`/contact?artist=${artist.slug}`);
+                const nameParam = `&artistName=${encodeURIComponent(artist.name)}`;
+                if (user && userType === "venue") {
+                  router.push(`/venue-portal/messages?artist=${artist.slug}${nameParam}`);
+                } else if (user && userType === "artist") {
+                  router.push(`/artist-portal/messages?artist=${artist.slug}${nameParam}`);
+                } else {
+                  router.push(`/contact?artist=${artist.slug}`);
+                }
               }}
               className="px-3 py-1.5 text-xs font-medium border border-border rounded-sm text-foreground hover:border-accent hover:text-accent transition-colors cursor-pointer"
             >
-              Send Message
+              Message
             </button>
             <button
               onClick={(e) => {
@@ -198,7 +213,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               }}
               className="px-3 py-1.5 text-xs font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors cursor-pointer"
             >
-              Buy Now
+              View Portfolio
             </button>
           </div>
         </div>

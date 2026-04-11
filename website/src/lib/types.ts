@@ -38,7 +38,7 @@ export interface MockOrder {
 }
 
 export interface SavedItem {
-  type: "work" | "collection";
+  type: "work" | "collection" | "artist";
   id: string;
   savedAt: string;
 }
