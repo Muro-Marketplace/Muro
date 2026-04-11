@@ -131,7 +131,7 @@ export default function VenuePortalLayout({
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0 mt-14 lg:mt-16">
+      <div className="flex-1 min-w-0">
         {/* Mobile top bar */}
         <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-border sticky top-14 z-20">
           <button
