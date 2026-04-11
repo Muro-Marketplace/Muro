@@ -40,10 +40,15 @@ export async function PUT(
     }
 
     if (action === "reject") {
-      await db
+      const { error: updateError } = await db
         .from("artist_applications")
-        .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+        .update({ status: "rejected" })
         .eq("id", id);
+
+      if (updateError) {
+        console.error("Reject update error:", updateError);
+        return NextResponse.json({ error: "Failed to reject application" }, { status: 500 });
+      }
 
       return NextResponse.json({ success: true, status: "rejected" });
     }
@@ -104,7 +109,7 @@ export async function PUT(
     // Mark application as accepted
     await db
       .from("artist_applications")
-      .update({ status: "accepted", reviewed_at: new Date().toISOString() })
+      .update({ status: "accepted" })
       .eq("id", id);
 
     return NextResponse.json({
