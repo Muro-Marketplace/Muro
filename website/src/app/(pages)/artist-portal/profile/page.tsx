@@ -95,6 +95,14 @@ export default function ProfileEditorPage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
 
+  // All hooks must be declared before any conditional returns
+  const [works, setWorks] = useState<ArtistWork[]>([]);
+  const [showWorkForm, setShowWorkForm] = useState(false);
+  const [editingWorkIndex, setEditingWorkIndex] = useState<number | null>(null);
+  const [workForm, setWorkForm] = useState<{ title: string; medium: string; dimensions: string; image: string; orientation: "portrait" | "landscape" | "square"; available: boolean; sizes: { label: string; price: number }[] }>({ title: "", medium: "", dimensions: "", image: "", orientation: "landscape", available: true, sizes: [{ label: '8\u00d710" (A4)', price: 0 }] });
+  const workImageRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
   useEffect(() => {
     if (artist && !profile) {
       const stored = localStorage.getItem("wallspace-artist-profile");
@@ -105,6 +113,15 @@ export default function ProfileEditorPage() {
     }
   }, [artist, profile]);
 
+  useEffect(() => {
+    if (!artist) return;
+    const stored = localStorage.getItem("wallspace-artist-works");
+    if (stored) {
+      try { setWorks(JSON.parse(stored)); return; } catch { /* ignore */ }
+    }
+    setWorks([...artist.works]);
+  }, [artist]);
+
   if (artistLoading || !artist || !profile) {
     return (
       <ArtistPortalLayout activePath="/artist-portal/profile">
@@ -112,24 +129,6 @@ export default function ProfileEditorPage() {
       </ArtistPortalLayout>
     );
   }
-
-  // Works management
-  const [works, setWorks] = useState<ArtistWork[]>([]);
-  const [showWorkForm, setShowWorkForm] = useState(false);
-  const [editingWorkIndex, setEditingWorkIndex] = useState<number | null>(null);
-  const [workForm, setWorkForm] = useState<{ title: string; medium: string; dimensions: string; image: string; orientation: "portrait" | "landscape" | "square"; available: boolean; sizes: { label: string; price: number }[] }>({ title: "", medium: "", dimensions: "", image: "", orientation: "landscape", available: true, sizes: [{ label: '8\u00d710" (A4)', price: 0 }] });
-  const workImageRef = useRef<HTMLInputElement>(null);
-
-  // Load works (artist is guaranteed non-null past the guard above)
-  useEffect(() => {
-    const stored = localStorage.getItem("wallspace-artist-works");
-    if (stored) {
-      try { setWorks(JSON.parse(stored)); return; } catch { /* ignore */ }
-    }
-    if (artist) setWorks([...artist.works]);
-  }, [artist]);
-
-  const [uploading, setUploading] = useState(false);
 
   async function handleFileUpload(field: "bannerImage" | "profileImage", e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
