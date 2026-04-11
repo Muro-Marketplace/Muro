@@ -205,7 +205,7 @@ export default function ProfileEditorPage() {
 
     // Save to Supabase
     try {
-      await authFetch("/api/artist-profile", {
+      const res = await authFetch("/api/artist-profile", {
         method: "PUT",
         body: JSON.stringify({
           name: profile.name,
@@ -235,8 +235,15 @@ export default function ProfileEditorPage() {
           venue_types_suited_for: profile.venueTypesSuitedFor,
         }),
       });
+
+      if (!res.ok) {
+        alert("Failed to save profile. Please try again.");
+        return;
+      }
     } catch (err) {
       console.error("Profile save error:", err);
+      alert("Failed to save profile. Please check your connection.");
+      return;
     }
 
     // Also keep localStorage as fallback
