@@ -36,7 +36,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
 
   return (
     <Link href={`/browse/${artist.slug}`} className="group block">
-      <div className="bg-surface border border-border rounded-sm overflow-hidden hover:border-accent/30 hover:shadow-sm transition-all duration-300">
+      <div className="bg-surface border border-border rounded-sm overflow-hidden hover:border-accent/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
         {/* Image area */}
         <div className="aspect-square relative overflow-hidden bg-border/30">
           {images.map((src, index) => (

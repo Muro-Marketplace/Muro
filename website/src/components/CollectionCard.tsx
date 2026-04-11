@@ -11,7 +11,7 @@ export default function CollectionCard({ collection }: CollectionCardProps) {
   return (
     <Link
       href={`/browse/collections/${collection.id}`}
-      className="group block bg-surface border border-border rounded-sm overflow-hidden hover:shadow-md transition-shadow"
+      className="group block bg-surface border border-border rounded-sm overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
     >
       <div className="relative aspect-[16/9] bg-border/20">
         <Image
