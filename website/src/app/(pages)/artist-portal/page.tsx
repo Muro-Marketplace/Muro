@@ -41,7 +41,10 @@ export default function ArtistPortalPage() {
     // Fetch everything in parallel
     async function loadDashboard() {
       // Get profile first to get slug, then fetch everything else in parallel
-      const profileData = await authFetch("/api/artist-profile").then((r) => r.json()).catch(() => ({ profile: null, works: [] }));
+      const profileData = await authFetch("/api/artist-profile").then(async (r) => {
+        if (!r.ok) console.error("Profile fetch failed:", r.status);
+        return r.json();
+      }).catch((err) => { console.error("Profile fetch error:", err); return { profile: null, works: [] }; });
       const slug = profileData.profile?.slug || "";
 
       const [placementsData, ordersData, messagesData] = await Promise.all([
