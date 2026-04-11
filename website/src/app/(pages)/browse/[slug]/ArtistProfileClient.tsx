@@ -324,31 +324,37 @@ export default function ArtistProfileClient({
                 )}
               </div>
 
-              {/* Size selector with pricing */}
+              {/* Size & Price dropdown */}
               {currentWork.available && currentWork.pricing.length > 0 && (
                 <div className="mb-4">
                   <p className="text-xs text-muted uppercase tracking-wider mb-2">Size & Price</p>
-                  <div className="space-y-1.5">
+                  <select
+                    value={selectedSizeIdx}
+                    onChange={(e) => setSelectedSizeIdx(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
+                  >
                     {currentWork.pricing.map((sp, i) => (
-                      <button
-                        key={sp.label}
-                        onClick={() => setSelectedSizeIdx(i)}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-sm border transition-colors ${
-                          selectedSizeIdx === i
-                            ? "bg-foreground text-white border-foreground"
-                            : "border-border text-muted hover:border-foreground/30"
-                        }`}
-                      >
-                        <span>{sp.label}</span>
-                        <span className="font-medium">£{sp.price}</span>
-                      </button>
+                      <option key={sp.label} value={i}>
+                        {sp.label} — £{sp.price}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
               )}
 
               {/* CTA */}
               <div className="mt-auto space-y-2">
+                {user && userType === "venue" && (
+                  <button
+                    onClick={() => {
+                      setLightboxIndex(null);
+                      router.push(`/venue-portal/messages?artist=${artistSlug}&artistName=${encodeURIComponent(artistName)}`);
+                    }}
+                    className="w-full px-5 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
+                  >
+                    Request Placement
+                  </button>
+                )}
                 {currentWork.available && currentWork.pricing.length > 0 && (
                   <button
                     onClick={() => {
@@ -367,7 +373,7 @@ export default function ArtistProfileClient({
                       setLightboxIndex(null);
                       router.push("/checkout");
                     }}
-                    className="w-full px-5 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
+                    className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
                   >
                     Buy Now – £{(currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0]).price}
                   </button>
@@ -381,17 +387,6 @@ export default function ArtistProfileClient({
                   </button>
                   <SaveButton type="work" itemId={currentWork.id} size="md" />
                 </div>
-                {user && userType === "venue" && (
-                  <button
-                    onClick={() => {
-                      setLightboxIndex(null);
-                      router.push(`/venue-portal/messages?artist=${artistSlug}&artistName=${encodeURIComponent(artistName)}`);
-                    }}
-                    className="w-full px-5 py-2.5 text-sm font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-sm transition-colors"
-                  >
-                    Request Placement
-                  </button>
-                )}
               </div>
 
               {/* Counter */}
