@@ -132,34 +132,7 @@ export default function VenuePortalLayout({
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        {/* Mobile top bar */}
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-border sticky top-14 z-20">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 rounded-sm border border-border text-foreground hover:bg-background transition-colors"
-            aria-label="Toggle navigation"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            >
-              <line x1="4" y1="7" x2="20" y2="7" />
-              <line x1="4" y1="12" x2="20" y2="12" />
-              <line x1="4" y1="17" x2="20" y2="17" />
-            </svg>
-          </button>
-          <span className="text-sm font-medium text-foreground">
-            Venue Portal
-          </span>
-        </div>
-
-        <div className="px-6 lg:px-8 pt-4 pb-6 lg:pb-8">{children}</div>
+        <div className="px-4 sm:px-6 lg:px-8 pt-4 pb-6 lg:pb-8">{children}</div>
       </div>
     </div>
   );

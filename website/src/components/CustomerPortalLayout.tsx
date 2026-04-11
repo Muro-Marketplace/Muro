@@ -82,13 +82,7 @@ export default function CustomerPortalLayout({ children }: { children: React.Rea
       {sidebarOpen && <div className="lg:hidden fixed inset-0 z-20 bg-black/30" onClick={() => setSidebarOpen(false)} />}
 
       <div className="flex-1 lg:ml-56 min-w-0">
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-border sticky top-14 z-20">
-          <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-sm hover:bg-background transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" /></svg>
-          </button>
-          <span className="text-sm font-medium">My Account</span>
-        </div>
-        <div className="px-6 lg:px-8 pt-4 pb-6 lg:pb-8">{children}</div>
+        <div className="px-4 sm:px-6 lg:px-8 pt-4 pb-6 lg:pb-8">{children}</div>
       </div>
     </div>
   );
