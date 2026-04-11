@@ -145,13 +145,21 @@ export default function VenueProfilePage() {
 
   return (
     <VenuePortalLayout>
-      <div className="mb-6">
-        <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-1">
-          Venue Profile &amp; Preferences
-        </h1>
-        <p className="text-sm text-muted">
-          Keep your profile up to date so artists can tailor their work to your space.
-        </p>
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-1">
+            Venue Profile &amp; Preferences
+          </h1>
+          <p className="text-sm text-muted">
+            Keep your profile up to date so artists can tailor their work to your space.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <button type="button" onClick={handleSave} className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors">
+            Save Changes
+          </button>
+          {saved && <span className="text-sm text-green-600">Saved</span>}
+        </div>
       </div>
 
       <div className="space-y-5 max-w-2xl">
@@ -330,23 +338,8 @@ export default function VenueProfilePage() {
           </div>
         </div>
 
-        {/* Save button */}
+        {/* Bottom spacer */}
         <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={handleSave}
-            className="px-6 py-2.5 bg-foreground text-white text-sm font-medium rounded-sm hover:bg-foreground/90 transition-colors cursor-pointer"
-          >
-            Save Changes
-          </button>
-          {saved && (
-            <span className="text-sm text-green-600 flex items-center gap-1.5">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              Saved
-            </span>
-          )}
         </div>
       </div>
     </VenuePortalLayout>

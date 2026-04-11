@@ -262,6 +262,12 @@ export default function ProfileEditorPage() {
             <p className="text-sm text-muted mt-1">Customise how venues and buyers see you on Wallplace.</p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleSave}
+              className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+            >
+              Save Changes
+            </button>
             <Link
               href={`/browse/${artist.slug}`}
               target="_blank"
@@ -704,22 +710,6 @@ export default function ProfileEditorPage() {
           </Link>
         </div>
 
-        {/* Save */}
-        <div className="flex items-center gap-4 pb-10">
-          <button
-            onClick={handleSave}
-            className="px-8 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
-          >
-            Save Changes
-          </button>
-          <Link
-            href={`/browse/${artist.slug}`}
-            target="_blank"
-            className="text-sm text-muted hover:text-foreground transition-colors"
-          >
-            Preview public profile
-          </Link>
-        </div>
       </div>
     </ArtistPortalLayout>
   );
