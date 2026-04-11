@@ -107,7 +107,7 @@ export default function VenuePortalLayout({
   );
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] bg-background pt-14 lg:pt-16">
+    <div className="flex min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] bg-background">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col w-56 shrink-0 bg-[#F5F3F0] border-r border-border sticky top-14 lg:top-16 self-start h-[calc(100vh-3.5rem)] lg:h-[calc(100vh-4rem)]">
         <NavContent />
@@ -131,9 +131,9 @@ export default function VenuePortalLayout({
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 mt-14 lg:mt-16">
         {/* Mobile top bar */}
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-border sticky top-[3.5rem] z-20">
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-border sticky top-14 z-20">
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}

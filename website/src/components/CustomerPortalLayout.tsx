@@ -26,7 +26,7 @@ export default function CustomerPortalLayout({ children }: { children: React.Rea
   if (loading || !user) return null;
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] bg-background pt-14 lg:pt-16">
+    <div className="flex min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] bg-background">
       {/* Sidebar */}
       <aside className={`
         fixed top-14 lg:top-16 left-0 h-[calc(100vh-3.5rem)] lg:h-[calc(100vh-4rem)]
@@ -81,8 +81,8 @@ export default function CustomerPortalLayout({ children }: { children: React.Rea
 
       {sidebarOpen && <div className="lg:hidden fixed inset-0 z-20 bg-black/30" onClick={() => setSidebarOpen(false)} />}
 
-      <div className="flex-1 lg:ml-56 min-w-0">
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-border sticky top-[3.5rem] z-20">
+      <div className="flex-1 lg:ml-56 min-w-0 mt-14 lg:mt-16">
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-border sticky top-14 z-20">
           <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-sm hover:bg-background transition-colors">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" /></svg>
           </button>
