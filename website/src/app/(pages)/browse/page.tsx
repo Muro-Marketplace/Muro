@@ -138,12 +138,12 @@ export default function BrowsePortfoliosPage() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [artists, setArtists] = useState<Artist[]>(staticArtists);
 
-  // Fetch database artists and merge with static on mount
+  // Fetch merged artists (static + database) on mount
   useEffect(() => {
     fetch("/api/browse-artists")
       .then((res) => res.json())
       .then((data) => {
-        if (data.artists && data.artists.length > staticArtists.length) {
+        if (data.artists?.length) {
           setArtists(data.artists);
         }
       })
