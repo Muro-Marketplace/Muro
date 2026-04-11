@@ -182,13 +182,13 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link
                   href="/browse"
-                  className="inline-flex items-center justify-center px-10 sm:px-8 py-3 sm:py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
+                  className="inline-flex items-center justify-center min-w-[180px] px-8 py-3 sm:py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
                 >
                   Discover Art
                 </Link>
                 <Link
                   href="/signup"
-                  className="inline-flex items-center justify-center px-10 sm:px-8 py-3 sm:py-4 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
+                  className="inline-flex items-center justify-center min-w-[180px] px-8 py-3 sm:py-4 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
                 >
                   Sign Up
                 </Link>
