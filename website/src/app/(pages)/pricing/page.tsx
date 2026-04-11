@@ -12,7 +12,7 @@ const coreFeatures = [
   "Standard artist profile",
   "Visibility to venues browsing the platform",
   "Curated matching – we surface you to relevant venues",
-  "10% platform fee on sales",
+  "18% platform fee on sales",
   "Basic analytics dashboard",
   "Access to Wallplace venue network",
 ];
@@ -21,7 +21,7 @@ const premiumFeatures = [
   "Featured artist profile",
   "Priority visibility in venue recommendations",
   "Proactive venue matching and introductions",
-  "5% platform fee on sales",
+  "8% platform fee on sales",
   "Full analytics – views, enquiries, conversion",
   "Featured in curated venue suggestion lists",
   "Priority response from Wallplace team",
@@ -31,7 +31,7 @@ const proFeatures = [
   "Premium profile with enhanced presentation",
   "Maximum visibility across the platform",
   "Direct venue matching and relationship management",
-  "0% platform fee on all sales",
+  "3% platform fee on sales",
   "Priority support with dedicated response SLA",
   "Dedicated account support",
   "Early access to new features and venue partnerships",
@@ -58,9 +58,9 @@ const comparisonRows = [
   },
   {
     feature: "Platform fee on sales",
-    core: "10%",
-    premium: "5%",
-    pro: "0%",
+    core: "15%",
+    premium: "8%",
+    pro: "3%",
   },
   {
     feature: "Analytics",
@@ -86,7 +86,7 @@ const faqItems = [
   {
     question: "What is a platform fee?",
     answer:
-      "The platform fee is the percentage Wallplace takes when a sale is made through the platform – whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is separate from your membership cost. Core artists pay 10%, Premium 5%, and Pro artists pay 0%. You keep the rest.",
+      "The platform fee is the percentage Wallplace takes when a sale is made through the platform – whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is separate from your membership cost. Core artists pay 15%, Premium 8%, and Pro artists pay 3%. You keep the rest.",
   },
   {
     question: "Is the first month really free?",
@@ -175,12 +175,12 @@ export default function PricingPage() {
             <div className="bg-surface border border-border rounded-sm p-8 flex flex-col">
               <h3 className="text-2xl mb-1">Core</h3>
               <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-serif">&pound;9.99</span>
+                <span className="text-4xl font-serif">&pound;14.99</span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-1">First month free</p>
               <p className="text-sm font-medium text-foreground mb-6">
-                10% platform fee on sales
+                18% platform fee on sales
               </p>
               <ul className="space-y-3 mb-8 flex-1">
                 {coreFeatures.map((feature) => (
@@ -217,12 +217,12 @@ export default function PricingPage() {
               </div>
               <h3 className="text-2xl mb-1">Premium</h3>
               <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-serif">&pound;29.99</span>
+                <span className="text-4xl font-serif">&pound;34.99</span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-1">First month free</p>
               <p className="text-sm font-medium text-foreground mb-6">
-                5% platform fee on sales
+                8% platform fee on sales
               </p>
               <ul className="space-y-3 mb-8 flex-1">
                 {premiumFeatures.map((feature) => (
@@ -256,7 +256,7 @@ export default function PricingPage() {
             <div className="bg-surface border border-border rounded-sm p-8 flex flex-col">
               <h3 className="text-2xl mb-1">Pro</h3>
               <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-serif">&pound;69.99</span>
+                <span className="text-4xl font-serif">&pound;59.99</span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-1">First month free</p>
@@ -366,7 +366,7 @@ export default function PricingPage() {
                   },
                   {
                     label: "Wallplace Core",
-                    detail: "£9.99/month, curated venue access",
+                    detail: "£14.99/month, curated venue access",
                     wallplace: true,
                   },
                 ].map(({ label, detail, wallplace }) => (
@@ -414,13 +414,13 @@ export default function PricingPage() {
 
             <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
               <h3 className="text-2xl mb-4">
-                The Pro case: zero platform fee
+                The Pro case: lowest platform fee
               </h3>
               <p className="text-muted leading-relaxed mb-4">
-                At &pound;69.99/month, Pro pays for itself quickly for any artist with
-                regular sales. On a &pound;500 sale, Core would cost you &pound;50 in
-                platform fees, Premium &pound;25. Pro costs nothing &ndash; keeping the
-                full &pound;500.
+                At &pound;59.99/month, Pro pays for itself quickly for any artist with
+                regular sales. On a &pound;500 sale, Core would cost you &pound;75 in
+                platform fees, Premium &pound;40. Pro costs just &pound;15 &ndash; keeping
+                &pound;485.
               </p>
               <p className="text-muted leading-relaxed mb-6">
                 For artists actively using the platform and generating consistent

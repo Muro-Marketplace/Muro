@@ -224,10 +224,16 @@ export default function Home() {
                     <span className="text-white/60">{stats.total_artworks} original artworks</span>
                   </>
                 )}
+                {stats && stats.total_venues > 0 && (
+                  <>
+                    <span className="w-1 h-1 rounded-full bg-white/30" />
+                    <span className="text-white/60">{stats.total_venues} active venues</span>
+                  </>
+                )}
                 {stats && stats.total_placements > 0 && (
                   <>
                     <span className="w-1 h-1 rounded-full bg-white/30" />
-                    <span className="text-white/60">{stats.total_placements} venue placements</span>
+                    <span className="text-white/60">{stats.total_placements} placements</span>
                   </>
                 )}
               </div>
@@ -331,7 +337,7 @@ export default function Home() {
 
                   <ul className="space-y-3 mb-10">
                     <BulletPoint text="Display your art in venues for free, or sell outright" />
-                    <BulletPoint text="0–10% platform fee. No gallery taking 50%." />
+                    <BulletPoint text="3–15% platform fee. No gallery taking 50%." />
                     <BulletPoint text="First month free. First 20 artists get 6 months free." />
                   </ul>
 

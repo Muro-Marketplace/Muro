@@ -137,7 +137,7 @@ const comparisonData = [
     gallery: "£200–1,000/week",
     marketplace: "Free–£30/month",
     instagram: "Free",
-    wallplace: "£9.99–£69.99/month",
+    wallplace: "£14.99–£59.99/month",
   },
   {
     category: "Audience",
@@ -252,7 +252,7 @@ export default function ArtistsPage() {
                 <span className="w-1 h-1 rounded-full bg-white/30" />
                 <span>Cancel anytime</span>
                 <span className="w-1 h-1 rounded-full bg-white/30" />
-                <span>From £9.99/mo</span>
+                <span>From £14.99/mo</span>
               </div>
             </div>
           </div>
@@ -345,12 +345,12 @@ export default function ArtistsPage() {
               <h3 className="text-2xl mb-1">Core</h3>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-3xl font-serif text-foreground">
-                  &pound;9.99
+                  &pound;14.99
                 </span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-6">
-                10% platform fee on sales
+                15% platform fee on sales
               </p>
               <ul className="space-y-3 mb-8 flex-1">
                 {coreFeatures.map((feature) => (
@@ -388,12 +388,12 @@ export default function ArtistsPage() {
               <h3 className="text-2xl mb-1">Premium</h3>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-3xl font-serif text-foreground">
-                  &pound;29.99
+                  &pound;34.99
                 </span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-6">
-                5% platform fee on sales
+                8% platform fee on sales
               </p>
               <ul className="space-y-3 mb-8 flex-1">
                 {premiumFeatures.map((feature) => (
@@ -428,12 +428,12 @@ export default function ArtistsPage() {
               <h3 className="text-2xl mb-1">Pro</h3>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-3xl font-serif text-foreground">
-                  &pound;100
+                  &pound;59.99
                 </span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-6">
-                0% platform fee on sales
+                3% platform fee on sales
               </p>
               <ul className="space-y-3 mb-8 flex-1">
                 {proFeatures.map((feature) => (
@@ -471,7 +471,7 @@ export default function ArtistsPage() {
       <section className="py-20 lg:py-28 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6">
           <h2 className="text-3xl md:text-4xl mb-10 text-white text-center">
-            What &pound;9.99 a month gets you
+            What &pound;14.99 a month gets you
           </h2>
           <div className="max-w-xl mx-auto space-y-4">
             <div className="flex items-center justify-between py-3 border-b border-white/10">
@@ -511,7 +511,7 @@ export default function ArtistsPage() {
                   Wallplace Core
                 </p>
                 <p className="text-sm text-white/40">
-                  &pound;9.99/month. Access high-intent venue demand. First month free.
+                  &pound;14.99/month. Access high-intent venue demand. First month free.
                 </p>
               </div>
               <svg
@@ -602,6 +602,25 @@ export default function ArtistsPage() {
         </div>
       </section>
 
+      {/* Venue Demand */}
+      <section className="py-16 lg:py-20 bg-accent/5 border-y border-accent/10">
+        <div className="max-w-[1200px] mx-auto px-6 text-center">
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Active Demand</p>
+          <h2 className="font-serif text-3xl md:text-4xl text-foreground mb-3">Venues are looking for art right now</h2>
+          <p className="text-muted max-w-lg mx-auto mb-8">
+            Real commercial spaces actively seeking artwork to display. Enter your postcode to see demand in your area.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <a href="/spaces-looking-for-art" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+              See Venue Demand
+            </a>
+            <a href="/spaces-looking-for-art" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+              Search by Postcode
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* Final CTA */}
       <section className="py-20 lg:py-28 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6 text-center">
@@ -614,7 +633,7 @@ export default function ArtistsPage() {
             </a>
           </div>
           <p className="mt-6 text-sm text-white/40">
-            First month free. First 20 approved artists get 6 months free. Membership from &pound;9.99/month.
+            First month free. First 20 approved artists get 6 months free. Membership from &pound;14.99/month.
           </p>
         </div>
       </section>
