@@ -519,9 +519,9 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           <p className="text-[10px] font-medium uppercase tracking-wider text-accent">Placement Request</p>
                         </div>
                         <div className="px-3.5 py-3 space-y-1.5">
-                          {meta.workImage && (
+                          {typeof meta.workImage === "string" && meta.workImage && (
                             <div className="w-full h-24 relative rounded-sm overflow-hidden mb-2">
-                              <Image src={meta.workImage as string} alt="" fill className="object-cover" sizes="300px" />
+                              <Image src={meta.workImage} alt="" fill className="object-cover" sizes="300px" />
                             </div>
                           )}
                           <p className="text-sm font-medium text-foreground">{meta.workTitle as string || "Artwork"}</p>

@@ -76,7 +76,7 @@ export const messageSchema = z.object({
   recipientSlug: safeString(100),
   content: safeString(5000),
   messageType: z.enum(["text", "placement_request", "placement_response"]).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const placementSchema = z.object({

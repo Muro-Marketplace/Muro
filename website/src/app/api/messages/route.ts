@@ -203,7 +203,7 @@ export async function POST(request: Request) {
           status: "pending",
           message: content,
           created_at: new Date().toISOString(),
-        }).catch(() => {});
+        });
 
         // Notify the recipient about the placement request
         const recipientIsArtist = !senderIsArtist;
@@ -236,7 +236,7 @@ export async function POST(request: Request) {
         await db.from("placements").update({
           status: responseStatus,
           responded_at: new Date().toISOString(),
-        }).eq("id", placementId).catch(() => {});
+        }).eq("id", placementId);
 
         // Notify the other party
         const { data: placement } = await db.from("placements").select("artist_user_id, venue, artist_slug").eq("id", placementId).single();
