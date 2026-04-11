@@ -47,7 +47,7 @@ const options = [
 
 export default function SignUpPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center relative">
+    <div className="relative min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex items-center justify-center">
       {/* Background — same as login */}
       <div className="absolute inset-0 -z-10">
         <Image
@@ -60,7 +60,7 @@ export default function SignUpPage() {
         <div className="absolute inset-0 bg-black/55" />
       </div>
 
-      <div className="w-full max-w-lg px-6 py-16">
+      <div className="w-full max-w-md px-6 py-16">
         {/* Heading */}
         <div className="text-center mb-10">
           <h1 className="text-3xl lg:text-4xl font-serif mb-2 text-white">Join Wallplace</h1>
