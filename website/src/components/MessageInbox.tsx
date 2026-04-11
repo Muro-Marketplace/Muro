@@ -567,7 +567,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 {otherWorksLoading ? (
                   <p className="text-xs text-muted">Loading portfolio...</p>
                 ) : otherPartyWorks.length > 0 ? (
-                  <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5">
+                  <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
                     {otherPartyWorks.map((w) => {
                       const selected = placementSelectedWorks.has(w.title);
                       return (
@@ -575,9 +575,9 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           key={w.id}
                           type="button"
                           onClick={() => togglePlacementWork(w.title)}
-                          className={`relative aspect-square rounded-sm overflow-hidden border-2 transition-all ${selected ? "border-accent shadow-sm" : "border-transparent hover:border-border"}`}
+                          className={`relative w-20 h-20 shrink-0 rounded-sm overflow-hidden border-2 transition-all ${selected ? "border-accent shadow-sm" : "border-transparent hover:border-border"}`}
                         >
-                          <Image src={w.image} alt={w.title} fill className="object-cover" sizes="60px" />
+                          <Image src={w.image} alt={w.title} fill className="object-cover" sizes="80px" />
                           {selected && (
                             <div className="absolute inset-0 bg-accent/25 flex items-center justify-center">
                               <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center">
@@ -612,7 +612,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
               {messages.map((msg) => {
-                const isMe = msg.sender_id === user?.id || msg.sender_type === portalType;
+                const isMe = (msg.sender_id != null && msg.sender_id === user?.id) || (msg.sender_id == null && msg.sender_name === userSlug);
                 const meta = (msg.metadata || {}) as Record<string, unknown>;
 
                 // Placement request card

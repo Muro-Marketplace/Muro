@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
@@ -16,6 +17,7 @@ interface LabelOptions {
 
 export default function LabelsPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
+  const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [showPreview, setShowPreview] = useState(false);
@@ -31,6 +33,24 @@ export default function LabelsPage() {
   const [selectedVenue, setSelectedVenue] = useState("");
   const [venues, setVenues] = useState<string[]>([]);
   const [venueDropdownOpen, setVenueDropdownOpen] = useState(false);
+  const [preselected, setPreselected] = useState(false);
+
+  // Pre-select venue and works from query params (from placement QR button)
+  useEffect(() => {
+    if (!artist || preselected) return;
+    const paramVenue = searchParams.get("venue");
+    const paramWorks = searchParams.get("works");
+    if (paramVenue) setSelectedVenue(paramVenue);
+    if (paramWorks && artist.works) {
+      const workTitles = paramWorks.split(",").map((w) => w.trim());
+      const indices = new Set<number>();
+      artist.works.forEach((w, i) => {
+        if (workTitles.includes(w.title)) indices.add(i);
+      });
+      if (indices.size > 0) setSelected(indices);
+    }
+    setPreselected(true);
+  }, [artist, searchParams, preselected]);
 
   // All hooks MUST be before any early return
   const totalLabels = useMemo(() => {

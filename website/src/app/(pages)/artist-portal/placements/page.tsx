@@ -457,12 +457,22 @@ export default function PlacementsPage() {
                     {p.revenue ?? <span className="text-muted">-</span>}
                   </td>
                   <td className="px-6 py-3.5 text-right">
-                    <button
-                      onClick={() => { if (confirm("Remove this placement?")) removePlacement(p.id); }}
-                      className="text-xs text-muted hover:text-red-500 transition-colors"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex items-center justify-end gap-3">
+                      {p.status === "Active" && (
+                        <Link
+                          href={`/artist-portal/labels?venue=${encodeURIComponent(p.venue)}&works=${encodeURIComponent(p.workTitle)}`}
+                          className="text-xs text-accent hover:text-accent-hover transition-colors"
+                        >
+                          QR Label
+                        </Link>
+                      )}
+                      <button
+                        onClick={() => { if (confirm("Remove this placement?")) removePlacement(p.id); }}
+                        className="text-xs text-muted hover:text-red-500 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

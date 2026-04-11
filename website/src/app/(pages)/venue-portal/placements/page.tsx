@@ -296,7 +296,7 @@ export default function VenuePlacementsPage() {
               ) : artistWorks.length === 0 ? (
                 <p className="text-sm text-muted">No works found. Browse an artist&rsquo;s profile to select works for placement.</p>
               ) : (
-                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
+                <div className="flex gap-2.5 overflow-x-auto pb-2">
                   {artistWorks.map((work) => {
                     const selected = selectedWorks.has(work.title);
                     return (
@@ -304,12 +304,12 @@ export default function VenuePlacementsPage() {
                         key={work.id}
                         type="button"
                         onClick={() => toggleWork(work.title)}
-                        className={`relative aspect-square rounded-sm overflow-hidden border-2 transition-all ${
+                        className={`relative w-24 h-24 shrink-0 rounded-sm overflow-hidden border-2 transition-all ${
                           selected ? "border-accent shadow-sm" : "border-transparent hover:border-border"
                         }`}
                       >
                         {work.image && (
-                          <Image src={work.image} alt={work.title} fill className="object-cover" sizes="80px" />
+                          <Image src={work.image} alt={work.title} fill className="object-cover" sizes="96px" />
                         )}
                         {selected && (
                           <div className="absolute inset-0 bg-accent/20 flex items-center justify-center">
@@ -318,6 +318,9 @@ export default function VenuePlacementsPage() {
                             </div>
                           </div>
                         )}
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5">
+                          <p className="text-[8px] text-white truncate">{work.title}</p>
+                        </div>
                       </button>
                     );
                   })}
