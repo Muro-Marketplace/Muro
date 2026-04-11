@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import CartIndicator from "./CartIndicator";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 
 const navLinks = [
   { label: "Discover Art", href: "/browse" },
@@ -21,6 +22,25 @@ export default function Header() {
   const pathname = usePathname();
   const isImmersive = immersiveRoutes.includes(pathname);
   const { user, userType, signOut, loading: authLoading } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const portalBase = userType === "venue" ? "/venue-portal" : "/artist-portal";
+
+  // Fetch unread message count when logged in
+  const fetchUnread = useCallback(() => {
+    if (!user) return;
+    authFetch("/api/messages/unread")
+      .then((r) => r.json())
+      .then((data) => setUnreadCount(data.count || 0))
+      .catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    fetchUnread();
+    // Poll every 60 seconds
+    const interval = setInterval(fetchUnread, 60000);
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
 
   useEffect(() => {
     if (!isImmersive) return;
@@ -73,9 +93,42 @@ export default function Header() {
           <div className="hidden lg:flex items-center gap-2.5">
             {!authLoading && user ? (
               <>
+                {/* Messages icon */}
                 <Link
-                  href={userType === "venue" ? "/venue-portal" : "/artist-portal"}
-                  className={`text-sm px-4 py-2 transition-colors duration-300 ${
+                  href={`${portalBase}/messages`}
+                  className={`relative p-2 transition-colors duration-300 ${
+                    showSolid ? "text-muted hover:text-foreground" : "text-white/70 hover:text-white"
+                  }`}
+                  title="Messages"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center px-1 text-[10px] font-bold text-white bg-accent rounded-full leading-none">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </Link>
+
+                {/* Notifications icon */}
+                <Link
+                  href={portalBase}
+                  className={`relative p-2 transition-colors duration-300 ${
+                    showSolid ? "text-muted hover:text-foreground" : "text-white/70 hover:text-white"
+                  }`}
+                  title="Notifications"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                </Link>
+
+                {/* Portal link */}
+                <Link
+                  href={portalBase}
+                  className={`text-sm px-3 py-2 transition-colors duration-300 ${
                     showSolid ? "text-muted hover:text-foreground" : "text-white/90 hover:text-white"
                   }`}
                 >
@@ -170,8 +223,25 @@ export default function Header() {
             <div className="flex flex-col gap-3 pt-4 border-t border-border">
               {user ? (
                 <>
+                  <div className="flex items-center gap-4 pb-2">
+                    <Link
+                      href={`${portalBase}/messages`}
+                      className="flex items-center gap-2 text-sm text-muted hover:text-foreground transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                      Messages
+                      {unreadCount > 0 && (
+                        <span className="min-w-[18px] h-[18px] flex items-center justify-center px-1 text-[10px] font-bold text-white bg-accent rounded-full leading-none">
+                          {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
+                      )}
+                    </Link>
+                  </div>
                   <Link
-                    href={userType === "venue" ? "/venue-portal" : "/artist-portal"}
+                    href={portalBase}
                     className="text-center text-sm px-5 py-3 rounded-sm border border-border text-foreground hover:bg-foreground/5"
                     onClick={() => setMobileMenuOpen(false)}
                   >
