@@ -114,7 +114,11 @@ export default function SpacesLookingForArtPage() {
   return (
     <div className="bg-background">
       {/* Hero */}
-      <section className="py-16 lg:py-20 bg-foreground relative overflow-hidden">
+      <section className="pt-24 lg:pt-28 pb-16 lg:pb-20 relative overflow-hidden">
+        <div className="absolute inset-0">
+          <img src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1920&h=800&fit=crop&crop=center" alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/75" />
+        </div>
         <div className="max-w-[1000px] mx-auto px-6 text-center relative z-10">
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">For Artists</p>
           <h1 className="font-serif text-4xl lg:text-5xl text-white mb-4">Venues Looking for Art</h1>
