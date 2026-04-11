@@ -89,10 +89,10 @@ export default function Home() {
                 Login
               </Link>
               <Link
-                href="/apply"
+                href="/signup"
                 className="text-sm px-5 py-2.5 bg-white text-foreground font-medium rounded-sm hover:bg-white/90 transition-colors"
               >
-                Apply to Join
+                Sign Up
               </Link>
             </div>
 
@@ -153,11 +153,11 @@ export default function Home() {
                     Login
                   </Link>
                   <Link
-                    href="/apply"
+                    href="/signup"
                     className="text-center text-sm px-5 py-3 rounded-sm bg-white text-foreground font-medium hover:bg-white/90"
                     onClick={() => setMobileMenuOpen(false)}
                   >
-                    Apply to Join
+                    Sign Up
                   </Link>
                 </div>
               </div>
@@ -187,10 +187,10 @@ export default function Home() {
                   Discover Art
                 </Link>
                 <Link
-                  href="/apply"
+                  href="/signup"
                   className="inline-flex items-center justify-center px-10 sm:px-8 py-3 sm:py-4 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
                 >
-                  Apply to Join
+                  Sign Up
                 </Link>
               </div>
             </div>

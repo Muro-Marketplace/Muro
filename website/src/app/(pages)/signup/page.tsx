@@ -64,7 +64,7 @@ export default function SignUpPage() {
         {/* Heading */}
         <div className="text-center mb-10">
           <h1 className="text-3xl lg:text-4xl font-serif mb-2 text-white">Join Wallspace</h1>
-          <p className="text-white/50 text-sm">I am a...</p>
+          <p className="text-white/50 text-sm">Choose your account type to get started</p>
         </div>
 
         {/* Options */}

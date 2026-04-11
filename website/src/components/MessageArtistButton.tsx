@@ -26,6 +26,8 @@ export default function MessageArtistButton({ artistSlug, artistName, variant = 
       router.push(`/venue-portal/messages?artist=${artistSlug}${nameParam}`);
     } else if (user && userType === "artist") {
       router.push(`/artist-portal/messages?artist=${artistSlug}${nameParam}`);
+    } else if (user && userType === "customer") {
+      router.push(`/customer-portal/messages?artist=${artistSlug}${nameParam}`);
     } else {
       router.push(`/contact?artist=${artistSlug}`);
     }
