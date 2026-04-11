@@ -53,6 +53,7 @@ export interface Artist {
   totalPlacements?: number;
   totalSales?: number;
   totalEnquiries?: number;
+  subscriptionPlan?: string;
 }
 
 export const artists: Artist[] = [

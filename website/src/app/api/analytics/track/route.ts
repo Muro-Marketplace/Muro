@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       visitor_id: visitorId,
       referrer: ctx.referrer || undefined,
       source: "browse",
-    }).catch(() => {});
+    }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
 
     return NextResponse.json({ ok: true });
   } catch {

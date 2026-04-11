@@ -55,11 +55,17 @@ export async function POST(request: Request) {
 
         // Look up artist profile for subscription plan (fee rate)
         if (firstArtistSlug) {
-          const { data: ap } = await db.from("artist_profiles").select("user_id, subscription_plan").eq("slug", firstArtistSlug).single();
+          const { data: ap } = await db.from("artist_profiles").select("user_id, subscription_plan, free_until").eq("slug", firstArtistSlug).single();
           if (ap) {
             artistUserId = ap.user_id;
-            const planFees: Record<string, number> = { core: 15, premium: 8, pro: 3 };
-            platformFeePct = planFees[ap.subscription_plan || "core"] || 15;
+            // Check if artist is in free period (founding artist or trial)
+            const isFree = ap.free_until && new Date(ap.free_until) > new Date();
+            if (isFree) {
+              platformFeePct = 0; // No platform fee during free period
+            } else {
+              const planFees: Record<string, number> = { core: 15, premium: 8, pro: 3 };
+              platformFeePct = planFees[ap.subscription_plan || "core"] || 15;
+            }
           }
         }
 
@@ -143,7 +149,7 @@ export async function POST(request: Request) {
             if (artistUser?.email && artistProfile) {
               const cartItems = session.metadata?.cart_items ? JSON.parse(session.metadata.cart_items) : [];
               const firstItem = cartItems[0]?.title || "Artwork";
-              notifyArtistNewOrder({ email: artistUser.email, artistName: artistProfile.name, orderId, itemTitle: firstItem, total, artistRevenue }).catch(() => {});
+              notifyArtistNewOrder({ email: artistUser.email, artistName: artistProfile.name, orderId, itemTitle: firstItem, total, artistRevenue }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
             }
           }
           // Notify venue if revenue share exists
@@ -154,7 +160,7 @@ export async function POST(request: Request) {
               const { data: ap } = await db.from("artist_profiles").select("name").eq("slug", firstArtistSlug).single();
               if (venueUser?.email) {
                 const cartItems = session.metadata?.cart_items ? JSON.parse(session.metadata.cart_items) : [];
-                notifyVenueOrderFromPlacement({ email: venueUser.email, venueName: vp.name, artistName: ap?.name || firstArtistSlug, itemTitle: cartItems[0]?.title || "Artwork", total, venueRevenue }).catch(() => {});
+                notifyVenueOrderFromPlacement({ email: venueUser.email, venueName: vp.name, artistName: ap?.name || firstArtistSlug, itemTitle: cartItems[0]?.title || "Artwork", total, venueRevenue }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
               }
             }
           }

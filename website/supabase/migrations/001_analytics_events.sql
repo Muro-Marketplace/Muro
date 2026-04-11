@@ -76,6 +76,19 @@ CREATE INDEX IF NOT EXISTS idx_placements_status ON placements(status);
 ALTER TABLE artist_profiles ADD COLUMN IF NOT EXISTS message_notifications_enabled boolean DEFAULT true;
 ALTER TABLE venue_profiles ADD COLUMN IF NOT EXISTS message_notifications_enabled boolean DEFAULT true;
 
+-- Founding artist tracking
+ALTER TABLE artist_profiles ADD COLUMN IF NOT EXISTS signup_order integer;
+ALTER TABLE artist_profiles ADD COLUMN IF NOT EXISTS free_until timestamptz;
+
+-- Customer profiles
+CREATE TABLE IF NOT EXISTS customer_profiles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id),
+  name text,
+  email text,
+  created_at timestamptz DEFAULT now()
+);
+
 -- Message types for placement requests in conversations
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type text DEFAULT 'text';
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}';

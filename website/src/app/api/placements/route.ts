@@ -161,7 +161,7 @@ export async function POST(request: Request) {
           arrangementType: parsed.data[0].type,
           revenueSharePercent: parsed.data[0].revenueSharePercent,
           message: parsed.data[0].message,
-        }).catch(() => {});
+        }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
       }
     }
 
@@ -246,7 +246,7 @@ export async function PATCH(request: Request) {
           artistName: artistProfile.name,
           venueName: existing.venue || "Venue",
           accepted: status === "active",
-        }).catch(() => {});
+        }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
       }
     }
 

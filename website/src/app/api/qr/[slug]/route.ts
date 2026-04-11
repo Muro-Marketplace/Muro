@@ -25,7 +25,7 @@ export async function GET(
     source: "qr",
     visitor_id: generateVisitorId(ctx.ip, ctx.userAgent),
     referrer: ctx.referrer || undefined,
-  }).catch(() => {});
+  }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
 
   // Build redirect URL with source attribution
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;

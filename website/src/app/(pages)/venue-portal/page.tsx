@@ -4,12 +4,15 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useAuth } from "@/context/AuthContext";
+import { useSaved } from "@/context/SavedContext";
 import { authFetch } from "@/lib/api-client";
 
 export default function VenueDashboardPage() {
   const { displayName } = useAuth();
+  const { savedItems } = useSaved();
+  const savedArtistCount = savedItems.filter((s) => s.type === "artist").length;
   const [stats, setStats] = useState([
-    { label: "Saved Artists", value: "0" },
+    { label: "Saved Artists", value: String(savedArtistCount) },
     { label: "Active Enquiries", value: "0" },
     { label: "Orders", value: "0" },
     { label: "Total Spent", value: "\u00a30" },
@@ -24,7 +27,7 @@ export default function VenueDashboardPage() {
       const totalSpent = orders.reduce((sum: number, o: { total?: number }) => sum + (o.total || 0), 0);
 
       setStats([
-        { label: "Saved Artists", value: "0" },
+        { label: "Saved Artists", value: String(savedArtistCount) },
         { label: "Active Enquiries", value: "0" },
         { label: "Orders", value: String(orders.length) },
         { label: "Total Spent", value: `\u00a3${totalSpent.toLocaleString()}` },

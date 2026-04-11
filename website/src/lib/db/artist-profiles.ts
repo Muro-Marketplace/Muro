@@ -40,6 +40,7 @@ export interface DbArtistProfile {
   total_sales?: number;
   total_enquiries?: number;
   message_notifications_enabled?: boolean;
+  subscription_plan?: string;
 }
 
 export interface DbArtistWork {
@@ -95,6 +96,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
     totalPlacements: profile.total_placements || 0,
     totalSales: profile.total_sales || 0,
     totalEnquiries: profile.total_enquiries || 0,
+    subscriptionPlan: profile.subscription_plan || undefined,
     works: works.map((w) => ({
       id: w.id,
       title: w.title,

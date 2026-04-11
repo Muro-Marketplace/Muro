@@ -37,6 +37,17 @@ export async function generateMetadata({
   return {
     title: `${artist.name} – Wallplace`,
     description: artist.shortBio,
+    openGraph: {
+      title: `${artist.name} – Wallplace`,
+      description: artist.shortBio,
+      images: artist.image ? [{ url: artist.image, width: 400, height: 400 }] : [],
+      type: "profile",
+    },
+    twitter: {
+      card: "summary",
+      title: `${artist.name} – Wallplace`,
+      description: artist.shortBio,
+    },
   };
 }
 

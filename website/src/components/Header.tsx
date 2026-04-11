@@ -91,6 +91,11 @@ export default function Header() {
       .catch(() => {});
   }, [msgDropdownOpen, user, resolvedSlug]);
 
+  // Refresh unread count when message dropdown closes (user likely read messages)
+  useEffect(() => {
+    if (!msgDropdownOpen && user) fetchUnread();
+  }, [msgDropdownOpen, user, fetchUnread]);
+
   // Load notifications when dropdown opens — placements, messages, enquiries
   useEffect(() => {
     if (!notifDropdownOpen || !user || !resolvedSlug) return;

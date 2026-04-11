@@ -151,7 +151,7 @@ export default function ArtistPortalLayout({
           <span className="text-sm font-medium text-foreground">Artist Portal</span>
         </div>
 
-        <main className="px-6 lg:px-8 pt-4 lg:pt-5 pb-6 lg:pb-8">
+        <main className="px-6 lg:px-8 pt-2 lg:pt-3 pb-6 lg:pb-8">
           {children}
         </main>
       </div>

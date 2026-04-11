@@ -93,7 +93,7 @@ export async function PATCH(request: Request) {
         orderId,
         status,
         trackingNumber,
-      }).catch(() => {});
+      }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
     }
 
     return NextResponse.json({ success: true });

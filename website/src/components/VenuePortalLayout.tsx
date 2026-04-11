@@ -159,7 +159,7 @@ export default function VenuePortalLayout({
           </span>
         </div>
 
-        <div className="px-6 lg:px-8 pt-4 lg:pt-5 pb-6 lg:pb-8">{children}</div>
+        <div className="px-6 lg:px-8 pt-2 lg:pt-3 pb-6 lg:pb-8">{children}</div>
       </div>
     </div>
   );

@@ -121,7 +121,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             </div>
           )}
 
-          {/* Founding Artist badge top-left */}
+          {/* Badges top-left */}
           <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
             {artist.isFoundingArtist && (
               <span
@@ -129,6 +129,13 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
                 title="One of the first 20 artists on Wallplace – free access for life"
               >
                 Founding Artist
+              </span>
+            )}
+            {(artist.subscriptionPlan === "premium" || artist.subscriptionPlan === "pro") && (
+              <span className={`inline-block px-2.5 py-1 text-xs font-medium rounded-sm backdrop-blur-sm ${
+                artist.subscriptionPlan === "pro" ? "bg-accent/90 text-white" : "bg-white/95 text-accent"
+              }`}>
+                {artist.subscriptionPlan === "pro" ? "Featured Artist" : "Featured"}
               </span>
             )}
           </div>

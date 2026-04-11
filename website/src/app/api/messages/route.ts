@@ -251,7 +251,7 @@ export async function POST(request: Request) {
               arrangementType: (m.arrangementType as string) || "free_loan",
               revenueSharePercent: m.revenueSharePercent as number | undefined,
               message: content,
-            }).catch(() => {});
+            }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
           }
         }
       }
@@ -280,7 +280,7 @@ export async function POST(request: Request) {
               artistName: artistProfile.name,
               venueName: placement.venue || "Venue",
               accepted: responseStatus === "active",
-            }).catch(() => {});
+            }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
           }
         }
       }
