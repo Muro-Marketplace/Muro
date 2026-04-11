@@ -158,7 +158,7 @@ export default async function ArtistProfilePage({
                   { label: "Originals", yes: artist.offersOriginals },
                   { label: "Prints", yes: artist.offersPrints },
                   { label: "Framed", yes: artist.offersFramed },
-                  { label: artist.revenueSharePercent ? `Display · ${artist.revenueSharePercent}% rev share` : "Display", yes: artist.openToFreeLoan || artist.openToRevenueShare },
+                  { label: artist.revenueSharePercent ? `Display · ${artist.revenueSharePercent}% revenue share` : "Display", yes: artist.openToFreeLoan || artist.openToRevenueShare },
                   { label: "Purchase", yes: artist.openToOutrightPurchase },
                 ].filter(item => item.yes).map((item) => (
                   <BoolCard key={item.label} label={item.label} yes={item.yes} />

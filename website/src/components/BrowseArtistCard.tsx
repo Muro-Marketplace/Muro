@@ -169,7 +169,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
           <div className="flex flex-wrap gap-1.5 mt-2">
             {(artist.openToFreeLoan || artist.openToRevenueShare) && (
               <span className="text-[10px] text-accent bg-accent/5 border border-accent/15 px-1.5 py-0.5 rounded-sm">
-                Display{artist.openToRevenueShare && artist.revenueSharePercent ? ` · ${artist.revenueSharePercent}% rev share` : ""}
+                Display{artist.openToRevenueShare && artist.revenueSharePercent ? ` · ${artist.revenueSharePercent}% revenue share` : ""}
               </span>
             )}
             {artist.openToOutrightPurchase && (
