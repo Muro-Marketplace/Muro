@@ -12,6 +12,7 @@ export interface LabelData {
   workMedium?: string;
   workDimensions?: string;
   workPrice?: string;
+  venueName?: string;
   quantity: number;
   isPortfolioLabel?: boolean;
   // Source values for restoring toggled-off fields in preview
@@ -41,9 +42,10 @@ export default function LabelSheet({ labels, pageIndex }: LabelSheetProps) {
     async function generate() {
       const uniqueUrls = await Promise.all(
         labels.map((l) => {
+          const venueParam = l.venueName ? `&v=${encodeURIComponent(l.venueName)}` : "";
           const url = l.isPortfolioLabel
-            ? `https://wallspace.art/api/qr/${l.artistSlug}`
-            : `https://wallspace.art/api/qr/${l.artistSlug}?work=${encodeURIComponent(l.workTitle || "")}`;
+            ? `https://wallspace.art/api/qr/${l.artistSlug}${venueParam ? `?${venueParam.slice(1)}` : ""}`
+            : `https://wallspace.art/api/qr/${l.artistSlug}?work=${encodeURIComponent(l.workTitle || "")}${venueParam}`;
           return generateQRDataURL(url);
         })
       );

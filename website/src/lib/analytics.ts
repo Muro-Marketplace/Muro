@@ -6,6 +6,7 @@ export interface TrackEventParams {
   artist_slug?: string;
   work_id?: string;
   venue_user_id?: string;
+  venue_name?: string;
   visitor_id?: string;
   referrer?: string;
   source?: string;
@@ -24,6 +25,7 @@ export async function trackEvent(params: TrackEventParams): Promise<void> {
       artist_slug: params.artist_slug || null,
       work_id: params.work_id || null,
       venue_user_id: params.venue_user_id || null,
+      venue_name: params.venue_name || null,
       visitor_id: params.visitor_id || null,
       referrer: params.referrer || null,
       source: params.source || null,

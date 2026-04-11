@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
 import type { LabelData } from "@/components/labels/LabelSheet";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
+import { authFetch } from "@/lib/api-client";
 
 interface LabelOptions {
   showMedium: boolean;
@@ -26,13 +27,34 @@ export default function LabelsPage() {
   });
   // Portfolio label
   const [portfolioQty, setPortfolioQty] = useState(0);
+  // Venue context for QR tracking
+  const [selectedVenue, setSelectedVenue] = useState("");
+  const [venues, setVenues] = useState<string[]>([]);
+  const [venueDropdownOpen, setVenueDropdownOpen] = useState(false);
 
-  // useMemo MUST be before any early return to satisfy React's rules of hooks
+  // All hooks MUST be before any early return
   const totalLabels = useMemo(() => {
     let count = portfolioQty;
     selected.forEach((i) => { count += quantities[i] ?? 1; });
     return count;
   }, [selected, quantities, portfolioQty]);
+
+  // Fetch unique venue names from placements
+  useEffect(() => {
+    authFetch("/api/placements")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.placements) {
+          const uniqueVenues = [...new Set(
+            data.placements
+              .map((p: { venue?: string }) => p.venue)
+              .filter(Boolean) as string[]
+          )];
+          setVenues(uniqueVenues);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   if (artistLoading || !artist) {
     return (
@@ -76,6 +98,7 @@ export default function LabelsPage() {
       labels.push({
         artistName: currentArtist.name,
         artistSlug: currentArtist.slug,
+        venueName: selectedVenue || undefined,
         quantity: portfolioQty,
         isPortfolioLabel: true,
       });
@@ -86,6 +109,7 @@ export default function LabelsPage() {
       labels.push({
         artistName: currentArtist.name,
         artistSlug: currentArtist.slug,
+        venueName: selectedVenue || undefined,
         workTitle: work.title,
         workMedium: options.showMedium ? work.medium : undefined,
         workDimensions: options.showDimensions ? work.dimensions : undefined,
@@ -115,7 +139,7 @@ export default function LabelsPage() {
           </p>
         </div>
 
-        {/* Customisation + Portfolio row */}
+        {/* Customisation + Venue + Portfolio row */}
         <div className="flex flex-col lg:flex-row gap-4 mb-6">
           {/* Customisation panel */}
           <div className="flex-1 bg-surface border border-border rounded-sm p-4">
@@ -140,6 +164,51 @@ export default function LabelsPage() {
                   {label}
                 </label>
               ))}
+            </div>
+          </div>
+
+          {/* Venue selector */}
+          <div className="lg:w-64 bg-surface border border-border rounded-sm p-4">
+            <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-2">Venue</h3>
+            <p className="text-xs text-muted mb-3">Tag scans to a specific venue</p>
+            <div className="relative">
+              <button
+                onClick={() => setVenueDropdownOpen(!venueDropdownOpen)}
+                className="w-full flex items-center justify-between text-sm border border-border rounded-sm px-3 py-2 bg-background hover:bg-background/80 transition-colors text-left"
+              >
+                <span className={selectedVenue ? "text-foreground" : "text-muted"}>
+                  {selectedVenue || "No venue"}
+                </span>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-muted shrink-0">
+                  <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {venueDropdownOpen && (
+                <div className="absolute left-0 right-0 mt-1 bg-surface border border-border rounded-sm shadow-sm z-20 max-h-48 overflow-y-auto">
+                  <button
+                    onClick={() => { setSelectedVenue(""); setVenueDropdownOpen(false); }}
+                    className={`w-full text-left text-sm px-3 py-2 hover:bg-background transition-colors ${
+                      !selectedVenue ? "text-accent font-medium" : "text-foreground"
+                    }`}
+                  >
+                    No venue
+                  </button>
+                  {venues.map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => { setSelectedVenue(v); setVenueDropdownOpen(false); }}
+                      className={`w-full text-left text-sm px-3 py-2 hover:bg-background transition-colors ${
+                        v === selectedVenue ? "text-accent font-medium" : "text-foreground"
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                  {venues.length === 0 && (
+                    <p className="text-xs text-muted px-3 py-2">No placements yet</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

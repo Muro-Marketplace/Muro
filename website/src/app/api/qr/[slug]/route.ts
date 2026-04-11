@@ -12,6 +12,7 @@ export async function GET(
 ) {
   const { slug } = await params;
   const work = request.nextUrl.searchParams.get("work");
+  const venue = request.nextUrl.searchParams.get("v");
 
   // Track the scan (fire-and-forget)
   const ctx = extractTrackingContext(request.headers);
@@ -19,6 +20,7 @@ export async function GET(
     event_type: "qr_scan",
     artist_slug: slug,
     work_id: work || undefined,
+    venue_name: venue || undefined,
     qr_label_type: work ? "work" : "portfolio",
     source: "qr",
     visitor_id: generateVisitorId(ctx.ip, ctx.userAgent),

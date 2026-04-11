@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS analytics_events (
   artist_slug text,
   work_id text,
   venue_user_id uuid,
+  venue_name text,
   visitor_id text,
   referrer text,
   source text,
@@ -18,6 +19,7 @@ CREATE INDEX IF NOT EXISTS idx_ae_event_type ON analytics_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_ae_created_at ON analytics_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_ae_artist_type_date ON analytics_events(artist_slug, event_type, created_at);
 CREATE INDEX IF NOT EXISTS idx_ae_venue_user ON analytics_events(venue_user_id) WHERE venue_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_ae_venue_name ON analytics_events(venue_name) WHERE venue_name IS NOT NULL;
 
 ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
 
