@@ -637,7 +637,7 @@ export default function BrowsePortfoliosPage() {
           <div className="absolute inset-0 bg-black/60" />
         </div>
 
-        <div className="relative max-w-[1400px] mx-auto px-6 pt-24 lg:pt-28 pb-8 lg:pb-14">
+        <div className="relative max-w-[1400px] mx-auto px-6 pt-16 lg:pt-20 pb-6 lg:pb-8">
           <div className="py-4">
             <h1 className="font-serif text-4xl lg:text-5xl text-white mb-3 leading-tight">
               The Marketplace
