@@ -1,8 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import { authFetch } from "@/lib/api-client";
 
-type OrderStatus = "Delivered" | "In Transit" | "Processing";
+type OrderStatus = "Delivered" | "In Transit" | "Processing" | "Confirmed";
 
 interface Order {
   id: string;
@@ -14,14 +16,12 @@ interface Order {
   date: string;
 }
 
-// TODO: Replace with Supabase query for the logged-in venue's orders
-const orders: Order[] = [];
-
 const statusBadge = (status: OrderStatus) => {
   const styles: Record<OrderStatus, string> = {
     Delivered: "bg-green-50 text-green-700 border-green-200",
     "In Transit": "bg-blue-50 text-blue-700 border-blue-200",
     Processing: "bg-amber-50 text-amber-700 border-amber-200",
+    Confirmed: "bg-green-50 text-green-700 border-green-200",
   };
   return (
     <span
@@ -33,6 +33,34 @@ const statusBadge = (status: OrderStatus) => {
 };
 
 export default function OrdersPage() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalSpend, setTotalSpend] = useState(0);
+
+  useEffect(() => {
+    authFetch("/api/orders")
+      .then((r) => r.json())
+      .then((data) => {
+        const raw = data.orders || [];
+        const mapped: Order[] = raw.map((o: Record<string, unknown>) => {
+          const items = (o.items || []) as { artistName?: string; title?: string }[];
+          return {
+            id: o.id as string,
+            artist: items[0]?.artistName || "Unknown",
+            title: items.map((i) => i.title || "").join(", ") || "Order",
+            type: "Purchase" as const,
+            amount: `\u00a3${((o.total as number) || 0).toFixed(2)}`,
+            status: (o.status as OrderStatus) || "confirmed",
+            date: o.created_at ? new Date(o.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
+          };
+        });
+        setOrders(mapped);
+        setTotalSpend(raw.reduce((sum: number, o: { total?: number }) => sum + (o.total || 0), 0));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <VenuePortalLayout>
       <div className="mb-6">
@@ -157,11 +185,11 @@ export default function OrdersPage() {
       <div className="mt-6 p-4 bg-white border border-border rounded-sm">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted">Total spend to date</span>
-          <span className="font-medium text-foreground">£800</span>
+          <span className="font-medium text-foreground">{`\u00a3${totalSpend.toFixed(2)}`}</span>
         </div>
         <div className="flex items-center justify-between text-sm mt-2">
           <span className="text-muted">Active loan arrangements</span>
-          <span className="font-medium text-foreground">2</span>
+          <span className="font-medium text-foreground">{orders.filter((o) => o.type === "Loan").length}</span>
         </div>
       </div>
     </VenuePortalLayout>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
+import { authFetch } from "@/lib/api-client";
 
 const STYLE_TAGS = [
   "Contemporary",
@@ -115,9 +116,31 @@ export default function VenueProfilePage() {
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
     );
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const handleSave = async () => {
+    try {
+      const res = await authFetch("/api/venue-profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          preferred_styles: styles,
+          preferred_themes: themes,
+          preferred_sizes: sizes,
+          interested_in_free_loan: freeLoan,
+          interested_in_revenue_share: revenueShare,
+          interested_in_direct_purchase: directPurchase,
+          interested_in_local_artists: localArtists,
+        }),
+      });
+
+      if (!res.ok) {
+        alert("Failed to save profile. Please try again.");
+        return;
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      alert("Failed to save. Please check your connection.");
+    }
   };
 
   return (

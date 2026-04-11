@@ -137,7 +137,7 @@ const comparisonData = [
     gallery: "£200–1,000/week",
     marketplace: "Free–£30/month",
     instagram: "Free",
-    wallspace: "£9.99–£100/month",
+    wallspace: "£9.99–£69.99/month",
   },
   {
     category: "Audience",

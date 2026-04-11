@@ -6,7 +6,7 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 /**
  * Upload an image to Supabase Storage and return the public URL.
  * Validates file size and MIME type before uploading.
- * Falls back to base64 data URL if upload fails.
+ * Throws on failure — callers should handle errors.
  */
 export async function uploadImage(
   file: File,
@@ -25,7 +25,7 @@ export async function uploadImage(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return fileToBase64(file);
+    throw new Error("You must be signed in to upload images.");
   }
 
   const ext = file.name.split(".").pop() || "jpg";
@@ -40,7 +40,7 @@ export async function uploadImage(
 
   if (error) {
     console.error("Upload error:", error);
-    return fileToBase64(file);
+    throw new Error("Image upload failed. Please try again.");
   }
 
   const { data: urlData } = supabase.storage
@@ -48,12 +48,4 @@ export async function uploadImage(
     .getPublicUrl(path);
 
   return urlData.publicUrl;
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve(e.target?.result as string);
-    reader.readAsDataURL(file);
-  });
 }

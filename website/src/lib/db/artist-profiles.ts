@@ -32,6 +32,9 @@ export interface DbArtistProfile {
   venue_types_suited_for: string[];
   is_founding_artist: boolean;
   profile_color: string;
+  postcode?: string;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export interface DbArtistWork {
@@ -77,7 +80,11 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
     canProvideFrames: profile.can_provide_frames,
     canArrangeFraming: profile.can_arrange_framing,
     venueTypesSuitedFor: profile.venue_types_suited_for || [],
-    coordinates: { lat: 51.5074, lng: -0.1278 },
+    postcode: profile.postcode || "",
+    coordinates:
+      profile.lat != null && profile.lng != null
+        ? { lat: profile.lat, lng: profile.lng }
+        : null,
     image: profile.profile_image || `https://picsum.photos/seed/${profile.slug}/400/400`,
     works: works.map((w) => ({
       id: w.id,

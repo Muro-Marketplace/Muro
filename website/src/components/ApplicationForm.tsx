@@ -91,7 +91,7 @@ const planOptions = [
   {
     id: "pro",
     name: "Pro",
-    price: "£100",
+    price: "£69.99",
     fee: "0% platform fee",
     description: "Premium profile, direct venue matching, dedicated support.",
   },

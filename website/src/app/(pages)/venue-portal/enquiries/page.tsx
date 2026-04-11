@@ -1,22 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import { authFetch } from "@/lib/api-client";
 
 type Status = "Pending" | "Responded" | "Closed";
 type FilterTab = "All" | Status;
 
 interface Enquiry {
-  id: number;
+  id: number | string;
   artist: string;
   subject: string;
-  type: "Free Loan" | "Revenue Share" | "Purchase";
+  type: "Free Loan" | "Revenue Share" | "Purchase" | "Display";
   dateSent: string;
   status: Status;
 }
-
-// TODO: Replace with Supabase query for the logged-in venue's enquiries
-const enquiries: Enquiry[] = [];
 
 const statusBadge = (status: Status) => {
   const styles: Record<Status, string> = {
@@ -37,6 +35,34 @@ const FILTER_TABS: FilterTab[] = ["All", "Pending", "Responded", "Closed"];
 
 export default function EnquiriesPage() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
+  const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
+
+  useEffect(() => {
+    authFetch("/api/orders")
+      .then((r) => r.json())
+      .then((data) => {
+        // For now, enquiries come from a simple endpoint; using orders as fallback
+        // When a dedicated enquiry endpoint exists, swap it in
+      })
+      .catch(() => {});
+
+    // Try to load enquiries from the enquiry endpoint
+    fetch("/api/enquiry")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.enquiries) {
+          setEnquiries(data.enquiries.map((e: Record<string, unknown>) => ({
+            id: e.id,
+            artist: e.artist_slug || "Unknown",
+            subject: (e.message as string)?.slice(0, 80) || "Enquiry",
+            type: (e.enquiry_type as string) || "Display",
+            dateSent: e.created_at ? new Date(e.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
+            status: (e.status as Status) || "Pending",
+          })));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const filtered =
     activeFilter === "All"

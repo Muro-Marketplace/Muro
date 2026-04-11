@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import { authFetch } from "@/lib/api-client";
 
 const dateRanges = ["Last 7 days", "Last 30 days", "Last 3 months", "Last 12 months", "All time"];
 
@@ -21,16 +22,33 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState("Last 30 days");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [placements, setPlacements] = useState<Placement[]>([]);
+  const [orders, setOrders] = useState<{ total?: number; created_at?: string }[]>([]);
 
   useEffect(() => {
-    const stored = localStorage.getItem("wallspace-placements");
-    if (stored) {
-      try { setPlacements(JSON.parse(stored)); } catch { /* ignore */ }
-    }
-  }, []);
+    // Fetch from API instead of localStorage
+    authFetch("/api/placements")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.placements) {
+          setPlacements(data.placements.map((p: Record<string, unknown>) => ({
+            id: p.id,
+            workTitle: p.work_title || "Untitled",
+            workImage: (p.work_image as string) || "",
+            venue: p.venue || "",
+            type: (p.arrangement_type || "Free Loan"),
+            revenueSharePercent: p.revenue_share_percent as number | undefined,
+            status: (p.status || "active"),
+            date: p.created_at ? new Date(p.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
+            revenue: p.revenue ? `\u00a3${p.revenue}` : null,
+          })));
+        }
+      })
+      .catch(() => {});
 
-  const orders = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem("wallspace-orders") || "[]"); } catch { return []; }
+    authFetch("/api/orders")
+      .then((r) => r.json())
+      .then((data) => { if (data.orders) setOrders(data.orders); })
+      .catch(() => {});
   }, []);
 
   const activePlacements = placements.filter((p) => p.status === "Active").length;
@@ -62,9 +80,9 @@ export default function AnalyticsPage() {
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthStr = months[d.getMonth()];
-      const monthOrders = orders.filter((o: { createdAt?: string }) => {
-        if (!o.createdAt) return false;
-        const od = new Date(o.createdAt);
+      const monthOrders = orders.filter((o) => {
+        if (!o.created_at) return false;
+        const od = new Date(o.created_at);
         return od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
       });
       data.push({

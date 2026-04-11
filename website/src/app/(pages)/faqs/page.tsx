@@ -30,7 +30,7 @@ const artistFaqs = [
   {
     question: "How much does it cost to join Wallspace as an artist?",
     answer:
-      "It is free to apply. Once accepted, membership starts from £9.99/month (Core plan) with your first month free. Higher tiers (Premium at £29.99/month, Pro at £100/month) offer lower platform fees on sales and more visibility. The first 20 founding artists receive 6 months free on any tier. See our pricing page for full details.",
+      "It is free to apply. Once accepted, membership starts from £9.99/month (Core plan) with your first month free. Higher tiers (Premium at £29.99/month, Pro at £69.99/month) offer lower platform fees on sales and more visibility. The first 20 founding artists receive 6 months free on any tier. See our pricing page for full details.",
   },
   {
     question: "How does the curation process work?",

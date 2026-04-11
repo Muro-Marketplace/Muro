@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { messageSchema } from "@/lib/validations";
+import { notifyNewMessage } from "@/lib/email";
 
 // GET: fetch conversations for the authenticated user
 export async function GET(request: Request) {
@@ -19,8 +20,24 @@ export async function GET(request: Request) {
     // Sanitize slug — strip anything that isn't alphanumeric, dash, or underscore
     const safeSlug = slug.replace(/[^a-zA-Z0-9_-]/g, "");
 
-    // Get all messages where this user is sender or recipient
+    // Verify the slug belongs to the authenticated user
     const db = getSupabaseAdmin();
+    const { data: ownerProfile } = await db
+      .from("artist_profiles")
+      .select("slug")
+      .eq("user_id", auth.user!.id)
+      .single();
+
+    const { data: venueProfile } = !ownerProfile
+      ? await db.from("venue_profiles").select("slug").eq("user_id", auth.user!.id).single()
+      : { data: null };
+
+    const userSlug = ownerProfile?.slug || venueProfile?.slug;
+    if (userSlug !== safeSlug) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    // Get all messages where this user is sender or recipient
     const { data, error } = await db
       .from("messages")
       .select("*")
@@ -108,6 +125,53 @@ export async function POST(request: Request) {
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    }
+
+    // Notify recipient by email (fire-and-forget)
+    const { data: recipientArtist } = await db
+      .from("artist_profiles")
+      .select("name, slug")
+      .eq("slug", recipientSlug)
+      .single();
+
+    if (recipientArtist) {
+      // Look up the artist's user email
+      const { data: artistProfileFull } = await db
+        .from("artist_profiles")
+        .select("user_id")
+        .eq("slug", recipientSlug)
+        .single();
+
+      if (artistProfileFull?.user_id) {
+        const { data: { user: recipientUser } } = await db.auth.admin.getUserById(artistProfileFull.user_id);
+        if (recipientUser?.email) {
+          notifyNewMessage({
+            email: recipientUser.email,
+            name: recipientArtist.name,
+            senderName,
+            messagePreview: content,
+          });
+        }
+      }
+    } else {
+      // Recipient might be a venue
+      const { data: venueProfile } = await db
+        .from("venue_profiles")
+        .select("name, user_id")
+        .eq("slug", recipientSlug)
+        .single();
+
+      if (venueProfile?.user_id) {
+        const { data: { user: recipientUser } } = await db.auth.admin.getUserById(venueProfile.user_id);
+        if (recipientUser?.email) {
+          notifyNewMessage({
+            email: recipientUser.email,
+            name: venueProfile.name,
+            senderName,
+            messagePreview: content,
+          });
+        }
+      }
     }
 
     return NextResponse.json({ success: true, conversationId: cid });

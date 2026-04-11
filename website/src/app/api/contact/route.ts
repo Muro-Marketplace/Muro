@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { contactSchema } from "@/lib/validations";
+import { notifyAdminNewContact } from "@/lib/email";
 
 export async function POST(request: Request) {
   try {
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    notifyAdminNewContact({ name, email, type, message });
 
     return NextResponse.json({ success: true });
   } catch {

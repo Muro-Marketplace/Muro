@@ -189,12 +189,11 @@ export default function VenuesPage() {
               For Venues
             </p>
             <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
-              Discover art for your space.
+              Display curated art for free. Earn when it sells.
             </h1>
             <p className="text-lg lg:text-xl text-white/60 leading-relaxed max-w-xl mb-10">
-              Browse portfolios from our curated independent artists.
-              Filter by style, theme, and location. Enquire directly.
-              No curation fee. No middleman. Free to use.
+              Browse portfolios from independent artists. Pick what fits your space.
+              Art goes on your wall at zero cost &mdash; and if a visitor buys via the QR label, you earn a share.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <Button href="/browse" size="lg" variant="accent">

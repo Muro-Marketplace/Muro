@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { registerVenueSchema } from "@/lib/validations";
+import { notifyAdminNewVenue } from "@/lib/email";
 
 export async function POST(request: Request) {
   try {
@@ -47,6 +48,14 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    notifyAdminNewVenue({
+      name: d.venueName,
+      contactName: d.contactName,
+      email: d.email,
+      type: d.venueType,
+      location: `${d.city}, ${d.postcode}`,
+    });
 
     return NextResponse.json({ success: true });
   } catch {

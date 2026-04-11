@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { artists as staticArtists, type Artist } from "@/data/artists";
@@ -8,16 +8,27 @@ import { themes } from "@/data/themes";
 import { getGalleryWorks } from "@/data/galleries";
 import { collections } from "@/data/collections";
 import { slugify } from "@/lib/slugify";
+import { geocodePostcode } from "@/lib/geocode";
 import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
 
-// Central London reference point
-const USER_LAT = 51.5074;
-const USER_LNG = -0.1278;
-
-function calcDistance(lat: number, lng: number): number {
-  return Math.sqrt((lat - USER_LAT) ** 2 + (lng - USER_LNG) ** 2) * 69;
+/** Haversine great-circle distance in miles */
+function calcDistance(
+  userLat: number,
+  userLng: number,
+  artistLat: number,
+  artistLng: number
+): number {
+  const R = 3958.8;
+  const dLat = ((artistLat - userLat) * Math.PI) / 180;
+  const dLng = ((artistLng - userLng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((userLat * Math.PI) / 180) *
+      Math.cos((artistLat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 const VENUE_TYPES = [
@@ -138,6 +149,12 @@ export default function BrowsePortfoliosPage() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [artists, setArtists] = useState<Artist[]>(staticArtists);
 
+  // User location state for Local mode
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoRequesting, setGeoRequesting] = useState(false);
+  const [postcodeInput, setPostcodeInput] = useState("");
+  const [postcodeError, setPostcodeError] = useState(false);
+
   // Fetch merged artists (static + database) on mount
   useEffect(() => {
     fetch("/api/browse-artists")
@@ -183,6 +200,41 @@ export default function BrowsePortfoliosPage() {
 
   const clearAll = () => setFilters(DEFAULT_FILTERS);
 
+  const requestGeolocation = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      return; // will fall through to postcode input
+    }
+    setGeoRequesting(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setGeoRequesting(false);
+      },
+      () => {
+        setGeoRequesting(false); // show postcode input
+      },
+      { timeout: 10000 }
+    );
+  }, []);
+
+  function handleModeChange(newMode: "local" | "global") {
+    setFilter("mode", newMode);
+    if (newMode === "local" && !userCoords && !geoRequesting) {
+      requestGeolocation();
+    }
+  }
+
+  async function handlePostcodeSubmit() {
+    if (!postcodeInput.trim()) return;
+    const coords = await geocodePostcode(postcodeInput);
+    if (coords) {
+      setUserCoords(coords);
+      setPostcodeError(false);
+    } else {
+      setPostcodeError(true);
+    }
+  }
+
   const hasActiveFilters =
     filters.mode === "local" ||
     filters.themes.length > 0 ||
@@ -199,7 +251,10 @@ export default function BrowsePortfoliosPage() {
   const filteredArtists = useMemo(() => {
     return artists.filter((artist) => {
       if (filters.mode === "local") {
+        if (!userCoords || !artist.coordinates) return false;
         const dist = calcDistance(
+          userCoords.lat,
+          userCoords.lng,
           artist.coordinates.lat,
           artist.coordinates.lng
         );
@@ -234,7 +289,7 @@ export default function BrowsePortfoliosPage() {
         return false;
       return true;
     });
-  }, [artists, filters]);
+  }, [artists, filters, userCoords]);
 
   const allMediums = useMemo(
     () => Array.from(new Set(artists.map((a) => a.primaryMedium))).sort(),
@@ -273,7 +328,7 @@ export default function BrowsePortfoliosPage() {
             <button
               key={mode}
               type="button"
-              onClick={() => setFilter("mode", mode)}
+              onClick={() => handleModeChange(mode)}
               className={`flex-1 py-2 text-sm rounded-sm border transition-all duration-150 capitalize cursor-pointer ${
                 filters.mode === mode
                   ? "bg-foreground text-background border-foreground"
@@ -285,24 +340,73 @@ export default function BrowsePortfoliosPage() {
           ))}
         </div>
         {filters.mode === "local" && (
-          <div className="mt-3">
-            <p className="text-xs text-muted mb-2">Distance</p>
-            <div className="flex flex-wrap gap-1.5">
-              {DISTANCE_OPTIONS.map((opt) => (
+          <div className="mt-3 space-y-3">
+            {/* Location status */}
+            {geoRequesting && (
+              <p className="text-xs text-muted animate-pulse">Detecting your location…</p>
+            )}
+            {!geoRequesting && userCoords && (
+              <p className="text-xs text-accent flex items-center gap-1.5">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="1.5 5 4 7.5 8.5 2.5" />
+                </svg>
+                Location set
                 <button
-                  key={opt.value}
                   type="button"
-                  onClick={() => setFilter("maxDistance", opt.value)}
-                  className={`px-2.5 py-1 text-xs rounded-sm border transition-all duration-150 cursor-pointer ${
-                    filters.maxDistance === opt.value
-                      ? "bg-accent text-white border-accent"
-                      : "border-border text-muted hover:border-accent/50"
-                  }`}
+                  onClick={() => { setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
+                  className="ml-1 text-[10px] text-muted underline cursor-pointer"
                 >
-                  {opt.label}
+                  change
                 </button>
-              ))}
-            </div>
+              </p>
+            )}
+            {!geoRequesting && !userCoords && (
+              <div>
+                <p className="text-xs text-muted mb-1.5">Enter your postcode</p>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={postcodeInput}
+                    onChange={(e) => { setPostcodeInput(e.target.value.toUpperCase()); setPostcodeError(false); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handlePostcodeSubmit(); }}
+                    placeholder="e.g. EC1A 1BB"
+                    className="flex-1 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50 uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={handlePostcodeSubmit}
+                    className="px-3 py-1.5 bg-accent text-white text-xs rounded-sm hover:bg-accent-hover transition-colors cursor-pointer"
+                  >
+                    Go
+                  </button>
+                </div>
+                {postcodeError && (
+                  <p className="text-[10px] text-red-400 mt-1">Postcode not found — try again</p>
+                )}
+              </div>
+            )}
+            {/* Distance options — only once we have a location */}
+            {userCoords && (
+              <div>
+                <p className="text-xs text-muted mb-2">Distance</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {DISTANCE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFilter("maxDistance", opt.value)}
+                      className={`px-2.5 py-1 text-xs rounded-sm border transition-all duration-150 cursor-pointer ${
+                        filters.maxDistance === opt.value
+                          ? "bg-accent text-white border-accent"
+                          : "border-border text-muted hover:border-accent/50"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -653,21 +757,36 @@ export default function BrowsePortfoliosPage() {
 
                 {filteredArtists.length === 0 ? (
                   <div className="py-20 text-center">
-                    <p className="text-muted mb-4">
-                      No artists match these filters.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={clearAll}
-                      className="text-sm text-accent hover:text-accent-hover transition-colors duration-150 cursor-pointer"
-                    >
-                      Clear filters
-                    </button>
+                    {filters.mode === "local" && !userCoords ? (
+                      <>
+                        <p className="text-muted mb-2">Enter your postcode in the filter panel</p>
+                        <p className="text-sm text-muted/60">to find artists near you</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-muted mb-4">No artists match these filters.</p>
+                        <button
+                          type="button"
+                          onClick={clearAll}
+                          className="text-sm text-accent hover:text-accent-hover transition-colors duration-150 cursor-pointer"
+                        >
+                          Clear filters
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : viewMode === "compact" ? (
                   <div className={`grid ${mobileGrid === 2 ? "grid-cols-2" : "grid-cols-1"} sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5`}>
                     {filteredArtists.map((artist) => {
-                      const distance = calcDistance(artist.coordinates.lat, artist.coordinates.lng);
+                      const distance =
+                        userCoords && artist.coordinates
+                          ? calcDistance(
+                              userCoords.lat,
+                              userCoords.lng,
+                              artist.coordinates.lat,
+                              artist.coordinates.lng
+                            )
+                          : null;
                       return <BrowseArtistCard key={artist.slug} artist={artist} distance={distance} />;
                     })}
                   </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
-const ADMIN_EMAIL = "fcoles2598@gmail.com";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "fcoles2598@gmail.com";
 
 /**
  * Validate the request is from the admin user.

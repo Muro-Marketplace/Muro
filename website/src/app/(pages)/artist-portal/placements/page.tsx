@@ -23,18 +23,6 @@ interface Placement {
   notes?: string;
 }
 
-function getSeedPlacements(works: { title: string; image: string }[]): Placement[] {
-  if (works.length === 0) return [];
-  const seeds: Placement[] = [
-    { id: "p1", workTitle: works[0]?.title || "Untitled", workImage: works[0]?.image || "", venue: "Ozone Coffee", type: "Revenue Share" as ArrangementType, revenueSharePercent: 10, status: "Active" as PlacementStatus, date: "12 Jan 2026", revenue: null },
-    { id: "p2", workTitle: works[1]?.title || "Untitled", workImage: works[1]?.image || "", venue: "The Copper Kettle", type: "Direct Purchase" as ArrangementType, status: "Sold" as PlacementStatus, date: "8 Jan 2026", revenue: "£320" },
-    { id: "p3", workTitle: works[2]?.title || "Untitled", workImage: works[2]?.image || "", venue: "Workshop Coffee", type: "Free Loan" as ArrangementType, status: "Completed" as PlacementStatus, date: "15 Nov 2025", revenue: null },
-    { id: "p4", workTitle: works[3]?.title || "Untitled", workImage: works[3]?.image || "", venue: "Redemption Roasters", type: "Revenue Share" as ArrangementType, revenueSharePercent: 15, status: "Pending" as PlacementStatus, date: "20 Mar 2026", revenue: null },
-    { id: "p5", workTitle: works[4]?.title || "Untitled", workImage: works[4]?.image || "", venue: "Climpson & Sons", type: "Free Loan" as ArrangementType, status: "Active" as PlacementStatus, date: "3 Feb 2026", revenue: null },
-  ];
-  return seeds.filter((_, i) => i < works.length);
-}
-
 const statusBadge = (status: string) => {
   switch (status) {
     case "Active": return "bg-green-100 text-green-700";
@@ -62,21 +50,31 @@ export default function PlacementsPage() {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<PlacementStatus>("Active");
 
-  // Load from localStorage once artist is known
+  // Load placements from API
   useEffect(() => {
     if (!artist || initialised) return;
-    const stored = localStorage.getItem("wallspace-placements");
-    if (stored) {
-      try { setPlacements(JSON.parse(stored)); setInitialised(true); return; } catch { /* ignore */ }
-    }
-    setPlacements(getSeedPlacements(artist.works));
-    setInitialised(true);
+    authFetch("/api/placements")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.placements && data.placements.length > 0) {
+          const mapped: Placement[] = data.placements.map((p: Record<string, unknown>) => ({
+            id: p.id,
+            workTitle: p.work_title || "Untitled",
+            workImage: (p.work_image as string) || "",
+            venue: p.venue || "",
+            type: (p.arrangement_type || "Free Loan") as ArrangementType,
+            revenueSharePercent: p.revenue_share_percent as number | undefined,
+            status: (p.status || "active") as PlacementStatus,
+            date: p.created_at ? new Date(p.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
+            revenue: p.revenue ? `\u00a3${p.revenue}` : null,
+            notes: p.notes as string | undefined,
+          }));
+          setPlacements(mapped);
+        }
+      })
+      .catch(() => { /* empty state */ })
+      .finally(() => setInitialised(true));
   }, [artist, initialised]);
-
-  function savePlacements(updated: Placement[]) {
-    setPlacements(updated);
-    localStorage.setItem("wallspace-placements", JSON.stringify(updated));
-  }
 
   function toggleWork(index: number) {
     setSelectedWorks((prev) => {
@@ -122,7 +120,7 @@ export default function PlacementsPage() {
       console.error("Placement save error:", err);
     }
 
-    savePlacements([...newPlacements, ...placements]);
+    setPlacements([...newPlacements, ...placements]);
     setShowForm(false);
     setVenueName("");
     setSelectedWorks(new Set());
@@ -132,8 +130,7 @@ export default function PlacementsPage() {
   }
 
   function updateStatus(id: string, newStatus: PlacementStatus) {
-    savePlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
-    // Sync to Supabase
+    setPlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
     authFetch("/api/placements", {
       method: "PATCH",
       body: JSON.stringify({ id, status: newStatus }),
@@ -141,8 +138,7 @@ export default function PlacementsPage() {
   }
 
   function removePlacement(id: string) {
-    savePlacements(placements.filter((p) => p.id !== id));
-    // Sync to Supabase
+    setPlacements(placements.filter((p) => p.id !== id));
     authFetch(`/api/placements?id=${id}`, { method: "DELETE" })
       .catch((err) => console.error("Placement delete error:", err));
   }

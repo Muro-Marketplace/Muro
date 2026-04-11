@@ -4,6 +4,30 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
 import { z } from "zod";
 
+// GET: fetch placements for the authenticated user
+export async function GET(request: Request) {
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
+      .from("placements")
+      .select("*")
+      .eq("artist_user_id", auth.user!.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return NextResponse.json({ error: "Failed to fetch placements" }, { status: 500 });
+    }
+
+    return NextResponse.json({ placements: data || [] });
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+}
+
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;

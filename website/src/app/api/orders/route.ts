@@ -1,5 +1,35 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getAuthenticatedUser } from "@/lib/api-auth";
+
+// GET: fetch orders for the authenticated user (by email)
+export async function GET(request: Request) {
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
+  try {
+    const email = auth.user!.email;
+    if (!email) {
+      return NextResponse.json({ orders: [] });
+    }
+
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
+      .from("orders")
+      .select("*")
+      .eq("buyer_email", email)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
+    }
+
+    return NextResponse.json({ orders: data || [] });
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+}
 
 export async function POST(request: Request) {
   try {

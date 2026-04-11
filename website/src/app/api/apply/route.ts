@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { applySchema } from "@/lib/validations";
+import { notifyAdminNewApplication, confirmApplicationToArtist } from "@/lib/email";
 
 export async function POST(request: Request) {
   try {
@@ -54,6 +55,10 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // Fire-and-forget email notifications
+    notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium });
+    confirmApplicationToArtist({ name: d.name, email: d.email });
 
     return NextResponse.json({ success: true });
   } catch {

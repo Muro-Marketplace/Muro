@@ -8,7 +8,7 @@ import type { Artist } from "@/data/artists";
 
 interface BrowseArtistCardProps {
   artist: Artist;
-  distance: number;
+  distance: number | null;
 }
 
 export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardProps) {
@@ -156,11 +156,13 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             <h2 className="text-base font-sans font-medium text-foreground leading-tight">
               {artist.name}
             </h2>
-            <span className="text-xs text-muted shrink-0 mt-0.5">
-              {distance < 1
-                ? `${(distance * 5280).toFixed(0)} ft`
-                : `${distance.toFixed(1)} mi`}
-            </span>
+            {distance !== null && (
+              <span className="text-xs text-muted shrink-0 mt-0.5">
+                {distance < 0.2
+                  ? "< 0.2 mi"
+                  : `${distance.toFixed(1)} mi`}
+              </span>
+            )}
           </div>
           <p className="text-sm text-muted mb-3">
             {artist.primaryMedium} &middot; {artist.location}

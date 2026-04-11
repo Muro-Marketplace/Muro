@@ -256,7 +256,7 @@ export default function PricingPage() {
             <div className="bg-surface border border-border rounded-sm p-8 flex flex-col">
               <h3 className="text-2xl mb-1">Pro</h3>
               <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-serif">&pound;100</span>
+                <span className="text-4xl font-serif">&pound;69.99</span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-1">First month free</p>
@@ -417,10 +417,10 @@ export default function PricingPage() {
                 The Pro case: zero platform fee
               </h3>
               <p className="text-muted leading-relaxed mb-4">
-                At £100/month, Pro pays for itself quickly for any artist with
-                regular sales. On a £500 sale, Core would cost you £50 in
-                platform fees, Premium £25. Pro costs nothing – keeping the
-                full £500.
+                At &pound;69.99/month, Pro pays for itself quickly for any artist with
+                regular sales. On a &pound;500 sale, Core would cost you &pound;50 in
+                platform fees, Premium &pound;25. Pro costs nothing &ndash; keeping the
+                full &pound;500.
               </p>
               <p className="text-muted leading-relaxed mb-6">
                 For artists actively using the platform and generating consistent

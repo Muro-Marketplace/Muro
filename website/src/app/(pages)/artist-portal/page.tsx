@@ -34,21 +34,27 @@ export default function ArtistPortalPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
-    // Derive stats from localStorage data
-    const placements = JSON.parse(localStorage.getItem("wallspace-placements") || "[]");
-    const orders = JSON.parse(localStorage.getItem("wallspace-orders") || "[]");
-    const activePlacements = placements.filter((p: { status: string }) => p.status === "Active").length;
-    const totalRevenue = orders.reduce((sum: number, o: { total: number }) => sum + (o.total || 0), 0);
+    // Fetch stats from API (not localStorage)
+    Promise.all([
+      authFetch("/api/placements").then((r) => r.json()).catch(() => ({ placements: [] })),
+      authFetch("/api/orders").then((r) => r.json()).catch(() => ({ orders: [] })),
+    ]).then(([placementsData, ordersData]) => {
+      const placements = placementsData.placements || [];
+      const orders = ordersData.orders || [];
+      const activePlacements = placements.filter((p: { status: string }) => p.status === "active").length;
+      const totalRevenue = orders.reduce((sum: number, o: { total: number }) => sum + (o.total || 0), 0);
 
-    setStats({
-      placements: activePlacements,
-      sales: `£${totalRevenue.toLocaleString()}`,
-      enquiries: 0,
-      views: 0,
+      setStats({
+        placements: activePlacements,
+        sales: `\u00a3${totalRevenue.toLocaleString()}`,
+        enquiries: 0,
+        views: 0,
+      });
     });
 
     // Build activity from recent messages
-    authFetch("/api/messages?slug=" + (displayName || "")).then(async (res) => {
+    if (!displayName) return;
+    authFetch("/api/messages?slug=" + displayName).then(async (res) => {
       try {
         const data = await res.json();
         if (data.conversations) {
@@ -70,13 +76,10 @@ export default function ArtistPortalPage() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl lg:text-3xl mb-1">Welcome back, {displayName?.split(" ")[0] || "Artist"}</h1>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-accent/10 text-accent px-2.5 py-1 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />
-              Premium · Trial active
-            </span>
-            <span className="text-xs text-muted">24 days remaining</span>
-          </div>
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-accent/10 text-accent px-2.5 py-1 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />
+            Your artist portal
+          </span>
         </div>
         <Button href="/artist-portal/portfolio" variant="secondary" size="sm">
           Edit Portfolio

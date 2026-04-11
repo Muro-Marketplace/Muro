@@ -1,11 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function ContactForm() {
+  const searchParams = useSearchParams();
+  const artistSlug = searchParams.get("artist");
+
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [artistName, setArtistName] = useState("");
+
+  // If messaging a specific artist, look up their name for display
+  useEffect(() => {
+    if (artistSlug) {
+      fetch(`/api/browse-artists`)
+        .then((r) => r.json())
+        .then((data) => {
+          const match = (data.artists || []).find((a: { slug: string; name: string }) => a.slug === artistSlug);
+          if (match) setArtistName(match.name);
+        })
+        .catch(() => {});
+    }
+  }, [artistSlug]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -21,6 +39,22 @@ export default function ContactForm() {
     };
 
     try {
+      // If messaging a specific artist, also create a message in the messaging system
+      if (artistSlug) {
+        await fetch("/api/enquiry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            senderName: data.name,
+            senderEmail: data.email,
+            artistSlug,
+            enquiryType: "general",
+            message: data.message,
+          }),
+        });
+      }
+
+      // Always save to contact submissions too
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -50,13 +84,24 @@ export default function ContactForm() {
           </svg>
         </div>
         <h3 className="text-xl mb-2">Message Sent</h3>
-        <p className="text-sm text-muted">Thanks for reaching out. We respond within 24 hours.</p>
+        <p className="text-sm text-muted">
+          {artistSlug
+            ? `Your message has been sent to ${artistName || "the artist"}. They'll be notified by email.`
+            : "Thanks for reaching out. We respond within 24 hours."}
+        </p>
       </div>
     );
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {artistSlug && (
+        <div className="bg-accent/5 border border-accent/20 rounded-sm px-4 py-3 text-sm">
+          <span className="text-accent font-medium">Messaging: </span>
+          <span className="text-foreground">{artistName || artistSlug}</span>
+        </div>
+      )}
+
       <div>
         <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">Name</label>
         <input type="text" id="name" name="name" required className="w-full px-4 py-3 bg-surface border border-border rounded-sm text-sm text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent transition-colors duration-200" placeholder="Your name" />
@@ -65,20 +110,22 @@ export default function ContactForm() {
         <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">Email</label>
         <input type="email" id="email" name="email" required className="w-full px-4 py-3 bg-surface border border-border rounded-sm text-sm text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent transition-colors duration-200" placeholder="you@example.com" />
       </div>
-      <div>
-        <label htmlFor="type" className="block text-sm font-medium text-foreground mb-2">I am a...</label>
-        <select id="type" name="type" required className="w-full px-4 py-3 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent transition-colors duration-200 appearance-none" defaultValue="">
-          <option value="" disabled>Select one</option>
-          <option value="artist">Artist</option>
-          <option value="venue">Venue</option>
-          <option value="buyer">Buyer</option>
-          <option value="commercial">Commercial Enquiry</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
+      {!artistSlug && (
+        <div>
+          <label htmlFor="type" className="block text-sm font-medium text-foreground mb-2">I am a...</label>
+          <select id="type" name="type" required className="w-full px-4 py-3 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent transition-colors duration-200 appearance-none" defaultValue="">
+            <option value="" disabled>Select one</option>
+            <option value="artist">Artist</option>
+            <option value="venue">Venue</option>
+            <option value="buyer">Buyer</option>
+            <option value="commercial">Commercial Enquiry</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      )}
       <div>
         <label htmlFor="message" className="block text-sm font-medium text-foreground mb-2">Message</label>
-        <textarea id="message" name="message" required rows={5} className="w-full px-4 py-3 bg-surface border border-border rounded-sm text-sm text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent transition-colors duration-200 resize-vertical" placeholder="Tell us what you're looking for..." />
+        <textarea id="message" name="message" required rows={5} className="w-full px-4 py-3 bg-surface border border-border rounded-sm text-sm text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent transition-colors duration-200 resize-vertical" placeholder={artistSlug ? `Write your message to ${artistName || "the artist"}...` : "Tell us what you're looking for..."} />
       </div>
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -88,7 +135,7 @@ export default function ContactForm() {
         disabled={submitting}
         className="w-full inline-flex items-center justify-center px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {submitting ? "Sending..." : "Send Message"}
+        {submitting ? "Sending..." : artistSlug ? `Send Message to ${artistName || "Artist"}` : "Send Message"}
       </button>
     </form>
   );

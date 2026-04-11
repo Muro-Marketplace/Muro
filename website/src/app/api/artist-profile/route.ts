@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getArtistProfileByUserId, upsertArtistProfile } from "@/lib/db/artist-profiles";
 import { getWorksByArtistProfileId } from "@/lib/db/artist-works";
+import { geocodePostcode } from "@/lib/geocode";
 
 // GET: fetch the current user's artist profile
 export async function GET(request: Request) {
@@ -27,7 +28,16 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { error } = await upsertArtistProfile(auth.user!.id, body);
+
+    // Geocode postcode if provided, store lat/lng
+    const updatePayload: Record<string, unknown> = { ...body };
+    if (typeof body.postcode === "string" && body.postcode.trim()) {
+      const coords = await geocodePostcode(body.postcode);
+      updatePayload.lat = coords?.lat ?? null;
+      updatePayload.lng = coords?.lng ?? null;
+    }
+
+    const { error } = await upsertArtistProfile(auth.user!.id, updatePayload);
 
     if (error) {
       console.error("Profile update error:", error);

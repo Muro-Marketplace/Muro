@@ -136,7 +136,7 @@ export default async function ArtistProfilePage({
                   </a>
                 )}
               </div>
-              <Button href="/contact" variant="accent" size="md">Message This Artist</Button>
+              <Button href={`/contact?artist=${artist.slug}`} variant="accent" size="md">Message This Artist</Button>
             </div>
 
             <div className="w-full lg:w-[400px] shrink-0 lg:mt-16">
@@ -207,7 +207,7 @@ export default async function ArtistProfilePage({
               Get in touch to discuss pricing, availability, and how this artist&rsquo;s work could transform your venue.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button href="/contact" variant="primary" size="lg">Message This Artist</Button>
+              <Button href={`/contact?artist=${artist.slug}`} variant="primary" size="lg">Message This Artist</Button>
               <Button href="/browse" variant="ghost" size="lg">Browse more artists</Button>
             </div>
           </div>

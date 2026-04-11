@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { enquirySchema } from "@/lib/validations";
+import { notifyAdminNewEnquiry, notifyNewMessage } from "@/lib/email";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request: Request) {
   try {
@@ -27,6 +29,28 @@ export async function POST(request: Request) {
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+    }
+
+    notifyAdminNewEnquiry({ senderName, senderEmail, artistSlug, enquiryType, message });
+
+    // Also notify the artist by email
+    const db = getSupabaseAdmin();
+    const { data: artistProfile } = await db
+      .from("artist_profiles")
+      .select("name, user_id")
+      .eq("slug", artistSlug)
+      .single();
+
+    if (artistProfile?.user_id) {
+      const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistProfile.user_id);
+      if (artistUser?.email) {
+        notifyNewMessage({
+          email: artistUser.email,
+          name: artistProfile.name,
+          senderName,
+          messagePreview: message,
+        });
+      }
     }
 
     return NextResponse.json({ success: true });

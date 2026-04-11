@@ -34,6 +34,7 @@ const venueTypes = [
 interface ProfileState {
   name: string;
   location: string;
+  postcode: string;
   primaryMedium: string;
   shortBio: string;
   extendedBio: string;
@@ -62,6 +63,7 @@ function initProfile(a: Artist): ProfileState {
   return {
     name: a.name,
     location: a.location,
+    postcode: a.postcode || "",
     primaryMedium: a.primaryMedium,
     shortBio: a.shortBio,
     extendedBio: a.extendedBio,
@@ -105,20 +107,12 @@ export default function ProfileEditorPage() {
 
   useEffect(() => {
     if (artist && !profile) {
-      const stored = localStorage.getItem("wallspace-artist-profile");
-      if (stored) {
-        try { setProfile(JSON.parse(stored)); return; } catch { /* ignore */ }
-      }
       setProfile(initProfile(artist));
     }
   }, [artist, profile]);
 
   useEffect(() => {
     if (!artist) return;
-    const stored = localStorage.getItem("wallspace-artist-works");
-    if (stored) {
-      try { setWorks(JSON.parse(stored)); return; } catch { /* ignore */ }
-    }
     setWorks([...artist.works]);
   }, [artist]);
 
@@ -215,6 +209,7 @@ export default function ProfileEditorPage() {
           short_bio: profile.shortBio,
           extended_bio: profile.extendedBio,
           location: profile.location,
+          postcode: profile.postcode,
           primary_medium: profile.primaryMedium,
           style_tags: profile.styleTags,
           themes: profile.themes,
@@ -344,8 +339,18 @@ export default function ProfileEditorPage() {
                 <input type="text" value={profile.name} onChange={(e) => update("name", e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Location</label>
+                <label className={labelClass}>Location <span className="text-muted font-normal">(city or area)</span></label>
                 <input type="text" value={profile.location} onChange={(e) => update("location", e.target.value)} placeholder="e.g. Hackney, London" className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Postcode <span className="text-muted font-normal">(used for distance search)</span></label>
+                <input
+                  type="text"
+                  value={profile.postcode}
+                  onChange={(e) => update("postcode", e.target.value.toUpperCase())}
+                  placeholder="e.g. E8 1DY"
+                  className={inputClass}
+                />
               </div>
             </div>
             <div>

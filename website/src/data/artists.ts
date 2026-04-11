@@ -44,7 +44,8 @@ export interface Artist {
   canProvideFrames: boolean;
   canArrangeFraming: boolean;
   venueTypesSuitedFor: string[];
-  coordinates: { lat: number; lng: number };
+  postcode?: string;
+  coordinates: { lat: number; lng: number } | null;
   image: string;
   works: ArtistWork[];
 }
