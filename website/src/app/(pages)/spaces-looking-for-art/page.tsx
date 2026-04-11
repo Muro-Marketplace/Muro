@@ -236,7 +236,7 @@ export default function SpacesLookingForArtPage() {
             {!canSeeDetails && filtered.length >= 1 && (
               <div className="bg-accent/5 border border-accent/20 rounded-sm p-6 mb-8 text-center">
                 <p className="text-sm font-medium text-foreground mb-1">Subscribe to see full venue details</p>
-                <p className="text-xs text-muted mb-4">Get venue names, contact details, and connect directly. Plans from £14.99/month.</p>
+                <p className="text-xs text-muted mb-4">Get venue names, contact details, and connect directly. Plans from £9.99/month.</p>
                 <Link href="/pricing" className="inline-flex items-center justify-center px-6 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors">
                   View Plans
                 </Link>

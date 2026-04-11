@@ -452,8 +452,8 @@ export default function Home() {
 
           {/* ─── VENUE DEMAND ─── */}
           <section className="py-20 lg:py-28 relative overflow-hidden">
-            <div className="absolute inset-0 -z-10">
-              <Image src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1920&h=800&fit=crop&crop=center" alt="" fill className="object-cover" sizes="100vw" />
+            <div className="absolute inset-0">
+              <img src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1920&h=800&fit=crop&crop=center" alt="" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/75" />
             </div>
             <div className="max-w-[1000px] mx-auto px-6 lg:px-10 text-center relative z-10">

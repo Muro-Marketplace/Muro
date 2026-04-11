@@ -12,7 +12,7 @@ const coreFeatures = [
   "Standard artist profile",
   "Visibility to venues browsing the platform",
   "Curated matching – we surface you to relevant venues",
-  "18% platform fee on sales",
+  "15% platform fee on sales",
   "Basic analytics dashboard",
   "Access to Wallplace venue network",
 ];
@@ -175,12 +175,12 @@ export default function PricingPage() {
             <div className="bg-surface border border-border rounded-sm p-8 flex flex-col">
               <h3 className="text-2xl mb-1">Core</h3>
               <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-serif">&pound;14.99</span>
+                <span className="text-4xl font-serif">&pound;9.99</span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-1">First month free</p>
               <p className="text-sm font-medium text-foreground mb-6">
-                18% platform fee on sales
+                15% platform fee on sales
               </p>
               <ul className="space-y-3 mb-8 flex-1">
                 {coreFeatures.map((feature) => (
@@ -217,7 +217,7 @@ export default function PricingPage() {
               </div>
               <h3 className="text-2xl mb-1">Premium</h3>
               <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-serif">&pound;34.99</span>
+                <span className="text-4xl font-serif">&pound;24.99</span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-1">First month free</p>
@@ -256,12 +256,12 @@ export default function PricingPage() {
             <div className="bg-surface border border-border rounded-sm p-8 flex flex-col">
               <h3 className="text-2xl mb-1">Pro</h3>
               <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-serif">&pound;59.99</span>
+                <span className="text-4xl font-serif">&pound;49.99</span>
                 <span className="text-muted text-sm">/month</span>
               </div>
               <p className="text-sm text-muted mb-1">First month free</p>
               <p className="text-sm font-medium text-foreground mb-6">
-                0% platform fee on sales
+                3% platform fee on sales
               </p>
               <ul className="space-y-3 mb-8 flex-1">
                 {proFeatures.map((feature) => (
@@ -366,7 +366,7 @@ export default function PricingPage() {
                   },
                   {
                     label: "Wallplace Core",
-                    detail: "£14.99/month, curated venue access",
+                    detail: "£9.99/month, curated venue access",
                     wallplace: true,
                   },
                 ].map(({ label, detail, wallplace }) => (
@@ -417,7 +417,7 @@ export default function PricingPage() {
                 The Pro case: lowest platform fee
               </h3>
               <p className="text-muted leading-relaxed mb-4">
-                At &pound;59.99/month, Pro pays for itself quickly for any artist with
+                At &pound;49.99/month, Pro pays for itself quickly for any artist with
                 regular sales. On a &pound;500 sale, Core would cost you &pound;75 in
                 platform fees, Premium &pound;40. Pro costs just &pound;15 &ndash; keeping
                 &pound;485.

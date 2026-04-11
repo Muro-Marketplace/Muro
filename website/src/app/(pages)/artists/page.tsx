@@ -137,7 +137,7 @@ const comparisonData = [
     gallery: "£200–1,000/week",
     marketplace: "Free–£30/month",
     instagram: "Free",
-    wallplace: "£14.99–£59.99/month",
+    wallplace: "£9.99–£49.99/month",
   },
   {
     category: "Audience",
@@ -252,7 +252,7 @@ export default function ArtistsPage() {
                 <span className="w-1 h-1 rounded-full bg-white/30" />
                 <span>Cancel anytime</span>
                 <span className="w-1 h-1 rounded-full bg-white/30" />
-                <span>From £14.99/mo</span>
+                <span>From £9.99/mo</span>
               </div>
             </div>
           </div>
@@ -345,7 +345,7 @@ export default function ArtistsPage() {
               <h3 className="text-2xl mb-1">Core</h3>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-3xl font-serif text-foreground">
-                  &pound;14.99
+                  &pound;9.99
                 </span>
                 <span className="text-muted text-sm">/month</span>
               </div>
@@ -388,7 +388,7 @@ export default function ArtistsPage() {
               <h3 className="text-2xl mb-1">Premium</h3>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-3xl font-serif text-foreground">
-                  &pound;34.99
+                  &pound;24.99
                 </span>
                 <span className="text-muted text-sm">/month</span>
               </div>
@@ -428,7 +428,7 @@ export default function ArtistsPage() {
               <h3 className="text-2xl mb-1">Pro</h3>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-3xl font-serif text-foreground">
-                  &pound;59.99
+                  &pound;49.99
                 </span>
                 <span className="text-muted text-sm">/month</span>
               </div>
@@ -471,7 +471,7 @@ export default function ArtistsPage() {
       <section className="py-20 lg:py-28 bg-foreground">
         <div className="max-w-[1200px] mx-auto px-6">
           <h2 className="text-3xl md:text-4xl mb-10 text-white text-center">
-            What &pound;14.99 a month gets you
+            What &pound;9.99 a month gets you
           </h2>
           <div className="max-w-xl mx-auto space-y-4">
             <div className="flex items-center justify-between py-3 border-b border-white/10">
@@ -511,7 +511,7 @@ export default function ArtistsPage() {
                   Wallplace Core
                 </p>
                 <p className="text-sm text-white/40">
-                  &pound;14.99/month. Access high-intent venue demand. First month free.
+                  &pound;9.99/month. Access high-intent venue demand. First month free.
                 </p>
               </div>
               <svg
@@ -633,7 +633,7 @@ export default function ArtistsPage() {
             </a>
           </div>
           <p className="mt-6 text-sm text-white/40">
-            First month free. First 20 approved artists get 6 months free. Membership from &pound;14.99/month.
+            First month free. First 20 approved artists get 6 months free. Membership from &pound;9.99/month.
           </p>
         </div>
       </section>
