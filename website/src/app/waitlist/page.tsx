@@ -70,12 +70,12 @@ export default function WaitlistPage() {
             ) : (
               <>
                 {/* Logo */}
-                <h2 className="font-serif text-5xl lg:text-6xl tracking-tight text-white mb-8 uppercase">
+                <h2 className="font-serif text-5xl lg:text-8xl tracking-tight text-white mb-6 lg:mb-10 uppercase">
                   Wallspace
                 </h2>
 
                 {/* Headline */}
-                <h1 className="font-serif text-[clamp(1.5rem,4vw,2.25rem)] lg:text-[2rem] leading-[1.1] tracking-[-0.01em] text-white/80 mb-3">
+                <h1 className="font-serif text-[clamp(1.5rem,4vw,2.25rem)] lg:text-2xl leading-[1.1] tracking-[-0.01em] text-white/70 mb-3">
                   The art marketplace for commercial spaces.
                 </h1>
 
