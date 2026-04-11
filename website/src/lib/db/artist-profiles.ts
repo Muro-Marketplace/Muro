@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { Artist, ArtistWork, SizePricing } from "@/data/artists";
 
 export interface DbArtistProfile {
@@ -154,20 +155,21 @@ export async function upsertArtistProfile(
   userId: string,
   data: Partial<Omit<DbArtistProfile, "id" | "user_id">>
 ) {
-  const { data: existing } = await supabase
+  const db = getSupabaseAdmin();
+  const { data: existing } = await db
     .from("artist_profiles")
     .select("id")
     .eq("user_id", userId)
     .single();
 
   if (existing) {
-    const { error } = await supabase
+    const { error } = await db
       .from("artist_profiles")
       .update({ ...data, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
     return { error };
   } else {
-    const { error } = await supabase
+    const { error } = await db
       .from("artist_profiles")
       .insert({ ...data, user_id: userId });
     return { error };

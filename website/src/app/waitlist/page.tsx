@@ -57,13 +57,13 @@ export default function WaitlistPage() {
           className="object-cover"
           priority
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-black/50" />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/65 via-black/45 to-black/35" />
       </div>
 
       {/* ─── HERO / WAITLIST ─── */}
       <section className="relative min-h-screen flex flex-col">
         {/* Main content */}
-        <div className="flex-1 flex items-center justify-center px-6 pb-28 pt-8">
+        <div className="flex-1 flex items-center justify-center px-6 pb-28 pt-20 lg:pt-8">
           <div className="w-full max-w-md lg:max-w-lg text-center">
             {submitted ? (
               <SuccessState />
@@ -161,7 +161,7 @@ export default function WaitlistPage() {
                   <button
                     type="submit"
                     disabled={!name || !email || !userType || submitting}
-                    className="w-full mt-2 py-3.5 px-6 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full mt-2 py-3.5 px-6 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Joining..." : "Join the Waitlist"}
                   </button>

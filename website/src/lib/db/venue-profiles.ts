@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { Venue } from "@/data/venues";
 
 export interface DbVenueProfile {
@@ -76,20 +77,21 @@ export async function upsertVenueProfile(
   userId: string,
   data: Partial<Omit<DbVenueProfile, "id" | "user_id">>
 ) {
-  const { data: existing } = await supabase
+  const db = getSupabaseAdmin();
+  const { data: existing } = await db
     .from("venue_profiles")
     .select("id")
     .eq("user_id", userId)
     .single();
 
   if (existing) {
-    const { error } = await supabase
+    const { error } = await db
       .from("venue_profiles")
       .update({ ...data, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
     return { error };
   } else {
-    const { error } = await supabase
+    const { error } = await db
       .from("venue_profiles")
       .insert({ ...data, user_id: userId });
     return { error };
