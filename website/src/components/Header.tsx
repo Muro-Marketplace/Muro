@@ -9,10 +9,11 @@ import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
 const navLinks = [
-  { label: "Discover Art", href: "/browse" },
+  { label: "Marketplace", href: "/browse" },
   { label: "For Venues", href: "/venues" },
   { label: "For Artists", href: "/artists" },
-  { label: "Spaces", href: "/spaces" },
+  { label: "Blog", href: "/blog" },
+  { label: "Waitlist", href: "/waitlist" },
 ];
 
 const immersiveRoutes = ["/venues", "/artists", "/browse", "/about", "/how-it-works"];

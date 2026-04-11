@@ -19,10 +19,11 @@ interface PlatformStats {
 }
 
 const navLinks = [
-  { label: "Discover Art", href: "/browse" },
+  { label: "Marketplace", href: "/browse" },
   { label: "For Venues", href: "/venues" },
   { label: "For Artists", href: "/artists" },
-  { label: "Spaces", href: "/spaces" },
+  { label: "Blog", href: "/blog" },
+  { label: "Waitlist", href: "/waitlist" },
 ];
 
 export default function Home() {
@@ -382,6 +383,62 @@ export default function Home() {
                     </Link>
                   </div>
                 </div>
+              </div>
+              </AnimateIn>
+            </div>
+          </section>
+
+          {/* ─── TESTIMONIALS ─── */}
+          <section className="py-20 lg:py-28 bg-surface border-y border-border">
+            <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
+              <AnimateIn>
+              <div className="text-center mb-14">
+                <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Testimonials</p>
+                <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground">
+                  Trusted by artists and venues
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {[
+                  {
+                    quote: "Wallspace made it incredibly easy to find artwork that fits our space. We went from bare walls to a rotating gallery in two weeks.",
+                    name: "Sarah Mitchell",
+                    role: "Owner, The Copper Kettle",
+                    type: "Venue",
+                  },
+                  {
+                    quote: "I've had more venue enquiries in three months on Wallspace than in two years trying to approach places myself. The platform just works.",
+                    name: "James Okafor",
+                    role: "Architectural Photographer",
+                    type: "Artist",
+                  },
+                  {
+                    quote: "The revenue share model is genius. We display beautiful art, the artist gets exposure, and when something sells we both benefit. Zero risk.",
+                    name: "David Chen",
+                    role: "Manager, Shoreditch Studios",
+                    type: "Venue",
+                  },
+                ].map((t, i) => (
+                  <div key={i} className="bg-background border border-border rounded-sm p-6 lg:p-8 flex flex-col">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="text-accent/30 mb-4 shrink-0">
+                      <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z" fill="currentColor" />
+                      <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" fill="currentColor" />
+                    </svg>
+                    <p className="text-sm text-foreground/80 leading-relaxed flex-1 mb-6">
+                      {t.quote}
+                    </p>
+                    <div className="flex items-center gap-3 pt-4 border-t border-border">
+                      <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
+                        <span className="text-sm font-medium text-accent">{t.name.charAt(0)}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{t.name}</p>
+                        <p className="text-xs text-muted">{t.role}</p>
+                      </div>
+                      <span className="ml-auto text-[10px] font-medium uppercase tracking-wider text-accent/60 bg-accent/5 px-2 py-0.5 rounded-sm">{t.type}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
               </AnimateIn>
             </div>
