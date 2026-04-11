@@ -7,6 +7,7 @@ import { artists as staticArtists, type Artist } from "@/data/artists";
 import { themes } from "@/data/themes";
 import { artistsToGalleryWorks } from "@/data/galleries";
 import { collections } from "@/data/collections";
+import { artCategories, getCategoryForMedium, matchesSubcategory, type ArtCategory } from "@/data/categories";
 import { slugify } from "@/lib/slugify";
 import { geocodePostcode } from "@/lib/geocode";
 import Button from "@/components/Button";
@@ -144,8 +145,10 @@ function CheckPill({
 }
 
 export default function BrowsePortfoliosPage() {
-  const initialMode = typeof window !== "undefined" && window.location.hash === "#collections" ? "collections" : "portfolios";
-  const [browseMode, setBrowseMode] = useState<"portfolios" | "gallery" | "collections">(initialMode);
+  const initialMode = typeof window !== "undefined" && window.location.hash === "#collections" ? "collections" : "";
+  const [activeCategory, setActiveCategory] = useState<string>(initialMode);
+  const [activeSubcategory, setActiveSubcategory] = useState<string>("");
+  const [viewAs, setViewAs] = useState<"artists" | "works">("artists");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [artists, setArtists] = useState<Artist[]>(staticArtists);
 
@@ -257,8 +260,32 @@ export default function BrowsePortfoliosPage() {
     filters.venueTypes.length > 0 ||
     filters.styleMedium !== "";
 
+  // Get active category object
+  const activeCategoryObj = useMemo(() =>
+    artCategories.find((c) => c.id === activeCategory) || null,
+    [activeCategory]
+  );
+
+  // Available subcategories for the active category (dynamically computed from actual artist data)
+  const availableSubcategories = useMemo(() => {
+    if (!activeCategoryObj) return [];
+    const artistsInCat = artists.filter((a) => activeCategoryObj.mediums.includes(a.primaryMedium));
+    const subs = new Set<string>();
+    for (const sub of activeCategoryObj.subcategories) {
+      if (artistsInCat.some((a) => matchesSubcategory(sub, a.styleTags, a.themes))) {
+        subs.add(sub);
+      }
+    }
+    return Array.from(subs);
+  }, [activeCategoryObj, artists]);
+
   const filteredArtists = useMemo(() => {
     return artists.filter((artist) => {
+      // Category filter
+      if (activeCategoryObj && !activeCategoryObj.mediums.includes(artist.primaryMedium)) return false;
+      // Subcategory filter
+      if (activeSubcategory && !matchesSubcategory(activeSubcategory, artist.styleTags, artist.themes)) return false;
+
       if (filters.mode === "local") {
         if (!userCoords || !artist.coordinates) return false;
         const dist = calcDistance(
@@ -298,7 +325,7 @@ export default function BrowsePortfoliosPage() {
         return false;
       return true;
     });
-  }, [artists, filters, userCoords]);
+  }, [artists, filters, userCoords, activeCategoryObj, activeSubcategory]);
 
   const allMediums = useMemo(
     () => Array.from(new Set(artists.map((a) => a.primaryMedium))).sort(),
@@ -314,6 +341,13 @@ export default function BrowsePortfoliosPage() {
 
   const filteredGalleryWorks = useMemo(() => {
     return allGalleryWorks.filter((work) => {
+      // Category filter
+      if (activeCategoryObj && !activeCategoryObj.mediums.includes(work.artistPrimaryMedium)) return false;
+      // Subcategory filter (check themes as proxy for styleTags on works)
+      if (activeSubcategory) {
+        const lower = activeSubcategory.toLowerCase();
+        if (!work.themes.some((t) => t.toLowerCase().includes(lower)) && !work.medium.toLowerCase().includes(lower) && !work.artistPrimaryMedium.toLowerCase().includes(lower)) return false;
+      }
       // Theme
       if (galleryTheme && !work.themes.includes(galleryTheme)) return false;
       // Medium (work-level)
@@ -340,7 +374,7 @@ export default function BrowsePortfoliosPage() {
       }
       return true;
     });
-  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceFilter, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, galleryLocationMode, userCoords, filters.maxDistance]);
+  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceFilter, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, galleryLocationMode, userCoords, filters.maxDistance, activeCategoryObj, activeSubcategory]);
 
   const hasGalleryFilters =
     !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || !!galleryPriceFilter || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || galleryLocationMode === "local";
@@ -606,47 +640,51 @@ export default function BrowsePortfoliosPage() {
               The Marketplace
             </h1>
             <p className="text-sm lg:text-base text-white/50 leading-relaxed max-w-md">
-              {browseMode === "portfolios"
-                ? "Explore curated artist profiles. Discover commercial terms, styles, and availability."
-                : browseMode === "gallery"
-                ? "Browse individual artworks. Filter by theme, medium, or price."
-                : "Themed bundles of artwork at a set price. Ready to transform your space."}
+              {activeCategory === "collections"
+                ? "Themed bundles of artwork at a set price. Ready to transform your space."
+                : activeCategoryObj
+                ? `Browse ${activeCategoryObj.label.toLowerCase()} from curated artists.`
+                : "Explore curated artist profiles. Discover commercial terms, styles, and availability."}
             </p>
           </div>
         </div>
       </section>
 
-      {/* Mode toggle – tab style, visually distinct from filter toggles */}
+      {/* Category tabs */}
       <div className="border-b border-border">
         <div className="max-w-[1400px] mx-auto px-6">
-          <div className="flex items-center gap-4 sm:gap-8 overflow-x-auto">
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+            {/* All */}
             <button
               type="button"
-              onClick={() => setBrowseMode("portfolios")}
-              className={`py-4 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
-                browseMode === "portfolios"
+              onClick={() => { setActiveCategory(""); setActiveSubcategory(""); }}
+              className={`py-4 px-3 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
+                activeCategory === ""
                   ? "border-foreground text-foreground"
                   : "border-transparent text-muted hover:text-foreground"
               }`}
             >
-              Portfolios
+              All
             </button>
+            {artCategories.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => { setActiveCategory(cat.id); setActiveSubcategory(""); }}
+                className={`py-4 px-3 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
+                  activeCategory === cat.id
+                    ? "border-foreground text-foreground"
+                    : "border-transparent text-muted hover:text-foreground"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
             <button
               type="button"
-              onClick={() => setBrowseMode("gallery")}
-              className={`py-4 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
-                browseMode === "gallery"
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted hover:text-foreground"
-              }`}
-            >
-              Gallery
-            </button>
-            <button
-              type="button"
-              onClick={() => setBrowseMode("collections")}
-              className={`py-4 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
-                browseMode === "collections"
+              onClick={() => { setActiveCategory("collections"); setActiveSubcategory(""); }}
+              className={`py-4 px-3 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
+                activeCategory === "collections"
                   ? "border-foreground text-foreground"
                   : "border-transparent text-muted hover:text-foreground"
               }`}
@@ -657,8 +695,63 @@ export default function BrowsePortfoliosPage() {
         </div>
       </div>
 
-      {browseMode === "portfolios" && (
-        /* ── Portfolios mode ── */
+      {/* Subcategory pills + view toggle */}
+      {activeCategoryObj && activeCategory !== "collections" && (
+        <div className="border-b border-border bg-[#FAF8F5]">
+          <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setActiveSubcategory("")}
+                className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
+                  activeSubcategory === ""
+                    ? "bg-foreground text-white border-foreground"
+                    : "border-border text-muted hover:border-foreground/30"
+                }`}
+              >
+                All {activeCategoryObj.label}
+              </button>
+              {availableSubcategories.map((sub) => (
+                <button
+                  key={sub}
+                  type="button"
+                  onClick={() => setActiveSubcategory(activeSubcategory === sub ? "" : sub)}
+                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
+                    activeSubcategory === sub
+                      ? "bg-foreground text-white border-foreground"
+                      : "border-border text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  {sub}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewAs("artists")}
+                className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
+                  viewAs === "artists" ? "bg-foreground text-white border-foreground" : "border-border text-muted"
+                }`}
+              >
+                Artists
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewAs("works")}
+                className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
+                  viewAs === "works" ? "bg-foreground text-white border-foreground" : "border-border text-muted"
+                }`}
+              >
+                Works
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeCategory !== "collections" && viewAs === "artists" && (
+        /* ── Artists view ── */
         <section className="py-10 lg:py-14">
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
@@ -906,7 +999,7 @@ export default function BrowsePortfoliosPage() {
         </section>
       )}
 
-      {browseMode === "gallery" && (
+      {activeCategory !== "collections" && viewAs === "works" && (
         /* ── Gallery mode with sidebar ── */
         <section className="py-10 lg:py-14">
           <div className="max-w-[1400px] mx-auto px-6">
@@ -1029,7 +1122,7 @@ export default function BrowsePortfoliosPage() {
                 </div>
 
                 {/* Mobile filter drawer */}
-                {sidebarOpen && browseMode === "gallery" && (
+                {sidebarOpen && activeCategory !== "collections" && viewAs === "works" && (
                   <div className="lg:hidden mb-6 bg-surface border border-border rounded-sm p-4 space-y-5">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Filters</span>
@@ -1160,7 +1253,7 @@ export default function BrowsePortfoliosPage() {
         </section>
       )}
 
-      {browseMode === "collections" && (
+      {activeCategory === "collections" && (
         <section className="py-10 lg:py-14">
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="mb-8">
