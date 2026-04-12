@@ -162,9 +162,10 @@ export default function ArtistProfileClient({
                     alt={work.title}
                     width={work.orientation === "landscape" ? 750 : 600}
                     height={work.orientation === "landscape" ? 500 : work.orientation === "square" ? 600 : 750}
-                    className="w-full h-auto object-cover group-hover:scale-[1.02] transition-transform duration-500 pointer-events-none"
+                    className="w-full h-auto object-cover group-hover:scale-[1.02] transition-transform duration-500 pointer-events-none select-none"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
                   />
                   {/* Transparent overlay to block save-as */}
                   <div className="absolute inset-0" />
@@ -283,13 +284,14 @@ export default function ArtistProfileClient({
                 src={currentWork.image}
                 alt={currentWork.title}
                 fill
-                className="object-contain pointer-events-none p-4"
-                sizes="(max-width: 1024px) 100vw, 60vw"
+                className="object-contain pointer-events-none p-4 select-none"
+                sizes="(max-width: 640px) 100vw, 800px"
                 draggable={false}
                 priority
+                onContextMenu={(e) => e.preventDefault()}
               />
-              {/* Transparent overlay to block save-as */}
-              <div className="absolute inset-0" />
+              {/* Transparent overlay to block save-as and right-click */}
+              <div className="absolute inset-0" onContextMenu={(e) => e.preventDefault()} />
 
               {/* Nav arrows */}
               {lightboxIndex > 0 && (
