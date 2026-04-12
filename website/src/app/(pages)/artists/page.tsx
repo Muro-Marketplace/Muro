@@ -242,17 +242,12 @@ export default function ArtistsPage() {
             <ScrollButton targetId="artist-content" label="See what you get" inline />
           </div>
           <div className="border-t border-white/10 bg-black/50 backdrop-blur-sm">
-            <div className="max-w-[1200px] mx-auto px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
-              <p className="text-sm text-white/90 font-medium">
-                First 20 artists: free access for life
-              </p>
-              <div className="flex items-center gap-3 text-xs text-white/40 tracking-wider uppercase">
-                <span>1 month free trial</span>
-                <span className="w-1 h-1 rounded-full bg-white/30" />
-                <span>Cancel anytime</span>
-                <span className="w-1 h-1 rounded-full bg-white/30" />
-                <span>From £9.99/mo</span>
-              </div>
+            <div className="max-w-[1200px] mx-auto px-6 py-3.5 flex items-center justify-center gap-3 text-xs text-white/40 tracking-wider uppercase">
+              <span>1 month free trial</span>
+              <span className="w-1 h-1 rounded-full bg-white/30" />
+              <span>Cancel anytime</span>
+              <span className="w-1 h-1 rounded-full bg-white/30" />
+              <span>From £9.99/mo</span>
             </div>
           </div>
         </div>
