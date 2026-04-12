@@ -55,6 +55,14 @@ export default function SpacesLookingForArtPage() {
 
   const [filterType, setFilterType] = useState("All");
   const [filterArrangement, setFilterArrangement] = useState<"all" | "display" | "revenue" | "purchase">("all");
+  const [maxDistance, setMaxDistance] = useState(9999);
+  const DISTANCE_OPTIONS = [
+    { label: "5 mi", value: 5 },
+    { label: "10 mi", value: 10 },
+    { label: "25 mi", value: 25 },
+    { label: "50 mi", value: 50 },
+    { label: "All", value: 9999 },
+  ];
 
   const { user, userType } = useAuth();
   const router = useRouter();
@@ -107,11 +115,12 @@ export default function SpacesLookingForArtPage() {
       list = list
         .filter((v) => v.coordinates)
         .map((v) => ({ ...v, distance: calcDistance(userCoords.lat, userCoords.lng, v.coordinates!.lat, v.coordinates!.lng) }))
+        .filter((v) => v.distance <= maxDistance)
         .sort((a, b) => a.distance - b.distance);
     }
 
     return list;
-  }, [venues, filterType, filterArrangement, userCoords]);
+  }, [venues, filterType, filterArrangement, userCoords, maxDistance]);
 
   return (
     <div className="bg-background">
@@ -123,36 +132,52 @@ export default function SpacesLookingForArtPage() {
         </div>
         <div className="max-w-[1000px] mx-auto px-6 text-center relative z-10">
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">For Artists</p>
-          <h1 className="font-serif text-4xl lg:text-5xl text-white mb-4">Venues Looking for Art</h1>
-          <p className="text-lg text-white/50 max-w-lg mx-auto mb-8">
+          <h1 className="font-serif text-2xl sm:text-4xl lg:text-5xl text-white mb-4">Venues Looking for Art</h1>
+          <p className="text-base sm:text-lg text-white/50 max-w-lg mx-auto mb-8">
             Real venues actively seeking artwork. Enter your postcode to see demand near you.
           </p>
 
           {/* Postcode search */}
-          <div className="flex items-center justify-center gap-2 max-w-sm mx-auto">
+          <div className="flex items-center justify-center gap-3 max-w-md mx-auto">
             <input
               type="text"
               value={postcode}
               onChange={(e) => { setPostcode(e.target.value.toUpperCase()); setPostcodeError(false); }}
               onKeyDown={(e) => { if (e.key === "Enter") handlePostcodeSearch(); }}
-              placeholder="Enter your postcode"
-              className="flex-1 px-4 py-3 bg-white/10 border border-white/20 rounded-sm text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-accent/50 uppercase"
+              placeholder="ENTER YOUR POSTCODE"
+              className="flex-1 px-5 py-4 bg-white/15 border-2 border-white/30 rounded-sm text-base text-white placeholder:text-white/50 focus:outline-none focus:border-accent focus:bg-white/20 uppercase tracking-wider transition-colors"
             />
             <button
               onClick={handlePostcodeSearch}
               disabled={searching}
-              className="px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
+              className="px-8 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {searching ? "..." : "Search"}
             </button>
           </div>
           {postcodeError && <p className="text-red-400 text-xs mt-2">Postcode not found — try again</p>}
           {userCoords && (
-            <p className="text-accent text-xs mt-2 flex items-center justify-center gap-1.5">
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-              Showing venues near {postcode}
-              <button onClick={() => { setUserCoords(null); setPostcode(""); }} className="ml-1 text-white/50 underline">clear</button>
-            </p>
+            <div className="mt-4 space-y-3">
+              <p className="text-accent text-xs flex items-center justify-center gap-1.5">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
+                Showing venues near {postcode}
+                <button onClick={() => { setUserCoords(null); setPostcode(""); setMaxDistance(9999); }} className="ml-1 text-white/50 underline">clear</button>
+              </p>
+              {/* Distance toggle */}
+              <div className="flex items-center justify-center gap-1.5">
+                {DISTANCE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setMaxDistance(opt.value)}
+                    className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                      maxDistance === opt.value ? "bg-white text-foreground border-white" : "border-white/30 text-white/60 hover:border-white/50"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </section>
