@@ -164,6 +164,7 @@ export default function ArtistProfileClient({
                     height={work.orientation === "landscape" ? 500 : work.orientation === "square" ? 600 : 750}
                     className="w-full h-auto object-cover group-hover:scale-[1.02] transition-transform duration-500 pointer-events-none select-none"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    quality={60}
                     draggable={false}
                     onContextMenu={(e) => e.preventDefault()}
                   />
@@ -286,6 +287,7 @@ export default function ArtistProfileClient({
                 fill
                 className="object-contain pointer-events-none p-4 select-none"
                 sizes="(max-width: 640px) 100vw, 800px"
+                quality={60}
                 draggable={false}
                 priority
                 onContextMenu={(e) => e.preventDefault()}
