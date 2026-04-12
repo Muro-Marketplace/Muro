@@ -9,26 +9,24 @@ export default function VenueArtistToggle() {
   const isArtists = pathname === "/artists";
 
   return (
-    <div className="sticky top-14 lg:top-16 z-30 border-b border-border bg-white">
-      <div className="max-w-[1400px] mx-auto px-6">
-        <div className="flex items-center justify-center gap-0">
-          <Link
-            href="/venues"
-            className={`px-6 sm:px-8 py-4 text-sm font-medium border-b-2 transition-colors ${
-              isVenues ? "border-foreground text-foreground" : "border-transparent text-muted hover:text-foreground"
-            }`}
-          >
-            For Venues
-          </Link>
-          <Link
-            href="/artists"
-            className={`px-6 sm:px-8 py-4 text-sm font-medium border-b-2 transition-colors ${
-              isArtists ? "border-foreground text-foreground" : "border-transparent text-muted hover:text-foreground"
-            }`}
-          >
-            For Artists
-          </Link>
-        </div>
+    <div className="absolute top-20 lg:top-24 left-1/2 -translate-x-1/2 z-30">
+      <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md rounded-full p-1">
+        <Link
+          href="/venues"
+          className={`px-5 py-2 text-xs font-medium rounded-full transition-colors ${
+            isVenues ? "bg-white text-foreground" : "text-white/70 hover:text-white"
+          }`}
+        >
+          For Venues
+        </Link>
+        <Link
+          href="/artists"
+          className={`px-5 py-2 text-xs font-medium rounded-full transition-colors ${
+            isArtists ? "bg-white text-foreground" : "text-white/70 hover:text-white"
+          }`}
+        >
+          For Artists
+        </Link>
       </div>
     </div>
   );
