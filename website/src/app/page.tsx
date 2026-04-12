@@ -112,7 +112,7 @@ export default function Home() {
         </header>
 
         {/* Hero content */}
-        <div className="flex-1 flex items-center justify-center px-6 lg:px-10 pb-16 sm:pb-32">
+        <div className="flex-1 flex items-center justify-center px-6 lg:px-10 pb-28 sm:pb-32">
           <div className="max-w-[1400px] mx-auto w-full">
             <div className="max-w-2xl mx-auto text-center">
               <h1 className="font-serif text-[2.6rem] sm:text-5xl md:text-[4.5rem] lg:text-[5.5rem] leading-[0.9] tracking-[-0.02em] text-white mt-6 sm:mt-10 mb-5 sm:mb-6">
