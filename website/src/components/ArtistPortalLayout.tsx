@@ -53,7 +53,7 @@ export default function ArtistPortalLayout({
   if (!user || userType !== "artist") return null;
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="bg-background flex min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)]">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -138,7 +138,7 @@ export default function ArtistPortalLayout({
       {/* Main content */}
       <div className="flex-1 lg:ml-56 min-w-0">
 
-        <main className="px-4 sm:px-6 lg:px-8 pt-2 pb-6 lg:pb-8">
+        <main className="px-4 sm:px-6 lg:px-8 pt-4 pb-6 lg:pb-8">
           {children}
         </main>
       </div>
