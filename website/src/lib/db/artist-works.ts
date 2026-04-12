@@ -26,15 +26,27 @@ export async function upsertWork(
     .single();
 
   if (existing) {
-    const { error } = await db
+    let { error } = await db
       .from("artist_works")
       .update(row)
       .eq("id", work.id);
+    // Retry without shipping_price if column doesn't exist yet
+    if (error) {
+      const { shipping_price: _, ...rowWithout } = row;
+      const retry = await db.from("artist_works").update(rowWithout).eq("id", work.id);
+      error = retry.error;
+    }
     return { error };
   } else {
-    const { error } = await db
+    let { error } = await db
       .from("artist_works")
       .insert(row);
+    // Retry without shipping_price if column doesn't exist yet
+    if (error) {
+      const { shipping_price: _, ...rowWithout } = row;
+      const retry = await db.from("artist_works").insert(rowWithout);
+      error = retry.error;
+    }
     return { error };
   }
 }
