@@ -219,12 +219,60 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Manage link for active users */}
+      {/* Change Plan — for active subscribers */}
+      {hasSubscription && (
+        <div className="bg-surface border border-border rounded-sm p-6 mb-5">
+          <h2 className="text-base font-medium mb-1">Change Plan</h2>
+          <p className="text-sm text-muted mb-5">Upgrade or downgrade anytime. Changes are prorated automatically.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {(["core", "premium", "pro"] as const).map((p) => {
+              const d = PLAN_DETAILS[p];
+              const isCurrent = p === plan;
+              const isUpgrade = (["core", "premium", "pro"] as const).indexOf(p) > (["core", "premium", "pro"] as const).indexOf(plan as "core" | "premium" | "pro");
+              return (
+                <div key={p} className={`border rounded-sm p-5 flex flex-col ${isCurrent ? "border-accent bg-accent/5" : "border-border"}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-base font-medium">{d.name}</h3>
+                    {isCurrent && <span className="text-[10px] font-medium text-accent uppercase tracking-wider">Current</span>}
+                  </div>
+                  <p className="text-lg font-semibold mb-0.5">{d.price}</p>
+                  <p className="text-xs text-muted mb-2">{d.fee} platform fee</p>
+                  <ul className="text-xs text-muted space-y-1 mb-4 flex-1">
+                    {p === "core" && <><li>Up to 8 works</li><li>Standard profile</li><li>Basic analytics</li></>}
+                    {p === "premium" && <><li>Up to 20 works</li><li>Featured profile + badge</li><li>Message venues directly</li><li>Full analytics</li></>}
+                    {p === "pro" && <><li>Unlimited works</li><li>Premium profile</li><li>Message venues directly</li><li>Dedicated support</li></>}
+                  </ul>
+                  {isCurrent ? (
+                    <div className="w-full py-2.5 text-sm font-medium text-center text-accent border border-accent/30 rounded-sm">
+                      Current Plan
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSubscribe(p)}
+                      disabled={redirecting}
+                      className={`w-full py-2.5 text-sm font-medium rounded-sm transition-colors cursor-pointer disabled:opacity-50 ${
+                        isUpgrade
+                          ? "bg-accent text-white hover:bg-accent-hover"
+                          : "bg-foreground/10 text-foreground hover:bg-foreground/20"
+                      }`}
+                    >
+                      {redirecting ? "Redirecting..." : isUpgrade ? `Upgrade to ${d.name}` : `Switch to ${d.name}`}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Payment & Invoices */}
       {hasSubscription && (
         <div className="bg-surface border border-border rounded-sm p-6">
           <h2 className="text-base font-medium mb-3">Payment & Invoices</h2>
           <p className="text-sm text-muted mb-4">
-            Manage your payment method, view invoices, and update your subscription through Stripe.
+            Manage your payment method, view invoices, and update billing details through Stripe.
           </p>
           <button
             type="button"
