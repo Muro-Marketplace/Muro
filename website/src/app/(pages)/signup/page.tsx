@@ -34,7 +34,7 @@ const options = [
   },
   {
     label: "Customer",
-    description: "Buy original artwork directly. Track your orders and build your collection.",
+    description: "Buy original artwork directly from independent artists. Track your orders and build your collection.",
     href: "/signup/customer",
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -73,7 +73,7 @@ export default function SignUpPage() {
             <Link
               key={opt.label}
               href={opt.href}
-              className="group block bg-white/95 backdrop-blur-sm rounded-sm p-6 hover:bg-white hover:shadow-lg transition-all duration-200"
+              className="group block bg-white/95 backdrop-blur-sm rounded-sm p-6 hover:bg-white hover:shadow-lg transition-all duration-200 min-h-[88px]"
             >
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center shrink-0 text-accent group-hover:bg-accent group-hover:text-white transition-colors">
