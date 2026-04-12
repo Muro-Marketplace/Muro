@@ -268,6 +268,42 @@ export async function POST(request: Request) {
     }
   }
 
+  // ─── Invoice paid — recover past_due subscriptions ───
+  if (event.type === "invoice.paid") {
+    const invoice = event.data.object as Stripe.Invoice;
+    const customerId = typeof invoice.customer === "string" ? invoice.customer : (invoice.customer as Stripe.Customer)?.id;
+
+    if (customerId) {
+      // Only recover if currently past_due
+      const { data: profile } = await db
+        .from("artist_profiles")
+        .select("subscription_status")
+        .eq("stripe_customer_id", customerId)
+        .single();
+
+      if (profile?.subscription_status === "past_due") {
+        const { error } = await db
+          .from("artist_profiles")
+          .update({ subscription_status: "active" })
+          .eq("stripe_customer_id", customerId);
+
+        if (error) console.error("Invoice paid recovery error:", error);
+      }
+    }
+  }
+
+  // ─── Transfer reversed — mark payout as failed ───
+  if (event.type === "transfer.reversed") {
+    const transfer = event.data.object as Stripe.Transfer;
+
+    const { error } = await db
+      .from("stripe_transfers")
+      .update({ status: "failed" })
+      .eq("stripe_transfer_id", transfer.id);
+
+    if (error) console.error("Transfer reversed update error:", error);
+  }
+
   // ─── Connect account onboarding updates ───
   if (event.type === "account.updated") {
     const account = event.data.object as Stripe.Account;
