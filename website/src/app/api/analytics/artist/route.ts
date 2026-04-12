@@ -116,11 +116,28 @@ export async function GET(request: NextRequest) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, counts]) => ({ date, ...counts }));
 
-  // Top works by views
-  const top_works = Object.entries(workViewCounts)
+  // Top works by views — enrich with titles
+  const topWorkIds = Object.entries(workViewCounts)
     .sort(([, a], [, b]) => b - a)
-    .slice(0, 10)
-    .map(([work_id, views]) => ({ work_id, views }));
+    .slice(0, 10);
+
+  let workTitleMap: Record<string, string> = {};
+  if (topWorkIds.length > 0) {
+    const ids = topWorkIds.map(([id]) => id);
+    const { data: works } = await db
+      .from("artist_works")
+      .select("id, title")
+      .in("id", ids);
+    if (works) {
+      workTitleMap = Object.fromEntries(works.map((w) => [w.id, w.title]));
+    }
+  }
+
+  const top_works = topWorkIds.map(([work_id, views]) => ({
+    work_id,
+    title: workTitleMap[work_id] || work_id,
+    views,
+  }));
 
   // Traffic sources
   const traffic_sources = Object.entries(sourceCounts)

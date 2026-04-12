@@ -39,7 +39,7 @@ interface AnalyticsData {
     venue_views: number;
   };
   views_over_time: { date: string; profile_views: number; artwork_views: number; qr_scans: number }[];
-  top_works: { work_id: string; views: number }[];
+  top_works: { work_id: string; title: string; views: number }[];
   traffic_sources: { source: string; count: number }[];
   venue_viewers: { venue_name: string; venue_type: string; viewed_at: string }[] | null;
   venue_viewer_count: number;
@@ -257,10 +257,11 @@ export default function AnalyticsPage() {
             <h2 className="text-base font-medium">Top Performing Works</h2>
           </div>
           <div className="divide-y divide-border">
-            {analytics.top_works.map((work) => (
-              <div key={work.work_id} className="px-6 py-3 flex items-center justify-between">
-                <span className="text-sm text-foreground truncate">{work.work_id}</span>
-                <span className="text-sm text-muted tabular-nums">{work.views} views</span>
+            {analytics.top_works.map((work, i) => (
+              <div key={work.work_id} className="px-6 py-3 flex items-center gap-3">
+                <span className="text-xs text-muted w-5 shrink-0 tabular-nums">{i + 1}.</span>
+                <span className="text-sm text-foreground truncate flex-1">{work.title}</span>
+                <span className="text-sm text-muted tabular-nums shrink-0">{work.views} view{work.views !== 1 ? "s" : ""}</span>
               </div>
             ))}
           </div>
@@ -589,7 +590,22 @@ function ViewsChart({ data }: { data: { date: string; profile_views: number; art
   );
 }
 
-/* ── Earnings Chart (pure SVG, unchanged) ── */
+/* ── Earnings Chart (pure SVG) ── */
+function niceMax(val: number): number {
+  if (val <= 0) return 100;
+  const mag = Math.pow(10, Math.floor(Math.log10(val)));
+  const norm = val / mag;
+  if (norm <= 1) return mag;
+  if (norm <= 2) return 2 * mag;
+  if (norm <= 5) return 5 * mag;
+  return 10 * mag;
+}
+
+function formatPounds(val: number): string {
+  if (val >= 1000) return `£${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+  return `£${val.toLocaleString()}`;
+}
+
 function EarningsChart({ data }: { data: { month: string; earnings: number; sales: number }[] }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -604,9 +620,10 @@ function EarningsChart({ data }: { data: { month: string; earnings: number; sale
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  const maxEarnings = Math.max(...data.map((d) => d.earnings), 100);
+  const rawMax = Math.max(...data.map((d) => d.earnings), 0);
+  const maxEarnings = niceMax(rawMax || 100);
   const chartHeight = 220;
-  const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+  const padding = { top: 20, right: 20, bottom: 30, left: 55 };
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = chartHeight - padding.top - padding.bottom;
   const xStep = data.length > 1 ? innerWidth / (data.length - 1) : innerWidth;
@@ -618,7 +635,9 @@ function EarningsChart({ data }: { data: { month: string; earnings: number; sale
 
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
   const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + innerHeight} L ${points[0].x} ${padding.top + innerHeight} Z`;
-  const yTicks = [0, Math.round(maxEarnings / 2), maxEarnings];
+
+  // 5 evenly spaced ticks for a clean axis
+  const yTicks = [0, maxEarnings * 0.25, maxEarnings * 0.5, maxEarnings * 0.75, maxEarnings];
 
   return (
     <div ref={containerRef} className="w-full">
@@ -629,7 +648,7 @@ function EarningsChart({ data }: { data: { month: string; earnings: number; sale
             <g key={tick}>
               <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#E5E2DD" strokeWidth="0.5" />
               <text x={padding.left - 8} y={y + 4} textAnchor="end" className="fill-muted" fontSize="10">
-                £{tick}
+                {formatPounds(Math.round(tick))}
               </text>
             </g>
           );
@@ -644,9 +663,12 @@ function EarningsChart({ data }: { data: { month: string; earnings: number; sale
               fill={hoveredIndex === i ? "#C17C5A" : "#fff"} stroke="#C17C5A" strokeWidth="2" />
             {hoveredIndex === i && (
               <g>
-                <rect x={p.x - 40} y={p.y - 38} width="80" height="28" rx="4" fill="#1A1A1A" />
-                <text x={p.x} y={p.y - 20} textAnchor="middle" fill="white" fontSize="11" fontWeight="500">
-                  £{data[i].earnings}
+                <rect x={p.x - 55} y={p.y - 48} width="110" height="38" rx="4" fill="#1A1A1A" />
+                <text x={p.x} y={p.y - 28} textAnchor="middle" fill="white" fontSize="12" fontWeight="500">
+                  £{data[i].earnings.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </text>
+                <text x={p.x} y={p.y - 14} textAnchor="middle" fill="#999" fontSize="10">
+                  {data[i].sales} sale{data[i].sales !== 1 ? "s" : ""}
                 </text>
               </g>
             )}
