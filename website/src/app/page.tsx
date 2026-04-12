@@ -199,7 +199,7 @@ export default function Home() {
       <div ref={contentRef} className="bg-background">
 
           {/* ─── FOR VENUES ─── */}
-          <section className="py-20 lg:py-28 bg-surface border-b border-border">
+          <section className="py-12 lg:py-28 bg-surface border-b border-border">
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
               <AnimateIn>
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
@@ -254,7 +254,7 @@ export default function Home() {
           </section>
 
           {/* ─── FOR ARTISTS ─── */}
-          <section className="py-20 lg:py-28">
+          <section className="py-12 lg:py-28">
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
               <AnimateIn>
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
