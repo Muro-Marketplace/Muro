@@ -145,12 +145,12 @@ export default function SpacesLookingForArtPage() {
               onChange={(e) => { setPostcode(e.target.value.toUpperCase()); setPostcodeError(false); }}
               onKeyDown={(e) => { if (e.key === "Enter") handlePostcodeSearch(); }}
               placeholder="ENTER YOUR POSTCODE"
-              className="flex-1 px-5 py-4 bg-white/15 border-2 border-white/30 rounded-sm text-base text-white placeholder:text-white/50 focus:outline-none focus:border-accent focus:bg-white/20 uppercase tracking-wider transition-colors"
+              className="flex-1 px-4 py-3 bg-white border border-white/80 rounded-sm text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent uppercase"
             />
             <button
               onClick={handlePostcodeSearch}
               disabled={searching}
-              className="px-8 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
+              className="px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {searching ? "..." : "Search"}
             </button>
