@@ -801,13 +801,26 @@ export default function BrowsePortfoliosPage() {
                   <div className="flex items-center gap-2">
                     {/* Portfolio/Gallery toggle */}
                     <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5">
-                      <button type="button" onClick={() => setViewAs("artists")} className={`px-3 py-1.5 text-xs rounded-sm transition-colors ${(viewAs as string) === "artists" ? "bg-white text-foreground shadow-sm" : "text-muted"}`}>
+                      <button type="button" onClick={() => setViewAs("artists")} className={`px-2.5 py-1 text-[11px] rounded-sm transition-colors ${(viewAs as string) === "artists" ? "bg-white text-foreground shadow-sm" : "text-muted"}`}>
                         Portfolios
                       </button>
-                      <button type="button" onClick={() => setViewAs("works")} className={`px-3 py-1.5 text-xs rounded-sm transition-colors ${(viewAs as string) === "works" ? "bg-white text-foreground shadow-sm" : "text-muted"}`}>
+                      <button type="button" onClick={() => setViewAs("works")} className={`px-2.5 py-1 text-[11px] rounded-sm transition-colors ${(viewAs as string) === "works" ? "bg-white text-foreground shadow-sm" : "text-muted"}`}>
                         Gallery
                       </button>
                     </div>
+                    {/* Grid toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileGrid(mobileGrid === 1 ? 2 : 1)}
+                      className={`p-2 border rounded-sm transition-colors ${mobileGrid === 2 ? "border-foreground bg-foreground text-white" : "border-border text-muted"}`}
+                      title={mobileGrid === 1 ? "Two columns" : "Single column"}
+                    >
+                      {mobileGrid === 2 ? (
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="0" width="6" height="6" rx="0.5" /><rect x="8" y="0" width="6" height="6" rx="0.5" /><rect x="0" y="8" width="6" height="6" rx="0.5" /><rect x="8" y="8" width="6" height="6" rx="0.5" /></svg>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="0" width="14" height="4" rx="0.5" /><rect x="0" y="5" width="14" height="4" rx="0.5" /><rect x="0" y="10" width="14" height="4" rx="0.5" /></svg>
+                      )}
+                    </button>
                     {/* Filters */}
                     <button
                       type="button"
@@ -1112,15 +1125,26 @@ export default function BrowsePortfoliosPage() {
                   <p className="text-sm text-muted">
                     {filteredGalleryWorks.length} work{filteredGalleryWorks.length !== 1 ? "s" : ""}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarOpen(!sidebarOpen)}
-                    className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-sm text-sm text-foreground hover:bg-surface transition-colors cursor-pointer"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="16" y2="12" /><line x1="4" y1="17" x2="12" y2="17" /></svg>
-                    Filters
-                    {hasGalleryFilters && <span className="text-xs text-white bg-accent rounded-full w-4 h-4 flex items-center justify-center">!</span>}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Portfolio/Gallery toggle */}
+                    <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5">
+                      <button type="button" onClick={() => setViewAs("artists")} className={`px-2.5 py-1 text-[11px] rounded-sm transition-colors ${(viewAs as string) === "artists" ? "bg-white text-foreground shadow-sm" : "text-muted"}`}>
+                        Portfolios
+                      </button>
+                      <button type="button" onClick={() => setViewAs("works")} className={`px-2.5 py-1 text-[11px] rounded-sm transition-colors ${(viewAs as string) === "works" ? "bg-white text-foreground shadow-sm" : "text-muted"}`}>
+                        Gallery
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSidebarOpen(!sidebarOpen)}
+                      className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-sm text-sm text-foreground hover:bg-surface transition-colors cursor-pointer"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="16" y2="12" /><line x1="4" y1="17" x2="12" y2="17" /></svg>
+                      Filters
+                      {hasGalleryFilters && <span className="text-xs text-white bg-accent rounded-full w-4 h-4 flex items-center justify-center">!</span>}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Mobile filter drawer */}

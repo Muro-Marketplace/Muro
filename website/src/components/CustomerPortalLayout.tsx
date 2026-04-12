@@ -82,7 +82,7 @@ export default function CustomerPortalLayout({ children }: { children: React.Rea
       {sidebarOpen && <div className="lg:hidden fixed inset-0 z-20 bg-black/30" onClick={() => setSidebarOpen(false)} />}
 
       <div className="flex-1 lg:ml-56 min-w-0">
-        <div className="px-4 sm:px-6 lg:px-8 pt-6 lg:pt-4 pb-6 lg:pb-8">{children}</div>
+        <div className="px-4 sm:px-6 lg:px-8 pt-2 pb-6 lg:pb-8">{children}</div>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ export default function MessageArtistButton({ artistSlug, artistName, variant = 
   const router = useRouter();
 
   const baseStyles = "inline-flex items-center justify-center font-medium rounded-sm transition-colors min-w-[140px]";
-  const sizeStyles = size === "lg" ? "px-7 py-3.5 text-sm" : "px-5 py-2.5 text-sm";
+  const sizeStyles = size === "lg" ? "px-8 py-3.5 text-sm font-semibold min-w-[200px]" : "px-5 py-2.5 text-sm";
   const variantStyles = variant === "primary"
     ? "bg-foreground text-white hover:bg-foreground/90"
     : "bg-accent text-white hover:bg-accent-hover";
