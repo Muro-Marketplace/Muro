@@ -13,6 +13,7 @@ import { geocodePostcode } from "@/lib/geocode";
 import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
+import SearchBar from "@/components/SearchBar";
 
 /** Haversine great-circle distance in miles */
 function calcDistance(
@@ -649,6 +650,12 @@ export default function BrowsePortfoliosPage() {
                 ? `Browse ${activeCategoryObj.label.toLowerCase()} from curated artists.`
                 : "Explore curated artist profiles. Discover commercial terms, styles, and availability."}
             </p>
+            <div className="mt-5 max-w-lg">
+              <SearchBar variant="dark" mode="desktop" />
+            </div>
+            <div className="mt-4 sm:hidden">
+              <SearchBar variant="dark" mode="mobile" />
+            </div>
           </div>
         </div>
       </section>

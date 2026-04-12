@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CartIndicator from "./CartIndicator";
-import SearchBar from "./SearchBar";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
@@ -198,9 +197,6 @@ export default function Header() {
             ))}
           </nav>
 
-          {/* Desktop Search */}
-          <SearchBar variant={isPortal || !showSolid ? "dark" : "light"} mode="desktop" />
-
           {/* Desktop CTAs */}
           <div className="hidden lg:flex items-center gap-2.5">
             {!authLoading && user ? (
@@ -381,9 +377,8 @@ export default function Header() {
             <CartIndicator className={isPortal || !showSolid ? "text-white" : "text-foreground"} />
           </div>
 
-          {/* Mobile Search + Menu Toggle */}
+          {/* Mobile Menu Toggle */}
           <div className="lg:hidden flex items-center">
-            <SearchBar variant={isPortal || !showSolid ? "dark" : "light"} mode="mobile" />
             <button
               type="button"
               className={`p-2 -mr-2 transition-colors duration-300 ${
