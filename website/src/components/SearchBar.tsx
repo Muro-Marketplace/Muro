@@ -8,6 +8,8 @@ interface SearchBarProps {
   variant: "light" | "dark";
   /** Render only the desktop inline input or only the mobile icon + overlay */
   mode?: "desktop" | "mobile";
+  /** Custom placeholder text */
+  placeholder?: string;
 }
 
 interface ArtistResult {
@@ -62,7 +64,7 @@ function fuzzyMatchWork(
   return words.every((word) => searchableText.includes(word));
 }
 
-export default function SearchBar({ variant, mode }: SearchBarProps) {
+export default function SearchBar({ variant, mode, placeholder: customPlaceholder }: SearchBarProps) {
   const router = useRouter();
   const [artists, setArtists] = useState<Artist[]>([]);
   const [fetched, setFetched] = useState(false);
@@ -437,7 +439,7 @@ export default function SearchBar({ variant, mode }: SearchBarProps) {
               if (query.trim()) setShowDropdown(true);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Search artists..."
+            placeholder={customPlaceholder || "Search artists..."}
             className={`w-full py-1.5 pl-2 pr-2.5 text-sm bg-transparent outline-none placeholder:text-sm ${
               isDark
                 ? "text-white placeholder:text-white/40"

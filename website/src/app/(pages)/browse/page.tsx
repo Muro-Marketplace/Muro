@@ -837,14 +837,14 @@ export default function BrowsePortfoliosPage() {
 
                 {/* Search + count + view toggle – desktop */}
                 <div className="hidden lg:flex items-center justify-between mb-6 gap-4">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-64">
-                      <SearchBar variant="light" mode="desktop" />
+                  <div className="flex items-center gap-3">
+                    <div className="w-56">
+                      <SearchBar variant="light" mode="desktop" placeholder="Search artists..." />
                     </div>
                     <p className="text-sm text-muted whitespace-nowrap">
                       {filteredArtists.length} artist
                       {filteredArtists.length !== 1 ? "s" : ""}
-                      {hasActiveFilters && " matching your filters"}
+                      {hasActiveFilters && " matching"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1195,9 +1195,9 @@ export default function BrowsePortfoliosPage() {
 
                 {/* Search + count + toggle – desktop */}
                 <div className="hidden lg:flex items-center justify-between mb-6 gap-4">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-64">
-                      <SearchBar variant="light" mode="desktop" />
+                  <div className="flex items-center gap-3">
+                    <div className="w-56">
+                      <SearchBar variant="light" mode="desktop" placeholder="Search artworks..." />
                     </div>
                     <p className="text-sm text-muted whitespace-nowrap">
                       {filteredGalleryWorks.length} work{filteredGalleryWorks.length !== 1 ? "s" : ""}
