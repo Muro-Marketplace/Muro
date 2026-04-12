@@ -490,20 +490,20 @@ export default function BrowsePortfoliosPage() {
         <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
           Arrangement
         </p>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <button
             type="button"
             onClick={() => { setFilter("freeLoan", !filters.freeLoan); if (!filters.freeLoan) setFilter("revenueShare", true); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-sm border text-left transition-colors cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.freeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border text-muted hover:border-foreground/30"
             }`}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={`shrink-0 ${filters.freeLoan ? "text-accent" : "text-muted"}`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.freeLoan ? "text-accent" : "text-muted"}`}>
               <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
             </svg>
             <div>
-              <p className="text-xs font-medium">Display</p>
-              <p className="text-[9px] text-muted leading-tight">Free loan or revenue share</p>
+              <p className="text-sm font-medium">Display</p>
+              <p className="text-[10px] text-muted">Free loan or revenue share</p>
             </div>
           </button>
           {filters.freeLoan && (
@@ -525,16 +525,16 @@ export default function BrowsePortfoliosPage() {
           <button
             type="button"
             onClick={() => setFilter("outrightPurchase", !filters.outrightPurchase)}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-sm border text-left transition-colors cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.outrightPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border text-muted hover:border-foreground/30"
             }`}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={`shrink-0 ${filters.outrightPurchase ? "text-accent" : "text-muted"}`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.outrightPurchase ? "text-accent" : "text-muted"}`}>
               <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
             </svg>
             <div>
-              <p className="text-xs font-medium">Purchase</p>
-              <p className="text-[9px] text-muted leading-tight">Buy artwork outright</p>
+              <p className="text-sm font-medium">Purchase</p>
+              <p className="text-[10px] text-muted">Buy artwork outright</p>
             </div>
           </button>
         </div>
