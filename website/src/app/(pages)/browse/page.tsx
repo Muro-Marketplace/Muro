@@ -695,27 +695,8 @@ export default function BrowsePortfoliosPage() {
               Collections
             </button>
 
-            {/* Portfolios / Gallery toggle in same row */}
-            <div className="flex items-center gap-1 ml-auto shrink-0">
-              <button
-                type="button"
-                onClick={() => setViewAs("artists")}
-                className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
-                  viewAs === "artists" ? "bg-foreground text-white border-foreground" : "border-border text-muted"
-                }`}
-              >
-                Portfolios
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewAs("works")}
-                className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
-                  viewAs === "works" ? "bg-foreground text-white border-foreground" : "border-border text-muted"
-                }`}
-              >
-                Gallery
-              </button>
-            </div>
+            {/* spacer so tabs don't stretch full width */}
+            <div className="ml-auto" />
           </div>
         </div>
       </div>
@@ -860,7 +841,16 @@ export default function BrowsePortfoliosPage() {
                     {filteredArtists.length !== 1 ? "s" : ""}
                     {hasActiveFilters && " matching your filters"}
                   </p>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
+                    {/* Portfolio/Gallery toggle */}
+                    <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5 mr-1">
+                      <button type="button" onClick={() => setViewAs("artists")} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${(viewAs as string) === "artists" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
+                        Portfolios
+                      </button>
+                      <button type="button" onClick={() => setViewAs("works")} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${(viewAs as string) === "works" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
+                        Gallery
+                      </button>
+                    </div>
                     {/* Compact / grid icon */}
                     <button
                       type="button"
