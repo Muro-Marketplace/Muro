@@ -116,7 +116,7 @@ export default function SpacesLookingForArtPage() {
       {/* Hero */}
       <section className="pt-24 lg:pt-28 pb-16 lg:pb-20 relative overflow-hidden -mt-14 lg:-mt-16">
         <div className="absolute inset-0">
-          <img src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1920&h=800&fit=crop&crop=center" alt="" className="w-full h-full object-cover" />
+          <img src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1920&h=1200&fit=crop&crop=center" alt="" className="w-full h-full min-h-full object-cover" />
           <div className="absolute inset-0 bg-black/75" />
         </div>
         <div className="max-w-[1000px] mx-auto px-6 text-center relative z-10">
