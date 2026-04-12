@@ -121,7 +121,7 @@ export default function Home() {
               <p className="text-lg sm:text-xl lg:text-2xl text-white/90 font-light leading-snug mb-6 sm:mb-3">
                 The curated art marketplace<br className="sm:hidden" /> for commercial spaces.
               </p>
-              <p className="text-sm sm:text-base lg:text-lg text-white/50 leading-relaxed mb-12 sm:mb-10 max-w-lg mx-auto">
+              <p className="text-sm sm:text-base lg:text-lg text-white/50 leading-relaxed mb-14 sm:mb-10 max-w-lg mx-auto">
                 Venues source original artwork risk-free. Artists access
                 high-intent commercial demand.
               </p>
