@@ -13,7 +13,7 @@ const navLinks = [
   { label: "For Venues", href: "/venues" },
   { label: "For Artists", href: "/artists" },
   { label: "Blog", href: "/blog" },
-  { label: "Spaces", href: "/spaces" },
+  { label: "Spaces", href: "/spaces-looking-for-art" },
   { label: "Waitlist", href: "/waitlist" },
 ];
 

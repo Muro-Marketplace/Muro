@@ -182,34 +182,32 @@ export default function SpacesLookingForArtPage() {
         </div>
       </section>
 
-      {/* Stats */}
-      {stats && (
-        <section className="border-b border-border">
-          <div className="max-w-[1200px] mx-auto px-6 py-4">
-            <div className="flex items-center justify-center gap-6 sm:gap-10 text-sm">
-              <div className="text-center">
-                <p className="text-2xl font-serif text-foreground">{stats.total}</p>
-                <p className="text-xs text-muted">Venues</p>
-              </div>
-              <div className="w-px h-8 bg-border" />
-              <div className="text-center">
-                <p className="text-2xl font-serif text-foreground">{stats.openToDisplay}</p>
-                <p className="text-xs text-muted">Open to Display</p>
-              </div>
-              <div className="w-px h-8 bg-border" />
-              <div className="text-center">
-                <p className="text-2xl font-serif text-foreground">{stats.openToRevenueShare}</p>
-                <p className="text-xs text-muted">Revenue Share</p>
-              </div>
-              <div className="w-px h-8 bg-border" />
-              <div className="text-center">
-                <p className="text-2xl font-serif text-foreground">{stats.openToPurchase}</p>
-                <p className="text-xs text-muted">Looking to Buy</p>
-              </div>
+      {/* Stats — computed from filtered results */}
+      <section className="border-b border-border">
+        <div className="max-w-[1200px] mx-auto px-6 py-4">
+          <div className="flex items-center justify-center gap-6 sm:gap-10 text-sm">
+            <div className="text-center">
+              <p className="text-2xl font-serif text-foreground">{filtered.length}</p>
+              <p className="text-xs text-muted">Venues</p>
+            </div>
+            <div className="w-px h-8 bg-border" />
+            <div className="text-center">
+              <p className="text-2xl font-serif text-foreground">{filtered.filter((v) => v.interestedInFreeLoan || v.interestedInRevenueShare).length}</p>
+              <p className="text-xs text-muted">Open to Display</p>
+            </div>
+            <div className="w-px h-8 bg-border" />
+            <div className="text-center">
+              <p className="text-2xl font-serif text-foreground">{filtered.filter((v) => v.interestedInRevenueShare).length}</p>
+              <p className="text-xs text-muted">Revenue Share</p>
+            </div>
+            <div className="w-px h-8 bg-border" />
+            <div className="text-center">
+              <p className="text-2xl font-serif text-foreground">{filtered.filter((v) => v.interestedInDirectPurchase).length}</p>
+              <p className="text-xs text-muted">Looking to Buy</p>
             </div>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* Filters */}
       <section className="border-b border-border bg-[#FAF8F5]">
