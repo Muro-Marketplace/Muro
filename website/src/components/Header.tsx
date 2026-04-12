@@ -16,7 +16,7 @@ const navLinks = [
   { label: "Waitlist", href: "/waitlist" },
 ];
 
-const immersiveRoutes = ["/venues", "/artists", "/browse", "/about", "/how-it-works"];
+const immersiveRoutes = ["/", "/venues", "/artists", "/browse", "/about", "/how-it-works"];
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
