@@ -50,7 +50,7 @@ export default function Home() {
   return (
     <div className="relative">
       {/* ─── HERO ─── full screen with transparent nav */}
-      <section className="relative min-h-[110vh] sm:min-h-screen flex flex-col">
+      <section className="relative min-h-[105vh] sm:min-h-screen flex flex-col">
         {/* Hero background image – scoped to hero only */}
         <div className="absolute inset-0 -z-10">
           <Image
@@ -143,8 +143,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Scroll indicator + trust bar – anchored to bottom of hero */}
-        <div className="relative z-10 mt-auto">
+        {/* Scroll indicator + trust bar – anchored to bottom, pushed up on mobile */}
+        <div className="relative z-10 mt-auto mb-[12vh] sm:mb-0">
           {/* Scroll to see more */}
           <button
             onClick={scrollToContent}
