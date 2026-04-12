@@ -358,10 +358,10 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Placement Status Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
         {placementSummary.map((item) => (
-          <div key={item.label} className="bg-surface border border-border rounded-sm p-5 flex items-center gap-4">
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${item.color}`}>{item.label}</span>
+          <div key={item.label} className="bg-surface border border-border rounded-sm p-4 sm:p-5 flex items-center gap-3">
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${item.color}`}>{item.label}</span>
             <p className="text-2xl font-medium">{item.count}</p>
           </div>
         ))}
