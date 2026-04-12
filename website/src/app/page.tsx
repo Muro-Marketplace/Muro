@@ -115,13 +115,13 @@ export default function Home() {
         <div className="flex-1 flex items-center justify-center px-6 lg:px-10 pb-28 sm:pb-32">
           <div className="max-w-[1400px] mx-auto w-full">
             <div className="max-w-2xl mx-auto text-center">
-              <h1 className="font-serif text-[2.6rem] sm:text-5xl md:text-[4.5rem] lg:text-[5.5rem] leading-[0.9] tracking-[-0.02em] text-white mt-6 sm:mt-10 mb-5 sm:mb-6">
+              <h1 className="font-serif text-[2.6rem] sm:text-5xl md:text-[4.5rem] lg:text-[5.5rem] leading-[0.9] tracking-[-0.02em] text-white mt-6 sm:mt-10 mb-7 sm:mb-6">
                 WALLPLACE
               </h1>
-              <p className="text-lg sm:text-xl lg:text-2xl text-white/90 font-light leading-snug mb-4 sm:mb-3">
+              <p className="text-lg sm:text-xl lg:text-2xl text-white/90 font-light leading-snug mb-5 sm:mb-3">
                 The curated art marketplace<br className="sm:hidden" /> for commercial spaces.
               </p>
-              <p className="text-sm sm:text-base lg:text-lg text-white/50 leading-relaxed mb-9 sm:mb-10 max-w-lg mx-auto">
+              <p className="text-sm sm:text-base lg:text-lg text-white/50 leading-relaxed mb-10 sm:mb-10 max-w-lg mx-auto">
                 Venues source original artwork risk-free. Artists access
                 high-intent commercial demand.
               </p>
@@ -144,7 +144,7 @@ export default function Home() {
         </div>
 
         {/* Scroll indicator + trust bar – anchored to bottom, pushed up on mobile */}
-        <div className="relative z-10 mt-auto mb-[10vh] sm:mb-0">
+        <div className="relative z-10 mt-auto mb-[13vh] sm:mb-0">
           {/* Scroll to see more */}
           <button
             onClick={scrollToContent}
