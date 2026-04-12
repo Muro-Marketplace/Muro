@@ -526,41 +526,55 @@ export default function BrowsePortfoliosPage() {
       {/* Commercial Terms */}
       <div>
         <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
-          Commercial Terms
+          Arrangement
         </p>
-        <div className="space-y-2.5">
-          <CheckPill
-            label="Display"
-            checked={filters.freeLoan}
-            onChange={(v) => { setFilter("freeLoan", v); if (v) setFilter("revenueShare", true); }}
-          />
-          <div className="flex items-center gap-1.5 pl-6">
-              <span className="text-xs text-muted">Min Revenue Share</span>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => { setFilter("freeLoan", !filters.freeLoan); if (!filters.freeLoan) setFilter("revenueShare", true); }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
+              filters.freeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border text-muted hover:border-foreground/30"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.freeLoan ? "text-accent" : "text-muted"}>
+              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium">Display</p>
+              <p className="text-[10px] text-muted">Free loan or revenue share</p>
+            </div>
+          </button>
+          {filters.freeLoan && (
+            <div className="flex items-center gap-2 pl-3 py-1">
+              <span className="text-[11px] text-muted">Min rev share</span>
               <input
                 type="text"
                 inputMode="numeric"
                 defaultValue=""
                 ref={(el) => { if (el && filters.revenueShareMin > 0 && !el.dataset.init) { el.value = String(filters.revenueShareMin); el.dataset.init = "1"; } }}
-                onBlur={(e) => {
-                  const val = Number(e.target.value) || 0;
-                  setFilter("revenueShareMin", val);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const val = Number((e.target as HTMLInputElement).value) || 0;
-                    setFilter("revenueShareMin", val);
-                  }
-                }}
-                placeholder="e.g. 10"
-                className="w-16 px-2 py-1.5 bg-surface border border-border rounded-sm text-sm text-foreground text-center focus:outline-none focus:border-accent/50"
+                onBlur={(e) => { setFilter("revenueShareMin", Number(e.target.value) || 0); }}
+                onKeyDown={(e) => { if (e.key === "Enter") setFilter("revenueShareMin", Number((e.target as HTMLInputElement).value) || 0); }}
+                placeholder="Any"
+                className="w-14 px-2 py-1 bg-surface border border-border rounded-sm text-xs text-foreground text-center focus:outline-none focus:border-accent/50"
               />
-              <span className="text-xs text-muted">%</span>
-          </div>
-          <CheckPill
-            label="Purchase"
-            checked={filters.outrightPurchase}
-            onChange={(v) => setFilter("outrightPurchase", v)}
-          />
+              <span className="text-[11px] text-muted">%</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setFilter("outrightPurchase", !filters.outrightPurchase)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
+              filters.outrightPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border text-muted hover:border-foreground/30"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.outrightPurchase ? "text-accent" : "text-muted"}>
+              <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium">Purchase</p>
+              <p className="text-[10px] text-muted">Buy artwork outright</p>
+            </div>
+          </button>
         </div>
       </div>
 
