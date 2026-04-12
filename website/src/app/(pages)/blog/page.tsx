@@ -12,8 +12,17 @@ export default function BlogPage() {
   return (
     <div className="bg-background">
       {/* Hero */}
-      <section className="py-16 lg:py-20 bg-foreground">
-        <div className="max-w-[1000px] mx-auto px-6 text-center">
+      <section className="relative py-16 lg:py-20 overflow-hidden">
+        <div className="absolute inset-0 -z-10">
+          <Image
+            src="https://images.unsplash.com/photo-1455390582262-044cdead277a?w=1920&h=600&fit=crop&crop=center"
+            alt=""
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-foreground/85" />
+        </div>
+        <div className="max-w-[1000px] mx-auto px-6 text-center relative z-10">
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Blog</p>
           <h1 className="font-serif text-4xl lg:text-5xl text-white mb-4">Insights & Stories</h1>
           <p className="text-lg text-white/50 max-w-lg mx-auto">
