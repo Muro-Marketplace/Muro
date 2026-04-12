@@ -404,6 +404,8 @@ export default function ProfileEditorPage() {
           </div>
         </div>
 
+
+
         {/* 4. Style & Themes */}
         <div className={sectionClass}>
           <h2 className="text-lg font-medium mb-5">Style & Themes</h2>

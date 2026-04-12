@@ -151,6 +151,7 @@ export default function ApplicationForm() {
   const [error, setError] = useState("");
   const [agreedToTos, setAgreedToTos] = useState(false);
   const [agreedToArtistTerms, setAgreedToArtistTerms] = useState(false);
+  const [acknowledgedInsurance, setAcknowledgedInsurance] = useState(false);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -636,13 +637,24 @@ export default function ApplicationForm() {
           checked={agreedToArtistTerms}
           onChange={setAgreedToArtistTerms}
         />
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={acknowledgedInsurance}
+            onChange={(e) => setAcknowledgedInsurance(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded-sm border border-border bg-background checked:bg-accent checked:border-accent focus:outline-none cursor-pointer shrink-0"
+          />
+          <span className="text-sm text-foreground">
+            I understand that I am responsible for insuring my own artwork, including during transit and while on display in venues. Wallplace does not provide artwork insurance.
+          </span>
+        </label>
       </div>
 
       {/* Submit */}
       <div className="pt-2">
         <button
           type="submit"
-          disabled={submitting || !agreedToTos || !agreedToArtistTerms}
+          disabled={submitting || !agreedToTos || !agreedToArtistTerms || !acknowledgedInsurance}
           className="px-8 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitting ? "Submitting..." : "Submit Application"}

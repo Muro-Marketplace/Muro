@@ -30,6 +30,8 @@ const footerColumns = [
       { label: "Venue Agreement", href: "/venue-agreement" },
       { label: "Privacy", href: "/privacy" },
       { label: "Cookies", href: "/cookies" },
+      { label: "Returns & Refunds", href: "/returns" },
+      { label: "IP Policy", href: "/ip-policy" },
     ],
   },
 ];

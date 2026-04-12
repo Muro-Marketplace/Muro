@@ -89,6 +89,7 @@ export default function RegisterVenuePage() {
   const [error, setError] = useState("");
   const [agreedToTos, setAgreedToTos] = useState(false);
   const [agreedToVenueTerms, setAgreedToVenueTerms] = useState(false);
+  const [acknowledgedInsurance, setAcknowledgedInsurance] = useState(false);
 
   function updateField(field: keyof VenueFormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -401,13 +402,24 @@ export default function RegisterVenuePage() {
                   checked={agreedToVenueTerms}
                   onChange={setAgreedToVenueTerms}
                 />
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={acknowledgedInsurance}
+                    onChange={(e) => setAcknowledgedInsurance(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded-sm border border-border bg-background checked:bg-accent checked:border-accent focus:outline-none cursor-pointer shrink-0"
+                  />
+                  <span className="text-sm text-foreground">
+                    I confirm that my venue holds appropriate public liability insurance and I understand that the venue is liable for damage to artwork caused by negligence.
+                  </span>
+                </label>
               </div>
 
               {/* Submit */}
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={submitting || !agreedToTos || !agreedToVenueTerms}
+                  disabled={submitting || !agreedToTos || !agreedToVenueTerms || !acknowledgedInsurance}
                   className="px-8 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? "Registering..." : "Register Your Venue"}

@@ -140,8 +140,42 @@ export default function TermsPage() {
               <div>
                 <h2 className="text-2xl mb-4">11. Dispute Resolution</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
-                  <p>Users are encouraged to resolve disputes directly with the other party. Wallplace may assist as a facilitator if contacted at <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a>, but Wallplace is not an arbitrator and is not liable for the outcome of any dispute.</p>
-                  <p>Nothing in these terms affects your statutory consumer rights.</p>
+                  <p>Wallplace encourages all parties to resolve disputes directly. Where this is not possible, the following process applies:</p>
+
+                  <div className="space-y-4 mt-4">
+                    <div>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 1 &mdash; Raise a Dispute</h3>
+                      <p>Contact <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a> with your order number, the nature of the dispute, and any supporting evidence (photographs, messages, tracking information). You may also raise a dispute through your account dashboard.</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 2 &mdash; Acknowledgement</h3>
+                      <p>Wallplace will acknowledge your dispute within 2 business days and assign a case reference.</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 3 &mdash; Investigation</h3>
+                      <p>We will review the available evidence, contact the other party, and request any additional information needed. We aim to complete our investigation within 10 business days.</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 4 &mdash; Resolution</h3>
+                      <p>Wallplace will propose a resolution, which may include a full or partial refund, replacement, or other remedy. Both parties will be notified of the outcome.</p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 5 &mdash; Escalation</h3>
+                      <p className="mb-2">If you are not satisfied with the resolution, you may:</p>
+                      <ul className="list-disc pl-6 space-y-1">
+                        <li>Request a senior review within 14 days of the decision</li>
+                        <li>Contact Citizens Advice (<a href="https://www.citizensadvice.org.uk" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">citizensadvice.org.uk</a>) for independent guidance</li>
+                        <li>Use the UK&rsquo;s Online Dispute Resolution platform (<a href="https://ec.europa.eu/odr" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">ec.europa.eu/odr</a>) for cross-border disputes</li>
+                        <li>Take legal action through the courts of England and Wales</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <p>Wallplace acts as a facilitator, not an arbitrator. Nothing in this section affects your statutory consumer rights under the Consumer Rights Act 2015 or the Consumer Contracts Regulations 2013.</p>
                 </div>
               </div>
 
