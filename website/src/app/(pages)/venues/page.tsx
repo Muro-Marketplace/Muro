@@ -196,10 +196,10 @@ export default function VenuesPage() {
               Art goes on your wall at zero cost &mdash; and if a visitor buys via the QR label, you earn a share.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <Button href="/browse" size="lg" variant="accent">
+              <a href="/browse" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors">
                 DISCOVER ART
-              </Button>
-              <a href="/register-venue" className="inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-3.5 text-sm font-semibold tracking-wider uppercase bg-white text-foreground rounded-sm hover:bg-white/90 transition-colors">
+              </a>
+              <a href="/register-venue" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white text-foreground rounded-sm hover:bg-white/90 transition-colors">
                 REGISTER YOUR VENUE
               </a>
             </div>
@@ -300,10 +300,10 @@ export default function VenuesPage() {
             Total time to get started: under 5 minutes.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button href="/browse" size="lg" variant="accent">
+            <a href="/browse" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors">
               DISCOVER ART
-            </Button>
-            <a href="/register-venue" className="inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-3.5 text-sm font-semibold tracking-wider uppercase border border-white/30 text-white rounded-sm hover:bg-white/10 transition-colors">
+            </a>
+            <a href="/register-venue" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase border border-white/30 text-white rounded-sm hover:bg-white/10 transition-colors">
               REGISTER YOUR VENUE
             </a>
           </div>
@@ -369,10 +369,10 @@ export default function VenuesPage() {
             No curation fee. No contract.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/browse" className="inline-flex items-center justify-center px-8 py-3 text-sm font-semibold tracking-wider bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors">
+            <Link href="/browse" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors">
               DISCOVER ART
             </Link>
-            <Link href="/register-venue" className="inline-flex items-center justify-center px-8 py-3 text-sm font-semibold tracking-wider bg-white text-foreground rounded-sm hover:bg-white/90 transition-colors">
+            <Link href="/register-venue" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white text-foreground rounded-sm hover:bg-white/90 transition-colors">
               REGISTER YOUR VENUE
             </Link>
           </div>

@@ -492,7 +492,7 @@ export default function Home() {
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Venues</p>
                   <h3 className="font-serif text-xl mb-3">Source artwork risk-free</h3>
                   <p className="text-sm text-muted mb-6 flex-1">Free to browse and enquire. No contracts.</p>
-                  <Link href="/register-venue" className="inline-flex items-center justify-center w-full px-6 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                  <Link href="/register-venue" className="inline-flex items-center justify-center w-full px-4 py-3.5 bg-accent text-white text-xs font-semibold tracking-wide uppercase rounded-sm hover:bg-accent-hover transition-colors whitespace-nowrap">
                     Register Your Venue
                   </Link>
                 </div>
@@ -500,7 +500,7 @@ export default function Home() {
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Artists</p>
                   <h3 className="font-serif text-xl mb-3">Get discovered by venues</h3>
                   <p className="text-sm text-muted mb-6 flex-1">First month free. From &pound;9.99/month.</p>
-                  <Link href="/apply" className="inline-flex items-center justify-center w-full px-6 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors">
+                  <Link href="/apply" className="inline-flex items-center justify-center w-full px-4 py-3.5 bg-foreground text-white text-xs font-semibold tracking-wide uppercase rounded-sm hover:bg-foreground/90 transition-colors whitespace-nowrap">
                     Apply to Join
                   </Link>
                 </div>
@@ -508,7 +508,7 @@ export default function Home() {
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Customers</p>
                   <h3 className="font-serif text-xl mb-3">Buy original artwork</h3>
                   <p className="text-sm text-muted mb-6 flex-1">Browse and buy directly from independent artists.</p>
-                  <Link href="/signup/customer" className="inline-flex items-center justify-center w-full px-6 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                  <Link href="/signup/customer" className="inline-flex items-center justify-center w-full px-4 py-3.5 border border-border text-foreground text-xs font-semibold tracking-wide uppercase rounded-sm hover:bg-background transition-colors whitespace-nowrap">
                     Sign Up
                   </Link>
                 </div>
