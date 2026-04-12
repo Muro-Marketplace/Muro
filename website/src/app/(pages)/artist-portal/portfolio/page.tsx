@@ -22,6 +22,7 @@ interface WorkFormState {
   available: boolean;
   orientation: "portrait" | "landscape" | "square";
   sizes: SizeEntry[];
+  shippingPrice: string;
 }
 
 const defaultSizes: SizeEntry[] = [
@@ -36,6 +37,7 @@ const emptyWork: WorkFormState = {
   available: true,
   orientation: "landscape",
   sizes: [...defaultSizes],
+  shippingPrice: "",
 };
 
 const statusColors: Record<string, string> = {
@@ -56,11 +58,22 @@ export default function PortfolioPage() {
   const [initialised, setInitialised] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formError, setFormError] = useState("");
+  const [defaultShipping, setDefaultShipping] = useState<string>("");
+  const [savingDefault, setSavingDefault] = useState(false);
 
   useEffect(() => {
     if (!artist || initialised) return;
     setWorks([...artist.works]);
     setInitialised(true);
+    // Fetch default shipping price
+    authFetch("/api/artist-profile")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.profile?.default_shipping_price != null) {
+          setDefaultShipping(String(data.profile.default_shipping_price));
+        }
+      })
+      .catch(() => {});
   }, [artist, initialised]);
 
   if (artistLoading || !artist) {
@@ -90,6 +103,7 @@ export default function PortfolioPage() {
           image: work.image,
           orientation: work.orientation || "landscape",
           sortOrder: index,
+          shippingPrice: (work as ArtistWork & { shippingPrice?: number }).shippingPrice ?? null,
         }),
       }).catch((err) => console.error("Work sync error:", err));
     });
@@ -110,7 +124,7 @@ export default function PortfolioPage() {
   }
 
   function openEdit(index: number) {
-    const w = works[index];
+    const w = works[index] as ArtistWork & { shippingPrice?: number };
     setForm({
       title: w.title,
       medium: w.medium,
@@ -119,6 +133,7 @@ export default function PortfolioPage() {
       available: w.available,
       orientation: w.orientation || "landscape",
       sizes: w.pricing.map((p) => ({ label: p.label, price: p.price })),
+      shippingPrice: w.shippingPrice != null ? String(w.shippingPrice) : "",
     });
     setEditingIndex(index);
     setShowForm(true);
@@ -176,7 +191,9 @@ export default function PortfolioPage() {
 
     const lowestPrice = Math.min(...validSizes.map((s) => s.price));
 
-    const newWork: ArtistWork = {
+    const shippingVal = form.shippingPrice.trim() ? parseFloat(form.shippingPrice) : undefined;
+
+    const newWork: ArtistWork & { shippingPrice?: number } = {
       id: editingIndex !== null ? works[editingIndex].id : `${artist!.slug}-${Date.now()}`,
       title: form.title,
       medium: form.medium,
@@ -187,6 +204,7 @@ export default function PortfolioPage() {
       color: "#C17C5A",
       image: form.imagePreview || "https://picsum.photos/seed/new-work/900/600",
       orientation: form.orientation,
+      ...(shippingVal != null && !isNaN(shippingVal) ? { shippingPrice: shippingVal } : {}),
     };
 
     let updated: ArtistWork[];
@@ -234,6 +252,43 @@ export default function PortfolioPage() {
               </div>
             );
           })()}
+        </div>
+      </div>
+
+      {/* Default Shipping Price */}
+      <div className="bg-surface border border-border rounded-sm p-5 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium mb-0.5">Default Shipping Price</h2>
+            <p className="text-xs text-muted">Applied to all works unless overridden per work. System default is £9.95.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted">&pound;</span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={defaultShipping}
+              onChange={(e) => setDefaultShipping(e.target.value)}
+              placeholder="9.95"
+              className="w-24 bg-background border border-border rounded-sm px-3 py-2 text-sm text-foreground text-right focus:outline-none focus:border-accent/60"
+            />
+            <button
+              onClick={async () => {
+                setSavingDefault(true);
+                const val = defaultShipping.trim() ? parseFloat(defaultShipping) : null;
+                await authFetch("/api/artist-profile", {
+                  method: "PUT",
+                  body: JSON.stringify({ default_shipping_price: val }),
+                }).catch(() => {});
+                setSavingDefault(false);
+              }}
+              disabled={savingDefault}
+              className="px-3 py-2 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-50"
+            >
+              {savingDefault ? "Saving..." : "Save"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -379,6 +434,26 @@ export default function PortfolioPage() {
                 ))}
               </div>
               <p className="text-[10px] text-muted mt-2">Add each size you offer with its price. Venues and buyers will choose from these options.</p>
+            </div>
+
+            {/* Shipping price */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Shipping Price</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted">&pound;</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.shippingPrice}
+                  onChange={(e) => setForm((p) => ({ ...p, shippingPrice: e.target.value }))}
+                  placeholder={defaultShipping || "9.95"}
+                  className="w-32 bg-background border border-border rounded-sm px-3 py-3 text-sm text-foreground text-right focus:outline-none focus:border-accent/60"
+                />
+              </div>
+              <p className="text-[10px] text-muted mt-1.5">
+                Leave blank to use your default ({defaultShipping ? `£${parseFloat(defaultShipping).toFixed(2)}` : "£9.95"}). Set to 0 for free shipping.
+              </p>
             </div>
 
             {/* Available toggle */}

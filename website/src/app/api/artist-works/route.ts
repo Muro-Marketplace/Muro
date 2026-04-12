@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, title, medium, dimensions, priceBand, pricing, available, color, image, orientation, sortOrder } = body;
+    const { id, title, medium, dimensions, priceBand, pricing, available, color, image, orientation, sortOrder, shippingPrice } = body;
 
     if (!id || !title || !image) {
       return NextResponse.json({ error: "ID, title, and image are required" }, { status: 400 });
@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       image,
       orientation: orientation || "landscape",
       sort_order: sortOrder ?? 0,
+      shipping_price: shippingPrice ?? null,
     });
 
     if (error) {
