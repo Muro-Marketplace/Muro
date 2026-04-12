@@ -13,6 +13,7 @@ export default function CartIndicator({ className = "" }: { className?: string }
       href="/checkout"
       className={`relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-black/5 transition-colors ${className}`}
       title="View cart"
+      aria-label={`Shopping cart: ${itemCount} item${itemCount !== 1 ? "s" : ""}`}
     >
       <svg
         width="20"

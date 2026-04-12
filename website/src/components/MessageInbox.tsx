@@ -64,6 +64,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const [messages, setMessages] = useState<Message[]>([]);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -172,6 +173,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   async function handleSendReply() {
     if (!reply.trim() || !selectedConv || !selectedConvData) return;
     setSending(true);
+    setSendError(null);
     try {
       const res = await authFetch("/api/messages", {
         method: "POST",
@@ -186,7 +188,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        console.error("Send failed:", errData.error || res.status);
+        setSendError(errData.error || "Failed to send message");
         setSending(false);
         return;
       }
@@ -216,6 +218,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   async function handleSendNewMessage() {
     if (!composeMessage.trim() || !composeRecipient) return;
     setSending(true);
+    setSendError(null);
     try {
       const res = await authFetch("/api/messages", {
         method: "POST",
@@ -229,7 +232,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       });
       const data = await res.json();
       if (!res.ok) {
-        console.error("Send message error:", data.error);
+        setSendError(data.error || "Failed to send message");
       } else if (data.conversationId) {
         await loadConversations();
         setSelectedConv(data.conversationId);
@@ -502,12 +505,26 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
               </div>
             </div>
             <div className="px-4 py-3 border-t border-border shadow-[0_-1px_3px_rgba(0,0,0,0.03)]">
+              {sendError && (
+                <div className="mb-2 flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-red-500 shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                  <p className="text-xs text-red-600 flex-1">{sendError}</p>
+                  <button onClick={() => setSendError(null)} className="text-red-400 hover:text-red-600">
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+                  </button>
+                </div>
+              )}
               <div className="flex gap-2">
-                <input type="text" value={composeMessage} onChange={(e) => setComposeMessage(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendNewMessage(); } }} placeholder="Type your first message..." className="flex-1 px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" autoFocus />
-                <button onClick={handleSendNewMessage} disabled={!composeMessage.trim() || sending} className="px-4 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-40">
+                <input type="text" value={composeMessage} onChange={(e) => { setComposeMessage(e.target.value); if (sendError) setSendError(null); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendNewMessage(); } }} maxLength={5000} placeholder="Type your first message..." className="flex-1 px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" autoFocus />
+                <button onClick={handleSendNewMessage} disabled={!composeMessage.trim() || sending || composeMessage.length > 5000} className="px-4 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-40">
                   {sending ? "..." : "Send"}
                 </button>
               </div>
+              {composeMessage.length > 0 && (
+                <p className={`text-[10px] mt-1 text-right ${composeMessage.length > 4800 ? (composeMessage.length > 5000 ? "text-red-500" : "text-amber-500") : "text-muted"}`}>
+                  {(5000 - composeMessage.length).toLocaleString()} characters remaining
+                </p>
+              )}
             </div>
           </>
         ) : !selectedConv ? (
@@ -691,12 +708,26 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
 
             {/* Reply input */}
             <div className="px-4 py-3 border-t border-border shadow-[0_-1px_3px_rgba(0,0,0,0.03)]">
+              {sendError && (
+                <div className="mb-2 flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-red-500 shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                  <p className="text-xs text-red-600 flex-1">{sendError}</p>
+                  <button onClick={() => setSendError(null)} className="text-red-400 hover:text-red-600">
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+                  </button>
+                </div>
+              )}
               <div className="flex gap-2">
-                <input type="text" value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }} placeholder="Type a message..." className="flex-1 px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
-                <button onClick={handleSendReply} disabled={!reply.trim() || sending} className="px-4 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-40">
+                <input type="text" value={reply} onChange={(e) => { setReply(e.target.value); if (sendError) setSendError(null); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }} maxLength={5000} placeholder="Type a message..." className="flex-1 px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
+                <button onClick={handleSendReply} disabled={!reply.trim() || sending || reply.length > 5000} className="px-4 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-40">
                   {sending ? "..." : "Send"}
                 </button>
               </div>
+              {reply.length > 0 && (
+                <p className={`text-[10px] mt-1 text-right ${reply.length > 4800 ? (reply.length > 5000 ? "text-red-500" : "text-amber-500") : "text-muted"}`}>
+                  {(5000 - reply.length).toLocaleString()} characters remaining
+                </p>
+              )}
             </div>
           </>
         )}

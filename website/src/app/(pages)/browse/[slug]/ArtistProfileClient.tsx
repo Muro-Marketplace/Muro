@@ -283,7 +283,7 @@ export default function ArtistProfileClient({
             >
               <Image
                 src={currentWork.image}
-                alt={currentWork.title}
+                alt={`${currentWork.title} — ${currentWork.medium}`}
                 fill
                 className="object-contain pointer-events-none p-4 select-none"
                 sizes="(max-width: 640px) 100vw, 800px"

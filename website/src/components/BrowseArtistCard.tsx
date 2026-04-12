@@ -64,7 +64,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             >
               <Image
                 src={src}
-                alt={`Artwork by ${artist.name}`}
+                alt={`${artist.works[index]?.title || "Artwork"} by ${artist.name}`}
                 fill
                 className="object-cover"
                 sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"

@@ -79,11 +79,26 @@ function formatName(raw: string): string {
     .join(" ");
 }
 
+interface OnboardingItem {
+  key: string;
+  label: string;
+  complete: boolean;
+  href: string;
+}
+
 export default function ArtistPortalPage() {
   const { displayName } = useAuth();
   const [stats, setStats] = useState({ placements: 0, sales: "£0", enquiries: 0, views: 0 });
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>("none");
+  const [onboardingItems, setOnboardingItems] = useState<OnboardingItem[]>([]);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(true);
+
+  useEffect(() => {
+    // Check if onboarding was previously dismissed
+    const dismissed = typeof window !== "undefined" && localStorage.getItem("wallplace-onboarding-complete") === "true";
+    setOnboardingDismissed(dismissed);
+  }, []);
 
   useEffect(() => {
     // Single API call for entire dashboard
@@ -101,34 +116,71 @@ export default function ArtistPortalPage() {
         });
       }
 
-      // Build activity from dashboard data
-      const items: ActivityItem[] = [];
+      // Build onboarding checklist
+      const profile = data.profile || {};
       const placements = data.placements || [];
+      const worksCount = data.worksCount ?? 0;
+
+      const hasBio = !!(profile.short_bio || profile.extended_bio);
+      const hasLocation = !!profile.location;
+      const hasStyleTag = Array.isArray(profile.style_tags) && profile.style_tags.length > 0;
+      const profileComplete = hasBio && hasLocation && hasStyleTag;
+
+      const items: OnboardingItem[] = [
+        { key: "profile",  label: "Complete your profile",   complete: profileComplete,                                  href: "/artist-portal/profile" },
+        { key: "work",     label: "Upload your first work",  complete: worksCount > 0,                                   href: "/artist-portal/portfolio" },
+        { key: "shipping", label: "Set your shipping price",  complete: profile.default_shipping_price != null,           href: "/artist-portal/portfolio" },
+        { key: "payouts",  label: "Set up payouts",          complete: !!profile.stripe_connect_account_id,              href: "/artist-portal/billing" },
+        { key: "placement",label: "Get your first placement", complete: placements.some((p: { status: string }) => p.status === "active"), href: "/artist-portal/placements" },
+      ];
+      setOnboardingItems(items);
+
+      // If all items are complete, auto-dismiss after a brief moment
+      if (items.every((i) => i.complete) && typeof window !== "undefined") {
+        setTimeout(() => {
+          localStorage.setItem("wallplace-onboarding-complete", "true");
+          setOnboardingDismissed(true);
+        }, 3000);
+      }
+
+      // Build activity from dashboard data
+      const activityItems: ActivityItem[] = [];
       const conversations = data.conversations || [];
 
       for (const p of placements.slice(0, 10)) {
         const time = p.responded_at || p.created_at;
         const venueName = formatName(p.venue);
         if (p.status === "pending") {
-          items.push({ id: "p-" + p.id, text: `Placement request: ${p.work_title || "Artwork"} — ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement" });
+          activityItems.push({ id: "p-" + p.id, text: `Placement request: ${p.work_title || "Artwork"} — ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement" });
         } else if (p.status === "active") {
-          items.push({ id: "pa-" + p.id, text: `Placement accepted: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement" });
+          activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement" });
         } else if (p.status === "declined") {
-          items.push({ id: "pd-" + p.id, text: `Placement declined: ${p.work_title || "Artwork"}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement" });
+          activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${p.work_title || "Artwork"}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement" });
         }
       }
 
       for (const c of conversations) {
         const name = formatName(c.otherParty);
         const preview = c.latestMessage?.slice(0, 50) || "";
-        items.push({ id: "m-" + c.conversationId, text: `${name}: "${preview}${c.latestMessage?.length > 50 ? "..." : ""}"`, time: formatRelativeTime(c.lastActivity), sortTime: new Date(c.lastActivity).getTime(), type: c.unreadCount > 0 ? "enquiry" : "message" });
+        activityItems.push({ id: "m-" + c.conversationId, text: `${name}: "${preview}${c.latestMessage?.length > 50 ? "..." : ""}"`, time: formatRelativeTime(c.lastActivity), sortTime: new Date(c.lastActivity).getTime(), type: c.unreadCount > 0 ? "enquiry" : "message" });
       }
 
-      items.sort((a, b) => b.sortTime - a.sortTime);
-      setActivity(items.slice(0, 8));
+      activityItems.sort((a, b) => b.sortTime - a.sortTime);
+      setActivity(activityItems.slice(0, 8));
     }
     loadDashboard();
   }, []);
+
+  const onboardingComplete = onboardingItems.filter((i) => i.complete).length;
+  const onboardingTotal = onboardingItems.length;
+  const allComplete = onboardingTotal > 0 && onboardingComplete === onboardingTotal;
+
+  function dismissOnboarding() {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wallplace-onboarding-complete", "true");
+    }
+    setOnboardingDismissed(true);
+  }
 
   return (
     <ArtistPortalLayout activePath="/artist-portal">
@@ -154,6 +206,105 @@ export default function ArtistPortalPage() {
             <p className="text-xs text-muted mt-0.5">All plans include a free trial. Founding artists get 6 months free.</p>
           </div>
           <Button href="/artist-portal/billing" variant="accent" size="sm">Choose a Plan</Button>
+        </div>
+      )}
+
+      {/* Onboarding checklist */}
+      {!onboardingDismissed && onboardingItems.length > 0 && (
+        <div className="mb-6 bg-surface border border-border rounded-sm overflow-hidden">
+          {/* Progress bar */}
+          <div className="h-1 bg-border">
+            <div
+              className="h-1 bg-accent transition-all duration-500 ease-out"
+              style={{ width: `${onboardingTotal > 0 ? (onboardingComplete / onboardingTotal) * 100 : 0}%` }}
+            />
+          </div>
+
+          <div className="p-6">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-base font-medium text-foreground">
+                  {allComplete ? "You're all set!" : "Getting Started"}
+                </h2>
+                <p className="text-xs text-muted mt-0.5">
+                  {allComplete
+                    ? "Great work — your artist portal is fully set up."
+                    : `${onboardingComplete} of ${onboardingTotal} complete — finish setting up to start getting placements`}
+                </p>
+              </div>
+              {!allComplete && (
+                <span className="shrink-0 ml-4 text-xs font-medium text-accent bg-accent/10 px-2.5 py-1 rounded-full">
+                  {onboardingComplete}/{onboardingTotal}
+                </span>
+              )}
+            </div>
+
+            {/* Checklist items */}
+            {allComplete ? (
+              <div className="flex items-center gap-3 py-3">
+                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <p className="text-sm text-foreground">Your portal is ready. Start connecting with venues!</p>
+              </div>
+            ) : (
+              <ul className="space-y-1">
+                {onboardingItems.map((item) => (
+                  <li key={item.key}>
+                    <Link
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-sm transition-colors group ${
+                        item.complete
+                          ? "opacity-60"
+                          : "hover:bg-accent/5"
+                      }`}
+                    >
+                      {/* Checkbox icon */}
+                      {item.complete ? (
+                        <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center shrink-0">
+                          <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                            <polyline points="2 7 5.5 10.5 12 3.5" />
+                          </svg>
+                        </div>
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border-2 border-border group-hover:border-accent/50 shrink-0 transition-colors" />
+                      )}
+
+                      {/* Label */}
+                      <span className={`flex-1 text-sm ${
+                        item.complete
+                          ? "line-through text-muted"
+                          : "text-foreground"
+                      }`}>
+                        {item.label}
+                      </span>
+
+                      {/* Action arrow for incomplete items */}
+                      {!item.complete && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                          <polyline points="12 5 19 12 12 19" />
+                        </svg>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Dismiss link */}
+            <div className="flex justify-end mt-3 pt-3 border-t border-border">
+              <button
+                onClick={dismissOnboarding}
+                className="text-xs text-muted hover:text-foreground transition-colors"
+              >
+                {allComplete ? "Close" : "Dismiss"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

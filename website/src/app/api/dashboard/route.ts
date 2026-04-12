@@ -27,12 +27,13 @@ export async function GET(request: Request) {
       : { data: null };
 
     if (artistProfile) {
-      // Artist dashboard — fetch placements, orders, messages in parallel
+      // Artist dashboard — fetch placements, orders, messages, works count in parallel
       const slug = artistProfile.slug;
-      const [placementsRes, ordersRes, messagesRes] = await Promise.all([
+      const [placementsRes, ordersRes, messagesRes, worksCountRes] = await Promise.all([
         db.from("placements").select("*").eq("artist_user_id", userId).order("created_at", { ascending: false }),
         db.from("orders").select("*").eq("artist_slug", slug).order("created_at", { ascending: false }),
         db.from("messages").select("*").or(`recipient_slug.eq.${slug},sender_name.eq.${slug}`).order("created_at", { ascending: false }).limit(50),
+        db.from("artist_works").select("id", { count: "exact", head: true }).eq("artist_id", artistProfile.id),
       ]);
 
       const placements = placementsRes.data || [];
@@ -60,6 +61,7 @@ export async function GET(request: Request) {
         placements,
         orders,
         conversations,
+        worksCount: worksCountRes.count ?? 0,
         stats: {
           activePlacements: placements.filter((p) => p.status === "active").length,
           totalRevenue: orders.reduce((sum, o) => sum + (o.total || 0), 0),
@@ -71,14 +73,16 @@ export async function GET(request: Request) {
 
     if (venueProfile) {
       const slug = venueProfile.slug;
-      const [ordersRes] = await Promise.all([
+      const [ordersRes, venueMessagesRes] = await Promise.all([
         db.from("orders").select("*").or(`venue_slug.eq.${slug},buyer_email.eq.${auth.user!.email}`).order("created_at", { ascending: false }),
+        db.from("messages").select("id", { count: "exact", head: true }).eq("sender_name", slug),
       ]);
 
       return NextResponse.json({
         userType: "venue",
         profile: venueProfile,
         orders: ordersRes.data || [],
+        sentMessageCount: venueMessagesRes.count ?? 0,
       });
     }
 

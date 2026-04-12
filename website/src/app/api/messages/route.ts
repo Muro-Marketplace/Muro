@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { messageSchema } from "@/lib/validations";
+import { moderateMessage } from "@/lib/moderation";
 import { notifyNewMessage, notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { artists as staticArtists } from "@/data/artists";
 import { venues as staticVenues } from "@/data/venues";
@@ -169,6 +170,16 @@ export async function POST(request: Request) {
     }
 
     const { conversationId, senderType, recipientSlug, content, messageType, metadata } = parsed.data;
+
+    // ── Content moderation ──────────────────────────────────────────────────
+    const moderation = moderateMessage(content);
+    if (!moderation.allowed) {
+      return NextResponse.json(
+        { error: moderation.reason || "Message not allowed" },
+        { status: 400 },
+      );
+    }
+
     const cid = conversationId || `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const db = getSupabaseAdmin();
@@ -192,11 +203,15 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     };
 
-    let { error } = await db.from("messages").insert({
+    // If moderation flagged the message, tag it for admin review
+    const extendedRow = {
       ...baseRow,
       message_type: messageType || "text",
       metadata: metadata || {},
-    });
+      ...(moderation.flagged ? { flagged: true, flagged_reason: moderation.reason } : {}),
+    };
+
+    let { error } = await db.from("messages").insert(extendedRow);
 
     // If insert failed (likely missing columns), retry with base columns only
     if (error) {
@@ -208,6 +223,10 @@ export async function POST(request: Request) {
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+    }
+
+    if (moderation.flagged) {
+      console.warn(`[moderation] Message flagged: sender=${resolvedSenderSlug} reason="${moderation.reason}"`);
     }
 
     // Handle placement request — create a pending placement

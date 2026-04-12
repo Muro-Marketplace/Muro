@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CartIndicator from "./CartIndicator";
+import SearchBar from "./SearchBar";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
@@ -181,7 +182,7 @@ export default function Header() {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-7">
+          <nav className="hidden lg:flex items-center gap-7" role="navigation" aria-label="Main navigation">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -197,6 +198,9 @@ export default function Header() {
             ))}
           </nav>
 
+          {/* Desktop Search */}
+          <SearchBar variant={isPortal || !showSolid ? "dark" : "light"} mode="desktop" />
+
           {/* Desktop CTAs */}
           <div className="hidden lg:flex items-center gap-2.5">
             {!authLoading && user ? (
@@ -209,6 +213,8 @@ export default function Header() {
                       isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                     title="Messages"
+                    aria-label="Messages"
+                    aria-expanded={msgDropdownOpen}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -275,6 +281,7 @@ export default function Header() {
                       isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                     title="Notifications"
+                    aria-label="Notifications"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -374,16 +381,18 @@ export default function Header() {
             <CartIndicator className={isPortal || !showSolid ? "text-white" : "text-foreground"} />
           </div>
 
-          {/* Mobile Menu Toggle */}
-          <button
-            type="button"
-            className={`lg:hidden p-2 -mr-2 transition-colors duration-300 ${
-              isPortal || !showSolid ? "text-white" : "text-foreground"
-            }`}
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={mobileMenuOpen}
-          >
+          {/* Mobile Search + Menu Toggle */}
+          <div className="lg:hidden flex items-center">
+            <SearchBar variant={isPortal || !showSolid ? "dark" : "light"} mode="mobile" />
+            <button
+              type="button"
+              className={`p-2 -mr-2 transition-colors duration-300 ${
+                isPortal || !showSolid ? "text-white" : "text-foreground"
+              }`}
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileMenuOpen}
+            >
             <svg
               width="24"
               height="24"
@@ -406,7 +415,8 @@ export default function Header() {
                 </>
               )}
             </svg>
-          </button>
+            </button>
+          </div>
         </div>
       </div>
 
