@@ -15,20 +15,57 @@ interface ActivityItem {
   type: "enquiry" | "sale" | "placement" | "message" | "view";
 }
 
-const typeColors: Record<string, string> = {
-  enquiry: "bg-blue-100 text-blue-700",
-  sale: "bg-green-100 text-green-700",
-  message: "bg-accent/10 text-accent",
-  placement: "bg-accent/15 text-accent",
-  view: "bg-gray-100 text-gray-600",
-};
-
-const typeLabels: Record<string, string> = {
-  enquiry: "Enquiry",
-  sale: "Sale",
-  placement: "Placement",
-  message: "Message",
-  view: "View",
+const activityTypes: Record<string, { label: string; bg: string; text: string; icon: React.ReactNode }> = {
+  message: {
+    label: "Message",
+    bg: "bg-blue-50",
+    text: "text-blue-600",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+      </svg>
+    ),
+  },
+  enquiry: {
+    label: "Enquiry",
+    bg: "bg-purple-50",
+    text: "text-purple-600",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    ),
+  },
+  placement: {
+    label: "Placement",
+    bg: "bg-accent/8",
+    text: "text-accent",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+    ),
+  },
+  sale: {
+    label: "Sale",
+    bg: "bg-green-50",
+    text: "text-green-600",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+      </svg>
+    ),
+  },
+  view: {
+    label: "View",
+    bg: "bg-gray-50",
+    text: "text-gray-500",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+  },
 };
 
 /** Convert a slug like "the-copper-kettle" to "The Copper Kettle" */
@@ -148,17 +185,26 @@ export default function ArtistPortalPage() {
             </div>
           ) : (
             <ul className="divide-y divide-border">
-              {activity.map((item) => (
-                <li key={item.id} className="px-6 py-4 flex items-start gap-4">
-                  <span className={`mt-0.5 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${typeColors[item.type]}`}>
-                    {typeLabels[item.type]}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground leading-snug">{item.text}</p>
-                    <p className="text-xs text-muted mt-0.5">{item.time}</p>
-                  </div>
-                </li>
-              ))}
+              {activity.map((item) => {
+                const t = activityTypes[item.type] || activityTypes.view;
+                return (
+                  <li key={item.id} className="px-4 sm:px-6 py-3.5 flex items-center gap-3">
+                    {/* Icon */}
+                    <div className={`w-8 h-8 rounded-full ${t.bg} ${t.text} flex items-center justify-center shrink-0`}>
+                      {t.icon}
+                    </div>
+                    {/* Type label — fixed width column */}
+                    <span className={`w-20 shrink-0 text-[11px] font-medium ${t.text} uppercase tracking-wider hidden sm:block`}>
+                      {t.label}
+                    </span>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground leading-snug truncate">{item.text}</p>
+                      <p className="text-[11px] text-muted mt-0.5">{item.time}</p>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
