@@ -14,13 +14,12 @@ export default function BlogPage() {
       {/* Hero */}
       <section className="relative -mt-14 lg:-mt-16 min-h-[50vh] lg:min-h-[60vh] flex items-center overflow-hidden">
         <div className="absolute inset-0 -z-10">
-          <Image
-            src="https://images.unsplash.com/photo-1455390582262-044cdead277a?w=1920&h=600&fit=crop&crop=center"
+          <img
+            src="https://images.unsplash.com/photo-1471107340929-a87cd0f5b5f3?w=1920&h=800&fit=crop&crop=center"
             alt=""
-            fill
-            className="object-cover"
+            className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-foreground/85" />
+          <div className="absolute inset-0 bg-black/70" />
         </div>
         <div className="max-w-[1000px] mx-auto px-6 text-center relative z-10">
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Blog</p>
