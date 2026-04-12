@@ -371,7 +371,7 @@ export default function Header() {
                 </Link>
               </>
             ) : null}
-            <CartIndicator />
+            <CartIndicator className={isPortal || !showSolid ? "text-white" : "text-foreground"} />
           </div>
 
           {/* Mobile Menu Toggle */}

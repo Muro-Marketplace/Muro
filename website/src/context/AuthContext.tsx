@@ -50,11 +50,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Restore session on mount
+    // Restore session on mount — set user immediately, don't wait for subscription
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
-      fetchSubscription(s?.user ?? null).finally(() => setLoading(false));
+      setLoading(false);
+      fetchSubscription(s?.user ?? null);
     });
 
     // Listen for auth state changes

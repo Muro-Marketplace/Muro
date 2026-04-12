@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 
-export default function CartIndicator() {
+export default function CartIndicator({ className = "" }: { className?: string }) {
   const { itemCount } = useCart();
 
   if (itemCount === 0) return null;
@@ -11,7 +11,7 @@ export default function CartIndicator() {
   return (
     <Link
       href="/checkout"
-      className="relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-black/5 transition-colors"
+      className={`relative inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-black/5 transition-colors ${className}`}
       title="View cart"
     >
       <svg
