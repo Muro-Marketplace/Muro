@@ -326,7 +326,7 @@ export default function SpacesLookingForArtPage() {
                       </div>
                     ) : canSeeDetails && !canMessageVenues ? (
                       <div className="mt-3 pt-3 border-t border-border">
-                        <Link href="/pricing" className="flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors">
+                        <Link href="/artist-portal/billing" className="flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors">
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
                           Upgrade to Premium to message venues
                         </Link>

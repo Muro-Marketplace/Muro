@@ -54,23 +54,44 @@ export async function POST(request: Request) {
 
     // If already subscribed, update the existing subscription instead of creating a new checkout
     if (hasActiveSubscription && customerId) {
-      const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 1 });
-      const existing = subscriptions.data[0];
-      if (existing) {
-        await stripe.subscriptions.update(existing.id, {
-          items: [{ id: existing.items.data[0].id, price: priceId }],
-          proration_behavior: "create_prorations",
-          metadata: { plan, artist_profile_id: profile.id },
+      try {
+        const subscriptions = await stripe.subscriptions.list({
+          customer: customerId,
+          status: "active",
+          limit: 1,
         });
+        // Also check trialing if no active found
+        let existing = subscriptions.data[0];
+        if (!existing) {
+          const trialingSubs = await stripe.subscriptions.list({
+            customer: customerId,
+            status: "trialing",
+            limit: 1,
+          });
+          existing = trialingSubs.data[0];
+        }
 
-        // Update profile
-        await db
-          .from("artist_profiles")
-          .update({ subscription_plan: plan })
-          .eq("id", profile.id);
+        if (existing && existing.items.data[0]) {
+          await stripe.subscriptions.update(existing.id, {
+            items: [{ id: existing.items.data[0].id, price: priceId }],
+            proration_behavior: "create_prorations",
+            metadata: { plan, artist_profile_id: profile.id },
+          });
 
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-        return NextResponse.json({ url: `${siteUrl}/artist-portal/billing?changed=true` });
+          // Update profile
+          await db
+            .from("artist_profiles")
+            .update({ subscription_plan: plan })
+            .eq("id", profile.id);
+
+          const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+          return NextResponse.json({ url: `${siteUrl}/artist-portal/billing?changed=true` });
+        }
+      } catch (upgradeErr) {
+        console.error("Subscription upgrade error:", upgradeErr);
+        return NextResponse.json({
+          error: upgradeErr instanceof Error ? upgradeErr.message : "Failed to upgrade subscription",
+        }, { status: 500 });
       }
     }
 
