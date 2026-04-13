@@ -19,10 +19,61 @@ export async function GET(request: Request) {
     const accepted = applications.filter((a) => a.status === "accepted").length;
     const rejected = applications.filter((a) => a.status === "rejected").length;
 
+    // Alert counts
+    let flaggedMessages = 0;
+    let pendingRefunds = 0;
+    let overdueOrders = 0;
+    let unreadSupportMessages = 0;
+
+    // Flagged messages (try/catch in case column doesn't exist)
+    try {
+      const { count } = await db
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .eq("flagged", true);
+      flaggedMessages = count || 0;
+    } catch { /* column may not exist yet */ }
+
+    // Pending refund requests
+    try {
+      const { count } = await db
+        .from("refund_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending");
+      pendingRefunds = count || 0;
+    } catch { /* table may not exist yet */ }
+
+    // Overdue orders (confirmed/processing for 7+ days)
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { count } = await db
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .in("status", ["confirmed", "processing"])
+        .lt("created_at", sevenDaysAgo);
+      overdueOrders = count || 0;
+    } catch { /* table may not exist yet */ }
+
+    // Unread support messages
+    try {
+      const { count } = await db
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .eq("recipient_slug", "wallplace-support")
+        .eq("is_read", false);
+      unreadSupportMessages = count || 0;
+    } catch { /* column may not exist yet */ }
+
     return NextResponse.json({
       applications: { total: applications.length, pending, accepted, rejected },
       artists: artists.data?.length || 0,
       venues: venues.data?.length || 0,
+      alerts: {
+        flaggedMessages,
+        pendingRefunds,
+        overdueOrders,
+        unreadSupportMessages,
+      },
     });
   } catch (err) {
     console.error("Admin stats error:", err);

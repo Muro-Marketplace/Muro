@@ -5,10 +5,18 @@ import Link from "next/link";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch } from "@/lib/api-client";
 
+interface Alerts {
+  flaggedMessages: number;
+  pendingRefunds: number;
+  overdueOrders: number;
+  unreadSupportMessages: number;
+}
+
 interface Stats {
   applications: { total: number; pending: number; accepted: number; rejected: number };
   artists: number;
   venues: number;
+  alerts?: Alerts;
 }
 
 interface Application {
@@ -55,6 +63,58 @@ export default function AdminDashboard() {
         <p className="text-muted text-sm">Failed to load stats. Make sure the database is set up.</p>
       ) : (
         <>
+          {/* Alert cards */}
+          {stats.alerts && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {[
+                {
+                  label: "Flagged Messages",
+                  icon: "\uD83D\uDEA9",
+                  value: stats.alerts.flaggedMessages,
+                  href: "/admin/messages",
+                  tint: stats.alerts.flaggedMessages > 0 ? "bg-red-50 border-red-200" : "",
+                  textTint: stats.alerts.flaggedMessages > 0 ? "text-red-600" : "text-foreground",
+                },
+                {
+                  label: "Pending Refunds",
+                  icon: "\uD83D\uDCB0",
+                  value: stats.alerts.pendingRefunds,
+                  href: undefined,
+                  tint: stats.alerts.pendingRefunds > 0 ? "bg-amber-50 border-amber-200" : "",
+                  textTint: stats.alerts.pendingRefunds > 0 ? "text-amber-600" : "text-foreground",
+                },
+                {
+                  label: "Overdue Orders",
+                  icon: "\u23F0",
+                  value: stats.alerts.overdueOrders,
+                  href: undefined,
+                  tint: stats.alerts.overdueOrders > 0 ? "bg-amber-50 border-amber-200" : "",
+                  textTint: stats.alerts.overdueOrders > 0 ? "text-amber-600" : "text-foreground",
+                },
+                {
+                  label: "Support Inbox",
+                  icon: "\uD83D\uDCAC",
+                  value: stats.alerts.unreadSupportMessages,
+                  href: "/admin/messages",
+                  tint: stats.alerts.unreadSupportMessages > 0 ? "bg-accent/5 border-accent/30" : "",
+                  textTint: stats.alerts.unreadSupportMessages > 0 ? "text-accent" : "text-foreground",
+                },
+              ].map((card) => {
+                const inner = (
+                  <div key={card.label} className={`border rounded-sm p-5 transition-colors ${card.tint || "bg-white border-border"}`}>
+                    <p className="text-xs text-muted uppercase tracking-wider mb-1">{card.icon} {card.label}</p>
+                    <p className={`text-3xl font-serif ${card.textTint}`}>{card.value}</p>
+                  </div>
+                );
+                return card.href ? (
+                  <Link key={card.label} href={card.href}>{inner}</Link>
+                ) : (
+                  <div key={card.label}>{inner}</div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Stat cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
             {[
@@ -96,6 +156,17 @@ export default function AdminDashboard() {
               className="px-4 py-2 text-sm font-medium text-foreground bg-surface border border-border hover:bg-background rounded-sm transition-colors"
             >
               View Venues
+            </Link>
+            <Link
+              href="/admin/messages"
+              className="px-4 py-2 text-sm font-medium text-foreground bg-surface border border-border hover:bg-background rounded-sm transition-colors"
+            >
+              Messages
+              {stats.alerts && stats.alerts.unreadSupportMessages > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 bg-accent/15 text-accent rounded text-xs">
+                  {stats.alerts.unreadSupportMessages}
+                </span>
+              )}
             </Link>
           </div>
 

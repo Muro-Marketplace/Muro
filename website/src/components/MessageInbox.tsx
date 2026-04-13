@@ -15,7 +15,7 @@ interface Conversation {
   otherParty: string;
   otherPartyDisplayName: string;
   otherPartyImage: string | null;
-  otherPartyType: "artist" | "venue";
+  otherPartyType: "artist" | "venue" | "system";
   hasActivePlacement: boolean;
   unreadCount: number;
   lastActivity: string;
@@ -37,14 +37,23 @@ interface Message {
 }
 
 interface MessageInboxProps {
-  userSlug: string;
-  portalType: "artist" | "venue";
+  userSlug?: string;
+  portalType: "artist" | "venue" | "admin";
+  portalSlug?: string;
   initialArtistSlug?: string;
   initialArtistName?: string;
   works?: ArtistWork[];
 }
 
-function Avatar({ src, name, size = 36 }: { src?: string | null; name: string; size?: number }) {
+function Avatar({ src, name, size = 36, isSystem }: { src?: string | null; name: string; size?: number; isSystem?: boolean }) {
+  // Wallplace Support / system avatar: accent-coloured "W" circle
+  if (isSystem || name === "Wallplace Support" || name === "wallplace-support") {
+    return (
+      <div className="rounded-full bg-accent flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
+        <span className="font-semibold text-white" style={{ fontSize: size * 0.4 }}>W</span>
+      </div>
+    );
+  }
   const initial = name?.charAt(0)?.toUpperCase() || "?";
   const cls = `rounded-full object-cover shrink-0`;
   if (src) {
@@ -57,8 +66,10 @@ function Avatar({ src, name, size = 36 }: { src?: string | null; name: string; s
   );
 }
 
-export default function MessageInbox({ userSlug, portalType, initialArtistSlug, initialArtistName, works }: MessageInboxProps) {
+export default function MessageInbox({ userSlug, portalType, portalSlug, initialArtistSlug, initialArtistName, works }: MessageInboxProps) {
   const { user } = useAuth();
+  const effectiveSlug = portalSlug || userSlug || "";
+  const isAdminMode = portalType === "admin";
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -72,10 +83,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const threadPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Compose new conversation
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState(isAdminMode);
   const [composeRecipient, setComposeRecipient] = useState("");
   const [composeRecipientName, setComposeRecipientName] = useState("");
   const [composeMessage, setComposeMessage] = useState("");
+  const [adminSearchQuery, setAdminSearchQuery] = useState("");
+  const [adminSearchResults, setAdminSearchResults] = useState<{ slug: string; name: string; type: string }[]>([]);
 
   // Placement request form
   const [showPlacementForm, setShowPlacementForm] = useState(false);
@@ -85,8 +98,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const [otherPartyWorks, setOtherPartyWorks] = useState<ArtistWork[]>([]);
   const [otherWorksLoading, setOtherWorksLoading] = useState(false);
 
-  const slugRef = useRef(userSlug);
-  slugRef.current = userSlug;
+  const slugRef = useRef(effectiveSlug);
+  slugRef.current = effectiveSlug;
 
   // Load conversations
   const loadConversations = useCallback(async (silent = false) => {
@@ -109,6 +122,36 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     convPollRef.current = setInterval(() => loadConversations(true), 15000);
     return () => { if (convPollRef.current) clearInterval(convPollRef.current); };
   }, [loadConversations]);
+
+  // Admin: search for artists/venues to message
+  useEffect(() => {
+    if (!isAdminMode || adminSearchQuery.length < 2) {
+      setAdminSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const [artistsRes, venuesRes] = await Promise.all([
+          authFetch("/api/browse-artists").then((r) => r.json()).catch(() => ({ artists: [] })),
+          authFetch("/api/browse-venues").then((r) => r.json()).catch(() => ({ venues: [] })),
+        ]);
+        const q = adminSearchQuery.toLowerCase();
+        const results: { slug: string; name: string; type: string }[] = [];
+        for (const a of artistsRes.artists || []) {
+          if (a.name?.toLowerCase().includes(q) || a.slug?.toLowerCase().includes(q)) {
+            results.push({ slug: a.slug, name: a.name, type: "artist" });
+          }
+        }
+        for (const v of venuesRes.venues || []) {
+          if (v.name?.toLowerCase().includes(q) || v.slug?.toLowerCase().includes(q)) {
+            results.push({ slug: v.slug, name: v.name, type: "venue" });
+          }
+        }
+        setAdminSearchResults(results.slice(0, 10));
+      } catch { /* empty */ }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [adminSearchQuery, isAdminMode]);
 
   // Handle initialArtistSlug
   useEffect(() => {
@@ -180,8 +223,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversationId: selectedConv,
-          senderName: userSlug,
-          senderType: portalType,
+          senderName: effectiveSlug,
+          senderType: isAdminMode ? "system" : portalType,
           recipientSlug: selectedConvData.otherParty,
           content: reply.trim(),
         }),
@@ -196,8 +239,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         id: Date.now(),
         conversation_id: selectedConv,
         sender_id: user?.id || null,
-        sender_name: userSlug,
-        sender_type: portalType,
+        sender_name: effectiveSlug,
+        sender_type: isAdminMode ? "system" : portalType,
         recipient_slug: selectedConvData.otherParty,
         content: reply.trim(),
         is_read: false,
@@ -224,8 +267,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          senderName: userSlug,
-          senderType: portalType,
+          senderName: effectiveSlug,
+          senderType: isAdminMode ? "system" : portalType,
           recipientSlug: composeRecipient,
           content: composeMessage.trim(),
         }),
@@ -305,8 +348,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversationId: selectedConv,
-          senderName: userSlug,
-          senderType: portalType,
+          senderName: effectiveSlug,
+          senderType: isAdminMode ? "system" : portalType,
           recipientSlug: selectedConvData.otherParty,
           content,
           messageType: "placement_request",
@@ -330,8 +373,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         id: Date.now(),
         conversation_id: selectedConv!,
         sender_id: user?.id || null,
-        sender_name: userSlug,
-        sender_type: portalType,
+        sender_name: effectiveSlug,
+        sender_type: isAdminMode ? "system" : portalType,
         recipient_slug: selectedConvData.otherParty,
         content,
         is_read: false,
@@ -360,8 +403,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversationId: selectedConv,
-          senderName: userSlug,
-          senderType: portalType,
+          senderName: effectiveSlug,
+          senderType: isAdminMode ? "system" : portalType,
           recipientSlug: selectedConvData.otherParty,
           content: accept ? "Placement accepted" : "Placement declined",
           messageType: "placement_response",
@@ -373,8 +416,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         id: Date.now(),
         conversation_id: selectedConv!,
         sender_id: user?.id || null,
-        sender_name: userSlug,
-        sender_type: portalType,
+        sender_name: effectiveSlug,
+        sender_type: isAdminMode ? "system" : portalType,
         recipient_slug: selectedConvData.otherParty,
         content: accept ? "Placement accepted" : "Placement declined",
         is_read: false,
@@ -406,9 +449,10 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     );
   }
 
-  // Separate placed and unplaced conversations
-  const placedConvs = conversations.filter((c) => c.hasActivePlacement);
-  const otherConvs = conversations.filter((c) => !c.hasActivePlacement);
+  // Separate placed, support, and unplaced conversations
+  const supportConvs = conversations.filter((c) => c.otherParty === "wallplace-support");
+  const placedConvs = conversations.filter((c) => c.hasActivePlacement && c.otherParty !== "wallplace-support");
+  const otherConvs = conversations.filter((c) => !c.hasActivePlacement && c.otherParty !== "wallplace-support");
 
   function renderConvItem(conv: Conversation) {
     return (
@@ -421,7 +465,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
             : "border-l-2 border-l-transparent hover:bg-[#FAF8F5]"
         }`}
       >
-        <Avatar src={conv.otherPartyImage} name={conv.otherPartyDisplayName} size={36} />
+        <Avatar src={conv.otherPartyImage} name={conv.otherPartyDisplayName} size={36} isSystem={conv.otherParty === "wallplace-support" || conv.otherPartyType === ("system" as typeof conv.otherPartyType)} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-medium text-foreground truncate">{conv.otherPartyDisplayName}</p>
@@ -453,6 +497,14 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     <div className="flex h-[calc(100vh-13rem)] border border-border rounded-sm overflow-hidden bg-surface">
       {/* Conversation list */}
       <div className={`${selectedConv || composing ? "hidden sm:block" : ""} w-full sm:w-80 shrink-0 border-r border-border overflow-y-auto`}>
+        {isAdminMode && (
+          <button
+            onClick={() => { setSelectedConv(null); setComposing(true); setComposeRecipient(""); setComposeRecipientName(""); setComposeMessage(""); }}
+            className="w-full px-4 py-2.5 text-xs font-medium text-accent bg-accent/5 hover:bg-accent/10 border-b border-border transition-colors text-left"
+          >
+            + New Message
+          </button>
+        )}
         {conversations.length === 0 && !composing ? (
           <div className="flex flex-col items-center justify-center py-16 px-6">
             <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center mb-4">
@@ -479,6 +531,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 {otherConvs.map(renderConvItem)}
               </>
             )}
+            {!isAdminMode && supportConvs.length > 0 && (
+              <>
+                <div className="px-4 py-2 text-[10px] font-medium uppercase tracking-widest text-muted bg-[#FAF8F5] border-b border-border border-t border-t-border">Support</div>
+                {supportConvs.map(renderConvItem)}
+              </>
+            )}
           </>
         )}
       </div>
@@ -488,20 +546,64 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         {composing ? (
           <>
             <div className="px-4 py-3 border-b border-border border-b-accent/20 flex items-center gap-3">
-              <button onClick={() => { setComposing(false); }} className="sm:hidden text-muted hover:text-foreground">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
-              </button>
+              {!isAdminMode && (
+                <button onClick={() => { setComposing(false); }} className="sm:hidden text-muted hover:text-foreground">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
+                </button>
+              )}
               <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">New Message</p>
-                <p className="text-[10px] text-muted">to {composeRecipientName}</p>
+                {composeRecipientName ? (
+                  <p className="text-[10px] text-muted">to {composeRecipientName}</p>
+                ) : isAdminMode ? (
+                  <p className="text-[10px] text-muted">Search for an artist or venue</p>
+                ) : null}
               </div>
             </div>
+            {/* Admin recipient search */}
+            {isAdminMode && !composeRecipient && (
+              <div className="px-4 py-3 border-b border-border">
+                <input
+                  type="text"
+                  value={adminSearchQuery}
+                  onChange={(e) => setAdminSearchQuery(e.target.value)}
+                  placeholder="Search artists or venues..."
+                  className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50"
+                  autoFocus
+                />
+                {adminSearchResults.length > 0 && (
+                  <div className="mt-2 border border-border rounded-sm overflow-hidden max-h-48 overflow-y-auto">
+                    {adminSearchResults.map((r) => (
+                      <button
+                        key={r.slug}
+                        onClick={() => { setComposeRecipient(r.slug); setComposeRecipientName(r.name); setAdminSearchQuery(""); setAdminSearchResults([]); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-[#FAF8F5] flex items-center gap-2 border-b border-border last:border-b-0"
+                      >
+                        <span className="text-foreground font-medium">{r.name}</span>
+                        <span className="text-[10px] text-muted uppercase">{r.type}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {isAdminMode && composeRecipient && (
+              <div className="px-4 py-2 bg-accent/5 border-b border-border flex items-center gap-2">
+                <span className="text-xs text-muted">To:</span>
+                <span className="text-xs font-medium text-foreground">{composeRecipientName}</span>
+                <button onClick={() => { setComposeRecipient(""); setComposeRecipientName(""); }} className="text-xs text-muted hover:text-red-500 ml-auto">Change</button>
+              </div>
+            )}
             <div className="flex-1 flex items-center justify-center px-6">
               <div className="text-center max-w-sm">
-                <p className="text-sm text-muted mb-1">Start a conversation with <strong className="text-foreground">{composeRecipientName}</strong></p>
+                {composeRecipientName ? (
+                  <p className="text-sm text-muted mb-1">Start a conversation with <strong className="text-foreground">{composeRecipientName}</strong>{isAdminMode ? " as Wallplace Support" : ""}</p>
+                ) : isAdminMode ? (
+                  <p className="text-sm text-muted mb-1">Search above to select a recipient</p>
+                ) : null}
               </div>
             </div>
             <div className="px-4 py-3 border-t border-border shadow-[0_-1px_3px_rgba(0,0,0,0.03)]">
@@ -547,7 +649,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
               <button onClick={() => { setSelectedConv(null); setShowPlacementForm(false); }} className="sm:hidden text-muted hover:text-foreground">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
               </button>
-              <Avatar src={selectedConvData?.otherPartyImage} name={selectedConvData?.otherPartyDisplayName || ""} size={40} />
+              <Avatar src={selectedConvData?.otherPartyImage} name={selectedConvData?.otherPartyDisplayName || ""} size={40} isSystem={selectedConvData?.otherParty === "wallplace-support" || selectedConvData?.otherPartyType === ("system" as typeof selectedConvData.otherPartyType)} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium truncate">{selectedConvData?.otherPartyDisplayName}</p>
@@ -645,7 +747,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
               {messages.map((msg) => {
-                const isMe = (msg.sender_id != null && msg.sender_id === user?.id) || (msg.sender_id == null && msg.sender_name === userSlug);
+                const isMe = (msg.sender_id != null && msg.sender_id === user?.id) || (msg.sender_id == null && msg.sender_name === effectiveSlug) || (isAdminMode && msg.sender_name === "wallplace-support");
                 const meta = (msg.metadata || {}) as Record<string, unknown>;
 
                 // Placement request card
@@ -725,7 +827,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 // Regular text message
                 return (
                   <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}>
-                    {!isMe && <Avatar src={selectedConvData?.otherPartyImage} name={selectedConvData?.otherPartyDisplayName || ""} size={24} />}
+                    {!isMe && <Avatar src={selectedConvData?.otherPartyImage} name={selectedConvData?.otherPartyDisplayName || ""} size={24} isSystem={msg.sender_type === "system" || msg.sender_name === "wallplace-support"} />}
                     <div className={`max-w-[75%] px-3.5 py-2.5 rounded-lg text-sm ${
                       isMe
                         ? "bg-accent text-white rounded-br-none"

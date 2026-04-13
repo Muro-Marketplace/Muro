@@ -72,7 +72,7 @@ export const messageSchema = z.object({
   conversationId: optionalString(100),
   senderId: optionalString(100),
   senderName: safeString(100),
-  senderType: z.enum(["artist", "venue", "anonymous"]).optional(),
+  senderType: z.enum(["artist", "venue", "anonymous", "system"]).optional(),
   recipientSlug: safeString(100),
   content: safeString(5000),
   messageType: z.enum(["text", "placement_request", "placement_response"]).optional(),

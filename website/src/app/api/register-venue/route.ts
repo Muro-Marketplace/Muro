@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { registerVenueSchema } from "@/lib/validations";
 import { notifyAdminNewVenue } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { slugify } from "@/lib/slugify";
 
 export async function POST(request: Request) {
   const limited = checkRateLimit(request, 5, 60000);
@@ -59,6 +61,20 @@ export async function POST(request: Request) {
       type: d.venueType,
       location: `${d.city}, ${d.postcode}`,
     });
+
+    // Send welcome message from Wallplace Support
+    const venueSlug = slugify(d.venueName);
+    const db = getSupabaseAdmin();
+    await db.from("messages").insert({
+      conversation_id: `support-${venueSlug}`,
+      sender_id: null,
+      sender_name: "wallplace-support",
+      sender_type: "system",
+      recipient_slug: venueSlug,
+      content: "Welcome to Wallplace! If you have any questions about getting started, just message us here.",
+      is_read: false,
+      created_at: new Date().toISOString(),
+    }).catch(() => {}); // fire-and-forget
 
     return NextResponse.json({ success: true });
   } catch {

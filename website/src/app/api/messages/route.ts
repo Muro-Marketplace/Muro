@@ -35,7 +35,12 @@ export async function GET(request: Request) {
       : { data: null };
 
     const userSlug = ownerProfile?.slug || venueProfile?.slug;
-    if (userSlug !== safeSlug) {
+
+    // Allow admin to access wallplace-support messages
+    const adminEmail = process.env.ADMIN_EMAIL || "fcoles2598@gmail.com";
+    const isAdmin = auth.user!.email === adminEmail;
+
+    if (userSlug !== safeSlug && !(isAdmin && safeSlug === "wallplace-support")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -102,7 +107,11 @@ export async function GET(request: Request) {
       : { data: [] };
 
     // Build lookup map
-    const profileMap = new Map<string, { displayName: string; image: string | null; type: "artist" | "venue" }>();
+    const profileMap = new Map<string, { displayName: string; image: string | null; type: "artist" | "venue" | "system" }>();
+
+    // Handle Wallplace Support as a special system identity
+    profileMap.set("wallplace-support", { displayName: "Wallplace Support", image: null, type: "system" as const });
+
     for (const ap of artistProfiles || []) {
       profileMap.set(ap.slug, { displayName: ap.name, image: ap.profile_image || null, type: "artist" });
     }
@@ -184,12 +193,23 @@ export async function POST(request: Request) {
 
     const db = getSupabaseAdmin();
 
-    // Resolve the authenticated user's actual slug (never trust client-provided senderName)
-    const { data: senderArtist } = await db.from("artist_profiles").select("slug").eq("user_id", auth.user!.id).single();
-    const { data: senderVenue } = !senderArtist
-      ? await db.from("venue_profiles").select("slug").eq("user_id", auth.user!.id).single()
-      : { data: null };
-    const resolvedSenderSlug = senderArtist?.slug || senderVenue?.slug || parsed.data.senderName;
+    // Admin can send as Wallplace Support
+    const adminEmail = process.env.ADMIN_EMAIL || "fcoles2598@gmail.com";
+    const isAdmin = auth.user!.email === adminEmail;
+
+    let resolvedSenderSlug: string;
+
+    if (isAdmin && (parsed.data.senderName === "wallplace-support" || parsed.data.senderType === "system")) {
+      // Allow admin to send as system without slug resolution
+      resolvedSenderSlug = "wallplace-support";
+    } else {
+      // Resolve the authenticated user's actual slug (never trust client-provided senderName)
+      const { data: senderArtist } = await db.from("artist_profiles").select("slug").eq("user_id", auth.user!.id).single();
+      const { data: senderVenue } = !senderArtist
+        ? await db.from("venue_profiles").select("slug").eq("user_id", auth.user!.id).single()
+        : { data: null };
+      resolvedSenderSlug = senderArtist?.slug || senderVenue?.slug || parsed.data.senderName;
+    }
 
     // Try insert with new columns first, fall back to base columns if they don't exist yet
     const baseRow = {
