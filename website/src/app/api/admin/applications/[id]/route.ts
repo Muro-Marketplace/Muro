@@ -134,8 +134,8 @@ export async function PUT(
       .update({ status: "accepted" })
       .eq("id", id);
 
-    // Send welcome message from Wallplace Support
-    await db.from("messages").insert({
+    // Send welcome message from Wallplace Support (fire-and-forget)
+    db.from("messages").insert({
       conversation_id: `support-${artistSlug}`,
       sender_id: null,
       sender_name: "wallplace-support",
@@ -144,7 +144,7 @@ export async function PUT(
       content: "Welcome to Wallplace! If you have any questions about getting started, just message us here.",
       is_read: false,
       created_at: new Date().toISOString(),
-    }).catch(() => {}); // fire-and-forget
+    }).then(() => {}).catch(() => {});
 
     return NextResponse.json({
       success: true,
