@@ -135,16 +135,18 @@ export async function PUT(
       .eq("id", id);
 
     // Send welcome message from Wallplace Support (fire-and-forget)
-    db.from("messages").insert({
-      conversation_id: `support-${artistSlug}`,
-      sender_id: null,
-      sender_name: "wallplace-support",
-      sender_type: "system",
-      recipient_slug: artistSlug,
-      content: "Welcome to Wallplace! If you have any questions about getting started, just message us here.",
-      is_read: false,
-      created_at: new Date().toISOString(),
-    }).then(() => {}).catch(() => {});
+    Promise.resolve(
+      db.from("messages").insert({
+        conversation_id: `support-${artistSlug}`,
+        sender_id: null,
+        sender_name: "wallplace-support",
+        sender_type: "system",
+        recipient_slug: artistSlug,
+        content: "Welcome to Wallplace! If you have any questions about getting started, just message us here.",
+        is_read: false,
+        created_at: new Date().toISOString(),
+      })
+    ).catch(() => {});
 
     return NextResponse.json({
       success: true,
