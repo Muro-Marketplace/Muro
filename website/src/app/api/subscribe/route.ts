@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     const hasActiveSubscription = profile.subscription_status === "active" || profile.subscription_status === "trialing";
 
-    // If already subscribed, update the existing subscription instead of creating a new checkout
+    // If already subscribed, cancel existing and create new checkout for the new plan
     if (hasActiveSubscription && customerId) {
       try {
         const subscriptions = await stripe.subscriptions.list({
@@ -60,7 +60,6 @@ export async function POST(request: Request) {
           status: "active",
           limit: 1,
         });
-        // Also check trialing if no active found
         let existing = subscriptions.data[0];
         if (!existing) {
           const trialingSubs = await stripe.subscriptions.list({
@@ -71,32 +70,18 @@ export async function POST(request: Request) {
           existing = trialingSubs.data[0];
         }
 
-        if (existing && existing.items.data[0]) {
-          await stripe.subscriptions.update(existing.id, {
-            items: [{ id: existing.items.data[0].id, price: priceId }],
-            proration_behavior: "create_prorations",
-            metadata: { plan, artist_profile_id: profile.id },
-          });
-
-          // Update profile
-          await db
-            .from("artist_profiles")
-            .update({ subscription_plan: plan })
-            .eq("id", profile.id);
-
-          const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-          return NextResponse.json({ url: `${siteUrl}/artist-portal/billing?changed=true` });
+        // Cancel existing subscription at period end so new one takes over
+        if (existing) {
+          await stripe.subscriptions.cancel(existing.id, { prorate: true });
         }
-      } catch (upgradeErr) {
-        console.error("Subscription upgrade error:", upgradeErr);
-        return NextResponse.json({
-          error: upgradeErr instanceof Error ? upgradeErr.message : "Failed to upgrade subscription",
-        }, { status: 500 });
+      } catch (cancelErr) {
+        console.error("Cancel existing subscription error:", cancelErr);
+        // Continue anyway — create the new checkout
       }
     }
 
-    // Determine trial days — only for brand new subscriptions
-    const hadPreviousSub = profile.subscription_status === "canceled" || profile.subscription_status === "past_due";
+    // Determine trial days — no trial if upgrading or had previous subscription
+    const hadPreviousSub = hasActiveSubscription || profile.subscription_status === "canceled" || profile.subscription_status === "past_due";
     const trialDays = hadPreviousSub ? 0 : profile.is_founding_artist ? 180 : 30;
 
     // Create Stripe Checkout Session in subscription mode
