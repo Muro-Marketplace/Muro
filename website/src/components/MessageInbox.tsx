@@ -550,7 +550,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
               <Avatar src={selectedConvData?.otherPartyImage} name={selectedConvData?.otherPartyDisplayName || ""} size={40} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium truncate">{selectedConvData?.otherPartyDisplayName}</p>
+                  {selectedConvData?.otherPartyType === "artist" ? (
+                    <Link href={`/browse/${selectedConvData.otherParty}`} className="text-sm font-medium truncate hover:text-accent transition-colors">{selectedConvData.otherPartyDisplayName}</Link>
+                  ) : selectedConvData?.otherPartyType === "venue" ? (
+                    <Link href="/spaces-looking-for-art" className="text-sm font-medium truncate hover:text-accent transition-colors">{selectedConvData.otherPartyDisplayName}</Link>
+                  ) : (
+                    <p className="text-sm font-medium truncate">{selectedConvData?.otherPartyDisplayName}</p>
+                  )}
                   {selectedConvData?.hasActivePlacement && (
                     <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
                       <svg width="8" height="8" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>

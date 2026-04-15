@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 const coreFeatures = [
   "Up to 8 works in your portfolio",
   "Standard artist profile",
+  "Message venues directly",
   "Visibility to venues browsing the platform",
   "Curated matching – we surface you to relevant venues",
   "Basic analytics dashboard",
@@ -58,7 +59,7 @@ const comparisonRows = [
   },
   {
     feature: "Message venues",
-    core: "—",
+    core: "Yes",
     premium: "Yes",
     pro: "Yes",
   },

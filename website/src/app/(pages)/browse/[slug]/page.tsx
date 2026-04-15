@@ -7,6 +7,7 @@ import { getCollectionsByArtist } from "@/data/collections";
 import Button from "@/components/Button";
 import CollectionCard from "@/components/CollectionCard";
 import MessageArtistButton from "@/components/MessageArtistButton";
+import { PlacementButton, PlacementCTASection } from "@/components/PlacementCTA";
 import ArtistProfileClient from "./ArtistProfileClient";
 import { getArtistBySlug } from "@/lib/db/merged-data";
 import { trackEvent, extractTrackingContext, generateVisitorId } from "@/lib/analytics";
@@ -163,7 +164,7 @@ export default async function ArtistProfilePage({
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
                 <MessageArtistButton artistSlug={artist.slug} artistName={artist.name} variant="accent" size="md" />
-                <Button href={`/venue-portal/placements?artist=${artist.slug}&artistName=${encodeURIComponent(artist.name)}`} variant="secondary" size="md">Request Placement</Button>
+                <PlacementButton artistSlug={artist.slug} artistName={artist.name} />
               </div>
             </div>
 
@@ -249,24 +250,26 @@ export default async function ArtistProfilePage({
         );
       })()}
 
-      {/* CTA Block */}
-      <section className="py-20 lg:py-24 border-t border-border">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-3xl lg:text-4xl mb-4">
-              Interested in {artist.name}&rsquo;s work?
-            </h2>
-            <p className="text-muted leading-relaxed mb-8 text-lg">
-              Get in touch to discuss pricing, availability, and how this artist&rsquo;s work could transform your venue.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button href={`/venue-portal/placements?artist=${artist.slug}&artistName=${encodeURIComponent(artist.name)}`} variant="primary" size="lg">Request Placement</Button>
-              <MessageArtistButton artistSlug={artist.slug} artistName={artist.name} variant="accent" size="lg" />
-              <Button href="/browse" variant="secondary" size="lg">Browse More Artists</Button>
+      {/* CTA Block — hidden for artists viewing other artists */}
+      <PlacementCTASection>
+        <section className="py-20 lg:py-24 border-t border-border">
+          <div className="max-w-[1200px] mx-auto px-6">
+            <div className="max-w-2xl mx-auto text-center">
+              <h2 className="text-3xl lg:text-4xl mb-4">
+                Interested in {artist.name}&rsquo;s work?
+              </h2>
+              <p className="text-muted leading-relaxed mb-8 text-lg">
+                Get in touch to discuss pricing, availability, and how this artist&rsquo;s work could transform your venue.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <PlacementButton artistSlug={artist.slug} artistName={artist.name} variant="primary" size="lg" />
+                <MessageArtistButton artistSlug={artist.slug} artistName={artist.name} variant="accent" size="lg" />
+                <Button href="/browse" variant="secondary" size="lg">Browse More Artists</Button>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </PlacementCTASection>
     </div>
   );
 }

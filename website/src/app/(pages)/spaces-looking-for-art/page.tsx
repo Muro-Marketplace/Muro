@@ -76,7 +76,7 @@ export default function SpacesLookingForArtPage() {
 
   const isSubscribed = subscriptionStatus === "active" || subscriptionStatus === "trialing";
   const canSeeDetails = isSubscribed || userType === "venue" || userType === "customer";
-  const canMessageVenues = userType === "venue" || userType === "customer" || subscriptionPlan === "premium" || subscriptionPlan === "pro";
+  const canMessageVenues = isSubscribed || userType === "venue" || userType === "customer";
 
   async function handlePostcodeSearch() {
     if (!postcode.trim()) return;
