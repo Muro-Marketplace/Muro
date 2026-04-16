@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import type { CartItem } from "@/lib/types";
 
 interface CartContextValue {
@@ -10,28 +10,35 @@ interface CartContextValue {
   clearCart: () => void;
   itemCount: number;
   subtotal: number;
+  ready: boolean;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-function loadCart(): CartItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem("wallplace-cart");
-    return stored ? JSON.parse(stored) : [];
-  } catch { return []; }
-}
-
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(loadCart);
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [ready, setReady] = useState(false);
+  const hasMounted = useRef(false);
 
+  // Load cart from localStorage on mount
   useEffect(() => {
-    localStorage.setItem("wallplace-cart", JSON.stringify(items));
+    const stored = localStorage.getItem("wallplace-cart");
+    if (stored) {
+      try { setItems(JSON.parse(stored)); } catch { /* ignore */ }
+    }
+    hasMounted.current = true;
+    setReady(true);
+  }, []);
+
+  // Persist to localStorage on change (after mount)
+  useEffect(() => {
+    if (hasMounted.current) {
+      localStorage.setItem("wallplace-cart", JSON.stringify(items));
+    }
   }, [items]);
 
   const addItem = useCallback((item: Omit<CartItem, "id">) => {
     setItems((prev) => {
-      // Check for duplicate: same work, same artist, same size
       const existing = prev.find(
         (i) => i.artistSlug === item.artistSlug && i.title === item.title && i.size === item.size
       );
@@ -61,7 +68,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <CartContext.Provider
-      value={{ items, addItem, removeItem, clearCart, itemCount, subtotal }}
+      value={{ items, addItem, removeItem, clearCart, itemCount, subtotal, ready }}
     >
       {children}
     </CartContext.Provider>

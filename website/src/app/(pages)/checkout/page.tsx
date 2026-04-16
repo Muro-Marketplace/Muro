@@ -9,7 +9,7 @@ import type { ShippingInfo } from "@/lib/types";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, removeItem, subtotal } = useCart();
+  const { items, removeItem, subtotal, ready } = useCart();
   const [shipping, setShipping] = useState<ShippingInfo>({
     fullName: "",
     email: "",
@@ -100,6 +100,14 @@ export default function CheckoutPage() {
     } catch {
       setErrors({ submit: true } as Record<string, boolean>);
     }
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <p className="text-muted text-sm">Loading checkout...</p>
+      </div>
+    );
   }
 
   if (items.length === 0) {
