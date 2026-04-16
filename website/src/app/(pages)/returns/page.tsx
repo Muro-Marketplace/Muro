@@ -20,7 +20,7 @@ export default function ReturnsPage() {
                 <h2 className="text-2xl mb-4">Your Right to Cancel</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Under the Consumer Contracts Regulations 2013, you have 14 days from the date you receive your artwork to cancel your order for any reason. This is your statutory cooling-off period.</p>
-                  <p>To cancel, contact the artist through the platform or email <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a> with your order number within 14 days of delivery.</p>
+                  <p>To cancel, contact the artist through the platform or email <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a> with your order number within 14 days of delivery.</p>
                   <p><strong className="text-foreground">Exceptions:</strong> Bespoke or personalised artwork (e.g. commissions made to your specification) is exempt from the 14-day cooling-off period.</p>
                 </div>
               </div>
@@ -38,7 +38,7 @@ export default function ReturnsPage() {
 
               <div>
                 <h2 className="text-2xl mb-4">Faulty or Misdescribed Goods</h2>
-                <p className="text-muted leading-relaxed">Under the Consumer Rights Act 2015, you have additional rights if your artwork is faulty or not as described. You may be entitled to a repair, replacement, or refund. Contact <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a> or use the Request Refund option in your account dashboard.</p>
+                <p className="text-muted leading-relaxed">Under the Consumer Rights Act 2015, you have additional rights if your artwork is faulty or not as described. You may be entitled to a repair, replacement, or refund. Contact <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a> or use the Request Refund option in your account dashboard.</p>
               </div>
 
               <div>
@@ -74,7 +74,7 @@ export default function ReturnsPage() {
               <div>
                 <h2 className="text-2xl mb-4">Contact</h2>
                 <p className="text-muted leading-relaxed">
-                  For any returns or refund queries: <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a>
+                  For any returns or refund queries: <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a>
                 </p>
               </div>
             </div>

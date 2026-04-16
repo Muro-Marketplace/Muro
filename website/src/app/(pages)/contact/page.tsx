@@ -57,10 +57,10 @@ export default function ContactPage() {
                       Email
                     </p>
                     <a
-                      href="mailto:hello@wallplace.co"
+                      href="mailto:hello@wallplace.co.uk"
                       className="text-sm text-accent hover:text-accent-hover transition-colors duration-200"
                     >
-                      hello@wallplace.co
+                      hello@wallplace.co.uk
                     </a>
                   </div>
 
@@ -114,10 +114,10 @@ export default function ContactPage() {
                     For urgent matters or press enquiries, please email us
                     directly at{" "}
                     <a
-                      href="mailto:hello@wallplace.co"
+                      href="mailto:hello@wallplace.co.uk"
                       className="text-foreground hover:text-accent transition-colors duration-200"
                     >
-                      hello@wallplace.co
+                      hello@wallplace.co.uk
                     </a>
                     .
                   </p>

@@ -24,7 +24,7 @@ export default function IpPolicyPage() {
               <div>
                 <h2 className="text-2xl mb-4">Reporting Infringement</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
-                  <p>If you believe that content on Wallplace infringes your intellectual property rights, please contact us at <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a> with:</p>
+                  <p>If you believe that content on Wallplace infringes your intellectual property rights, please contact us at <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a> with:</p>
                   <ul className="list-disc pl-6 space-y-2">
                     <li>Your name and contact information</li>
                     <li>A description of the copyrighted work you believe has been infringed</li>
@@ -69,7 +69,7 @@ export default function IpPolicyPage() {
               <div>
                 <h2 className="text-2xl mb-4">Contact</h2>
                 <p className="text-muted leading-relaxed">
-                  Intellectual property queries: <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a>
+                  Intellectual property queries: <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a>
                 </p>
               </div>
             </div>

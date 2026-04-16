@@ -251,10 +251,10 @@ export default function ApplicationForm() {
           an email with a link to set up your account and profile. In the meantime, if you have any
           questions, email us at{" "}
           <a
-            href="mailto:hello@wallplace.co"
+            href="mailto:hello@wallplace.co.uk"
             className="text-accent hover:underline"
           >
-            hello@wallplace.co
+            hello@wallplace.co.uk
           </a>
           .
         </p>

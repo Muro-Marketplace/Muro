@@ -246,10 +246,10 @@ export default function CookiesPage() {
                   If you have questions about our use of cookies or this Cookie
                   Policy, please contact us at{" "}
                   <a
-                    href="mailto:hello@wallplace.co"
+                    href="mailto:hello@wallplace.co.uk"
                     className="text-accent hover:underline"
                   >
-                    hello@wallplace.co
+                    hello@wallplace.co.uk
                   </a>
                   . For more information about how we handle your personal data,
                   please read our{" "}

@@ -151,7 +151,7 @@ export default function VenueAgreementPage() {
                 <h2 className="text-2xl mb-4">15. Contact</h2>
                 <p className="text-muted leading-relaxed">
                   Wallplace, London, United Kingdom.<br />
-                  Email: <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a>
+                  Email: <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a>
                 </p>
               </div>
             </div>

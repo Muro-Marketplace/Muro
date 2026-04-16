@@ -43,7 +43,7 @@ export default function LabelSheet({ labels, pageIndex }: LabelSheetProps) {
 
   useEffect(() => {
     async function generate() {
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.art";
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
       const uniqueUrls = await Promise.all(
         labels.map((l) => {
           const venueParam = l.venueName ? `&v=${encodeURIComponent(l.venueName)}` : "";

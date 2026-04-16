@@ -153,7 +153,7 @@ export default function ArtistAgreementPage() {
               <div>
                 <h2 className="text-2xl mb-4">14. Cancellation</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
-                  <p>You may cancel your membership at any time with 30 days&rsquo; written notice (email to <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a> or via your account settings).</p>
+                  <p>You may cancel your membership at any time with 30 days&rsquo; written notice (email to <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a> or via your account settings).</p>
                   <p>Your membership remains active until the end of the notice period. No refund is given for the remaining billing period.</p>
                   <p>You must collect all artwork from venues within 30 days of your cancellation date. If artwork remains uncollected after 60 days, Wallplace may arrange return at your cost or store the artwork at your risk and cost.</p>
                   <p>Your profile and listings will be removed from the Platform. Outstanding payments will be processed within 30 days of cancellation.</p>
@@ -164,7 +164,7 @@ export default function ArtistAgreementPage() {
                 <h2 className="text-2xl mb-4">15. Contact</h2>
                 <p className="text-muted leading-relaxed">
                   Wallplace, London, United Kingdom.<br />
-                  Email: <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a>
+                  Email: <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a>
                 </p>
               </div>
             </div>

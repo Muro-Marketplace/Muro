@@ -26,7 +26,7 @@ export default function TermsPage() {
               <div>
                 <h2 className="text-2xl mb-4">1. About These Terms</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
-                  <p>These terms govern your use of wallplace.co and the Wallplace platform (the &ldquo;Platform&rdquo;). By creating an account or using the Platform, you agree to be bound by these terms.</p>
+                  <p>These terms govern your use of wallplace.co.uk and the Wallplace platform (the &ldquo;Platform&rdquo;). By creating an account or using the Platform, you agree to be bound by these terms.</p>
                   <p>Wallplace is a marketplace and platform. It facilitates connections between artists, venues, and buyers. <strong className="text-foreground">Wallplace is not a seller, and is not a party to any contract of sale between an artist and a buyer.</strong></p>
                   <p>These terms should be read alongside our <Link href="/privacy" className="text-accent hover:underline">Privacy Policy</Link>, <Link href="/cookies" className="text-accent hover:underline">Cookie Policy</Link>, <Link href="/artist-agreement" className="text-accent hover:underline">Artist Agreement</Link>, and <Link href="/venue-agreement" className="text-accent hover:underline">Venue Partnership Agreement</Link>.</p>
                 </div>
@@ -145,7 +145,7 @@ export default function TermsPage() {
                   <div className="space-y-4 mt-4">
                     <div>
                       <h3 className="text-base font-medium text-foreground mb-1">Step 1 &mdash; Raise a Dispute</h3>
-                      <p>Contact <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a> with your order number, the nature of the dispute, and any supporting evidence (photographs, messages, tracking information). You may also raise a dispute through your account dashboard.</p>
+                      <p>Contact <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a> with your order number, the nature of the dispute, and any supporting evidence (photographs, messages, tracking information). You may also raise a dispute through your account dashboard.</p>
                     </div>
 
                     <div>
@@ -234,7 +234,7 @@ export default function TermsPage() {
                 <h2 className="text-2xl mb-4">18. Contact</h2>
                 <p className="text-muted leading-relaxed">
                   Wallplace, London, United Kingdom.<br />
-                  Email: <a href="mailto:hello@wallplace.co" className="text-accent hover:underline">hello@wallplace.co</a><br />
+                  Email: <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a><br />
                   For data protection queries, see our <Link href="/privacy" className="text-accent hover:underline">Privacy Policy</Link>.
                 </p>
               </div>

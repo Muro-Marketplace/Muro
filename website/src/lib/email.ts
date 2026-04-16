@@ -7,7 +7,7 @@ function getResend(): Resend | null {
   return _resend;
 }
 
-const FROM = "Wallplace <notifications@wallplace.art>";
+const FROM = "Wallplace <notifications@wallplace.co.uk>";
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "fcoles2598@gmail.com";
 
 /**
@@ -60,7 +60,7 @@ export async function confirmApplicationToArtist(applicant: {
         <h2>Thanks for applying, ${applicant.name}!</h2>
         <p>We've received your application to join Wallplace as an artist.</p>
         <p>Our team reviews applications within 2-3 working days. We'll email you once a decision has been made.</p>
-        <p>In the meantime, follow us on <a href="https://instagram.com/wallplace.art">Instagram</a> to see what's happening.</p>
+        <p>In the meantime, follow us on <a href="https://instagram.com/wallplace">Instagram</a> to see what's happening.</p>
         <br/>
         <p>The Wallplace Team</p>
       `,

@@ -163,7 +163,7 @@ export default function QRLabel({
             letterSpacing: "0.03em",
           }}
         >
-          wallplace.art
+          wallplace.co.uk
         </p>
       </div>
 
