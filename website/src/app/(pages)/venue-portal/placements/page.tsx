@@ -510,25 +510,26 @@ export default function VenuePlacementsPage() {
                       <p className="text-xs text-foreground">{p.message}</p>
                     </div>
                   )}
-                {p.status === "Pending" && (
-                  <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border">
-                    <button
-                      onClick={() => respond(p.id, true)}
-                      disabled={responding === p.id}
-                      className="px-5 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-sm transition-colors disabled:opacity-50"
-                    >
-                      {responding === p.id ? "..." : "Accept"}
-                    </button>
-                    <button
-                      onClick={() => respond(p.id, false)}
-                      disabled={responding === p.id}
-                      className="px-5 py-2 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-50"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                )}
-              </div>
+                  {p.status === "Pending" && (
+                    <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); respond(p.id, true); }}
+                        disabled={responding === p.id}
+                        className="px-5 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-sm transition-colors disabled:opacity-50"
+                      >
+                        {responding === p.id ? "..." : "Accept"}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); respond(p.id, false); }}
+                        disabled={responding === p.id}
+                        className="px-5 py-2 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-50"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
