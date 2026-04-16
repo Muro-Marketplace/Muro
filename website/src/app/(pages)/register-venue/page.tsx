@@ -51,6 +51,7 @@ interface VenueFormState {
   email: string;
   phone: string;
   venueType: string;
+  customVenueType: string;
   addressLine1: string;
   addressLine2: string;
   city: string;
@@ -69,6 +70,7 @@ const initialState: VenueFormState = {
   email: "",
   phone: "",
   venueType: "",
+  customVenueType: "",
   addressLine1: "",
   addressLine2: "",
   city: "",
@@ -171,7 +173,7 @@ export default function RegisterVenuePage() {
           body: JSON.stringify({
             name: form.venueName,
             slug: venueSlug,
-            type: form.venueType,
+            type: form.venueType === "Other" && form.customVenueType ? form.customVenueType : form.venueType,
             location: form.city,
             contactName: form.contactName,
             email: form.email,
@@ -297,6 +299,15 @@ export default function RegisterVenuePage() {
                       <option value="">Select type</option>
                       {venueTypes.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
+                    {form.venueType === "Other" && (
+                      <input
+                        type="text"
+                        value={form.customVenueType || ""}
+                        onChange={(e) => updateField("customVenueType", e.target.value)}
+                        placeholder="Please describe your venue type"
+                        className={`${inputClass} mt-2`}
+                      />
+                    )}
                   </div>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { authFetch } from "@/lib/api-client";
@@ -92,35 +92,78 @@ function TagPill({
 }
 
 export default function VenueProfilePage() {
-  const { venue } = useCurrentVenue();
+  const { venue, refetch } = useCurrentVenue();
   const [editing, setEditing] = useState<string | null>(null);
   const [freeLoan, setFreeLoan] = useState(true);
   const [revenueShare, setRevenueShare] = useState(true);
   const [directPurchase, setDirectPurchase] = useState(true);
   const [localArtists, setLocalArtists] = useState(false);
-  const [styles, setStyles] = useState<string[]>(["Contemporary", "Minimal", "Photography"]);
-  const [themes, setThemes] = useState<string[]>(["Nature", "City", "Architecture"]);
-  const [sizes, setSizes] = useState<string[]>(["Medium (40–80cm)", "Large (80–120cm)"]);
+  const [styles, setStyles] = useState<string[]>([]);
+  const [themes, setThemes] = useState<string[]>([]);
+  const [sizes, setSizes] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
-  const toggleStyle = (s: string) =>
-    setStyles((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-    );
-  const toggleTheme = (t: string) =>
-    setThemes((prev) =>
-      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-    );
-  const toggleSize = (s: string) =>
-    setSizes((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-    );
+  // Editable venue details
+  const [detailName, setDetailName] = useState("");
+  const [detailType, setDetailType] = useState("");
+  const [detailLocation, setDetailLocation] = useState("");
+  const [detailWallSpace, setDetailWallSpace] = useState("");
+
+  // Load preferences from venue data
+  useEffect(() => {
+    if (venue && !loaded) {
+      setFreeLoan(venue.interestedInFreeLoan ?? true);
+      setRevenueShare(venue.interestedInRevenueShare ?? true);
+      setDirectPurchase(venue.interestedInDirectPurchase ?? true);
+      setLocalArtists(venue.interestedInLocalArtists ?? false);
+      setStyles(venue.preferredStyles?.length ? venue.preferredStyles : ["Contemporary", "Minimal", "Photography"]);
+      setThemes(venue.preferredThemes?.length ? venue.preferredThemes : ["Nature", "City", "Architecture"]);
+      setSizes(["Medium (40–80cm)", "Large (80–120cm)"]);
+      setDetailName(venue.name || "");
+      setDetailType(venue.type || "");
+      setDetailLocation(venue.location || "");
+      setDetailWallSpace(venue.wallSpace || "");
+      setLoaded(true);
+    }
+  }, [venue, loaded]);
+
+  // Track unsaved changes
+  const markDirty = useCallback(() => setHasUnsavedChanges(true), []);
+
+  // Warn on unload if unsaved changes
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedChanges]);
+
+  const toggleStyle = (s: string) => {
+    setStyles((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
+    markDirty();
+  };
+  const toggleTheme = (t: string) => {
+    setThemes((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
+    markDirty();
+  };
+  const toggleSize = (s: string) => {
+    setSizes((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
+    markDirty();
+  };
 
   const handleSave = async () => {
+    setSaving(true);
     try {
       const res = await authFetch("/api/venue-profile", {
         method: "PUT",
         body: JSON.stringify({
+          name: detailName || undefined,
+          type: detailType || undefined,
+          location: detailLocation || undefined,
+          wall_space: detailWallSpace || undefined,
           preferred_styles: styles,
           preferred_themes: themes,
           preferred_sizes: sizes,
@@ -133,13 +176,19 @@ export default function VenueProfilePage() {
 
       if (!res.ok) {
         alert("Failed to save profile. Please try again.");
+        setSaving(false);
         return;
       }
 
       setSaved(true);
+      setHasUnsavedChanges(false);
+      setEditing(null);
+      refetch();
       setTimeout(() => setSaved(false), 2500);
     } catch {
       alert("Failed to save. Please check your connection.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -155,8 +204,8 @@ export default function VenueProfilePage() {
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <button type="button" onClick={handleSave} className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors">
-            Save Changes
+          <button type="button" onClick={handleSave} disabled={saving} className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-60">
+            {saving ? "Saving..." : "Save Changes"}
           </button>
           {saved && <span className="text-sm text-green-600">Saved</span>}
         </div>
@@ -180,18 +229,19 @@ export default function VenueProfilePage() {
             </button>
           </div>
           <div className="p-5 space-y-4">
-            {[
-              { label: "Venue Name", value: venue?.name || "Your Venue" },
-              { label: "Venue Type", value: venue?.type || "Not set" },
-              { label: "Location", value: venue?.location || "Not set" },
-              { label: "Wall Space", value: venue?.wallSpace || "Not set" },
-            ].map(({ label, value }) => (
+            {([
+              { label: "Venue Name", value: detailName || venue?.name || "Your Venue", setter: setDetailName },
+              { label: "Venue Type", value: detailType || venue?.type || "Not set", setter: setDetailType },
+              { label: "Location", value: detailLocation || venue?.location || "Not set", setter: setDetailLocation },
+              { label: "Wall Space", value: detailWallSpace || venue?.wallSpace || "Not set", setter: setDetailWallSpace },
+            ] as const).map(({ label, value, setter }) => (
               <div key={label}>
                 <p className="text-xs font-medium text-muted mb-1">{label}</p>
                 {editing === "details" ? (
                   <input
                     type="text"
-                    defaultValue={value}
+                    value={value}
+                    onChange={(e) => { setter(e.target.value); markDirty(); }}
                     className="w-full px-3 py-2 border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 bg-background"
                   />
                 ) : (
@@ -218,17 +268,17 @@ export default function VenueProfilePage() {
               <div className="space-y-3">
                 <Toggle
                   checked={freeLoan}
-                  onChange={setFreeLoan}
+                  onChange={(v) => { setFreeLoan(v); markDirty(); }}
                   label="Free Loan"
                 />
                 <Toggle
                   checked={revenueShare}
-                  onChange={setRevenueShare}
+                  onChange={(v) => { setRevenueShare(v); markDirty(); }}
                   label="Revenue Share"
                 />
                 <Toggle
                   checked={directPurchase}
-                  onChange={setDirectPurchase}
+                  onChange={(v) => { setDirectPurchase(v); markDirty(); }}
                   label="Direct Purchase"
                 />
               </div>
@@ -275,7 +325,7 @@ export default function VenueProfilePage() {
               </p>
               <Toggle
                 checked={localArtists}
-                onChange={setLocalArtists}
+                onChange={(v) => { setLocalArtists(v); markDirty(); }}
                 label="Prefer artists within 10 miles of my venue"
               />
             </div>

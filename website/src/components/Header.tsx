@@ -201,7 +201,7 @@ export default function Header() {
 
           {/* Desktop Navigation — centered on page */}
           <nav className="hidden lg:flex items-center gap-7 absolute left-1/2 -translate-x-1/2" role="navigation" aria-label="Main navigation">
-            {(user ? loggedInNavLinks : publicNavLinks).map((link) => (
+            {(user ? loggedInNavLinks.filter((l) => !(userType === "venue" && l.href === "/spaces-looking-for-art")) : publicNavLinks).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -474,7 +474,7 @@ export default function Header() {
           <div className="mx-auto max-w-[1400px] px-6 py-6 space-y-6">
             {/* Primary nav links */}
             <nav className="flex flex-col gap-4">
-              {(user ? loggedInNavLinks : publicNavLinks).map((link) => (
+              {(user ? loggedInNavLinks.filter((l) => !(userType === "venue" && l.href === "/spaces-looking-for-art")) : publicNavLinks).map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
