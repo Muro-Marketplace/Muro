@@ -107,7 +107,6 @@ const faqItems = [
       "Yes. Every approved artist gets their first month at no cost, on any tier. You can start with Core and upgrade later, or begin on Premium or Pro – the first month is always free. After that, billing begins on your chosen plan.",
   },
   {
-  {
     question: "Can I change my tier?",
     answer:
       "Yes, you can upgrade or downgrade at any time. If you upgrade mid-cycle, the difference is prorated. Downgrading takes effect at the start of your next billing period.",
