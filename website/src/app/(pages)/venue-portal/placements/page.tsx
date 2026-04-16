@@ -6,6 +6,11 @@ import { useSearchParams } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { authFetch } from "@/lib/api-client";
 
+function formatSlug(slug: string): string {
+  if (!slug) return "";
+  return slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
 type FilterTab = "All" | "Pending" | "Active" | "Completed";
 type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed";
 
@@ -60,6 +65,7 @@ export default function VenuePlacementsPage() {
   const [placements, setPlacements] = useState<PlacementRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [responding, setResponding] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Request form state
   const [showForm, setShowForm] = useState(false);
@@ -127,9 +133,19 @@ export default function VenuePlacementsPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.placements) {
+          // Resolve artist names from browse-artists
+          let artistNameMap: Record<string, string> = {};
+          try {
+            const artistRes = await fetch("/api/browse-artists");
+            const artistData = await artistRes.json();
+            for (const a of (artistData.artists || [])) {
+              artistNameMap[a.slug] = a.name;
+            }
+          } catch { /* fallback to slug */ }
+
           const mapped: PlacementRequest[] = data.placements.map((p: Record<string, unknown>) => ({
             id: p.id,
-            artistName: p.artist_slug || "Artist",
+            artistName: artistNameMap[p.artist_slug as string] || formatSlug(p.artist_slug as string) || "Artist",
             artistSlug: p.artist_slug || "",
             workTitle: p.work_title || "Untitled",
             workImage: (p.work_image as string) || "",
@@ -417,7 +433,10 @@ export default function VenuePlacementsPage() {
             <div key={p.id} className={`bg-surface border rounded-sm overflow-hidden transition-all ${
               p.status === "Pending" ? "border-amber-200 shadow-sm" : "border-border"
             }`}>
-              <div className="p-4 sm:p-5">
+              <div
+                className="p-4 sm:p-5 cursor-pointer"
+                onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+              >
                 <div className="flex items-start gap-4">
                   {p.workImage && (
                     <div className="w-16 h-16 sm:w-20 sm:h-20 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
@@ -430,9 +449,14 @@ export default function VenuePlacementsPage() {
                         <h3 className="text-sm font-medium text-foreground">{p.workTitle}</h3>
                         <p className="text-xs text-muted mt-0.5">by {p.artistName}</p>
                       </div>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${statusStyles[p.status] || statusStyles.Pending}`}>
-                        {p.status}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${statusStyles[p.status] || statusStyles.Pending}`}>
+                          {p.status}
+                        </span>
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className={`text-muted transition-transform duration-200 ${expandedId === p.id ? "rotate-180" : ""}`}>
+                          <polyline points="3 5 7 9 11 5" />
+                        </svg>
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted">
                       <span className="border border-border rounded-sm px-1.5 py-0.5">
@@ -441,13 +465,48 @@ export default function VenuePlacementsPage() {
                       <span>Requested {p.date}</span>
                       {p.respondedAt && <span>Responded {p.respondedAt}</span>}
                     </div>
-                    {p.message && (
-                      <div className="mt-3 bg-background border border-border rounded-sm p-3">
-                        <p className="text-xs text-muted italic">&ldquo;{p.message}&rdquo;</p>
-                      </div>
-                    )}
                   </div>
                 </div>
+              </div>
+              {/* Expanded details */}
+              {expandedId === p.id && (
+                <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-border pt-4 space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <p className="text-muted mb-0.5">Artist</p>
+                      <p className="text-foreground font-medium">{p.artistName}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted mb-0.5">Arrangement</p>
+                      <p className="text-foreground font-medium">{typeLabel(p.arrangementType, p.revenueSharePercent)}</p>
+                    </div>
+                    {p.revenueSharePercent != null && p.revenueSharePercent > 0 && (
+                      <div>
+                        <p className="text-muted mb-0.5">Revenue Share</p>
+                        <p className="text-foreground font-medium">{p.revenueSharePercent}%</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-muted mb-0.5">Requested</p>
+                      <p className="text-foreground font-medium">{p.date}</p>
+                    </div>
+                    {p.respondedAt && (
+                      <div>
+                        <p className="text-muted mb-0.5">Responded</p>
+                        <p className="text-foreground font-medium">{p.respondedAt}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-muted mb-0.5">Status</p>
+                      <p className="text-foreground font-medium">{p.status}</p>
+                    </div>
+                  </div>
+                  {p.message && (
+                    <div className="bg-background border border-border rounded-sm p-3">
+                      <p className="text-[10px] text-muted uppercase tracking-wider mb-1">Message from artist</p>
+                      <p className="text-xs text-foreground">{p.message}</p>
+                    </div>
+                  )}
                 {p.status === "Pending" && (
                   <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border">
                     <button

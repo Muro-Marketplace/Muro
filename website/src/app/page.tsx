@@ -23,7 +23,7 @@ const navLinks = [
 export default function Home() {
   const contentRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, userType } = useAuth();
+  const { user, userType, signOut } = useAuth();
 
   const portalBase = userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal";
   const portalLabel = userType === "venue" ? "Venue Portal" : userType === "customer" ? "Customer Portal" : "Artist Portal";
@@ -59,7 +59,10 @@ export default function Home() {
             </nav>
             <div className="hidden lg:flex items-center gap-4">
               {user ? (
-                <Link href={portalBase} className="text-sm text-white/90 hover:text-white transition-colors">{portalLabel}</Link>
+                <>
+                  <Link href={portalBase} className="text-sm text-white/90 hover:text-white transition-colors">{portalLabel}</Link>
+                  <button onClick={() => signOut()} className="text-sm text-white/50 hover:text-white transition-colors">Logout</button>
+                </>
               ) : (
                 <>
                   <Link href="/login" className="text-sm text-white/90 hover:text-white transition-colors">Login</Link>
@@ -83,7 +86,10 @@ export default function Home() {
                 </nav>
                 <div className="flex flex-col gap-3 pt-4 border-t border-white/10">
                   {user ? (
-                    <Link href={portalBase} className="text-center text-sm px-5 py-3 rounded-sm bg-white text-foreground font-medium hover:bg-white/90" onClick={() => setMobileMenuOpen(false)}>{portalLabel}</Link>
+                    <>
+                      <Link href={portalBase} className="text-center text-sm px-5 py-3 rounded-sm bg-white text-foreground font-medium hover:bg-white/90" onClick={() => setMobileMenuOpen(false)}>{portalLabel}</Link>
+                      <button onClick={() => { signOut(); setMobileMenuOpen(false); }} className="text-center text-sm px-5 py-3 rounded-sm border border-white/20 text-white hover:bg-white/10">Logout</button>
+                    </>
                   ) : (
                     <>
                       <Link href="/login" className="text-center text-sm px-5 py-3 rounded-sm border border-white/20 text-white hover:bg-white/10" onClick={() => setMobileMenuOpen(false)}>Login</Link>

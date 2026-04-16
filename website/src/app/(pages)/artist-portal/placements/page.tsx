@@ -68,6 +68,7 @@ export default function PlacementsPage() {
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [initialised, setInitialised] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Form state
   const [venueSlug, setVenueSlug] = useState("");
@@ -496,30 +497,87 @@ export default function PlacementsPage() {
       {/* Cards - mobile */}
       <div className="sm:hidden space-y-3">
         {filtered.map((p) => (
-          <div key={p.id} className="bg-surface border border-border rounded-sm p-4">
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
-                  <Image src={p.workImage} alt={p.workTitle} fill className="object-cover" sizes="40px" />
+          <div key={p.id} className="bg-surface border border-border rounded-sm overflow-hidden">
+            <div
+              className="p-4 cursor-pointer"
+              onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+            >
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
+                    <Image src={p.workImage} alt={p.workTitle} fill className="object-cover" sizes="40px" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground text-sm leading-snug">{p.workTitle}</p>
+                    <p className="text-xs text-muted">{p.venue}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-foreground text-sm leading-snug">{p.workTitle}</p>
-                  <p className="text-xs text-muted">{p.venue}</p>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${statusBadge(p.status)}`}>
+                    {p.status === "Pending" ? "Awaiting response" : p.status}
+                  </span>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className={`text-muted transition-transform duration-200 ${expandedId === p.id ? "rotate-180" : ""}`}>
+                    <polyline points="3 5 7 9 11 5" />
+                  </svg>
                 </div>
               </div>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${statusBadge(p.status)}`}>
-                {p.status === "Pending" ? "Awaiting response" : p.status}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs text-muted mt-2">
-              <div className="flex items-center gap-2">
-                <span className="border border-border rounded-sm px-1.5 py-0.5">
-                  {p.type}{p.revenueSharePercent ? ` ${p.revenueSharePercent}%` : ""}
-                </span>
-                <span>{p.date}</span>
+              <div className="flex items-center justify-between text-xs text-muted mt-2">
+                <div className="flex items-center gap-2">
+                  <span className="border border-border rounded-sm px-1.5 py-0.5">
+                    {p.type}{p.revenueSharePercent ? ` ${p.revenueSharePercent}%` : ""}
+                  </span>
+                  <span>{p.date}</span>
+                </div>
+                {p.revenue && <span className="font-medium text-foreground">{p.revenue}</span>}
               </div>
-              {p.revenue && <span className="font-medium text-foreground">{p.revenue}</span>}
             </div>
+            {/* Expanded details */}
+            {expandedId === p.id && (
+              <div className="px-4 pb-4 border-t border-border pt-3 space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <p className="text-muted mb-0.5">Venue</p>
+                    <p className="text-foreground font-medium">{p.venue || "Unknown"}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted mb-0.5">Arrangement</p>
+                    <p className="text-foreground font-medium">{p.type}{p.revenueSharePercent ? ` (${p.revenueSharePercent}%)` : ""}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted mb-0.5">Status</p>
+                    <p className="text-foreground font-medium">{p.status}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted mb-0.5">Requested</p>
+                    <p className="text-foreground font-medium">{p.date}</p>
+                  </div>
+                  {p.respondedAt && (
+                    <div>
+                      <p className="text-muted mb-0.5">Responded</p>
+                      <p className="text-foreground font-medium">{p.respondedAt}</p>
+                    </div>
+                  )}
+                  {p.revenue && (
+                    <div>
+                      <p className="text-muted mb-0.5">Revenue</p>
+                      <p className="text-foreground font-medium">{p.revenue}</p>
+                    </div>
+                  )}
+                </div>
+                {p.message && (
+                  <div className="bg-background border border-border rounded-sm p-3">
+                    <p className="text-[10px] text-muted uppercase tracking-wider mb-1">Message</p>
+                    <p className="text-xs text-foreground">{p.message}</p>
+                  </div>
+                )}
+                {p.notes && (
+                  <div className="bg-background border border-border rounded-sm p-3">
+                    <p className="text-[10px] text-muted uppercase tracking-wider mb-1">Notes</p>
+                    <p className="text-xs text-foreground">{p.notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
         {filtered.length === 0 && (
