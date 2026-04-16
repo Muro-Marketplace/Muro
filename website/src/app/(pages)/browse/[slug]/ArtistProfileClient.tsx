@@ -7,6 +7,7 @@ import type { ArtistWork } from "@/data/artists";
 import { slugify } from "@/lib/slugify";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
 
 interface ArtistProfileClientProps {
@@ -27,6 +28,7 @@ export default function ArtistProfileClient({
   const router = useRouter();
   const { addItem } = useCart();
   const { user, displayName: authDisplayName, userType } = useAuth();
+  const { showToast } = useToast();
   const [activeTheme, setActiveTheme] = useState("All");
   const [bioExpanded, setBioExpanded] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -430,28 +432,51 @@ export default function ArtistProfileClient({
                   </button>
                 )}
                 {currentWork.available && currentWork.pricing.length > 0 && (
-                  <button
-                    onClick={() => {
-                      const selected = currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0];
-                      addItem({
-                        type: "work",
-                        workId: currentWork.id,
-                        artistSlug,
-                        artistName,
-                        title: currentWork.title,
-                        image: currentWork.image,
-                        size: selected.label,
-                        price: selected.price,
-                        quantity: 1,
-                        shippingPrice: currentWork.shippingPrice ?? undefined,
-                      });
-                      setLightboxIndex(null);
-                      router.push("/checkout");
-                    }}
-                    className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
-                  >
-                    Buy Now – £{(currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0]).price}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => {
+                        const selected = currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0];
+                        addItem({
+                          type: "work",
+                          workId: currentWork.id,
+                          artistSlug,
+                          artistName,
+                          title: currentWork.title,
+                          image: currentWork.image,
+                          size: selected.label,
+                          price: selected.price,
+                          quantity: 1,
+                          shippingPrice: currentWork.shippingPrice ?? undefined,
+                        });
+                        setLightboxIndex(null);
+                        router.push("/checkout");
+                      }}
+                      className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
+                    >
+                      Buy Now – £{(currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0]).price}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const selected = currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0];
+                        addItem({
+                          type: "work",
+                          workId: currentWork.id,
+                          artistSlug,
+                          artistName,
+                          title: currentWork.title,
+                          image: currentWork.image,
+                          size: selected.label,
+                          price: selected.price,
+                          quantity: 1,
+                          shippingPrice: currentWork.shippingPrice ?? undefined,
+                        });
+                        showToast("Added to basket");
+                      }}
+                      className="w-full px-5 py-2 text-sm font-medium text-foreground border border-border hover:border-foreground/30 rounded-sm transition-colors"
+                    >
+                      Add to Basket
+                    </button>
+                  </>
                 )}
                 <div className="flex gap-2">
                   <button

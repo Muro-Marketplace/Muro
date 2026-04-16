@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import type { CartItem } from "@/lib/types";
 
 interface CartContextValue {
@@ -14,22 +14,19 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const hasMounted = useRef(false);
-
-  useEffect(() => {
+function loadCart(): CartItem[] {
+  if (typeof window === "undefined") return [];
+  try {
     const stored = localStorage.getItem("wallplace-cart");
-    if (stored) {
-      try { setItems(JSON.parse(stored)); } catch { /* ignore */ }
-    }
-    hasMounted.current = true;
-  }, []);
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+}
+
+export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [items, setItems] = useState<CartItem[]>(loadCart);
 
   useEffect(() => {
-    if (hasMounted.current) {
-      localStorage.setItem("wallplace-cart", JSON.stringify(items));
-    }
+    localStorage.setItem("wallplace-cart", JSON.stringify(items));
   }, [items]);
 
   const addItem = useCallback((item: Omit<CartItem, "id">) => {

@@ -7,6 +7,7 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import SaveButton from "@/components/SaveButton";
 import MessageArtistButton from "@/components/MessageArtistButton";
+import { useToast } from "@/context/ToastContext";
 
 interface ArtworkPageClientProps {
   work: ArtistWork;
@@ -26,6 +27,7 @@ export default function ArtworkPageClient({
   const router = useRouter();
   const { addItem } = useCart();
   const { user, userType } = useAuth();
+  const { showToast } = useToast();
   const [selectedSizeIdx, setSelectedSizeIdx] = useState(0);
 
   return (
@@ -122,30 +124,55 @@ export default function ArtworkPageClient({
           </button>
         )}
         {work.available && work.pricing.length > 0 && (
-          <button
-            onClick={() => {
-              const selected =
-                work.pricing[selectedSizeIdx] || work.pricing[0];
-              addItem({
-                type: "work",
-                workId: work.id,
-                artistSlug,
-                artistName,
-                title: work.title,
-                image: work.image,
-                size: selected.label,
-                price: selected.price,
-                quantity: 1,
-                shippingPrice: work.shippingPrice ?? undefined,
-                internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
-              });
-              router.push("/checkout");
-            }}
-            className="w-full px-5 py-3 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
-          >
-            Buy Print – £
-            {(work.pricing[selectedSizeIdx] || work.pricing[0]).price}
-          </button>
+          <>
+            <button
+              onClick={() => {
+                const selected =
+                  work.pricing[selectedSizeIdx] || work.pricing[0];
+                addItem({
+                  type: "work",
+                  workId: work.id,
+                  artistSlug,
+                  artistName,
+                  title: work.title,
+                  image: work.image,
+                  size: selected.label,
+                  price: selected.price,
+                  quantity: 1,
+                  shippingPrice: work.shippingPrice ?? undefined,
+                  internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
+                });
+                router.push("/checkout");
+              }}
+              className="w-full px-5 py-3 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
+            >
+              Buy Now – £
+              {(work.pricing[selectedSizeIdx] || work.pricing[0]).price}
+            </button>
+            <button
+              onClick={() => {
+                const selected =
+                  work.pricing[selectedSizeIdx] || work.pricing[0];
+                addItem({
+                  type: "work",
+                  workId: work.id,
+                  artistSlug,
+                  artistName,
+                  title: work.title,
+                  image: work.image,
+                  size: selected.label,
+                  price: selected.price,
+                  quantity: 1,
+                  shippingPrice: work.shippingPrice ?? undefined,
+                  internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
+                });
+                showToast("Added to basket");
+              }}
+              className="w-full px-5 py-2.5 text-sm font-medium text-foreground border border-border hover:border-foreground/30 rounded-sm transition-colors"
+            >
+              Add to Basket
+            </button>
+          </>
         )}
         {work.available && work.inStorePrice != null && work.inStorePrice > 0 && (
           <button
