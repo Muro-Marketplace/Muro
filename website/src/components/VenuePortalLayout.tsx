@@ -7,13 +7,11 @@ import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { label: "Dashboard", href: "/venue-portal" },
+  { label: "Venue Profile", href: "/venue-portal/profile" },
   { label: "Placements", href: "/venue-portal/placements" },
   { label: "Messages", href: "/venue-portal/messages" },
-  { label: "Browse Portfolios", href: "/browse" },
-  { label: "Saved Artists", href: "/venue-portal/saved" },
+  { label: "Saved", href: "/venue-portal/saved" },
   { label: "My Orders", href: "/venue-portal/orders" },
-  { label: "Venue Profile", href: "/venue-portal/profile" },
-  { label: "Premium Tools", href: "/venue-portal/premium" },
   { label: "Settings", href: "/venue-portal/settings" },
 ];
 
@@ -142,6 +140,21 @@ export default function VenuePortalLayout({
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
+        {/* Mobile top bar with hamburger */}
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-background sticky top-14 z-10">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-1.5 -ml-1.5 text-foreground/70 hover:text-foreground transition-colors"
+            aria-label="Toggle menu"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <span className="text-sm font-medium text-foreground">Venue Portal</span>
+        </div>
 
         <div className="px-4 sm:px-6 lg:px-8 pt-4 pb-6 lg:pb-8">{children}</div>
       </div>

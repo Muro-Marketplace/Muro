@@ -24,6 +24,7 @@ const footerColumns = [
     links: [
       { label: "About", href: "/about" },
       { label: "Blog", href: "/blog" },
+      { label: "How It Works", href: "/how-it-works" },
       { label: "Contact", href: "/contact" },
       { label: "Terms", href: "/terms" },
       { label: "Artist Agreement", href: "/artist-agreement" },

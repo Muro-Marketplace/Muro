@@ -8,12 +8,26 @@ import CartIndicator from "./CartIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
-const navLinks = [
+const publicNavLinks = [
   { label: "Marketplace", href: "/browse" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
   { label: "Spaces", href: "/spaces-looking-for-art" },
   { label: "Waitlist", href: "/waitlist" },
+];
+
+const loggedInNavLinks = [
+  { label: "Marketplace", href: "/browse" },
+  { label: "Spaces", href: "/spaces-looking-for-art" },
+];
+
+const moreLinks = [
+  { label: "How It Works", href: "/how-it-works" },
+  { label: "Blog", href: "/blog" },
+  { label: "About", href: "/about" },
+  { label: "Contact", href: "/contact" },
+  { label: "FAQs", href: "/faqs" },
+  { label: "Pricing", href: "/pricing" },
 ];
 
 const immersiveRoutes = ["/venues", "/artists", "/browse", "/about", "/how-it-works"];
@@ -32,6 +46,8 @@ export default function Header() {
   const [notifications, setNotifications] = useState<{ id: string; type: string; title: string; description: string; time: string; link: string }[]>([]);
   const msgDropdownRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
+  const moreDropdownRef = useRef<HTMLDivElement>(null);
+  const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
 
   const portalBase = userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal";
   const [resolvedSlug, setResolvedSlug] = useState("");
@@ -132,7 +148,7 @@ export default function Header() {
 
   // Close dropdowns on click outside
   useEffect(() => {
-    if (!msgDropdownOpen && !notifDropdownOpen) return;
+    if (!msgDropdownOpen && !notifDropdownOpen && !moreDropdownOpen) return;
     function handleClick(e: MouseEvent) {
       if (msgDropdownOpen && msgDropdownRef.current && !msgDropdownRef.current.contains(e.target as Node)) {
         setMsgDropdownOpen(false);
@@ -140,13 +156,16 @@ export default function Header() {
       if (notifDropdownOpen && notifDropdownRef.current && !notifDropdownRef.current.contains(e.target as Node)) {
         setNotifDropdownOpen(false);
       }
+      if (moreDropdownOpen && moreDropdownRef.current && !moreDropdownRef.current.contains(e.target as Node)) {
+        setMoreDropdownOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [msgDropdownOpen, notifDropdownOpen]);
+  }, [msgDropdownOpen, notifDropdownOpen, moreDropdownOpen]);
 
   // Close dropdowns on route change
-  useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); }, [pathname]);
+  useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); setMoreDropdownOpen(false); }, [pathname]);
 
   const isPortal = pathname.startsWith("/artist-portal") || pathname.startsWith("/venue-portal");
   const showSolid = !isImmersive || scrolled;
@@ -182,7 +201,7 @@ export default function Header() {
 
           {/* Desktop Navigation — centered on page */}
           <nav className="hidden lg:flex items-center gap-7 absolute left-1/2 -translate-x-1/2" role="navigation" aria-label="Main navigation">
-            {navLinks.map((link) => (
+            {(user ? loggedInNavLinks : publicNavLinks).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -195,6 +214,38 @@ export default function Header() {
                 {link.label}
               </Link>
             ))}
+            {/* More dropdown — logged in only */}
+            {user && (
+              <div className="relative" ref={moreDropdownRef}>
+                <button
+                  onClick={() => { setMoreDropdownOpen(!moreDropdownOpen); setMsgDropdownOpen(false); setNotifDropdownOpen(false); }}
+                  className={`text-sm transition-colors duration-300 flex items-center gap-1 ${
+                    isPortal || !showSolid
+                      ? "text-white/80 hover:text-white"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  More
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className={`transition-transform duration-200 ${moreDropdownOpen ? "rotate-180" : ""}`}>
+                    <polyline points="2 4 6 8 10 4" />
+                  </svg>
+                </button>
+                {moreDropdownOpen && (
+                  <div className="absolute top-full mt-2 right-0 w-48 bg-white border border-border rounded-sm shadow-lg py-2 z-50">
+                    {moreLinks.map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className="block px-4 py-2 text-sm text-muted hover:text-foreground hover:bg-surface transition-colors"
+                        onClick={() => setMoreDropdownOpen(false)}
+                      >
+                        {link.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
 
           {/* Desktop CTAs */}
@@ -421,18 +472,32 @@ export default function Header() {
         <div className="lg:hidden fixed inset-0 bg-black/20 z-40" onClick={() => setMobileMenuOpen(false)} />
         <div className="lg:hidden border-t border-border bg-white relative z-50">
           <div className="mx-auto max-w-[1400px] px-6 py-6 space-y-6">
+            {/* Primary nav links */}
             <nav className="flex flex-col gap-4">
-              {navLinks.map((link) => (
+              {(user ? loggedInNavLinks : publicNavLinks).map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="text-base text-muted hover:text-foreground transition-colors duration-200"
+                  className="text-base text-foreground font-medium hover:text-accent transition-colors duration-200"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {link.label}
                 </Link>
               ))}
             </nav>
+            {/* More pages — logged in only */}
+            {user && (
+              <div className="pt-2 border-t border-border">
+                <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">More</p>
+                <div className="flex flex-col gap-2">
+                  {moreLinks.map((link) => (
+                    <Link key={link.href} href={link.href} className="text-sm text-muted hover:text-foreground transition-colors" onClick={() => setMobileMenuOpen(false)}>
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex flex-col gap-3 pt-4 border-t border-border">
               {user ? (
                 <>
