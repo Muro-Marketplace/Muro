@@ -264,6 +264,8 @@ export default function BrowsePortfoliosPage() {
 
   const filteredArtists = useMemo(() => {
     return artists.filter((artist) => {
+      // Must have at least one artwork to appear in marketplace
+      if (!artist.works || artist.works.length === 0) return false;
       // Category filter
       if (activeCategoryObj && !activeCategoryObj.mediums.includes(artist.primaryMedium)) return false;
       // Subcategory filter (any selected subcategory must match)

@@ -24,10 +24,26 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Record<string, boolean>>({});
 
   const DEFAULT_SHIPPING = 9.95;
-  const shippingCost = items.reduce((sum, item) => {
-    const perItem = item.shippingPrice ?? DEFAULT_SHIPPING;
-    return sum + perItem * item.quantity;
-  }, 0);
+
+  // Group items by artist for shipping breakdown
+  const artistGroups = items.reduce<Record<string, { artistName: string; items: typeof items; shipping: number }>>((acc, item) => {
+    if (!acc[item.artistSlug]) {
+      acc[item.artistSlug] = { artistName: item.artistName, items: [], shipping: 0 };
+    }
+    acc[item.artistSlug].items.push(item);
+    return acc;
+  }, {});
+
+  // Calculate per-artist shipping: highest single item shipping + 50% of each additional
+  for (const group of Object.values(artistGroups)) {
+    const shippingRates = group.items
+      .flatMap((item) => Array(item.quantity).fill(item.shippingPrice ?? DEFAULT_SHIPPING))
+      .sort((a, b) => b - a);
+    if (shippingRates.length === 0) continue;
+    group.shipping = shippingRates[0] + shippingRates.slice(1).reduce((sum, r) => sum + r * 0.5, 0);
+  }
+
+  const shippingCost = Object.values(artistGroups).reduce((sum, g) => sum + g.shipping, 0);
   const total = subtotal + shippingCost;
 
   function updateField(field: keyof ShippingInfo, value: string) {
@@ -246,7 +262,17 @@ export default function CheckoutPage() {
                 <span className="text-muted">Shipping</span>
                 <span>{shippingCost === 0 ? "Free" : `£${shippingCost.toFixed(2)}`}</span>
               </div>
-              {shippingCost > 0 && (
+              {shippingCost > 0 && Object.keys(artistGroups).length > 1 && (
+                <div className="space-y-1 pl-2">
+                  {Object.values(artistGroups).map((group) => (
+                    <div key={group.artistName} className="flex justify-between text-[10px] text-muted">
+                      <span>Shipped by {group.artistName}</span>
+                      <span>{group.shipping === 0 ? "Free" : `£${group.shipping.toFixed(2)}`}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {shippingCost > 0 && Object.keys(artistGroups).length <= 1 && (
                 <p className="text-[10px] text-muted">Shipping costs set by each artist</p>
               )}
               <div className="flex justify-between text-sm font-medium pt-2 border-t border-border">

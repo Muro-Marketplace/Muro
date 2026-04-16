@@ -85,6 +85,15 @@ export default function ArtworkPageClient({
             </select>
           </div>
         )}
+
+        {/* Shipping info */}
+        <p className="text-xs text-muted mt-1">
+          {work.shippingPrice === 0
+            ? "Free shipping"
+            : work.shippingPrice
+              ? `Shipping: £${work.shippingPrice.toFixed(2)}`
+              : "Shipping: £9.95"}
+        </p>
       </div>
 
       {/* CTAs */}
@@ -116,6 +125,7 @@ export default function ArtworkPageClient({
                 size: selected.label,
                 price: selected.price,
                 quantity: 1,
+                shippingPrice: work.shippingPrice ?? undefined,
               });
               router.push("/checkout");
             }}

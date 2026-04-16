@@ -16,6 +16,7 @@ export interface ArtistWork {
   color: string;
   image: string;
   orientation?: WorkOrientation;
+  shippingPrice?: number | null;
 }
 
 export interface Artist {

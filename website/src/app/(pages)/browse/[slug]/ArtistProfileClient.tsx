@@ -443,6 +443,7 @@ export default function ArtistProfileClient({
                         size: selected.label,
                         price: selected.price,
                         quantity: 1,
+                        shippingPrice: currentWork.shippingPrice ?? undefined,
                       });
                       setLightboxIndex(null);
                       router.push("/checkout");

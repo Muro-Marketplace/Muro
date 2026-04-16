@@ -109,6 +109,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
       color: w.color,
       image: w.image,
       orientation: (w.orientation as "portrait" | "landscape" | "square") || undefined,
+      shippingPrice: w.shipping_price ?? undefined,
     })),
   };
 }
