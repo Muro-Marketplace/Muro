@@ -36,6 +36,7 @@ export default function ArtistProfileClient({
   const [showEnquiry, setShowEnquiry] = useState(false);
   const [selectedForPlacement, setSelectedForPlacement] = useState<Set<number>>(new Set());
   const touchStartX = useRef<number | null>(null);
+  const navigatingAway = useRef(false);
 
   function togglePlacementSelection(index: number) {
     setSelectedForPlacement((prev) => {
@@ -125,6 +126,7 @@ export default function ArtistProfileClient({
 
   // Sync URL with lightbox state so each artwork gets a shareable link
   useEffect(() => {
+    if (navigatingAway.current) return;
     if (lightboxIndex !== null && filteredWorks[lightboxIndex]) {
       const workSlug = slugify(filteredWorks[lightboxIndex].title);
       window.history.pushState(null, "", `/browse/${artistSlug}/${workSlug}`);
@@ -423,6 +425,7 @@ export default function ArtistProfileClient({
                 {user && userType === "venue" && (
                   <button
                     onClick={() => {
+                      navigatingAway.current = true;
                       setLightboxIndex(null);
                       router.push(`/venue-portal/placements?artist=${artistSlug}&artistName=${encodeURIComponent(artistName)}&work=${encodeURIComponent(currentWork.title)}&workImage=${encodeURIComponent(currentWork.image)}`);
                     }}
@@ -448,6 +451,7 @@ export default function ArtistProfileClient({
                           quantity: 1,
                           shippingPrice: currentWork.shippingPrice ?? undefined,
                         });
+                        navigatingAway.current = true;
                         setLightboxIndex(null);
                         router.push("/checkout");
                       }}

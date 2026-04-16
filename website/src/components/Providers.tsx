@@ -11,9 +11,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <CookieConsentProvider>
       <AuthProvider>
         <CartProvider>
-          <SavedProvider>
-            <ToastProvider>{children}</ToastProvider>
-          </SavedProvider>
+          <ToastProvider>
+            <SavedProvider>{children}</SavedProvider>
+          </ToastProvider>
         </CartProvider>
       </AuthProvider>
     </CookieConsentProvider>
