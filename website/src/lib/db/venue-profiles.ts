@@ -87,15 +87,25 @@ export async function upsertVenueProfile(
     .single();
 
   if (existing) {
-    const { error } = await db
+    let { error } = await db
       .from("venue_profiles")
       .update({ ...data, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
+    // Retry without potentially missing columns if update fails
+    if (error) {
+      const { preferred_sizes, interested_in_local_artists, ...safeData } = data as Record<string, unknown>;
+      const retry = await db
+        .from("venue_profiles")
+        .update({ ...safeData, updated_at: new Date().toISOString() })
+        .eq("user_id", userId);
+      error = retry.error;
+    }
     return { error };
   } else {
+    const { preferred_sizes, interested_in_local_artists, ...safeData } = data as Record<string, unknown>;
     const { error } = await db
       .from("venue_profiles")
-      .insert({ ...data, user_id: userId });
+      .insert({ ...safeData, user_id: userId });
     return { error };
   }
 }

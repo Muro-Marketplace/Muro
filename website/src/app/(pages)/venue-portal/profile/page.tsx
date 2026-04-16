@@ -166,11 +166,9 @@ export default function VenueProfilePage() {
           wall_space: detailWallSpace || undefined,
           preferred_styles: styles,
           preferred_themes: themes,
-          preferred_sizes: sizes,
           interested_in_free_loan: freeLoan,
           interested_in_revenue_share: revenueShare,
           interested_in_direct_purchase: directPurchase,
-          interested_in_local_artists: localArtists,
         }),
       });
 
