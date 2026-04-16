@@ -394,7 +394,7 @@ export default function Header() {
                     isPortal || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
                   }`}
                 >
-                  {userType === "venue" ? "Venue Portal" : "Artist Portal"}
+                  {userType === "venue" ? "Venue Portal" : userType === "customer" ? "My Account" : "Artist Portal"}
                 </Link>
                 <button
                   onClick={() => signOut()}
