@@ -773,7 +773,7 @@ export default function BrowsePortfoliosPage() {
 
       {activeCategory !== "collections" && viewAs === "artists" && (
         /* ── Artists view ── */
-        <section className="pt-4 pb-10 lg:pt-6 lg:pb-14">
+        <section className="pt-6 pb-10 lg:pt-10 lg:pb-14">
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
@@ -1055,7 +1055,7 @@ export default function BrowsePortfoliosPage() {
 
       {activeCategory !== "collections" && viewAs === "works" && (
         /* ── Gallery mode with sidebar ── */
-        <section className="pt-4 pb-10 lg:pt-6 lg:pb-14">
+        <section className="pt-6 pb-10 lg:pt-10 lg:pb-14">
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
