@@ -28,7 +28,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
 
   return (
     <Link href={`/browse/${artist.slug}`} className="group block">
-      <div className="bg-[#F8F6F2] border border-border/50 rounded-lg overflow-hidden flex flex-col h-full">
+      <div className="bg-surface border border-border/50 rounded-lg overflow-hidden flex flex-col h-full">
         {/* Image */}
         <div
           className="aspect-square relative overflow-hidden bg-border/20 rounded-t-lg"

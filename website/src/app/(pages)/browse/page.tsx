@@ -1371,7 +1371,7 @@ export default function BrowsePortfoliosPage() {
                       href={`/browse/${work.artistSlug}#work-${slugify(work.title)}`}
                       className="group break-inside-avoid block"
                     >
-                      <div className="bg-[#F8F6F2] border border-border/50 rounded-lg overflow-hidden">
+                      <div className="bg-surface border border-border/50 rounded-lg overflow-hidden">
                         {/* Image */}
                         <div className="relative overflow-hidden bg-border/20 rounded-t-lg">
                           <Image
