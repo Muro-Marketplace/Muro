@@ -184,7 +184,7 @@ export default function Header() {
         isPortal
           ? "bg-[#1A1A1A]"
           : isBrowsePage
-          ? "bg-accent"
+          ? "bg-[#2C2420]"
           : showSolid
           ? "bg-white border-b border-border"
           : "bg-transparent border-b border-transparent"
