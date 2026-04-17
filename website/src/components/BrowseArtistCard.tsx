@@ -28,7 +28,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
 
   return (
     <Link href={`/browse/${artist.slug}`} className="group block">
-      <div className="bg-[#FAF8F5] border border-border/50 rounded-lg overflow-hidden">
+      <div className="bg-[#F5F0EB] border border-border/50 rounded-lg overflow-hidden flex flex-col h-full">
         {/* Image */}
         <div
           className="aspect-square relative overflow-hidden bg-border/20 rounded-t-lg"
@@ -101,7 +101,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
         </div>
 
         {/* Info */}
-        <div className="px-4 py-3.5">
+        <div className="px-4 py-3.5 flex-1">
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="text-sm font-medium text-foreground leading-tight">
               {artist.name}
@@ -120,9 +120,9 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               {offers.join(" · ")}{offers.length > 0 && formats.length > 0 ? " · " : ""}{formats.join(", ")}
             </p>
           )}
-          {artist.openToRevenueShare && artist.revenueSharePercent != null && artist.revenueSharePercent > 0 && userType !== "customer" && (
+          {artist.openToRevenueShare && artist.revenueSharePercent != null && artist.revenueSharePercent > 0 && !(userType === "customer") && (
             <p className="text-[11px] text-accent font-medium mt-1">
-              {artist.revenueSharePercent}% revenue share
+              {artist.revenueSharePercent}% Revenue Share
             </p>
           )}
         </div>
