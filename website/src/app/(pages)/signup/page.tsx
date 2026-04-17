@@ -47,7 +47,7 @@ const options = [
 
 export default function SignUpPage() {
   return (
-    <div className="relative min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex items-center justify-center">
+    <div className="relative min-h-screen flex items-center justify-center -mt-14 lg:-mt-16">
       {/* Background — same as login */}
       <div className="absolute inset-0 -z-10">
         <Image
