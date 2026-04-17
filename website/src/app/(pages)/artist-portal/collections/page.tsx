@@ -309,12 +309,64 @@ export default function CollectionsPage() {
               />
 
               {/* Images */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {/* Thumbnail */}
                 <div>
                   <p className="text-xs text-muted uppercase tracking-wider mb-2">
                     Thumbnail <span className="normal-case text-muted/70">(square, shown on cards)</span>
                   </p>
+                  <div className="relative w-full aspect-square rounded-sm overflow-hidden bg-border/20 border border-dashed border-border flex items-center justify-center text-xs text-muted mb-3">
+                    {form.thumbnail ? (
+                      <Image
+                        src={form.thumbnail}
+                        alt="Thumbnail preview"
+                        fill
+                        className="object-cover"
+                        sizes="300px"
+                        unoptimized
+                      />
+                    ) : (
+                      <span>No thumbnail selected</span>
+                    )}
+                  </div>
+
+                  {artist.works.length > 0 && (
+                    <>
+                      <p className="text-[11px] text-muted mb-1.5">Select from your works</p>
+                      <div className="flex gap-1.5 overflow-x-auto pb-1.5 mb-2 scrollbar-none">
+                        {artist.works.map((work) => {
+                          const isSelected = form.thumbnail === work.image;
+                          return (
+                            <button
+                              key={work.id}
+                              type="button"
+                              onClick={() =>
+                                setForm((p) => ({
+                                  ...p,
+                                  thumbnail: isSelected ? "" : work.image,
+                                }))
+                              }
+                              className={`relative shrink-0 w-14 h-14 rounded-sm overflow-hidden border-2 transition-all cursor-pointer ${
+                                isSelected
+                                  ? "border-accent shadow-sm"
+                                  : "border-transparent hover:border-border"
+                              }`}
+                              title={work.title}
+                            >
+                              <Image
+                                src={work.image}
+                                alt={work.title}
+                                fill
+                                className="object-cover"
+                                sizes="56px"
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
                   <input
                     ref={thumbnailInputRef}
                     type="file"
@@ -322,39 +374,26 @@ export default function CollectionsPage() {
                     onChange={(e) => handleImageUpload("thumbnail", e)}
                     className="hidden"
                   />
-                  <button
-                    type="button"
-                    onClick={() => thumbnailInputRef.current?.click()}
-                    disabled={uploading === "thumbnail"}
-                    className="relative w-full aspect-square rounded-sm overflow-hidden bg-border/20 border border-dashed border-border hover:border-accent/40 transition-colors cursor-pointer flex items-center justify-center text-xs text-muted disabled:opacity-60"
-                  >
-                    {form.thumbnail ? (
-                      <>
-                        <Image
-                          src={form.thumbnail}
-                          alt="Thumbnail preview"
-                          fill
-                          className="object-cover"
-                          sizes="300px"
-                          unoptimized
-                        />
-                        <span className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] py-1.5 text-center">
-                          {uploading === "thumbnail" ? "Uploading…" : "Replace"}
-                        </span>
-                      </>
-                    ) : (
-                      <span>{uploading === "thumbnail" ? "Uploading…" : "Click to upload"}</span>
-                    )}
-                  </button>
-                  {form.thumbnail && (
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => setForm((p) => ({ ...p, thumbnail: "" }))}
-                      className="mt-1.5 text-[11px] text-muted hover:text-red-600 transition-colors"
+                      onClick={() => thumbnailInputRef.current?.click()}
+                      disabled={uploading === "thumbnail"}
+                      className="text-xs text-accent hover:text-accent-hover transition-colors disabled:opacity-60"
                     >
-                      Remove thumbnail
+                      {artist.works.length > 0 ? "Or upload image" : "Upload image"}
+                      {uploading === "thumbnail" ? "…" : ""}
                     </button>
-                  )}
+                    {form.thumbnail && (
+                      <button
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, thumbnail: "" }))}
+                        className="text-[11px] text-muted hover:text-red-600 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Banner */}
@@ -362,6 +401,58 @@ export default function CollectionsPage() {
                   <p className="text-xs text-muted uppercase tracking-wider mb-2">
                     Banner <span className="normal-case text-muted/70">(16:9, shown on detail page)</span>
                   </p>
+                  <div className="relative w-full aspect-[16/9] rounded-sm overflow-hidden bg-border/20 border border-dashed border-border flex items-center justify-center text-xs text-muted mb-3">
+                    {form.bannerImage ? (
+                      <Image
+                        src={form.bannerImage}
+                        alt="Banner preview"
+                        fill
+                        className="object-cover"
+                        sizes="600px"
+                        unoptimized
+                      />
+                    ) : (
+                      <span>No banner selected</span>
+                    )}
+                  </div>
+
+                  {artist.works.length > 0 && (
+                    <>
+                      <p className="text-[11px] text-muted mb-1.5">Select from your works</p>
+                      <div className="flex gap-1.5 overflow-x-auto pb-1.5 mb-2 scrollbar-none">
+                        {artist.works.map((work) => {
+                          const isSelected = form.bannerImage === work.image;
+                          return (
+                            <button
+                              key={work.id}
+                              type="button"
+                              onClick={() =>
+                                setForm((p) => ({
+                                  ...p,
+                                  bannerImage: isSelected ? "" : work.image,
+                                }))
+                              }
+                              className={`relative shrink-0 w-14 h-14 rounded-sm overflow-hidden border-2 transition-all cursor-pointer ${
+                                isSelected
+                                  ? "border-accent shadow-sm"
+                                  : "border-transparent hover:border-border"
+                              }`}
+                              title={work.title}
+                            >
+                              <Image
+                                src={work.image}
+                                alt={work.title}
+                                fill
+                                className="object-cover"
+                                sizes="56px"
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
                   <input
                     ref={bannerInputRef}
                     type="file"
@@ -369,39 +460,26 @@ export default function CollectionsPage() {
                     onChange={(e) => handleImageUpload("banner", e)}
                     className="hidden"
                   />
-                  <button
-                    type="button"
-                    onClick={() => bannerInputRef.current?.click()}
-                    disabled={uploading === "banner"}
-                    className="relative w-full aspect-[16/9] rounded-sm overflow-hidden bg-border/20 border border-dashed border-border hover:border-accent/40 transition-colors cursor-pointer flex items-center justify-center text-xs text-muted disabled:opacity-60"
-                  >
-                    {form.bannerImage ? (
-                      <>
-                        <Image
-                          src={form.bannerImage}
-                          alt="Banner preview"
-                          fill
-                          className="object-cover"
-                          sizes="600px"
-                          unoptimized
-                        />
-                        <span className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[11px] py-1.5 text-center">
-                          {uploading === "banner" ? "Uploading…" : "Replace"}
-                        </span>
-                      </>
-                    ) : (
-                      <span>{uploading === "banner" ? "Uploading…" : "Click to upload"}</span>
-                    )}
-                  </button>
-                  {form.bannerImage && (
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => setForm((p) => ({ ...p, bannerImage: "" }))}
-                      className="mt-1.5 text-[11px] text-muted hover:text-red-600 transition-colors"
+                      onClick={() => bannerInputRef.current?.click()}
+                      disabled={uploading === "banner"}
+                      className="text-xs text-accent hover:text-accent-hover transition-colors disabled:opacity-60"
                     >
-                      Remove banner
+                      {artist.works.length > 0 ? "Or upload image" : "Upload image"}
+                      {uploading === "banner" ? "…" : ""}
                     </button>
-                  )}
+                    {form.bannerImage && (
+                      <button
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, bannerImage: "" }))}
+                        className="text-[11px] text-muted hover:text-red-600 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               {uploadError && (
