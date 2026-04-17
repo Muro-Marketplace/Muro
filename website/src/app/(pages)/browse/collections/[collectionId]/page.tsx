@@ -1,9 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { getCollectionById } from "@/data/collections";
+import { getCollectionById, type ArtistCollection } from "@/data/collections";
 import { getWorkById } from "@/data/artists";
 import { useCart } from "@/context/CartContext";
 import SaveButton from "@/components/SaveButton";
@@ -13,7 +14,49 @@ export default function CollectionDetailPage() {
   const router = useRouter();
   const { addItem } = useCart();
   const collectionId = params.collectionId as string;
-  const collection = getCollectionById(collectionId);
+  const [collection, setCollection] = useState<ArtistCollection | null>(getCollectionById(collectionId) || null);
+  const [loading, setLoading] = useState(!collection);
+
+  useEffect(() => {
+    if (collection) return;
+    // Not in static data — try API and localStorage
+    fetch("/api/browse-collections")
+      .then((r) => r.json())
+      .then((data) => {
+        const found = (data.collections || []).find((c: ArtistCollection) => c.id === collectionId);
+        if (found) { setCollection(found); setLoading(false); return; }
+        // Try localStorage
+        try {
+          const keys = Object.keys(localStorage).filter((k) => k.startsWith("wallplace-collections-"));
+          for (const key of keys) {
+            const local = JSON.parse(localStorage.getItem(key) || "[]");
+            const match = local.find((c: { id: string }) => c.id === collectionId);
+            if (match) {
+              const slug = key.replace("wallplace-collections-", "");
+              setCollection({
+                id: match.id, artistSlug: slug, artistName: slug, name: match.name,
+                description: match.description, workIds: match.workIds || [],
+                bundlePrice: match.bundlePrice ? parseFloat(match.bundlePrice) : 0,
+                bundlePriceBand: match.bundlePrice ? `£${match.bundlePrice}` : "",
+                coverImage: `https://picsum.photos/seed/${match.id}/900/600`, available: true,
+              });
+              setLoading(false);
+              return;
+            }
+          }
+        } catch { /* ignore */ }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [collectionId, collection]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <p className="text-muted text-sm">Loading collection...</p>
+      </div>
+    );
+  }
 
   if (!collection) {
     return (
