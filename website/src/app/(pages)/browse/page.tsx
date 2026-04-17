@@ -452,7 +452,7 @@ export default function BrowsePortfoliosPage() {
               className={`flex-1 py-2 text-sm rounded-sm border transition-all duration-150 capitalize cursor-pointer ${
                 filters.mode === mode
                   ? "bg-foreground text-background border-foreground"
-                  : "border-border bg-white text-muted hover:border-foreground/30"
+                  : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
               }`}
             >
               {mode}
@@ -541,7 +541,7 @@ export default function BrowsePortfoliosPage() {
             type="button"
             onClick={() => { setFilter("freeLoan", !filters.freeLoan); if (!filters.freeLoan) setFilter("revenueShare", true); }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
-              filters.freeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-white text-muted hover:border-foreground/30"
+              filters.freeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.freeLoan ? "text-accent" : "text-muted"}>
@@ -572,7 +572,7 @@ export default function BrowsePortfoliosPage() {
             type="button"
             onClick={() => setFilter("outrightPurchase", !filters.outrightPurchase)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
-              filters.outrightPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-white text-muted hover:border-foreground/30"
+              filters.outrightPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.outrightPurchase ? "text-accent" : "text-muted"}>
@@ -594,7 +594,7 @@ export default function BrowsePortfoliosPage() {
         <select
           value={filters.styleMedium}
           onChange={(e) => setFilter("styleMedium", e.target.value)}
-          className="w-full px-3 py-2 bg-white border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
+          className="w-full px-3 py-2 bg-[#F8F6F2] lg:bg-white border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
         >
           <option value="">All styles</option>
           {allMediums.map((m) => (
@@ -613,7 +613,7 @@ export default function BrowsePortfoliosPage() {
         <select
           value={filters.themes[0] || ""}
           onChange={(e) => setFilter("themes", e.target.value ? [e.target.value] : [])}
-          className="w-full px-3 py-2 bg-white border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
+          className="w-full px-3 py-2 bg-[#F8F6F2] lg:bg-white border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
         >
           <option value="">All themes</option>
           {themes.map((t) => (
@@ -745,7 +745,7 @@ export default function BrowsePortfoliosPage() {
               className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
                 activeSubcategories.size === 0
                   ? "bg-foreground text-white border-foreground"
-                  : "border-border bg-white text-muted hover:border-foreground/30"
+                  : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
               }`}
             >
               All {activeCategoryObj.label}
@@ -758,7 +758,7 @@ export default function BrowsePortfoliosPage() {
                 className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
                   activeSubcategories.has(sub)
                     ? "bg-foreground text-white border-foreground"
-                    : "border-border bg-white text-muted hover:border-foreground/30"
+                    : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                 }`}
               >
                 {sub}
@@ -898,7 +898,7 @@ export default function BrowsePortfoliosPage() {
                       className={`p-1.5 rounded-sm border transition-colors duration-150 cursor-pointer ${
                         viewMode === "compact"
                           ? "bg-foreground text-background border-foreground"
-                          : "border-border bg-white text-muted hover:border-foreground/30"
+                          : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                       }`}
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
@@ -916,7 +916,7 @@ export default function BrowsePortfoliosPage() {
                       className={`p-1.5 rounded-sm border transition-colors duration-150 cursor-pointer ${
                         viewMode === "expanded"
                           ? "bg-foreground text-background border-foreground"
-                          : "border-border bg-white text-muted hover:border-foreground/30"
+                          : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                       }`}
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
@@ -1074,7 +1074,7 @@ export default function BrowsePortfoliosPage() {
                     <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Location Mode</p>
                     <div className="flex gap-2">
                       {(["global", "local"] as const).map((mode) => (
-                        <button key={mode} type="button" onClick={() => { setGalleryLocationMode(mode); if (mode === "local" && !userCoords) handleModeChange("local"); }} className={`flex-1 py-2 text-sm rounded-sm border transition-all duration-150 capitalize cursor-pointer ${galleryLocationMode === mode ? "bg-foreground text-background border-foreground" : "border-border bg-white text-muted hover:border-foreground/30"}`}>
+                        <button key={mode} type="button" onClick={() => { setGalleryLocationMode(mode); if (mode === "local" && !userCoords) handleModeChange("local"); }} className={`flex-1 py-2 text-sm rounded-sm border transition-all duration-150 capitalize cursor-pointer ${galleryLocationMode === mode ? "bg-foreground text-background border-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"}`}>
                           {mode}
                         </button>
                       ))}
@@ -1084,7 +1084,7 @@ export default function BrowsePortfoliosPage() {
                         <p className="text-xs text-muted mb-2">Distance</p>
                         <div className="flex flex-wrap gap-1.5">
                           {DISTANCE_OPTIONS.map((opt) => (
-                            <button key={opt.value} type="button" onClick={() => setFilter("maxDistance", opt.value)} className={`px-2.5 py-1 text-xs rounded-sm border transition-colors cursor-pointer ${filters.maxDistance === opt.value ? "bg-foreground text-background border-foreground" : "border-border bg-white text-muted hover:border-foreground/30"}`}>
+                            <button key={opt.value} type="button" onClick={() => setFilter("maxDistance", opt.value)} className={`px-2.5 py-1 text-xs rounded-sm border transition-colors cursor-pointer ${filters.maxDistance === opt.value ? "bg-foreground text-background border-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"}`}>
                               {opt.label}
                             </button>
                           ))}
@@ -1111,7 +1111,7 @@ export default function BrowsePortfoliosPage() {
                         type="button"
                         onClick={() => { setGalleryFreeLoan(!galleryFreeLoan); if (!galleryFreeLoan) setGalleryRevenueShare(true); }}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
-                          galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-white text-muted hover:border-foreground/30"
+                          galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={galleryFreeLoan ? "text-accent" : "text-muted"}>
@@ -1141,7 +1141,7 @@ export default function BrowsePortfoliosPage() {
                         type="button"
                         onClick={() => setGalleryPurchase(!galleryPurchase)}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
-                          galleryPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-white text-muted hover:border-foreground/30"
+                          galleryPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={galleryPurchase ? "text-accent" : "text-muted"}>
@@ -1245,7 +1245,7 @@ export default function BrowsePortfoliosPage() {
                           type="button"
                           onClick={() => { setGalleryFreeLoan(!galleryFreeLoan); if (!galleryFreeLoan) setGalleryRevenueShare(true); }}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm border text-left transition-colors ${
-                            galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-white text-muted hover:border-foreground/30"
+                            galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                           }`}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={galleryFreeLoan ? "text-accent" : "text-muted"}>
@@ -1275,7 +1275,7 @@ export default function BrowsePortfoliosPage() {
                           type="button"
                           onClick={() => setGalleryPurchase(!galleryPurchase)}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm border text-left transition-colors ${
-                            galleryPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-white text-muted hover:border-foreground/30"
+                            galleryPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                           }`}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={galleryPurchase ? "text-accent" : "text-muted"}>
