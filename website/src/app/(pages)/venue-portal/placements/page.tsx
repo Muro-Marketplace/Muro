@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { authFetch } from "@/lib/api-client";
@@ -509,6 +510,19 @@ export default function VenuePlacementsPage() {
                         <p className="text-foreground font-medium">{p.revenueSharePercent}% of sales</p>
                       </div>
                     )}
+                    <div>
+                      <p className="text-muted mb-0.5">QR Scans</p>
+                      <p className="text-foreground font-medium">0</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <Link
+                      href={`/venue-portal/messages?artist=${p.artistSlug}&artistName=${encodeURIComponent(p.artistName)}`}
+                      className="text-xs text-accent hover:text-accent-hover transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Message Artist
+                    </Link>
                   </div>
                   {p.message && (
                     <div className="bg-background border border-border rounded-sm p-3">

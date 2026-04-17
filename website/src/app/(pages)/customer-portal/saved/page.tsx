@@ -166,7 +166,7 @@ export default function CustomerSavedPage() {
                   {(() => {
                     const match = item.item_type === "work" ? workMap.get(item.item_id) : null;
                     const href = match
-                      ? `/browse/${match.artistSlug}/${slugify(match.title)}`
+                      ? `/browse/${match.artistSlug}?work=${slugify(match.title)}`
                       : linkForItem(item.item_type, item.item_id);
                     const label = match ? match.title : formatName(item.item_id);
                     return (

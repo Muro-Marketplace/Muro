@@ -512,6 +512,28 @@ export default function PlacementsPage() {
                           <p className="text-muted mb-0.5">Payout</p>
                           <p className="text-foreground font-medium">{p.revenue || "No sales yet"}</p>
                         </div>
+                        <div>
+                          <p className="text-muted mb-0.5">QR Scans</p>
+                          <p className="text-foreground font-medium">0</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 mt-3">
+                        <Link
+                          href={`/artist-portal/messages?artist=${p.venueSlug}&artistName=${encodeURIComponent(p.venue)}`}
+                          className="text-xs text-accent hover:text-accent-hover transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Message Venue
+                        </Link>
+                        {p.status === "Active" && (
+                          <Link
+                            href={`/artist-portal/labels?venue=${encodeURIComponent(p.venue)}&works=${encodeURIComponent(p.workTitle)}`}
+                            className="text-xs text-accent hover:text-accent-hover transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Generate QR Label
+                          </Link>
+                        )}
                       </div>
                       {p.message && (
                         <div className="mt-3 bg-surface border border-border rounded-sm p-3">
@@ -605,6 +627,10 @@ export default function PlacementsPage() {
                     <p className="text-muted mb-0.5">Payout</p>
                     <p className="text-foreground font-medium">{p.revenue || "No sales yet"}</p>
                   </div>
+                  <div>
+                    <p className="text-muted mb-0.5">QR Scans</p>
+                    <p className="text-foreground font-medium">0</p>
+                  </div>
                 </div>
                 {p.message && (
                   <div className="bg-background border border-border rounded-sm p-3">
@@ -618,6 +644,22 @@ export default function PlacementsPage() {
                     <p className="text-xs text-foreground">{p.notes}</p>
                   </div>
                 )}
+                <div className="flex items-center gap-3 mt-2">
+                  <Link
+                    href={`/artist-portal/messages?artist=${p.venueSlug}&artistName=${encodeURIComponent(p.venue)}`}
+                    className="text-xs text-accent hover:text-accent-hover transition-colors"
+                  >
+                    Message Venue
+                  </Link>
+                  {p.status === "Active" && (
+                    <Link
+                      href={`/artist-portal/labels?venue=${encodeURIComponent(p.venue)}&works=${encodeURIComponent(p.workTitle)}`}
+                      className="text-xs text-accent hover:text-accent-hover transition-colors"
+                    >
+                      Generate QR Label
+                    </Link>
+                  )}
+                </div>
               </div>
             )}
           </div>

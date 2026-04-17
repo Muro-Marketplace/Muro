@@ -1,11 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { artists } from "@/data/artists";
 import { slugify } from "@/lib/slugify";
 import { getArtistBySlug } from "@/lib/db/merged-data";
-import { trackEvent, extractTrackingContext, generateVisitorId } from "@/lib/analytics";
 import ArtworkPageClient from "./ArtworkPageClient";
 import type { Metadata } from "next";
 
@@ -91,9 +89,13 @@ export default async function ArtworkPage({
     notFound();
   }
 
-  // Track artwork view (fire-and-forget)
+  // Track artwork view (fire-and-forget, dynamic import to avoid crash if env vars missing)
   try {
-    const headersList = await headers();
+    const [{ trackEvent, extractTrackingContext, generateVisitorId }, { headers: getHeaders }] = await Promise.all([
+      import("@/lib/analytics"),
+      import("next/headers"),
+    ]);
+    const headersList = await getHeaders();
     const ctx = extractTrackingContext(headersList);
     trackEvent({
       event_type: "artwork_view",

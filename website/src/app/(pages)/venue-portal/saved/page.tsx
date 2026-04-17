@@ -103,7 +103,7 @@ export default function SavedPage() {
                     </p>
                     <div className="flex gap-2">
                       <Link
-                        href={`/browse/${work!.artistSlug}/${slugify(work!.title)}`}
+                        href={`/browse/${work!.artistSlug}?work=${slugify(work!.title)}`}
                         className="flex-1 text-center px-3 py-1.5 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors"
                       >
                         View

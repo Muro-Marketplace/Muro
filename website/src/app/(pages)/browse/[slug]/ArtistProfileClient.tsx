@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import type { ArtistWork } from "@/data/artists";
 import { slugify } from "@/lib/slugify";
@@ -57,6 +57,16 @@ export default function ArtistProfileClient({
     }
   }
   const [enquirySent, setEnquirySent] = useState(false);
+  const searchParams = useSearchParams();
+
+  // Auto-open lightbox if ?work= param is present
+  useEffect(() => {
+    const workParam = searchParams.get("work");
+    if (workParam && works.length > 0 && lightboxIndex === null) {
+      const index = works.findIndex((w) => slugify(w.title) === workParam || w.id === workParam);
+      if (index >= 0) setLightboxIndex(index);
+    }
+  }, [searchParams, works, lightboxIndex]);
 
   const allThemes = ["All", ...themes];
 
