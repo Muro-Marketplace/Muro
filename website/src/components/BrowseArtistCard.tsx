@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Artist } from "@/data/artists";
+import { useAuth } from "@/context/AuthContext";
 
 interface BrowseArtistCardProps {
   artist: Artist;
@@ -11,6 +12,7 @@ interface BrowseArtistCardProps {
 }
 
 export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardProps) {
+  const { userType } = useAuth();
   const [imgIndex, setImgIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState(0);
   const images = artist.works.map((w) => w.image);
@@ -118,7 +120,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               {offers.join(" · ")}{offers.length > 0 && formats.length > 0 ? " · " : ""}{formats.join(", ")}
             </p>
           )}
-          {artist.openToRevenueShare && artist.revenueSharePercent != null && artist.revenueSharePercent > 0 && (
+          {artist.openToRevenueShare && artist.revenueSharePercent != null && artist.revenueSharePercent > 0 && userType !== "customer" && (
             <p className="text-[11px] text-accent font-medium mt-1">
               {artist.revenueSharePercent}% revenue share
             </p>
