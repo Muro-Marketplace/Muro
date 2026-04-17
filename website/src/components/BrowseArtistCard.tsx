@@ -118,6 +118,11 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               {offers.join(" · ")}{offers.length > 0 && formats.length > 0 ? " · " : ""}{formats.join(", ")}
             </p>
           )}
+          {artist.openToRevenueShare && artist.revenueSharePercent != null && artist.revenueSharePercent > 0 && (
+            <p className="text-[11px] text-accent font-medium mt-1">
+              {artist.revenueSharePercent}% revenue share
+            </p>
+          )}
         </div>
       </div>
     </Link>
