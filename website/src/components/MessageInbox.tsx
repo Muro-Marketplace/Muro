@@ -158,19 +158,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     return () => { if (threadPollRef.current) clearInterval(threadPollRef.current); };
   }, [selectedConv, loadThread]);
 
-  // Scroll to bottom within the messages container only (not the whole page)
+  // Scroll to bottom (most recent messages) when thread loads or new message sent
   useEffect(() => {
     const scrollToBottom = () => {
-      if (messagesEndRef.current) {
-        const container = messagesEndRef.current.parentElement;
-        if (container) {
-          container.scrollTop = container.scrollHeight;
-        }
-      }
+      messagesEndRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
     };
-    // Immediate + delayed to catch both fast and slow renders
     scrollToBottom();
-    const timer = setTimeout(scrollToBottom, 100);
+    const timer = setTimeout(scrollToBottom, 150);
     return () => clearTimeout(timer);
   }, [messages]);
 
