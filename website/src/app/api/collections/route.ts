@@ -73,32 +73,26 @@ export async function POST(request: Request) {
 
     const id = `${profile.slug}-collection-${Date.now()}`;
 
-    // Try to insert into artist_collections table
-    try {
-      const { error } = await Promise.resolve(
-        db.from("artist_collections").insert({
-          id,
-          artist_id: profile.id,
-          artist_slug: profile.slug,
-          name,
-          description: description || null,
-          bundle_price: bundlePrice ? parseFloat(bundlePrice) : null,
-          work_ids: workIds,
-          created_at: new Date().toISOString(),
-        })
-      );
+    const { error } = await Promise.resolve(
+      db.from("artist_collections").upsert({
+        id,
+        artist_id: profile.id,
+        artist_slug: profile.slug,
+        name,
+        description: description || null,
+        bundle_price: bundlePrice ? parseFloat(bundlePrice) : null,
+        work_ids: workIds,
+        available: true,
+        created_at: new Date().toISOString(),
+      }, { onConflict: "id" })
+    );
 
-      if (error) {
-        console.error("Collections insert error (table may not exist):", error.message);
-        // Still return success — localStorage is the primary store for now
-        return NextResponse.json({ success: true, id, dbSaved: false });
-      }
-
-      return NextResponse.json({ success: true, id, dbSaved: true });
-    } catch {
-      // Table doesn't exist — return success anyway (localStorage is primary)
-      return NextResponse.json({ success: true, id, dbSaved: false });
+    if (error) {
+      console.error("Collections save error:", error.message);
+      return NextResponse.json({ error: "Failed to save collection" }, { status: 500 });
     }
+
+    return NextResponse.json({ success: true, id, dbSaved: true });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }

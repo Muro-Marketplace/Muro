@@ -8,31 +8,45 @@ import type { ArtistCollection } from "@/data/collections";
 export async function GET() {
   const allCollections: ArtistCollection[] = [...staticCollections];
 
-  // Try to fetch database collections
+  // Fetch database collections
   try {
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
     const db = getSupabaseAdmin();
     const { data } = await db
       .from("artist_collections")
-      .select("*, artist_profiles!inner(slug, name, profile_image)")
+      .select("*")
+      .eq("available", true)
       .order("created_at", { ascending: false });
 
     if (data) {
-      for (const row of data) {
-        // Skip if already in static data
-        if (allCollections.some((c) => c.id === row.id)) continue;
+      // Fetch artist names for the collections
+      const slugs = [...new Set(data.map((r: { artist_slug: string }) => r.artist_slug).filter(Boolean))];
+      let artistMap: Record<string, { name: string; image: string }> = {};
+      if (slugs.length > 0) {
+        const { data: profiles } = await db
+          .from("artist_profiles")
+          .select("slug, name, profile_image")
+          .in("slug", slugs);
+        if (profiles) {
+          for (const p of profiles) {
+            artistMap[p.slug] = { name: p.name, image: p.profile_image };
+          }
+        }
+      }
 
-        const artistProfile = row.artist_profiles as { slug: string; name: string; profile_image: string } | null;
+      for (const row of data) {
+        if (allCollections.some((c) => c.id === row.id)) continue;
+        const artist = artistMap[row.artist_slug] || {};
         allCollections.push({
           id: row.id,
-          artistSlug: row.artist_slug || artistProfile?.slug || "",
-          artistName: artistProfile?.name || row.artist_slug || "",
+          artistSlug: row.artist_slug || "",
+          artistName: artist.name || row.artist_slug || "",
           name: row.name,
           description: row.description || undefined,
           workIds: row.work_ids || [],
           bundlePrice: row.bundle_price || 0,
           bundlePriceBand: row.bundle_price ? `£${row.bundle_price}` : "",
-          coverImage: artistProfile?.profile_image || `https://picsum.photos/seed/${row.id}/900/600`,
+          coverImage: artist.image || `https://picsum.photos/seed/${row.id}/900/600`,
           available: true,
         });
       }
