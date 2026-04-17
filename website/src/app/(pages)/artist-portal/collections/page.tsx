@@ -89,6 +89,7 @@ export default function CollectionsPage() {
         description: form.description,
         bundlePrice: form.bundlePrice,
         workIds: form.workIds,
+        available: true,
       }),
     }).catch(() => {});
 

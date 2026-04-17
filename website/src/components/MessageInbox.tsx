@@ -94,8 +94,26 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       const res = await authFetch(`/api/messages?slug=${slugRef.current}`);
       const data = await res.json();
       if (data.conversations) {
+        const convs = data.conversations as Conversation[];
+        // Add Wallplace Support if not already present
+        if (!convs.some((c) => c.otherParty === "wallplace-support")) {
+          convs.push({
+            conversationId: "wallplace-support",
+            latestMessage: "Need help? Send us a message.",
+            latestSender: "wallplace-support",
+            latestSenderType: "admin",
+            otherParty: "wallplace-support",
+            otherPartyDisplayName: "Wallplace Support",
+            otherPartyImage: null,
+            otherPartyType: "artist" as const,
+            hasActivePlacement: false,
+            unreadCount: 0,
+            lastActivity: new Date().toISOString(),
+            messageCount: 0,
+          });
+        }
         setConversations((prev) => {
-          if (JSON.stringify(prev) !== JSON.stringify(data.conversations)) return data.conversations;
+          if (JSON.stringify(prev) !== JSON.stringify(convs)) return convs;
           return prev;
         });
       }

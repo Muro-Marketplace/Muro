@@ -6,7 +6,7 @@ import Image from "next/image";
 import { artists as staticArtists, type Artist } from "@/data/artists";
 import { themes } from "@/data/themes";
 import { artistsToGalleryWorks } from "@/data/galleries";
-import { collections } from "@/data/collections";
+import { collections as staticCollections, type ArtistCollection } from "@/data/collections";
 import { artCategories, getCategoryForMedium, matchesSubcategory, type ArtCategory } from "@/data/categories";
 import { slugify } from "@/lib/slugify";
 import { geocodePostcode } from "@/lib/geocode";
@@ -135,6 +135,7 @@ export default function BrowsePortfoliosPage() {
   const [gallerySort, setGallerySort] = useState<"featured" | "az" | "price_low" | "price_high" | "revenue_share">("featured");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [artists, setArtists] = useState<Artist[]>(staticArtists);
+  const [collections, setCollections] = useState<ArtistCollection[]>(staticCollections);
 
   // User location state for Local mode
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -150,6 +151,12 @@ export default function BrowsePortfoliosPage() {
         if (data.artists?.length) {
           setArtists(data.artists);
         }
+      })
+      .catch(() => { /* keep static data */ });
+    fetch("/api/browse-collections")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.collections?.length) setCollections(data.collections);
       })
       .catch(() => { /* keep static data */ });
   }, []);

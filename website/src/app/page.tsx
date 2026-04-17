@@ -159,8 +159,6 @@ export default function Home() {
                 <span className="text-white/60">Active Venues</span>
               </div>
               <div className="hidden sm:flex items-center gap-4 text-xs text-white/40 tracking-widest uppercase">
-                <span>Original work only</span>
-                <span className="w-1 h-1 rounded-full bg-white/30" />
                 <span>No AI art</span>
                 <span className="w-1 h-1 rounded-full bg-white/30" />
                 <span>Every artist reviewed</span>
@@ -191,22 +189,25 @@ export default function Home() {
                     Completely free to browse and enquire.
                   </p>
 
-                  {/* Mobile image strip */}
-                  <div className="sm:hidden flex gap-2 overflow-x-auto -mx-6 px-6 pb-2 mb-6 scrollbar-hide">
-                    <div className="w-40 h-28 relative rounded-sm overflow-hidden shrink-0">
-                      <Image src="https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=280&fit=crop" alt="Art in café" fill className="object-cover" sizes="160px" />
-                    </div>
-                    <div className="w-40 h-28 relative rounded-sm overflow-hidden shrink-0">
-                      <Image src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=400&h=280&fit=crop" alt="Art in restaurant" fill className="object-cover" sizes="160px" />
-                    </div>
-                    <div className="w-40 h-28 relative rounded-sm overflow-hidden shrink-0">
-                      <Image src="https://images.unsplash.com/photo-1519710164239-da123dc03ef4?w=400&h=280&fit=crop" alt="Art in hotel lobby" fill className="object-cover" sizes="160px" />
-                    </div>
-                  </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-8 sm:mb-10">
-                    <DealCard title="Display" description="Art on your walls for free. Earn a share if it sells." />
-                    <DealCard title="Purchase" description="Buy pieces outright for your permanent collection." />
+                    <div className="flex items-start gap-3 p-4 bg-background border border-border rounded-sm">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-accent shrink-0 mt-0.5">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+                      </svg>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground mb-0.5">Display</p>
+                        <p className="text-xs text-muted">Art on your walls for free. Earn a share if it sells.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 p-4 bg-background border border-border rounded-sm">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-accent shrink-0 mt-0.5">
+                        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
+                      </svg>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground mb-0.5">Purchase</p>
+                        <p className="text-xs text-muted">Buy pieces outright for your permanent collection.</p>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
