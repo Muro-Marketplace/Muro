@@ -445,7 +445,7 @@ export default function BrowsePortfoliosPage() {
     setGalleryLocationMode("global");
   }
 
-  const FilterPanel = () => (
+  const filterPanel = (
     <div className="space-y-7">
       {/* Local / Global */}
       <div>
@@ -811,7 +811,7 @@ export default function BrowsePortfoliosPage() {
                     </span>
                   )}
                 </div>
-                <FilterPanel />
+                {filterPanel}
               </aside>
 
               {/* Content */}
@@ -873,7 +873,7 @@ export default function BrowsePortfoliosPage() {
                 {/* Mobile filter panel */}
                 {sidebarOpen && (
                   <div className="lg:hidden mb-8 p-5 bg-surface border border-border rounded-sm">
-                    <FilterPanel />
+                    {filterPanel}
                   </div>
                 )}
 
