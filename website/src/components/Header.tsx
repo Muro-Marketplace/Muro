@@ -178,21 +178,14 @@ export default function Header() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 h-14 lg:h-16 overflow-hidden ${
+      className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ${
         isPortal
-          ? "border-b border-black/10"
+          ? "bg-[#1A1A1A]"
           : showSolid
           ? "bg-white border-b border-border"
           : "bg-transparent border-b border-transparent"
       }`}
     >
-      {/* Dark gallery background for portal pages */}
-      {isPortal && (
-        <div className="absolute inset-0 -z-10 overflow-hidden">
-          <img src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=200&fit=crop&crop=center" alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/45 to-black/55" />
-        </div>
-      )}
       <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
         <div className="flex items-center justify-between h-14 lg:h-16">
           {/* Logo */}

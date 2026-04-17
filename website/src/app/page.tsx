@@ -386,11 +386,11 @@ export default function Home() {
               <p className="text-lg text-white/50 max-w-lg mx-auto mb-10">
                 Cafés, restaurants, hotels, and offices actively seeking artwork to display. See what&rsquo;s available near you.
               </p>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-md sm:max-w-none mx-auto">
-                <Link href="/spaces-looking-for-art" className="inline-flex items-center justify-center w-full sm:w-auto sm:min-w-[200px] px-8 py-3 sm:py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <Link href="/spaces-looking-for-art" className="inline-flex items-center justify-center px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                   See Venue Demand
                 </Link>
-                <Link href="/apply" className="inline-flex items-center justify-center w-full sm:w-auto sm:min-w-[200px] px-8 py-3 sm:py-4 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
+                <Link href="/apply" className="inline-flex items-center justify-center px-7 py-3 sm:py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
                   Apply to Join
                 </Link>
               </div>

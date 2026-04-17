@@ -196,12 +196,15 @@ export default function LabelPreview({ labels: initialLabels, availableSizes = [
             </div>
           )}
 
-          {/* A4 paper preview */}
+          {/* A4 paper preview — scales to fit on mobile */}
           <div className="flex-1 overflow-auto">
-            <div className="py-8 flex flex-col items-center gap-8">
+            <div className="py-4 sm:py-8 flex flex-col items-center gap-4 sm:gap-8">
               {Array.from({ length: pageCount }, (_, pageIdx) => (
                 <div
                   key={pageIdx}
+                  className="origin-top scale-[0.45] sm:scale-[0.6] lg:scale-100 -mb-[160mm] sm:-mb-[120mm] lg:mb-0"
+                >
+                <div
                   className="bg-white shadow-lg label-page"
                   style={{
                     width: "210mm",
@@ -216,6 +219,7 @@ export default function LabelPreview({ labels: initialLabels, availableSizes = [
                     Page {pageIdx + 1} of {pageCount}
                   </div>
                   <LabelSheet labels={labels} pageIndex={pageIdx} />
+                </div>
                 </div>
               ))}
             </div>
