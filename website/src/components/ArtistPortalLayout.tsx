@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 
 const navItems = [
   { label: "Dashboard", href: "/artist-portal" },
@@ -36,12 +38,24 @@ export default function ArtistPortalLayout({
   const router = useRouter();
   const { user, loading, userType, displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && (!user || userType !== "artist")) {
       router.replace("/login");
     }
   }, [loading, user, userType, router]);
+
+  useEffect(() => {
+    if (user && userType === "artist") {
+      authFetch("/api/artist-profile")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.profile?.profile_image) setProfileImage(data.profile.profile_image);
+        })
+        .catch(() => {});
+    }
+  }, [user, userType]);
 
   if (loading) {
     return (
@@ -133,13 +147,19 @@ export default function ArtistPortalLayout({
           </ul>
         </nav>
 
-        <div className="px-4 py-4 border-t border-border">
+        <div className="px-4 py-3 border-t border-border">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent text-sm font-medium">
-              {displayName?.charAt(0)?.toUpperCase() || "A"}
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground leading-tight">{displayName || "Artist"}</p>
+            {profileImage ? (
+              <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
+                <Image src={profileImage} alt={displayName || "Artist"} width={32} height={32} className="object-cover w-full h-full" />
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent text-sm font-medium shrink-0">
+                {displayName?.charAt(0)?.toUpperCase() || "A"}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground leading-tight truncate">{displayName || "Artist"}</p>
               <p className="text-xs text-muted">Artist</p>
             </div>
           </div>

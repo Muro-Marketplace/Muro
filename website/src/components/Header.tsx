@@ -484,6 +484,16 @@ export default function Header() {
                 </Link>
               ))}
             </nav>
+            {/* Portal link — right after nav, before everything else */}
+            {user && (
+              <Link
+                href={userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal"}
+                className="block text-base font-medium text-accent hover:text-accent-hover transition-colors -mt-2"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {userType === "venue" ? "Venue Portal" : userType === "customer" ? "My Account" : "Artist Portal"}
+              </Link>
+            )}
             {/* More pages — logged in only */}
             {user && (
               <div className="pt-2 border-t border-border">
@@ -500,10 +510,10 @@ export default function Header() {
             <div className="flex flex-col gap-3 pt-4 border-t border-border">
               {user ? (
                 <>
-                  <div className="flex items-center gap-4 pb-2">
+                  <div className="flex flex-col gap-3">
                     <Link
                       href={`${portalBase}/messages`}
-                      className="flex items-center gap-2 text-sm text-muted hover:text-foreground transition-colors"
+                      className="flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -516,20 +526,21 @@ export default function Header() {
                         </span>
                       )}
                     </Link>
-                  </div>
-                  {/* Portal link */}
-                  <div className="pt-2 border-t border-border">
                     <Link
-                      href={userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal"}
-                      className="block text-sm font-medium text-foreground hover:text-accent transition-colors"
+                      href={`${portalBase}`}
+                      className="flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"
                       onClick={() => setMobileMenuOpen(false)}
                     >
-                      {userType === "venue" ? "Venue Portal" : userType === "customer" ? "My Account" : "Artist Portal"}
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                      </svg>
+                      Notifications
                     </Link>
                   </div>
                   <button
                     onClick={() => { signOut(); setMobileMenuOpen(false); }}
-                    className="text-base text-muted hover:text-foreground transition-colors duration-200"
+                    className="text-sm text-muted hover:text-foreground transition-colors duration-200 text-left"
                   >
                     Logout
                   </button>
