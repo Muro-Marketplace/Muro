@@ -156,7 +156,32 @@ export default function BrowsePortfoliosPage() {
     fetch("/api/browse-collections")
       .then((res) => res.json())
       .then((data) => {
-        if (data.collections?.length) setCollections(data.collections);
+        const apiCollections: ArtistCollection[] = data.collections || [];
+        // Also merge localStorage collections from all artists
+        try {
+          const keys = Object.keys(localStorage).filter((k) => k.startsWith("wallplace-collections-"));
+          for (const key of keys) {
+            const slug = key.replace("wallplace-collections-", "");
+            const local = JSON.parse(localStorage.getItem(key) || "[]");
+            const artist = staticArtists.find((a) => a.slug === slug);
+            for (const col of local) {
+              if (apiCollections.some((c) => c.id === col.id)) continue;
+              apiCollections.push({
+                id: col.id,
+                artistSlug: slug,
+                artistName: artist?.name || slug,
+                name: col.name,
+                description: col.description || undefined,
+                workIds: col.workIds || [],
+                bundlePrice: col.bundlePrice ? parseFloat(col.bundlePrice) : 0,
+                bundlePriceBand: col.bundlePrice ? `£${col.bundlePrice}` : "",
+                coverImage: artist?.image || `https://picsum.photos/seed/${col.id}/900/600`,
+                available: true,
+              });
+            }
+          }
+        } catch { /* ignore localStorage errors */ }
+        if (apiCollections.length) setCollections(apiCollections);
       })
       .catch(() => { /* keep static data */ });
   }, []);

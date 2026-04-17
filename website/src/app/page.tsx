@@ -61,7 +61,7 @@ export default function Home() {
               {user ? (
                 <>
                   <Link href={portalBase} className="text-sm text-white/90 hover:text-white transition-colors">{portalLabel}</Link>
-                  <button onClick={() => signOut()} className="text-sm text-white/50 hover:text-white transition-colors">Logout</button>
+                  <button onClick={() => signOut()} className="text-sm text-white/90 hover:text-white transition-colors">Logout</button>
                 </>
               ) : (
                 <>

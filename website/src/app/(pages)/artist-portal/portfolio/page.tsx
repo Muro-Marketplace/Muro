@@ -23,6 +23,8 @@ interface WorkFormState {
   orientation: "portrait" | "landscape" | "square";
   sizes: SizeEntry[];
   shippingPrice: string;
+  shippingPerSize: boolean;
+  sizeShipping: string[];
   inStorePrice: string;
   detectedRatio: number | null;
 }
@@ -76,6 +78,8 @@ const emptyWork: WorkFormState = {
   orientation: "landscape",
   sizes: [...defaultSizes],
   shippingPrice: "",
+  shippingPerSize: false,
+  sizeShipping: [],
   inStorePrice: "",
   detectedRatio: null,
 };
@@ -183,6 +187,8 @@ export default function PortfolioPage() {
       orientation: w.orientation || "landscape",
       sizes: w.pricing.map((p) => ({ label: p.label, price: p.price })),
       shippingPrice: w.shippingPrice != null ? String(w.shippingPrice) : "",
+      shippingPerSize: false,
+      sizeShipping: [],
       inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
       detectedRatio: null,
     });
@@ -609,21 +615,66 @@ export default function PortfolioPage() {
             {/* Shipping price */}
             <div>
               <label className="block text-sm font-medium mb-2">Shipping Price</label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted">&pound;</span>
+              {!form.shippingPerSize && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted">&pound;</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.shippingPrice}
+                    onChange={(e) => setForm((p) => ({ ...p, shippingPrice: e.target.value }))}
+                    placeholder={defaultShipping || "9.95"}
+                    className="w-32 bg-background border border-border rounded-sm px-3 py-3 text-sm text-foreground text-right focus:outline-none focus:border-accent/60"
+                  />
+                </div>
+              )}
+              <label className="flex items-center gap-2 mt-2 cursor-pointer">
                 <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.shippingPrice}
-                  onChange={(e) => setForm((p) => ({ ...p, shippingPrice: e.target.value }))}
-                  placeholder={defaultShipping || "9.95"}
-                  className="w-32 bg-background border border-border rounded-sm px-3 py-3 text-sm text-foreground text-right focus:outline-none focus:border-accent/60"
+                  type="checkbox"
+                  checked={form.shippingPerSize}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setForm((p) => ({
+                      ...p,
+                      shippingPerSize: checked,
+                      sizeShipping: checked ? p.sizes.map(() => "") : [],
+                    }));
+                  }}
+                  className="w-3.5 h-3.5 rounded-sm border border-border accent-accent"
                 />
-              </div>
-              <p className="text-[10px] text-muted mt-1.5">
-                Leave blank to use your default ({defaultShipping ? `£${parseFloat(defaultShipping).toFixed(2)}` : "£9.95"}). Set to 0 for free shipping.
-              </p>
+                <span className="text-xs text-muted">Set different shipping per size</span>
+              </label>
+              {form.shippingPerSize && (
+                <div className="mt-3 space-y-2">
+                  {form.sizes.map((size, i) => (
+                    size.label.trim() ? (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-xs text-muted w-28 truncate">{size.label}</span>
+                        <span className="text-xs text-muted">&pound;</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={form.sizeShipping[i] || ""}
+                          onChange={(e) => setForm((p) => {
+                            const updated = [...p.sizeShipping];
+                            updated[i] = e.target.value;
+                            return { ...p, sizeShipping: updated };
+                          })}
+                          placeholder={defaultShipping || "9.95"}
+                          className="w-20 bg-background border border-border rounded-sm px-2 py-1.5 text-xs text-foreground text-right focus:outline-none focus:border-accent/60"
+                        />
+                      </div>
+                    ) : null
+                  ))}
+                </div>
+              )}
+              {!form.shippingPerSize && (
+                <p className="text-[10px] text-muted mt-1.5">
+                  Leave blank to use your default ({defaultShipping ? `£${parseFloat(defaultShipping).toFixed(2)}` : "£9.95"}). Set to 0 for free shipping.
+                </p>
+              )}
             </div>
 
             {/* In-store price */}
