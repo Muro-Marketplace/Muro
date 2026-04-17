@@ -187,7 +187,7 @@ export default function BrowsePortfoliosPage() {
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"compact" | "expanded">("compact");
-  const [mobileGrid, setMobileGrid] = useState<1 | 2>(1);
+  const [mobileGrid, setMobileGrid] = useState<1 | 2>(2);
 
   // Gallery mode filters
   const [galleryTheme, setGalleryTheme] = useState("");

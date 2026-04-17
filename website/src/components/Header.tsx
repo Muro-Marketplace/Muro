@@ -184,7 +184,7 @@ export default function Header() {
         isPortal
           ? "bg-[#1A1A1A]"
           : isBrowsePage
-          ? "bg-[#2C2420]"
+          ? "bg-white border-b border-border"
           : showSolid
           ? "bg-white border-b border-border"
           : "bg-transparent border-b border-transparent"
@@ -212,8 +212,8 @@ export default function Header() {
                   href={link.href}
                   className={`text-sm transition-colors duration-300 ${
                     isActive
-                      ? (isPortal || isBrowsePage || !showSolid ? "text-white font-semibold" : "text-foreground font-semibold")
-                      : (isPortal || isBrowsePage || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground")
+                      ? (isPortal || !showSolid ? "text-white font-semibold" : "text-foreground font-semibold")
+                      : (isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground")
                   }`}
                 >
                   {link.label}
