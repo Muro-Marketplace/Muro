@@ -26,6 +26,7 @@ interface WorkFormState {
   shippingPerSize: boolean;
   sizeShipping: string[];
   inStorePrice: string;
+  inStorePricing: string[];
   detectedRatio: number | null;
 }
 
@@ -81,6 +82,7 @@ const emptyWork: WorkFormState = {
   shippingPerSize: false,
   sizeShipping: [],
   inStorePrice: "",
+  inStorePricing: [],
   detectedRatio: null,
 };
 
@@ -190,6 +192,7 @@ export default function PortfolioPage() {
       shippingPerSize: false,
       sizeShipping: [],
       inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
+      inStorePricing: w.inStorePricing ? w.inStorePricing.map((p) => String(p.price)) : [],
       detectedRatio: null,
     });
     setEditingIndex(index);
@@ -299,6 +302,9 @@ export default function PortfolioPage() {
       orientation: form.orientation,
       ...(shippingVal != null && !isNaN(shippingVal) ? { shippingPrice: shippingVal } : {}),
       ...(inStoreVal != null && !isNaN(inStoreVal) ? { inStorePrice: inStoreVal } : {}),
+      inStorePricing: form.inStorePricing.length > 0
+        ? validSizes.map((s, i) => ({ label: s.label, price: form.inStorePricing[i] ? parseFloat(form.inStorePricing[i]) : 0 })).filter((p) => p.price > 0)
+        : undefined,
     };
 
     let updated: ArtistWork[];
@@ -677,24 +683,35 @@ export default function PortfolioPage() {
               )}
             </div>
 
-            {/* In-store price */}
+            {/* In-store price per size */}
             <div>
-              <label className="block text-sm font-medium mb-2">In-Store Price <span className="text-muted font-normal">(optional)</span></label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted">&pound;</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.inStorePrice}
-                  onChange={(e) => setForm((p) => ({ ...p, inStorePrice: e.target.value }))}
-                  placeholder="e.g. 250"
-                  className="w-32 bg-background border border-border rounded-sm px-3 py-3 text-sm text-foreground text-right focus:outline-none focus:border-accent/60"
-                />
-              </div>
-              <p className="text-[10px] text-muted mt-1.5">
-                Set a price for the original piece when displayed in a venue. Customers can buy it in person with no shipping. Leave blank if not applicable.
+              <label className="block text-sm font-medium mb-2">In-Store Prices <span className="text-muted font-normal">(optional)</span></label>
+              <p className="text-[10px] text-muted mb-3">
+                Set prices for the original piece when displayed in a venue. Customers can buy in person with no shipping. Leave blank for sizes not available in store.
               </p>
+              <div className="space-y-2">
+                {form.sizes.map((size, i) => (
+                  size.label.trim() ? (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-xs text-muted w-28 truncate">{size.label}</span>
+                      <span className="text-xs text-muted">&pound;</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={form.inStorePricing?.[i] || ""}
+                        onChange={(e) => setForm((p) => {
+                          const updated = [...(p.inStorePricing || p.sizes.map(() => ""))];
+                          updated[i] = e.target.value;
+                          return { ...p, inStorePricing: updated };
+                        })}
+                        placeholder="Not in store"
+                        className="w-24 bg-background border border-border rounded-sm px-2 py-1.5 text-xs text-foreground text-right focus:outline-none focus:border-accent/60"
+                      />
+                    </div>
+                  ) : null
+                ))}
+              </div>
             </div>
 
             {/* Available toggle */}

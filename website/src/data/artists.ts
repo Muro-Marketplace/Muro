@@ -18,6 +18,7 @@ export interface ArtistWork {
   orientation?: WorkOrientation;
   shippingPrice?: number | null;
   inStorePrice?: number | null;
+  inStorePricing?: SizePricing[];
 }
 
 export interface Artist {

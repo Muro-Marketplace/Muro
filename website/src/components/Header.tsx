@@ -174,7 +174,7 @@ export default function Header() {
   useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); setMoreDropdownOpen(false); }, [pathname]);
 
   const isPortal = pathname.startsWith("/artist-portal") || pathname.startsWith("/venue-portal") || pathname.startsWith("/customer-portal");
-  const isBrowsePage = pathname === "/browse" || pathname.startsWith("/browse/");
+  const isBrowsePage = pathname === "/browse";
   const isSpacesPage = pathname === "/spaces-looking-for-art";
   const showSolid = !isImmersive || scrolled;
 
@@ -184,19 +184,12 @@ export default function Header() {
         isPortal
           ? "bg-[#1A1A1A]"
           : isBrowsePage
-          ? "bg-[#1A1A1A]"
+          ? "bg-accent"
           : showSolid
           ? "bg-white border-b border-border"
           : "bg-transparent border-b border-transparent"
       }`}
     >
-      {/* Background image for marketplace page only */}
-      {isBrowsePage && (
-        <div className="absolute inset-0 -z-10 overflow-hidden">
-          <img src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=200&fit=crop&crop=center" alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-black/55" />
-        </div>
-      )}
       <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
         <div className="flex items-center justify-between h-14 lg:h-16">
           {/* Logo */}

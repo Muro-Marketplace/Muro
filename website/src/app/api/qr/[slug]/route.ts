@@ -13,6 +13,7 @@ export async function GET(
   const { slug } = await params;
   const work = request.nextUrl.searchParams.get("work");
   const venue = request.nextUrl.searchParams.get("v");
+  const size = request.nextUrl.searchParams.get("size");
 
   // Track the scan (fire-and-forget, dynamic import to avoid crash if env vars missing)
   try {
@@ -33,8 +34,9 @@ export async function GET(
   // Build redirect URL with source attribution
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
   const sourceParams = `?ref=qr${venue ? `&venue=${encodeURIComponent(venue)}` : ""}`;
+  const sizeParam = size ? `&size=${encodeURIComponent(size)}` : "";
   const redirectPath = work
-    ? `/browse/${slug}${sourceParams}&work=${slugify(work)}`
+    ? `/browse/${slug}${sourceParams}&work=${slugify(work)}${sizeParam}`
     : `/browse/${slug}${sourceParams}`;
 
   return NextResponse.redirect(new URL(redirectPath, baseUrl), 302);

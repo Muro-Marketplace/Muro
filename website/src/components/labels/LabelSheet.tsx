@@ -47,9 +47,10 @@ export default function LabelSheet({ labels, pageIndex }: LabelSheetProps) {
       const uniqueUrls = await Promise.all(
         labels.map((l) => {
           const venueParam = l.venueName ? `&v=${encodeURIComponent(l.venueName)}` : "";
+          const sizeParam = l.workDimensions ? `&size=${encodeURIComponent(l.workDimensions)}` : "";
           const url = l.isPortfolioLabel
             ? `${siteUrl}/api/qr/${l.artistSlug}${venueParam ? `?${venueParam.slice(1)}` : ""}`
-            : `${siteUrl}/api/qr/${l.artistSlug}?work=${encodeURIComponent(l.workTitle || "")}${venueParam}`;
+            : `${siteUrl}/api/qr/${l.artistSlug}?work=${encodeURIComponent(l.workTitle || "")}${venueParam}${sizeParam}`;
           return generateQRDataURL(url);
         })
       );

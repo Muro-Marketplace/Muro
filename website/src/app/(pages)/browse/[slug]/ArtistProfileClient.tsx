@@ -60,14 +60,25 @@ export default function ArtistProfileClient({
   const [enquirySent, setEnquirySent] = useState(false);
   const searchParams = useSearchParams();
 
+  const qrSize = searchParams.get("size") || null;
+  const isQrScan = searchParams.get("ref") === "qr";
+
   // Auto-open lightbox if ?work= param is present
   useEffect(() => {
     const workParam = searchParams.get("work");
     if (workParam && works.length > 0 && lightboxIndex === null) {
       const index = works.findIndex((w) => slugify(w.title) === workParam || w.id === workParam);
-      if (index >= 0) setLightboxIndex(index);
+      if (index >= 0) {
+        setLightboxIndex(index);
+        // Pre-select size if specified in URL
+        if (qrSize) {
+          const work = works[index];
+          const sizeIdx = work.pricing.findIndex((p) => p.label === qrSize);
+          if (sizeIdx >= 0) setSelectedSizeIdx(sizeIdx);
+        }
+      }
     }
-  }, [searchParams, works, lightboxIndex]);
+  }, [searchParams, works, lightboxIndex, qrSize]);
 
   const allThemes = ["All", ...themes];
 
@@ -339,15 +350,16 @@ export default function ArtistProfileClient({
                 src={currentWork.image}
                 alt={`${currentWork.title} — ${currentWork.medium}`}
                 fill
-                className="object-contain pointer-events-none p-4 select-none"
+                className="object-contain p-4 select-none touch-pinch-zoom"
+                style={{ touchAction: "pinch-zoom" }}
                 sizes="(max-width: 640px) 100vw, 800px"
                 quality={60}
                 draggable={false}
                 priority
                 onContextMenu={(e) => e.preventDefault()}
               />
-              {/* Transparent overlay to block save-as and right-click */}
-              <div className="absolute inset-0" onContextMenu={(e) => e.preventDefault()} />
+              {/* Overlay to block right-click save — allows touch through on mobile */}
+              <div className="absolute inset-0 sm:pointer-events-auto pointer-events-none" onContextMenu={(e) => e.preventDefault()} />
 
               {/* Nav arrows */}
               {lightboxIndex > 0 && (
