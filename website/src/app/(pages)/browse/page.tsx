@@ -686,33 +686,6 @@ export default function BrowsePortfoliosPage() {
 
   return (
     <div className="bg-background">
-      {/* Hero – compact with background image */}
-      <section className="relative -mt-14 lg:-mt-16 overflow-hidden border-b border-border">
-        <div className="absolute inset-0">
-          <Image
-            src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=1920&h=600&fit=crop&crop=center"
-            alt="Abstract art"
-            fill
-            className="object-cover"
-          />
-          <div className="absolute inset-0 bg-black/60" />
-        </div>
-
-        <div className="relative max-w-[1400px] mx-auto px-6 pt-20 lg:pt-24 pb-8 lg:pb-12">
-          <div className="py-4">
-            <h1 className="font-serif text-4xl lg:text-5xl text-white mb-3 leading-tight">
-              The Marketplace
-            </h1>
-            <p className="text-sm lg:text-base text-white/50 leading-relaxed max-w-md">
-              {activeCategory === "collections"
-                ? "Themed bundles of artwork at a set price. Ready to transform your space."
-                : activeCategoryObj
-                ? `Browse ${activeCategoryObj.label.toLowerCase()} from curated artists.`
-                : "Explore curated artist profiles. Discover commercial terms, styles, and availability."}
-            </p>
-          </div>
-        </div>
-      </section>
 
       {/* Category tabs */}
       <div className="border-b border-border bg-[#FAF8F5]">

@@ -174,6 +174,8 @@ export default function Header() {
   useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); setMoreDropdownOpen(false); }, [pathname]);
 
   const isPortal = pathname.startsWith("/artist-portal") || pathname.startsWith("/venue-portal") || pathname.startsWith("/customer-portal");
+  const isBrowsePage = pathname === "/browse" || pathname.startsWith("/browse/");
+  const isSpacesPage = pathname === "/spaces-looking-for-art";
   const showSolid = !isImmersive || scrolled;
 
   return (
@@ -181,11 +183,20 @@ export default function Header() {
       className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ${
         isPortal
           ? "bg-[#1A1A1A]"
+          : (isBrowsePage || isSpacesPage)
+          ? "bg-[#1A1A1A]"
           : showSolid
           ? "bg-white border-b border-border"
           : "bg-transparent border-b border-transparent"
       }`}
     >
+      {/* Background image for marketplace/spaces pages */}
+      {(isBrowsePage || isSpacesPage) && (
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=200&fit=crop&crop=center" alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/55" />
+        </div>
+      )}
       <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
         <div className="flex items-center justify-between h-14 lg:h-16">
           {/* Logo */}
@@ -200,19 +211,22 @@ export default function Header() {
 
           {/* Desktop Navigation — centered on page */}
           <nav className="hidden lg:flex items-center gap-7 absolute left-1/2 -translate-x-1/2" role="navigation" aria-label="Main navigation">
-            {(user ? (userType === "venue" ? venueNavLinks : loggedInNavLinks) : publicNavLinks).map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`text-sm transition-colors duration-300 ${
-                  isPortal || !showSolid
-                    ? "text-white/80 hover:text-white"
-                    : "text-muted hover:text-foreground"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {(user ? (userType === "venue" ? venueNavLinks : loggedInNavLinks) : publicNavLinks).map((link) => {
+              const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`text-sm transition-colors duration-300 ${
+                    isActive
+                      ? (isPortal || isBrowsePage || isSpacesPage || !showSolid ? "text-white font-semibold" : "text-foreground font-semibold")
+                      : (isPortal || isBrowsePage || isSpacesPage || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground")
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
             {/* More dropdown — logged in only */}
             {user && (
               <div className="relative" ref={moreDropdownRef}>
