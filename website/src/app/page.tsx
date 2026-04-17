@@ -191,6 +191,19 @@ export default function Home() {
                     Completely free to browse and enquire.
                   </p>
 
+                  {/* Mobile image strip */}
+                  <div className="sm:hidden flex gap-2 overflow-x-auto -mx-6 px-6 pb-2 mb-6 scrollbar-hide">
+                    <div className="w-40 h-28 relative rounded-sm overflow-hidden shrink-0">
+                      <Image src="https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=280&fit=crop" alt="Art in café" fill className="object-cover" sizes="160px" />
+                    </div>
+                    <div className="w-40 h-28 relative rounded-sm overflow-hidden shrink-0">
+                      <Image src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=400&h=280&fit=crop" alt="Art in restaurant" fill className="object-cover" sizes="160px" />
+                    </div>
+                    <div className="w-40 h-28 relative rounded-sm overflow-hidden shrink-0">
+                      <Image src="https://images.unsplash.com/photo-1519710164239-da123dc03ef4?w=400&h=280&fit=crop" alt="Art in hotel lobby" fill className="object-cover" sizes="160px" />
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-8 sm:mb-10">
                     <DealCard title="Display" description="Art on your walls for free. Earn a share if it sells." />
                     <DealCard title="Purchase" description="Buy pieces outright for your permanent collection." />

@@ -7,6 +7,7 @@ import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useSaved } from "@/context/SavedContext";
 import { artists } from "@/data/artists";
 import { getGalleryWorks } from "@/data/galleries";
+import { slugify } from "@/lib/slugify";
 
 type Tab = "artists" | "works" | "collections";
 
@@ -102,7 +103,7 @@ export default function SavedPage() {
                     </p>
                     <div className="flex gap-2">
                       <Link
-                        href={`/browse/${work!.artistSlug}`}
+                        href={`/browse/${work!.artistSlug}/${slugify(work!.title)}`}
                         className="flex-1 text-center px-3 py-1.5 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors"
                       >
                         View

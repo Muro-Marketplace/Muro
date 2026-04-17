@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { authFetch } from "@/lib/api-client";
+import { slugify } from "@/lib/slugify";
 
 type ItemType = "work" | "artist" | "collection";
 
@@ -125,7 +126,7 @@ export default function ArtistSavedPage() {
             </div>
           )}
           <div className="min-w-0">
-            <Link href={linkForItem(item.item_type, item.item_id)} className="text-sm font-medium text-foreground hover:text-accent transition-colors truncate block">
+            <Link href={match ? `/browse/${match.artistSlug}/${slugify(match.work.title)}` : linkForItem(item.item_type, item.item_id)} className="text-sm font-medium text-foreground hover:text-accent transition-colors truncate block">
               {match ? match.work.title : formatName(item.item_id)}
             </Link>
             <p className="text-xs text-muted mt-0.5 truncate">

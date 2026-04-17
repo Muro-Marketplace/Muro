@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import { authFetch } from "@/lib/api-client";
+import { slugify } from "@/lib/slugify";
 
 type ItemType = "work" | "artist" | "collection";
 
@@ -39,17 +40,34 @@ function formatName(raw: string): string {
   return raw.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
+interface ArtistWork { id: string; title: string; }
+interface ArtistData { slug: string; name: string; works: ArtistWork[]; }
+
 export default function CustomerSavedPage() {
   const [items, setItems] = useState<SavedItemRow[]>([]);
+  const [allArtists, setAllArtists] = useState<ArtistData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ItemType>("work");
   const [removing, setRemoving] = useState<string | null>(null);
 
+  const workMap = useMemo(() => {
+    const map = new Map<string, { title: string; artistSlug: string; artistName: string }>();
+    for (const artist of allArtists) {
+      for (const work of artist.works || []) {
+        map.set(work.id, { title: work.title, artistSlug: artist.slug, artistName: artist.name });
+      }
+    }
+    return map;
+  }, [allArtists]);
+
   const fetchItems = useCallback(() => {
-    authFetch("/api/saved")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.items) setItems(data.items);
+    Promise.all([
+      authFetch("/api/saved").then((r) => r.json()),
+      fetch("/api/browse-artists").then((r) => r.json()),
+    ])
+      .then(([savedData, artistsData]) => {
+        if (savedData.items) setItems(savedData.items);
+        if (artistsData.artists) setAllArtists(artistsData.artists);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -131,10 +149,16 @@ export default function CustomerSavedPage() {
                 )}
                 <div className="min-w-0">
                   <Link
-                    href={linkForItem(item.item_type, item.item_id)}
+                    href={
+                      item.item_type === "work" && workMap.has(item.item_id)
+                        ? `/browse/${workMap.get(item.item_id)!.artistSlug}/${slugify(workMap.get(item.item_id)!.title)}`
+                        : linkForItem(item.item_type, item.item_id)
+                    }
                     className="text-sm font-medium text-foreground hover:text-accent transition-colors truncate block"
                   >
-                    {formatName(item.item_id)}
+                    {item.item_type === "work" && workMap.has(item.item_id)
+                      ? workMap.get(item.item_id)!.title
+                      : formatName(item.item_id)}
                   </Link>
                   <p className="text-xs text-muted mt-0.5">
                     Saved{" "}
