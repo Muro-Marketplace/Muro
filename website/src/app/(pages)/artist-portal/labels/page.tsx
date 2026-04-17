@@ -21,6 +21,7 @@ export default function LabelsPage() {
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [quantities, setQuantities] = useState<Record<number, number>>({});
+  const [selectedSizes, setSelectedSizes] = useState<Record<number, string>>({});
   const [showPreview, setShowPreview] = useState(false);
   const [previewLabels, setPreviewLabels] = useState<LabelData[]>([]);
   const [options, setOptions] = useState<LabelOptions>({
@@ -43,6 +44,7 @@ export default function LabelsPage() {
     if (!artist || preselected) return;
     const paramVenue = searchParams.get("venue");
     const paramWorks = searchParams.get("works");
+    const paramSize = searchParams.get("size");
     if (paramVenue) setSelectedVenue(paramVenue);
     if (paramWorks && artist.works) {
       const workTitles = paramWorks.split(",").map((w) => w.trim());
@@ -50,7 +52,15 @@ export default function LabelsPage() {
       artist.works.forEach((w, i) => {
         if (workTitles.includes(w.title)) indices.add(i);
       });
-      if (indices.size > 0) setSelected(indices);
+      if (indices.size > 0) {
+        setSelected(indices);
+        // Auto-set size from placement if provided
+        if (paramSize) {
+          const sizeMap: Record<number, string> = {};
+          indices.forEach((i) => { sizeMap[i] = paramSize; });
+          setSelectedSizes(sizeMap);
+        }
+      }
     }
     setPreselected(true);
   }, [artist, searchParams, preselected]);
@@ -137,7 +147,7 @@ export default function LabelsPage() {
         venueName: selectedVenue || undefined,
         workTitle: work.title,
         workMedium: options.showMedium ? work.medium : undefined,
-        workDimensions: options.showDimensions ? work.dimensions : undefined,
+        workDimensions: selectedSizes[i] || (options.showDimensions ? work.dimensions : undefined),
         workPrice: options.showPrice ? work.priceBand : undefined,
         quantity: getQty(i),
         _sourceMedium: work.medium,
@@ -379,6 +389,19 @@ export default function LabelsPage() {
                       >
                         {work.available ? "Available" : "Sold"}
                       </span>
+                    )}
+                    {isSelected && work.pricing && work.pricing.length > 0 && (
+                      <select
+                        value={selectedSizes[index] || ""}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => { e.stopPropagation(); setSelectedSizes((prev) => ({ ...prev, [index]: e.target.value })); }}
+                        className="text-[10px] px-1 py-0.5 bg-background border border-border rounded-sm text-foreground focus:outline-none"
+                      >
+                        <option value="">Size</option>
+                        {work.pricing.map((p) => (
+                          <option key={p.label} value={p.label}>{p.label}</option>
+                        ))}
+                      </select>
                     )}
                     <button
                       onClick={(e) => {

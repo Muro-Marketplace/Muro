@@ -15,6 +15,7 @@ interface Placement {
   id: string;
   workTitle: string;
   workImage: string;
+  workSize?: string;
   venue: string;
   venueSlug: string;
   type: ArrangementType;
@@ -75,6 +76,7 @@ export default function PlacementsPage() {
   // arrangementType derived from revenuePercent — no separate state needed
   const [revenuePercent, setRevenuePercent] = useState(10);
   const [selectedWorks, setSelectedWorks] = useState<Set<number>>(new Set());
+  const [workSizes, setWorkSizes] = useState<Record<number, string>>({});
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -94,6 +96,7 @@ export default function PlacementsPage() {
             id: p.id,
             workTitle: p.work_title || "Untitled",
             workImage: (p.work_image as string) || "",
+            workSize: (p.work_size as string) || undefined,
             venue: p.venue || "",
             venueSlug: p.venue_slug || "",
             type: normaliseType(p.arrangement_type as string || "free_loan"),
@@ -142,6 +145,7 @@ export default function PlacementsPage() {
         id: `p-${Date.now()}-${workIndex}`,
         workTitle: work.title,
         workImage: work.image,
+        workSize: workSizes[workIndex] || undefined,
         venueSlug,
         type: revenuePercent > 0 ? "revenue_share" as const : "free_loan" as const,
         revenueSharePercent: revenuePercent > 0 ? revenuePercent : undefined,
@@ -161,6 +165,7 @@ export default function PlacementsPage() {
           id: p.id,
           workTitle: p.workTitle,
           workImage: p.workImage,
+          workSize: p.workSize,
           venue: selectedVenue?.name || venueSlug,
           venueSlug: p.venueSlug,
           type: revenuePercent > 0 ? "Revenue Share" as ArrangementType : "Free Loan" as ArrangementType,
@@ -329,6 +334,30 @@ export default function PlacementsPage() {
                   );
                 })}
               </div>
+              {/* Size selector for selected works */}
+              {selectedWorks.size > 0 && (
+                <div className="mt-3 space-y-2">
+                  {Array.from(selectedWorks).map((workIndex) => {
+                    const work = works[workIndex];
+                    if (!work) return null;
+                    return (
+                      <div key={workIndex} className="flex items-center gap-3 text-xs">
+                        <span className="text-foreground font-medium w-32 truncate">{work.title}</span>
+                        <select
+                          value={workSizes[workIndex] || ""}
+                          onChange={(e) => setWorkSizes((prev) => ({ ...prev, [workIndex]: e.target.value }))}
+                          className="px-2 py-1.5 bg-background border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50"
+                        >
+                          <option value="">Select size</option>
+                          {work.pricing?.map((p) => (
+                            <option key={p.label} value={p.label}>{p.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Message to venue */}
@@ -462,7 +491,7 @@ export default function PlacementsPage() {
                     <div className="flex items-center justify-end gap-3">
                       {p.status === "Active" && (
                         <Link
-                          href={`/artist-portal/labels?venue=${encodeURIComponent(p.venue)}&works=${encodeURIComponent(p.workTitle)}`}
+                          href={`/artist-portal/labels?venue=${encodeURIComponent(p.venue)}&works=${encodeURIComponent(p.workTitle)}${p.workSize ? `&size=${encodeURIComponent(p.workSize)}` : ""}`}
                           className="w-8 h-8 flex items-center justify-center rounded-sm border border-border hover:border-accent hover:bg-accent/5 transition-colors"
                           title="Generate QR Label"
                         >
@@ -494,6 +523,12 @@ export default function PlacementsPage() {
                           <p className="text-muted mb-0.5">Venue</p>
                           <p className="text-foreground font-medium">{p.venue}</p>
                         </div>
+                        {p.workSize && (
+                          <div>
+                            <p className="text-muted mb-0.5">Size</p>
+                            <p className="text-foreground font-medium">{p.workSize}</p>
+                          </div>
+                        )}
                         <div>
                           <p className="text-muted mb-0.5">Arrangement</p>
                           <p className="text-foreground font-medium">{p.type}{p.revenueSharePercent ? ` (${p.revenueSharePercent}%)` : ""}</p>
@@ -596,6 +631,12 @@ export default function PlacementsPage() {
                     <p className="text-muted mb-0.5">Venue</p>
                     <p className="text-foreground font-medium">{p.venue || "Unknown"}</p>
                   </div>
+                  {p.workSize && (
+                    <div>
+                      <p className="text-muted mb-0.5">Size</p>
+                      <p className="text-foreground font-medium">{p.workSize}</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-muted mb-0.5">Arrangement</p>
                     <p className="text-foreground font-medium">{p.type}{p.revenueSharePercent ? ` (${p.revenueSharePercent}%)` : ""}</p>

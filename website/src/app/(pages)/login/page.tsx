@@ -51,7 +51,7 @@ export default function LoginPage() {
   if (user) return null;
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center px-6 py-16 -mt-14 lg:-mt-16">
+    <div className="relative min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex items-center justify-center px-6 py-16">
       {/* Background image */}
       <div className="absolute inset-0 -z-10">
         <Image

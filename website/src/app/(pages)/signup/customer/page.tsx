@@ -70,7 +70,7 @@ export default function CustomerSignUpPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative -mt-14 lg:-mt-16">
+    <div className="min-h-screen flex items-center justify-center relative">
       <div className="absolute inset-0 -z-10">
         <Image
           src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop&crop=center"
