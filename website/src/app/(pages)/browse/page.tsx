@@ -157,40 +157,7 @@ export default function BrowsePortfoliosPage() {
       .then((res) => res.json())
       .then((data) => {
         const apiCollections: ArtistCollection[] = data.collections || [];
-        // Also merge localStorage collections from all artists
-        try {
-          const keys = Object.keys(localStorage).filter((k) => k.startsWith("wallplace-collections-"));
-          for (const key of keys) {
-            const slug = key.replace("wallplace-collections-", "");
-            const local = JSON.parse(localStorage.getItem(key) || "[]");
-            const artist = staticArtists.find((a) => a.slug === slug);
-            for (const col of local) {
-              if (apiCollections.some((c) => c.id === col.id)) continue;
-              if (col.available === false) continue;
-              const thumbnail: string | undefined = col.thumbnail || undefined;
-              const bannerImage: string | undefined = col.bannerImage || undefined;
-              apiCollections.push({
-                id: col.id,
-                artistSlug: slug,
-                artistName: artist?.name || slug,
-                name: col.name,
-                description: col.description || undefined,
-                workIds: col.workIds || [],
-                bundlePrice: col.bundlePrice ? parseFloat(col.bundlePrice) : 0,
-                bundlePriceBand: col.bundlePrice ? `£${col.bundlePrice}` : "",
-                thumbnail,
-                bannerImage,
-                coverImage:
-                  thumbnail ||
-                  bannerImage ||
-                  artist?.image ||
-                  `https://picsum.photos/seed/${col.id}/900/600`,
-                available: true,
-              });
-            }
-          }
-        } catch { /* ignore localStorage errors */ }
-        if (apiCollections.length) setCollections(apiCollections);
+        setCollections(apiCollections);
       })
       .catch(() => { /* keep static data */ });
   }, []);

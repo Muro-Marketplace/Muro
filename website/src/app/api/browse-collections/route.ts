@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { collections as staticCollections } from "@/data/collections";
 import type { ArtistCollection } from "@/data/collections";
 
 /**
- * Public endpoint: returns all available collections (static + database).
+ * Public endpoint: returns all available collections from the database.
+ * No static seed data — collections are created by artists only.
  */
 export async function GET() {
-  const allCollections: ArtistCollection[] = [...staticCollections];
+  const allCollections: ArtistCollection[] = [];
 
-  // Fetch database collections
   try {
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
     const db = getSupabaseAdmin();
@@ -37,11 +36,9 @@ export async function GET() {
       }
 
       for (const row of data) {
-        if (allCollections.some((c) => c.id === row.id)) continue;
         const artist = artistMap[row.artist_slug] || { name: "", image: "" };
         const thumbnail: string | undefined = row.thumbnail || undefined;
         const bannerImage: string | undefined = row.banner_image || undefined;
-        // coverImage is a single-image fallback used by older code paths.
         const coverImage =
           thumbnail ||
           bannerImage ||
@@ -53,7 +50,8 @@ export async function GET() {
           artistName: artist.name || row.artist_slug || "",
           name: row.name,
           description: row.description || undefined,
-          workIds: row.work_ids || [],
+          workIds: Array.isArray(row.work_ids) ? row.work_ids : [],
+          workSizes: Array.isArray(row.work_sizes) ? row.work_sizes : [],
           bundlePrice: row.bundle_price || 0,
           bundlePriceBand: row.bundle_price ? `£${row.bundle_price}` : "",
           thumbnail,
@@ -64,8 +62,8 @@ export async function GET() {
       }
     }
   } catch {
-    // DB not available — just return static collections
+    // DB not available — return empty
   }
 
-  return NextResponse.json({ collections: allCollections.filter((c) => c.available) });
+  return NextResponse.json({ collections: allCollections });
 }

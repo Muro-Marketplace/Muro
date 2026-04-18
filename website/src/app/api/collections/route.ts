@@ -7,10 +7,43 @@ type CollectionPayload = {
   description?: unknown;
   bundlePrice?: unknown;
   workIds?: unknown;
+  workSizes?: unknown;
   thumbnail?: unknown;
   bannerImage?: unknown;
   available?: unknown;
 };
+
+type DbRow = {
+  id: string;
+  artist_id: string;
+  artist_slug: string;
+  name: string;
+  description: string | null;
+  bundle_price: number | null;
+  work_ids: string[] | null;
+  work_sizes: { workId: string; sizeLabel: string }[] | null;
+  thumbnail: string | null;
+  banner_image: string | null;
+  available: boolean;
+  created_at: string;
+  updated_at: string | null;
+};
+
+function rowToClient(row: DbRow) {
+  return {
+    id: row.id,
+    artistSlug: row.artist_slug,
+    name: row.name,
+    description: row.description || "",
+    bundlePrice: row.bundle_price != null ? String(row.bundle_price) : "",
+    workIds: Array.isArray(row.work_ids) ? row.work_ids : [],
+    workSizes: Array.isArray(row.work_sizes) ? row.work_sizes : [],
+    thumbnail: row.thumbnail || undefined,
+    bannerImage: row.banner_image || undefined,
+    available: row.available,
+    createdAt: row.created_at,
+  };
+}
 
 function parseBody(body: CollectionPayload) {
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -26,6 +59,17 @@ function parseBody(body: CollectionPayload) {
   const workIds = Array.isArray(body.workIds)
     ? body.workIds.filter((x): x is string => typeof x === "string")
     : [];
+  const workSizes = Array.isArray(body.workSizes)
+    ? body.workSizes
+        .filter(
+          (x): x is { workId: string; sizeLabel: string } =>
+            !!x &&
+            typeof x === "object" &&
+            typeof (x as { workId?: unknown }).workId === "string" &&
+            typeof (x as { sizeLabel?: unknown }).sizeLabel === "string"
+        )
+        .map((x) => ({ workId: x.workId, sizeLabel: x.sizeLabel }))
+    : [];
   const thumbnail =
     typeof body.thumbnail === "string" && body.thumbnail.trim() !== ""
       ? body.thumbnail.trim()
@@ -36,7 +80,16 @@ function parseBody(body: CollectionPayload) {
       : null;
   const available = typeof body.available === "boolean" ? body.available : true;
 
-  return { name, description, bundlePrice, workIds, thumbnail, bannerImage, available };
+  return {
+    name,
+    description,
+    bundlePrice,
+    workIds,
+    workSizes,
+    thumbnail,
+    bannerImage,
+    available,
+  };
 }
 
 // GET: fetch collections for the authenticated artist
@@ -47,32 +100,29 @@ export async function GET(request: Request) {
   try {
     const db = getSupabaseAdmin();
 
-    const { data: profile } = await Promise.resolve(
-      db.from("artist_profiles").select("id, slug").eq("user_id", auth.user!.id).single()
-    );
+    const { data: profile } = await db
+      .from("artist_profiles")
+      .select("id, slug")
+      .eq("user_id", auth.user!.id)
+      .single();
 
     if (!profile) {
       return NextResponse.json({ collections: [] });
     }
 
-    try {
-      const { data, error } = await Promise.resolve(
-        db
-          .from("artist_collections")
-          .select("*")
-          .eq("artist_id", profile.id)
-          .order("created_at", { ascending: false })
-      );
+    const { data, error } = await db
+      .from("artist_collections")
+      .select("*")
+      .eq("artist_id", profile.id)
+      .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Collections query error (table may not exist):", error.message);
-        return NextResponse.json({ collections: [] });
-      }
-
-      return NextResponse.json({ collections: data || [] });
-    } catch {
+    if (error) {
+      console.error("Collections query error:", error.message);
       return NextResponse.json({ collections: [] });
     }
+
+    const rows = (data || []) as DbRow[];
+    return NextResponse.json({ collections: rows.map(rowToClient) });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
@@ -85,8 +135,16 @@ export async function POST(request: Request) {
 
   try {
     const raw = (await request.json()) as CollectionPayload;
-    const { name, description, bundlePrice, workIds, thumbnail, bannerImage, available } =
-      parseBody(raw);
+    const {
+      name,
+      description,
+      bundlePrice,
+      workIds,
+      workSizes,
+      thumbnail,
+      bannerImage,
+      available,
+    } = parseBody(raw);
 
     if (!name || workIds.length < 2) {
       return NextResponse.json(
@@ -97,9 +155,11 @@ export async function POST(request: Request) {
 
     const db = getSupabaseAdmin();
 
-    const { data: profile } = await Promise.resolve(
-      db.from("artist_profiles").select("id, slug").eq("user_id", auth.user!.id).single()
-    );
+    const { data: profile } = await db
+      .from("artist_profiles")
+      .select("id, slug")
+      .eq("user_id", auth.user!.id)
+      .single();
 
     if (!profile) {
       return NextResponse.json({ error: "Artist profile not found" }, { status: 404 });
@@ -108,8 +168,9 @@ export async function POST(request: Request) {
     const id = `${profile.slug}-collection-${Date.now()}`;
     const now = new Date().toISOString();
 
-    const { error } = await Promise.resolve(
-      db.from("artist_collections").upsert(
+    const { data, error } = await db
+      .from("artist_collections")
+      .upsert(
         {
           id,
           artist_id: profile.id,
@@ -118,6 +179,7 @@ export async function POST(request: Request) {
           description,
           bundle_price: bundlePrice,
           work_ids: workIds,
+          work_sizes: workSizes,
           thumbnail,
           banner_image: bannerImage,
           available,
@@ -126,17 +188,15 @@ export async function POST(request: Request) {
         },
         { onConflict: "id" }
       )
-    );
+      .select("*")
+      .single();
 
-    if (error) {
-      console.error("Collections save error:", error.message);
-      return NextResponse.json(
-        { error: "Failed to save collection", dbSaved: false },
-        { status: 500 }
-      );
+    if (error || !data) {
+      console.error("Collections save error:", error?.message);
+      return NextResponse.json({ error: "Failed to save collection" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, id, dbSaved: true });
+    return NextResponse.json({ success: true, collection: rowToClient(data as DbRow) });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
@@ -154,8 +214,16 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
 
-    const { name, description, bundlePrice, workIds, thumbnail, bannerImage, available } =
-      parseBody(raw);
+    const {
+      name,
+      description,
+      bundlePrice,
+      workIds,
+      workSizes,
+      thumbnail,
+      bannerImage,
+      available,
+    } = parseBody(raw);
 
     if (!name || workIds.length < 2) {
       return NextResponse.json(
@@ -166,40 +234,40 @@ export async function PATCH(request: Request) {
 
     const db = getSupabaseAdmin();
 
-    const { data: profile } = await Promise.resolve(
-      db.from("artist_profiles").select("id").eq("user_id", auth.user!.id).single()
-    );
+    const { data: profile } = await db
+      .from("artist_profiles")
+      .select("id")
+      .eq("user_id", auth.user!.id)
+      .single();
 
     if (!profile) {
       return NextResponse.json({ error: "Artist profile not found" }, { status: 404 });
     }
 
-    const { error } = await Promise.resolve(
-      db
-        .from("artist_collections")
-        .update({
-          name,
-          description,
-          bundle_price: bundlePrice,
-          work_ids: workIds,
-          thumbnail,
-          banner_image: bannerImage,
-          available,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id)
-        .eq("artist_id", profile.id)
-    );
+    const { data, error } = await db
+      .from("artist_collections")
+      .update({
+        name,
+        description,
+        bundle_price: bundlePrice,
+        work_ids: workIds,
+        work_sizes: workSizes,
+        thumbnail,
+        banner_image: bannerImage,
+        available,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("artist_id", profile.id)
+      .select("*")
+      .single();
 
-    if (error) {
-      console.error("Collections update error:", error.message);
-      return NextResponse.json(
-        { error: "Failed to update collection", dbSaved: false },
-        { status: 500 }
-      );
+    if (error || !data) {
+      console.error("Collections update error:", error?.message);
+      return NextResponse.json({ error: "Failed to update collection" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, id, dbSaved: true });
+    return NextResponse.json({ success: true, collection: rowToClient(data as DbRow) });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
@@ -220,32 +288,28 @@ export async function DELETE(request: Request) {
 
     const db = getSupabaseAdmin();
 
-    const { data: profile } = await Promise.resolve(
-      db.from("artist_profiles").select("id").eq("user_id", auth.user!.id).single()
-    );
+    const { data: profile } = await db
+      .from("artist_profiles")
+      .select("id")
+      .eq("user_id", auth.user!.id)
+      .single();
 
     if (!profile) {
       return NextResponse.json({ error: "Artist profile not found" }, { status: 404 });
     }
 
-    try {
-      const { error } = await Promise.resolve(
-        db
-          .from("artist_collections")
-          .delete()
-          .eq("id", id)
-          .eq("artist_id", profile.id)
-      );
+    const { error } = await db
+      .from("artist_collections")
+      .delete()
+      .eq("id", id)
+      .eq("artist_id", profile.id);
 
-      if (error) {
-        console.error("Collections delete error (table may not exist):", error.message);
-        return NextResponse.json({ success: true, dbDeleted: false });
-      }
-
-      return NextResponse.json({ success: true, dbDeleted: true });
-    } catch {
-      return NextResponse.json({ success: true, dbDeleted: false });
+    if (error) {
+      console.error("Collections delete error:", error.message);
+      return NextResponse.json({ error: "Failed to delete collection" }, { status: 500 });
     }
+
+    return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }

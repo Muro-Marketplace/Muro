@@ -1,3 +1,8 @@
+export interface CollectionWorkSize {
+  workId: string;
+  sizeLabel: string;
+}
+
 export interface ArtistCollection {
   id: string;
   artistSlug: string;
@@ -5,6 +10,8 @@ export interface ArtistCollection {
   name: string;
   description?: string;
   workIds: string[];
+  /** Size chosen by the artist for each work included in the bundle. */
+  workSizes?: CollectionWorkSize[];
   bundlePrice: number;
   bundlePriceBand: string;
   /** Card image (square or 16:9). Falls back to bannerImage or work-preview grid. */

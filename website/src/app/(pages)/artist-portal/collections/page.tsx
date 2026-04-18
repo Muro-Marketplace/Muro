@@ -11,21 +11,25 @@ interface CollectionForm {
   name: string;
   description: string;
   workIds: string[];
+  /** workId -> selected size label */
+  workSizes: Record<string, string>;
   bundlePrice: string;
   thumbnail: string;
   bannerImage: string;
   available: boolean;
 }
 
-interface LocalCollection {
+interface ServerCollection {
   id: string;
+  artistSlug: string;
   name: string;
   description: string;
   bundlePrice: string;
   workIds: string[];
+  workSizes: { workId: string; sizeLabel: string }[];
   thumbnail?: string;
   bannerImage?: string;
-  available?: boolean;
+  available: boolean;
   createdAt: string;
 }
 
@@ -33,161 +37,182 @@ const EMPTY_FORM: CollectionForm = {
   name: "",
   description: "",
   workIds: [],
+  workSizes: {},
   bundlePrice: "",
   thumbnail: "",
   bannerImage: "",
   available: true,
 };
 
-function getStorageKey(slug: string) {
-  return `wallplace-collections-${slug}`;
-}
-
-function loadLocalCollections(slug: string): LocalCollection[] {
-  try {
-    const raw = localStorage.getItem(getStorageKey(slug));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalCollections(slug: string, collections: LocalCollection[]) {
-  try {
-    localStorage.setItem(getStorageKey(slug), JSON.stringify(collections));
-  } catch {
-    /* ignore */
-  }
-}
-
 export default function CollectionsPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingList, setLoadingList] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [userCollections, setUserCollections] = useState<LocalCollection[]>([]);
+  const [userCollections, setUserCollections] = useState<ServerCollection[]>([]);
   const [form, setForm] = useState<CollectionForm>(EMPTY_FORM);
   const [uploading, setUploading] = useState<null | "thumbnail" | "banner">(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Load from DB on mount / when artist changes
   useEffect(() => {
-    if (artist?.slug) {
-      setUserCollections(loadLocalCollections(artist.slug));
-    }
-  }, [artist?.slug]);
+    if (!artist) return;
+    let cancelled = false;
+    setLoadingList(true);
+    authFetch("/api/collections")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setUserCollections(data.collections || []);
+      })
+      .catch(() => {
+        if (!cancelled) setUserCollections([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingList(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [artist]);
 
   const resetForm = useCallback(() => {
     setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
     setUploadError(null);
+    setFormError(null);
   }, []);
 
   const handleSave = useCallback(async () => {
     if (!artist || !form.name || form.workIds.length < 2 || !form.bundlePrice) return;
 
-    setSaving(true);
+    // Convert workSizes record -> array. For works with no explicit choice,
+    // fall back to the first pricing entry (if any).
+    const workSizesArr: { workId: string; sizeLabel: string }[] = [];
+    for (const wid of form.workIds) {
+      const explicit = form.workSizes[wid];
+      if (explicit) {
+        workSizesArr.push({ workId: wid, sizeLabel: explicit });
+        continue;
+      }
+      const work = artist.works.find((w) => w.id === wid);
+      const firstSize = work?.pricing?.[0]?.label;
+      if (firstSize) workSizesArr.push({ workId: wid, sizeLabel: firstSize });
+    }
 
     const payload = {
       name: form.name,
       description: form.description,
       bundlePrice: form.bundlePrice,
       workIds: form.workIds,
+      workSizes: workSizesArr,
       thumbnail: form.thumbnail || undefined,
       bannerImage: form.bannerImage || undefined,
       available: form.available,
     };
 
-    if (editingId) {
-      const updated = userCollections.map((c) =>
-        c.id === editingId
-          ? {
-              ...c,
-              name: form.name,
-              description: form.description,
-              bundlePrice: form.bundlePrice,
-              workIds: form.workIds,
-              thumbnail: form.thumbnail || undefined,
-              bannerImage: form.bannerImage || undefined,
-              available: form.available,
-            }
-          : c
+    setSaving(true);
+    setFormError(null);
+
+    try {
+      const res = await authFetch(
+        editingId ? "/api/collections" : "/api/collections",
+        {
+          method: editingId ? "PATCH" : "POST",
+          body: JSON.stringify(editingId ? { id: editingId, ...payload } : payload),
+        }
       );
-      setUserCollections(updated);
-      saveLocalCollections(artist.slug, updated);
+      const data = await res.json();
 
-      authFetch("/api/collections", {
-        method: "PATCH",
-        body: JSON.stringify({ id: editingId, ...payload }),
-      }).catch(() => {});
-    } else {
-      const id = `${artist.slug}-collection-${Date.now()}`;
-      const newCollection: LocalCollection = {
-        id,
-        name: form.name,
-        description: form.description,
-        bundlePrice: form.bundlePrice,
-        workIds: form.workIds,
-        thumbnail: form.thumbnail || undefined,
-        bannerImage: form.bannerImage || undefined,
-        available: form.available,
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [newCollection, ...userCollections];
-      setUserCollections(updated);
-      saveLocalCollections(artist.slug, updated);
+      if (!res.ok || !data.collection) {
+        setFormError(data.error || "Failed to save collection");
+        return;
+      }
 
-      authFetch("/api/collections", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }).catch(() => {});
+      const saved: ServerCollection = data.collection;
+      setUserCollections((prev) => {
+        const without = prev.filter((c) => c.id !== saved.id);
+        return [saved, ...without];
+      });
+      resetForm();
+    } catch {
+      setFormError("Network error. Please try again.");
+    } finally {
+      setSaving(false);
     }
-
-    resetForm();
-    setSaving(false);
-  }, [artist, form, userCollections, editingId, resetForm]);
+  }, [artist, form, editingId, resetForm]);
 
   const handleDelete = useCallback(
     async (id: string) => {
       if (!artist) return;
-      const updated = userCollections.filter((c) => c.id !== id);
-      setUserCollections(updated);
-      saveLocalCollections(artist.slug, updated);
-
-      authFetch(`/api/collections?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      }).catch(() => {});
+      // Optimistic remove
+      const prev = userCollections;
+      setUserCollections(prev.filter((c) => c.id !== id));
+      try {
+        const res = await authFetch(`/api/collections?id=${encodeURIComponent(id)}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          // Revert on failure
+          setUserCollections(prev);
+        }
+      } catch {
+        setUserCollections(prev);
+      }
     },
     [artist, userCollections]
   );
 
   const toggleAvailability = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (!artist) return;
       const target = userCollections.find((c) => c.id === id);
       if (!target) return;
-      const nextAvailable = !(target.available ?? true);
-      const updated = userCollections.map((c) =>
-        c.id === id ? { ...c, available: nextAvailable } : c
-      );
-      setUserCollections(updated);
-      saveLocalCollections(artist.slug, updated);
+      const nextAvailable = !target.available;
 
-      authFetch("/api/collections", {
-        method: "PATCH",
-        body: JSON.stringify({
-          id,
-          name: target.name,
-          description: target.description,
-          bundlePrice: target.bundlePrice,
-          workIds: target.workIds,
-          thumbnail: target.thumbnail,
-          bannerImage: target.bannerImage,
-          available: nextAvailable,
-        }),
-      }).catch(() => {});
+      // Optimistic update
+      setUserCollections((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, available: nextAvailable } : c))
+      );
+
+      try {
+        const res = await authFetch("/api/collections", {
+          method: "PATCH",
+          body: JSON.stringify({
+            id,
+            name: target.name,
+            description: target.description,
+            bundlePrice: target.bundlePrice,
+            workIds: target.workIds,
+            workSizes: target.workSizes,
+            thumbnail: target.thumbnail,
+            bannerImage: target.bannerImage,
+            available: nextAvailable,
+          }),
+        });
+        if (!res.ok) {
+          // Revert
+          setUserCollections((prev) =>
+            prev.map((c) => (c.id === id ? { ...c, available: !nextAvailable } : c))
+          );
+        } else {
+          const data = await res.json();
+          if (data.collection) {
+            setUserCollections((prev) =>
+              prev.map((c) => (c.id === id ? data.collection : c))
+            );
+          }
+        }
+      } catch {
+        setUserCollections((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, available: !nextAvailable } : c))
+        );
+      }
     },
     [artist, userCollections]
   );
@@ -226,27 +251,49 @@ export default function CollectionsPage() {
   }
 
   function toggleWork(workId: string) {
+    setForm((prev) => {
+      const isAdding = !prev.workIds.includes(workId);
+      const workIds = isAdding
+        ? [...prev.workIds, workId]
+        : prev.workIds.filter((id) => id !== workId);
+
+      // When adding, default size to the first pricing entry. When removing, drop it.
+      const nextSizes = { ...prev.workSizes };
+      if (isAdding) {
+        const work = artist!.works.find((w) => w.id === workId);
+        const firstLabel = work?.pricing?.[0]?.label;
+        if (firstLabel && !nextSizes[workId]) nextSizes[workId] = firstLabel;
+      } else {
+        delete nextSizes[workId];
+      }
+      return { ...prev, workIds, workSizes: nextSizes };
+    });
+  }
+
+  function setWorkSize(workId: string, sizeLabel: string) {
     setForm((prev) => ({
       ...prev,
-      workIds: prev.workIds.includes(workId)
-        ? prev.workIds.filter((id) => id !== workId)
-        : [...prev.workIds, workId],
+      workSizes: { ...prev.workSizes, [workId]: sizeLabel },
     }));
   }
 
-  function openEdit(col: LocalCollection) {
+  function openEdit(col: ServerCollection) {
+    const workSizes: Record<string, string> = {};
+    for (const ws of col.workSizes) workSizes[ws.workId] = ws.sizeLabel;
     setForm({
       name: col.name,
       description: col.description,
       bundlePrice: col.bundlePrice,
       workIds: col.workIds,
+      workSizes,
       thumbnail: col.thumbnail || "",
       bannerImage: col.bannerImage || "",
-      available: col.available ?? true,
+      available: col.available,
     });
     setEditingId(col.id);
     setShowForm(true);
     setUploadError(null);
+    setFormError(null);
   }
 
   const isFormValid =
@@ -522,6 +569,69 @@ export default function CollectionsPage() {
                 )}
               </div>
 
+              {/* Per-work size pickers */}
+              {form.workIds.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted uppercase tracking-wider mb-3">
+                    Size for each work{" "}
+                    <span className="normal-case text-muted/70">
+                      (shown to buyers on the collection page)
+                    </span>
+                  </p>
+                  <div className="space-y-2">
+                    {form.workIds.map((wid) => {
+                      const work = artist.works.find((w) => w.id === wid);
+                      if (!work) return null;
+                      const pricing = work.pricing || [];
+                      const selected = form.workSizes[wid] || pricing[0]?.label || "";
+                      return (
+                        <div
+                          key={wid}
+                          className="flex items-center gap-3 py-2 border-b border-border/40 last:border-b-0"
+                        >
+                          <div className="relative w-10 h-10 rounded-sm overflow-hidden bg-border/20 shrink-0">
+                            <Image
+                              src={work.image}
+                              alt={work.title}
+                              fill
+                              className="object-cover"
+                              sizes="40px"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm truncate">{work.title}</p>
+                            <p className="text-[11px] text-muted truncate">
+                              {work.medium}
+                            </p>
+                          </div>
+                          {pricing.length === 0 ? (
+                            <span className="text-[11px] text-muted italic">
+                              No sizes configured
+                            </span>
+                          ) : pricing.length === 1 ? (
+                            <span className="text-xs text-muted">
+                              {pricing[0].label} · £{pricing[0].price}
+                            </span>
+                          ) : (
+                            <select
+                              value={selected}
+                              onChange={(e) => setWorkSize(wid, e.target.value)}
+                              className="px-2 py-1.5 bg-background border border-border rounded-sm text-xs focus:outline-none focus:border-accent/50 max-w-[180px]"
+                            >
+                              {pricing.map((p) => (
+                                <option key={p.label} value={p.label}>
+                                  {p.label} · £{p.price}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Availability */}
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
@@ -534,6 +644,8 @@ export default function CollectionsPage() {
                   Publish to marketplace <span className="text-muted">(uncheck to save as draft)</span>
                 </span>
               </label>
+
+              {formError && <p className="text-xs text-red-600">{formError}</p>}
 
               <div className="flex items-center gap-3 pt-2">
                 <button
@@ -556,13 +668,15 @@ export default function CollectionsPage() {
         )}
 
         {/* User-created collections */}
-        {userCollections.length > 0 ? (
+        {loadingList ? (
+          <p className="text-muted text-sm py-12 text-center">Loading your collections...</p>
+        ) : userCollections.length > 0 ? (
           <div className="mb-6">
             <h2 className="text-xs text-muted uppercase tracking-wider mb-3">Your Collections</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {userCollections.map((col) => {
                 const workPreviews = artist.works.filter((w) => col.workIds.includes(w.id));
-                const isPublished = col.available ?? true;
+                const isPublished = col.available;
                 return (
                   <div key={col.id} className="bg-surface border border-border rounded-sm overflow-hidden">
                     {col.bannerImage ? (
