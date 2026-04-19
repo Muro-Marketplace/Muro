@@ -161,7 +161,6 @@ export default function ApplicationForm() {
   const [agreedToArtistTerms, setAgreedToArtistTerms] = useState(false);
   const [acknowledgedInsurance, setAcknowledgedInsurance] = useState(false);
   const [acknowledgedCoolingOff, setAcknowledgedCoolingOff] = useState(false);
-  const [waivedCoolingOff, setWaivedCoolingOff] = useState(false);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -201,7 +200,6 @@ export default function ApplicationForm() {
         body: JSON.stringify({
           ...form,
           acknowledgedCoolingOff,
-          waivedCoolingOff,
         }),
       });
       const data = await res.json();
@@ -721,19 +719,16 @@ export default function ApplicationForm() {
         </label>
 
         {form.traderStatus === "consumer" && (
-          <div className="bg-surface border border-border rounded-sm p-5 space-y-4">
-            <div>
-              <h4 className="text-sm font-medium text-foreground mb-1">
-                Your 14-day right to cancel (consumer cooling-off)
-              </h4>
-              <p className="text-xs text-muted leading-relaxed">
-                Because you are applying as an individual (not in the course of business),
-                you have the right to cancel your Wallplace membership within 14 days of
-                sign-up under the Consumer Contracts (Information, Cancellation and Additional
-                Charges) Regulations 2013. During your free first month you will not be
-                charged in any event. Please read and tick the options below.
-              </p>
-            </div>
+          <div className="bg-surface border border-border rounded-sm p-5">
+            <h4 className="text-sm font-medium text-foreground mb-1">
+              Your 14-day right to cancel
+            </h4>
+            <p className="text-xs text-muted leading-relaxed mb-4">
+              Because you are applying as an individual (not in the course of business),
+              you have the right to cancel your Wallplace membership within 14 days of
+              sign-up under the Consumer Contracts Regulations 2013. Your first month
+              is free, so no charge will apply in any event.
+            </p>
             <label className="flex items-start gap-3 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -742,8 +737,8 @@ export default function ApplicationForm() {
                 className="mt-0.5 w-4 h-4 rounded-sm border border-border bg-background checked:bg-accent checked:border-accent focus:outline-none cursor-pointer shrink-0"
               />
               <span className="text-sm text-foreground">
-                I acknowledge that I have been informed of my 14-day right to cancel and of
-                the Model Cancellation Form available in the{" "}
+                I acknowledge that I have been informed of my 14-day right to cancel, as
+                set out in the{" "}
                 <a
                   href="/terms#cancellation"
                   target="_blank"
@@ -753,22 +748,6 @@ export default function ApplicationForm() {
                   Platform Terms
                 </a>
                 .
-              </span>
-            </label>
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={waivedCoolingOff}
-                onChange={(e) => setWaivedCoolingOff(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded-sm border border-border bg-background checked:bg-accent checked:border-accent focus:outline-none cursor-pointer shrink-0"
-              />
-              <span className="text-sm text-foreground">
-                I expressly request that Wallplace begins providing the membership services
-                (profile setup, portfolio upload, and venue matching) during my 14-day
-                cancellation period, and I acknowledge that if I later cancel within those
-                14 days I may be charged a proportionate amount for services actually
-                supplied up to the point of cancellation.{" "}
-                <span className="text-muted">(Optional — leave unticked if you prefer services to start only after day 14.)</span>
               </span>
             </label>
           </div>
