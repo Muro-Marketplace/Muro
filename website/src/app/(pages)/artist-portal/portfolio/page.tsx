@@ -28,6 +28,7 @@ interface WorkFormState {
   inStorePrice: string;
   inStorePricing: string[];
   detectedRatio: number | null;
+  quantityAvailable: string;
 }
 
 // Standard print sizes in inches [width, height] — always width <= height
@@ -84,6 +85,7 @@ const emptyWork: WorkFormState = {
   inStorePrice: "",
   inStorePricing: [],
   detectedRatio: null,
+  quantityAvailable: "",
 };
 
 const statusColors: Record<string, string> = {
@@ -194,6 +196,9 @@ export default function PortfolioPage() {
       inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
       inStorePricing: w.inStorePricing ? w.inStorePricing.map((p) => String(p.price)) : [],
       detectedRatio: null,
+      quantityAvailable: (w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable != null
+        ? String((w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable)
+        : "",
     });
     setEditingIndex(index);
     setShowForm(true);
@@ -288,15 +293,18 @@ export default function PortfolioPage() {
 
     const shippingVal = form.shippingPrice.trim() ? parseFloat(form.shippingPrice) : undefined;
     const inStoreVal = form.inStorePrice.trim() ? parseFloat(form.inStorePrice) : undefined;
+    const qtyRaw = form.quantityAvailable.trim();
+    const qtyVal = qtyRaw === "" ? null : Math.max(0, Math.floor(Number(qtyRaw)));
+    const qtyFinite = qtyVal !== null && Number.isFinite(qtyVal);
 
-    const newWork: ArtistWork & { shippingPrice?: number; inStorePrice?: number } = {
+    const newWork: ArtistWork & { shippingPrice?: number; inStorePrice?: number; quantityAvailable?: number | null } = {
       id: editingIndex !== null ? works[editingIndex].id : `${artist!.slug}-${Date.now()}`,
       title: form.title,
       medium: form.medium,
       dimensions: form.dimensions,
       priceBand: `From \u00a3${lowestPrice}`,
       pricing: validSizes.map((s) => ({ label: s.label, price: s.price })),
-      available: form.available,
+      available: form.available && (!qtyFinite || qtyVal! > 0),
       color: "#C17C5A",
       image: form.imagePreview || "https://picsum.photos/seed/new-work/900/600",
       orientation: form.orientation,
@@ -305,6 +313,7 @@ export default function PortfolioPage() {
       inStorePricing: form.inStorePricing.length > 0
         ? validSizes.map((s, i) => ({ label: s.label, price: form.inStorePricing[i] ? parseFloat(form.inStorePricing[i]) : 0 })).filter((p) => p.price > 0)
         : undefined,
+      quantityAvailable: qtyFinite ? qtyVal : null,
     };
 
     let updated: ArtistWork[];
@@ -728,6 +737,21 @@ export default function PortfolioPage() {
                 </button>
                 <span className="text-sm">Available for purchase</span>
               </label>
+            </div>
+
+            {/* Quantity available */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Quantity available (optional)</label>
+              <p className="text-xs text-muted mb-2">Leave blank for unlimited (e.g. print-on-demand). Enter a number if you have a fixed number of units.</p>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={form.quantityAvailable}
+                onChange={(e) => setForm((p) => ({ ...p, quantityAvailable: e.target.value }))}
+                placeholder="e.g. 10"
+                className="w-32 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
+              />
             </div>
 
             {/* Error message */}

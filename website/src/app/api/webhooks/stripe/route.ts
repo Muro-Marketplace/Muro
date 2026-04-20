@@ -151,6 +151,31 @@ export async function POST(request: Request) {
         if (error) {
           console.error("Supabase order save error:", error);
         } else {
+          // Decrement per-work quantity (F10). Best-effort: swallow any errors
+          // so a DB hiccup here doesn't abort the rest of the order flow.
+          try {
+            type CartItem = { workId?: string; id?: string; qty?: number; quantity?: number };
+            for (const item of cartItems as CartItem[]) {
+              const workId = item.workId || item.id;
+              const qty = Number(item.qty ?? item.quantity ?? 1);
+              if (!workId || !Number.isFinite(qty) || qty <= 0) continue;
+
+              const { data: work } = await db.from("artist_works")
+                .select("quantity_available")
+                .eq("id", workId)
+                .single();
+              const current = work?.quantity_available;
+              if (typeof current === "number") {
+                const next = Math.max(0, current - qty);
+                const updates: Record<string, unknown> = { quantity_available: next };
+                if (next === 0) updates.available = false;
+                await db.from("artist_works").update(updates).eq("id", workId);
+              }
+            }
+          } catch (err) {
+            console.warn("Quantity decrement skipped:", err);
+          }
+
           // Notify artist (fire-and-forget)
           if (artistUserId) {
             const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistUserId);

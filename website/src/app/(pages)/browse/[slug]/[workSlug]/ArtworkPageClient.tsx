@@ -61,7 +61,11 @@ export default function ArtworkPageClient({
           {work.available ? (
             <span className="inline-flex items-center gap-1.5 text-sm text-accent">
               <span className="w-2 h-2 rounded-full bg-accent" />
-              Available
+              {typeof work.quantityAvailable === "number"
+                ? work.quantityAvailable > 0
+                  ? `${work.quantityAvailable} left`
+                  : "Sold out"
+                : "Available"}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-sm text-muted">

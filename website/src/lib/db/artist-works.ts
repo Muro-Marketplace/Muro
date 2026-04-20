@@ -30,9 +30,9 @@ export async function upsertWork(
       .from("artist_works")
       .update(row)
       .eq("id", work.id);
-    // Retry without shipping_price if column doesn't exist yet
+    // Retry without optional/new columns if the DB hasn't been migrated yet
     if (error) {
-      const { shipping_price: _, ...rowWithout } = row;
+      const { shipping_price: _sp, quantity_available: _qa, ...rowWithout } = row as Record<string, unknown>;
       const retry = await db.from("artist_works").update(rowWithout).eq("id", work.id);
       error = retry.error;
     }
@@ -41,9 +41,8 @@ export async function upsertWork(
     let { error } = await db
       .from("artist_works")
       .insert(row);
-    // Retry without shipping_price if column doesn't exist yet
     if (error) {
-      const { shipping_price: _, ...rowWithout } = row;
+      const { shipping_price: _sp, quantity_available: _qa, ...rowWithout } = row as Record<string, unknown>;
       const retry = await db.from("artist_works").insert(rowWithout);
       error = retry.error;
     }

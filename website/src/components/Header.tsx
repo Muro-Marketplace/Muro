@@ -8,21 +8,31 @@ import CartIndicator from "./CartIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
-const publicNavLinks = [
-  { label: "Marketplace", href: "/browse" },
+const marketplaceSubLinks = [
+  { label: "All artworks", href: "/browse", description: "Browse everything available" },
+  { label: "Collections", href: "/browse?view=galleries", description: "Curated artist bundles" },
+  { label: "Artists", href: "/artists", description: "All artists on Wallplace" },
+  { label: "Galleries", href: "/galleries", description: "Featured galleries" },
+  { label: "Spaces looking for art", href: "/spaces-looking-for-art", description: "Venues seeking artwork" },
+];
+
+type NavLink = { label: string; href: string; subLinks?: { label: string; href: string; description?: string }[] };
+
+const publicNavLinks: NavLink[] = [
+  { label: "Marketplace", href: "/browse", subLinks: marketplaceSubLinks },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
   { label: "Spaces", href: "/spaces-looking-for-art" },
   { label: "Waitlist", href: "/waitlist" },
 ];
 
-const loggedInNavLinks = [
-  { label: "Marketplace", href: "/browse" },
+const loggedInNavLinks: NavLink[] = [
+  { label: "Marketplace", href: "/browse", subLinks: marketplaceSubLinks },
   { label: "Spaces", href: "/spaces-looking-for-art" },
 ];
 
-const venueNavLinks = [
-  { label: "Marketplace", href: "/browse" },
+const venueNavLinks: NavLink[] = [
+  { label: "Marketplace", href: "/browse", subLinks: marketplaceSubLinks },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
 ];
@@ -55,6 +65,8 @@ export default function Header() {
   const notifDropdownRef = useRef<HTMLDivElement>(null);
   const moreDropdownRef = useRef<HTMLDivElement>(null);
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
+  const [marketplaceDropdownOpen, setMarketplaceDropdownOpen] = useState(false);
+  const marketplaceDropdownRef = useRef<HTMLDivElement>(null);
 
   const portalBase = userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal";
   const [resolvedSlug, setResolvedSlug] = useState("");
@@ -230,15 +242,58 @@ export default function Header() {
           <nav className="hidden lg:flex items-center gap-7 absolute left-1/2 -translate-x-1/2" role="navigation" aria-label="Main navigation">
             {(user ? (userType === "venue" ? venueNavLinks : loggedInNavLinks) : publicNavLinks).map((link) => {
               const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
+              const activeClass = isActive
+                ? (isPortal || !showSolid ? "text-white font-semibold" : "text-foreground font-semibold")
+                : (isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground");
+
+              if (link.subLinks && link.subLinks.length > 0) {
+                const isMarketplace = link.href === "/browse";
+                return (
+                  <div
+                    key={link.href}
+                    ref={isMarketplace ? marketplaceDropdownRef : null}
+                    className="relative"
+                    onMouseEnter={() => isMarketplace && setMarketplaceDropdownOpen(true)}
+                    onMouseLeave={() => isMarketplace && setMarketplaceDropdownOpen(false)}
+                  >
+                    <Link
+                      href={link.href}
+                      onClick={() => isMarketplace && setMarketplaceDropdownOpen(false)}
+                      className={`text-sm transition-colors duration-300 flex items-center gap-1 ${activeClass}`}
+                    >
+                      {link.label}
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className={`transition-transform duration-200 ${marketplaceDropdownOpen && isMarketplace ? "rotate-180" : ""}`}>
+                        <polyline points="2 4 6 8 10 4" />
+                      </svg>
+                    </Link>
+                    {isMarketplace && marketplaceDropdownOpen && (
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 z-50">
+                        <div className="w-64 bg-white border border-border rounded-sm shadow-lg py-2">
+                          {link.subLinks.map((sub) => (
+                            <Link
+                              key={sub.href}
+                              href={sub.href}
+                              onClick={() => setMarketplaceDropdownOpen(false)}
+                              className="block px-4 py-2 hover:bg-surface transition-colors"
+                            >
+                              <p className="text-sm text-foreground">{sub.label}</p>
+                              {sub.description && (
+                                <p className="text-[11px] text-muted mt-0.5">{sub.description}</p>
+                              )}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`text-sm transition-colors duration-300 ${
-                    isActive
-                      ? (isPortal || !showSolid ? "text-white font-semibold" : "text-foreground font-semibold")
-                      : (isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground")
-                  }`}
+                  className={`text-sm transition-colors duration-300 ${activeClass}`}
                 >
                   {link.label}
                 </Link>

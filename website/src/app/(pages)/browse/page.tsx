@@ -131,8 +131,8 @@ export default function BrowsePortfoliosPage() {
   const [activeCategory, setActiveCategory] = useState<string>(initialMode);
   const [activeSubcategories, setActiveSubcategories] = useState<Set<string>>(new Set());
   const [viewAs, setViewAs] = useState<"artists" | "works">("artists");
-  const [artistSort, setArtistSort] = useState<"featured" | "name" | "revenue_share">("featured");
-  const [gallerySort, setGallerySort] = useState<"featured" | "az" | "price_low" | "price_high" | "revenue_share">("featured");
+  const [artistSort, setArtistSort] = useState<"featured" | "name" | "revenue_share" | "distance">("featured");
+  const [gallerySort, setGallerySort] = useState<"featured" | "az" | "price_low" | "price_high" | "revenue_share" | "distance">("featured");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [artists, setArtists] = useState<Artist[]>(staticArtists);
   const [collections, setCollections] = useState<ArtistCollection[]>(staticCollections);
@@ -322,6 +322,11 @@ export default function BrowsePortfoliosPage() {
     }).sort((a, b) => {
       if (artistSort === "name") return a.name.localeCompare(b.name);
       if (artistSort === "revenue_share") return (b.revenueSharePercent || 0) - (a.revenueSharePercent || 0);
+      if (artistSort === "distance" && userCoords) {
+        const da = a.coordinates ? calcDistance(userCoords.lat, userCoords.lng, a.coordinates.lat, a.coordinates.lng) : Infinity;
+        const db = b.coordinates ? calcDistance(userCoords.lat, userCoords.lng, b.coordinates.lat, b.coordinates.lng) : Infinity;
+        return da - db;
+      }
       // "featured": founding artists first, then original order
       if (a.isFoundingArtist && !b.isFoundingArtist) return -1;
       if (!a.isFoundingArtist && b.isFoundingArtist) return 1;
@@ -398,6 +403,11 @@ export default function BrowsePortfoliosPage() {
         return bPrice - aPrice;
       }
       if (gallerySort === "revenue_share") return (b.revenueSharePercent || 0) - (a.revenueSharePercent || 0);
+      if (gallerySort === "distance" && userCoords) {
+        const da = a.artistCoordinates ? calcDistance(userCoords.lat, userCoords.lng, a.artistCoordinates.lat, a.artistCoordinates.lng) : Infinity;
+        const db = b.artistCoordinates ? calcDistance(userCoords.lat, userCoords.lng, b.artistCoordinates.lat, b.artistCoordinates.lng) : Infinity;
+        return da - db;
+      }
       return 0; // "featured": original order
     });
   }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, galleryLocationMode, userCoords, filters.maxDistance, activeCategoryObj, activeSubcategories, gallerySort]);
@@ -910,6 +920,9 @@ export default function BrowsePortfoliosPage() {
                       <option value="featured">Sort: Featured</option>
                       <option value="name">Sort: A-Z</option>
                       <option value="revenue_share">Sort: Revenue Share %</option>
+                      <option value="distance" disabled={!userCoords}>
+                        Sort: Nearest{userCoords ? "" : " (enable location)"}
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -1330,6 +1343,9 @@ export default function BrowsePortfoliosPage() {
                       <option value="price_low">Sort: Price (low to high)</option>
                       <option value="price_high">Sort: Price (high to low)</option>
                       <option value="revenue_share">Sort: Revenue Share %</option>
+                      <option value="distance" disabled={!userCoords}>
+                        Sort: Nearest{userCoords ? "" : " (enable location)"}
+                      </option>
                     </select>
                   </div>
                 </div>

@@ -156,9 +156,9 @@ Issues surfaced during Phase 2 testing.
 
 ### Phase 3 — marketplace polish (3–4 days)
 User-facing browse + product improvements.
-- **F10** Artwork quantity
-- **F11** Marketplace nav dropdowns
-- **F12** Distance sort
+- **F10** Artwork quantity ✅ shipped (migration 009)
+- **F11** Marketplace nav dropdowns ✅ shipped
+- **F12** Distance sort ✅ shipped
 
 ### Phase 4 — placement lifecycle (4–5 days)
 Makes the placement flow feel coherent end-to-end.

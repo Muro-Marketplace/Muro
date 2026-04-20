@@ -485,7 +485,11 @@ export default function ArtistProfileClient({
                 {currentWork.available ? (
                   <span className="inline-flex items-center gap-1.5 text-sm text-accent">
                     <span className="w-2 h-2 rounded-full bg-accent" />
-                    Available
+                    {typeof currentWork.quantityAvailable === "number"
+                      ? currentWork.quantityAvailable > 0
+                        ? `${currentWork.quantityAvailable} left`
+                        : "Sold out"
+                      : "Available"}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 text-sm text-muted">

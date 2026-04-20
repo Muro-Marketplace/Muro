@@ -19,6 +19,7 @@ export interface ArtistWork {
   shippingPrice?: number | null;
   inStorePrice?: number | null;
   inStorePricing?: SizePricing[];
+  quantityAvailable?: number | null;
 }
 
 export interface Artist {
