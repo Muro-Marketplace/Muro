@@ -63,7 +63,7 @@ Everything else is independent.
 | F5 | Per-line quantity display in basket | P0 | S | — | Basket/cart render shows "× N" next to each line when `quantity > 1`; also update line total |
 | F6 | Fullscreen artwork viewer | P0 | S-M | — | Add a visible fullscreen toggle (corner icon) on artwork images in gallery grids and on artwork detail pages; uses Fullscreen API or a max-viewport overlay; works on mobile + web |
 | F17 | Lightbox "Request a placement" button → cream | P0 | XS | — | Swap button colour class to cream token in ArtistProfileClient + ArtworkPageClient lightbox instances |
-| F18 | Placement form: QR vs Paid-loan-no-QR toggle + monthly fee | P0 | S | — | Add boolean `qr_enabled` (default true) to placement create form; when unticked, reveal optional `monthly_fee_gbp` input. Persist on placement row (new columns) and surface in accept flow |
+| F18 | Placement form: QR vs Paid-loan-no-QR toggle + monthly fee | P0 | S | Migration 007 | Form toggle built, API carries fields. DB migration `007_notifications_and_placement_flags.sql` adds `qr_enabled BOOLEAN DEFAULT TRUE` and `monthly_fee_gbp NUMERIC` on `placements`. Run the migration to persist; until then the insert silently omits via retry fallback |
 | F19 | Rename "Micro" label to "QR Only" | P0 | XS | — | `components/labels/QRLabel.tsx` label string change; search-and-replace any display of "Micro" in LabelPreview/LabelSheet |
 | F7 | Auto in-app message on placement request | P1 | S | Existing `messages` table | Insert message row in `POST /api/placements` after email fires |
 | F8 | Notifications table + routing | P1 | M | — | New `notifications` table (id, user_id, kind, title, body, link, read_at, created_at); migration; API routes; Header dropdown rewired to persistent source |

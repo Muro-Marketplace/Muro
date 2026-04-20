@@ -3,7 +3,13 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
 import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
+import { createNotification } from "@/lib/notifications";
 import { z } from "zod";
+
+function deterministicConversationId(slugA: string, slugB: string): string {
+  const [a, b] = [slugA, slugB].sort();
+  return `placement-${a}__${b}`;
+}
 
 /**
  * Determine if the authenticated user is an artist or venue.
@@ -172,6 +178,57 @@ export async function POST(request: Request) {
           message: parsed.data[0].message,
         }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
       }
+
+      // In-app notification (F9)
+      const portalBase = fromVenue ? "/artist-portal" : "/venue-portal";
+      const workTitles = parsed.data.map((p) => p.workTitle);
+      const workSummary = workTitles.length === 1
+        ? workTitles[0]
+        : `${workTitles.length} works`;
+      const requesterName = fromVenue ? venueProfile!.name : artistProfile!.name;
+      createNotification({
+        userId: notifyUserId,
+        kind: "placement_request",
+        title: "New placement request",
+        body: `${requesterName} requested a placement for ${workSummary}`,
+        link: `${portalBase}/placements`,
+      }).catch(() => {});
+    }
+
+    // Auto in-app message from requester to recipient (F7)
+    try {
+      const requesterSlug = fromVenue ? venueProfile!.slug : artistProfile!.slug;
+      const recipientSlug = fromVenue ? artistProfile!.slug : venueProfile!.slug;
+      const senderType = fromVenue ? "venue" : "artist";
+      const workTitles = parsed.data.map((p) => p.workTitle);
+      const workLine = workTitles.length === 1
+        ? workTitles[0]
+        : workTitles.join(", ");
+      const arrangementLine = parsed.data[0].type === "revenue_share"
+        ? `Revenue share: ${parsed.data[0].revenueSharePercent || 0}% to the venue`
+        : parsed.data[0].type === "free_loan"
+          ? "Free loan arrangement"
+          : "Purchase arrangement";
+      const userMessage = (parsed.data[0].message || "").trim();
+      const content = [
+        `Placement request sent for: ${workLine}`,
+        arrangementLine,
+        userMessage ? `\n"${userMessage}"` : "",
+      ].filter(Boolean).join("\n");
+
+      const cid = deterministicConversationId(requesterSlug, recipientSlug);
+      await db.from("messages").insert({
+        conversation_id: cid,
+        sender_id: auth.user!.id,
+        sender_name: requesterSlug,
+        sender_type: senderType,
+        recipient_slug: recipientSlug,
+        content,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn("Auto-message on placement skipped:", err);
     }
 
     return NextResponse.json({ success: true });

@@ -118,13 +118,25 @@ export default function Header() {
     if (!msgDropdownOpen && user) fetchUnread();
   }, [msgDropdownOpen, user, fetchUnread]);
 
-  // Load notifications when dropdown opens — placements, messages, enquiries
+  // Load notifications from the persistent notifications table, with a fallback
+  // to derived placements/messages data for environments where the table
+  // does not yet exist or has no rows.
   useEffect(() => {
-    if (!notifDropdownOpen || !user || !resolvedSlug) return;
+    if (!notifDropdownOpen || !user) return;
     async function loadNotifs() {
+      try {
+        const res = await authFetch("/api/notifications");
+        const data = await res.json();
+        const rows = Array.isArray(data.notifications) ? data.notifications : [];
+        if (rows.length > 0) {
+          setNotifications(rows.slice(0, 12));
+          return;
+        }
+      } catch { /* fall through to derived */ }
+
+      if (!resolvedSlug) return;
       const notifs: typeof notifications = [];
       try {
-        // Placements
         const placementsRes = await authFetch("/api/placements");
         const placementsData = await placementsRes.json();
         for (const p of (placementsData.placements || []).slice(0, 10)) {
@@ -136,7 +148,6 @@ export default function Header() {
             notifs.push({ id: p.id + "-d", type: "placement_declined", title: "Placement Declined", description: `${p.work_title || "Artwork"} — ${p.venue || p.artist_slug || ""}`, time: p.responded_at, link: `${portalBase}/placements` });
           }
         }
-        // Unread messages
         const msgsRes = await authFetch(`/api/messages?slug=${resolvedSlug}`);
         const msgsData = await msgsRes.json();
         for (const c of (msgsData.conversations || []).slice(0, 5)) {
@@ -145,7 +156,6 @@ export default function Header() {
           }
         }
       } catch { /* empty */ }
-      // Sort by time descending
       notifs.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
       setNotifications(notifs.slice(0, 12));
     }
@@ -359,8 +369,17 @@ export default function Header() {
                           notifications.map((n) => (
                             <Link
                               key={n.id}
-                              href={n.link}
-                              onClick={() => setNotifDropdownOpen(false)}
+                              href={n.link || "#"}
+                              onClick={() => {
+                                setNotifDropdownOpen(false);
+                                // Mark as read in the background — ignore errors (e.g. derived items)
+                                if (n.id && !n.id.startsWith("msg-")) {
+                                  authFetch("/api/notifications", {
+                                    method: "PATCH",
+                                    body: JSON.stringify({ id: n.id }),
+                                  }).catch(() => {});
+                                }
+                              }}
                               className="block px-4 py-3 hover:bg-[#FAF8F5] transition-colors border-b border-border last:border-b-0"
                             >
                               <div className="flex items-start gap-3">
