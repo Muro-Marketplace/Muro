@@ -370,7 +370,28 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
 
   async function handlePlacementResponse(msg: Message, accept: boolean) {
     if (!selectedConvData) return;
-    const placementId = (msg.metadata as Record<string, unknown>)?.placementId as string;
+    const placementId = (msg.metadata as Record<string, unknown>)?.placementId as string | undefined;
+
+    // Update the real placement status first. If it fails (e.g. legacy requests
+    // without a placementId), surface the error and abort so we don't leave a
+    // confusing "accepted" message without the underlying state change.
+    if (placementId) {
+      try {
+        const res = await authFetch("/api/placements", {
+          method: "PATCH",
+          body: JSON.stringify({ id: placementId, status: accept ? "active" : "declined" }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.error || "Could not update placement. Please try again.");
+          return;
+        }
+      } catch (err) {
+        console.error("Placement PATCH failed:", err);
+        alert("Network error. Please try again.");
+        return;
+      }
+    }
 
     try {
       await authFetch("/api/messages", {
@@ -398,10 +419,10 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         is_read: false,
         created_at: new Date().toISOString(),
         message_type: "placement_response",
-        metadata: { status: accept ? "active" : "declined" },
+        metadata: { placementId, status: accept ? "active" : "declined" },
       }]);
     } catch (err) {
-      console.error("Placement response failed:", err);
+      console.error("Placement response message failed:", err);
     }
   }
 

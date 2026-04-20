@@ -46,6 +46,7 @@ export default function Header() {
   const { user, userType, displayName, signOut, loading: authLoading } = useAuth();
   const router = useRouter();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [msgDropdownOpen, setMsgDropdownOpen] = useState(false);
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
   const [conversations, setConversations] = useState<{ conversationId: string; otherPartyDisplayName: string; otherPartyImage: string | null; otherParty: string; latestMessage: string; unreadCount: number; lastActivity: string }[]>([]);
@@ -67,12 +68,27 @@ export default function Header() {
       .catch(() => {});
   }, [user]);
 
+  // Fetch unread notification count (mirror messages pattern — on mount + poll)
+  const fetchUnreadNotifs = useCallback(() => {
+    if (!user) return;
+    authFetch("/api/notifications")
+      .then((r) => r.json())
+      .then((data) => setUnreadNotifCount(data.unreadCount || 0))
+      .catch(() => setUnreadNotifCount(0));
+  }, [user]);
+
   useEffect(() => {
     fetchUnread();
+    fetchUnreadNotifs();
     // Poll every 60 seconds
-    const interval = setInterval(fetchUnread, 60000);
+    const interval = setInterval(() => { fetchUnread(); fetchUnreadNotifs(); }, 60000);
     return () => clearInterval(interval);
-  }, [fetchUnread]);
+  }, [fetchUnread, fetchUnreadNotifs]);
+
+  // Refresh unread count when notification dropdown closes (user likely saw them)
+  useEffect(() => {
+    if (!notifDropdownOpen && user) fetchUnreadNotifs();
+  }, [notifDropdownOpen, user, fetchUnreadNotifs]);
 
   useEffect(() => {
     if (!isImmersive) return;
@@ -348,9 +364,9 @@ export default function Header() {
                       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                     </svg>
-                    {notifications.length > 0 && notifDropdownOpen === false && (
+                    {unreadNotifCount > 0 && notifDropdownOpen === false && (
                       <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center px-1 text-[10px] font-bold text-white bg-accent rounded-full leading-none">
-                        {notifications.length > 9 ? "9+" : notifications.length}
+                        {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
                       </span>
                     )}
                   </button>

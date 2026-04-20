@@ -14,6 +14,66 @@ interface OnboardingItem {
   href: string;
 }
 
+interface ActivityItem {
+  id: string;
+  text: string;
+  time: string;
+  sortTime: number;
+  type: "placement" | "placement_accepted" | "placement_declined" | "message" | "enquiry" | "order" | "view";
+  link?: string;
+}
+
+const activityTypes: Record<string, { label: string; bg: string; text: string; icon: React.ReactNode }> = {
+  placement: {
+    label: "Request", bg: "bg-amber-50", text: "text-amber-600",
+    icon: (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>),
+  },
+  placement_accepted: {
+    label: "Accepted", bg: "bg-green-50", text: "text-green-600",
+    icon: (<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>),
+  },
+  placement_declined: {
+    label: "Declined", bg: "bg-red-50", text: "text-red-600",
+    icon: (<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>),
+  },
+  message: {
+    label: "Message", bg: "bg-blue-50", text: "text-blue-600",
+    icon: (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>),
+  },
+  enquiry: {
+    label: "Enquiry", bg: "bg-purple-50", text: "text-purple-600",
+    icon: (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>),
+  },
+  order: {
+    label: "Order", bg: "bg-accent/8", text: "text-accent",
+    icon: (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" /></svg>),
+  },
+  view: {
+    label: "View", bg: "bg-gray-50", text: "text-gray-500",
+    icon: (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>),
+  },
+};
+
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function formatName(raw: string): string {
+  if (!raw) return "";
+  if (raw.includes(" ")) return raw;
+  return raw.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
 export default function VenueDashboardPage() {
   const { displayName } = useAuth();
   const { savedItems } = useSaved();
@@ -27,6 +87,7 @@ export default function VenueDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [onboardingItems, setOnboardingItems] = useState<OnboardingItem[]>([]);
   const [onboardingDismissed, setOnboardingDismissed] = useState(true);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
     const dismissed = typeof window !== "undefined" && localStorage.getItem("wallplace-venue-onboarding-complete") === "true";
@@ -83,6 +144,39 @@ export default function VenueDashboardPage() {
           setOnboardingDismissed(true);
         }, 3000);
       }
+
+      // Build Recent Activity — mirror of artist portal
+      const activityItems: ActivityItem[] = [];
+
+      for (const p of placements.slice(0, 15)) {
+        const time = p.responded_at || p.created_at;
+        if (!time) continue;
+        const artistName = formatName(p.artist_slug || "");
+        const workTitle = p.work_title || "Artwork";
+        if (p.status === "pending") {
+          activityItems.push({ id: "p-" + p.id, text: `Placement request: ${workTitle}${artistName ? ` — ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: "/venue-portal/placements" });
+        } else if (p.status === "active") {
+          activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${workTitle}${artistName ? ` — ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_accepted", link: "/venue-portal/placements" });
+        } else if (p.status === "declined") {
+          activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${workTitle}${artistName ? ` — ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_declined", link: "/venue-portal/placements" });
+        }
+      }
+
+      for (const o of orders.slice(0, 8) as Array<{ id?: string; total?: number; created_at?: string; artist_slug?: string }>) {
+        if (!o.created_at) continue;
+        const artistName = formatName(o.artist_slug || "");
+        activityItems.push({
+          id: "o-" + (o.id || o.created_at),
+          text: `Order placed${o.total ? ` for \u00a3${o.total}` : ""}${artistName ? ` — ${artistName}` : ""}`,
+          time: formatRelativeTime(o.created_at),
+          sortTime: new Date(o.created_at).getTime(),
+          type: "order",
+          link: "/venue-portal/orders",
+        });
+      }
+
+      activityItems.sort((a, b) => b.sortTime - a.sortTime);
+      setActivity(activityItems.slice(0, 8));
     }).finally(() => setLoading(false));
   }, [savedArtistCount]);
 
@@ -294,6 +388,50 @@ export default function VenueDashboardPage() {
             </Link>
           </div>
         </div>
+      </div>
+
+      {/* Recent Activity (mirror of artist portal) */}
+      <div className="bg-surface border border-border rounded-sm mb-8">
+        <div className="px-6 py-4 border-b border-border">
+          <h2 className="text-base font-medium">Recent Activity</h2>
+        </div>
+        {activity.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-muted">
+            No recent activity yet. Start by{" "}
+            <Link href="/browse" className="text-accent hover:underline">browsing portfolios</Link>.
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {activity.map((item) => {
+              const t = activityTypes[item.type] || activityTypes.view;
+              const Row = (
+                <>
+                  <div className={`w-8 h-8 rounded-full ${t.bg} ${t.text} flex items-center justify-center shrink-0`}>
+                    {t.icon}
+                  </div>
+                  <span className={`w-20 shrink-0 text-[11px] font-medium ${t.text} uppercase tracking-wider hidden sm:block`}>
+                    {t.label}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-foreground leading-snug truncate">{item.text}</p>
+                    <p className="text-[11px] text-muted mt-0.5">{item.time}</p>
+                  </div>
+                </>
+              );
+              return (
+                <li key={item.id}>
+                  {item.link ? (
+                    <Link href={item.link} className="px-4 sm:px-6 py-3.5 flex items-center gap-3 hover:bg-background/60 transition-colors">
+                      {Row}
+                    </Link>
+                  ) : (
+                    <div className="px-4 sm:px-6 py-3.5 flex items-center gap-3">{Row}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </VenuePortalLayout>
   );

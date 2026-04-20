@@ -66,6 +66,7 @@ export default function VenuePlacementsPage() {
   const [placements, setPlacements] = useState<PlacementRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [responding, setResponding] = useState<string | null>(null);
+  const [respondError, setRespondError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Request form state
@@ -233,11 +234,13 @@ export default function VenuePlacementsPage() {
 
   async function respond(id: string, accept: boolean) {
     setResponding(id);
+    setRespondError(null);
     try {
       const res = await authFetch("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id, status: accept ? "active" : "declined" }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setPlacements((prev) =>
           prev.map((p) =>
@@ -246,9 +249,12 @@ export default function VenuePlacementsPage() {
               : p
           )
         );
+      } else {
+        setRespondError(data.error || "Could not update placement. Please try again.");
       }
     } catch (err) {
       console.error("Response error:", err);
+      setRespondError("Network error. Please try again.");
     } finally {
       setResponding(null);
     }
@@ -531,21 +537,26 @@ export default function VenuePlacementsPage() {
                     </div>
                   )}
                   {p.status === "Pending" && (
-                    <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); respond(p.id, true); }}
-                        disabled={responding === p.id}
-                        className="px-5 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-sm transition-colors disabled:opacity-50"
-                      >
-                        {responding === p.id ? "..." : "Accept"}
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); respond(p.id, false); }}
-                        disabled={responding === p.id}
-                        className="px-5 py-2 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-50"
-                      >
-                        Decline
-                      </button>
+                    <div className="flex flex-col gap-2 mt-4 pt-3 border-t border-border">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); respond(p.id, true); }}
+                          disabled={responding === p.id}
+                          className="px-5 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-sm transition-colors disabled:opacity-50"
+                        >
+                          {responding === p.id ? "..." : "Accept"}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); respond(p.id, false); }}
+                          disabled={responding === p.id}
+                          className="px-5 py-2 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-50"
+                        >
+                          Decline
+                        </button>
+                      </div>
+                      {respondError && responding === null && (
+                        <p className="text-xs text-red-600">{respondError}</p>
+                      )}
                     </div>
                   )}
                 </div>

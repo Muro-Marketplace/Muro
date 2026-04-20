@@ -147,6 +147,7 @@ export async function POST(request: Request) {
       message: parsed.data[i].message || null,
       qr_enabled: parsed.data[i].qrEnabled ?? true,
       monthly_fee_gbp: parsed.data[i].monthlyFeeGbp ?? null,
+      requester_user_id: auth.user!.id,
     }));
 
     let { error } = await db.from("placements").insert(fullRows);
@@ -216,8 +217,25 @@ export async function POST(request: Request) {
         userMessage ? `\n"${userMessage}"` : "",
       ].filter(Boolean).join("\n");
 
-      const cid = deterministicConversationId(requesterSlug, recipientSlug);
-      await db.from("messages").insert({
+      // Prefer an existing conversation between these two parties so the
+      // request lands in the same chat the user is already having.
+      const { data: existingConv } = await db
+        .from("messages")
+        .select("conversation_id")
+        .or(
+          `and(sender_name.eq.${requesterSlug},recipient_slug.eq.${recipientSlug}),and(sender_name.eq.${recipientSlug},recipient_slug.eq.${requesterSlug})`,
+        )
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const cid = existingConv?.conversation_id
+        || deterministicConversationId(requesterSlug, recipientSlug);
+
+      // Link the message back to the placement so the UI can render inline
+      // Accept/Decline buttons in the messages thread (F25).
+      const placementIds = parsed.data.map((p) => p.id);
+      const baseMsg = {
         conversation_id: cid,
         sender_id: auth.user!.id,
         sender_name: requesterSlug,
@@ -226,7 +244,35 @@ export async function POST(request: Request) {
         content,
         is_read: false,
         created_at: new Date().toISOString(),
-      });
+      };
+      const firstPlacementId = placementIds[0] || null;
+      const firstWorkImage = parsed.data[0].workImage || null;
+      const extendedMsg = {
+        ...baseMsg,
+        message_type: "placement_request",
+        metadata: {
+          // Match the shape MessageInbox already understands
+          placementId: firstPlacementId,
+          workTitle: workLine,
+          workImage: firstWorkImage,
+          workTitles,
+          arrangementType: parsed.data[0].type,
+          revenueSharePercent: parsed.data[0].revenueSharePercent || null,
+          qrEnabled: parsed.data[0].qrEnabled ?? true,
+          monthlyFeeGbp: parsed.data[0].monthlyFeeGbp ?? null,
+          placementIds,
+        },
+      };
+
+      let { error: msgErr } = await db.from("messages").insert(extendedMsg);
+      if (msgErr) {
+        // Retry without message_type/metadata if columns missing
+        const retry = await db.from("messages").insert(baseMsg);
+        msgErr = retry.error;
+      }
+      if (msgErr) {
+        console.warn("Auto-message on placement skipped:", msgErr.message);
+      }
     } catch (err) {
       console.warn("Auto-message on placement skipped:", err);
     }
@@ -253,12 +299,22 @@ export async function PATCH(request: Request) {
     const { id, status } = parsed.data;
     const db = getSupabaseAdmin();
 
-    // Fetch the placement
-    const { data: existing } = await db
+    // Fetch the placement (include requester_user_id where available)
+    let { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue, status")
+      .select("artist_user_id, venue_user_id, artist_slug, venue, status, requester_user_id")
       .eq("id", id)
       .single();
+
+    // Retry without requester_user_id if the column doesn't exist yet
+    if (!existing) {
+      const fallback = await db
+        .from("placements")
+        .select("artist_user_id, venue_user_id, artist_slug, venue, status")
+        .eq("id", id)
+        .single();
+      existing = fallback.data as typeof existing;
+    }
 
     if (!existing) {
       return NextResponse.json({ error: "Placement not found" }, { status: 404 });
@@ -285,23 +341,36 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Venue can accept/decline pending requests
-    if (isVenue) {
-      if (existing.status !== "pending") {
-        return NextResponse.json({ error: "Can only respond to pending requests" }, { status: 400 });
-      }
-      if (status !== "active" && status !== "declined") {
-        return NextResponse.json({ error: "Venue can only accept or decline" }, { status: 400 });
+    // Determine who can respond to a pending request.
+    // If requester_user_id is set, the OTHER party is the recipient.
+    // Legacy rows (NULL requester): fall back to "venue accepts" behaviour.
+    const requesterId = existing.requester_user_id || null;
+    const isRequester = requesterId !== null && requesterId === auth.user!.id;
+    const isRecipient = requesterId !== null
+      ? (isArtist || isVenue) && !isRequester
+      : isVenue; // legacy fallback
+
+    if (existing.status === "pending" && (status === "active" || status === "declined")) {
+      if (!isRecipient) {
+        return NextResponse.json(
+          { error: isRequester ? "You cannot respond to your own placement request" : "Not authorised to respond to this placement" },
+          { status: 400 }
+        );
       }
     }
 
-    // Artist can update active placements but not pending ones (venue decides those)
-    if (isArtist && existing.status === "pending" && status !== "pending") {
-      return NextResponse.json({ error: "Awaiting venue response" }, { status: 400 });
+    // Can only respond to pending placements
+    if ((status === "active" || status === "declined") && existing.status !== "pending") {
+      return NextResponse.json({ error: "Can only respond to pending requests" }, { status: 400 });
+    }
+
+    // Artist cannot unilaterally change a pending placement into something other than active/declined
+    if (isArtist && existing.status === "pending" && status === "pending") {
+      // no-op but allowed
     }
 
     const updates: Record<string, unknown> = { status };
-    if (isVenue && (status === "active" || status === "declined")) {
+    if (existing.status === "pending" && (status === "active" || status === "declined")) {
       updates.responded_at = new Date().toISOString();
     }
 
@@ -312,21 +381,40 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Failed to update placement" }, { status: 500 });
     }
 
-    // Notify artist when venue responds (fire-and-forget)
-    if (isVenue && existing.artist_user_id) {
-      const { data: { user: artistUser } } = await db.auth.admin.getUserById(existing.artist_user_id);
-      const { data: artistProfile } = await db
-        .from("artist_profiles")
-        .select("name")
-        .eq("user_id", existing.artist_user_id)
-        .single();
-      if (artistUser?.email && artistProfile) {
-        notifyPlacementResponse({
-          email: artistUser.email,
-          artistName: artistProfile.name,
-          venueName: existing.venue || "Venue",
-          accepted: status === "active",
-        }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+    // On pending → active/declined, notify the requester (fire-and-forget)
+    if (
+      requesterId &&
+      existing.status === "pending" &&
+      (status === "active" || status === "declined")
+    ) {
+      try {
+        const { data: { user: requesterUser } } = await db.auth.admin.getUserById(requesterId);
+        const { data: artistProfile } = await db
+          .from("artist_profiles")
+          .select("name")
+          .eq("user_id", existing.artist_user_id)
+          .single();
+
+        if (requesterUser?.email && artistProfile) {
+          notifyPlacementResponse({
+            email: requesterUser.email,
+            artistName: artistProfile.name,
+            venueName: existing.venue || "Venue",
+            accepted: status === "active",
+          }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+        }
+
+        // In-app notification to the requester
+        const portalBase = requesterId === existing.artist_user_id ? "/artist-portal" : "/venue-portal";
+        createNotification({
+          userId: requesterId,
+          kind: status === "active" ? "placement_accepted" : "placement_declined",
+          title: status === "active" ? "Placement accepted" : "Placement declined",
+          body: `${artistProfile?.name || "Artist"} · ${existing.venue || "Venue"}`,
+          link: `${portalBase}/placements`,
+        }).catch(() => {});
+      } catch (err) {
+        console.warn("Response notification skipped:", err);
       }
     }
 

@@ -22,6 +22,11 @@ One additional item was partially visible on source screenshots ("Add frame opti
 | 18 | "Request a placement" button in lightbox: cream colour | **Not built** — button exists (ArtistProfileClient / ArtworkPageClient) but currently not cream | XS |
 | 19 | Request placement form: QR-display vs Paid-loan-no-QR toggle, with conditional monthly fee | **Not built** — form currently captures revenue share only. Need a tickbox "QR code display" (default on) vs "Paid loan no QR"; when the no-QR option is chosen, reveal an optional "Monthly fee for artist (£)" input. Likely lives in the artist-portal placements create form and/or PlacementCTA flow | Small |
 | 20 | Rename "Micro" label to "QR Only" in QR label sheet | **Not built** — `src/components/labels/QRLabel.tsx:4` currently defines `{ key: "micro", label: "Micro", ... }`. Rename the display label (and optionally the key) | XS |
+| 21 | Notification bell count loads proactively on mount + polls | **Partial** — `src/components/Header.tsx` already polls unread *messages* via `fetchUnread()` every 60s, but the notification dropdown count is derived from state that is only populated when the dropdown opens. Need an unread-notifications count fetched on mount + polled (mirror the messages pattern) | Small |
+| 22 | Venue portal Recent Activity section (mirror artist portal) | **Not built** — `src/app/(pages)/artist-portal/page.tsx` has a full "Recent Activity" panel (types: placement, enquiry, message, sale, view) driven off dashboard data. The venue portal dashboard (`src/app/(pages)/venue-portal/page.tsx`) shows stats + onboarding but no activity feed. Mirror the same component/logic adapted to venue-side events | Small-Medium |
+| 23 | Accept/reject placement from artist portal (+ error feedback) | **Broken** — artist cannot respond to venue-initiated placement requests. `src/app/(pages)/artist-portal/placements/page.tsx:536-554` renders "Awaiting response" for Pending rows with no Accept/Decline buttons. API (`src/app/api/placements/route.ts` PATCH) also hard-codes only venue can accept, which blocks the artist path even if the UI were added. No user-facing feedback when PATCH fails — button silently does nothing | Small-Medium |
+| 24 | Auto-message from placement request continues existing chat | **Broken** — `deterministicConversationId()` in `src/app/api/placements/route.ts` creates a `placement-{a}__{b}` conversation, separate from any existing chat with the same artist. Should look up an existing conversation between the two parties first, fall back to the deterministic id only if none exists | Small |
+| 25 | Accept/reject controls inside the messages UI | **Not built** — placement-request messages should carry the placement id + render Accept/Decline buttons inline in the messages view (same behaviour as the placement section). Needs a `message_type` tag on the auto-message row and UI rendering in `MessageInbox.tsx` | Small-Medium |
 | 6 | Artwork with multiple available units + artist-settable quantity | **Partial** — `artist_works.available` is a boolean only; no `quantity` column. No UI | Small-Medium |
 | 7 | Sort by distance | **Partial** — `lat`/`lng` stored on `artist_profiles` (`supabase-coordinates-migration.sql`); no sort UI, no distance calc | Medium |
 | 8 | Dropdown nav on marketplace + portfolio gallery collections | **Partial** — `collections.ts` data exists, generic dropdown patterns exist in Header; no sub-dropdowns on marketplace nav | Small-Medium |
@@ -65,6 +70,9 @@ Everything else is independent.
 | F17 | Lightbox "Request a placement" button → cream | P0 | XS | — | Swap button colour class to cream token in ArtistProfileClient + ArtworkPageClient lightbox instances |
 | F18 | Placement form: QR vs Paid-loan-no-QR toggle + monthly fee | P0 | S | Migration 007 | Form toggle built, API carries fields. DB migration `007_notifications_and_placement_flags.sql` adds `qr_enabled BOOLEAN DEFAULT TRUE` and `monthly_fee_gbp NUMERIC` on `placements`. Run the migration to persist; until then the insert silently omits via retry fallback |
 | F19 | Rename "Micro" label to "QR Only" | P0 | XS | — | `components/labels/QRLabel.tsx` label string change; search-and-replace any display of "Micro" in LabelPreview/LabelSheet |
+| F20 | Notification bell loads count on mount + polls | P0 | S | F8 persistent notifications | New `GET /api/notifications/unread-count` (or extend existing endpoint to return count cheaply). Header mounts a poller identical to messages' `fetchUnread`. Show badge count from the polled value, not from dropdown state |
+| F21 | Venue portal Recent Activity panel | P0 | S-M | F8 persistent notifications (optional data source) | Add an activity section to `venue-portal/page.tsx` matching `artist-portal/page.tsx:327+` layout. Venue-side event types: placement request sent, placement accepted/declined, message, order placed, QR scan. Source from `/api/dashboard` + `/api/notifications` |
+| F22 | Accept/reject placement from either portal + error feedback | P0 | M | Migration 008 | Add `requester_user_id UUID` column to `placements`. POST sets it to `auth.user.id`. PATCH allows the non-requester party to transition pending → active/declined (falls back to "venue accepts" if requester_user_id is NULL for legacy rows). Add Accept/Decline buttons to artist-portal placements table. Show a visible error (toast or inline) when the PATCH returns non-OK |
 | F7 | Auto in-app message on placement request | P1 | S | Existing `messages` table | Insert message row in `POST /api/placements` after email fires |
 | F8 | Notifications table + routing | P1 | M | — | New `notifications` table (id, user_id, kind, title, body, link, read_at, created_at); migration; API routes; Header dropdown rewired to persistent source |
 | F9 | Auto notification on placement request | P1 | S | F8 | Insert notification row on placement request |
@@ -135,9 +143,15 @@ Small, independent items that harden the current experience.
 
 ### Phase 2 — notifications + placement comms (2–3 days)
 Ties notifications into persistence and makes placement requests fire in-app cleanly.
-- **F8** Notifications table + API + Header rewire
-- **F7** Auto message on placement request
-- **F9** Auto notification on placement request
+- **F8** Notifications table + API + Header rewire ✅ shipped
+- **F7** Auto message on placement request ✅ shipped
+- **F9** Auto notification on placement request ✅ shipped
+
+### Phase 2.1 — notifications polish + placement response fix (follow-up, 1–1½ days)
+Issues surfaced during Phase 2 testing.
+- **F20** Bell badge count should load on mount + poll (currently only populates on dropdown open)
+- **F21** Mirror the artist portal "Recent Activity" panel on the venue portal dashboard
+- **F22** Accept/reject placement flow: add `requester_user_id` column, allow the non-requester to respond, add Accept/Decline UI to the artist portal placements table, show errors when the PATCH fails
 
 ### Phase 3 — marketplace polish (3–4 days)
 User-facing browse + product improvements.

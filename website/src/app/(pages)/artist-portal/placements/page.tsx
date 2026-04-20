@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
+import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
 type FilterTab = "All" | "Pending" | "Active" | "Completed";
@@ -26,6 +27,7 @@ interface Placement {
   revenue: string | null;
   notes?: string;
   message?: string;
+  canRespond?: boolean;
 }
 
 interface InteractedVenue {
@@ -65,6 +67,9 @@ function normaliseType(raw: string): ArrangementType {
 
 export default function PlacementsPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
+  const { user } = useAuth();
+  const [responding, setResponding] = useState<string | null>(null);
+  const [respondError, setRespondError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -94,28 +99,62 @@ export default function PlacementsPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.placements && data.placements.length > 0) {
-          const mapped: Placement[] = data.placements.map((p: Record<string, unknown>) => ({
-            id: p.id,
-            workTitle: p.work_title || "Untitled",
-            workImage: (p.work_image as string) || "",
-            workSize: (p.work_size as string) || undefined,
-            venue: p.venue || "",
-            venueSlug: p.venue_slug || "",
-            type: normaliseType(p.arrangement_type as string || "free_loan"),
-            revenueSharePercent: p.revenue_share_percent as number | undefined,
-            status: normaliseStatus(p.status as string || "active"),
-            date: p.created_at ? new Date(p.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
-            respondedAt: p.responded_at ? new Date(p.responded_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : undefined,
-            revenue: p.revenue ? `\u00a3${p.revenue}` : null,
-            notes: p.notes as string | undefined,
-            message: p.message as string | undefined,
-          }));
+          const mapped: Placement[] = data.placements.map((p: Record<string, unknown>) => {
+            const requesterId = (p.requester_user_id as string) || null;
+            const canRespond = requesterId !== null
+              ? requesterId !== user?.id
+              : false; // legacy rows — artist cannot respond by default (venue decides)
+            return {
+              id: p.id as string,
+              workTitle: (p.work_title as string) || "Untitled",
+              workImage: (p.work_image as string) || "",
+              workSize: (p.work_size as string) || undefined,
+              venue: (p.venue as string) || "",
+              venueSlug: (p.venue_slug as string) || "",
+              type: normaliseType((p.arrangement_type as string) || "free_loan"),
+              revenueSharePercent: p.revenue_share_percent as number | undefined,
+              status: normaliseStatus((p.status as string) || "active"),
+              date: p.created_at ? new Date(p.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
+              respondedAt: p.responded_at ? new Date(p.responded_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : undefined,
+              revenue: p.revenue ? `\u00a3${p.revenue}` : null,
+              notes: p.notes as string | undefined,
+              message: p.message as string | undefined,
+              canRespond,
+            };
+          });
           setPlacements(mapped);
         }
       })
       .catch(() => {})
       .finally(() => setInitialised(true));
-  }, [artist, initialised]);
+  }, [artist, initialised, user?.id]);
+
+  async function respond(id: string, accept: boolean) {
+    setResponding(id);
+    setRespondError(null);
+    try {
+      const res = await authFetch("/api/placements", {
+        method: "PATCH",
+        body: JSON.stringify({ id, status: accept ? "active" : "declined" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setPlacements((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? { ...p, status: accept ? "Active" : "Declined", respondedAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }
+              : p
+          )
+        );
+      } else {
+        setRespondError(data.error || "Could not update placement. Please try again.");
+      }
+    } catch {
+      setRespondError("Network error. Please try again.");
+    } finally {
+      setResponding(null);
+    }
+  }
 
   // Load interacted venues when form opens
   useEffect(() => {
@@ -622,7 +661,7 @@ export default function PlacementsPage() {
                           <p className="text-foreground font-medium">0</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-3">
+                      <div className="flex items-center gap-2 mt-3 flex-wrap">
                         <Link
                           href={`/artist-portal/messages?artist=${p.venueSlug}&artistName=${encodeURIComponent(p.venue)}`}
                           className="text-xs text-accent hover:text-accent-hover transition-colors"
@@ -630,7 +669,28 @@ export default function PlacementsPage() {
                         >
                           Message Venue
                         </Link>
+                        {p.status === "Pending" && p.canRespond && (
+                          <div className="flex items-center gap-2 ml-auto">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); respond(p.id, true); }}
+                              disabled={responding === p.id}
+                              className="px-4 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-sm transition-colors disabled:opacity-50"
+                            >
+                              {responding === p.id ? "…" : "Accept"}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); respond(p.id, false); }}
+                              disabled={responding === p.id}
+                              className="px-4 py-1.5 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-50"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        )}
                       </div>
+                      {respondError && responding === null && (
+                        <p className="mt-2 text-xs text-red-600">{respondError}</p>
+                      )}
                       {p.message && (
                         <div className="mt-3 bg-surface border border-border rounded-sm p-3">
                           <p className="text-[10px] text-muted uppercase tracking-wider mb-1">Message</p>
@@ -746,14 +806,35 @@ export default function PlacementsPage() {
                     <p className="text-xs text-foreground">{p.notes}</p>
                   </div>
                 )}
-                <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <Link
                     href={`/artist-portal/messages?artist=${p.venueSlug}&artistName=${encodeURIComponent(p.venue)}`}
                     className="text-xs text-accent hover:text-accent-hover transition-colors"
                   >
                     Message Venue
                   </Link>
+                  {p.status === "Pending" && p.canRespond && (
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); respond(p.id, true); }}
+                        disabled={responding === p.id}
+                        className="px-4 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-sm transition-colors disabled:opacity-50"
+                      >
+                        {responding === p.id ? "…" : "Accept"}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); respond(p.id, false); }}
+                        disabled={responding === p.id}
+                        className="px-4 py-1.5 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-50"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
                 </div>
+                {respondError && responding === null && (
+                  <p className="mt-1 text-xs text-red-600">{respondError}</p>
+                )}
               </div>
             )}
           </div>
