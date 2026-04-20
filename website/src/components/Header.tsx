@@ -9,7 +9,8 @@ import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
 const marketplaceSubLinks = [
-  { label: "Portfolio Gallery", href: "/browse", description: "Browse artists and their work" },
+  { label: "Portfolios", href: "/browse#portfolios", description: "Browse artists" },
+  { label: "Gallery", href: "/browse#gallery", description: "Browse individual works" },
   { label: "Collections", href: "/browse#collections", description: "Curated artist bundles" },
 ];
 

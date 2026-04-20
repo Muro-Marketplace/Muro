@@ -127,10 +127,30 @@ function CheckPill({
 }
 
 export default function BrowsePortfoliosPage() {
-  const initialMode = typeof window !== "undefined" && window.location.hash === "#collections" ? "collections" : "";
+  const initialHash = typeof window !== "undefined" ? window.location.hash : "";
+  const initialMode = initialHash === "#collections" ? "collections" : "";
+  const initialView: "artists" | "works" = initialHash === "#gallery" ? "works" : "artists";
   const [activeCategory, setActiveCategory] = useState<string>(initialMode);
   const [activeSubcategories, setActiveSubcategories] = useState<Set<string>>(new Set());
-  const [viewAs, setViewAs] = useState<"artists" | "works">("artists");
+  const [viewAs, setViewAs] = useState<"artists" | "works">(initialView);
+
+  // React to hash changes so nav dropdown links switch the view cleanly
+  useEffect(() => {
+    function syncFromHash() {
+      const h = window.location.hash;
+      if (h === "#collections") {
+        setActiveCategory("collections");
+      } else if (h === "#gallery") {
+        setActiveCategory("");
+        setViewAs("works");
+      } else if (h === "#portfolios") {
+        setActiveCategory("");
+        setViewAs("artists");
+      }
+    }
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
+  }, []);
   const [artistSort, setArtistSort] = useState<"featured" | "name" | "revenue_share" | "distance">("featured");
   const [gallerySort, setGallerySort] = useState<"featured" | "az" | "price_low" | "price_high" | "revenue_share" | "distance">("featured");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
