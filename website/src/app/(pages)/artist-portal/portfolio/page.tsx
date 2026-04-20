@@ -786,7 +786,7 @@ export default function PortfolioPage() {
                       className="flex-1 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
                     />
                     <div className="flex items-center gap-1">
-                      <span className="text-sm text-muted">+\u00a3</span>
+                      <span className="text-sm text-muted">+£</span>
                       <input
                         type="number"
                         min={0}

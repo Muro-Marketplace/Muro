@@ -9,11 +9,8 @@ import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
 const marketplaceSubLinks = [
-  { label: "All artworks", href: "/browse", description: "Browse everything available" },
-  { label: "Collections", href: "/browse?view=galleries", description: "Curated artist bundles" },
-  { label: "Artists", href: "/artists", description: "All artists on Wallplace" },
-  { label: "Galleries", href: "/galleries", description: "Featured galleries" },
-  { label: "Spaces looking for art", href: "/spaces-looking-for-art", description: "Venues seeking artwork" },
+  { label: "Portfolio Gallery", href: "/browse", description: "Browse artists and their work" },
+  { label: "Collections", href: "/browse#collections", description: "Curated artist bundles" },
 ];
 
 type NavLink = { label: string; href: string; subLinks?: { label: string; href: string; description?: string }[] };
