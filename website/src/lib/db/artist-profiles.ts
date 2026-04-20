@@ -62,6 +62,7 @@ export interface DbArtistWork {
   shipping_price?: number | null;
   in_store_price?: number | null;
   quantity_available?: number | null;
+  frame_options?: { label: string; priceUplift: number }[];
 }
 
 /** Convert a DB profile row + works to the Artist shape used everywhere in the app */
@@ -119,6 +120,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
       shippingPrice: w.shipping_price ?? undefined,
       inStorePrice: w.in_store_price ?? undefined,
       quantityAvailable: w.quantity_available ?? undefined,
+      frameOptions: Array.isArray(w.frame_options) ? w.frame_options : [],
     })),
   };
 }

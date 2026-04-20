@@ -29,6 +29,7 @@ interface WorkFormState {
   inStorePricing: string[];
   detectedRatio: number | null;
   quantityAvailable: string;
+  frameOptions: { label: string; priceUplift: string }[];
 }
 
 // Standard print sizes in inches [width, height] — always width <= height
@@ -86,6 +87,7 @@ const emptyWork: WorkFormState = {
   inStorePricing: [],
   detectedRatio: null,
   quantityAvailable: "",
+  frameOptions: [],
 };
 
 const statusColors: Record<string, string> = {
@@ -161,6 +163,8 @@ export default function PortfolioPage() {
           sortOrder: index,
           shippingPrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).shippingPrice ?? null,
           inStorePrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).inStorePrice ?? null,
+          quantityAvailable: (work as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable ?? null,
+          frameOptions: (work as ArtistWork & { frameOptions?: { label: string; priceUplift: number }[] }).frameOptions ?? [],
         }),
       }).catch((err) => console.error("Work sync error:", err));
     });
@@ -199,6 +203,9 @@ export default function PortfolioPage() {
       quantityAvailable: (w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable != null
         ? String((w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable)
         : "",
+      frameOptions: Array.isArray((w as ArtistWork & { frameOptions?: { label: string; priceUplift: number }[] }).frameOptions)
+        ? (w as ArtistWork & { frameOptions?: { label: string; priceUplift: number }[] }).frameOptions!.map((f) => ({ label: f.label, priceUplift: String(f.priceUplift) }))
+        : [],
     });
     setEditingIndex(index);
     setShowForm(true);
@@ -297,7 +304,11 @@ export default function PortfolioPage() {
     const qtyVal = qtyRaw === "" ? null : Math.max(0, Math.floor(Number(qtyRaw)));
     const qtyFinite = qtyVal !== null && Number.isFinite(qtyVal);
 
-    const newWork: ArtistWork & { shippingPrice?: number; inStorePrice?: number; quantityAvailable?: number | null } = {
+    const cleanFrameOptions = form.frameOptions
+      .map((f) => ({ label: f.label.trim(), priceUplift: Number(f.priceUplift) || 0 }))
+      .filter((f) => f.label.length > 0);
+
+    const newWork: ArtistWork & { shippingPrice?: number; inStorePrice?: number; quantityAvailable?: number | null; frameOptions?: { label: string; priceUplift: number }[] } = {
       id: editingIndex !== null ? works[editingIndex].id : `${artist!.slug}-${Date.now()}`,
       title: form.title,
       medium: form.medium,
@@ -314,6 +325,7 @@ export default function PortfolioPage() {
         ? validSizes.map((s, i) => ({ label: s.label, price: form.inStorePricing[i] ? parseFloat(form.inStorePricing[i]) : 0 })).filter((p) => p.price > 0)
         : undefined,
       quantityAvailable: qtyFinite ? qtyVal : null,
+      frameOptions: cleanFrameOptions.length > 0 ? cleanFrameOptions : undefined,
     };
 
     let updated: ArtistWork[];
@@ -752,6 +764,61 @@ export default function PortfolioPage() {
                 placeholder="e.g. 10"
                 className="w-32 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
               />
+            </div>
+
+            {/* Frame options */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Frame options (optional)</label>
+              <p className="text-xs text-muted mb-3">Offer framed variants. Leave blank if you only sell unframed. Price uplift is added on top of the size price.</p>
+              <div className="space-y-2">
+                {form.frameOptions.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={f.label}
+                      onChange={(e) => setForm((p) => {
+                        const next = [...p.frameOptions];
+                        next[i] = { ...next[i], label: e.target.value };
+                        return { ...p, frameOptions: next };
+                      })}
+                      placeholder="e.g. Black oak frame"
+                      maxLength={80}
+                      className="flex-1 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
+                    />
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm text-muted">+\u00a3</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={f.priceUplift}
+                        onChange={(e) => setForm((p) => {
+                          const next = [...p.frameOptions];
+                          next[i] = { ...next[i], priceUplift: e.target.value };
+                          return { ...p, frameOptions: next };
+                        })}
+                        placeholder="0"
+                        className="w-20 bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, frameOptions: p.frameOptions.filter((_, j) => j !== i) }))}
+                      className="w-8 h-8 flex items-center justify-center text-muted hover:text-red-500 transition-colors"
+                      aria-label="Remove frame option"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, frameOptions: [...p.frameOptions, { label: "", priceUplift: "" }] }))}
+                  className="text-xs text-accent hover:text-accent-hover transition-colors"
+                >
+                  + Add frame option
+                </button>
+              </div>
             </div>
 
             {/* Error message */}

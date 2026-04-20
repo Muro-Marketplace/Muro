@@ -28,6 +28,10 @@ export default function ArtworkPageClient({
   const { user, userType } = useAuth();
   const { showToast } = useToast();
   const [selectedSizeIdx, setSelectedSizeIdx] = useState(0);
+  const frameOptions = work.frameOptions && work.frameOptions.length > 0 ? work.frameOptions : [];
+  const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
+  const selectedFrame = frameOptions[selectedFrameIdx];
+  const frameUplift = selectedFrame?.priceUplift || 0;
 
   return (
     <div className="flex flex-col justify-between h-full">
@@ -96,6 +100,24 @@ export default function ArtworkPageClient({
           </div>
         )}
 
+        {/* Frame selector */}
+        {work.available && frameOptions.length > 0 && (
+          <div className="mb-5">
+            <p className="text-xs text-muted uppercase tracking-wider mb-2">Frame</p>
+            <select
+              value={selectedFrameIdx}
+              onChange={(e) => setSelectedFrameIdx(Number(e.target.value))}
+              className="w-full px-3 py-2.5 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
+            >
+              {frameOptions.map((f, i) => (
+                <option key={f.label} value={i}>
+                  {f.label}{f.priceUplift > 0 ? ` — +\u00a3${f.priceUplift}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Shipping info */}
         <div className="text-xs text-muted mt-1 space-y-0.5">
           <p>
@@ -127,57 +149,58 @@ export default function ArtworkPageClient({
             Request Placement
           </button>
         )}
-        {work.available && work.pricing.length > 0 && (
-          <>
-            <button
-              onClick={() => {
-                const selected =
-                  work.pricing[selectedSizeIdx] || work.pricing[0];
-                addItem({
-                  type: "work",
-                  workId: work.id,
-                  artistSlug,
-                  artistName,
-                  title: work.title,
-                  image: work.image,
-                  size: selected.label,
-                  price: selected.price,
-                  quantity: 1,
-                  shippingPrice: work.shippingPrice ?? undefined,
-                  internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
-                });
-                router.push("/checkout");
-              }}
-              className="w-full px-5 py-3 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
-            >
-              Buy Now – £
-              {(work.pricing[selectedSizeIdx] || work.pricing[0]).price}
-            </button>
-            <button
-              onClick={() => {
-                const selected =
-                  work.pricing[selectedSizeIdx] || work.pricing[0];
-                addItem({
-                  type: "work",
-                  workId: work.id,
-                  artistSlug,
-                  artistName,
-                  title: work.title,
-                  image: work.image,
-                  size: selected.label,
-                  price: selected.price,
-                  quantity: 1,
-                  shippingPrice: work.shippingPrice ?? undefined,
-                  internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
-                });
-                showToast("Added to basket");
-              }}
-              className="w-full px-5 py-2.5 text-sm font-medium text-foreground border border-border hover:border-foreground/30 rounded-sm transition-colors"
-            >
-              Add to Basket
-            </button>
-          </>
-        )}
+        {work.available && work.pricing.length > 0 && (() => {
+          const selected = work.pricing[selectedSizeIdx] || work.pricing[0];
+          const frameLabel = selectedFrame ? ` + ${selectedFrame.label}` : "";
+          const sizeLabel = `${selected.label}${frameLabel}`;
+          const totalPrice = Math.round((selected.price + frameUplift) * 100) / 100;
+          return (
+            <>
+              <button
+                onClick={() => {
+                  addItem({
+                    type: "work",
+                    workId: work.id,
+                    artistSlug,
+                    artistName,
+                    title: work.title,
+                    image: work.image,
+                    size: sizeLabel,
+                    price: totalPrice,
+                    quantity: 1,
+                    shippingPrice: work.shippingPrice ?? undefined,
+                    internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
+                  });
+                  router.push("/checkout");
+                }}
+                className="w-full px-5 py-3 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
+              >
+                Buy Now – £{totalPrice}
+              </button>
+              <button
+                onClick={() => {
+                  addItem({
+                    type: "work",
+                    workId: work.id,
+                    artistSlug,
+                    artistName,
+                    title: work.title,
+                    image: work.image,
+                    size: sizeLabel,
+                    price: totalPrice,
+                    quantity: 1,
+                    shippingPrice: work.shippingPrice ?? undefined,
+                    internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
+                  });
+                  showToast("Added to basket");
+                }}
+                className="w-full px-5 py-2.5 text-sm font-medium text-foreground border border-border hover:border-foreground/30 rounded-sm transition-colors"
+              >
+                Add to Basket
+              </button>
+            </>
+          );
+        })()}
         {work.available && work.inStorePrice != null && work.inStorePrice > 0 && (
           <button
             onClick={() => {

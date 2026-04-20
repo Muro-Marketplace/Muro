@@ -29,11 +29,25 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, title, medium, dimensions, priceBand, pricing, available, color, image, orientation, sortOrder, shippingPrice, inStorePrice, quantityAvailable } = body;
+    const { id, title, medium, dimensions, priceBand, pricing, available, color, image, orientation, sortOrder, shippingPrice, inStorePrice, quantityAvailable, frameOptions } = body;
 
     if (!id || !title || !image) {
       return NextResponse.json({ error: "ID, title, and image are required" }, { status: 400 });
     }
+
+    const sanitizedFrames = Array.isArray(frameOptions)
+      ? frameOptions
+          .filter((f: unknown): f is { label: string; priceUplift: number } =>
+            !!f && typeof f === "object" && typeof (f as { label?: unknown }).label === "string" &&
+            typeof (f as { priceUplift?: unknown }).priceUplift === "number" &&
+            ((f as { label: string }).label.trim().length > 0),
+          )
+          .slice(0, 20)
+          .map((f) => ({
+            label: f.label.trim().slice(0, 80),
+            priceUplift: Math.max(0, Math.round(f.priceUplift * 100) / 100),
+          }))
+      : [];
 
     const { error } = await upsertWork(result.profile.id, {
       id,
@@ -50,6 +64,7 @@ export async function POST(request: Request) {
       shipping_price: shippingPrice ?? null,
       in_store_price: inStorePrice ?? null,
       quantity_available: typeof quantityAvailable === "number" ? quantityAvailable : null,
+      frame_options: sanitizedFrames,
     });
 
     if (error) {

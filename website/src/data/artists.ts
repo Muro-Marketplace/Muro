@@ -20,6 +20,7 @@ export interface ArtistWork {
   inStorePrice?: number | null;
   inStorePricing?: SizePricing[];
   quantityAvailable?: number | null;
+  frameOptions?: { label: string; priceUplift: number }[];
 }
 
 export interface Artist {

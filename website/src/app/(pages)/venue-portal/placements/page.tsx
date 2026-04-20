@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import PlacementStepper, { type PlacementStepperData } from "@/components/PlacementStepper";
 import { authFetch } from "@/lib/api-client";
 
 function formatSlug(slug: string): string {
@@ -28,6 +29,11 @@ interface PlacementRequest {
   respondedAt?: string;
   message?: string;
   revenueEarned?: number;
+  acceptedAt?: string | null;
+  scheduledFor?: string | null;
+  installedAt?: string | null;
+  liveFrom?: string | null;
+  collectedAt?: string | null;
 }
 
 interface ArtistWork {
@@ -160,6 +166,11 @@ export default function VenuePlacementsPage() {
             respondedAt: p.responded_at ? new Date(p.responded_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : undefined,
             message: p.message as string | undefined,
             revenueEarned: typeof p.revenue_earned_gbp === "number" ? p.revenue_earned_gbp : 0,
+            acceptedAt: (p.accepted_at as string | null) ?? null,
+            scheduledFor: (p.scheduled_for as string | null) ?? null,
+            installedAt: (p.installed_at as string | null) ?? null,
+            liveFrom: (p.live_from as string | null) ?? null,
+            collectedAt: (p.collected_at as string | null) ?? null,
           }));
           setPlacements(mapped);
         }
@@ -525,6 +536,29 @@ export default function VenuePlacementsPage() {
                       <p className="text-foreground font-medium">0</p>
                     </div>
                   </div>
+                  {/* Lifecycle stepper (F14) */}
+                  <PlacementStepper
+                    placement={{
+                      id: p.id,
+                      status: p.status.toLowerCase(),
+                      acceptedAt: p.acceptedAt,
+                      scheduledFor: p.scheduledFor,
+                      installedAt: p.installedAt,
+                      liveFrom: p.liveFrom,
+                      collectedAt: p.collectedAt,
+                    }}
+                    canAdvance={p.status === "Active"}
+                    onChange={(next) => setPlacements((prev) => prev.map((x) => x.id === p.id ? {
+                      ...x,
+                      status: next.status === "completed" ? "Completed" : x.status,
+                      acceptedAt: next.acceptedAt ?? x.acceptedAt,
+                      scheduledFor: next.scheduledFor ?? x.scheduledFor,
+                      installedAt: next.installedAt ?? x.installedAt,
+                      liveFrom: next.liveFrom ?? x.liveFrom,
+                      collectedAt: next.collectedAt ?? x.collectedAt,
+                    } : x))}
+                  />
+
                   <div className="flex items-center gap-3 mt-2">
                     <Link
                       href={`/venue-portal/messages?artist=${p.artistSlug}&artistName=${encodeURIComponent(p.artistName)}`}

@@ -328,7 +328,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "ID and valid status required" }, { status: 400 });
     }
 
-    const { id, status } = parsed.data;
+    const { id, status, stage } = parsed.data;
+    if (!status && !stage) {
+      return NextResponse.json({ error: "status or stage required" }, { status: 400 });
+    }
+
     const db = getSupabaseAdmin();
 
     // Fetch the placement (include requester_user_id where available)
@@ -401,12 +405,40 @@ export async function PATCH(request: Request) {
       // no-op but allowed
     }
 
-    const updates: Record<string, unknown> = { status };
+    const updates: Record<string, unknown> = {};
+    if (status) updates.status = status;
+    const now = new Date().toISOString();
+
     if (existing.status === "pending" && (status === "active" || status === "declined")) {
-      updates.responded_at = new Date().toISOString();
+      updates.responded_at = now;
+      if (status === "active") updates.accepted_at = now;
     }
 
-    const { error } = await db.from("placements").update(updates).eq("id", id);
+    // Stage transitions (F13) — only allowed once the placement is active.
+    // Any party to the placement can advance the stage; fine-grained gating
+    // can come later if needed.
+    if (stage) {
+      const effectiveStatus = status || existing.status;
+      if (effectiveStatus !== "active") {
+        return NextResponse.json({ error: "Placement must be active to advance the stage" }, { status: 400 });
+      }
+      if (stage === "scheduled") updates.scheduled_for = now;
+      if (stage === "installed") updates.installed_at = now;
+      if (stage === "live") updates.live_from = now;
+      if (stage === "collected") {
+        updates.collected_at = now;
+        updates.status = "completed";
+      }
+    }
+
+    let { error } = await db.from("placements").update(updates).eq("id", id);
+
+    // Retry without the new lifecycle columns if the DB isn't migrated yet
+    if (error) {
+      const { accepted_at: _a, scheduled_for: _s, installed_at: _i, live_from: _l, collected_at: _c, ...safe } = updates as Record<string, unknown>;
+      const retry = await db.from("placements").update(safe).eq("id", id);
+      error = retry.error;
+    }
 
     if (error) {
       console.error("Supabase error:", error);

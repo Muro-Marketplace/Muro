@@ -28,6 +28,7 @@ One additional item was partially visible on source screenshots ("Add frame opti
 | 24 | Auto-message from placement request continues existing chat | **Broken** — `deterministicConversationId()` in `src/app/api/placements/route.ts` creates a `placement-{a}__{b}` conversation, separate from any existing chat with the same artist. Should look up an existing conversation between the two parties first, fall back to the deterministic id only if none exists | Small |
 | 25 | Accept/reject controls inside the messages UI | **Not built** — placement-request messages should carry the placement id + render Accept/Decline buttons inline in the messages view (same behaviour as the placement section). Needs a `message_type` tag on the auto-message row and UI rendering in `MessageInbox.tsx` | Small-Medium |
 | 26 | Venue placement card: show £ earned, not "% of sales" | **Wrong label** — `src/app/(pages)/venue-portal/placements/page.tsx:515-516` shows "Your Revenue Share: 20% of sales". Should show the actual £ received for this placement (sum of `orders.venue_revenue` where `orders.placement_id = placement.id`). Keep the % elsewhere on the card — this field should be the realised earnings | Small |
+| 27 | Frame options on artworks | **Not built** — artists can't offer framed variants. Add `frame_options JSONB` to `artist_works` (array of `{label, priceUplift}`). Edit form to add/remove options. Artwork detail + lightbox surface a frame selector; the selected uplift adds to the purchase total and flows through to the cart/checkout | Small-Medium |
 | 6 | Artwork with multiple available units + artist-settable quantity | **Partial** — `artist_works.available` is a boolean only; no `quantity` column. No UI | Small-Medium |
 | 7 | Sort by distance | **Partial** — `lat`/`lng` stored on `artist_profiles` (`supabase-coordinates-migration.sql`); no sort UI, no distance calc | Medium |
 | 8 | Dropdown nav on marketplace + portfolio gallery collections | **Partial** — `collections.ts` data exists, generic dropdown patterns exist in Header; no sub-dropdowns on marketplace nav | Small-Medium |
@@ -71,6 +72,7 @@ Everything else is independent.
 | F17 | Lightbox "Request a placement" button → cream | P0 | XS | — | Swap button colour class to cream token in ArtistProfileClient + ArtworkPageClient lightbox instances |
 | F18 | Placement form: QR vs Paid-loan-no-QR toggle + monthly fee | P0 | S | Migration 007 | Form toggle built, API carries fields. DB migration `007_notifications_and_placement_flags.sql` adds `qr_enabled BOOLEAN DEFAULT TRUE` and `monthly_fee_gbp NUMERIC` on `placements`. Run the migration to persist; until then the insert silently omits via retry fallback |
 | F19 | Rename "Micro" label to "QR Only" | P0 | XS | — | `components/labels/QRLabel.tsx` label string change; search-and-replace any display of "Micro" in LabelPreview/LabelSheet |
+| F27 | Frame options on artworks | P1 | M | Migration 010 | New `frame_options JSONB` column, typed `[{label, priceUplift}]`. Artist portfolio form section with add/remove rows. Detail page + lightbox: selector shown only when options exist; selected frame appended to the cart item size label and its uplift added to price |
 | F20 | Notification bell loads count on mount + polls | P0 | S | F8 persistent notifications | New `GET /api/notifications/unread-count` (or extend existing endpoint to return count cheaply). Header mounts a poller identical to messages' `fetchUnread`. Show badge count from the polled value, not from dropdown state |
 | F21 | Venue portal Recent Activity panel | P0 | S-M | F8 persistent notifications (optional data source) | Add an activity section to `venue-portal/page.tsx` matching `artist-portal/page.tsx:327+` layout. Venue-side event types: placement request sent, placement accepted/declined, message, order placed, QR scan. Source from `/api/dashboard` + `/api/notifications` |
 | F22 | Accept/reject placement from either portal + error feedback | P0 | M | Migration 008 | Add `requester_user_id UUID` column to `placements`. POST sets it to `auth.user.id`. PATCH allows the non-requester party to transition pending → active/declined (falls back to "venue accepts" if requester_user_id is NULL for legacy rows). Add Accept/Decline buttons to artist-portal placements table. Show a visible error (toast or inline) when the PATCH returns non-OK |
@@ -162,8 +164,9 @@ User-facing browse + product improvements.
 
 ### Phase 4 — placement lifecycle (4–5 days)
 Makes the placement flow feel coherent end-to-end.
-- **F13** Progress model schema
-- **F14** Progress UI (stepper)
+- **F13** Progress model schema ✅ shipped (migration 010: accepted_at, scheduled_for, installed_at, live_from, collected_at)
+- **F14** Progress UI (stepper) ✅ shipped (`components/PlacementStepper.tsx` in both portals)
+- **F27** Frame options on artworks ✅ shipped (migration 010: frame_options JSONB; selector on detail page + lightbox; uplift flows through cart)
 
 ### Phase 5 — dedicated placement experience (1–2 weeks)
 The structural change. Treat as one unit because the loan record has no good home without the detail page.

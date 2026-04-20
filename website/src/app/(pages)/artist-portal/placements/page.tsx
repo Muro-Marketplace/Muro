@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import PlacementStepper, { type PlacementStepperData } from "@/components/PlacementStepper";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
@@ -28,6 +29,11 @@ interface Placement {
   notes?: string;
   message?: string;
   canRespond?: boolean;
+  acceptedAt?: string | null;
+  scheduledFor?: string | null;
+  installedAt?: string | null;
+  liveFrom?: string | null;
+  collectedAt?: string | null;
 }
 
 interface InteractedVenue {
@@ -120,6 +126,11 @@ export default function PlacementsPage() {
               notes: p.notes as string | undefined,
               message: p.message as string | undefined,
               canRespond,
+              acceptedAt: (p.accepted_at as string | null) ?? null,
+              scheduledFor: (p.scheduled_for as string | null) ?? null,
+              installedAt: (p.installed_at as string | null) ?? null,
+              liveFrom: (p.live_from as string | null) ?? null,
+              collectedAt: (p.collected_at as string | null) ?? null,
             };
           });
           setPlacements(mapped);
@@ -661,6 +672,29 @@ export default function PlacementsPage() {
                           <p className="text-foreground font-medium">0</p>
                         </div>
                       </div>
+
+                      <PlacementStepper
+                        placement={{
+                          id: p.id,
+                          status: p.status.toLowerCase(),
+                          acceptedAt: p.acceptedAt,
+                          scheduledFor: p.scheduledFor,
+                          installedAt: p.installedAt,
+                          liveFrom: p.liveFrom,
+                          collectedAt: p.collectedAt,
+                        }}
+                        canAdvance={p.status === "Active"}
+                        onChange={(next) => setPlacements((prev) => prev.map((x) => x.id === p.id ? {
+                          ...x,
+                          status: next.status === "completed" ? "Completed" : x.status,
+                          acceptedAt: next.acceptedAt ?? x.acceptedAt,
+                          scheduledFor: next.scheduledFor ?? x.scheduledFor,
+                          installedAt: next.installedAt ?? x.installedAt,
+                          liveFrom: next.liveFrom ?? x.liveFrom,
+                          collectedAt: next.collectedAt ?? x.collectedAt,
+                        } : x))}
+                      />
+
                       <div className="flex items-center gap-2 mt-3 flex-wrap">
                         <Link
                           href={`/artist-portal/messages?artist=${p.venueSlug}&artistName=${encodeURIComponent(p.venue)}`}
@@ -806,6 +840,28 @@ export default function PlacementsPage() {
                     <p className="text-xs text-foreground">{p.notes}</p>
                   </div>
                 )}
+                <PlacementStepper
+                  placement={{
+                    id: p.id,
+                    status: p.status.toLowerCase(),
+                    acceptedAt: p.acceptedAt,
+                    scheduledFor: p.scheduledFor,
+                    installedAt: p.installedAt,
+                    liveFrom: p.liveFrom,
+                    collectedAt: p.collectedAt,
+                  }}
+                  canAdvance={p.status === "Active"}
+                  onChange={(next) => setPlacements((prev) => prev.map((x) => x.id === p.id ? {
+                    ...x,
+                    status: next.status === "completed" ? "Completed" : x.status,
+                    acceptedAt: next.acceptedAt ?? x.acceptedAt,
+                    scheduledFor: next.scheduledFor ?? x.scheduledFor,
+                    installedAt: next.installedAt ?? x.installedAt,
+                    liveFrom: next.liveFrom ?? x.liveFrom,
+                    collectedAt: next.collectedAt ?? x.collectedAt,
+                  } : x))}
+                />
+
                 <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <Link
                     href={`/artist-portal/messages?artist=${p.venueSlug}&artistName=${encodeURIComponent(p.venue)}`}

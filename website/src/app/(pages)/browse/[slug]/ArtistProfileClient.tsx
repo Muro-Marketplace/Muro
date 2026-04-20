@@ -36,6 +36,7 @@ export default function ArtistProfileClient({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedSizeIdx, setSelectedSizeIdx] = useState(0);
+  const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
   const [showEnquiry, setShowEnquiry] = useState(false);
   const [selectedForPlacement, setSelectedForPlacement] = useState<Set<number>>(new Set());
   const touchStartX = useRef<number | null>(null);
@@ -518,6 +519,24 @@ export default function ArtistProfileClient({
                 </div>
               )}
 
+              {/* Frame selector */}
+              {currentWork.available && currentWork.frameOptions && currentWork.frameOptions.length > 0 && (
+                <div className="mb-2 sm:mb-4">
+                  <p className="text-xs text-muted uppercase tracking-wider mb-2">Frame</p>
+                  <select
+                    value={selectedFrameIdx}
+                    onChange={(e) => setSelectedFrameIdx(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
+                  >
+                    {currentWork.frameOptions.map((f, i) => (
+                      <option key={f.label} value={i}>
+                        {f.label}{f.priceUplift > 0 ? ` — +\u00a3${f.priceUplift}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* CTA */}
               <div className="mt-auto space-y-2">
                 {user && userType === "venue" && (
@@ -532,54 +551,60 @@ export default function ArtistProfileClient({
                     Request Placement
                   </button>
                 )}
-                {currentWork.available && currentWork.pricing.length > 0 && (
-                  <>
-                    <button
-                      onClick={() => {
-                        const selected = currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0];
-                        addItem({
-                          type: "work",
-                          workId: currentWork.id,
-                          artistSlug,
-                          artistName,
-                          title: currentWork.title,
-                          image: currentWork.image,
-                          size: selected.label,
-                          price: selected.price,
-                          quantity: 1,
-                          shippingPrice: currentWork.shippingPrice ?? undefined,
-                        });
-                        navigatingAway.current = true;
-                        setLightboxIndex(null);
-                        router.push("/checkout");
-                      }}
-                      className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
-                    >
-                      Buy Now – £{(currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0]).price}
-                    </button>
-                    <button
-                      onClick={() => {
-                        const selected = currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0];
-                        addItem({
-                          type: "work",
-                          workId: currentWork.id,
-                          artistSlug,
-                          artistName,
-                          title: currentWork.title,
-                          image: currentWork.image,
-                          size: selected.label,
-                          price: selected.price,
-                          quantity: 1,
-                          shippingPrice: currentWork.shippingPrice ?? undefined,
-                        });
-                        showToast("Added to basket");
-                      }}
-                      className="w-full px-5 py-2 text-sm font-medium text-foreground border border-border hover:border-foreground/30 rounded-sm transition-colors"
-                    >
-                      Add to Basket
-                    </button>
-                  </>
-                )}
+                {currentWork.available && currentWork.pricing.length > 0 && (() => {
+                  const selected = currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0];
+                  const frameOpts = currentWork.frameOptions || [];
+                  const currentFrame = frameOpts[selectedFrameIdx];
+                  const frameUplift = currentFrame?.priceUplift || 0;
+                  const sizeLabel = currentFrame ? `${selected.label} + ${currentFrame.label}` : selected.label;
+                  const totalPrice = Math.round((selected.price + frameUplift) * 100) / 100;
+                  return (
+                    <>
+                      <button
+                        onClick={() => {
+                          addItem({
+                            type: "work",
+                            workId: currentWork.id,
+                            artistSlug,
+                            artistName,
+                            title: currentWork.title,
+                            image: currentWork.image,
+                            size: sizeLabel,
+                            price: totalPrice,
+                            quantity: 1,
+                            shippingPrice: currentWork.shippingPrice ?? undefined,
+                          });
+                          navigatingAway.current = true;
+                          setLightboxIndex(null);
+                          router.push("/checkout");
+                        }}
+                        className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
+                      >
+                        Buy Now – £{totalPrice}
+                      </button>
+                      <button
+                        onClick={() => {
+                          addItem({
+                            type: "work",
+                            workId: currentWork.id,
+                            artistSlug,
+                            artistName,
+                            title: currentWork.title,
+                            image: currentWork.image,
+                            size: sizeLabel,
+                            price: totalPrice,
+                            quantity: 1,
+                            shippingPrice: currentWork.shippingPrice ?? undefined,
+                          });
+                          showToast("Added to basket");
+                        }}
+                        className="w-full px-5 py-2 text-sm font-medium text-foreground border border-border hover:border-foreground/30 rounded-sm transition-colors"
+                      >
+                        Add to Basket
+                      </button>
+                    </>
+                  );
+                })()}
                 <button
                   onClick={() => { setShowEnquiry(true); setEnquirySent(false); }}
                   className="w-full px-5 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
