@@ -1341,54 +1341,95 @@ export default function BrowsePortfoliosPage() {
                   </div>
                 ) : (
                 <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-5 space-y-5">
-                  {filteredGalleryWorks.map((work) => (
-                    <Link
-                      key={work.id}
-                      href={`/browse/${work.artistSlug}#work-${slugify(work.title)}`}
-                      className="group break-inside-avoid block"
-                    >
-                      <div className="bg-surface border border-border/50 rounded-lg overflow-hidden">
-                        {/* Image */}
-                        <div className="relative overflow-hidden bg-border/20 rounded-t-lg">
-                          <Image
-                            src={work.image}
-                            alt={work.title}
-                            width={600}
-                            height={600}
-                            className="w-full h-auto object-cover group-hover:scale-[1.03] transition-transform duration-700"
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                          />
-                          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/20 to-transparent" />
-                          {!work.available && (
-                            <span className="absolute top-3 left-3 z-10 px-2 py-0.5 bg-black/70 text-white text-[10px] rounded-sm backdrop-blur-sm">
-                              Sold
-                            </span>
-                          )}
-                        </div>
+                  {filteredGalleryWorks.map((work) => {
+                    const workSlug = slugify(work.title);
+                    const quickLookHref = `/browse/${work.artistSlug}#work-${workSlug}`;
+                    const fullPageHref = `/browse/${work.artistSlug}/${workSlug}`;
+                    return (
+                      <div key={work.id} className="group break-inside-avoid block">
+                        <div className="bg-surface border border-border/50 rounded-lg overflow-hidden">
+                          {/* Image */}
+                          <div className="relative overflow-hidden bg-border/20 rounded-t-lg">
+                            <Link href={fullPageHref} aria-label={`View full details for ${work.title}`}>
+                              <Image
+                                src={work.image}
+                                alt={work.title}
+                                width={600}
+                                height={600}
+                                className="w-full h-auto object-cover group-hover:scale-[1.03] transition-transform duration-700"
+                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                              />
+                              <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/20 to-transparent" />
+                            </Link>
+                            {!work.available && (
+                              <span className="absolute top-3 left-3 z-10 px-2 py-0.5 bg-black/70 text-white text-[10px] rounded-sm backdrop-blur-sm">
+                                Sold
+                              </span>
+                            )}
+                            {/* Hover action buttons */}
+                            <div className="absolute top-3 right-3 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              <Link
+                                href={quickLookHref}
+                                aria-label="Quick look"
+                                title="Quick look"
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/95 text-foreground hover:bg-white hover:text-accent shadow-sm backdrop-blur-sm transition-colors"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                  <circle cx="12" cy="12" r="3" />
+                                </svg>
+                              </Link>
+                              <Link
+                                href={fullPageHref}
+                                aria-label="Open full artwork page"
+                                title="Open full artwork page"
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/95 text-foreground hover:bg-white hover:text-accent shadow-sm backdrop-blur-sm transition-colors"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M15 3h6v6" />
+                                  <path d="M10 14 21 3" />
+                                  <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
+                                </svg>
+                              </Link>
+                            </div>
+                          </div>
 
-                        {/* Info */}
-                        <div className="px-4 py-3.5">
-                          <h3 className="text-sm font-medium text-foreground leading-tight">
-                            {work.title}
-                          </h3>
-                          <p className="text-xs text-muted mt-0.5">
-                            {work.artistName} · {work.medium}
-                          </p>
-                          <p className="text-xs text-foreground/80 mt-1 font-medium">
-                            {work.priceBand}
-                          </p>
-                          <p className="text-[11px] text-muted/70 mt-1">
-                            {[work.openToFreeLoan ? "Display" : "", work.openToOutrightPurchase ? "Purchase" : ""].filter(Boolean).join(" · ")}
-                          </p>
-                          {work.openToRevenueShare && work.revenueSharePercent != null && work.revenueSharePercent > 0 && (
-                            <p className="text-[11px] text-accent font-medium mt-1">
-                              {work.revenueSharePercent}% Revenue Share
+                          {/* Info */}
+                          <div className="px-4 py-3.5">
+                            <Link href={fullPageHref} className="block group/title">
+                              <h3 className="text-sm font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors">
+                                {work.title}
+                              </h3>
+                            </Link>
+                            <p className="text-xs text-muted mt-0.5">
+                              {work.artistName} · {work.medium}
                             </p>
-                          )}
+                            <p className="text-xs text-foreground/80 mt-1 font-medium">
+                              {work.priceBand}
+                            </p>
+                            <p className="text-[11px] text-muted/70 mt-1">
+                              {[work.openToFreeLoan ? "Display" : "", work.openToOutrightPurchase ? "Purchase" : ""].filter(Boolean).join(" · ")}
+                            </p>
+                            {work.openToRevenueShare && work.revenueSharePercent != null && work.revenueSharePercent > 0 && (
+                              <p className="text-[11px] text-accent font-medium mt-1">
+                                {work.revenueSharePercent}% Revenue Share
+                              </p>
+                            )}
+                            <Link
+                              href={fullPageHref}
+                              className="inline-flex items-center gap-1 text-[11px] text-accent hover:text-accent-hover transition-colors mt-2"
+                            >
+                              View full details
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M5 12h14" />
+                                <path d="m12 5 7 7-7 7" />
+                              </svg>
+                            </Link>
+                          </div>
                         </div>
                       </div>
-                    </Link>
-                  ))}
+                    );
+                  })}
                 </div>
                 )}
               </div>

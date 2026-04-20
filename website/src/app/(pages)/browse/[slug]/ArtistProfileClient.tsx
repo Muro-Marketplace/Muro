@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import type { ArtistWork } from "@/data/artists";
 import { slugify } from "@/lib/slugify";
 import { useCart } from "@/context/CartContext";
@@ -225,7 +226,7 @@ export default function ArtistProfileClient({
                   <div className="absolute inset-0" />
 
                   {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/55 transition-colors duration-300 flex items-end">
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/55 transition-colors duration-300 flex items-end pointer-events-none group-hover:pointer-events-auto">
                     <div className="p-5 w-full opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
                       <h3 className="text-white font-sans font-medium text-sm leading-snug mb-1">
                         {work.title}
@@ -233,9 +234,21 @@ export default function ArtistProfileClient({
                       <p className="text-white/70 text-xs mb-1.5">
                         {work.medium} &middot; {work.dimensions}
                       </p>
-                      <p className="text-white text-sm font-medium">
-                        {work.priceBand}
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-white text-sm font-medium">
+                          {work.priceBand}
+                        </p>
+                        <Link
+                          href={`/browse/${artistSlug}/${slugify(work.title)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[11px] text-white/80 hover:text-white transition-colors"
+                        >
+                          Full details
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+                          </svg>
+                        </Link>
+                      </div>
                     </div>
                   </div>
                   {/* Save button */}
@@ -260,8 +273,8 @@ export default function ArtistProfileClient({
                       )}
                     </button>
                   )}
-                  {/* Availability */}
-                  <div className="absolute top-3 right-3">
+                  {/* Availability — hidden on hover, replaced by action buttons */}
+                  <div className="absolute top-3 right-3 transition-opacity duration-200 group-hover:opacity-0 pointer-events-none">
                     {work.available ? (
                       <span className="inline-block px-2 py-0.5 bg-accent/90 text-white text-[10px] rounded-sm backdrop-blur-sm">
                         Available
@@ -271,6 +284,32 @@ export default function ArtistProfileClient({
                         Sold
                       </span>
                     )}
+                  </div>
+                  {/* Hover action buttons */}
+                  <div className="absolute top-3 right-3 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setLightboxIndex(index); }}
+                      title="Quick look"
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-white/95 text-foreground hover:bg-white hover:text-accent shadow-sm backdrop-blur-sm transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    </button>
+                    <Link
+                      href={`/browse/${artistSlug}/${slugify(work.title)}`}
+                      title="Full artwork page"
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-white/95 text-foreground hover:bg-white hover:text-accent shadow-sm backdrop-blur-sm transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 3h6v6" />
+                        <path d="M10 14 21 3" />
+                        <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
+                      </svg>
+                    </Link>
                   </div>
                 </div>
               </div>
