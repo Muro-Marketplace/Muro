@@ -14,14 +14,19 @@ export default function CollectionCard({ collection, distance }: CollectionCardP
       href={`/browse/collections/${collection.id}`}
       className="group block bg-surface border border-border rounded-sm overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
     >
-      <div className="relative aspect-[16/9] bg-border/20">
+      <div
+        className="relative aspect-[16/9] bg-border/20 select-none"
+        onContextMenu={(e) => e.preventDefault()}
+      >
         <Image
           src={collection.thumbnail || collection.bannerImage || collection.coverImage}
           alt={collection.name}
           fill
-          className="object-cover group-hover:scale-[1.02] transition-transform duration-500"
+          className="object-cover group-hover:scale-[1.02] transition-transform duration-500 pointer-events-none select-none"
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           unoptimized
+          draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
         <div className="absolute top-3 right-3">

@@ -32,7 +32,7 @@ interface WorkFormState {
   inStorePricing: string[];
   detectedRatio: number | null;
   quantityAvailable: string;
-  frameOptions: { label: string; priceUplift: string }[];
+  frameOptions: { label: string; priceUplift: string; imageUrl?: string }[];
 }
 
 // Standard print sizes in inches [width, height] — always width <= height
@@ -176,7 +176,7 @@ export default function PortfolioPage() {
           shippingPrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).shippingPrice ?? null,
           inStorePrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).inStorePrice ?? null,
           quantityAvailable: (work as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable ?? null,
-          frameOptions: (work as ArtistWork & { frameOptions?: { label: string; priceUplift: number }[] }).frameOptions ?? [],
+          frameOptions: ((work as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions ?? []).map((f) => ({ label: f.label, priceUplift: String(f.priceUplift), imageUrl: f.imageUrl })),
           description: work.description || "",
           images: work.images || [],
         }),
@@ -231,8 +231,8 @@ export default function PortfolioPage() {
       quantityAvailable: (w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable != null
         ? String((w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable)
         : "",
-      frameOptions: Array.isArray((w as ArtistWork & { frameOptions?: { label: string; priceUplift: number }[] }).frameOptions)
-        ? (w as ArtistWork & { frameOptions?: { label: string; priceUplift: number }[] }).frameOptions!.map((f) => ({ label: f.label, priceUplift: String(f.priceUplift) }))
+      frameOptions: Array.isArray((w as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions)
+        ? (w as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions!.map((f) => ({ label: f.label, priceUplift: String(f.priceUplift), imageUrl: f.imageUrl }))
         : [],
     });
     setEditingIndex(index);
@@ -379,10 +379,14 @@ export default function PortfolioPage() {
     const qtyFinite = qtyVal !== null && Number.isFinite(qtyVal);
 
     const cleanFrameOptions = form.frameOptions
-      .map((f) => ({ label: f.label.trim(), priceUplift: Number(f.priceUplift) || 0 }))
+      .map((f) => ({
+        label: f.label.trim(),
+        priceUplift: Number(f.priceUplift) || 0,
+        ...(f.imageUrl && f.imageUrl.length > 0 ? { imageUrl: f.imageUrl } : {}),
+      }))
       .filter((f) => f.label.length > 0);
 
-    const newWork: ArtistWork & { shippingPrice?: number; inStorePrice?: number; quantityAvailable?: number | null; frameOptions?: { label: string; priceUplift: number }[] } = {
+    const newWork: ArtistWork & { shippingPrice?: number; inStorePrice?: number; quantityAvailable?: number | null; frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] } = {
       id: editingIndex !== null ? works[editingIndex].id : `${artist!.slug}-${Date.now()}`,
       title: form.title,
       medium: form.medium,
@@ -960,43 +964,93 @@ export default function PortfolioPage() {
               <p className="text-xs text-muted mb-3">Offer framed variants. Leave blank if you only sell unframed. Price uplift is added on top of the size price.</p>
               <div className="space-y-2">
                 {form.frameOptions.map((f, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={f.label}
-                      onChange={(e) => setForm((p) => {
-                        const next = [...p.frameOptions];
-                        next[i] = { ...next[i], label: e.target.value };
-                        return { ...p, frameOptions: next };
-                      })}
-                      placeholder="e.g. Black oak frame"
-                      maxLength={80}
-                      className="flex-1 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
-                    />
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm text-muted">+£</span>
+                  <div key={i} className="flex items-start gap-2">
+                    {/* Frame preview / upload trigger */}
+                    <label className="w-14 h-14 shrink-0 border border-dashed border-border rounded-sm flex items-center justify-center overflow-hidden bg-surface cursor-pointer hover:border-accent/60 transition-colors relative" title={f.imageUrl ? "Replace image" : "Add image"}>
+                      {f.imageUrl ? (
+                        <Image src={f.imageUrl} alt={f.label || "Frame preview"} fill sizes="56px" className="object-cover" />
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="9" cy="9" r="1.5" />
+                          <path d="m21 15-5-5L5 21" />
+                        </svg>
+                      )}
                       <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={f.priceUplift}
-                        onChange={(e) => setForm((p) => {
-                          const next = [...p.frameOptions];
-                          next[i] = { ...next[i], priceUplift: e.target.value };
-                          return { ...p, frameOptions: next };
-                        })}
-                        placeholder="0"
-                        className="w-20 bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const url = await uploadImage(file, "artworks");
+                            setForm((p) => {
+                              const next = [...p.frameOptions];
+                              next[i] = { ...next[i], imageUrl: url };
+                              return { ...p, frameOptions: next };
+                            });
+                          } catch {
+                            setFormError("Frame image upload failed.");
+                          } finally {
+                            e.target.value = "";
+                          }
+                        }}
                       />
+                    </label>
+                    <div className="flex-1 flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={f.label}
+                          onChange={(e) => setForm((p) => {
+                            const next = [...p.frameOptions];
+                            next[i] = { ...next[i], label: e.target.value };
+                            return { ...p, frameOptions: next };
+                          })}
+                          placeholder="e.g. Black oak frame"
+                          maxLength={80}
+                          className="flex-1 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
+                        />
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm text-muted">+£</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={f.priceUplift}
+                            onChange={(e) => setForm((p) => {
+                              const next = [...p.frameOptions];
+                              next[i] = { ...next[i], priceUplift: e.target.value };
+                              return { ...p, frameOptions: next };
+                            })}
+                            placeholder="0"
+                            className="w-20 bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setForm((p) => ({ ...p, frameOptions: p.frameOptions.filter((_, j) => j !== i) }))}
+                          className="w-8 h-8 flex items-center justify-center text-muted hover:text-red-500 transition-colors"
+                          aria-label="Remove frame option"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+                        </button>
+                      </div>
+                      {f.imageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setForm((p) => {
+                            const next = [...p.frameOptions];
+                            next[i] = { ...next[i], imageUrl: undefined };
+                            return { ...p, frameOptions: next };
+                          })}
+                          className="self-start text-[11px] text-muted hover:text-red-500 transition-colors"
+                        >
+                          Remove image
+                        </button>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setForm((p) => ({ ...p, frameOptions: p.frameOptions.filter((_, j) => j !== i) }))}
-                      className="w-8 h-8 flex items-center justify-center text-muted hover:text-red-500 transition-colors"
-                      aria-label="Remove frame option"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
-                    </button>
                   </div>
                 ))}
                 <button

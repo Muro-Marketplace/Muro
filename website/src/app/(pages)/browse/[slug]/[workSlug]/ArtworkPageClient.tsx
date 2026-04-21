@@ -125,6 +125,18 @@ export default function ArtworkPageClient({
               </option>
             ))}
           </select>
+          {selectedFrame?.imageUrl && (
+            <div className="mt-3 relative aspect-video rounded-sm overflow-hidden border border-border/60 bg-surface select-none" onContextMenu={(e) => e.preventDefault()}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={selectedFrame.imageUrl}
+                alt={`${selectedFrame.label} preview`}
+                className="w-full h-full object-cover pointer-events-none select-none"
+                draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
+              />
+            </div>
+          )}
         </div>
       )}
 

@@ -58,7 +58,7 @@ export default function ArtworkImageViewer({ src, alt, aspectRatio, images }: Pr
             <div className="absolute inset-0" />
             <button
               onClick={() => setIsFullscreen(true)}
-              className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/80 hover:bg-white text-foreground items-center justify-center shadow-md transition-colors z-10 flex"
+              className="lg:hidden absolute top-3 right-3 w-9 h-9 rounded-full bg-white/80 hover:bg-white text-foreground items-center justify-center shadow-md transition-colors z-10 flex"
               aria-label="Expand image"
               title="Expand image"
             >

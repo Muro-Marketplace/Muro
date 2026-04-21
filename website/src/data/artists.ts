@@ -22,7 +22,7 @@ export interface ArtistWork {
   inStorePrice?: number | null;
   inStorePricing?: SizePricing[];
   quantityAvailable?: number | null;
-  frameOptions?: { label: string; priceUplift: number }[];
+  frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[];
 }
 
 export interface Artist {
