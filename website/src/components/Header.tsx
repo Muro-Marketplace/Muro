@@ -10,11 +10,10 @@ import { authFetch } from "@/lib/api-client";
 
 // When the user is inside the marketplace area (/browse or /spaces-looking-for-art)
 // the top-level "Marketplace" link is replaced by these inline tabs.
-// Collections lives on the browse page's in-page toolbar alongside the
-// Portfolios / Gallery toggle, not in the top nav.
 const marketplaceTabs = [
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v !== "gallery" && v !== "collections" },
   { label: "Galleries",  href: "/browse?view=gallery",    match: (p: string, v: string) => p === "/browse" && v === "gallery" },
+  { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
   { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
 ];
 
