@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -49,6 +49,34 @@ const moreLinks = [
 
 const immersiveRoutes = ["/venues", "/artists", "/about", "/how-it-works"];
 
+// Marketplace tabs pulled into their own component so the useSearchParams call
+// is isolated behind a <Suspense> boundary. Without that, every page that
+// renders the shared Header would be forced into dynamic rendering, which
+// breaks the static prerender for pages like /admin/applications.
+function MarketplaceTabsNav({ pathname, isPortal, showSolid }: { pathname: string; isPortal: boolean; showSolid: boolean }) {
+  const searchParams = useSearchParams();
+  const view = searchParams?.get("view") || "";
+  return (
+    <>
+      {marketplaceTabs.map((tab) => {
+        const active = tab.match(pathname, view);
+        const cls = active
+          ? (isPortal || !showSolid ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
+          : (isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground");
+        return (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            className={`text-sm transition-colors duration-300 py-1 ${cls}`}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -68,12 +96,6 @@ export default function Header() {
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
   const [marketplaceDropdownOpen, setMarketplaceDropdownOpen] = useState(false);
   const marketplaceDropdownRef = useRef<HTMLDivElement>(null);
-  // Query-param tracking for active marketplace tab highlight (F47).
-  // We use ?view=portfolios|gallery|collections rather than a hash, because
-  // Next.js Link to the same pathname + different hash uses pushState which
-  // doesn't fire hashchange — so the tab highlight wouldn't update.
-  const searchParams = useSearchParams();
-  const view = searchParams?.get("view") || "";
 
   const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces-looking-for-art";
 
@@ -251,21 +273,9 @@ export default function Header() {
           <nav className="hidden lg:flex items-center gap-7 absolute left-1/2 -translate-x-1/2" role="navigation" aria-label="Main navigation">
             {isMarketplaceArea ? (
               // F47 — marketplace tabs replace the normal nav while inside /browse or /spaces-looking-for-art
-              marketplaceTabs.map((tab) => {
-                const active = tab.match(pathname, view);
-                const cls = active
-                  ? (isPortal || !showSolid ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
-                  : (isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground");
-                return (
-                  <Link
-                    key={tab.href}
-                    href={tab.href}
-                    className={`text-sm transition-colors duration-300 py-1 ${cls}`}
-                  >
-                    {tab.label}
-                  </Link>
-                );
-              })
+              <Suspense fallback={null}>
+                <MarketplaceTabsNav pathname={pathname} isPortal={isPortal} showSolid={showSolid} />
+              </Suspense>
             ) : (
             (user ? (userType === "venue" ? venueNavLinks : loggedInNavLinks) : publicNavLinks).map((link) => {
               const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
