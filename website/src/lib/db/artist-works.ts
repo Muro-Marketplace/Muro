@@ -34,20 +34,38 @@ export async function upsertWork(
 
   // Try full write; on failure, progressively strip newer optional columns.
   const droppedColumns: string[] = [];
+  const fallbackErrors: string[] = [];
   let { error } = await attempt(row);
   if (error) {
+    fallbackErrors.push(`full-write: ${error.message}`);
     const { description: _d, images: _i, ...r2 } = row as Record<string, unknown>;
     void _d; void _i;
     droppedColumns.push("description", "images");
     ({ error } = await attempt(r2));
   }
   if (error) {
+    fallbackErrors.push(`without-desc-images: ${error.message}`);
     const { description: _d, images: _i, shipping_price: _sp, quantity_available: _qa, frame_options: _fo, ...r3 } = row as Record<string, unknown>;
     void _d; void _i; void _sp; void _qa; void _fo;
     droppedColumns.push("shipping_price", "quantity_available", "frame_options");
     ({ error } = await attempt(r3));
   }
-  return { error, droppedColumns };
+  if (fallbackErrors.length > 0) {
+    console.warn("upsertWork fallback chain:", fallbackErrors);
+  }
+
+  // Read back what was actually persisted so the API can confirm
+  let savedRow: DbArtistWork | null = null;
+  if (!error) {
+    const { data } = await db
+      .from("artist_works")
+      .select("*")
+      .eq("id", work.id)
+      .single();
+    savedRow = (data as DbArtistWork | null) ?? null;
+  }
+
+  return { error, droppedColumns, savedRow, fallbackErrors };
 }
 
 export async function deleteWork(workId: string, artistProfileId: string) {

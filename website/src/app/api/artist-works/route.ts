@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       ? description.slice(0, 2000)
       : "";
 
-    const { error, droppedColumns } = await upsertWork(result.profile.id, {
+    const { error, droppedColumns, savedRow, fallbackErrors } = await upsertWork(result.profile.id, {
       id,
       title,
       medium: medium || "",
@@ -113,7 +113,31 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, warnings });
+    // Diagnostic: description/images sent but not present in the row the DB returned.
+    // If migration 015 is applied and the write didn't error, but the column is still empty,
+    // something is silently dropping it (RLS policy, trigger, schema cache, wrong table).
+    if (sanitizedDescription && savedRow && !savedRow.description) {
+      const cause = fallbackErrors && fallbackErrors.length > 0
+        ? ` First-write error: ${fallbackErrors[0]}.`
+        : "";
+      warnings.push(
+        `Description was sent but did not persist — the DB returned an empty description column.${cause} Likely causes: stale PostgREST schema cache (run 'NOTIFY pgrst, ''reload schema'';' in Supabase SQL editor), or the migration was applied to a different project than this app points at.`
+      );
+      console.error("Description drop detected", {
+        workId: id,
+        sent: sanitizedDescription.slice(0, 80),
+        savedDescription: savedRow.description,
+        savedKeys: Object.keys(savedRow),
+        fallbackErrors,
+      });
+    }
+    if (sanitizedImages.length > 0 && savedRow && (!Array.isArray(savedRow.images) || savedRow.images.length === 0)) {
+      warnings.push(
+        "Extra images were sent but did not persist — the DB returned an empty images column."
+      );
+    }
+
+    return NextResponse.json({ success: true, warnings, savedRow });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
