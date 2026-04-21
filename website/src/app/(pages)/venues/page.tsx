@@ -206,6 +206,13 @@ export default function VenuesPage() {
                   REGISTER YOUR VENUE
                 </a>
               </div>
+              <p className="mt-6 text-sm text-white/60">
+                Prefer a curator to pick for you?{" "}
+                <a href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
+                  Try Wallplace Curated
+                </a>{" "}
+                — from £49.
+              </p>
             </div>
           </div>
         </div>

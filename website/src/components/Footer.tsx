@@ -15,6 +15,7 @@ const footerColumns = [
     links: [
       { label: "Discover Art", href: "/browse" },
       { label: "Register Your Venue", href: "/register-venue" },
+      { label: "Wallplace Curated", href: "/curated" },
       { label: "How It Works", href: "/how-it-works" },
       { label: "FAQs", href: "/faqs" },
     ],

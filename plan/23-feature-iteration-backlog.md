@@ -173,6 +173,19 @@ The structural change. Treat as one unit because the loan record has no good hom
 - **F15** Placement detail page ✅ shipped (`/placements/[id]` with full placement view, stepper, messages/notes, photo gallery, record form)
 - **F16** Loan/consignment table + CRUD ✅ shipped (migration 011 `placement_records` + `placement_photos`; `PUT /api/placements/[id]/record`; `POST/DELETE /api/placements/[id]/photos`)
 
+### Revenue stream 1 — Curated matching for venues (F38)
+Paid concierge offer: venue submits a brief, pays up front, Wallplace hand-curates a shortlist manually and returns it by email. Lets us validate pricing and demand before automating.
+
+- New public page `/curated` with marketing copy + paid enquiry form
+- Three tiers: Single wall (£49), Full space (£149), Bespoke (£299 — adjustable per project)
+- Stripe Checkout for the curation fee (one-off payment, no subscription)
+- Webhook records paid requests into a new `curation_requests` table
+- Admin list view at `/admin/curation` to triage, update status, mark shortlist sent
+- Email the admin on new paid request + confirmation to the venue
+- Entry point from the Marketplace nav dropdown / footer
+
+Kept deliberately manual on the delivery side: no in-platform shortlist builder yet — the admin sends the shortlist by email from their own mailbox. That stays true to the "concierge-first" principle from the original plan.
+
 ### Phase 6 — production readiness (blockers before taking real money)
 Straight out of the earlier audit. Not user-facing features, but everything below must land before launch.
 - **F28** Fix RLS on `refund_requests` (any user can currently approve/modify refunds)

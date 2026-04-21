@@ -249,6 +249,13 @@ export default function RegisterVenuePage() {
             <p className="text-lg text-white/60 leading-relaxed">
               Tell us about your space and we&rsquo;ll match you with artists whose work fits your environment. Completely free – no contracts, no commitments.
             </p>
+            <p className="mt-5 text-sm text-white/50">
+              Want us to do the curation for you?{" "}
+              <a href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
+                Wallplace Curated
+              </a>{" "}
+              — paid shortlists from £49.
+            </p>
           </div>
         </div>
       </section>

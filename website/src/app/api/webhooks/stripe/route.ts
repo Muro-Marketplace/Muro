@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer } from "@/lib/stripe-connect";
-import { notifyArtistNewOrder, notifyVenueOrderFromPlacement } from "@/lib/email";
+import { notifyArtistNewOrder, notifyVenueOrderFromPlacement, notifyCurationCustomerPaid } from "@/lib/email";
 import type Stripe from "stripe";
 
 export async function POST(request: Request) {
@@ -28,6 +28,57 @@ export async function POST(request: Request) {
   }
 
   const db = getSupabaseAdmin();
+
+  // ─── Curation checkout ───
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    if (session.mode === "payment" && session.metadata?.kind === "curation_request") {
+      const requestId = session.metadata.curation_request_id;
+      if (requestId) {
+        const paymentIntentId = typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : session.payment_intent?.id || "";
+        const amountPaid = (session.amount_total || 0) / 100;
+        const { data: existing } = await db
+          .from("curation_requests")
+          .select("id, tier, venue_name, contact_name, contact_email, status")
+          .eq("id", requestId)
+          .maybeSingle();
+
+        if (existing && existing.status !== "paid" && existing.status !== "in_progress") {
+          const { error: updErr } = await db
+            .from("curation_requests")
+            .update({
+              status: "paid",
+              stripe_payment_intent_id: paymentIntentId,
+              amount_paid_gbp: amountPaid,
+              paid_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", requestId);
+          if (updErr) {
+            console.error("curation_requests update error:", updErr);
+            return NextResponse.json({ error: "DB update failed" }, { status: 500 });
+          }
+          if (existing.contact_email) {
+            const tierLabels: Record<string, string> = {
+              single_wall: "Single wall",
+              full_space: "Full space",
+              bespoke: "Bespoke project",
+            };
+            notifyCurationCustomerPaid({
+              email: existing.contact_email,
+              contactName: existing.contact_name,
+              venueName: existing.venue_name,
+              tierLabel: tierLabels[existing.tier] || existing.tier,
+              amountGbp: amountPaid,
+            }).catch(() => {});
+          }
+        }
+      }
+      return NextResponse.json({ received: true });
+    }
+  }
 
   // ─── Art purchase checkout ───
   if (event.type === "checkout.session.completed") {

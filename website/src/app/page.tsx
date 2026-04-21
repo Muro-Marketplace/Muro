@@ -218,6 +218,12 @@ export default function Home() {
                       REGISTER YOUR VENUE
                     </Link>
                   </div>
+                  <p className="mt-5 text-sm text-muted">
+                    Want a shortlist picked for you?{" "}
+                    <Link href="/curated" className="text-accent hover:underline font-medium">
+                      Professional curation services also available &rarr;
+                    </Link>
+                  </p>
                 </div>
 
                 <div className="hidden sm:grid grid-cols-5 grid-rows-4 gap-2 aspect-square">

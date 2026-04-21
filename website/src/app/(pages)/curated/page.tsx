@@ -1,0 +1,334 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+
+type TierKey = "single_wall" | "full_space" | "bespoke";
+
+const TIERS: { key: TierKey; label: string; priceLabel: string; strapline: string; bullets: string[]; cta: string }[] = [
+  {
+    key: "single_wall",
+    label: "Single wall",
+    priceLabel: "£49",
+    strapline: "One feature wall, hand-picked.",
+    bullets: [
+      "Shortlist of 5–8 works suited to your space",
+      "Size, style and budget matched to your brief",
+      "Delivered by email within 5 business days",
+    ],
+    cta: "Book for £49",
+  },
+  {
+    key: "full_space",
+    label: "Full space",
+    priceLabel: "£149",
+    strapline: "Every wall in your venue, considered together.",
+    bullets: [
+      "Multi-wall shortlist with grouping notes",
+      "Mood and palette guidance for a coherent look",
+      "Optional revisions if you'd like alternatives",
+      "Delivered within 5 business days",
+    ],
+    cta: "Book for £149",
+  },
+  {
+    key: "bespoke",
+    label: "Bespoke project",
+    priceLabel: "From £299",
+    strapline: "For hotels, hospitality groups, offices, or larger venues.",
+    bullets: [
+      "Full curation plan tailored to your brand and space",
+      "Artist shortlist + commissioned work if needed",
+      "Rotation schedule and installation guidance",
+      "Quote based on scope — just tell us what you need",
+    ],
+    cta: "Request a quote",
+  },
+];
+
+const VENUE_TYPES = [
+  "Café",
+  "Restaurant",
+  "Hotel",
+  "Bar / pub",
+  "Office",
+  "Co-working",
+  "Retail",
+  "Clinic",
+  "Gallery",
+  "Event space",
+  "Other",
+];
+
+export default function CuratedPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const cancelled = searchParams.get("cancelled") === "1";
+
+  const [selectedTier, setSelectedTier] = useState<TierKey | null>(null);
+  const [form, setForm] = useState({
+    venueName: "",
+    contactName: "",
+    contactEmail: "",
+    contactPhone: "",
+    venueType: "",
+    location: "",
+    wallCount: "",
+    budgetGbp: "",
+    timeframe: "",
+    styleNotes: "",
+    audienceNotes: "",
+    moodNotes: "",
+    referencesNotes: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedTier) {
+      const el = document.getElementById("brief");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selectedTier]);
+
+  function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
+    setForm((p) => ({ ...p, [key]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedTier) return;
+    if (!form.venueName.trim() || !form.contactName.trim() || !form.contactEmail.trim()) {
+      setError("Please fill the venue, your name, and email.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/curation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier: selectedTier,
+          venueName: form.venueName,
+          contactName: form.contactName,
+          contactEmail: form.contactEmail,
+          contactPhone: form.contactPhone,
+          venueType: form.venueType,
+          location: form.location,
+          wallCount: form.wallCount ? Number(form.wallCount) : undefined,
+          budgetGbp: form.budgetGbp,
+          timeframe: form.timeframe,
+          styleNotes: form.styleNotes,
+          audienceNotes: form.audienceNotes,
+          moodNotes: form.moodNotes,
+          referencesNotes: form.referencesNotes,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Could not submit. Please try again.");
+        setSubmitting(false);
+        return;
+      }
+      if (data.mode === "checkout" && data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      if (data.mode === "enquiry") {
+        router.push("/curated/enquiry-sent");
+        return;
+      }
+      setError("Unexpected response. Please try again.");
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const inputCls = "w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60";
+  const labelCls = "block text-xs font-medium text-muted uppercase tracking-wider mb-1";
+
+  return (
+    <div className="bg-background">
+      {/* Hero */}
+      <section className="pt-16 pb-12 lg:pt-24 lg:pb-16">
+        <div className="max-w-[1000px] mx-auto px-6 text-center">
+          <p className="text-xs font-medium tracking-[0.25em] uppercase text-accent mb-5">
+            Wallplace Curated
+          </p>
+          <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl leading-tight text-foreground mb-6">
+            Art on your walls, chosen by experts.
+          </h1>
+          <p className="text-lg text-muted max-w-2xl mx-auto leading-relaxed">
+            Tell us about your space — the style, the audience, the mood you want. Our curators hand-pick a shortlist of works from Wallplace artists that fit. You decide what goes on the wall.
+          </p>
+        </div>
+      </section>
+
+      {cancelled && (
+        <div className="max-w-[1000px] mx-auto px-6 mb-8">
+          <div className="bg-amber-50 border border-amber-200 rounded-sm px-4 py-3 text-sm text-amber-900">
+            Checkout cancelled. Nothing has been charged — pick a tier below to try again.
+          </div>
+        </div>
+      )}
+
+      {/* Tiers */}
+      <section className="pb-16">
+        <div className="max-w-[1100px] mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {TIERS.map((t) => {
+              const selected = selectedTier === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setSelectedTier(t.key)}
+                  className={`text-left bg-white border rounded-sm p-6 transition-colors ${selected ? "border-accent ring-2 ring-accent/20" : "border-border hover:border-foreground/30"}`}
+                >
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted mb-2">{t.label}</p>
+                  <p className="font-serif text-3xl text-foreground mb-2">{t.priceLabel}</p>
+                  <p className="text-sm text-foreground mb-4">{t.strapline}</p>
+                  <ul className="space-y-2 mb-5">
+                    {t.bullets.map((b) => (
+                      <li key={b} className="flex gap-2 text-sm text-muted">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#C17C5A" strokeWidth="2" strokeLinecap="round" className="mt-1 shrink-0"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <span className={`inline-flex items-center gap-1 text-sm font-medium ${selected ? "text-accent" : "text-foreground"}`}>
+                    {selected ? "Selected" : t.cta}
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Brief form */}
+      <section id="brief" className="pb-20">
+        <div className="max-w-[800px] mx-auto px-6">
+          <div className="bg-surface border border-border rounded-sm p-6 sm:p-8">
+            <h2 className="font-serif text-2xl text-foreground mb-1">Tell us about your space</h2>
+            <p className="text-sm text-muted mb-6">
+              {selectedTier
+                ? TIERS.find((t) => t.key === selectedTier)?.label === "Bespoke project"
+                  ? "We'll review your brief and email a tailored quote within 2 business days."
+                  : "We'll confirm payment and email your shortlist within 5 business days."
+                : "Pick a tier above first — then fill in the brief here."}
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Venue name *</label>
+                  <input required value={form.venueName} onChange={(e) => update("venueName", e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Venue type</label>
+                  <select value={form.venueType} onChange={(e) => update("venueType", e.target.value)} className={inputCls + " cursor-pointer"}>
+                    <option value="">Select…</option>
+                    {VENUE_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Your name *</label>
+                  <input required value={form.contactName} onChange={(e) => update("contactName", e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Email *</label>
+                  <input type="email" required value={form.contactEmail} onChange={(e) => update("contactEmail", e.target.value)} className={inputCls} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Phone</label>
+                  <input type="tel" value={form.contactPhone} onChange={(e) => update("contactPhone", e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Location (town/city)</label>
+                  <input value={form.location} onChange={(e) => update("location", e.target.value)} className={inputCls} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className={labelCls}>Wall count</label>
+                  <input type="number" min={0} value={form.wallCount} onChange={(e) => update("wallCount", e.target.value)} className={inputCls} placeholder="e.g. 3" />
+                </div>
+                <div>
+                  <label className={labelCls}>Budget (£)</label>
+                  <input value={form.budgetGbp} onChange={(e) => update("budgetGbp", e.target.value)} className={inputCls} placeholder="e.g. 500 or 1000–2500" />
+                </div>
+                <div>
+                  <label className={labelCls}>Timeframe</label>
+                  <input value={form.timeframe} onChange={(e) => update("timeframe", e.target.value)} className={inputCls} placeholder="e.g. ASAP, within 2 weeks" />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Style you like</label>
+                <textarea rows={2} value={form.styleNotes} onChange={(e) => update("styleNotes", e.target.value)} className={inputCls} placeholder="e.g. muted minimalist photography, bold colour abstracts, urban street scenes" />
+              </div>
+
+              <div>
+                <label className={labelCls}>Audience / guests</label>
+                <textarea rows={2} value={form.audienceNotes} onChange={(e) => update("audienceNotes", e.target.value)} className={inputCls} placeholder="Who's in your space — their taste, demographic, time of day" />
+              </div>
+
+              <div>
+                <label className={labelCls}>Mood / atmosphere</label>
+                <textarea rows={2} value={form.moodNotes} onChange={(e) => update("moodNotes", e.target.value)} className={inputCls} placeholder="Calm, energetic, cosy, clean, warm, considered…" />
+              </div>
+
+              <div>
+                <label className={labelCls}>References, links, or anything else</label>
+                <textarea rows={3} value={form.referencesNotes} onChange={(e) => update("referencesNotes", e.target.value)} className={inputCls} placeholder="Share Instagram links, Pinterest boards, or photos of the space (paste URLs)." />
+              </div>
+
+              {error && <p className="text-sm text-red-600">{error}</p>}
+
+              <div className="flex items-center justify-between gap-4 pt-3 border-t border-border">
+                <p className="text-xs text-muted">
+                  {selectedTier === "bespoke"
+                    ? "No charge yet — we'll email a tailored quote."
+                    : selectedTier
+                      ? `You'll be sent to secure Stripe checkout to pay ${TIERS.find((t) => t.key === selectedTier)?.priceLabel}.`
+                      : "Select a tier above to continue."}
+                </p>
+                <button
+                  type="submit"
+                  disabled={!selectedTier || submitting}
+                  className="px-6 py-3 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {submitting
+                    ? "Submitting…"
+                    : selectedTier === "bespoke"
+                      ? "Request quote"
+                      : selectedTier
+                        ? `Pay ${TIERS.find((t) => t.key === selectedTier)?.priceLabel}`
+                        : "Select a tier"}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <p className="text-xs text-muted text-center mt-6">
+            Already on Wallplace?{" "}
+            <Link href="/venue-portal" className="text-accent hover:underline">Log in to your venue portal</Link>.
+          </p>
+        </div>
+      </section>
+    </div>
+  );
+}

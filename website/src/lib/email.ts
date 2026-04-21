@@ -469,3 +469,103 @@ export async function notifyRefundDecision(params: {
     console.error("Email send error (refund decision):", err);
   }
 }
+
+/**
+ * Notify the admin that a venue has submitted a curation request.
+ * Fires for both pay-first tiers and bespoke enquiries.
+ */
+export async function notifyAdminCurationRequest(params: {
+  requestId: string;
+  tier: string;
+  payFirst: boolean;
+  priceGbp: number;
+  venueName: string;
+  contactName: string;
+  contactEmail: string;
+  location?: string;
+}) {
+  const resend = getResend();
+  if (!resend) return;
+  try {
+    const flow = params.payFirst
+      ? `Pay-first checkout (£${params.priceGbp}) — awaiting completion`
+      : `Bespoke enquiry (from £${params.priceGbp}) — please send a quote`;
+    await resend.emails.send({
+      from: FROM,
+      to: ADMIN_EMAIL,
+      subject: `Curation request: ${params.venueName} (${params.tier})`,
+      html: `
+        <h2>New curation request</h2>
+        <p><strong>${params.venueName}</strong></p>
+        <ul>
+          <li>Contact: ${params.contactName} &lt;${params.contactEmail}&gt;</li>
+          <li>Tier: ${params.tier}</li>
+          ${params.location ? `<li>Location: ${params.location}</li>` : ""}
+          <li>${flow}</li>
+        </ul>
+        <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/curation" style="color: #C17C5A; font-weight: 600;">View in admin</a></p>
+      `,
+    });
+  } catch (err) {
+    console.error("Email send error (curation admin):", err);
+  }
+}
+
+/**
+ * Customer confirmation for a bespoke curation enquiry (no upfront charge).
+ */
+export async function notifyCurationCustomerEnquiry(params: {
+  email: string;
+  contactName: string;
+  venueName: string;
+  tierLabel: string;
+}) {
+  const resend = getResend();
+  if (!resend) return;
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: params.email,
+      subject: "Your Wallplace curation enquiry",
+      html: `
+        <h2>Thanks, ${params.contactName}</h2>
+        <p>We've received your curation enquiry for <strong>${params.venueName}</strong> (${params.tierLabel}). A member of the Wallplace team will be in touch within 2 business days with a tailored quote.</p>
+        <p>If you have any further context or references to share in the meantime, just reply to this email.</p>
+        <br/>
+        <p style="color: #999; font-size: 12px;">The Wallplace Team</p>
+      `,
+    });
+  } catch (err) {
+    console.error("Email send error (curation enquiry):", err);
+  }
+}
+
+/**
+ * Customer confirmation after a paid curation checkout (pay-first tiers).
+ */
+export async function notifyCurationCustomerPaid(params: {
+  email: string;
+  contactName: string;
+  venueName: string;
+  tierLabel: string;
+  amountGbp: number;
+}) {
+  const resend = getResend();
+  if (!resend) return;
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: params.email,
+      subject: "Your Wallplace curation is underway",
+      html: `
+        <h2>Payment received — thanks, ${params.contactName}</h2>
+        <p>We've received your payment of <strong>£${params.amountGbp}</strong> for <strong>${params.tierLabel}</strong> curation for <strong>${params.venueName}</strong>.</p>
+        <p>Our curators will review your brief and email you a shortlist within 5 business days. If we need anything else we'll reach out.</p>
+        <br/>
+        <p style="color: #999; font-size: 12px;">The Wallplace Team</p>
+      `,
+    });
+  } catch (err) {
+    console.error("Email send error (curation paid):", err);
+  }
+}
