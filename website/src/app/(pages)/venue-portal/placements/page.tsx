@@ -63,7 +63,7 @@ function normaliseStatus(raw: string): PlacementStatus {
 
 function typeLabel(raw: string, pct?: number): string {
   if (raw === "revenue_share") return `Revenue Share${pct ? ` (${pct}%)` : ""}`;
-  if (raw === "free_loan") return "Free Loan";
+  if (raw === "free_loan") return "Paid Loan";
   return raw;
 }
 

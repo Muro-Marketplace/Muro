@@ -192,7 +192,7 @@ export default function SavedPage() {
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-accent"><rect x="2" y="7" width="20" height="14" rx="2" strokeWidth="1.5" /><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" strokeWidth="1.5" /></svg>
                   </div>
                   <div className="min-w-0">
-                    <Link href="/browse#collections" className="text-sm font-medium text-foreground hover:text-accent transition-colors truncate block">
+                    <Link href="/browse?view=collections" className="text-sm font-medium text-foreground hover:text-accent transition-colors truncate block">
                       {item.id.includes(" ") ? item.id : item.id.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
                     </Link>
                     <p className="text-xs text-muted mt-0.5">

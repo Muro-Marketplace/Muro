@@ -75,8 +75,10 @@ export default function SpacesLookingForArtPage() {
   }, []);
 
   const isSubscribed = subscriptionStatus === "active" || subscriptionStatus === "trialing";
-  const canSeeDetails = isSubscribed || userType === "venue" || userType === "customer";
-  const canMessageVenues = isSubscribed || userType === "venue" || userType === "customer";
+  // Venues are locked out of viewing other venues — this page is for artists/customers
+  // discovering venue demand. Venues manage their own profile through /venue-portal.
+  const canSeeDetails = userType !== "venue" && (isSubscribed || userType === "customer");
+  const canMessageVenues = userType !== "venue" && (isSubscribed || userType === "customer");
 
   async function handlePostcodeSearch() {
     if (!postcode.trim()) return;
@@ -251,11 +253,23 @@ export default function SpacesLookingForArtPage() {
             <>
             {!canSeeDetails && filtered.length >= 1 && (
               <div className="bg-accent/5 border border-accent/20 rounded-sm p-6 mb-8 text-center">
-                <p className="text-sm font-medium text-foreground mb-1">Subscribe to see full venue details</p>
-                <p className="text-xs text-muted mb-4">Get venue names, contact details, and connect directly. Plans from £9.99/month.</p>
-                <Link href="/pricing" className="inline-flex items-center justify-center px-6 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors">
-                  View Plans
-                </Link>
+                {userType === "venue" ? (
+                  <>
+                    <p className="text-sm font-medium text-foreground mb-1">This page is for artists discovering venue demand</p>
+                    <p className="text-xs text-muted mb-4">Manage your own venue profile and view leads from your dashboard.</p>
+                    <Link href="/venue-portal" className="inline-flex items-center justify-center px-6 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors">
+                      Go to Venue Portal
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-foreground mb-1">Subscribe to see full venue details</p>
+                    <p className="text-xs text-muted mb-4">Get venue names, contact details, and connect directly. Plans from £9.99/month.</p>
+                    <Link href="/pricing" className="inline-flex items-center justify-center px-6 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors">
+                      View Plans
+                    </Link>
+                  </>
+                )}
               </div>
             )}
 

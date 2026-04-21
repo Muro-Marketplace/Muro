@@ -182,7 +182,7 @@ export async function notifyPlacementRequest(venue: {
   try {
     const typeLabel = venue.arrangementType === "revenue_share"
       ? `Revenue Share (${venue.revenueSharePercent || 0}%)`
-      : venue.arrangementType === "free_loan" ? "Free Loan" : "Direct Purchase";
+      : venue.arrangementType === "free_loan" ? "Paid Loan" : "Direct Purchase";
     await resend.emails.send({
       from: FROM,
       to: venue.email,

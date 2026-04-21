@@ -19,7 +19,7 @@ export const blogPosts: BlogPost[] = [
 
 Studies consistently show that environments with curated artwork increase dwell time by up to 30%. For a cafe, that means more coffee sold. For a coworking space, higher retention. For a hotel lobby, better first impressions that translate to reviews.
 
-The best part? With platforms like Wallplace, you don't need to buy art outright. Free loan and revenue share arrangements mean you can rotate artwork regularly, keeping your space fresh without the upfront cost.
+The best part? With platforms like Wallplace, you don't need to buy art outright. Paid loan and revenue share arrangements mean you can rotate artwork regularly, keeping your space fresh without the upfront cost of ownership.
 
 Whether you run a neighbourhood coffee shop or a boutique hotel, the art on your walls tells your customers who you are. Make it count.`,
     image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&h=500&fit=crop",
@@ -34,9 +34,9 @@ Whether you run a neighbourhood coffee shop or a boutique hotel, the art on your
     excerpt: "Pricing for galleries is one thing. Pricing for cafes, restaurants, and offices is another. Here's how to find the sweet spot.",
     content: `When a venue wants to display your work, the pricing conversation is different from a gallery sale. You're not just selling a piece — you're entering a partnership.
 
-There are three main models: free loan (your art displayed for exposure), revenue share (you split sale proceeds with the venue), and direct purchase. Each has its place.
+There are three main models: paid loan (your art is displayed for an agreed loan fee), revenue share (you split sale proceeds with the venue), and direct purchase. Each has its place.
 
-Free loan works best when you're building your name in a new area. Revenue share is ideal for high-traffic venues where sales are likely. Direct purchase suits venues that want permanent pieces.
+Paid loan works well when you want guaranteed income regardless of sales. Revenue share is ideal for high-traffic venues where sales are likely. Direct purchase suits venues that want permanent pieces.
 
 The key is understanding what each venue needs and matching your pricing to their model. A cafe rotating art monthly has different needs than a hotel buying for their lobby.
 
@@ -74,7 +74,7 @@ The key is accessibility. Venues don't want to navigate the traditional art worl
 
 2. Be professional about delivery and installation. Arrive on time, bring proper hanging hardware, and leave the wall exactly as you found it when the placement ends.
 
-3. Set clear terms upfront. Whether it's free loan, revenue share, or purchase — get it in writing. Wallplace handles this automatically, but if you're arranging independently, don't skip this step.
+3. Set clear terms upfront. Whether it's paid loan, revenue share, or purchase — get it in writing. Wallplace handles this automatically, but if you're arranging independently, don't skip this step.
 
 4. Promote the placement. Tag the venue on social media, mention it in your newsletter. The venue will appreciate the exposure, and it strengthens the relationship.
 

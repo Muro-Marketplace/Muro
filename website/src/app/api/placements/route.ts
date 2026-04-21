@@ -240,7 +240,7 @@ export async function POST(request: Request) {
       const arrangementLine = parsed.data[0].type === "revenue_share"
         ? `Revenue share: ${parsed.data[0].revenueSharePercent || 0}% to the venue`
         : parsed.data[0].type === "free_loan"
-          ? "Free loan arrangement"
+          ? "Paid loan arrangement"
           : "Purchase arrangement";
       const userMessage = (parsed.data[0].message || "").trim();
       const content = [

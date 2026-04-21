@@ -117,21 +117,22 @@ export default function ArtistAgreementPage() {
               </div>
 
               <div>
-                <h2 className="text-2xl mb-4">8. Free Loan Arrangements and Consignment Record</h2>
+                <h2 className="text-2xl mb-4">8. Paid Loan Arrangements and Consignment Record</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
-                  <p>You may lend artwork to a venue at no cost (a &ldquo;Free Loan&rdquo;). The specific terms of each Free Loan are agreed directly between you and the venue, facilitated by Wallplace.</p>
-                  <p>Artwork remains your property throughout the loan period (title does not pass to the venue). Each Free Loan must be recorded on the Platform as a &ldquo;Loan Consignment Record&rdquo; before the artwork leaves your possession. The Loan Consignment Record must include, at minimum:</p>
+                  <p>You may lend artwork to a venue for an agreed loan fee (a &ldquo;Paid Loan&rdquo;). The loan fee and specific terms of each Paid Loan are agreed directly between you and the venue, facilitated by Wallplace.</p>
+                  <p>Artwork remains your property throughout the loan period (title does not pass to the venue). Each Paid Loan must be recorded on the Platform as a &ldquo;Loan Consignment Record&rdquo; before the artwork leaves your possession. The Loan Consignment Record must include, at minimum:</p>
                   <ul className="list-disc pl-6 space-y-1">
                     <li>Artist name and venue name</li>
                     <li>Title(s), medium, dimensions, edition details, and agreed insurance valuation of each artwork</li>
                     <li>Condition at handover (supported by photographs)</li>
                     <li>Loan start date and expected loan end date</li>
+                    <li>Agreed loan fee and payment schedule</li>
                     <li>Collection / return arrangements</li>
                     <li>Confirmation that title remains with the artist and that the venue holds the work as bailee</li>
                     <li>Confirmation of the venue&rsquo;s insurance position</li>
                   </ul>
                   <p>The venue is expected to exercise reasonable care as bailee and must not sell, lend on, alter, reframe (beyond what you have approved), or move the artwork off-site without your written consent.</p>
-                  <p>You are responsible for insuring your artwork during the loan period unless the venue has provided a written insurance warranty confirming the work is covered on its policy for the agreed valuation. Wallplace is not an insurer and is not liable for damage, loss, or theft during a Free Loan.</p>
+                  <p>Loan fees are processed via Stripe Connect after any applicable platform fee has been deducted. You are responsible for insuring your artwork during the loan period unless the venue has provided a written insurance warranty confirming the work is covered on its policy for the agreed valuation. Wallplace is not an insurer and is not liable for damage, loss, or theft during a Paid Loan.</p>
                 </div>
               </div>
 

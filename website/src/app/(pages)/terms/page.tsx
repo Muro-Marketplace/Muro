@@ -40,7 +40,7 @@ export default function TermsPage() {
                   <p><strong className="text-foreground">Venue</strong> means a commercial premises registered on the Platform to browse and display artwork.</p>
                   <p><strong className="text-foreground">Buyer</strong> means any person who purchases artwork through the Platform.</p>
                   <p><strong className="text-foreground">Artwork</strong> means any original creative work listed on the Platform.</p>
-                  <p><strong className="text-foreground">Free Loan</strong> means an arrangement where an artist lends artwork to a venue at no cost.</p>
+                  <p><strong className="text-foreground">Paid Loan</strong> means an arrangement where an artist lends artwork to a venue for an agreed loan fee, with the artwork remaining the artist&rsquo;s property throughout the loan period.</p>
                   <p><strong className="text-foreground">Revenue Share</strong> means an arrangement where a venue receives an agreed percentage of sales from artwork displayed on their premises.</p>
                   <p><strong className="text-foreground">Direct Purchase</strong> means a transaction where a buyer purchases artwork outright.</p>
                   <p><strong className="text-foreground">QR Label</strong> means the scannable label placed alongside displayed artwork, linking to the artwork&rsquo;s listing on the Platform.</p>

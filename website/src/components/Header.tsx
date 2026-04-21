@@ -1,32 +1,26 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CartIndicator from "./CartIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
-const marketplaceSubLinks = [
-  { label: "Portfolios", href: "/browse#portfolios", description: "Browse artists" },
-  { label: "Gallery", href: "/browse#gallery", description: "Browse individual works" },
-  { label: "Collections", href: "/browse#collections", description: "Curated artist bundles" },
-];
-
 // When the user is inside the marketplace area (/browse or /spaces-looking-for-art)
 // the top-level "Marketplace" link is replaced by these inline tabs.
 const marketplaceTabs = [
-  { label: "Portfolios", href: "/browse#portfolios", match: (p: string, h: string) => p === "/browse" && h !== "#gallery" && h !== "#collections" },
-  { label: "Galleries",  href: "/browse#gallery",    match: (p: string, h: string) => p === "/browse" && h === "#gallery" },
-  { label: "Collections", href: "/browse#collections", match: (p: string, h: string) => p === "/browse" && h === "#collections" },
+  { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v !== "gallery" && v !== "collections" },
+  { label: "Galleries",  href: "/browse?view=gallery",    match: (p: string, v: string) => p === "/browse" && v === "gallery" },
+  { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
   { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
 ];
 
 type NavLink = { label: string; href: string; subLinks?: { label: string; href: string; description?: string }[] };
 
 const publicNavLinks: NavLink[] = [
-  { label: "Marketplace", href: "/browse", subLinks: marketplaceSubLinks },
+  { label: "Marketplace", href: "/browse" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
   { label: "Spaces", href: "/spaces-looking-for-art" },
@@ -34,12 +28,12 @@ const publicNavLinks: NavLink[] = [
 ];
 
 const loggedInNavLinks: NavLink[] = [
-  { label: "Marketplace", href: "/browse", subLinks: marketplaceSubLinks },
+  { label: "Marketplace", href: "/browse" },
   { label: "Spaces", href: "/spaces-looking-for-art" },
 ];
 
 const venueNavLinks: NavLink[] = [
-  { label: "Marketplace", href: "/browse", subLinks: marketplaceSubLinks },
+  { label: "Marketplace", href: "/browse" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
 ];
@@ -74,14 +68,12 @@ export default function Header() {
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
   const [marketplaceDropdownOpen, setMarketplaceDropdownOpen] = useState(false);
   const marketplaceDropdownRef = useRef<HTMLDivElement>(null);
-  // Hash tracking for active marketplace tab highlight
-  const [hash, setHash] = useState("");
-  useEffect(() => {
-    const sync = () => setHash(window.location.hash);
-    sync();
-    window.addEventListener("hashchange", sync);
-    return () => window.removeEventListener("hashchange", sync);
-  }, [pathname]);
+  // Query-param tracking for active marketplace tab highlight (F47).
+  // We use ?view=portfolios|gallery|collections rather than a hash, because
+  // Next.js Link to the same pathname + different hash uses pushState which
+  // doesn't fire hashchange — so the tab highlight wouldn't update.
+  const searchParams = useSearchParams();
+  const view = searchParams?.get("view") || "";
 
   const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces-looking-for-art";
 
@@ -260,7 +252,7 @@ export default function Header() {
             {isMarketplaceArea ? (
               // F47 — marketplace tabs replace the normal nav while inside /browse or /spaces-looking-for-art
               marketplaceTabs.map((tab) => {
-                const active = tab.match(pathname, hash);
+                const active = tab.match(pathname, view);
                 const cls = active
                   ? (isPortal || !showSolid ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
                   : (isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground");

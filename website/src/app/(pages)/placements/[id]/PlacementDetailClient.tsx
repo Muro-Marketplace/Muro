@@ -232,7 +232,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
           <p className="text-xs uppercase tracking-wider text-muted mb-1">
             {placement.arrangement_type === "revenue_share"
               ? `Revenue Share${placement.revenue_share_percent ? ` (${placement.revenue_share_percent}%)` : ""}`
-              : placement.arrangement_type === "free_loan" ? "Free Loan" : "Purchase"}
+              : placement.arrangement_type === "free_loan" ? "Paid Loan" : "Purchase"}
           </p>
           <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-2">{placement.work_title}</h1>
           <div className="flex flex-wrap items-center gap-3 text-sm">

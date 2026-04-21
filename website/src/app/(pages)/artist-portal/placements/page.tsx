@@ -10,7 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
 type FilterTab = "All" | "Pending" | "Active" | "Completed";
-type ArrangementType = "Free Loan" | "Revenue Share" | "Direct Purchase";
+type ArrangementType = "Paid Loan" | "Revenue Share" | "Direct Purchase";
 type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed" | "Sold";
 
 interface Placement {
@@ -66,9 +66,9 @@ function normaliseStatus(raw: string): PlacementStatus {
 
 function normaliseType(raw: string): ArrangementType {
   const map: Record<string, ArrangementType> = {
-    free_loan: "Free Loan", revenue_share: "Revenue Share", purchase: "Direct Purchase",
+    free_loan: "Paid Loan", revenue_share: "Revenue Share", purchase: "Direct Purchase",
   };
-  return map[raw] || "Free Loan";
+  return map[raw] || "Paid Loan";
 }
 
 export default function PlacementsPage() {
@@ -225,7 +225,7 @@ export default function PlacementsPage() {
           workSize: p.workSize,
           venue: selectedVenue?.name || venueSlug,
           venueSlug: p.venueSlug,
-          type: rev > 0 ? "Revenue Share" as ArrangementType : "Free Loan" as ArrangementType,
+          type: rev > 0 ? "Revenue Share" as ArrangementType : "Paid Loan" as ArrangementType,
           revenueSharePercent: p.revenueSharePercent,
           status: "Pending",
           date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),

@@ -46,7 +46,7 @@ function linkForItem(type: ItemType, itemId: string): string {
     case "artist":
       return `/browse/${itemId}`;
     case "collection":
-      return `/browse#collections`;
+      return `/browse?view=collections`;
   }
 }
 

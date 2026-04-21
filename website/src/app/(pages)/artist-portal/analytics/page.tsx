@@ -65,7 +65,7 @@ export default function AnalyticsPage() {
             workTitle: p.work_title || "Untitled",
             workImage: (p.work_image as string) || "",
             venue: p.venue || "",
-            type: (p.arrangement_type || "Free Loan"),
+            type: (p.arrangement_type || "Paid Loan"),
             revenueSharePercent: p.revenue_share_percent as number | undefined,
             status: (p.status || "active"),
             date: p.created_at ? new Date(p.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",

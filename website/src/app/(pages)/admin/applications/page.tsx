@@ -230,7 +230,7 @@ export default function AdminApplicationsPage() {
                         <p className="text-xs text-muted uppercase tracking-wider mb-1">Arrangements</p>
                         <div className="flex flex-wrap gap-1.5">
                           {[
-                            app.open_to_free_loan && "Free Loan",
+                            app.open_to_free_loan && "Paid Loan",
                             app.open_to_revenue_share && "Revenue Share",
                             app.open_to_purchase && "Purchase",
                           ].filter(Boolean).map((o) => (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { artists as staticArtists, type Artist } from "@/data/artists";
@@ -54,7 +55,6 @@ const DISTANCE_OPTIONS = [
 
 interface Filters {
   mode: "local" | "global";
-  minDistance: number;
   maxDistance: number;
   themes: string[];
   originals: boolean;
@@ -70,7 +70,6 @@ interface Filters {
 
 const DEFAULT_FILTERS: Filters = {
   mode: "global",
-  minDistance: 0,
   maxDistance: 25,
   themes: [],
   originals: false,
@@ -133,25 +132,22 @@ export default function BrowsePortfoliosPage() {
   const [activeSubcategories, setActiveSubcategories] = useState<Set<string>>(new Set());
   const [viewAs, setViewAs] = useState<"artists" | "works">("artists");
 
-  // Read hash on mount and react to changes — done in useEffect so SSR and
-  // initial client render agree (no hydration mismatch).
+  // Drive view from ?view= query param (F47). We use searchParams rather than
+  // window.location.hash because Next.js Link same-page hash changes use
+  // pushState, which doesn't fire hashchange — so the page wouldn't react.
+  const searchParams = useSearchParams();
+  const viewParam = searchParams?.get("view") || "";
   useEffect(() => {
-    function syncFromHash() {
-      const h = window.location.hash;
-      if (h === "#collections") {
-        setActiveCategory("collections");
-      } else if (h === "#gallery") {
-        setActiveCategory("");
-        setViewAs("works");
-      } else if (h === "#portfolios") {
-        setActiveCategory("");
-        setViewAs("artists");
-      }
+    if (viewParam === "collections") {
+      setActiveCategory("collections");
+    } else if (viewParam === "gallery") {
+      setActiveCategory("");
+      setViewAs("works");
+    } else if (viewParam === "portfolios") {
+      setActiveCategory("");
+      setViewAs("artists");
     }
-    syncFromHash();
-    window.addEventListener("hashchange", syncFromHash);
-    return () => window.removeEventListener("hashchange", syncFromHash);
-  }, []);
+  }, [viewParam]);
   const [artistSort, setArtistSort] = useState<"featured" | "name" | "revenue_share" | "distance">("featured");
   const [gallerySort, setGallerySort] = useState<"featured" | "az" | "price_low" | "price_high" | "revenue_share" | "distance">("featured");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
@@ -310,7 +306,7 @@ export default function BrowsePortfoliosPage() {
           artist.coordinates.lat,
           artist.coordinates.lng
         );
-        if (dist < filters.minDistance || dist > filters.maxDistance) return false;
+        if (dist > filters.maxDistance) return false;
       }
       if (
         filters.themes.length > 0 &&
@@ -408,7 +404,7 @@ export default function BrowsePortfoliosPage() {
       // Location
       if (galleryLocationMode === "local" && userCoords && work.artistCoordinates) {
         const dist = calcDistance(userCoords.lat, userCoords.lng, work.artistCoordinates.lat, work.artistCoordinates.lng);
-        if (dist < filters.minDistance || dist > filters.maxDistance) return false;
+        if (dist > filters.maxDistance) return false;
       }
       return true;
     }).sort((a, b) => {
@@ -431,7 +427,7 @@ export default function BrowsePortfoliosPage() {
       }
       return 0; // "featured": original order
     });
-  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, galleryLocationMode, userCoords, filters.minDistance, filters.maxDistance, activeCategoryObj, activeSubcategories, gallerySort]);
+  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, galleryLocationMode, userCoords, filters.maxDistance, activeCategoryObj, activeSubcategories, gallerySort]);
 
   const hasGalleryFilters =
     !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || galleryLocationMode === "local";
@@ -512,54 +508,26 @@ export default function BrowsePortfoliosPage() {
                 )}
               </div>
             )}
-            {/* Distance range — only once we have a location (F48) */}
+            {/* Distance — max only, once we have a location (F48) */}
             {userCoords && (
               <div>
                 <p className="text-xs text-muted mb-2">
-                  Distance: {filters.minDistance}–{filters.maxDistance >= 9999 ? "Any" : `${filters.maxDistance} mi`}
+                  Within {filters.maxDistance >= 9999 ? "any distance" : `${filters.maxDistance} mi`}
                 </p>
                 <div className="space-y-2.5">
-                  <div>
-                    <label className="text-[10px] text-muted">Min ({filters.minDistance} mi)</label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={200}
-                      step={1}
-                      value={filters.minDistance}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setFilter("minDistance", Math.min(v, filters.maxDistance));
-                      }}
-                      className="w-full accent-accent h-1.5 cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-muted">Max ({filters.maxDistance >= 9999 ? "Any" : `${filters.maxDistance} mi`})</label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={200}
-                      step={1}
-                      value={filters.maxDistance >= 9999 ? 200 : filters.maxDistance}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        const capped = v >= 200 ? 9999 : v;
-                        setFilter("maxDistance", Math.max(capped, filters.minDistance));
-                      }}
-                      className="w-full accent-accent h-1.5 cursor-pointer"
-                    />
-                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={200}
+                    step={1}
+                    value={filters.maxDistance >= 9999 ? 200 : filters.maxDistance}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setFilter("maxDistance", v >= 200 ? 9999 : v);
+                    }}
+                    className="w-full accent-accent h-1.5 cursor-pointer"
+                  />
                   <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={200}
-                      value={filters.minDistance}
-                      onChange={(e) => setFilter("minDistance", Math.max(0, Math.min(Number(e.target.value) || 0, filters.maxDistance)))}
-                      className="w-16 px-2 py-1 text-xs bg-surface border border-border rounded-sm text-foreground focus:outline-none focus:border-accent/50"
-                    />
-                    <span className="text-xs text-muted">to</span>
                     <input
                       type="number"
                       min={0}
@@ -569,8 +537,7 @@ export default function BrowsePortfoliosPage() {
                       onChange={(e) => {
                         const raw = e.target.value;
                         if (raw === "") { setFilter("maxDistance", 9999); return; }
-                        const n = Math.max(filters.minDistance, Number(raw) || 0);
-                        setFilter("maxDistance", n);
+                        setFilter("maxDistance", Math.max(0, Number(raw) || 0));
                       }}
                       className="w-20 px-2 py-1 text-xs bg-surface border border-border rounded-sm text-foreground focus:outline-none focus:border-accent/50"
                     />
@@ -601,7 +568,7 @@ export default function BrowsePortfoliosPage() {
             </svg>
             <div>
               <p className="text-sm font-medium">Display</p>
-              <p className="text-[10px] text-muted">Free loan or revenue share</p>
+              <p className="text-[10px] text-muted">Revenue share or paid loan</p>
             </div>
           </button>
           {filters.freeLoan && (
@@ -1174,7 +1141,7 @@ export default function BrowsePortfoliosPage() {
                         </svg>
                         <div>
                           <p className="text-sm font-medium">Display</p>
-                          <p className="text-[10px] text-muted">Free loan or revenue share</p>
+                          <p className="text-[10px] text-muted">Revenue share or paid loan</p>
                         </div>
                       </button>
                       {galleryFreeLoan && (
@@ -1308,7 +1275,7 @@ export default function BrowsePortfoliosPage() {
                           </svg>
                           <div>
                             <p className="text-xs font-medium">Display</p>
-                            <p className="text-[10px] text-muted">Free loan or revenue share</p>
+                            <p className="text-[10px] text-muted">Revenue share or paid loan</p>
                           </div>
                         </button>
                         {galleryFreeLoan && (

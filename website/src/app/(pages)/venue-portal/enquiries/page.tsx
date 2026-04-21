@@ -11,7 +11,7 @@ interface Enquiry {
   id: number | string;
   artist: string;
   subject: string;
-  type: "Free Loan" | "Revenue Share" | "Purchase" | "Display";
+  type: "Paid Loan" | "Revenue Share" | "Purchase" | "Display";
   dateSent: string;
   status: Status;
 }
