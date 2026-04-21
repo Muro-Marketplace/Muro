@@ -1444,7 +1444,10 @@ function BrowsePortfoliosPageInner() {
                 <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-5 space-y-5">
                   {filteredGalleryWorks.map((work) => {
                     const workSlug = slugify(work.title);
-                    const quickLookHref = `/browse/${work.artistSlug}#work-${workSlug}`;
+                    // ArtistProfileClient opens the lightbox when ?work= is present,
+                    // so we route quick-look through the query param rather than a
+                    // hash (which only scrolled to the anchor without opening the modal).
+                    const quickLookHref = `/browse/${work.artistSlug}?work=${workSlug}`;
                     const fullPageHref = `/browse/${work.artistSlug}/${workSlug}`;
                     const workDistance = userCoords && work.artistCoordinates
                       ? calcDistance(userCoords.lat, userCoords.lng, work.artistCoordinates.lat, work.artistCoordinates.lng)
@@ -1457,7 +1460,7 @@ function BrowsePortfoliosPageInner() {
                             className="relative overflow-hidden bg-border/20 rounded-t-lg select-none"
                             onContextMenu={(e) => e.preventDefault()}
                           >
-                            <Link href={fullPageHref} aria-label={`View full details for ${work.title}`}>
+                            <Link href={quickLookHref} aria-label={`Quick look at ${work.title}`}>
                               <Image
                                 src={work.image}
                                 alt={work.title}
@@ -1506,7 +1509,7 @@ function BrowsePortfoliosPageInner() {
                           {/* Info */}
                           <div className="px-4 py-3.5">
                             <div className="flex items-baseline justify-between gap-2">
-                              <Link href={fullPageHref} className="block group/title min-w-0 flex-1">
+                              <Link href={quickLookHref} className="block group/title min-w-0 flex-1">
                                 <h3 className="text-sm font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate">
                                   {work.title}
                                 </h3>
@@ -1531,16 +1534,6 @@ function BrowsePortfoliosPageInner() {
                                 {work.revenueSharePercent}% Revenue Share
                               </p>
                             )}
-                            <Link
-                              href={fullPageHref}
-                              className="inline-flex items-center gap-1 text-[11px] text-accent hover:text-accent-hover transition-colors mt-2"
-                            >
-                              View full details
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M5 12h14" />
-                                <path d="m12 5 7 7-7 7" />
-                              </svg>
-                            </Link>
                           </div>
                         </div>
                       </div>
