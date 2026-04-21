@@ -22,6 +22,8 @@ export async function generateStaticParams() {
 
 // Allow dynamic params for database artists not in static list
 export const dynamicParams = true;
+// Always read fresh from DB so new works/descriptions appear immediately
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,

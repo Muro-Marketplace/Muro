@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getArtistProfileByUserId } from "@/lib/db/artist-profiles";
 import { getWorksByArtistProfileId, upsertWork, deleteWork } from "@/lib/db/artist-works";
+import { slugify } from "@/lib/slugify";
 
 // GET: fetch works for the current user's artist profile
 export async function GET(request: Request) {
@@ -87,6 +89,12 @@ export async function POST(request: Request) {
       console.error("Work save error:", error);
       return NextResponse.json({ error: "Failed to save work" }, { status: 500 });
     }
+
+    // Bust the Next.js cache so the updated work shows immediately on public pages
+    try {
+      revalidatePath(`/browse/${result.profile.slug}`);
+      revalidatePath(`/browse/${result.profile.slug}/${slugify(title)}`);
+    } catch { /* best-effort */ }
 
     const warnings: string[] = [];
     if (droppedColumns && droppedColumns.length > 0) {

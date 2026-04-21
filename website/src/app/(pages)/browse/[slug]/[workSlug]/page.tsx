@@ -19,6 +19,8 @@ export async function generateStaticParams() {
 }
 
 export const dynamicParams = true;
+// Always read fresh from DB so newly-saved description/images show immediately
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
