@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       ? description.slice(0, 2000)
       : "";
 
-    const { error } = await upsertWork(result.profile.id, {
+    const { error, droppedColumns } = await upsertWork(result.profile.id, {
       id,
       title,
       medium: medium || "",
@@ -88,7 +88,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to save work" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    const warnings: string[] = [];
+    if (droppedColumns && droppedColumns.length > 0) {
+      console.warn("Work saved with dropped columns:", droppedColumns);
+      const missingNew = ["description", "images"].filter((c) => droppedColumns.includes(c));
+      if (missingNew.length > 0) {
+        warnings.push(
+          `${missingNew.join(" and ")} could not be saved — your database is missing these columns. Run Supabase migration 015_artwork_description_and_images.sql.`
+        );
+      }
+      const missingOlder = ["frame_options", "quantity_available", "shipping_price"].filter((c) => droppedColumns.includes(c));
+      if (missingOlder.length > 0) {
+        warnings.push(
+          `${missingOlder.join(", ")} could not be saved — run the pending migrations (012–014).`
+        );
+      }
+    }
+
+    return NextResponse.json({ success: true, warnings });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }

@@ -3,13 +3,12 @@
   "configurations": [
     {
       "name": "wallspace-dev",
-      "runtimeExecutable": "/opt/homebrew/Cellar/node/25.8.2/bin/node",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
       "runtimeArgs": ["node_modules/.bin/next", "dev"],
       "port": 3099,
       "autoPort": true,
       "cwd": "website",
       "env": {
-        "NODE": "/opt/homebrew/Cellar/node/25.8.2/bin/node",
         "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
       }
     }

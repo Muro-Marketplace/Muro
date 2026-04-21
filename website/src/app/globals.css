@@ -29,6 +29,12 @@ label[for], summary, [onclick], .cursor-pointer {
   cursor: pointer;
 }
 
+/* Make the blinking text caret clearly visible in all editable fields */
+input, textarea, [contenteditable="true"] {
+  caret-color: var(--color-accent);
+  cursor: text;
+}
+
 h1,
 h2,
 h3,

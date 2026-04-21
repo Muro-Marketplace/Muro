@@ -8,6 +8,7 @@ import { type ArtistWork, type SizePricing } from "@/data/artists";
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
+import { useToast } from "@/context/ToastContext";
 
 interface SizeEntry {
   label: string;
@@ -106,6 +107,7 @@ const IMAGE_LIMITS: Record<string, number> = { core: 3, premium: 5, pro: 10 };
 
 export default function PortfolioPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
+  const { showToast } = useToast();
   const [works, setWorks] = useState<ArtistWork[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -155,6 +157,7 @@ export default function PortfolioPage() {
     setWorks(updated);
 
     // Sync each work to Supabase
+    const shownWarnings = new Set<string>();
     updated.forEach((work, index) => {
       authFetch("/api/artist-works", {
         method: "POST",
@@ -177,7 +180,19 @@ export default function PortfolioPage() {
           description: work.description || "",
           images: work.images || [],
         }),
-      }).catch((err) => console.error("Work sync error:", err));
+      })
+        .then((r) => r.json())
+        .then((res: { warnings?: string[] }) => {
+          if (Array.isArray(res.warnings)) {
+            res.warnings.forEach((w) => {
+              if (!shownWarnings.has(w)) {
+                shownWarnings.add(w);
+                showToast(w);
+              }
+            });
+          }
+        })
+        .catch((err) => console.error("Work sync error:", err));
     });
   }
 

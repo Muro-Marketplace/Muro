@@ -33,18 +33,21 @@ export async function upsertWork(
   }
 
   // Try full write; on failure, progressively strip newer optional columns.
+  const droppedColumns: string[] = [];
   let { error } = await attempt(row);
   if (error) {
     const { description: _d, images: _i, ...r2 } = row as Record<string, unknown>;
     void _d; void _i;
+    droppedColumns.push("description", "images");
     ({ error } = await attempt(r2));
   }
   if (error) {
     const { description: _d, images: _i, shipping_price: _sp, quantity_available: _qa, frame_options: _fo, ...r3 } = row as Record<string, unknown>;
     void _d; void _i; void _sp; void _qa; void _fo;
+    droppedColumns.push("shipping_price", "quantity_available", "frame_options");
     ({ error } = await attempt(r3));
   }
-  return { error };
+  return { error, droppedColumns };
 }
 
 export async function deleteWork(workId: string, artistProfileId: string) {

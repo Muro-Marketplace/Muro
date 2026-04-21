@@ -607,16 +607,8 @@ export default function ArtistProfileClient({
                 })()}
               </div>
 
-              {/* Secondary links */}
-              <div className="mt-4 flex items-center justify-between gap-3 text-xs">
-                <button
-                  type="button"
-                  onClick={() => { setShowEnquiry(true); setEnquirySent(false); }}
-                  className="inline-flex items-center gap-1 text-muted hover:text-foreground transition-colors"
-                >
-                  Message {artistName.split(" ")[0]}
-                  <span aria-hidden>→</span>
-                </button>
+              {/* Secondary links — stacked, full-width text links */}
+              <div className="mt-4 flex flex-col items-start gap-2 text-xs">
                 <Link
                   href={`/browse/${artistSlug}/${slugify(currentWork.title)}`}
                   onClick={() => { navigatingAway.current = true; setLightboxIndex(null); }}
@@ -627,6 +619,14 @@ export default function ArtistProfileClient({
                     <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
                   </svg>
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => { setShowEnquiry(true); setEnquirySent(false); }}
+                  className="inline-flex items-center gap-1 text-muted hover:text-foreground transition-colors"
+                >
+                  Message {artistName.split(" ")[0]}
+                  <span aria-hidden>→</span>
+                </button>
               </div>
 
               {/* Counter */}
