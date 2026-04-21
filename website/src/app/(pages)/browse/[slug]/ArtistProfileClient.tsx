@@ -421,7 +421,7 @@ export default function ArtistProfileClient({
               {/* Fullscreen toggle */}
               <button
                 onClick={(e) => { e.stopPropagation(); setIsFullscreen((v) => !v); }}
-                className={`absolute ${isFullscreen ? "top-4 right-4" : "top-3 left-3"} w-10 h-10 rounded-full ${isFullscreen ? "bg-white/15 hover:bg-white/25 text-white" : "bg-white/80 hover:bg-white text-foreground"} flex items-center justify-center shadow-lg transition-colors z-10`}
+                className={`absolute ${isFullscreen ? "top-4 right-4 flex" : "top-3 left-3 flex sm:hidden"} w-10 h-10 rounded-full ${isFullscreen ? "bg-white/15 hover:bg-white/25 text-white" : "bg-white/80 hover:bg-white text-foreground"} items-center justify-center shadow-lg transition-colors z-10`}
                 aria-label={isFullscreen ? "Exit fullscreen" : "Expand image"}
                 title={isFullscreen ? "Exit fullscreen" : "Expand image"}
               >

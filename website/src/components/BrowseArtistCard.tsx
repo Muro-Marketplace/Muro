@@ -31,7 +31,8 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
       <div className="bg-surface border border-border/50 rounded-lg overflow-hidden flex flex-col h-full">
         {/* Image */}
         <div
-          className="aspect-square relative overflow-hidden bg-border/20 rounded-t-lg"
+          className="aspect-square relative overflow-hidden bg-border/20 rounded-t-lg select-none"
+          onContextMenu={(e) => e.preventDefault()}
           onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
           onTouchEnd={(e) => {
             const diff = touchStartX - e.changedTouches[0].clientX;
@@ -52,11 +53,15 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
                 src={src}
                 alt={`${artist.works[index]?.title || "Artwork"} by ${artist.name}`}
                 fill
-                className="object-cover group-hover:scale-[1.03] transition-transform duration-700"
+                className="object-cover group-hover:scale-[1.03] transition-transform duration-700 pointer-events-none select-none"
                 sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
               />
             </div>
           ))}
+          {/* Transparent overlay to block save-as */}
+          <div className="absolute inset-0 pointer-events-none" />
 
           {/* Subtle gradient at bottom for legibility */}
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/30 to-transparent" />

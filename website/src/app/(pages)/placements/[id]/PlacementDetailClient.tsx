@@ -63,6 +63,8 @@ export interface PlacementRecord {
   logistics_notes?: string;
   contract_attachment_url?: string;
   internal_notes?: string;
+  venue_approved?: boolean;
+  venue_approved_at?: string | null;
 }
 
 interface PhotoRow {
@@ -185,9 +187,20 @@ export default function PlacementDetailClient({ placementId }: Props) {
     if (record) return;
     setCreatingRecord(true);
     try {
+      // F41 — auto-populate with details already agreed on the placement.
+      const body: Record<string, unknown> = {
+        recordType: "loan",
+        qrEnabled: placement.qr_enabled ?? true,
+      };
+      if (typeof placement.revenue_share_percent === "number") {
+        body.venueSharePercent = placement.revenue_share_percent;
+      }
+      if (typeof placement.monthly_fee_gbp === "number" && placement.monthly_fee_gbp > 0) {
+        body.monthlyDisplayFeeGbp = placement.monthly_fee_gbp;
+      }
       const res = await authFetch(`/api/placements/${encodeURIComponent(placementId)}/record`, {
         method: "PUT",
-        body: JSON.stringify({ recordType: "loan", qrEnabled: placement.qr_enabled ?? true }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         await load();
@@ -323,6 +336,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
           <PlacementLoanForm
             placementId={placementId}
             record={record}
+            viewerRole={viewerRole}
             onSaved={(updated) => setRecord(updated)}
           />
         ) : (

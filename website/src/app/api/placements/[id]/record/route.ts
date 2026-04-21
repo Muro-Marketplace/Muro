@@ -35,6 +35,7 @@ const recordSchema = z.object({
   logisticsNotes: z.string().max(4000).optional(),
   contractAttachmentUrl: z.string().url().max(2000).or(z.literal("")).optional(),
   internalNotes: z.string().max(4000).optional(),
+  venueApproved: z.boolean().optional(),
 });
 
 // Upsert placement_record. Only parties of the placement may write.
@@ -96,6 +97,15 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   if (d.logisticsNotes !== undefined) row.logistics_notes = d.logisticsNotes;
   if (d.contractAttachmentUrl !== undefined) row.contract_attachment_url = d.contractAttachmentUrl;
   if (d.internalNotes !== undefined) row.internal_notes = d.internalNotes;
+  // F43 — venue-approval tickbox. Only the venue party can set it; if they
+  // do, stamp the timestamp. Unchecking clears the timestamp.
+  if (d.venueApproved !== undefined) {
+    if (placement.venue_user_id !== auth.user!.id) {
+      return NextResponse.json({ error: "Only the venue can approve" }, { status: 403 });
+    }
+    row.venue_approved = d.venueApproved;
+    row.venue_approved_at = d.venueApproved ? new Date().toISOString() : null;
+  }
 
   const { data: existing } = await db
     .from("placement_records")

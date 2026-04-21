@@ -235,7 +235,7 @@ export default function CuratedClient() {
       )}
 
       {/* One-off tiers */}
-      <section className="pb-10">
+      <section className="pt-20 lg:pt-28 pb-10">
         <div className="max-w-[1100px] mx-auto px-6">
           <div className="flex items-baseline justify-between mb-4">
             <h2 className="font-serif text-2xl text-foreground">One-off curation</h2>

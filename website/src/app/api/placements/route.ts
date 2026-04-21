@@ -365,36 +365,38 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
     }
 
-    // Self-accept guard: placements where both parties are the same user cannot be accepted/declined
-    if (
-      existing.artist_user_id &&
-      existing.venue_user_id &&
-      existing.artist_user_id === existing.venue_user_id &&
-      existing.status === "pending" &&
-      (status === "active" || status === "declined")
-    ) {
-      return NextResponse.json(
-        { error: "You cannot accept a placement you created yourself" },
-        { status: 400 }
-      );
-    }
-
-    // Determine who can respond to a pending request.
-    // If requester_user_id is set, the OTHER party is the recipient.
-    // Legacy rows (NULL requester): fall back to "venue accepts" behaviour.
+    // F39 — approval logic
+    // Rules (simple, no legacy fallback pitfall):
+    //   1. Block only the requester from accepting their own request.
+    //   2. Block a true self-placement (both parties are the same user).
+    //   3. Any authenticated party that is NOT the requester may accept/decline.
+    // If requester_user_id is unknown (legacy row or missing column), we still
+    // allow either party to accept — the previous "only venue accepts" fallback
+    // was wrong for venue-initiated placements.
     const requesterId = existing.requester_user_id || null;
     const isRequester = requesterId !== null && requesterId === auth.user!.id;
-    const isRecipient = requesterId !== null
-      ? (isArtist || isVenue) && !isRequester
-      : isVenue; // legacy fallback
+    const isSelfPlacement =
+      !!existing.artist_user_id &&
+      !!existing.venue_user_id &&
+      existing.artist_user_id === existing.venue_user_id;
 
     if (existing.status === "pending" && (status === "active" || status === "declined")) {
-      if (!isRecipient) {
+      if (isSelfPlacement) {
         return NextResponse.json(
-          { error: isRequester ? "You cannot respond to your own placement request" : "Not authorised to respond to this placement" },
+          { error: "You cannot accept a placement you created yourself" },
           { status: 400 }
         );
       }
+      if (isRequester) {
+        return NextResponse.json(
+          { error: "You cannot respond to your own placement request" },
+          { status: 400 }
+        );
+      }
+      if (!isArtist && !isVenue) {
+        return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+      }
+      // Otherwise: the other party may accept. Fall through.
     }
 
     // Can only respond to pending placements

@@ -1384,15 +1384,20 @@ export default function BrowsePortfoliosPage() {
                       <div key={work.id} className="group break-inside-avoid block">
                         <div className="bg-surface border border-border/50 rounded-lg overflow-hidden">
                           {/* Image */}
-                          <div className="relative overflow-hidden bg-border/20 rounded-t-lg">
+                          <div
+                            className="relative overflow-hidden bg-border/20 rounded-t-lg select-none"
+                            onContextMenu={(e) => e.preventDefault()}
+                          >
                             <Link href={fullPageHref} aria-label={`View full details for ${work.title}`}>
                               <Image
                                 src={work.image}
                                 alt={work.title}
                                 width={600}
                                 height={600}
-                                className="w-full h-auto object-cover group-hover:scale-[1.03] transition-transform duration-700"
+                                className="w-full h-auto object-cover group-hover:scale-[1.03] transition-transform duration-700 pointer-events-none select-none"
                                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                                draggable={false}
+                                onContextMenu={(e) => e.preventDefault()}
                               />
                               <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/20 to-transparent" />
                             </Link>

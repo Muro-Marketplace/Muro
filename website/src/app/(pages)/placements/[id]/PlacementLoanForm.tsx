@@ -7,6 +7,7 @@ import type { PlacementRecord } from "./PlacementDetailClient";
 interface Props {
   placementId: string;
   record: PlacementRecord;
+  viewerRole?: "artist" | "venue" | null;
   onSaved: (r: PlacementRecord) => void;
 }
 
@@ -21,7 +22,7 @@ function numOrNull(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export default function PlacementLoanForm({ placementId, record, onSaved }: Props) {
+export default function PlacementLoanForm({ placementId, record, viewerRole, onSaved }: Props) {
   const [form, setForm] = useState({
     recordType: record.record_type || "loan",
     qrEnabled: record.qr_enabled ?? true,
@@ -32,7 +33,6 @@ export default function PlacementLoanForm({ placementId, record, onSaved }: Prop
     insuredValueGbp: strOr(record.insured_value_gbp),
     salePriceGbp: strOr(record.sale_price_gbp),
     venueSharePercent: strOr(record.venue_share_percent),
-    platformCommissionPercent: strOr(record.platform_commission_percent),
     artistPayoutTerms: record.artist_payout_terms || "",
     monthlyDisplayFeeGbp: strOr(record.monthly_display_fee_gbp),
     conditionIn: record.condition_in || "",
@@ -47,6 +47,7 @@ export default function PlacementLoanForm({ placementId, record, onSaved }: Prop
     logisticsNotes: record.logistics_notes || "",
     contractAttachmentUrl: record.contract_attachment_url || "",
     internalNotes: record.internal_notes || "",
+    venueApproved: record.venue_approved ?? false,
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -71,7 +72,6 @@ export default function PlacementLoanForm({ placementId, record, onSaved }: Prop
         insuredValueGbp: numOrNull(form.insuredValueGbp),
         salePriceGbp: numOrNull(form.salePriceGbp),
         venueSharePercent: numOrNull(form.venueSharePercent),
-        platformCommissionPercent: numOrNull(form.platformCommissionPercent),
         artistPayoutTerms: form.artistPayoutTerms,
         monthlyDisplayFeeGbp: numOrNull(form.monthlyDisplayFeeGbp),
         conditionIn: form.conditionIn,
@@ -86,6 +86,8 @@ export default function PlacementLoanForm({ placementId, record, onSaved }: Prop
         logisticsNotes: form.logisticsNotes,
         contractAttachmentUrl: form.contractAttachmentUrl,
         internalNotes: form.internalNotes,
+        // Only the venue role is allowed to submit this field; omit otherwise.
+        ...(viewerRole === "venue" ? { venueApproved: form.venueApproved } : {}),
       };
       const res = await authFetch(`/api/placements/${encodeURIComponent(placementId)}/record`, {
         method: "PUT",
@@ -109,7 +111,6 @@ export default function PlacementLoanForm({ placementId, record, onSaved }: Prop
         insured_value_gbp: payload.insuredValueGbp,
         sale_price_gbp: payload.salePriceGbp,
         venue_share_percent: payload.venueSharePercent,
-        platform_commission_percent: payload.platformCommissionPercent,
         artist_payout_terms: payload.artistPayoutTerms,
         monthly_display_fee_gbp: payload.monthlyDisplayFeeGbp,
         condition_in: payload.conditionIn,
@@ -124,6 +125,9 @@ export default function PlacementLoanForm({ placementId, record, onSaved }: Prop
         logistics_notes: payload.logisticsNotes,
         contract_attachment_url: payload.contractAttachmentUrl,
         internal_notes: payload.internalNotes,
+        ...(viewerRole === "venue"
+          ? { venue_approved: form.venueApproved, venue_approved_at: form.venueApproved ? new Date().toISOString() : null }
+          : {}),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -152,7 +156,7 @@ export default function PlacementLoanForm({ placementId, record, onSaved }: Prop
             <option value="consignment">Consignment</option>
           </select>
         </div>
-        <div className="flex items-center gap-6 pt-5">
+        <div className="flex items-center gap-6 pt-5 flex-wrap">
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.qrEnabled} onChange={(e) => update("qrEnabled", e.target.checked)} className="accent-accent" />
             <span className="text-sm text-foreground">QR enabled</span>
@@ -166,6 +170,39 @@ export default function PlacementLoanForm({ placementId, record, onSaved }: Prop
             <span className="text-sm text-foreground">Available for sale</span>
           </label>
         </div>
+      </div>
+
+      {/* Venue approval — only shown/editable for the venue party */}
+      <div className="bg-background border border-border rounded-sm p-4">
+        {viewerRole === "venue" ? (
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.venueApproved}
+              onChange={(e) => update("venueApproved", e.target.checked)}
+              className="accent-accent w-4 h-4"
+            />
+            <span className="text-sm text-foreground font-medium">
+              I approve this loan / consignment record
+            </span>
+            {record.venue_approved_at && (
+              <span className="text-xs text-muted">
+                Approved {new Date(record.venue_approved_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </span>
+            )}
+          </label>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center justify-center w-4 h-4 rounded-sm ${record.venue_approved ? "bg-green-500 text-white" : "border border-border"}`}>
+              {record.venue_approved && (
+                <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
+              )}
+            </span>
+            <span className="text-sm text-foreground">
+              {record.venue_approved ? "Venue has approved this record" : "Awaiting venue approval"}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Dates */}
@@ -201,10 +238,6 @@ export default function PlacementLoanForm({ placementId, record, onSaved }: Prop
         <div>
           <label className={labelCls}>Venue share %</label>
           <input type="number" min={0} max={100} value={form.venueSharePercent} onChange={(e) => update("venueSharePercent", e.target.value)} className={inputCls} />
-        </div>
-        <div>
-          <label className={labelCls}>Platform commission %</label>
-          <input type="number" min={0} max={100} value={form.platformCommissionPercent} onChange={(e) => update("platformCommissionPercent", e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className={labelCls}>Monthly display fee (£)</label>

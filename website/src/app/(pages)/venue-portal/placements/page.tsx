@@ -82,7 +82,9 @@ export default function VenuePlacementsPage() {
   const [artistName, setArtistName] = useState("");
   const [artistWorks, setArtistWorks] = useState<ArtistWork[]>([]);
   const [selectedWorks, setSelectedWorks] = useState<Set<string>>(new Set());
-  const [revenuePercent, setRevenuePercent] = useState(0);
+  const [revenuePercent, setRevenuePercent] = useState<number | "">(0);
+  const [qrEnabled, setQrEnabled] = useState(true);
+  const [monthlyFee, setMonthlyFee] = useState<number | "">("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [worksLoading, setWorksLoading] = useState(false);
@@ -194,6 +196,8 @@ export default function VenuePlacementsPage() {
     if (!artistSlug || selectedWorks.size === 0) return;
     setSubmitting(true);
 
+    const rev = typeof revenuePercent === "number" ? revenuePercent : 0;
+    const fee = typeof monthlyFee === "number" ? monthlyFee : 0;
     const newPlacements = Array.from(selectedWorks).map((workTitle) => {
       const work = artistWorks.find((w) => w.title === workTitle);
       return {
@@ -201,8 +205,10 @@ export default function VenuePlacementsPage() {
         workTitle,
         workImage: work?.image || "",
         venueSlug: "", // API resolves from auth
-        type: revenuePercent > 0 ? "revenue_share" as const : "free_loan" as const,
-        revenueSharePercent: revenuePercent > 0 ? revenuePercent : undefined,
+        type: qrEnabled && rev > 0 ? "revenue_share" as const : "free_loan" as const,
+        revenueSharePercent: qrEnabled && rev > 0 ? rev : undefined,
+        qrEnabled,
+        monthlyFeeGbp: !qrEnabled && fee > 0 ? fee : undefined,
         message: message || undefined,
       };
     });
@@ -227,7 +233,7 @@ export default function VenuePlacementsPage() {
           artistSlug,
           workTitle: p.workTitle,
           workImage: p.workImage,
-          arrangementType: revenuePercent > 0 ? "revenue_share" : "free_loan",
+          arrangementType: qrEnabled && rev > 0 ? "revenue_share" : "free_loan",
           revenueSharePercent: p.revenueSharePercent,
           status: "Pending",
           date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
@@ -235,6 +241,8 @@ export default function VenuePlacementsPage() {
         }));
         setPlacements([...mapped, ...placements]);
         setShowForm(false);
+        setQrEnabled(true);
+        setMonthlyFee("");
         setSelectedWorks(new Set());
         setMessage("");
         setRevenuePercent(0);
@@ -367,22 +375,85 @@ export default function VenuePlacementsPage() {
               )}
             </div>
 
-            {/* Revenue share */}
+            {/* Placement type (F40) */}
             <div>
-              <label className="block text-sm font-medium mb-2">Revenue Share (optional)</label>
-              <p className="text-xs text-muted mb-3">Propose a revenue share percentage. Leave at 0 for a free display arrangement.</p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  max={50}
-                  value={revenuePercent}
-                  onChange={(e) => setRevenuePercent(Number(e.target.value) || 0)}
-                  className="w-20 bg-background border border-border rounded-sm px-3 py-3 text-sm text-center focus:outline-none focus:border-accent/60"
-                />
-                <span className="text-sm text-muted">% revenue share</span>
+              <label className="block text-sm font-medium mb-2">Placement Type</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className={`flex items-start gap-3 p-3 border rounded-sm cursor-pointer transition-colors ${qrEnabled ? "border-accent bg-accent/5" : "border-border hover:border-foreground/30"}`}>
+                  <input
+                    type="checkbox"
+                    checked={qrEnabled}
+                    onChange={() => setQrEnabled(true)}
+                    className="mt-0.5 accent-accent"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">QR Display</p>
+                    <p className="text-xs text-muted">Display the work with a QR linking to sales. Revenue share applies.</p>
+                  </div>
+                </label>
+                <label className={`flex items-start gap-3 p-3 border rounded-sm cursor-pointer transition-colors ${!qrEnabled ? "border-accent bg-accent/5" : "border-border hover:border-foreground/30"}`}>
+                  <input
+                    type="checkbox"
+                    checked={!qrEnabled}
+                    onChange={() => setQrEnabled(false)}
+                    className="mt-0.5 accent-accent"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Paid Loan</p>
+                    <p className="text-xs text-muted">Venue pays the artist a monthly fee to display the work. No QR sales link.</p>
+                  </div>
+                </label>
               </div>
             </div>
+
+            {/* Revenue share (QR Display) OR Monthly artist fee (Paid Loan) */}
+            {qrEnabled ? (
+              <div>
+                <label className="block text-sm font-medium mb-2">Revenue Share (optional)</label>
+                <p className="text-xs text-muted mb-3">Propose a revenue share percentage on QR sales. Leave at 0 for a free display arrangement.</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    value={revenuePercent}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "") { setRevenuePercent(""); return; }
+                      const n = Number(v);
+                      if (!Number.isNaN(n)) setRevenuePercent(n);
+                    }}
+                    onBlur={() => { if (revenuePercent === "") setRevenuePercent(0); }}
+                    className="w-20 bg-background border border-border rounded-sm px-3 py-3 text-sm text-center focus:outline-none focus:border-accent/60"
+                  />
+                  <span className="text-sm text-muted">% to the venue on sales</span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium mb-2">Monthly fee to artist (optional)</label>
+                <p className="text-xs text-muted mb-3">What you'll pay the artist each month to display their work.</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted">£</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={monthlyFee}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "") { setMonthlyFee(""); return; }
+                      const n = Number(v);
+                      if (!Number.isNaN(n)) setMonthlyFee(n);
+                    }}
+                    placeholder="e.g. 50"
+                    className="w-28 bg-background border border-border rounded-sm px-3 py-3 text-sm focus:outline-none focus:border-accent/60"
+                  />
+                  <span className="text-sm text-muted">per month</span>
+                </div>
+                <p className="text-xs text-muted mt-2">Billing is handled manually for now — use this to record the agreed amount.</p>
+              </div>
+            )}
 
             {/* Message */}
             <div>
@@ -596,11 +667,10 @@ export default function VenuePlacementsPage() {
                       <Link
                         href={`/placements/${encodeURIComponent(p.id)}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-sm border border-border hover:border-accent hover:bg-accent/5 transition-colors text-muted hover:text-accent"
-                        title="Add loan / consignment record"
-                        aria-label="Add loan / consignment record"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-sm transition-colors"
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        Add Loan / Consignment Record
                       </Link>
                       <Link
                         href={`/placements/${encodeURIComponent(p.id)}`}

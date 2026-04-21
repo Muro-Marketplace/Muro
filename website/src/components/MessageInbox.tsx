@@ -81,6 +81,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const [showPlacementForm, setShowPlacementForm] = useState(false);
   const [placementSelectedWorks, setPlacementSelectedWorks] = useState<Set<string>>(new Set());
   const [placementRevShare, setPlacementRevShare] = useState(0);
+  const [placementQrEnabled, setPlacementQrEnabled] = useState(true);
+  const [placementMonthlyFee, setPlacementMonthlyFee] = useState<number | "">("");
   const [placementMessage, setPlacementMessage] = useState("");
   const [otherPartyWorks, setOtherPartyWorks] = useState<ArtistWork[]>([]);
   const [otherWorksLoading, setOtherWorksLoading] = useState(false);
@@ -313,9 +315,11 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     const workTitles = Array.from(placementSelectedWorks);
     const firstWork = otherPartyWorks.find((w) => w.title === workTitles[0]);
     const label = workTitles.length === 1 ? workTitles[0] : `${workTitles.length} works`;
-    const content = placementRevShare > 0
-      ? `Placement request: ${label} — Revenue Share ${placementRevShare}%${placementMessage ? ` — ${placementMessage}` : ""}`
-      : `Placement request: ${label} — Free Display${placementMessage ? ` — ${placementMessage}` : ""}`;
+    const fee = typeof placementMonthlyFee === "number" ? placementMonthlyFee : 0;
+    const summary = placementQrEnabled
+      ? (placementRevShare > 0 ? `QR Display — Revenue Share ${placementRevShare}%` : "QR Display — Free")
+      : (fee > 0 ? `Paid Loan — £${fee}/month to artist` : "Paid Loan (no fee set)");
+    const content = `Placement request: ${label} — ${summary}${placementMessage ? ` — ${placementMessage}` : ""}`;
 
     try {
       const res = await authFetch("/api/messages", {
@@ -332,8 +336,10 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
             workTitle: workTitles.join(", "),
             workImage: firstWork?.image || null,
             workTitles,
-            arrangementType: placementRevShare > 0 ? "revenue_share" : "free_loan",
-            revenueSharePercent: placementRevShare > 0 ? placementRevShare : null,
+            arrangementType: placementQrEnabled && placementRevShare > 0 ? "revenue_share" : "free_loan",
+            revenueSharePercent: placementQrEnabled && placementRevShare > 0 ? placementRevShare : null,
+            qrEnabled: placementQrEnabled,
+            monthlyFeeGbp: !placementQrEnabled && fee > 0 ? fee : null,
           },
         }),
       });
@@ -355,7 +361,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         is_read: false,
         created_at: new Date().toISOString(),
         message_type: "placement_request",
-        metadata: { workTitle: workTitles.join(", "), workImage: firstWork?.image || null, workTitles, arrangementType: placementRevShare > 0 ? "revenue_share" : "free_loan", revenueSharePercent: placementRevShare },
+        metadata: { workTitle: workTitles.join(", "), workImage: firstWork?.image || null, workTitles, arrangementType: placementQrEnabled && placementRevShare > 0 ? "revenue_share" : "free_loan", revenueSharePercent: placementRevShare, qrEnabled: placementQrEnabled, monthlyFeeGbp: !placementQrEnabled && fee > 0 ? fee : null },
       }]);
 
       setShowPlacementForm(false);
@@ -681,12 +687,49 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                   <p className="text-xs text-muted">No works available to select.</p>
                 )}
 
+                {/* Placement type toggle (F40) */}
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted">Revenue Share</span>
-                  <input type="number" min={0} max={50} value={placementRevShare} onChange={(e) => setPlacementRevShare(Number(e.target.value) || 0)} className="w-16 px-2 py-1.5 bg-white border border-border rounded-sm text-xs text-center focus:outline-none focus:border-accent/50" />
-                  <span className="text-xs text-muted">%</span>
-                  <span className="text-[10px] text-muted ml-1">(0 = free display)</span>
+                  <button
+                    type="button"
+                    onClick={() => setPlacementQrEnabled(true)}
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-sm border transition-colors ${placementQrEnabled ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}
+                  >
+                    QR Display
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlacementQrEnabled(false)}
+                    className={`flex-1 px-3 py-1.5 text-xs rounded-sm border transition-colors ${!placementQrEnabled ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}
+                  >
+                    Paid Loan
+                  </button>
                 </div>
+                {placementQrEnabled ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted">Revenue Share</span>
+                    <input type="number" min={0} max={50} value={placementRevShare} onChange={(e) => setPlacementRevShare(Number(e.target.value) || 0)} className="w-16 px-2 py-1.5 bg-white border border-border rounded-sm text-xs text-center focus:outline-none focus:border-accent/50" />
+                    <span className="text-xs text-muted">%</span>
+                    <span className="text-[10px] text-muted ml-1">(0 = free display)</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted">Monthly fee £</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={placementMonthlyFee}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "") { setPlacementMonthlyFee(""); return; }
+                        const n = Number(v);
+                        if (!Number.isNaN(n)) setPlacementMonthlyFee(n);
+                      }}
+                      placeholder="e.g. 50"
+                      className="w-20 px-2 py-1.5 bg-white border border-border rounded-sm text-xs focus:outline-none focus:border-accent/50"
+                    />
+                    <span className="text-[10px] text-muted ml-1">/mo to the artist</span>
+                  </div>
+                )}
                 <input type="text" value={placementMessage} onChange={(e) => setPlacementMessage(e.target.value)} placeholder="Add a note (optional)" className="w-full px-3 py-2 bg-white border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
                 <button onClick={handlePlacementRequest} disabled={sending || placementSelectedWorks.size === 0} className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-40">
                   {sending ? "Sending..." : `Request ${placementSelectedWorks.size} Placement${placementSelectedWorks.size !== 1 ? "s" : ""}`}

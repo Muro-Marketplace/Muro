@@ -173,6 +173,33 @@ The structural change. Treat as one unit because the loan record has no good hom
 - **F15** Placement detail page ✅ shipped (`/placements/[id]` with full placement view, stepper, messages/notes, photo gallery, record form)
 - **F16** Loan/consignment table + CRUD ✅ shipped (migration 011 `placement_records` + `placement_photos`; `PUT /api/placements/[id]/record`; `POST/DELETE /api/placements/[id]/photos`)
 
+### Phase 7 — placement flow unification + loan record polish (next)
+
+Grouped tightly so the placement experience is coherent end-to-end after this batch.
+
+- **F39** Fix placement approval: the self-accept guard (F1) over-blocked — recipients can't accept either. Must only block the sender, not the receiver.
+- **F40** Unified placement type selector (consolidates requests 17/18/19/20): both venue-side and artist-side placement request forms (including the messages composer) offer **QR Display** (default) vs **Paid Loan**. QR Display → revenue share field. Paid Loan → monthly artist fee field (replaces revenue share).
+- **F41** Auto-populate loan / consignment record with the revenue share % already agreed on the placement.
+- **F42** Remove Platform Commission field from the loan / consignment record form and schema display (still a server-side concept for Stripe fee split — not user-editable).
+- **F43** Venue-approval tickbox on the loan record ("Venue approved: yes/no" + approval timestamp).
+- **F44** Relabel the "+" icon on placement cards to a visible **Add Loan / Consignment Record** button.
+- **F45** Mirror the artist placement page layout on the venue side so they feel symmetric.
+- **F46** Quick wins: block right-click save on gallery/portfolio images; restrict the in-page expand button to mobile only (lightbox still works on web).
+
+### Phase 8 — marketplace nav, filters, premium gating, frame photos
+
+- **F47** Marketplace nav rework: once on `/browse`, replace the "Marketplace" dropdown with inline tabs — Portfolios / Galleries / Collections / Spaces — each routing to its actual view. Portfolios is the default.
+- **F48** Filters: location filter becomes a slider with min/max number inputs.
+- **F49** Global mode filters out artists whose delivery radius doesn't reach the active venue.
+- **F50** Recent Activity click-through on both portals: each notification row links to its subject (message, placement, order, etc.) not just the parent page.
+- **F51** Venue "view my public profile" link — show a link on the venue dashboard/profile that opens the venue's page on `/spaces-looking-for-art`. Other venues remain gated as today.
+- **F52** Artist Collections become a premium-only feature. UI gate + API gate behind `subscription_plan in ('premium','pro')`.
+- **F53** Frame options accept an image upload (uses existing uploadImage()).
+
+### Phase 9 — auth hardening
+
+- **F54** Rate-limit `/login` and `/forgot-password`. Likely via Cloudflare rules at the edge. Document fallback IP-based rate limiting in the app if CF not available.
+
 ### Revenue stream 1 — Curated matching for venues (F38)
 Paid concierge offer: venue submits a brief, pays up front, Wallplace hand-curates a shortlist manually and returns it by email. Lets us validate pricing and demand before automating.
 
