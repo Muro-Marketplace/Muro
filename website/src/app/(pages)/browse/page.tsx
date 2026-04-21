@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -127,7 +127,17 @@ function CheckPill({
   );
 }
 
+// Wrap the real page body in <Suspense> so useSearchParams doesn't deopt the
+// entire route tree and blow up the static prerender during `next build`.
 export default function BrowsePortfoliosPage() {
+  return (
+    <Suspense fallback={null}>
+      <BrowsePortfoliosPageInner />
+    </Suspense>
+  );
+}
+
+function BrowsePortfoliosPageInner() {
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [activeSubcategories, setActiveSubcategories] = useState<Set<string>>(new Set());
   const [viewAs, setViewAs] = useState<"artists" | "works">("artists");
