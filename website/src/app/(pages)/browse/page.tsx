@@ -208,6 +208,10 @@ function BrowsePortfoliosPageInner() {
   const [galleryRevenueShareMin, setGalleryRevenueShareMin] = useState(0);
   const [galleryPurchase, setGalleryPurchase] = useState(false);
 
+  // Collections view location filter — independent of artists/gallery so the
+  // filter state doesn't bleed across views.
+  const [collectionsLocationMode, setCollectionsLocationMode] = useState<"global" | "local">("global");
+
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
@@ -441,6 +445,19 @@ function BrowsePortfoliosPageInner() {
 
   const hasGalleryFilters =
     !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || galleryLocationMode === "local";
+
+  // Collections filtered by distance when user has enabled local mode.
+  // Artist coordinates are looked up via artistSlug.
+  const filteredCollections = useMemo(() => {
+    const base = collections.filter((c) => c.available);
+    if (collectionsLocationMode !== "local" || !userCoords) return base;
+    return base.filter((c) => {
+      const artist = artists.find((a) => a.slug === c.artistSlug);
+      if (!artist?.coordinates) return false;
+      const dist = calcDistance(userCoords.lat, userCoords.lng, artist.coordinates.lat, artist.coordinates.lng);
+      return dist <= filters.maxDistance;
+    });
+  }, [collections, collectionsLocationMode, userCoords, artists, filters.maxDistance]);
 
   function clearGalleryFilters() {
     setGalleryTheme(""); setGalleryMedium(""); setGalleryStyle(""); setGalleryAvailableOnly(false);
@@ -746,18 +763,6 @@ function BrowsePortfoliosPageInner() {
                 {cat.label}
               </button>
             ))}
-            <button
-              type="button"
-              onClick={() => { setActiveCategory("collections"); setActiveSubcategories(new Set()); }}
-              className={`py-4 px-3 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
-                activeCategory === "collections"
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted hover:text-foreground"
-              }`}
-            >
-              Collections
-            </button>
-
             {/* spacer so tabs don't stretch full width */}
             <div className="ml-auto" />
           </div>
@@ -1113,13 +1118,38 @@ function BrowsePortfoliosPageInner() {
                     </div>
                     {galleryLocationMode === "local" && userCoords && (
                       <div className="mt-3">
-                        <p className="text-xs text-muted mb-2">Distance</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {DISTANCE_OPTIONS.map((opt) => (
-                            <button key={opt.value} type="button" onClick={() => setFilter("maxDistance", opt.value)} className={`px-2.5 py-1 text-xs rounded-sm border transition-colors cursor-pointer ${filters.maxDistance === opt.value ? "bg-foreground text-background border-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"}`}>
-                              {opt.label}
-                            </button>
-                          ))}
+                        <p className="text-xs text-muted mb-2">
+                          Within {filters.maxDistance >= 9999 ? "any distance" : `${filters.maxDistance} mi`}
+                        </p>
+                        <div className="space-y-2.5">
+                          <input
+                            type="range"
+                            min={0}
+                            max={200}
+                            step={1}
+                            value={filters.maxDistance >= 9999 ? 200 : filters.maxDistance}
+                            onChange={(e) => {
+                              const v = Number(e.target.value);
+                              setFilter("maxDistance", v >= 200 ? 9999 : v);
+                            }}
+                            className="w-full accent-accent h-1.5 cursor-pointer"
+                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={9999}
+                              value={filters.maxDistance >= 9999 ? "" : filters.maxDistance}
+                              placeholder="Any"
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === "") { setFilter("maxDistance", 9999); return; }
+                                setFilter("maxDistance", Math.max(0, Number(raw) || 0));
+                              }}
+                              className="w-20 px-2 py-1 text-xs bg-surface border border-border rounded-sm text-foreground focus:outline-none focus:border-accent/50"
+                            />
+                            <span className="text-xs text-muted">mi</span>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1505,18 +1535,81 @@ function BrowsePortfoliosPageInner() {
       {activeCategory === "collections" && (
         <section className="py-10 lg:py-14">
           <div className="max-w-[1400px] mx-auto px-6">
-            <div className="mb-8">
-              <h2 className="text-2xl font-serif mb-2">Curated Collections</h2>
-              <p className="text-sm text-muted">Themed bundles of artwork at a set price. Ready to transform your space.</p>
+            <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="text-2xl font-serif mb-2">Curated Collections</h2>
+                <p className="text-sm text-muted">Themed bundles of artwork at a set price. Ready to transform your space.</p>
+              </div>
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">Location</p>
+                  <div className="flex gap-2">
+                    {(["global", "local"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => { setCollectionsLocationMode(mode); if (mode === "local" && !userCoords) handleModeChange("local"); }}
+                        className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer capitalize ${
+                          collectionsLocationMode === mode
+                            ? "bg-foreground text-background border-foreground"
+                            : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {collectionsLocationMode === "local" && userCoords && (
+                  <div className="min-w-[180px]">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">
+                      Within {filters.maxDistance >= 9999 ? "any" : `${filters.maxDistance} mi`}
+                    </p>
+                    <input
+                      type="range"
+                      min={0}
+                      max={200}
+                      step={1}
+                      value={filters.maxDistance >= 9999 ? 200 : filters.maxDistance}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setFilter("maxDistance", v >= 200 ? 9999 : v);
+                      }}
+                      className="w-full accent-accent h-1.5 cursor-pointer"
+                    />
+                  </div>
+                )}
+                {collectionsLocationMode === "local" && !userCoords && !geoRequesting && (
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">Postcode</p>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={postcodeInput}
+                        onChange={(e) => { setPostcodeInput(e.target.value.toUpperCase()); setPostcodeError(false); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") handlePostcodeSubmit(); }}
+                        placeholder="EC1A 1BB"
+                        className="w-28 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50 uppercase"
+                      />
+                      <button type="button" onClick={handlePostcodeSubmit} className="px-3 py-1.5 bg-accent text-white text-xs rounded-sm hover:bg-accent-hover transition-colors cursor-pointer">Go</button>
+                    </div>
+                    {postcodeError && <p className="text-[10px] text-red-400 mt-1">Postcode not found</p>}
+                  </div>
+                )}
+              </div>
             </div>
-            {collections.length > 0 ? (
+            {filteredCollections.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {collections.filter((c) => c.available).map((col) => (
+                {filteredCollections.map((col) => (
                   <CollectionCard key={col.id} collection={col} />
                 ))}
               </div>
             ) : (
-              <p className="text-muted text-center py-16">No collections available yet.</p>
+              <p className="text-muted text-center py-16">
+                {collections.filter((c) => c.available).length === 0
+                  ? "No collections available yet."
+                  : "No collections match this filter."}
+              </p>
             )}
           </div>
         </section>

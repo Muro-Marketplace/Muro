@@ -56,13 +56,26 @@ const immersiveRoutes = ["/venues", "/artists", "/about", "/how-it-works"];
 function MarketplaceTabsNav({ pathname, isPortal, showSolid }: { pathname: string; isPortal: boolean; showSolid: boolean }) {
   const searchParams = useSearchParams();
   const view = searchParams?.get("view") || "";
+  const onDark = isPortal || !showSolid;
   return (
     <>
       {marketplaceTabs.map((tab) => {
         const active = tab.match(pathname, view);
+        // Collections renders as a pill, positioned right after Galleries.
+        if (tab.label === "Collections") {
+          const pillBase = "text-xs rounded-full border px-3 py-1 transition-colors duration-300 whitespace-nowrap";
+          const pillCls = active
+            ? (onDark ? "bg-white text-foreground border-white" : "bg-foreground text-white border-foreground")
+            : (onDark ? "text-white/80 border-white/30 hover:border-white hover:text-white" : "text-muted border-border hover:border-foreground/40 hover:text-foreground");
+          return (
+            <Link key={tab.href} href={tab.href} className={`${pillBase} ${pillCls}`}>
+              {tab.label}
+            </Link>
+          );
+        }
         const cls = active
-          ? (isPortal || !showSolid ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
-          : (isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground");
+          ? (onDark ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
+          : (onDark ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground");
         return (
           <Link
             key={tab.href}
