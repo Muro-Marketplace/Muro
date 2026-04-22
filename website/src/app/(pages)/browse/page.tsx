@@ -137,16 +137,30 @@ export default function BrowsePortfoliosPage() {
   );
 }
 
+const PAGE_SIZE = 20;
+
 function BrowsePortfoliosPageInner() {
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [activeSubcategories, setActiveSubcategories] = useState<Set<string>>(new Set());
   const [viewAs, setViewAs] = useState<"artists" | "works">("artists");
+  // Pagination — "Show 20 more" pattern per view.
+  const [loadedArtists, setLoadedArtists] = useState(PAGE_SIZE);
+  const [loadedWorks, setLoadedWorks] = useState(PAGE_SIZE);
+  const [loadedCollections, setLoadedCollections] = useState(PAGE_SIZE);
 
   // Drive view from ?view= query param (F47). We use searchParams rather than
   // window.location.hash because Next.js Link same-page hash changes use
   // pushState, which doesn't fire hashchange — so the page wouldn't react.
   const searchParams = useSearchParams();
   const viewParam = searchParams?.get("view") || "";
+  // Reset pagination when switching views / categories so users don't land
+  // on an empty grid if they scroll back to a narrow filter.
+  useEffect(() => {
+    setLoadedArtists(PAGE_SIZE);
+    setLoadedWorks(PAGE_SIZE);
+    setLoadedCollections(PAGE_SIZE);
+  }, [activeCategory, viewAs]);
+
   useEffect(() => {
     if (viewParam === "collections") {
       setActiveCategory("collections");
@@ -1011,7 +1025,7 @@ function BrowsePortfoliosPageInner() {
                   </div>
                 ) : viewMode === "compact" ? (
                   <div className={`grid ${mobileGrid === 2 ? "grid-cols-2" : "grid-cols-1"} sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5`}>
-                    {filteredArtists.map((artist) => {
+                    {filteredArtists.slice(0, loadedArtists).map((artist) => {
                       const distance =
                         userCoords && artist.coordinates
                           ? calcDistance(
@@ -1027,7 +1041,7 @@ function BrowsePortfoliosPageInner() {
                 ) : (
                   /* Expanded view */
                   <div className="divide-y divide-border">
-                    {filteredArtists.map((artist) => (
+                    {filteredArtists.slice(0, loadedArtists).map((artist) => (
                       <div
                         key={artist.slug}
                         className="flex gap-6 items-start py-6"
@@ -1096,6 +1110,22 @@ function BrowsePortfoliosPageInner() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+                {/* Load more — only render when there's more than the
+                    currently-loaded slice to show. */}
+                {filteredArtists.length > loadedArtists && (
+                  <div className="mt-10 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setLoadedArtists((n) => n + PAGE_SIZE)}
+                      className="px-6 py-2.5 text-sm font-medium text-foreground border border-foreground/30 rounded-sm hover:border-foreground hover:bg-surface transition-colors cursor-pointer"
+                    >
+                      Show {Math.min(PAGE_SIZE, filteredArtists.length - loadedArtists)} more
+                    </button>
+                    <p className="text-xs text-muted mt-2">
+                      Showing {loadedArtists} of {filteredArtists.length}
+                    </p>
                   </div>
                 )}
               </div>
@@ -1533,7 +1563,7 @@ function BrowsePortfoliosPageInner() {
                   </div>
                 ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                  {filteredGalleryWorks.map((work) => {
+                  {filteredGalleryWorks.slice(0, loadedWorks).map((work) => {
                     const workSlug = slugify(work.title);
                     // ArtistProfileClient opens the lightbox when ?work= is present,
                     // so we route quick-look through the query param rather than a
@@ -1633,6 +1663,20 @@ function BrowsePortfoliosPageInner() {
                     );
                   })}
                 </div>
+                )}
+                {filteredGalleryWorks.length > loadedWorks && (
+                  <div className="mt-10 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setLoadedWorks((n) => n + PAGE_SIZE)}
+                      className="px-6 py-2.5 text-sm font-medium text-foreground border border-foreground/30 rounded-sm hover:border-foreground hover:bg-surface transition-colors cursor-pointer"
+                    >
+                      Show {Math.min(PAGE_SIZE, filteredGalleryWorks.length - loadedWorks)} more
+                    </button>
+                    <p className="text-xs text-muted mt-2">
+                      Showing {loadedWorks} of {filteredGalleryWorks.length}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -1815,15 +1859,31 @@ function BrowsePortfoliosPageInner() {
               </div>
             </div>
             {filteredCollections.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredCollections.map((col) => {
-                  const collectionArtist = artists.find((a) => a.slug === col.artistSlug);
-                  const colDistance = userCoords && collectionArtist?.coordinates
-                    ? calcDistance(userCoords.lat, userCoords.lng, collectionArtist.coordinates.lat, collectionArtist.coordinates.lng)
-                    : null;
-                  return <CollectionCard key={col.id} collection={col} distance={colDistance} />;
-                })}
-              </div>
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {filteredCollections.slice(0, loadedCollections).map((col) => {
+                    const collectionArtist = artists.find((a) => a.slug === col.artistSlug);
+                    const colDistance = userCoords && collectionArtist?.coordinates
+                      ? calcDistance(userCoords.lat, userCoords.lng, collectionArtist.coordinates.lat, collectionArtist.coordinates.lng)
+                      : null;
+                    return <CollectionCard key={col.id} collection={col} distance={colDistance} />;
+                  })}
+                </div>
+                {filteredCollections.length > loadedCollections && (
+                  <div className="mt-10 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setLoadedCollections((n) => n + PAGE_SIZE)}
+                      className="px-6 py-2.5 text-sm font-medium text-foreground border border-foreground/30 rounded-sm hover:border-foreground hover:bg-surface transition-colors cursor-pointer"
+                    >
+                      Show {Math.min(PAGE_SIZE, filteredCollections.length - loadedCollections)} more
+                    </button>
+                    <p className="text-xs text-muted mt-2">
+                      Showing {loadedCollections} of {filteredCollections.length}
+                    </p>
+                  </div>
+                )}
+              </>
             ) : (
               <p className="text-muted text-center py-16">
                 {collections.filter((c) => c.available).length === 0

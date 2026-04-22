@@ -9,6 +9,7 @@ import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
+import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 
 interface SizeEntry {
   label: string;
@@ -124,6 +125,13 @@ export default function PortfolioPage() {
   const [internationalShipping, setInternationalShipping] = useState<string>("");
   const [savingDefault, setSavingDefault] = useState(false);
 
+  // Track whether the work form has unsaved changes. We snapshot the form
+  // each time it opens, then compare on every change. The beforeunload
+  // guard only fires when the form is open AND currently dirty.
+  const initialFormJson = useRef<string>("");
+  const formDirty = showForm && JSON.stringify(form) !== initialFormJson.current;
+  useUnsavedWarning(formDirty);
+
   useEffect(() => {
     if (!artist || initialised) return;
     setWorks([...artist.works]);
@@ -205,14 +213,16 @@ export default function PortfolioPage() {
   }
 
   function openAdd() {
-    setForm({ ...emptyWork, sizes: [...defaultSizes] });
+    const fresh = { ...emptyWork, sizes: [...defaultSizes] };
+    setForm(fresh);
+    initialFormJson.current = JSON.stringify(fresh);
     setEditingIndex(null);
     setShowForm(true);
   }
 
   function openEdit(index: number) {
     const w = works[index] as ArtistWork & { shippingPrice?: number };
-    setForm({
+    const initial: WorkFormState = {
       title: w.title,
       medium: w.medium,
       dimensions: w.dimensions,
@@ -234,7 +244,9 @@ export default function PortfolioPage() {
       frameOptions: Array.isArray((w as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions)
         ? (w as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions!.map((f) => ({ label: f.label, priceUplift: String(f.priceUplift), imageUrl: f.imageUrl }))
         : [],
-    });
+    };
+    setForm(initial);
+    initialFormJson.current = JSON.stringify(initial);
     setEditingIndex(index);
     setShowForm(true);
 
@@ -416,6 +428,8 @@ export default function PortfolioPage() {
     }
 
     saveWorks(updated);
+    // Clear dirty snapshot so the beforeunload guard drops after save
+    initialFormJson.current = JSON.stringify(form);
     setShowForm(false);
     setEditingIndex(null);
   }

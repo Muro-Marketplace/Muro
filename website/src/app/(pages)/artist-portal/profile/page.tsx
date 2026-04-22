@@ -9,6 +9,7 @@ import { themes as allThemes } from "@/data/themes";
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
+import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 
 const primaryMediums = [
   "Oil Painting", "Watercolour", "Acrylic Painting", "Drawing & Illustration",
@@ -93,6 +94,7 @@ export default function ProfileEditorPage() {
   const { artist, loading: artistLoading, profileId, refetch } = useCurrentArtist();
   const [profile, setProfile] = useState<ProfileState | null>(null);
   const [saved, setSaved] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [newTag, setNewTag] = useState("");
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
@@ -110,6 +112,8 @@ export default function ProfileEditorPage() {
       setProfile(initProfile(artist));
     }
   }, [artist, profile]);
+
+  useUnsavedWarning(hasUnsavedChanges);
 
   useEffect(() => {
     if (!artist) return;
@@ -181,6 +185,7 @@ export default function ProfileEditorPage() {
   function update<K extends keyof ProfileState>(key: K, value: ProfileState[K]) {
     setProfile((prev) => prev ? { ...prev, [key]: value } : prev);
     setSaved(false);
+    setHasUnsavedChanges(true);
   }
 
   function toggleArrayItem(key: "styleTags" | "themes" | "availableSizes" | "venueTypesSuitedFor", item: string) {
@@ -192,6 +197,7 @@ export default function ProfileEditorPage() {
       };
     });
     setSaved(false);
+    setHasUnsavedChanges(true);
   }
 
   async function handleSave() {
@@ -244,6 +250,7 @@ export default function ProfileEditorPage() {
     // Also keep localStorage as fallback
     localStorage.setItem("wallplace-artist-profile", JSON.stringify(profile));
     setSaved(true);
+    setHasUnsavedChanges(false);
     refetch();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
