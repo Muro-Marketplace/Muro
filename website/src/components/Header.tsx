@@ -17,6 +17,17 @@ const marketplaceTabs = [
   { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
 ];
 
+// Venue variant of the marketplace tabs: drops "Spaces" (not useful for a
+// venue browsing) and adds Wallplace Curated + Blog so the venue's own
+// nav shape stays consistent with the non-marketplace pages.
+const venueMarketplaceTabs = [
+  { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v !== "gallery" && v !== "collections" },
+  { label: "Galleries",  href: "/browse?view=gallery",    match: (p: string, v: string) => p === "/browse" && v === "gallery" },
+  { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
+  { label: "Wallplace Curated", href: "/curated", match: (p: string) => p === "/curated" },
+  { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
+];
+
 type NavLink = { label: string; href: string; subLinks?: { label: string; href: string; description?: string }[] };
 
 const publicNavLinks: NavLink[] = [
@@ -57,13 +68,24 @@ const immersiveRoutes = ["/", "/venues", "/artists", "/about", "/how-it-works"];
 // is isolated behind a <Suspense> boundary. Without that, every page that
 // renders the shared Header would be forced into dynamic rendering, which
 // breaks the static prerender for pages like /admin/applications.
-function MarketplaceTabsNav({ pathname, isPortal, showSolid }: { pathname: string; isPortal: boolean; showSolid: boolean }) {
+function MarketplaceTabsNav({
+  pathname,
+  isPortal,
+  showSolid,
+  variant,
+}: {
+  pathname: string;
+  isPortal: boolean;
+  showSolid: boolean;
+  variant: "default" | "venue";
+}) {
   const searchParams = useSearchParams();
   const view = searchParams?.get("view") || "";
   const onDark = isPortal || !showSolid;
+  const tabs = variant === "venue" ? venueMarketplaceTabs : marketplaceTabs;
   return (
     <>
-      {marketplaceTabs.map((tab) => {
+      {tabs.map((tab) => {
         const active = tab.match(pathname, view);
         const cls = active
           ? (onDark ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
@@ -279,7 +301,12 @@ export default function Header() {
             {isMarketplaceArea ? (
               // F47 — marketplace tabs replace the normal nav while inside /browse or /spaces-looking-for-art
               <Suspense fallback={null}>
-                <MarketplaceTabsNav pathname={pathname} isPortal={isPortal} showSolid={showSolid} />
+                <MarketplaceTabsNav
+                  pathname={pathname}
+                  isPortal={isPortal}
+                  showSolid={showSolid}
+                  variant={userType === "venue" ? "venue" : "default"}
+                />
               </Suspense>
             ) : (
             (user ? (userType === "venue" ? venueNavLinks : loggedInNavLinks) : publicNavLinks).map((link) => {

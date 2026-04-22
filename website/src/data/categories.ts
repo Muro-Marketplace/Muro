@@ -1,11 +1,10 @@
 /**
- * Wallplace taxonomy (Phase 3 rewrite).
+ * Wallplace taxonomy.
  *
- * A single clean model: 6 top-level disciplines + flat sub-styles per
- * discipline. (Seven entries if you count the "mixed" fallback bucket.)
- *
- * Digital Art replaces Printmaking as a top-level. Printmaking is now a
- * sub-style under Painting + Drawing.
+ * Top-level disciplines + flat sub-styles per discipline. Digital illustration
+ * lives as a sub-style under Drawing & Illustration rather than as its own
+ * top-level — Wallplace's curated focus is original physical artwork, so a
+ * standalone "Digital Art" bucket confused the marketplace.
  */
 export const DISCIPLINES = [
   {
@@ -41,19 +40,6 @@ export const DISCIPLINES = [
     ],
   },
   {
-    id: "digital",
-    label: "Digital Art",
-    subStyles: [
-      "illustration",
-      "3d-render",
-      "generative",
-      "pixel-art",
-      "collage",
-      "graphic",
-      "typography",
-    ],
-  },
-  {
     id: "drawing",
     label: "Drawing & Illustration",
     subStyles: [
@@ -65,6 +51,7 @@ export const DISCIPLINES = [
       "children",
       "line-art",
       "printmaking",
+      "digital-illustration",
     ],
   },
   {
@@ -102,4 +89,60 @@ export function formatSubStyleLabel(slug: string): string {
   if (!slug) return "";
   const spaced = slug.replace(/-/g, " ");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * Map a free-text primary medium / legacy discipline onto the current
+ * discipline taxonomy. Used so seed artists (and any DB rows that haven't
+ * been backfilled) still appear under the right category filter.
+ *
+ * - Legacy "digital" discipline id is rehomed onto "drawing" (digital
+ *   illustration lives there as a sub-style).
+ * - Anything that doesn't match falls into "mixed".
+ */
+export function resolveDiscipline(
+  primaryMedium: string | null | undefined,
+  rawDiscipline?: string | null,
+): DisciplineId {
+  const explicit = (rawDiscipline || "").toLowerCase();
+  if (explicit === "digital") return "drawing";
+  if (
+    explicit === "photography" ||
+    explicit === "painting" ||
+    explicit === "drawing" ||
+    explicit === "sketching" ||
+    explicit === "sculpture" ||
+    explicit === "mixed"
+  ) {
+    return explicit;
+  }
+  const m = (primaryMedium || "").toLowerCase();
+  if (m.includes("photo")) return "photography";
+  if (
+    m.includes("paint") ||
+    m.includes("watercolour") ||
+    m.includes("watercolor") ||
+    m.includes("acrylic") ||
+    m.includes("oil") ||
+    m.includes("print")
+  )
+    return "painting";
+  if (m.includes("sketch")) return "sketching";
+  if (
+    m.includes("sculpt") ||
+    m.includes("ceramic") ||
+    m.includes("clay") ||
+    m.includes("bronze")
+  )
+    return "sculpture";
+  if (
+    m.includes("illust") ||
+    m.includes("drawing") ||
+    m.includes("digital") ||
+    m.includes("ink")
+  )
+    return "drawing";
+  if (m.includes("mixed") || m.includes("collage") || m.includes("textile"))
+    return "mixed";
+  return "mixed";
 }

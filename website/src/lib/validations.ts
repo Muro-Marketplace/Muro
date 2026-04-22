@@ -36,6 +36,7 @@ export const applySchema = z.object({
   website: optionalString(500),
   primaryMedium: safeString(100),
   // Phase 3 taxonomy. Optional to keep back-compat with any in-flight forms.
+  // "digital" accepted for legacy payloads — it maps onto drawing on read.
   discipline: z
     .enum(["photography", "painting", "digital", "drawing", "sketching", "sculpture", "mixed"])
     .optional(),

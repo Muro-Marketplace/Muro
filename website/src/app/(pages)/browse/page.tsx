@@ -8,7 +8,7 @@ import { artists as staticArtists, type Artist } from "@/data/artists";
 import { themes } from "@/data/themes";
 import { artistsToGalleryWorks } from "@/data/galleries";
 import { collections as staticCollections, type ArtistCollection } from "@/data/collections";
-import { DISCIPLINES, formatSubStyleLabel, getDisciplineById } from "@/data/categories";
+import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, resolveDiscipline } from "@/data/categories";
 import { slugify } from "@/lib/slugify";
 import { geocodePostcode } from "@/lib/geocode";
 import Button from "@/components/Button";
@@ -60,10 +60,15 @@ interface Filters {
   originals: boolean;
   prints: boolean;
   framing: boolean;
-  freeLoan: boolean;
+  // Three arrangement filters — independent toggles. Revenue share applies a
+  // minimum % via the slider below.
   revenueShare: boolean;
+  paidLoan: boolean;
   revenueShareMin: number;
   outrightPurchase: boolean;
+  // Retained for any deep-link URL containing the legacy "freeLoan" param so
+  // historical bookmarks don't 404 the whole filter. Not surfaced in the UI.
+  freeLoan: boolean;
   venueTypes: string[];
   styleMedium: string;
 }
@@ -75,10 +80,11 @@ const DEFAULT_FILTERS: Filters = {
   originals: false,
   prints: false,
   framing: false,
-  freeLoan: false,
   revenueShare: false,
+  paidLoan: false,
   revenueShareMin: 0,
   outrightPurchase: false,
+  freeLoan: false,
   venueTypes: [],
   styleMedium: "",
 };
@@ -296,6 +302,8 @@ function BrowsePortfoliosPageInner() {
     filters.originals ||
     filters.prints ||
     filters.framing ||
+    filters.revenueShare ||
+    filters.paidLoan ||
     filters.freeLoan ||
     filters.revenueShare ||
     filters.revenueShareMin > 0 ||
@@ -315,7 +323,9 @@ function BrowsePortfoliosPageInner() {
   // row from showing totally empty buckets.
   const availableSubStyles = useMemo(() => {
     if (!activeDisciplineObj) return [] as string[];
-    const artistsInDiscipline = artists.filter((a) => a.discipline === activeDisciplineObj.id);
+    const artistsInDiscipline = artists.filter(
+      (a) => resolveDiscipline(a.primaryMedium, a.discipline) === activeDisciplineObj.id,
+    );
     const subs = new Set<string>();
     for (const sub of activeDisciplineObj.subStyles) {
       if (artistsInDiscipline.some((a) => a.subStyles?.includes(sub))) {
@@ -329,8 +339,13 @@ function BrowsePortfoliosPageInner() {
     return artists.filter((artist) => {
       // Must have at least one artwork to appear in marketplace
       if (!artist.works || artist.works.length === 0) return false;
-      // Discipline filter
-      if (activeDisciplineObj && artist.discipline !== activeDisciplineObj.id) return false;
+      // Discipline filter — fall back to inferring from primary medium
+      // so seed artists (without an explicit discipline field) and older
+      // DB rows that missed the backfill still match the right category.
+      if (activeDisciplineObj) {
+        const effective = resolveDiscipline(artist.primaryMedium, artist.discipline);
+        if (effective !== activeDisciplineObj.id) return false;
+      }
       // Sub-style filter — artist must have at least one of the active sub-styles
       if (activeSubStyles.size > 0 && !artist.subStyles?.some((s) => activeSubStyles.has(s))) return false;
 
@@ -352,10 +367,22 @@ function BrowsePortfoliosPageInner() {
       if (filters.originals && !artist.offersOriginals) return false;
       if (filters.prints && !artist.offersPrints) return false;
       if (filters.framing && !artist.offersFramed) return false;
-      if (filters.freeLoan && !artist.openToFreeLoan && !artist.openToRevenueShare) return false;
-      if (filters.revenueShareMin > 0 && (!artist.openToRevenueShare || !artist.revenueSharePercent || artist.revenueSharePercent < filters.revenueShareMin)) return false;
-      if (filters.outrightPurchase && !artist.openToOutrightPurchase)
+      // Independent arrangement filters — any combination can be active.
+      if (filters.revenueShare && !artist.openToRevenueShare) return false;
+      if (filters.paidLoan && !artist.openToFreeLoan) return false;
+      if (filters.outrightPurchase && !artist.openToOutrightPurchase) return false;
+      // Min rev share threshold only applies when Revenue Share is the
+      // active arrangement — ignored otherwise.
+      if (
+        filters.revenueShare &&
+        filters.revenueShareMin > 0 &&
+        (!artist.revenueSharePercent || artist.revenueSharePercent < filters.revenueShareMin)
+      ) {
         return false;
+      }
+      // Legacy freeLoan URL param still works — matches either Revenue Share
+      // or Paid Loan capability.
+      if (filters.freeLoan && !artist.openToFreeLoan && !artist.openToRevenueShare) return false;
       if (
         filters.venueTypes.length > 0 &&
         !filters.venueTypes.some((v) => artist.venueTypesSuitedFor.includes(v))
@@ -593,43 +620,74 @@ function BrowsePortfoliosPageInner() {
         )}
       </div>
 
-      {/* Arrangement — above style/theme */}
+      {/* Arrangement — three independent toggles for the core Wallplace
+          models: Revenue Share, Paid Loan, Direct Purchase. Rev share min
+          % shows as a slider beneath the Revenue Share tile when active. */}
       <div>
         <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
           Arrangement
         </p>
         <div className="space-y-2">
+          {/* Revenue Share */}
           <button
             type="button"
-            onClick={() => { setFilter("freeLoan", !filters.freeLoan); if (!filters.freeLoan) setFilter("revenueShare", true); }}
+            onClick={() => setFilter("revenueShare", !filters.revenueShare)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
-              filters.freeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+              filters.revenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.freeLoan ? "text-accent" : "text-muted"}>
-              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.revenueShare ? "text-accent" : "text-muted"}>
+              <rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M9 9h.01M14 9h.01M9 14h.01M14 14h.01" />
             </svg>
             <div>
-              <p className="text-sm font-medium">Display</p>
-              <p className="text-[10px] text-muted">Revenue share or paid loan</p>
+              <p className="text-sm font-medium">Revenue Share</p>
+              <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
             </div>
           </button>
-          {filters.freeLoan && (
-            <div className="flex items-center gap-2 pl-3 py-0.5">
-              <span className="text-[11px] text-muted">Min rev share</span>
+          {filters.revenueShare && (
+            <div className="pl-3 pr-1 pb-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] text-muted">Minimum share</span>
+                <span className="text-[11px] font-medium text-foreground">
+                  {filters.revenueShareMin > 0 ? `${filters.revenueShareMin}%` : "Any"}
+                </span>
+              </div>
               <input
-                type="text"
-                inputMode="numeric"
-                defaultValue=""
-                ref={(el) => { if (el && filters.revenueShareMin > 0 && !el.dataset.init) { el.value = String(filters.revenueShareMin); el.dataset.init = "1"; } }}
-                onBlur={(e) => { setFilter("revenueShareMin", Number(e.target.value) || 0); }}
-                onKeyDown={(e) => { if (e.key === "Enter") setFilter("revenueShareMin", Number((e.target as HTMLInputElement).value) || 0); }}
-                placeholder="Any"
-                className="w-14 px-2 py-1 bg-surface border border-border rounded-sm text-xs text-foreground text-center focus:outline-none focus:border-accent/50"
+                type="range"
+                min={0}
+                max={50}
+                step={5}
+                value={filters.revenueShareMin}
+                onChange={(e) => setFilter("revenueShareMin", Number(e.target.value) || 0)}
+                className="w-full accent-accent h-1 cursor-pointer"
+                aria-label="Minimum revenue share"
               />
-              <span className="text-[11px] text-muted">%</span>
+              <div className="flex justify-between text-[9px] text-muted mt-0.5">
+                <span>0%</span>
+                <span>25%</span>
+                <span>50%</span>
+              </div>
             </div>
           )}
+
+          {/* Paid Loan */}
+          <button
+            type="button"
+            onClick={() => setFilter("paidLoan", !filters.paidLoan)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
+              filters.paidLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.paidLoan ? "text-accent" : "text-muted"}>
+              <path d="M12 2v20M17 5H9a3 3 0 000 6h6a3 3 0 010 6H7" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium">Paid Loan</p>
+              <p className="text-[10px] text-muted">Monthly fee to display the work</p>
+            </div>
+          </button>
+
+          {/* Direct Purchase */}
           <button
             type="button"
             onClick={() => setFilter("outrightPurchase", !filters.outrightPurchase)}
@@ -641,7 +699,7 @@ function BrowsePortfoliosPageInner() {
               <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
             </svg>
             <div>
-              <p className="text-sm font-medium">Purchase</p>
+              <p className="text-sm font-medium">Direct Purchase</p>
               <p className="text-[10px] text-muted">Buy artwork outright</p>
             </div>
           </button>

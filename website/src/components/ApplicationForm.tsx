@@ -436,28 +436,9 @@ export default function ApplicationForm() {
           Your Practice
         </h3>
         <div className="space-y-5">
-          <div>
-            <label htmlFor="primaryMedium" className={labelClass}>
-              Primary Medium <span className="text-accent">*</span>
-            </label>
-            <select
-              id="primaryMedium"
-              name="primaryMedium"
-              value={form.primaryMedium}
-              onChange={handleChange}
-              required
-              className={inputClass}
-            >
-              <option value="">Select your primary medium</option>
-              {primaryMediums.map((medium) => (
-                <option key={medium} value={medium}>
-                  {medium}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Discipline + sub-style — the new taxonomy venues browse by. */}
+          {/* Discipline comes first — it's the primary taxonomy venues
+              filter by, and picking it narrows the Primary Medium options
+              conceptually. */}
           <div>
             <p className={labelClass}>
               Discipline <span className="text-accent">*</span>
@@ -498,6 +479,27 @@ export default function ApplicationForm() {
                 );
               })}
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="primaryMedium" className={labelClass}>
+              Primary Medium <span className="text-accent">*</span>
+            </label>
+            <select
+              id="primaryMedium"
+              name="primaryMedium"
+              value={form.primaryMedium}
+              onChange={handleChange}
+              required
+              className={inputClass}
+            >
+              <option value="">Select your primary medium</option>
+              {primaryMediums.map((medium) => (
+                <option key={medium} value={medium}>
+                  {medium}
+                </option>
+              ))}
+            </select>
           </div>
 
           {form.discipline && (

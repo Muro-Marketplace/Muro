@@ -3,6 +3,7 @@ import Image from "next/image";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { artists } from "@/data/artists";
+import { getDisciplineById, resolveDiscipline, formatSubStyleLabel } from "@/data/categories";
 import { getCollectionsByArtist } from "@/data/collections";
 import Button from "@/components/Button";
 import CollectionCard from "@/components/CollectionCard";
@@ -139,8 +140,21 @@ export default async function ArtistProfilePage({
                 )}
               </div>
               <p className="text-muted text-sm">
-                {artist.primaryMedium} &middot; {artist.location}
+                {(() => {
+                  const d = getDisciplineById(resolveDiscipline(artist.primaryMedium, artist.discipline));
+                  return d?.label || artist.primaryMedium;
+                })()}
+                {" "}&middot; {artist.primaryMedium} &middot; {artist.location}
               </p>
+              {artist.subStyles && artist.subStyles.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {artist.subStyles.slice(0, 6).map((s) => (
+                    <span key={s} className="inline-block px-2 py-0.5 text-[10px] text-muted bg-surface border border-border rounded-full">
+                      {formatSubStyleLabel(s)}
+                    </span>
+                  ))}
+                </div>
+              )}
               <p className="text-foreground/80 leading-relaxed max-w-lg text-base mb-4 mt-3">
                 {artist.shortBio}
               </p>
