@@ -71,30 +71,20 @@ export default function PlacementActionItems({
           const href = `/placements/${encodeURIComponent(p.id)}`;
           const status = (p.status || "").toLowerCase();
 
-          // Pending — receiver needs to respond; requester is waiting.
+          // Pending — only surface if the recipient (not the requester)
+          // needs to respond. If you sent the request and they haven't
+          // replied, that's THEIR action item, not yours.
           if (status === "pending") {
             const isRequester = p.requester_user_id && p.requester_user_id === userId;
-            if (isRequester) {
-              out.push({
-                id: `${p.id}-pending-wait`,
-                title: `Awaiting response from ${otherName}`,
-                subtitle: work,
-                href,
-                cta: "View",
-                severity: "waiting",
-              });
-            } else {
-              out.push({
-                id: `${p.id}-pending-act`,
-                title: role === "artist"
-                  ? `Respond to ${otherName}'s placement request`
-                  : `Respond to ${otherName}'s placement request`,
-                subtitle: work,
-                href,
-                cta: "Respond",
-                severity: "todo",
-              });
-            }
+            if (isRequester) continue;
+            out.push({
+              id: `${p.id}-pending-act`,
+              title: `Respond to ${otherName}'s placement request`,
+              subtitle: work,
+              href,
+              cta: "Respond",
+              severity: "todo",
+            });
             continue;
           }
 

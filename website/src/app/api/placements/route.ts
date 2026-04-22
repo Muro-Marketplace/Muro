@@ -236,14 +236,34 @@ export async function POST(request: Request) {
 
     let { error } = await db.from("placements").insert(fullRows);
 
-    // If insert failed (likely missing columns added in a later migration),
-    // retry with base columns only. Critical ownership columns stay so
-    // the row remains reachable via GET filters.
+    // If the insert failed because a column doesn't exist in the DB (or
+    // PostgREST's schema cache is stale), drop the offending column and
+    // retry. We try progressively: full → without the three optional
+    // message columns → without requester_user_id → without both.
+    async function insertWithout(drop: string[]) {
+      const clean = baseRows.map((row) => {
+        const next = { ...row } as Record<string, unknown>;
+        for (const k of drop) delete next[k];
+        return next;
+      });
+      return db.from("placements").insert(clean);
+    }
     if (error) {
       console.warn("Placement insert failed with new columns, retrying base-only:", error.message);
-      const retry = await db.from("placements").insert(baseRows);
-      error = retry.error;
-      if (retry.error) console.warn("Base-only insert also failed:", retry.error.message);
+      // First retry: base columns (no message/qr/fee fields)
+      const r1 = await db.from("placements").insert(baseRows);
+      error = r1.error;
+      if (error && /requester_user_id/.test(error.message || "")) {
+        console.warn("requester_user_id missing, retrying without it:", error.message);
+        const r2 = await insertWithout(["requester_user_id"]);
+        error = r2.error;
+      }
+      if (error && /venue_slug|artist_slug/.test(error.message || "")) {
+        console.warn("slug columns missing, retrying without them:", error.message);
+        const r3 = await insertWithout(["requester_user_id", "venue_slug", "artist_slug"]);
+        error = r3.error;
+      }
+      if (error) console.warn("All fallback inserts failed:", error.message);
     }
 
     if (error) {

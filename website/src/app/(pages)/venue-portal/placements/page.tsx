@@ -550,13 +550,13 @@ export default function VenuePlacementsPage() {
     setPlacements(placements.filter((p) => p.id !== id));
     try {
       const res = await authFetch(`/api/placements?id=${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        // Roll back and surface the error — previously the UI silently
-        // ate the 403 and the placement reappeared on next reload.
-        setPlacements(snapshot);
-        const body = await res.json().catch(() => ({}));
-        alert(body?.error || `Could not delete placement (HTTP ${res.status})`);
-      }
+      if (res.ok) return;
+      // 404 means the row is already gone from the DB — treat as success
+      // so the UI doesn't roll back. Only roll back on permission/other errors.
+      if (res.status === 404) return;
+      setPlacements(snapshot);
+      const body = await res.json().catch(() => ({}));
+      alert(body?.error || `Could not delete placement (HTTP ${res.status})`);
     } catch (err) {
       setPlacements(snapshot);
       console.error("Placement delete error:", err);
@@ -592,9 +592,8 @@ export default function VenuePlacementsPage() {
         </div>
       </div>
 
-      {/* Outstanding placement actions — pinned to the top of the page */}
-      <PlacementActionItems userId={user?.id} role="venue" heading="Needs your attention" />
-
+      {/* Request Placement Form — above the Action Items so venues
+          aren't hunting past a long to-do list to send a new request */}
       {/* Request Placement Form */}
       {showForm && (
         <div className="bg-surface border border-border rounded-sm p-6 mb-6">
@@ -773,6 +772,10 @@ export default function VenuePlacementsPage() {
           </div>
         </div>
       )}
+
+      {/* Outstanding placement actions — shown BELOW the request form
+          so new-request flow isn't hidden behind a long to-do list */}
+      <PlacementActionItems userId={user?.id} role="venue" heading="Needs your attention" />
 
       {/* Filter tabs */}
       <div className="flex gap-1 mb-6 border-b border-border">
