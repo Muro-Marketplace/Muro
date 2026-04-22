@@ -410,9 +410,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "ID and valid status required" }, { status: 400 });
     }
 
-    const { id, status, stage } = parsed.data;
-    if (!status && !stage) {
-      return NextResponse.json({ error: "status or stage required" }, { status: 400 });
+    const { id, status, stage, counter } = parsed.data;
+    if (!status && !stage && !counter) {
+      return NextResponse.json({ error: "status, stage, or counter required" }, { status: 400 });
     }
 
     const db = getSupabaseAdmin();
@@ -477,6 +477,111 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "Not authorised" }, { status: 403 });
       }
       // Otherwise: the other party may accept. Fall through.
+    }
+
+    // Counter offer: revise terms on a still-pending row and hand the
+    // "needs to respond" role back to the original requester.
+    if (counter) {
+      if (existing.status !== "pending") {
+        return NextResponse.json({ error: "Can only counter a pending request" }, { status: 400 });
+      }
+      if (isSelfPlacement) {
+        return NextResponse.json({ error: "You cannot counter your own placement" }, { status: 400 });
+      }
+      if (isRequester) {
+        return NextResponse.json({ error: "You cannot counter your own request" }, { status: 400 });
+      }
+      if (!isArtist && !isVenue) {
+        return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+      }
+
+      const counterUpdates: Record<string, unknown> = {};
+      if (counter.revenueSharePercent !== undefined) counterUpdates.revenue_share_percent = counter.revenueSharePercent;
+      if (counter.qrEnabled !== undefined) counterUpdates.qr_enabled = counter.qrEnabled;
+      if (counter.monthlyFeeGbp !== undefined) counterUpdates.monthly_fee_gbp = counter.monthlyFeeGbp;
+      if (counter.arrangementType !== undefined) counterUpdates.arrangement_type = counter.arrangementType;
+      counterUpdates.requester_user_id = auth.user!.id; // role flip \u2014 other side now responds
+
+      let { error: counterErr } = await db.from("placements").update(counterUpdates).eq("id", id);
+      // Retry without new columns if DB schema is older
+      if (counterErr) {
+        const { qr_enabled: _q, monthly_fee_gbp: _m, requester_user_id: _r, ...safe } = counterUpdates as Record<string, unknown>;
+        const retry = await db.from("placements").update(safe).eq("id", id);
+        counterErr = retry.error;
+      }
+      if (counterErr) {
+        console.error("Counter update failed:", counterErr);
+        return NextResponse.json({ error: "Failed to update placement" }, { status: 500 });
+      }
+
+      // Auto-message into the conversation so both parties see the counter in-thread.
+      try {
+        const counterpartyUserId = isArtist ? existing.venue_user_id : existing.artist_user_id;
+        const myProfileTable = isArtist ? "artist_profiles" : "venue_profiles";
+        const theirProfileTable = isArtist ? "venue_profiles" : "artist_profiles";
+        const { data: mine } = await db.from(myProfileTable).select("slug, name").eq("user_id", auth.user!.id).single();
+        const { data: theirs } = counterpartyUserId
+          ? await db.from(theirProfileTable).select("slug, name").eq("user_id", counterpartyUserId).single()
+          : { data: null };
+
+        if (mine && theirs) {
+          const cid = deterministicConversationId(mine.slug, theirs.slug);
+          const terms: string[] = [];
+          if (counter.arrangementType === "revenue_share" && counter.revenueSharePercent !== undefined) {
+            terms.push(`Revenue share: ${counter.revenueSharePercent}% to the venue`);
+          } else if (counter.arrangementType === "free_loan") {
+            terms.push("Paid loan arrangement");
+          } else if (counter.arrangementType === "purchase") {
+            terms.push("Purchase arrangement");
+          } else if (counter.revenueSharePercent !== undefined) {
+            terms.push(`Revenue share: ${counter.revenueSharePercent}%`);
+          }
+          if (counter.monthlyFeeGbp !== undefined) terms.push(`Monthly fee: \u00a3${counter.monthlyFeeGbp}`);
+          if (counter.qrEnabled !== undefined) terms.push(counter.qrEnabled ? "QR enabled" : "QR disabled");
+          const note = (counter.message || "").trim();
+          const content = [
+            "Counter offer sent:",
+            terms.join(" \u00b7 "),
+            note ? `\n"${note}"` : "",
+          ].filter(Boolean).join("\n");
+
+          await db.from("messages").insert({
+            conversation_id: cid,
+            sender_id: auth.user!.id,
+            sender_name: mine.slug,
+            sender_type: isArtist ? "artist" : "venue",
+            recipient_slug: theirs.slug,
+            recipient_user_id: counterpartyUserId,
+            content,
+            is_read: false,
+            created_at: new Date().toISOString(),
+            message_type: "placement_request",
+            metadata: {
+              placementId: id,
+              counter: true,
+              arrangementType: counter.arrangementType,
+              revenueSharePercent: counter.revenueSharePercent ?? null,
+              qrEnabled: counter.qrEnabled ?? null,
+              monthlyFeeGbp: counter.monthlyFeeGbp ?? null,
+            },
+          });
+
+          if (counterpartyUserId) {
+            const portalBase = isArtist ? "/venue-portal" : "/artist-portal";
+            createNotification({
+              userId: counterpartyUserId,
+              kind: "placement_request",
+              title: "Counter offer received",
+              body: `${mine.name} sent revised terms`,
+              link: `${portalBase}/messages`,
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn("Counter auto-message skipped:", err);
+      }
+
+      return NextResponse.json({ success: true, countered: true });
     }
 
     // Can only respond to pending placements

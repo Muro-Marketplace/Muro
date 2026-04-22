@@ -10,6 +10,7 @@ import PlacementActionItems from "@/components/PlacementActionItems";
 import { authFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import { canRespond, isRequester } from "@/lib/placement-permissions";
+import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass } from "@/lib/placements/status";
 
 function formatSlug(slug: string): string {
   if (!slug) return "";
@@ -56,26 +57,11 @@ interface ArtistWork {
   priceBand: string;
 }
 
-const statusBadge = (status: string) => {
-  switch (status) {
-    case "Active": return "bg-green-100 text-green-700";
-    case "Pending": return "bg-amber-100 text-amber-700";
-    case "Declined": return "bg-red-100 text-red-600";
-    case "Sold": return "bg-blue-100 text-blue-700";
-    case "Completed": return "bg-gray-100 text-gray-600";
-    default: return "bg-gray-100 text-gray-600";
-  }
-};
+const statusBadge = (status: string) => statusBadgeClass(sharedNormaliseStatus(status));
 
 const tabs: FilterTab[] = ["All", "Pending", "Active", "Completed"];
 
-function normaliseStatus(raw: string): PlacementStatus {
-  const map: Record<string, PlacementStatus> = {
-    active: "Active", pending: "Pending", declined: "Declined",
-    completed: "Completed", sold: "Sold", paused: "Completed",
-  };
-  return map[raw.toLowerCase()] || "Pending";
-}
+const normaliseStatus = (raw: string): PlacementStatus => sharedNormaliseStatus(raw) as PlacementStatus;
 
 /**
  * Derive a "what happens next" message from placement status + lifecycle

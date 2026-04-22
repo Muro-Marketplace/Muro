@@ -106,6 +106,15 @@ export const placementUpdateSchema = z.object({
   id: safeString(100),
   status: z.enum(["pending", "active", "declined", "completed", "paused"]).optional(),
   stage: z.enum(["scheduled", "installed", "live", "collected"]).optional(),
+  // A counter offer keeps the row pending but revises the terms and hands the
+  // "needs to respond" role back to the original requester.
+  counter: z.object({
+    revenueSharePercent: z.number().min(0).max(100).optional(),
+    qrEnabled: z.boolean().optional(),
+    monthlyFeeGbp: z.number().min(0).max(100000).optional(),
+    arrangementType: z.enum(["free_loan", "revenue_share", "purchase"]).optional(),
+    message: optionalString(2000),
+  }).optional(),
 });
 
 export const checkoutSchema = z.object({

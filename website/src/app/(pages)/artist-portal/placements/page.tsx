@@ -9,6 +9,7 @@ import PlacementStepper, { type PlacementStepperData } from "@/components/Placem
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass } from "@/lib/placements/status";
 
 type FilterTab = "All" | "Pending" | "Active" | "Completed";
 type ArrangementType = "Paid Loan" | "Revenue Share" | "Direct Purchase";
@@ -44,16 +45,7 @@ interface InteractedVenue {
   location?: string;
 }
 
-const statusBadge = (status: string) => {
-  switch (status) {
-    case "Active": return "bg-green-100 text-green-700";
-    case "Pending": return "bg-amber-100 text-amber-700";
-    case "Declined": return "bg-red-100 text-red-600";
-    case "Sold": return "bg-blue-100 text-blue-700";
-    case "Completed": return "bg-gray-100 text-gray-600";
-    default: return "bg-gray-100 text-gray-600";
-  }
-};
+const statusBadge = (status: string) => statusBadgeClass(sharedNormaliseStatus(status));
 
 /**
  * What happens next for the artist on this placement?
@@ -102,13 +94,7 @@ function MiniStatusBar({ p }: { p: Placement }) {
 
 const tabs: FilterTab[] = ["All", "Pending", "Active", "Completed"];
 
-function normaliseStatus(raw: string): PlacementStatus {
-  const map: Record<string, PlacementStatus> = {
-    active: "Active", pending: "Pending", declined: "Declined",
-    completed: "Completed", sold: "Sold", paused: "Completed",
-  };
-  return map[raw.toLowerCase()] || "Active";
-}
+const normaliseStatus = (raw: string): PlacementStatus => sharedNormaliseStatus(raw) as PlacementStatus;
 
 function normaliseType(raw: string): ArrangementType {
   const map: Record<string, ArrangementType> = {
