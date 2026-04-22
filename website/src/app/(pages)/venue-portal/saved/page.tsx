@@ -45,20 +45,20 @@ export default function SavedPage() {
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-8 border-b border-border">
+      {/* Tabs — horizontal scroll on narrow mobile to avoid wrapping */}
+      <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto scrollbar-none -mx-1 px-1">
         {(["works", "artists", "collections"] as Tab[]).map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors duration-150 border-b-2 -mb-px cursor-pointer ${
+            className={`shrink-0 px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors duration-150 border-b-2 -mb-px cursor-pointer whitespace-nowrap ${
               activeTab === tab
                 ? "border-accent text-accent"
                 : "border-transparent text-muted hover:text-foreground"
             }`}
           >
-            {tab === "artists" ? "Artists" : tab === "collections" ? "Collections" : "Saved Works"}
+            {tab === "artists" ? "Artists" : tab === "collections" ? "Collections" : "Works"}
             <span className="ml-2 px-1.5 py-0.5 text-[10px] bg-background border border-border rounded-full text-muted">
               {tab === "artists" ? savedArtistSlugs.length : tab === "collections" ? savedItems.filter((s) => s.type === "collection").length : savedWorks.length}
             </span>

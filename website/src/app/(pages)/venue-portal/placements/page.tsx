@@ -88,7 +88,10 @@ function nextActionText(p: {
   liveFrom?: string | null;
   collectedAt?: string | null;
 }): string | null {
-  if (p.status === "Pending") return "Awaiting artist response";
+  // Pending status is already surfaced via the top-right badge as
+  // "Awaiting response", so we suppress the "Awaiting artist response"
+  // duplicate here to keep the card concise.
+  if (p.status === "Pending") return null;
   if (p.status === "Declined") return null;
   if (p.status === "Completed" || p.status === "Sold") return null;
   // Active — walk lifecycle
@@ -152,66 +155,80 @@ function ArtistPickerDropdown({ onPick }: { onPick: (slug: string, name: string)
   const [allArtists, setAllArtists] = useState<PickerArtist[]>([]);
 
   useEffect(() => {
-    // Saved artists (works are saved; derive the artist from each work's slug)
-    authFetch("/api/saved")
-      .then((r) => r.json())
-      .then(async (data) => {
-        const items: { type: string; itemId: string }[] = data.savedItems || [];
+    // Fetch the full artists list once and use it to resolve display names
+    // across every group. Every source (saved/messaged/placed) can then show
+    // "Fin Coles" instead of "fin-coles".
+    (async () => {
+      let artistsList: Array<{ slug: string; name: string; works?: Array<{ id: string }> }> = [];
+      try {
+        const res = await fetch("/api/browse-artists");
+        const browseData = await res.json();
+        artistsList = browseData.artists || [];
+        setAllArtists(artistsList.map((a) => ({ slug: a.slug, name: a.name, group: "search" as const })));
+      } catch { /* keep empty */ }
+
+      const nameFor = (slug: string): string => {
+        const match = artistsList.find((a) => a.slug === slug);
+        if (match) return match.name;
+        // Fallback: slug → "Title Case" (fin-coles → Fin Coles)
+        return slug.split("-").map((w) => (w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
+      };
+
+      // Saved artists (works saved → owning artist, plus direct type='artist')
+      try {
+        const savedRes = await authFetch("/api/saved");
+        const savedData = await savedRes.json();
+        const items: { type: string; itemId: string }[] = savedData.savedItems || [];
         const workIds = items.filter((i) => i.type === "work").map((i) => i.itemId);
         const artistSet = new Map<string, string>();
-        // Lookup artist slug per saved work via browse-artists (we already load it)
-        try {
-          const res = await fetch("/api/browse-artists");
-          const browseData = await res.json();
-          const artistsList: Array<{ slug: string; name: string; works?: Array<{ id: string }> }> = browseData.artists || [];
-          for (const a of artistsList) {
-            if (a.works?.some((w) => workIds.includes(w.id))) {
-              artistSet.set(a.slug, a.name);
-            }
+        for (const a of artistsList) {
+          if (a.works?.some((w) => workIds.includes(w.id))) {
+            artistSet.set(a.slug, a.name);
           }
-          // Saved artists directly (type: artist) — check if any in saved_items
-          for (const i of items.filter((x) => x.type === "artist")) {
-            const found = artistsList.find((a) => a.slug === i.itemId);
-            if (found) artistSet.set(found.slug, found.name);
-          }
-          setSavedArtists(Array.from(artistSet.entries()).map(([slug, name]) => ({ slug, name, group: "saved" as const })));
-          setAllArtists(artistsList.map((a) => ({ slug: a.slug, name: a.name, group: "search" as const })));
-        } catch { /* ignore */ }
-      })
-      .catch(() => {});
+        }
+        for (const i of items.filter((x) => x.type === "artist")) {
+          artistSet.set(i.itemId, nameFor(i.itemId));
+        }
+        setSavedArtists(
+          Array.from(artistSet.entries()).map(([slug, name]) => ({ slug, name, group: "saved" as const }))
+        );
+      } catch { /* ignore */ }
 
-    // Messaged artists — hit the venue conversations endpoint
-    authFetch("/api/messages")
-      .then((r) => r.json())
-      .then((data) => {
-        const convs: Array<{ otherParty: string; otherPartyDisplayName: string; otherPartyType?: string }> = data.conversations || [];
+      // Messaged artists — conversations endpoint
+      try {
+        const msgRes = await authFetch("/api/messages");
+        const msgData = await msgRes.json();
+        const convs: Array<{ otherParty: string; otherPartyDisplayName: string; otherPartyType?: string }> = msgData.conversations || [];
         const seen = new Set<string>();
         const picks: PickerArtist[] = [];
         for (const c of convs) {
-          // Include only artist-party conversations; skip if type missing, include anyway
           if (!c.otherParty || seen.has(c.otherParty)) continue;
+          // Skip non-artist conversations (Wallplace Support, other venues, etc.)
+          if (c.otherPartyType && c.otherPartyType !== "artist") continue;
           seen.add(c.otherParty);
-          picks.push({ slug: c.otherParty, name: c.otherPartyDisplayName || c.otherParty, group: "messaged" });
+          const name = c.otherPartyDisplayName && c.otherPartyDisplayName.trim().length > 0 && c.otherPartyDisplayName !== c.otherParty
+            ? c.otherPartyDisplayName
+            : nameFor(c.otherParty);
+          picks.push({ slug: c.otherParty, name, group: "messaged" });
         }
         setMessagedArtists(picks);
-      })
-      .catch(() => {});
+      } catch { /* ignore */ }
 
-    // Existing placements (so venue can re-request easily)
-    authFetch("/api/placements")
-      .then((r) => r.json())
-      .then((data) => {
-        const rows: Array<{ artist_slug?: string }> = data.placements || [];
+      // Previously placed — placements history
+      try {
+        const placeRes = await authFetch("/api/placements");
+        const placeData = await placeRes.json();
+        const rows: Array<{ artist_slug?: string }> = placeData.placements || [];
         const seen = new Set<string>();
         const picks: PickerArtist[] = [];
         for (const p of rows) {
           if (!p.artist_slug || seen.has(p.artist_slug)) continue;
           seen.add(p.artist_slug);
-          picks.push({ slug: p.artist_slug, name: p.artist_slug, group: "placed" });
+          picks.push({ slug: p.artist_slug, name: nameFor(p.artist_slug), group: "placed" });
         }
         setPlacedArtists(picks);
-      })
-      .catch(() => {});
+      } catch { /* ignore */ }
+    })();
   }, []);
 
   const q = query.trim().toLowerCase();

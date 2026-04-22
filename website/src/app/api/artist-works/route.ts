@@ -118,10 +118,10 @@ export async function POST(request: Request) {
     // something is silently dropping it (RLS policy, trigger, schema cache, wrong table).
     if (sanitizedDescription && savedRow && !savedRow.description) {
       const cause = fallbackErrors && fallbackErrors.length > 0
-        ? ` First-write error: ${fallbackErrors[0]}.`
+        ? ` Errors encountered: ${fallbackErrors.join(" | ")}.`
         : "";
       warnings.push(
-        `Description was sent but did not persist — the DB returned an empty description column.${cause} Likely causes: stale PostgREST schema cache (run 'NOTIFY pgrst, ''reload schema'';' in Supabase SQL editor), or the migration was applied to a different project than this app points at.`
+        `Description didn't save. ${cause} Fix: in Supabase SQL editor, run: NOTIFY pgrst, 'reload schema'; — then save again. If that doesn't work, contact support with the error above.`
       );
       console.error("Description drop detected", {
         workId: id,

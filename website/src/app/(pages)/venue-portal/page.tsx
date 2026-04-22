@@ -203,9 +203,6 @@ export default function VenueDashboardPage() {
           </div>
           <p className="text-sm text-muted">Here&apos;s what&apos;s happening with your account.</p>
         </div>
-        <span className="shrink-0 px-3 py-1 text-xs font-medium bg-background border border-border rounded-full text-muted">
-          Free Plan
-        </span>
       </div>
 
       {/* Stats row */}

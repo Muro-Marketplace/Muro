@@ -164,9 +164,21 @@ export default function PortfolioPage() {
   function saveWorks(updated: ArtistWork[]) {
     setWorks(updated);
 
-    // Sync each work to Supabase
+    // Sync each work to Supabase. After the response lands, reconcile the
+    // work's description/images against what the DB actually returned so
+    // the UI reflects persisted state (not just the in-memory form).
     const shownWarnings = new Set<string>();
     updated.forEach((work, index) => {
+      // priceUplift must be numeric for the API's Zod-like validator to
+      // accept the frame; previously we stringified, which caused frames
+      // to be silently sanitized away.
+      const frames = ((work as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions ?? [])
+        .map((f) => ({
+          label: f.label,
+          priceUplift: typeof f.priceUplift === "number" ? f.priceUplift : Number(f.priceUplift) || 0,
+          imageUrl: f.imageUrl,
+        }));
+
       authFetch("/api/artist-works", {
         method: "POST",
         body: JSON.stringify({
@@ -184,13 +196,25 @@ export default function PortfolioPage() {
           shippingPrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).shippingPrice ?? null,
           inStorePrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).inStorePrice ?? null,
           quantityAvailable: (work as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable ?? null,
-          frameOptions: ((work as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions ?? []).map((f) => ({ label: f.label, priceUplift: String(f.priceUplift), imageUrl: f.imageUrl })),
+          frameOptions: frames,
           description: work.description || "",
           images: work.images || [],
         }),
       })
         .then((r) => r.json())
-        .then((res: { warnings?: string[] }) => {
+        .then((res: { warnings?: string[]; savedRow?: { id?: string; description?: string; images?: string[] } }) => {
+          // Reconcile DB state back into local works so subsequent edits
+          // see what actually persisted.
+          if (res.savedRow && res.savedRow.id) {
+            setWorks((prev) => prev.map((w) => {
+              if (w.id !== res.savedRow!.id) return w;
+              return {
+                ...w,
+                description: res.savedRow?.description ?? w.description,
+                images: Array.isArray(res.savedRow?.images) ? res.savedRow!.images : w.images,
+              };
+            }));
+          }
           if (Array.isArray(res.warnings)) {
             res.warnings.forEach((w) => {
               if (!shownWarnings.has(w)) {
@@ -975,82 +999,44 @@ export default function PortfolioPage() {
             {/* Frame options */}
             <div>
               <label className="block text-sm font-medium mb-1">Frame options (optional)</label>
-              <p className="text-xs text-muted mb-3">Offer framed variants. Leave blank if you only sell unframed. Price uplift is added on top of the size price.</p>
+              <p className="text-xs text-muted mb-3">Offer framed variants. Price uplift is added on top of the size price. Per-size pricing may be added later.</p>
               <div className="space-y-2">
                 {form.frameOptions.map((f, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    {/* Frame preview / upload trigger */}
-                    <label className="w-14 h-14 shrink-0 border border-dashed border-border rounded-sm flex items-center justify-center overflow-hidden bg-surface cursor-pointer hover:border-accent/60 transition-colors relative" title={f.imageUrl ? "Replace image" : "Add image"}>
-                      {f.imageUrl ? (
-                        <Image src={f.imageUrl} alt={f.label || "Frame preview"} fill sizes="56px" className="object-cover" />
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
-                          <rect x="3" y="3" width="18" height="18" rx="2" />
-                          <circle cx="9" cy="9" r="1.5" />
-                          <path d="m21 15-5-5L5 21" />
-                        </svg>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          try {
-                            const url = await uploadImage(file, "artworks");
-                            setForm((p) => {
-                              const next = [...p.frameOptions];
-                              next[i] = { ...next[i], imageUrl: url };
-                              return { ...p, frameOptions: next };
-                            });
-                          } catch {
-                            setFormError("Frame image upload failed.");
-                          } finally {
-                            e.target.value = "";
-                          }
-                        }}
-                      />
-                    </label>
-                    <div className="flex-1 flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
+                  <div key={i} className="flex items-center gap-2">
+                    {/* Frame preview / upload trigger with hover-remove on top-right */}
+                    <div className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0">
+                      <label className="absolute inset-0 border border-dashed border-border rounded-sm flex items-center justify-center overflow-hidden bg-surface cursor-pointer hover:border-accent/60 transition-colors" title={f.imageUrl ? "Replace image" : "Add image"}>
+                        {f.imageUrl ? (
+                          <Image src={f.imageUrl} alt={f.label || "Frame preview"} fill sizes="56px" className="object-cover" />
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="9" cy="9" r="1.5" />
+                            <path d="m21 15-5-5L5 21" />
+                          </svg>
+                        )}
                         <input
-                          type="text"
-                          value={f.label}
-                          onChange={(e) => setForm((p) => {
-                            const next = [...p.frameOptions];
-                            next[i] = { ...next[i], label: e.target.value };
-                            return { ...p, frameOptions: next };
-                          })}
-                          placeholder="e.g. Black oak frame"
-                          maxLength={80}
-                          className="flex-1 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const url = await uploadImage(file, "artworks");
+                              setForm((p) => {
+                                const next = [...p.frameOptions];
+                                next[i] = { ...next[i], imageUrl: url };
+                                return { ...p, frameOptions: next };
+                              });
+                            } catch {
+                              setFormError("Frame image upload failed.");
+                            } finally {
+                              e.target.value = "";
+                            }
+                          }}
                         />
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-muted">+£</span>
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={f.priceUplift}
-                            onChange={(e) => setForm((p) => {
-                              const next = [...p.frameOptions];
-                              next[i] = { ...next[i], priceUplift: e.target.value };
-                              return { ...p, frameOptions: next };
-                            })}
-                            placeholder="0"
-                            className="w-20 bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setForm((p) => ({ ...p, frameOptions: p.frameOptions.filter((_, j) => j !== i) }))}
-                          className="w-8 h-8 flex items-center justify-center text-muted hover:text-red-500 transition-colors"
-                          aria-label="Remove frame option"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
-                        </button>
-                      </div>
+                      </label>
                       {f.imageUrl && (
                         <button
                           type="button"
@@ -1059,12 +1045,51 @@ export default function PortfolioPage() {
                             next[i] = { ...next[i], imageUrl: undefined };
                             return { ...p, frameOptions: next };
                           })}
-                          className="self-start text-[11px] text-muted hover:text-red-500 transition-colors"
+                          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-foreground text-background flex items-center justify-center text-[9px] hover:bg-red-500 transition-colors"
+                          aria-label="Remove frame image"
+                          title="Remove frame image"
                         >
-                          Remove image
+                          ×
                         </button>
                       )}
                     </div>
+                    {/* Label + price + delete — single row on one line */}
+                    <input
+                      type="text"
+                      value={f.label}
+                      onChange={(e) => setForm((p) => {
+                        const next = [...p.frameOptions];
+                        next[i] = { ...next[i], label: e.target.value };
+                        return { ...p, frameOptions: next };
+                      })}
+                      placeholder="e.g. Black oak frame"
+                      maxLength={80}
+                      className="min-w-0 flex-1 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
+                    />
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-sm text-muted">+£</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={f.priceUplift}
+                        onChange={(e) => setForm((p) => {
+                          const next = [...p.frameOptions];
+                          next[i] = { ...next[i], priceUplift: e.target.value };
+                          return { ...p, frameOptions: next };
+                        })}
+                        placeholder="0"
+                        className="w-16 sm:w-20 bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm((p) => ({ ...p, frameOptions: p.frameOptions.filter((_, j) => j !== i) }))}
+                      className="shrink-0 w-8 h-8 flex items-center justify-center text-muted hover:text-red-500 transition-colors"
+                      aria-label="Remove frame option"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+                    </button>
                   </div>
                 ))}
                 <button
