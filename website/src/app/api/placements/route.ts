@@ -156,15 +156,30 @@ export async function POST(request: Request) {
     let venueProfile: { user_id: string; slug: string; name: string } | null = null;
 
     if (fromVenue && role?.type === "venue") {
-      // Venue-initiated request: look up artist from body
+      // Venue-initiated request: look up artist from body.
+      //
+      // If the artist isn't in artist_profiles (seed-data-only or hasn't
+      // signed up yet), we still accept the placement — it's stored with
+      // artist_user_id = NULL and just the slug. When the artist later
+      // signs up we can claim it by slug. A venue should be able to
+      // request a placement from any artist.
       const targetArtistSlug = bodyArtistSlug || parsed.data[0].venueSlug;
-      const { data: ap } = await db.from("artist_profiles").select("user_id, slug, name").eq("slug", targetArtistSlug).single();
+      if (!targetArtistSlug) {
+        return NextResponse.json({ error: "Artist selection required" }, { status: 400 });
+      }
       const { data: vp } = await db.from("venue_profiles").select("user_id, slug, name").eq("user_id", auth.user!.id).single();
-
-      if (!ap) return NextResponse.json({ error: "Artist not found" }, { status: 400 });
       if (!vp) return NextResponse.json({ error: "Venue profile not found" }, { status: 400 });
 
-      artistProfile = ap;
+      const { data: ap } = await db.from("artist_profiles").select("user_id, slug, name").eq("slug", targetArtistSlug).single();
+
+      // Fallback: synthesize a minimal "artist profile" so the rest of
+      // the flow can work. `user_id` stays empty — downstream code
+      // checks for it before trying to email / notify.
+      artistProfile = ap || {
+        user_id: "",
+        slug: targetArtistSlug,
+        name: (targetArtistSlug as string).split("-").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+      };
       venueProfile = vp;
     } else {
       // Artist-initiated request: look up venue from venueSlug
@@ -181,17 +196,25 @@ export async function POST(request: Request) {
       venueProfile = vp;
     }
 
-    if (artistProfile.user_id === venueProfile.user_id) {
+    if (artistProfile.user_id && artistProfile.user_id === venueProfile.user_id) {
       return NextResponse.json(
         { error: "You cannot create a placement between your own artist and venue profiles" },
         { status: 400 }
       );
     }
 
-    // Build rows with new columns, fall back to base columns if they don't exist
+    // Build rows. `baseRows` now keeps the critical ownership columns
+    // (artist_slug / venue_user_id / venue_slug / requester_user_id) so
+    // the fallback retry still produces rows the subsequent GET can
+    // find via its .eq("venue_user_id", auth.user.id) filter. Previously
+    // the fallback silently stripped venue_user_id and the placement
+    // became invisible on reload.
     const baseRows = parsed.data.map((p) => ({
       id: p.id,
-      artist_user_id: artistProfile!.user_id,
+      artist_user_id: artistProfile!.user_id || null,
+      artist_slug: artistProfile!.slug,
+      venue_user_id: venueProfile!.user_id,
+      venue_slug: venueProfile!.slug,
       work_title: p.workTitle,
       work_image: p.workImage || null,
       venue: venueProfile!.name,
@@ -200,32 +223,35 @@ export async function POST(request: Request) {
       status: "pending",
       revenue: null,
       notes: p.notes || null,
+      requester_user_id: auth.user!.id,
       created_at: new Date().toISOString(),
     }));
 
     const fullRows = baseRows.map((row, i) => ({
       ...row,
-      artist_slug: artistProfile!.slug,
-      venue_user_id: venueProfile!.user_id,
-      venue_slug: venueProfile!.slug,
       message: parsed.data[i].message || null,
       qr_enabled: parsed.data[i].qrEnabled ?? true,
       monthly_fee_gbp: parsed.data[i].monthlyFeeGbp ?? null,
-      requester_user_id: auth.user!.id,
     }));
 
     let { error } = await db.from("placements").insert(fullRows);
 
-    // If insert failed (likely missing columns), retry with base columns only
+    // If insert failed (likely missing columns added in a later migration),
+    // retry with base columns only. Critical ownership columns stay so
+    // the row remains reachable via GET filters.
     if (error) {
       console.warn("Placement insert failed with new columns, retrying base-only:", error.message);
       const retry = await db.from("placements").insert(baseRows);
       error = retry.error;
+      if (retry.error) console.warn("Base-only insert also failed:", retry.error.message);
     }
 
     if (error) {
       console.error("Supabase error:", error);
-      return NextResponse.json({ error: "Failed to save placements" }, { status: 500 });
+      return NextResponse.json(
+        { error: `Failed to save placements: ${error.message || "unknown DB error"}` },
+        { status: 500 },
+      );
     }
 
     // Notify the other party by email (fire-and-forget)
@@ -299,6 +325,8 @@ export async function POST(request: Request) {
       // Link the message back to the placement so the UI can render inline
       // Accept/Decline buttons in the messages thread (F25).
       const placementIds = parsed.data.map((p) => p.id);
+      // recipient_user_id is nullable — when the artist hasn't signed up
+      // yet, we carry the message by slug alone and claim it later.
       const recipientUserId = fromVenue ? artistProfile!.user_id : venueProfile!.user_id;
       const baseMsg = {
         conversation_id: cid,
@@ -306,7 +334,7 @@ export async function POST(request: Request) {
         sender_name: requesterSlug,
         sender_type: senderType,
         recipient_slug: recipientSlug,
-        recipient_user_id: recipientUserId,
+        recipient_user_id: recipientUserId || null,
         content,
         is_read: false,
         created_at: new Date().toISOString(),
@@ -538,13 +566,24 @@ export async function DELETE(request: Request) {
     }
 
     const db = getSupabaseAdmin();
+    // Either the artist on the placement OR the venue can delete it.
+    // Previously only the artist was authorised, so venue-side removes
+    // silently failed and the row reappeared on reload.
     const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id")
+      .select("artist_user_id, venue_user_id, requester_user_id")
       .eq("id", id)
       .single();
 
-    if (!existing || existing.artist_user_id !== auth.user!.id) {
+    if (!existing) {
+      return NextResponse.json({ error: "Placement not found" }, { status: 404 });
+    }
+
+    const isArtist = existing.artist_user_id && existing.artist_user_id === auth.user!.id;
+    const isVenue = existing.venue_user_id && existing.venue_user_id === auth.user!.id;
+    const isRequesterRow = existing.requester_user_id && existing.requester_user_id === auth.user!.id;
+
+    if (!isArtist && !isVenue && !isRequesterRow) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
     }
 

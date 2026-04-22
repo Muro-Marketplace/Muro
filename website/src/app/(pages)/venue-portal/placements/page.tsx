@@ -544,10 +544,24 @@ export default function VenuePlacementsPage() {
     }).catch((err) => console.error("Status update error:", err));
   }
 
-  function removePlacement(id: string) {
+  async function removePlacement(id: string) {
+    const snapshot = placements;
+    // Optimistic remove
     setPlacements(placements.filter((p) => p.id !== id));
-    authFetch(`/api/placements?id=${id}`, { method: "DELETE" })
-      .catch((err) => console.error("Placement delete error:", err));
+    try {
+      const res = await authFetch(`/api/placements?id=${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        // Roll back and surface the error — previously the UI silently
+        // ate the 403 and the placement reappeared on next reload.
+        setPlacements(snapshot);
+        const body = await res.json().catch(() => ({}));
+        alert(body?.error || `Could not delete placement (HTTP ${res.status})`);
+      }
+    } catch (err) {
+      setPlacements(snapshot);
+      console.error("Placement delete error:", err);
+      alert("Network error — placement not deleted. Please try again.");
+    }
   }
 
   const filtered = placements.filter((p) => {
