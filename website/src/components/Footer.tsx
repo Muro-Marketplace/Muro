@@ -1,4 +1,5 @@
 import Link from "next/link";
+import NewsletterForm from "./NewsletterForm";
 
 const footerColumns = [
   {
@@ -51,6 +52,14 @@ export default function Footer() {
             <p className="mt-3 text-sm text-muted leading-relaxed max-w-xs">
               The curated art marketplace connecting artists with commercial spaces.
             </p>
+
+            {/* Mailing list — item 19: "be first to see new works" */}
+            <div className="mt-6 max-w-sm">
+              <p className="text-sm font-medium text-foreground mb-2">Be first to see new works</p>
+              <p className="text-xs text-muted mb-3">Monthly email with new artists, collections, and venues. No spam.</p>
+              <NewsletterForm source="footer" />
+            </div>
+
             {/* Instagram */}
             <a
               href="https://instagram.com/thewallplace"

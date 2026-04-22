@@ -277,32 +277,6 @@ export default function VenueSettingsPage() {
           </div>
         </SectionCard>
 
-        {/* Plan information */}
-        <SectionCard title="Plan Information">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-foreground mb-1">
-                Free Plan
-              </p>
-              <p className="text-xs text-muted leading-relaxed">
-                You&apos;re on the free tier. Upgrade to Premium to unlock AI
-                tools, curated recommendations, and priority support.
-              </p>
-            </div>
-            <span className="shrink-0 px-3 py-1 text-xs font-medium bg-background border border-border rounded-full text-muted">
-              Free
-            </span>
-          </div>
-          <div className="mt-4 pt-4 border-t border-border">
-            <button
-              type="button"
-              className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent/90 transition-colors cursor-pointer"
-            >
-              Upgrade to Premium
-            </button>
-          </div>
-        </SectionCard>
-
         {/* Payouts */}
         <SectionCard title="Payouts">
           {connectLoading ? (

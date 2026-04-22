@@ -111,6 +111,7 @@ export default function VenueProfilePage() {
   const [detailType, setDetailType] = useState("");
   const [detailLocation, setDetailLocation] = useState("");
   const [detailWallSpace, setDetailWallSpace] = useState("");
+  const [detailFootfall, setDetailFootfall] = useState("");
 
   // Load preferences from venue data
   useEffect(() => {
@@ -126,6 +127,7 @@ export default function VenueProfilePage() {
       setDetailType(venue.type || "");
       setDetailLocation(venue.location || "");
       setDetailWallSpace(venue.wallSpace || "");
+      setDetailFootfall(venue.approximateFootfall || "");
       setLoaded(true);
     }
   }, [venue, loaded]);
@@ -164,6 +166,7 @@ export default function VenueProfilePage() {
           type: detailType || undefined,
           location: detailLocation || undefined,
           wall_space: detailWallSpace || undefined,
+          approximate_footfall: detailFootfall || undefined,
           preferred_styles: styles,
           preferred_themes: themes,
           interested_in_free_loan: freeLoan,
@@ -243,17 +246,19 @@ export default function VenueProfilePage() {
           </div>
           <div className="p-5 space-y-4">
             {([
-              { label: "Venue Name", value: detailName || venue?.name || "Your Venue", setter: setDetailName },
-              { label: "Venue Type", value: detailType || venue?.type || "Not set", setter: setDetailType },
-              { label: "Location", value: detailLocation || venue?.location || "Not set", setter: setDetailLocation },
-              { label: "Wall Space", value: detailWallSpace || venue?.wallSpace || "Not set", setter: setDetailWallSpace },
-            ] as const).map(({ label, value, setter }) => (
+              { label: "Venue Name", value: detailName || venue?.name || "Your Venue", setter: setDetailName, placeholder: "" },
+              { label: "Venue Type", value: detailType || venue?.type || "Not set", setter: setDetailType, placeholder: "" },
+              { label: "Location", value: detailLocation || venue?.location || "Not set", setter: setDetailLocation, placeholder: "" },
+              { label: "Wall Space", value: detailWallSpace || venue?.wallSpace || "Not set", setter: setDetailWallSpace, placeholder: "" },
+              { label: "Visitors per day (approx.)", value: detailFootfall || venue?.approximateFootfall || "Not set", setter: setDetailFootfall, placeholder: "e.g. 250" },
+            ] as const).map(({ label, value, setter, placeholder }) => (
               <div key={label}>
                 <p className="text-xs font-medium text-muted mb-1">{label}</p>
                 {editing === "details" ? (
                   <input
                     type="text"
                     value={value}
+                    placeholder={placeholder}
                     onChange={(e) => { setter(e.target.value); markDirty(); }}
                     className="w-full px-3 py-2 border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 bg-background"
                   />

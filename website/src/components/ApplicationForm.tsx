@@ -481,9 +481,19 @@ export default function ApplicationForm() {
               onChange={handleChange}
               required
               rows={5}
-              placeholder="Tell us about your practice – what drives your work, what themes you explore, and what makes your work suited to commercial spaces. (100–300 words)"
+              placeholder="Tell us about your practice – what drives your work, what themes you explore, and what makes your work suited to commercial spaces."
               className={`${inputClass} resize-none`}
             />
+            {(() => {
+              const words = form.artistStatement.trim().split(/\s+/).filter(Boolean).length;
+              const outOfRange = words < 100 || words > 300;
+              const empty = words === 0;
+              return (
+                <p className={`mt-1.5 text-xs ${empty ? "text-muted" : outOfRange ? "text-amber-600" : "text-green-600"}`}>
+                  {words} {words === 1 ? "word" : "words"} &middot; aim for 100&ndash;300
+                </p>
+              );
+            })()}
           </div>
         </div>
       </div>
