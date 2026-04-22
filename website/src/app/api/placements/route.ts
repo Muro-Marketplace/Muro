@@ -6,6 +6,12 @@ import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import { z } from "zod";
 
+// Every handler on this route must read live DB state — not a cached Route
+// Handler response. Without this, Next.js was serving a stale GET response
+// after a DELETE so the deleted placement reappeared on refresh.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function deterministicConversationId(slugA: string, slugB: string): string {
   const [a, b] = [slugA, slugB].sort();
   return `placement-${a}__${b}`;

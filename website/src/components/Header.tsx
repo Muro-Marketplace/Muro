@@ -17,6 +17,18 @@ const marketplaceTabs = [
   { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
 ];
 
+// Public (logged-out) variant: keeps How It Works + Blog inline on the
+// marketplace so discovery links stay reachable without needing the
+// More dropdown.
+const publicMarketplaceTabs = [
+  { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v !== "gallery" && v !== "collections" },
+  { label: "Galleries",  href: "/browse?view=gallery",    match: (p: string, v: string) => p === "/browse" && v === "gallery" },
+  { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
+  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
+  { label: "How It Works", href: "/how-it-works", match: (p: string) => p === "/how-it-works" },
+  { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
+];
+
 // Venue variant of the marketplace tabs: drops "Spaces" (not useful for a
 // venue browsing) and adds Wallplace Curated + Blog so the venue's own
 // nav shape stays consistent with the non-marketplace pages.
@@ -77,12 +89,15 @@ function MarketplaceTabsNav({
   pathname: string;
   isPortal: boolean;
   showSolid: boolean;
-  variant: "default" | "venue";
+  variant: "default" | "venue" | "public";
 }) {
   const searchParams = useSearchParams();
   const view = searchParams?.get("view") || "";
   const onDark = isPortal || !showSolid;
-  const tabs = variant === "venue" ? venueMarketplaceTabs : marketplaceTabs;
+  const tabs =
+    variant === "venue" ? venueMarketplaceTabs
+    : variant === "public" ? publicMarketplaceTabs
+    : marketplaceTabs;
   return (
     <>
       {tabs.map((tab) => {
@@ -305,7 +320,9 @@ export default function Header() {
                   pathname={pathname}
                   isPortal={isPortal}
                   showSolid={showSolid}
-                  variant={userType === "venue" ? "venue" : "default"}
+                  variant={
+                    !user ? "public" : userType === "venue" ? "venue" : "default"
+                  }
                 />
               </Suspense>
             ) : (

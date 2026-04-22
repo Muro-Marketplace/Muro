@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Artist } from "@/data/artists";
 import { useAuth } from "@/context/AuthContext";
+import { disciplineLabel } from "@/data/categories";
 
 interface BrowseArtistCardProps {
   artist: Artist;
@@ -17,10 +18,13 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
   const [touchStartX, setTouchStartX] = useState(0);
   const images = artist.works.map((w) => w.image);
 
-  // Build a clean one-line summary
+  // Build a clean one-line summary using the three core methods; the
+  // profile header shows the broad discipline (Photography, Painting…)
+  // and the specific style lives in the chip row below.
   const offers: string[] = [];
-  if (artist.openToFreeLoan || artist.openToRevenueShare) offers.push("Display");
-  if (artist.openToOutrightPurchase) offers.push("Purchase");
+  if (artist.openToRevenueShare) offers.push("Revenue Share");
+  if (artist.openToFreeLoan) offers.push("Paid Loan");
+  if (artist.openToOutrightPurchase) offers.push("Direct Purchase");
   const formats: string[] = [];
   if (artist.offersOriginals) formats.push("Originals");
   if (artist.offersPrints) formats.push("Prints");
@@ -118,7 +122,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             )}
           </div>
           <p className="text-xs text-muted mt-0.5">
-            {artist.primaryMedium} · {artist.location}
+            {disciplineLabel(artist.primaryMedium, artist.discipline)} · {artist.location}
           </p>
           {(offers.length > 0 || formats.length > 0) && (
             <p className="text-[11px] text-muted/70 mt-1">

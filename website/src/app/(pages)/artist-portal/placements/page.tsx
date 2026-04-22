@@ -296,17 +296,25 @@ export default function PlacementsPage() {
 
   async function removePlacement(id: string) {
     const snapshot = placements;
-    // Optimistic remove so the UI feels instant.
     setPlacements(placements.filter((p) => p.id !== id));
     try {
-      const res = await authFetch(`/api/placements?id=${id}`, { method: "DELETE" });
-      if (res.ok) return;
-      // 404 = already gone from the DB, treat as success so the row
-      // doesn't bounce back on the next poll / reload.
+      const res = await authFetch(`/api/placements?id=${encodeURIComponent(id)}`, { method: "DELETE" });
       if (res.status === 404) return;
-      setPlacements(snapshot);
-      const body = await res.json().catch(() => ({}));
-      alert(body?.error || `Could not delete placement (HTTP ${res.status})`);
+      if (!res.ok) {
+        setPlacements(snapshot);
+        const body = await res.json().catch(() => ({}));
+        alert(body?.error || `Could not delete placement (HTTP ${res.status})`);
+        return;
+      }
+      // Verify the row really is gone — catches silent DB permission blocks.
+      const verifyRes = await authFetch(`/api/placements?_t=${Date.now()}`, { cache: "no-store" as RequestCache });
+      const verifyData = await verifyRes.json().catch(() => ({}));
+      const stillThere = Array.isArray(verifyData.placements)
+        && verifyData.placements.some((p: { id?: string }) => p.id === id);
+      if (stillThere) {
+        setPlacements(snapshot);
+        alert("Server said the placement was deleted, but it's still there on reload. This is usually a database permission policy — check Supabase logs.");
+      }
     } catch (err) {
       setPlacements(snapshot);
       console.error("Placement delete error:", err);
@@ -688,9 +696,16 @@ export default function PlacementsPage() {
                       )}
                       <button
                         onClick={() => { if (confirm("Remove this placement?")) removePlacement(p.id); }}
-                        className="text-xs text-muted hover:text-red-500 transition-colors"
+                        className="p-1.5 rounded-sm text-muted hover:text-red-500 hover:bg-red-50 transition-colors"
+                        aria-label="Remove placement"
+                        title="Remove placement"
                       >
-                        Remove
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6M14 11v6" />
+                          <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                        </svg>
                       </button>
                     </div>
                   </td>

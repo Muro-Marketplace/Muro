@@ -92,6 +92,20 @@ export function formatSubStyleLabel(slug: string): string {
 }
 
 /**
+ * Top-level discipline label for a raw medium string + optional explicit
+ * discipline id. Used in artist profile headers so the card reads as the
+ * broad category ("Photography") — specific styles / themes ("Landscape
+ * photography") live under the chips below.
+ */
+export function disciplineLabel(
+  primaryMedium: string | null | undefined,
+  rawDiscipline?: string | null,
+): string {
+  const id = resolveDiscipline(primaryMedium, rawDiscipline);
+  return getDisciplineById(id)?.label || "Art";
+}
+
+/**
  * Map a free-text primary medium / legacy discipline onto the current
  * discipline taxonomy. Used so seed artists (and any DB rows that haven't
  * been backfilled) still appear under the right category filter.

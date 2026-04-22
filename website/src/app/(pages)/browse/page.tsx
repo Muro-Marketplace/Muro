@@ -8,7 +8,7 @@ import { artists as staticArtists, type Artist } from "@/data/artists";
 import { themes } from "@/data/themes";
 import { artistsToGalleryWorks } from "@/data/galleries";
 import { collections as staticCollections, type ArtistCollection } from "@/data/collections";
-import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, resolveDiscipline } from "@/data/categories";
+import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, resolveDiscipline, disciplineLabel } from "@/data/categories";
 import { slugify } from "@/lib/slugify";
 import { geocodePostcode } from "@/lib/geocode";
 import Button from "@/components/Button";
@@ -1136,7 +1136,7 @@ function BrowsePortfoliosPageInner() {
                             </h3>
                           </Link>
                           <p className="text-xs text-muted mb-2">
-                            {artist.primaryMedium} &middot; {artist.location}
+                            {disciplineLabel(artist.primaryMedium, artist.discipline)} &middot; {artist.location}
                           </p>
                           <div className="flex flex-wrap gap-1">
                             {artist.styleTags.slice(0, 3).map((tag) => (
