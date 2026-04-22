@@ -539,11 +539,22 @@ export default function PlacementContextPanel({
         <Header title="Terms" />
         <div className="mt-2 space-y-1.5">
           <TermsRow label="Type" value={arrangementLabel} />
-          {p.revenue_share_percent != null && p.arrangement_type === "revenue_share" && (
-            <TermsRow label="Revenue share" value={`${p.revenue_share_percent}%`} />
+          {/* Revenue share — always shown for revenue_share arrangements so
+              the agreed split is visible in the panel. Falls back to "Not set"
+              if the value is missing rather than silently hiding the row. */}
+          {p.arrangement_type === "revenue_share" && (
+            <TermsRow
+              label="Revenue share"
+              value={p.revenue_share_percent != null ? `${p.revenue_share_percent}%` : "Not set"}
+            />
           )}
-          {p.monthly_fee_gbp != null && (
-            <TermsRow label="Monthly fee" value={`\u00a3${p.monthly_fee_gbp}`} />
+          {/* Monthly fee — always shown for paid-loan arrangements. "Free"
+              when no fee was agreed, £X when one was. */}
+          {p.arrangement_type === "free_loan" && (
+            <TermsRow
+              label="Monthly fee"
+              value={p.monthly_fee_gbp != null && p.monthly_fee_gbp > 0 ? `£${p.monthly_fee_gbp}` : "Free"}
+            />
           )}
           {p.qr_enabled != null && (
             <TermsRow label="QR code" value={p.qr_enabled ? "Enabled" : "Disabled"} />
