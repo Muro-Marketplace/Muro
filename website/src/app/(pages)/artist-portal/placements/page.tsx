@@ -55,6 +55,51 @@ const statusBadge = (status: string) => {
   }
 };
 
+/**
+ * What happens next for the artist on this placement?
+ * Mirrors the venue-side helper but phrased from the artist's side.
+ * Returns null when nothing actionable applies (Pending is already
+ * surfaced via the "Awaiting response" chip; Declined/Completed/Sold
+ * are terminal states).
+ */
+function nextActionText(p: Placement): string | null {
+  if (p.status === "Pending") return null;
+  if (p.status === "Declined") return null;
+  if (p.status === "Completed" || p.status === "Sold") return null;
+  if (!p.scheduledFor) return "Next: agree an installation date with the venue";
+  if (!p.installedAt) return "Next: confirm installation once the venue has hung the work";
+  if (!p.liveFrom) return "Next: mark live on wall";
+  if (!p.collectedAt) return "Next: mark collected when the piece comes down";
+  return null;
+}
+
+/**
+ * 5-dot progress indicator matching the venue-side MiniStatusBar —
+ * shows the lifecycle at a glance without the user needing to expand
+ * the row.
+ */
+function MiniStatusBar({ p }: { p: Placement }) {
+  if (p.status === "Pending" || p.status === "Declined") return null;
+  const stages = [
+    { label: "Accepted", done: !!p.acceptedAt || p.status === "Active" },
+    { label: "Scheduled", done: !!p.scheduledFor },
+    { label: "Installed", done: !!p.installedAt },
+    { label: "Live", done: !!p.liveFrom },
+    { label: "Collected", done: !!p.collectedAt },
+  ];
+  return (
+    <div className="flex items-center gap-1" aria-label="Placement progress">
+      {stages.map((s) => (
+        <span
+          key={s.label}
+          title={s.label}
+          className={`h-1.5 w-4 rounded-full transition-colors ${s.done ? "bg-accent" : "bg-border"}`}
+        />
+      ))}
+    </div>
+  );
+}
+
 const tabs: FilterTab[] = ["All", "Pending", "Active", "Completed"];
 
 function normaliseStatus(raw: string): PlacementStatus {
@@ -578,7 +623,12 @@ export default function PlacementsPage() {
                       <div className="w-8 h-8 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
                         <Image src={p.workImage} alt={p.workTitle} fill className="object-cover" sizes="32px" />
                       </div>
-                      <span className="font-medium text-foreground">{p.workTitle}</span>
+                      <div className="min-w-0">
+                        <span className="font-medium text-foreground block truncate">{p.workTitle}</span>
+                        {nextActionText(p) && (
+                          <span className="text-[11px] text-accent block truncate">{nextActionText(p)}</span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.venue}</td>
@@ -588,25 +638,30 @@ export default function PlacementsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3.5">
+                    <div className="flex flex-col gap-1.5">
                     {p.status === "Pending" ? (
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadge(p.status)}`}>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full self-start ${statusBadge(p.status)}`}>
                         Awaiting response
                       </span>
                     ) : p.status === "Declined" ? (
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadge(p.status)}`}>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full self-start ${statusBadge(p.status)}`}>
                         Declined
                       </span>
                     ) : (
                       <select
                         value={p.status}
                         onChange={(e) => updateStatus(p.id, e.target.value as PlacementStatus)}
-                        className={`text-xs font-medium px-2 py-0.5 rounded-full border-none cursor-pointer ${statusBadge(p.status)}`}
+                        className={`text-xs font-medium px-2 py-0.5 rounded-full border-none cursor-pointer self-start ${statusBadge(p.status)}`}
                       >
                         <option value="Active">Active</option>
                         <option value="Completed">Completed</option>
                         <option value="Sold">Sold</option>
                       </select>
                     )}
+                    {(p.status === "Active" || p.status === "Completed" || p.status === "Sold") && (
+                      <MiniStatusBar p={p} />
+                    )}
+                    </div>
                   </td>
                   <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.date}</td>
                   <td className="px-4 py-3.5 text-right font-medium text-foreground">
@@ -809,6 +864,15 @@ export default function PlacementsPage() {
                 </div>
                 {p.revenue && <span className="font-medium text-foreground">{p.revenue}</span>}
               </div>
+              {/* Mini status bar + next action — visible without expanding */}
+              {(p.status === "Active" || p.status === "Completed" || p.status === "Sold") && (
+                <div className="mt-2.5">
+                  <MiniStatusBar p={p} />
+                </div>
+              )}
+              {nextActionText(p) && (
+                <p className="mt-1.5 text-[11px] text-accent">{nextActionText(p)}</p>
+              )}
             </div>
             {/* Expanded details */}
             {expandedId === p.id && (
