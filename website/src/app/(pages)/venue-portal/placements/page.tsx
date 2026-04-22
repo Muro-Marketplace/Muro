@@ -75,6 +75,56 @@ function normaliseStatus(raw: string): PlacementStatus {
   return map[raw.toLowerCase()] || "Pending";
 }
 
+/**
+ * Derive a "what happens next" message from placement status + lifecycle
+ * timestamps. Surfaces the most useful next-action text at a glance so
+ * venues don't have to expand each row to understand state.
+ */
+function nextActionText(p: {
+  status: PlacementStatus;
+  acceptedAt?: string | null;
+  scheduledFor?: string | null;
+  installedAt?: string | null;
+  liveFrom?: string | null;
+  collectedAt?: string | null;
+}): string | null {
+  if (p.status === "Pending") return "Awaiting artist response";
+  if (p.status === "Declined") return null;
+  if (p.status === "Completed" || p.status === "Sold") return null;
+  // Active — walk lifecycle
+  if (!p.scheduledFor) return "Next: schedule installation with the artist";
+  if (!p.installedAt) return "Next: confirm the artwork is installed";
+  if (!p.liveFrom) return "Next: mark live on wall";
+  if (!p.collectedAt) return "Next: mark collected when the piece comes down";
+  return null;
+}
+
+/**
+ * Compact 5-dot progress indicator for use in placement card headers.
+ * Mirrors the stages in PlacementStepper without the action buttons.
+ */
+function MiniStatusBar({ p }: { p: { status: PlacementStatus; acceptedAt?: string | null; scheduledFor?: string | null; installedAt?: string | null; liveFrom?: string | null; collectedAt?: string | null } }) {
+  if (p.status === "Pending" || p.status === "Declined") return null;
+  const stages = [
+    { label: "Accepted", done: !!p.acceptedAt || p.status === "Active" },
+    { label: "Scheduled", done: !!p.scheduledFor },
+    { label: "Installed", done: !!p.installedAt },
+    { label: "Live", done: !!p.liveFrom },
+    { label: "Collected", done: !!p.collectedAt },
+  ];
+  return (
+    <div className="flex items-center gap-1" aria-label="Placement progress">
+      {stages.map((s, i) => (
+        <span
+          key={s.label}
+          title={s.label}
+          className={`h-1.5 rounded-full transition-colors ${s.done ? "bg-accent" : "bg-border"} ${i === stages.length - 1 ? "w-4" : "w-4"}`}
+        />
+      ))}
+    </div>
+  );
+}
+
 function normaliseType(raw: string): ArrangementType {
   const map: Record<string, ArrangementType> = {
     free_loan: "Paid Loan", revenue_share: "Revenue Share", purchase: "Direct Purchase",
@@ -743,7 +793,12 @@ export default function VenuePlacementsPage() {
                           <div className="w-8 h-8 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
                             {p.workImage && <Image src={p.workImage} alt={p.workTitle} fill className="object-cover" sizes="32px" />}
                           </div>
-                          <span className="font-medium text-foreground">{p.workTitle}</span>
+                          <div className="min-w-0">
+                            <span className="font-medium text-foreground block truncate">{p.workTitle}</span>
+                            {nextActionText(p) && (
+                              <span className="text-[11px] text-accent block truncate">{nextActionText(p)}</span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.artistName}</td>
@@ -972,6 +1027,17 @@ export default function VenuePlacementsPage() {
                       </span>
                     )}
                   </div>
+                  {/* Mini status bar + next action — visible without expanding */}
+                  {(p.status === "Active" || p.status === "Completed" || p.status === "Sold") && (
+                    <div className="mt-2.5 flex items-center justify-between gap-2">
+                      <MiniStatusBar p={p} />
+                    </div>
+                  )}
+                  {nextActionText(p) && (
+                    <p className="mt-1.5 text-[11px] text-accent">
+                      {nextActionText(p)}
+                    </p>
+                  )}
                 </div>
                 {/* Expanded details */}
                 {expandedId === p.id && (
