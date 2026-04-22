@@ -348,7 +348,7 @@ export default function PlacementContextPanel({
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted flex-1">Monthly fee</span>
-              <span className="text-xs text-muted">\u00a3</span>
+              <span className="text-xs text-muted">£</span>
               <input type="number" min={0} value={reqFee} onChange={(e) => { const v = e.target.value; if (v === "") { setReqFee(""); return; } const n = Number(v); if (!Number.isNaN(n)) setReqFee(n); }} placeholder="e.g. 50" className="w-20 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs focus:outline-none focus:border-accent/50" />
             </div>
           )}
@@ -456,7 +456,7 @@ export default function PlacementContextPanel({
             ) : (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted flex-1">Monthly fee</span>
-                <span className="text-xs text-muted">\u00a3</span>
+                <span className="text-xs text-muted">£</span>
                 <input type="number" min={0} value={counterFee} onChange={(e) => { const v = e.target.value; if (v === "") { setCounterFee(""); return; } const n = Number(v); if (!Number.isNaN(n)) setCounterFee(n); }} className="w-20 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs focus:outline-none focus:border-accent/50" />
               </div>
             )}
@@ -525,7 +525,7 @@ export default function PlacementContextPanel({
 
       <div className="px-5 py-4 mt-auto">
         <Link href={`${portalBase}/placements`} className="text-xs text-accent hover:text-accent-hover transition-colors">
-          Open full placement \u2192
+          Open full placement →
         </Link>
       </div>
     </aside>
