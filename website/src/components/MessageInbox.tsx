@@ -180,6 +180,23 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     return () => { if (threadPollRef.current) clearInterval(threadPollRef.current); };
   }, [selectedConv, loadThread]);
 
+  // Load the works the current user can offer (artist) or pick from (venue).
+  const loadOtherPartyWorks = useCallback(async (otherPartySlug: string) => {
+    if (portalType === "artist" && works && works.length > 0) {
+      setOtherPartyWorks(works);
+      return;
+    }
+    setOtherWorksLoading(true);
+    try {
+      const res = await fetch("/api/browse-artists");
+      const data = await res.json();
+      const artist = (data.artists || []).find((a: { slug: string }) => a.slug === otherPartySlug);
+      if (artist?.works) setOtherPartyWorks(artist.works);
+      else setOtherPartyWorks([]);
+    } catch { /* empty */ }
+    setOtherWorksLoading(false);
+  }, [portalType, works]);
+
   // Load works for the placement panel whenever the selected conversation changes.
   useEffect(() => {
     const other = conversations.find((c) => c.conversationId === selectedConv)?.otherParty;
@@ -273,23 +290,6 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     }
     setSending(false);
   }
-
-  // Load the works the current user can offer (artist) or pick from (venue).
-  const loadOtherPartyWorks = useCallback(async (otherPartySlug: string) => {
-    if (portalType === "artist" && works && works.length > 0) {
-      setOtherPartyWorks(works);
-      return;
-    }
-    setOtherWorksLoading(true);
-    try {
-      const res = await fetch("/api/browse-artists");
-      const data = await res.json();
-      const artist = (data.artists || []).find((a: { slug: string }) => a.slug === otherPartySlug);
-      if (artist?.works) setOtherPartyWorks(artist.works);
-      else setOtherPartyWorks([]);
-    } catch { /* empty */ }
-    setOtherWorksLoading(false);
-  }, [portalType, works]);
 
   async function handleDeleteConversation(convId: string) {
     try {
