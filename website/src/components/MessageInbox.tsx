@@ -678,15 +678,28 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           )}
                           {!isCounter && <p className="text-sm font-medium text-foreground">{meta.workTitle as string || "Artwork"}</p>}
                           <p className="text-xs text-muted">
-                            {meta.arrangementType === "revenue_share"
-                              ? `Revenue Share ${meta.revenueSharePercent}%`
-                              : meta.arrangementType === "free_loan" && meta.monthlyFeeGbp
-                                ? `Paid Loan · £${meta.monthlyFeeGbp}/mo`
-                                : meta.arrangementType === "free_loan"
-                                  ? "Free display"
-                                  : meta.arrangementType === "purchase"
-                                    ? "Direct purchase"
-                                    : "Free display"}
+                            {(() => {
+                              // Combined label: "Paid loan + QR" / "Revenue
+                              // Share" / "Direct purchase". Mirrors the
+                              // placements list and the status panel so the
+                              // thread, the list, and the panel all agree.
+                              const type = meta.arrangementType as string | undefined;
+                              const fee = meta.monthlyFeeGbp as number | undefined;
+                              const qr = meta.qrEnabled as boolean | undefined;
+                              const rev = meta.revenueSharePercent as number | undefined;
+                              const hasFee = typeof fee === "number" && fee > 0;
+                              const label = hasFee
+                                ? (qr ? "Paid loan + QR" : "Paid loan")
+                                : type === "purchase"
+                                  ? "Direct purchase"
+                                  : qr || type === "revenue_share"
+                                    ? "Revenue share"
+                                    : "Free display";
+                              const parts: string[] = [label];
+                              if (hasFee) parts.push(`£${fee}/mo`);
+                              if ((qr || type === "revenue_share") && typeof rev === "number" && rev > 0) parts.push(`${rev}% on QR sales`);
+                              return parts.join(" · ");
+                            })()}
                           </p>
                           {msg.content && <p className="text-xs text-muted whitespace-pre-wrap">{msg.content}</p>}
                         </div>

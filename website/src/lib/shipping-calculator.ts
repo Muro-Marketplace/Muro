@@ -107,10 +107,57 @@ export function parseDimensions(raw: string | null | undefined): { widthCm: numb
   return null;
 }
 
-function estimateWeightKg(longestEdgeCm: number, shortestEdgeCm: number, framed: boolean): number {
+/**
+ * Per-medium density (kg/m²) estimates. Values taken from UK art-supply
+ * catalogue norms (fine-art paper ~0.2, canvas ~0.5–0.7, board/wood
+ * ~1.0, sculpture treated separately).
+ */
+const MEDIUM_DENSITY_KG_PER_M2: { test: RegExp; density: number; label: string }[] = [
+  { test: /digital|download|pdf/i, density: 0, label: "digital" },
+  { test: /print|giclee|gicl\xe9e|poster|photograph/i, density: 0.25, label: "print" },
+  { test: /watercolou?r|gouache|ink|pastel|charcoal|drawing|sketch|paper/i, density: 0.3, label: "paper" },
+  { test: /photograph|photo|c-type|darkroom/i, density: 0.3, label: "photo" },
+  { test: /canvas|oil|acrylic|painting/i, density: 0.6, label: "canvas" },
+  { test: /panel|board|mdf|wood|plywood/i, density: 1.2, label: "board" },
+  { test: /ceramic|clay|porcelain|stoneware/i, density: 3.0, label: "ceramic" },
+  { test: /metal|steel|bronze|iron|aluminium/i, density: 4.5, label: "metal" },
+  { test: /sculpture/i, density: 2.5, label: "sculpture" },
+  { test: /mixed media|collage|textile/i, density: 0.5, label: "mixed" },
+];
+
+function densityForMedium(medium: string | null | undefined): number {
+  if (!medium) return 0.6;
+  for (const row of MEDIUM_DENSITY_KG_PER_M2) {
+    if (row.test.test(medium)) return row.density;
+  }
+  return 0.6;
+}
+
+/**
+ * Weight estimate from size + medium + frame. Packaging allowance
+ * scales with the piece so a 150cm canvas doesn't share weight with
+ * a postcard.
+ */
+function estimateWeightKg(
+  longestEdgeCm: number,
+  shortestEdgeCm: number,
+  framed: boolean,
+  medium?: string | null,
+): number {
   const areaM2 = (longestEdgeCm * shortestEdgeCm) / 10000;
-  const baseKg = 0.6 * areaM2; // canvas/print upper bound
-  const frameKg = framed ? (longestEdgeCm > 60 ? 3.0 : 1.5) : 0;
+  const density = densityForMedium(medium);
+  const baseKg = density * areaM2;
+  // Frame + glass for framed works. Bigger frames are disproportionately
+  // heavier because glass weight scales with area.
+  const frameKg = framed
+    ? areaM2 > 0.6
+      ? 3.5
+      : areaM2 > 0.25
+        ? 2.0
+        : 1.0
+    : 0;
+  // Packaging: cardboard, corner protectors, acid-free tissue. Scales
+  // roughly linearly with the longest edge.
   const packagingKg = 0.3 + longestEdgeCm * 0.005;
   return Math.max(0.2, baseKg + frameKg + packagingKg);
 }
@@ -140,6 +187,9 @@ interface EstimateInput {
   framed?: boolean;
   priceGbp?: number;
   region?: "uk" | "international";
+  /** Medium string from the work ("Oil on canvas", "Giclée print", …).
+      Drives weight estimation — canvas ≠ paper ≠ ceramic. */
+  medium?: string | null;
 }
 
 /**
@@ -154,7 +204,7 @@ export function estimateShipping(input: EstimateInput): ShippingEstimate | null 
   const longest = Math.max(dims.widthCm, dims.heightCm);
   const shortest = Math.min(dims.widthCm, dims.heightCm);
   const framed = Boolean(input.framed);
-  const weight = estimateWeightKg(longest, shortest, framed);
+  const weight = estimateWeightKg(longest, shortest, framed, input.medium);
   const tier = tierForSize(longest, weight);
   const region = input.region || "uk";
   const p = PRICING[tier];
@@ -186,6 +236,7 @@ export function resolveShippingCost(params: {
   framed?: boolean;
   priceGbp?: number;
   region?: "uk" | "international";
+  medium?: string | null;
 }): {
   cost: number | null;
   source: "manual" | "estimate" | "unknown";
@@ -199,6 +250,7 @@ export function resolveShippingCost(params: {
     framed: params.framed,
     priceGbp: params.priceGbp,
     region: params.region,
+    medium: params.medium,
   });
   if (estimate) return { cost: estimate.cost, source: "estimate", estimate };
   return { cost: null, source: "unknown", estimate: null };

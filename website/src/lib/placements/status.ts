@@ -49,6 +49,31 @@ export interface PlacementLifecycle {
   requesterUserId?: string | null;
 }
 
+/**
+ * Combined arrangement label. Derives from actual data — monthly fee,
+ * qr_enabled — rather than trusting arrangement_type alone. Used by the
+ * placements list, messages placement card, and the placement panel so
+ * "Paid loan + QR" shows consistently everywhere.
+ */
+export function arrangementLabel(input: {
+  arrangement_type?: string | null;
+  monthly_fee_gbp?: number | null;
+  qr_enabled?: boolean | null;
+  /** Optional message to scan for "£X/month" when the fee column is
+      missing (legacy rows). */
+  message?: string | null;
+}): string {
+  const msg = input.message || "";
+  const match = msg.match(/(?:£|GBP)\s?(\d{2,5})\s?(?:\/?\s?m|per\s*m|\/\s*mo|a\s*m)/i);
+  const msgFee = match ? parseFloat(match[1]) : 0;
+  const hasFee = (typeof input.monthly_fee_gbp === "number" && input.monthly_fee_gbp > 0) || msgFee > 0;
+
+  if (hasFee) return input.qr_enabled ? "Paid loan + QR" : "Paid loan";
+  if (input.arrangement_type === "purchase") return "Direct purchase";
+  if (input.qr_enabled || input.arrangement_type === "revenue_share") return "Revenue share";
+  return "Free display";
+}
+
 export function currentStage(p: PlacementLifecycle): Stage | null {
   if (p.collectedAt) return "collected";
   if (p.liveFrom) return "live";

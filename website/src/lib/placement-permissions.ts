@@ -49,9 +49,14 @@ export function canRespond(
     return false;
   }
 
-  // Legacy fallback: before requester_user_id existed, venues created placements.
-  // So an artist viewing their own pending placement can respond.
-  if (viewerRole === "artist" && placement.artist_user_id === userId) return true;
+  // Legacy fallback for rows without requester_user_id. We don't know who
+  // sent the request, so we allow either the artist or the venue on the
+  // placement to respond. This used to assume "venue created → artist
+  // accepts" but artist-initiated requests predate the requester field too,
+  // so the old assumption was locking venues out of responding to
+  // artist-requested placements.
+  if (placement.artist_user_id && placement.artist_user_id === userId) return true;
+  if (placement.venue_user_id && placement.venue_user_id === userId) return true;
   return false;
 }
 

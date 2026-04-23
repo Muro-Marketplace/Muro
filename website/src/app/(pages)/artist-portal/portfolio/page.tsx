@@ -495,8 +495,12 @@ export default function PortfolioPage() {
         </div>
       </div>
 
-      {/* Shipping Settings */}
-      <div className="bg-surface border border-border rounded-sm p-5 mb-6 space-y-5">
+      {/* Shipping Settings — rendered only when the edit form is closed,
+          so clicking "Edit work" doesn't push the form below a tall
+          settings panel. When the form opens it slots in here at the
+          top of the page. */}
+      {!showForm && (
+      <div className="bg-surface border border-border rounded-sm p-5 mb-6 space-y-5" id="shipping-settings">
         <h2 className="text-sm font-medium">Shipping Settings</h2>
 
         {/* Default UK Shipping */}
@@ -579,6 +583,7 @@ export default function PortfolioPage() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Add/Edit Form */}
       {showForm && (
@@ -905,27 +910,58 @@ export default function PortfolioPage() {
               </label>
               {form.shippingPerSize && (
                 <div className="mt-3 space-y-2">
-                  {form.sizes.map((size, i) => (
-                    size.label.trim() ? (
-                      <div key={i} className="flex items-center gap-2">
-                        <span className="text-xs text-muted w-28 truncate">{size.label}</span>
-                        <span className="text-xs text-muted">&pound;</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={form.sizeShipping[i] || ""}
-                          onChange={(e) => setForm((p) => {
-                            const updated = [...p.sizeShipping];
-                            updated[i] = e.target.value;
-                            return { ...p, sizeShipping: updated };
-                          })}
-                          placeholder={defaultShipping || "9.95"}
-                          className="w-20 bg-background border border-border rounded-sm px-2 py-1.5 text-xs text-foreground text-right focus:outline-none focus:border-accent/60"
-                        />
+                  {form.sizes.map((size, i) => {
+                    if (!size.label.trim()) return null;
+                    // Per-size estimate. The size label itself is the
+                    // dimension string ("A3", "50 x 70 cm"), so feed that
+                    // into the calculator.
+                    const est = estimateShipping({
+                      dimensions: size.label,
+                      framed: false,
+                      medium: form.medium,
+                    });
+                    const current = form.sizeShipping[i] || "";
+                    return (
+                      <div key={i} className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted w-28 truncate">{size.label}</span>
+                          <span className="text-xs text-muted">&pound;</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={current}
+                            onChange={(e) => setForm((p) => {
+                              const updated = [...p.sizeShipping];
+                              updated[i] = e.target.value;
+                              return { ...p, sizeShipping: updated };
+                            })}
+                            placeholder={est ? est.cost.toFixed(2) : (defaultShipping || "9.95")}
+                            className="w-20 bg-background border border-border rounded-sm px-2 py-1.5 text-xs text-foreground text-right focus:outline-none focus:border-accent/60"
+                          />
+                          {est && (
+                            <button
+                              type="button"
+                              onClick={() => setForm((p) => {
+                                const updated = [...p.sizeShipping];
+                                updated[i] = est.cost.toFixed(2);
+                                return { ...p, sizeShipping: updated };
+                              })}
+                              className="text-[10px] text-accent hover:text-accent-hover whitespace-nowrap"
+                              title={`${tierLabel(est.tier)} · ${est.estimatedDays}`}
+                            >
+                              Use &pound;{est.cost.toFixed(2)}
+                            </button>
+                          )}
+                        </div>
+                        {est && !current && (
+                          <p className="text-[10px] text-muted pl-[120px]">
+                            Suggested {tierLabel(est.tier).toLowerCase()}, {est.estimatedDays} &middot; {est.estimatedWeightKg}kg
+                          </p>
+                        )}
                       </div>
-                    ) : null
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               {!form.shippingPerSize && (
@@ -934,11 +970,12 @@ export default function PortfolioPage() {
                 </p>
               )}
 
-              {/* Shipping calculator suggestion. If the artist filled in
-                  dimensions we can estimate a tier-appropriate UK rate,
-                  which helps them price sensibly rather than guessing. */}
+              {/* Shipping calculator suggestion for the single-price mode.
+                  Uses dimensions + medium to pick a tier and a weight band.
+                  Per-size suggestions render inline above when the artist
+                  has chosen "different shipping per size". */}
               {form.dimensions && !form.shippingPerSize && (() => {
-                const est = estimateShipping({ dimensions: form.dimensions, framed: false });
+                const est = estimateShipping({ dimensions: form.dimensions, framed: false, medium: form.medium });
                 if (!est) return null;
                 return (
                   <div className="mt-3 flex items-start gap-2 p-3 bg-accent/5 border border-accent/20 rounded-sm">
@@ -950,7 +987,7 @@ export default function PortfolioPage() {
                         Suggested: <span className="font-semibold">£{est.cost.toFixed(2)}</span> — {tierLabel(est.tier)}, {est.estimatedDays}
                       </p>
                       <p className="text-muted text-[11px] mt-0.5">
-                        Based on {est.longestEdgeCm}cm longest edge · {est.estimatedWeightKg}kg packaged.
+                        Based on {est.longestEdgeCm}cm longest edge · {est.estimatedWeightKg}kg packaged{form.medium ? ` (${form.medium.toLowerCase()})` : ""}.
                       </p>
                       {!form.shippingPrice && (
                         <button

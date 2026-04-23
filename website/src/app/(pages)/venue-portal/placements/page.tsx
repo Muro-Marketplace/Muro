@@ -10,7 +10,7 @@ import PlacementActionItems from "@/components/PlacementActionItems";
 import { authFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import { canRespond, isRequester } from "@/lib/placement-permissions";
-import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass } from "@/lib/placements/status";
+import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, arrangementLabel } from "@/lib/placements/status";
 
 function formatSlug(slug: string): string {
   if (!slug) return "";
@@ -18,7 +18,9 @@ function formatSlug(slug: string): string {
 }
 
 type FilterTab = "All" | "Pending" | "Active" | "Completed";
-type ArrangementType = "Paid Loan" | "Revenue Share" | "Direct Purchase";
+// Open-ended so combined labels ("Paid loan + QR") can come through the
+// shared arrangementLabel helper.
+type ArrangementType = string;
 type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed" | "Sold";
 
 interface PlacementRequest {
@@ -116,11 +118,16 @@ function MiniStatusBar({ p }: { p: { status: PlacementStatus; acceptedAt?: strin
   );
 }
 
-function normaliseType(raw: string): ArrangementType {
-  const map: Record<string, ArrangementType> = {
-    free_loan: "Paid Loan", revenue_share: "Revenue Share", purchase: "Direct Purchase",
-  };
-  return map[raw] || "Paid Loan";
+function normaliseType(
+  rawType: string,
+  extras?: { monthly_fee_gbp?: number | null; qr_enabled?: boolean | null; message?: string | null },
+): ArrangementType {
+  return arrangementLabel({
+    arrangement_type: rawType,
+    monthly_fee_gbp: extras?.monthly_fee_gbp,
+    qr_enabled: extras?.qr_enabled,
+    message: extras?.message,
+  });
 }
 
 interface PickerArtist {
@@ -374,7 +381,11 @@ export default function VenuePlacementsPage() {
             workTitle: (p.work_title as string) || "Untitled",
             workImage: (p.work_image as string) || "",
             workSize: (p.work_size as string) || undefined,
-            type: normaliseType((p.arrangement_type as string) || "free_loan"),
+            type: normaliseType((p.arrangement_type as string) || "free_loan", {
+              monthly_fee_gbp: p.monthly_fee_gbp as number | null,
+              qr_enabled: p.qr_enabled as boolean | null,
+              message: p.message as string | null,
+            }),
             revenueSharePercent: p.revenue_share_percent as number | undefined,
             status: normaliseStatus((p.status as string) || "pending"),
             date: p.created_at ? new Date(p.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",

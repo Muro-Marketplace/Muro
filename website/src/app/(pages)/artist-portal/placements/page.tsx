@@ -9,10 +9,12 @@ import PlacementStepper, { type PlacementStepperData } from "@/components/Placem
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
-import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass } from "@/lib/placements/status";
+import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, arrangementLabel } from "@/lib/placements/status";
 
 type FilterTab = "All" | "Pending" | "Active" | "Completed";
-type ArrangementType = "Paid Loan" | "Revenue Share" | "Direct Purchase";
+// Display-only strings — arrangementLabel() can return combined values
+// like "Paid loan + QR" so this is deliberately open.
+type ArrangementType = string;
 type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed" | "Sold";
 
 interface Placement {
@@ -96,11 +98,18 @@ const tabs: FilterTab[] = ["All", "Pending", "Active", "Completed"];
 
 const normaliseStatus = (raw: string): PlacementStatus => sharedNormaliseStatus(raw) as PlacementStatus;
 
-function normaliseType(raw: string): ArrangementType {
-  const map: Record<string, ArrangementType> = {
-    free_loan: "Paid Loan", revenue_share: "Revenue Share", purchase: "Direct Purchase",
-  };
-  return map[raw] || "Paid Loan";
+function normaliseType(
+  rawType: string,
+  extras?: { monthly_fee_gbp?: number | null; qr_enabled?: boolean | null; message?: string | null },
+): string {
+  // Use the shared arrangement-label helper so "Paid Loan + QR" /
+  // "Revenue Share" etc. all come out of one source of truth.
+  return arrangementLabel({
+    arrangement_type: rawType,
+    monthly_fee_gbp: extras?.monthly_fee_gbp,
+    qr_enabled: extras?.qr_enabled,
+    message: extras?.message,
+  });
 }
 
 export default function PlacementsPage() {
@@ -150,7 +159,11 @@ export default function PlacementsPage() {
               workSize: (p.work_size as string) || undefined,
               venue: (p.venue as string) || "",
               venueSlug: (p.venue_slug as string) || "",
-              type: normaliseType((p.arrangement_type as string) || "free_loan"),
+              type: normaliseType((p.arrangement_type as string) || "free_loan", {
+                monthly_fee_gbp: p.monthly_fee_gbp as number | null,
+                qr_enabled: p.qr_enabled as boolean | null,
+                message: p.message as string | null,
+              }) as ArrangementType,
               revenueSharePercent: p.revenue_share_percent as number | undefined,
               status: normaliseStatus((p.status as string) || "active"),
               date: p.created_at ? new Date(p.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",

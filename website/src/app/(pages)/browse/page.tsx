@@ -1277,40 +1277,69 @@ function BrowsePortfoliosPageInner() {
                     )}
                   </div>
 
-                  {/* Arrangement */}
+                  {/* Arrangement — three independent toggles matching the
+                      portfolio filter bar (Revenue Share / Paid Loan /
+                      Direct Purchase). Rev share slider appears under the
+                      Revenue Share tile when active. */}
                   <div>
                     <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Arrangement</p>
                     <div className="space-y-2">
+                      {/* Revenue Share */}
                       <button
                         type="button"
-                        onClick={() => { setGalleryFreeLoan(!galleryFreeLoan); if (!galleryFreeLoan) setGalleryRevenueShare(true); }}
+                        onClick={() => setGalleryRevenueShare(!galleryRevenueShare)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                          galleryRevenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                        }`}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={galleryRevenueShare ? "text-accent" : "text-muted"}>
+                          <rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M9 9h.01M14 9h.01M9 14h.01M14 14h.01" />
+                        </svg>
+                        <div>
+                          <p className="text-sm font-medium">Revenue Share</p>
+                          <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
+                        </div>
+                      </button>
+                      {galleryRevenueShare && (
+                        <div className="pl-3 pr-1 pb-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] text-muted">Minimum share</span>
+                            <span className="text-[11px] font-medium text-foreground">
+                              {galleryRevenueShareMin > 0 ? `${galleryRevenueShareMin}%` : "Any"}
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={50}
+                            step={1}
+                            value={galleryRevenueShareMin}
+                            onChange={(e) => setGalleryRevenueShareMin(Number(e.target.value) || 0)}
+                            className="w-full accent-accent h-1 cursor-pointer"
+                            aria-label="Minimum revenue share"
+                          />
+                          <div className="flex justify-between text-[9px] text-muted mt-0.5">
+                            <span>0%</span><span>25%</span><span>50%</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Paid Loan */}
+                      <button
+                        type="button"
+                        onClick={() => setGalleryFreeLoan(!galleryFreeLoan)}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
                           galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
                       >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={galleryFreeLoan ? "text-accent" : "text-muted"}>
-                          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
-                        </svg>
+                        <span className={`text-base font-serif font-semibold leading-none w-4 text-center ${galleryFreeLoan ? "text-accent" : "text-muted"}`}>&pound;</span>
                         <div>
-                          <p className="text-sm font-medium">Display</p>
-                          <p className="text-[10px] text-muted">Revenue share or paid loan</p>
+                          <p className="text-sm font-medium">Paid Loan</p>
+                          <p className="text-[10px] text-muted">Monthly fee to display the work</p>
                         </div>
                       </button>
-                      {galleryFreeLoan && (
-                        <div className="flex items-center gap-2 pl-3 py-0.5">
-                          <span className="text-[11px] text-muted">Min rev share</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={50}
-                            value={galleryRevenueShareMin === 0 ? "" : galleryRevenueShareMin}
-                            onChange={(e) => setGalleryRevenueShareMin(e.target.value === "" ? 0 : Number(e.target.value))}
-                            placeholder="Any"
-                            className="w-14 px-2 py-1 bg-surface border border-border rounded-sm text-xs text-foreground text-center focus:outline-none focus:border-accent/50"
-                          />
-                          <span className="text-[11px] text-muted">%</span>
-                        </div>
-                      )}
+
+                      {/* Direct Purchase */}
                       <button
                         type="button"
                         onClick={() => setGalleryPurchase(!galleryPurchase)}
@@ -1322,7 +1351,7 @@ function BrowsePortfoliosPageInner() {
                           <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
                         </svg>
                         <div>
-                          <p className="text-sm font-medium">Purchase</p>
+                          <p className="text-sm font-medium">Direct Purchase</p>
                           <p className="text-[10px] text-muted">Buy artwork outright</p>
                         </div>
                       </button>

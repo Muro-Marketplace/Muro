@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ArtistWork } from "@/data/artists";
 import { useCart } from "@/context/CartContext";
@@ -35,6 +35,16 @@ export default function ArtworkPageClient({
   const selectedFrame = frameOptions[selectedFrameIdx];
   const frameUplift = selectedFrame?.priceUplift || 0;
   const [wallVizOpen, setWallVizOpen] = useState(false);
+
+  // The "View on your wall" button now lives on the image itself; it
+  // dispatches a window event that this component listens for so the
+  // modal state can stay here without prop-drilling through the server
+  // page component.
+  useEffect(() => {
+    const handler = () => setWallVizOpen(true);
+    window.addEventListener("wallplace:open-wall-viz", handler);
+    return () => window.removeEventListener("wallplace:open-wall-viz", handler);
+  }, []);
 
   const selectedPricing = work.pricing[selectedSizeIdx] || work.pricing[0];
   const displayPrice = selectedPricing
@@ -317,16 +327,6 @@ export default function ArtworkPageClient({
             Buy Original — £{work.inStorePrice}
           </button>
         )}
-        <button
-          onClick={() => setWallVizOpen(true)}
-          className="w-full px-5 py-3 text-sm font-medium text-foreground border border-border hover:border-foreground/50 rounded-sm transition-colors inline-flex items-center justify-center gap-2"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-          </svg>
-          View on your wall
-        </button>
-
         <button
           onClick={() => {
             const nameParam = artistName ? `&artistName=${encodeURIComponent(artistName)}` : "";

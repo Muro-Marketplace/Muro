@@ -64,6 +64,24 @@ export default function ArtworkImageViewer({ src, alt, aspectRatio, images }: Pr
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>
             </button>
+
+            {/* View on your wall — overlaid on the bottom-left of the
+                image so it reads as an action on *this* piece rather
+                than a generic page CTA. Uses a custom event so the
+                modal state can live in ArtworkPageClient without us
+                prop-drilling through the page. */}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event("wallplace:open-wall-viz"))}
+              className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 hover:bg-white text-foreground text-xs font-medium shadow-md backdrop-blur-sm transition-colors z-10"
+              aria-label="View on your wall"
+              title="View on your wall"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+              </svg>
+              View on your wall
+            </button>
           </div>
         </div>
 

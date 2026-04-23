@@ -161,22 +161,9 @@ export default async function ArtworkPage({
         </div>
       </section>
 
-      {/* About this work — artist description */}
-      {hasDescription && (
-        <section className="py-12 lg:py-16 border-t border-border/70 bg-surface/40">
-          <div className="max-w-[1240px] mx-auto px-6">
-            <div className="max-w-2xl">
-              <p className="text-[10px] text-muted uppercase tracking-[0.18em] mb-4">
-                About this work
-              </p>
-              <div className="font-serif text-lg lg:text-xl leading-[1.65] text-foreground whitespace-pre-line">
-                {work.description}
-              </div>
-              <p className="mt-6 text-xs text-muted">— {artist.name}</p>
-            </div>
-          </div>
-        </section>
-      )}
+      {/* About this work now lives inside the right-hand details column
+          (ArtworkPageClient) so the page doesn't show two copies of the
+          same description. */}
 
       {/* More by this artist */}
       {otherWorks.length > 0 && (
