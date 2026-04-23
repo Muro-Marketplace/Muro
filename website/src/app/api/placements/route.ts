@@ -66,14 +66,34 @@ export async function GET(request: Request) {
       query = db.from("placements").select("*").eq("venue_user_id", auth.user!.id);
     }
 
-    const { data, error } = await query.order("created_at", { ascending: false });
+    let { data, error } = await query.order("created_at", { ascending: false });
+
+    // Retry without any envs where the hidden_for_* columns don't exist
+    // yet (pre-migration 026). We select("*") so it should always
+    // succeed, but some SELECT statements in deployments may be strict.
+    if (error && String(error.message || "").toLowerCase().includes("hidden_for")) {
+      const retry = await db
+        .from("placements")
+        .select("*")
+        .eq(role.type === "artist" ? "artist_user_id" : "venue_user_id", auth.user!.id)
+        .order("created_at", { ascending: false });
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Failed to fetch placements" }, { status: 500 });
     }
 
-    const placements = data || [];
+    // Filter out rows the current user has soft-deleted from their own
+    // list. The counterparty still sees them (as cancelled / declined)
+    // until they also remove them.
+    const hiddenFlag = role.type === "artist" ? "hidden_for_artist" : "hidden_for_venue";
+    const placements = (data || []).filter((p) => {
+      const hidden = (p as Record<string, unknown>)[hiddenFlag];
+      return hidden !== true;
+    });
 
     // Compute realised revenue per placement. For venues we sum
     // `orders.venue_revenue`; for artists we sum `orders.artist_revenue`.
@@ -129,48 +149,75 @@ export async function GET(request: Request) {
       }
     } catch { /* leave counts empty if analytics table missing */ }
 
-    // Backfill requester_user_id for any row where it's NULL by reading
-    // the sender of the first placement_request message that references
-    // the placement. This happens on rows that predate migration 008 or
-    // where the insert-fallback path stripped the column. Otherwise the
-    // UI can't tell "sent" vs "received" and defaults everything to
-    // "Received", which is what the user was seeing.
-    const missingRequester = placements.filter((p) => !p.requester_user_id && p.id).map((p) => p.id as string);
+    // Scan placement_request messages once and derive two things:
+    //   1. inferredRequesters — the FIRST sender per placement, used
+    //      to backfill legacy rows where requester_user_id is NULL.
+    //   2. latestCountererByPlacement — the sender of the MOST RECENT
+    //      counter message, which is the authoritative current
+    //      requester even if the placements.requester_user_id column
+    //      never got flipped. This is what prevents a counter-sender
+    //      from accepting their own counter offer — the DB column can
+    //      lag behind the message trail, but the messages are the
+    //      source of truth for the negotiation.
     const inferredRequesters: Record<string, string> = {};
-    if (missingRequester.length > 0) {
-      // Pull all placement_request messages whose metadata.placementId is
-      // one of the missing ids. Supabase doesn't support an `in` match on
-      // a JSON key directly, so fall back to scanning the most recent
-      // placement_request rows and filtering client-side.
+    const latestCountererByPlacement: Record<string, { userId: string; at: string }> = {};
+    if (placementIds.length > 0) {
       const { data: reqMsgs } = await db
         .from("messages")
-        .select("sender_id, sender_name, metadata")
+        .select("sender_id, sender_name, metadata, created_at")
         .eq("message_type", "placement_request")
         .order("created_at", { ascending: true })
-        .limit(500);
-      for (const m of (reqMsgs || []) as Array<{ sender_id: string | null; sender_name: string | null; metadata: Record<string, unknown> | null }>) {
+        .limit(1000);
+      for (const m of (reqMsgs || []) as Array<{ sender_id: string | null; sender_name: string | null; metadata: Record<string, unknown> | null; created_at: string }>) {
         const pid = m.metadata?.placementId as string | undefined;
-        if (!pid || !missingRequester.includes(pid)) continue;
-        if (inferredRequesters[pid]) continue;
-        if (m.sender_id) inferredRequesters[pid] = m.sender_id;
+        if (!pid || !placementIds.includes(pid)) continue;
+        // First sender is the original requester (when the row's own
+        // requester_user_id is missing).
+        if (!inferredRequesters[pid] && m.sender_id) {
+          inferredRequesters[pid] = m.sender_id;
+        }
+        // Every counter message stamps metadata.requesterUserId with
+        // the counter sender. Track the most recent per placement.
+        const isCounter = m.metadata?.counter === true;
+        const senderFromMeta = m.metadata?.requesterUserId as string | undefined;
+        const sender = senderFromMeta || m.sender_id || null;
+        if (isCounter && sender) {
+          const existing = latestCountererByPlacement[pid];
+          if (!existing || existing.at < m.created_at) {
+            latestCountererByPlacement[pid] = { userId: sender, at: m.created_at };
+          }
+        }
       }
-      // For any we resolved, write them back so subsequent reads are
-      // cheap and gating (canRespond) can trust requester_user_id going
-      // forward. Fire-and-forget — a failure here doesn't hurt the GET.
+      // Back-fill the column for rows where it's NULL so subsequent
+      // reads short-circuit the scan.
       for (const [pid, uid] of Object.entries(inferredRequesters)) {
-        db.from("placements").update({ requester_user_id: uid }).eq("id", pid).then(() => {}, () => {});
+        const row = placements.find((p) => p.id === pid);
+        if (row && !row.requester_user_id) {
+          db.from("placements").update({ requester_user_id: uid }).eq("id", pid).then(() => {}, () => {});
+        }
       }
     }
 
     const enriched = placements.map((p) => {
-      const resolvedRequester = p.requester_user_id || (p.id ? inferredRequesters[p.id as string] : null) || null;
+      const pid = p.id as string;
+      // Precedence for the "who currently holds the request" field:
+      //   1. The latest counter message (source of truth — even if the
+      //      DB column didn't flip, the counter sender should not be
+      //      able to accept / decline their own counter).
+      //   2. The placements.requester_user_id column.
+      //   3. The inferred original requester.
+      const counterer = pid ? latestCountererByPlacement[pid] : null;
+      const resolvedRequester = counterer?.userId
+        || p.requester_user_id
+        || (pid ? inferredRequesters[pid] : null)
+        || null;
       return {
         ...p,
         requester_user_id: resolvedRequester,
-        revenue_earned_gbp: p.id && earnedByPlacement[p.id as string]
-          ? Math.round(earnedByPlacement[p.id as string] * 100) / 100
+        revenue_earned_gbp: pid && earnedByPlacement[pid]
+          ? Math.round(earnedByPlacement[pid] * 100) / 100
           : 0,
-        qr_scans: p.id ? (qrByPlacement[p.id as string] || 0) : 0,
+        qr_scans: pid ? (qrByPlacement[pid] || 0) : 0,
       };
     });
 
@@ -932,7 +979,7 @@ export async function DELETE(request: Request) {
     // silently failed and the row reappeared on reload.
     const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, requester_user_id")
+      .select("artist_user_id, venue_user_id, requester_user_id, status, hidden_for_artist, hidden_for_venue")
       .eq("id", id)
       .single();
 
@@ -948,13 +995,66 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
     }
 
-    // Clear child / linking rows first. If any of these tables hold a
-    // foreign key to placements.id with ON DELETE RESTRICT, the main row
-    // delete will silently return 0 rows and the placement will "come
-    // back" on reload. Order matters: side tables → orders linkage →
-    // placement_request / placement_response messages → placements.
-    // DMs within the same conversation stay — we only drop the placement
-    // card, not the whole chat history.
+    const currentStatus = String(existing.status || "").toLowerCase();
+    const alreadyHiddenForOtherParty = isArtist
+      ? Boolean(existing.hidden_for_venue)
+      : Boolean(existing.hidden_for_artist);
+    // Declined rows and rows the other side has also walked away from
+    // can be cleaned up entirely — no value keeping them around.
+    const shouldHardDelete = currentStatus === "declined" || alreadyHiddenForOtherParty;
+
+    if (!shouldHardDelete) {
+      // Soft-delete path: hide from the deleter's list, and if the row
+      // was "active" (or still pending) transition it to a cancelled
+      // state so the other party sees what happened instead of the
+      // placement silently disappearing / lingering as "Active".
+      const softUpdates: Record<string, unknown> = {
+        ...(isArtist ? { hidden_for_artist: true } : {}),
+        ...(isVenue ? { hidden_for_venue: true } : {}),
+      };
+      const shouldMarkCancelled = currentStatus === "active" || currentStatus === "pending";
+      if (shouldMarkCancelled) {
+        softUpdates.status = "cancelled";
+        softUpdates.cancelled_at = new Date().toISOString();
+        softUpdates.cancelled_by_user_id = auth.user!.id;
+      }
+
+      let { data: softData, error: softErr } = await db
+        .from("placements")
+        .update(softUpdates)
+        .eq("id", id)
+        .select("id");
+      // If any of the new columns don't exist in this environment, retry
+      // with just the status flip and ignore the hidden flags.
+      if (softErr) {
+        const msg = String(softErr.message || "").toLowerCase();
+        const retryUpdates: Record<string, unknown> = { ...softUpdates };
+        if (msg.includes("hidden_for_artist")) delete retryUpdates.hidden_for_artist;
+        if (msg.includes("hidden_for_venue")) delete retryUpdates.hidden_for_venue;
+        if (msg.includes("cancelled_at")) delete retryUpdates.cancelled_at;
+        if (msg.includes("cancelled_by_user_id")) delete retryUpdates.cancelled_by_user_id;
+        if (Object.keys(retryUpdates).length > 0) {
+          const retry = await db.from("placements").update(retryUpdates).eq("id", id).select("id");
+          softErr = retry.error;
+          softData = retry.data;
+        }
+      }
+
+      if (softErr || !softData || softData.length === 0) {
+        console.error("Placement soft-delete failed:", softErr);
+        return NextResponse.json(
+          { error: softErr?.message || "Could not remove the placement" },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json({ success: true, soft: true, newStatus: shouldMarkCancelled ? "cancelled" : currentStatus });
+    }
+
+    // Hard-delete path — declined rows and rows the other party has
+    // already walked from. Clear child / linking rows first so FK
+    // RESTRICT constraints can't silently abort the delete and leave
+    // the row ghost-visible on reload.
     await Promise.all([
       db.from("placement_records").delete().eq("placement_id", id),
       db.from("placement_photos").delete().eq("placement_id", id),
@@ -971,11 +1071,6 @@ export async function DELETE(request: Request) {
     // record of truth — but we do need to drop the foreign key link.
     await db.from("orders").update({ placement_id: null }).eq("placement_id", id).then(() => {}, () => {});
 
-    // Use .select() after .delete() to get back the deleted row(s). Lets us
-    // confirm the delete actually removed something — if the row is still
-    // there on the next GET, we know whether Supabase silently dropped the
-    // delete (e.g. RLS, FK constraint) or whether the client is reading
-    // from a different source.
     const { data: deleted, error } = await db
       .from("placements")
       .delete()
@@ -988,9 +1083,6 @@ export async function DELETE(request: Request) {
     }
 
     if (!deleted || deleted.length === 0) {
-      // No row came back — RLS or a lingering FK constraint blocked it.
-      // Surface a real error rather than reporting success, so the client
-      // can rollback instead of lying to the user.
       console.warn("Placement DELETE returned no rows for id=", id);
       return NextResponse.json(
         { error: "Delete did not remove any row (possible RLS policy or FK constraint). Check Supabase logs." },
@@ -998,7 +1090,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    return NextResponse.json({ success: true, deletedId: deleted[0]?.id });
+    return NextResponse.json({ success: true, soft: false, deletedId: deleted[0]?.id });
   } catch (err) {
     console.error("DELETE /api/placements exception:", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });

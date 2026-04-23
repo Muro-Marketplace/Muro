@@ -63,9 +63,35 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       : Promise.resolve({ data: null }),
   ]);
 
+  // Override requester_user_id with the sender of the most recent
+  // counter message (if any). The counter flow writes this via
+  // metadata.requesterUserId; the placements row column can lag
+  // behind if the update hit an older schema, so the messages are
+  // the authoritative source for "who currently owes a response."
+  let effectiveRequesterId: string | null = placement.requester_user_id || null;
+  try {
+    const { data: reqMsgs } = await db
+      .from("messages")
+      .select("sender_id, metadata, created_at")
+      .eq("message_type", "placement_request")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    for (const m of (reqMsgs || []) as Array<{ sender_id: string | null; metadata: Record<string, unknown> | null; created_at: string }>) {
+      if (m.metadata?.placementId !== id) continue;
+      if (m.metadata?.counter === true) {
+        const sender = (m.metadata?.requesterUserId as string | undefined) || m.sender_id;
+        if (sender) {
+          effectiveRequesterId = sender;
+          break; // newest first
+        }
+      }
+    }
+  } catch { /* non-fatal */ }
+
   return NextResponse.json({
     placement: {
       ...placement,
+      requester_user_id: effectiveRequesterId,
       revenue_earned_gbp: Math.round(revenueEarned * 100) / 100,
     },
     record: record || null,

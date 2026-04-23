@@ -23,7 +23,7 @@ type FilterTab = "All" | "Pending" | "Active" | "Completed";
 // Open-ended so combined labels ("Paid loan + QR") can come through the
 // shared arrangementLabel helper.
 type ArrangementType = string;
-type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed" | "Sold";
+type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed" | "Sold" | "Cancelled";
 
 interface PlacementRequest {
   id: string;
@@ -352,12 +352,16 @@ export default function VenuePlacementsPage() {
       const data = await res.json();
       const artist = (data.artists || []).find((a: { slug: string }) => a.slug === slug);
       if (artist?.works) {
+        // Preserve pricing + dimensions so the per-work size picker has
+        // real options instead of an empty dropdown.
         setArtistWorks(artist.works.map((w: ArtistWork) => ({
           id: w.id,
           title: w.title,
           image: w.image,
           medium: w.medium,
           priceBand: w.priceBand,
+          dimensions: w.dimensions,
+          pricing: Array.isArray(w.pricing) ? w.pricing : undefined,
         })));
         if (!artistName && artist.name) setArtistName(artist.name);
       } else if (preselectedWork) {
@@ -459,7 +463,15 @@ export default function VenuePlacementsPage() {
     });
     setSizePickerFor(null);
   }
-  function toggleSizePicker(title: string) {
+  // Clicking a card either selects it (default: Any size) and opens
+  // the picker, or — if already selected — just re-opens the picker
+  // so the user can change size / deselect. No half-state where the
+  // card is "open but unselected".
+  function handleCardClick(title: string) {
+    setSelectedWorkSizes((prev) => {
+      if (title in prev) return prev; // already selected — keep current size
+      return { ...prev, [title]: "" }; // select with Any size as default
+    });
     setSizePickerFor((prev) => (prev === title ? null : title));
   }
 
@@ -818,7 +830,7 @@ export default function VenuePlacementsPage() {
                       <div key={work.id} className="relative">
                         <button
                           type="button"
-                          onClick={() => toggleSizePicker(work.title)}
+                          onClick={() => handleCardClick(work.title)}
                           className={`relative block w-full aspect-square rounded-sm overflow-hidden border-2 transition-all ${
                             selected ? "border-accent shadow-sm" : "border-transparent hover:border-border"
                           }`}

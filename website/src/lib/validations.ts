@@ -105,7 +105,7 @@ export const placementSchema = z.object({
 
 export const placementUpdateSchema = z.object({
   id: safeString(100),
-  status: z.enum(["pending", "active", "declined", "completed", "paused"]).optional(),
+  status: z.enum(["pending", "active", "declined", "completed", "paused", "cancelled"]).optional(),
   stage: z.enum(["scheduled", "installed", "live", "collected"]).optional(),
   // Optional explicit stage timestamp in ISO 8601. Lets the user pick
   // a future install date instead of being forced to "now". Used by the

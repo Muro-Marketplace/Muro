@@ -1,8 +1,8 @@
 // Single source of truth for placement status + stage presentation.
 // Kept dependency-free (no React) so it can run on the server and the client.
 
-export type RawStatus = "pending" | "active" | "declined" | "completed" | "sold" | "paused";
-export type DisplayStatus = "Pending" | "Active" | "Declined" | "Completed" | "Sold";
+export type RawStatus = "pending" | "active" | "declined" | "completed" | "sold" | "paused" | "cancelled";
+export type DisplayStatus = "Pending" | "Active" | "Declined" | "Completed" | "Sold" | "Cancelled";
 export type Stage = "accepted" | "scheduled" | "installed" | "live" | "collected";
 
 export const STAGE_ORDER: Stage[] = ["accepted", "scheduled", "installed", "live", "collected"];
@@ -21,6 +21,7 @@ export function normaliseStatus(raw: string | null | undefined): DisplayStatus {
     case "active": return "Active";
     case "pending": return "Pending";
     case "declined": return "Declined";
+    case "cancelled": return "Cancelled";
     case "sold": return "Sold";
     case "completed": case "paused": return "Completed";
     default: return "Active";
@@ -34,6 +35,7 @@ export function statusBadgeClass(status: DisplayStatus): string {
     case "Active":    return "bg-green-50 text-green-700 border border-green-200";
     case "Pending":   return "bg-amber-50 text-amber-800 border border-amber-200";
     case "Declined":  return "bg-red-50 text-red-700 border border-red-200";
+    case "Cancelled": return "bg-neutral-100 text-neutral-700 border border-neutral-300";
     case "Sold":      return "bg-blue-50 text-blue-700 border border-blue-200";
     case "Completed": return "bg-neutral-100 text-neutral-700 border border-neutral-200";
   }

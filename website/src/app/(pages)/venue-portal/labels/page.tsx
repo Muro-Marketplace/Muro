@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
@@ -30,6 +31,8 @@ interface ArtistLookup {
 }
 
 export default function VenueLabelsPage() {
+  const searchParams = useSearchParams();
+  const preselectPlacementId = searchParams?.get("placement") || null;
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [artistsBySlug, setArtistsBySlug] = useState<Record<string, ArtistLookup>>({});
   const [venueName, setVenueName] = useState("");
@@ -56,6 +59,14 @@ export default function VenueLabelsPage() {
         const all = (data.placements || []) as Placement[];
         const active = all.filter((p) => p.status === "active");
         setPlacements(active);
+
+        // If the caller passed ?placement=<id>, preselect that row so
+        // deep links from the placement detail page land with the right
+        // work already ticked and ready for label printing.
+        if (preselectPlacementId) {
+          const idx = active.findIndex((p) => p.id === preselectPlacementId);
+          if (idx >= 0) setSelected(new Set([idx]));
+        }
 
         // Best-effort lookup of artist display names
         const slugs = [...new Set(active.map((p) => p.artist_slug).filter(Boolean))];

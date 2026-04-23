@@ -9,9 +9,7 @@ import { authFetch } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import PlacementLoanForm from "./PlacementLoanForm";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
-import PlacementQRModal from "@/components/PlacementQRModal";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
-import { slugify } from "@/lib/slugify";
 
 interface PlacementRow {
   id: string;
@@ -99,7 +97,6 @@ export default function PlacementDetailClient({ placementId }: Props) {
   const [responding, setResponding] = useState<"accept" | "decline" | null>(null);
   const [respondError, setRespondError] = useState<string | null>(null);
   const [counterOpen, setCounterOpen] = useState(false);
-  const [qrOpen, setQrOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -303,39 +300,34 @@ export default function PlacementDetailClient({ placementId }: Props) {
             }`}>
               {placement.status.charAt(0).toUpperCase() + placement.status.slice(1)}
             </span>
-            {/* QR label — scannable code + download / print shortcut.
-                Visible for both portals so artists and venues can grab
-                a label without leaving the placement page. */}
-            <button
-              type="button"
-              onClick={() => setQrOpen(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/5 border border-accent/30 hover:bg-accent/10 rounded-sm px-2.5 py-1 transition-colors"
-              title="Show QR label"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-                <path d="M14 14h3v3h-3zM20 14h1v1h-1zM14 20h1v1h-1zM20 20h1v1h-1z" />
-              </svg>
-              QR label
-            </button>
+            {/* QR label — deep-link into the Labels page with this
+                placement's work (and venue, on the artist side) already
+                preselected. Visible for both portals so artists and
+                venues land on the full designer / printer, not just a
+                thumbnail of the QR. */}
+            {(() => {
+              const labelHref = portalBase === "/venue-portal"
+                ? `/venue-portal/labels?placement=${encodeURIComponent(placement.id)}`
+                : `/artist-portal/labels?works=${encodeURIComponent(placement.work_title || "")}&venue=${encodeURIComponent(venue?.name || placement.venue || "")}`;
+              return (
+                <Link
+                  href={labelHref}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/5 border border-accent/30 hover:bg-accent/10 rounded-sm px-2.5 py-1 transition-colors"
+                  title="Open QR label designer"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                    <path d="M14 14h3v3h-3zM20 14h1v1h-1zM14 20h1v1h-1zM20 20h1v1h-1z" />
+                  </svg>
+                  QR label
+                </Link>
+              );
+            })()}
           </div>
         </div>
       </div>
-
-      <PlacementQRModal
-        open={qrOpen}
-        onClose={() => setQrOpen(false)}
-        targetUrl={typeof window !== "undefined"
-          ? `${window.location.origin}/browse/${placement.artist_slug || ""}/${slugify(placement.work_title || "")}`
-          : `/browse/${placement.artist_slug || ""}/${slugify(placement.work_title || "")}`
-        }
-        placementId={placement.id}
-        portalBase={portalBase as "/artist-portal" | "/venue-portal"}
-        artistName={artist?.name}
-        workTitle={placement.work_title}
-      />
 
       {/* Progress — single combined block. Shows the 6-step lifecycle and
           exposes the "Mark <next stage>" action directly below the bar

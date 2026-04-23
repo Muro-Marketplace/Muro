@@ -17,7 +17,7 @@ type FilterTab = "All" | "Pending" | "Active" | "Completed";
 // Display-only strings — arrangementLabel() can return combined values
 // like "Paid loan + QR" so this is deliberately open.
 type ArrangementType = string;
-type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed" | "Sold";
+type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed" | "Sold" | "Cancelled";
 
 interface Placement {
   id: string;
