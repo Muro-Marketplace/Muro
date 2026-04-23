@@ -181,7 +181,7 @@ export default function CounterPlacementDialog({ placementId, initial, onClose, 
               type="button"
               onClick={submit}
               disabled={busy}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-sm transition-colors disabled:opacity-60"
+              className="flex-1 px-4 py-2 text-sm font-medium text-amber-700 border border-amber-300 hover:bg-amber-50 rounded-sm transition-colors disabled:opacity-60"
             >
               {busy ? "Sending…" : "Send counter"}
             </button>

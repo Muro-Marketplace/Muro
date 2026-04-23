@@ -761,17 +761,17 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                             const placementIdForCounter = meta.placementId as string | undefined;
                             return (
                               <div className="px-3.5 py-2 border-t border-border flex gap-2 flex-wrap">
-                                <button onClick={() => handlePlacementResponse(msg, true)} className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-full transition-colors">Accept</button>
+                                <button onClick={() => handlePlacementResponse(msg, true)} className="px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 hover:bg-emerald-50 rounded-full transition-colors">Accept</button>
                                 {placementIdForCounter && (
                                   <button
                                     type="button"
                                     onClick={() => setCounteringId(placementIdForCounter)}
-                                    className="px-3 py-1.5 text-xs font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-full transition-colors"
+                                    className="px-3 py-1.5 text-xs font-medium text-amber-700 border border-amber-300 hover:bg-amber-50 rounded-full transition-colors"
                                   >
                                     Counter
                                   </button>
                                 )}
-                                <button onClick={() => handlePlacementResponse(msg, false)} className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-full transition-colors">Decline</button>
+                                <button onClick={() => handlePlacementResponse(msg, false)} className="px-3 py-1.5 text-xs font-medium text-red-700 border border-red-300 hover:bg-red-50 rounded-full transition-colors">Decline</button>
                               </div>
                             );
                           }

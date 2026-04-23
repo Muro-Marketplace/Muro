@@ -53,6 +53,9 @@ interface PlacementRequest {
   qrScans?: number;
   monthlyFeeGbp?: number | null;
   qrEnabledOnPlacement?: boolean | null;
+  /** Bilateral-confirmation proposal fields for installed / collected. */
+  proposedStage?: "installed" | "collected" | null;
+  proposedByUserId?: string | null;
 }
 
 interface ArtistWork {
@@ -406,6 +409,8 @@ export default function VenuePlacementsPage() {
             requesterUserId: (p.requester_user_id as string | null) ?? null,
             monthlyFeeGbp: (p.monthly_fee_gbp as number | null) ?? null,
             qrEnabledOnPlacement: (p.qr_enabled as boolean | null) ?? null,
+            proposedStage: (p.proposed_stage as "installed" | "collected" | null) ?? null,
+            proposedByUserId: (p.proposed_by_user_id as string | null) ?? null,
             artistUserId: (p.artist_user_id as string | null) ?? null,
             venueUserId: (p.venue_user_id as string | null) ?? null,
             createdAtTs: p.created_at ? new Date(p.created_at as string).getTime() : 0,
@@ -1015,8 +1020,11 @@ export default function VenuePlacementsPage() {
                               installedAt: p.installedAt,
                               liveFrom: p.liveFrom,
                               collectedAt: p.collectedAt,
+                              proposedStage: p.proposedStage,
+                              proposedByUserId: p.proposedByUserId,
                             }}
                             canAdvance={p.status === "Active"}
+                            currentUserId={user?.id}
                             onChange={(next) => setPlacements((prev) => prev.map((x) => x.id === p.id ? {
                               ...x,
                               status: next.status === "completed" ? "Completed" : x.status,
@@ -1025,62 +1033,68 @@ export default function VenuePlacementsPage() {
                               installedAt: next.installedAt ?? x.installedAt,
                               liveFrom: next.liveFrom ?? x.liveFrom,
                               collectedAt: next.collectedAt ?? x.collectedAt,
+                              proposedStage: next.proposedStage ?? x.proposedStage,
+                              proposedByUserId: next.proposedByUserId ?? x.proposedByUserId,
                             } : x))}
                           />
 
-                          <div className="flex items-center gap-3 mt-4 flex-wrap">
-                            {/* Response buttons pinned to the left of the
-                                row so they read as the primary actions. */}
-                            {canRespond({ status: p.status, requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id, "venue") && (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); respond(p.id, true); }}
-                                  disabled={responding === p.id}
-                                  className="px-4 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-sm transition-colors disabled:opacity-50"
-                                >
-                                  {responding === p.id ? "…" : "Accept"}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); setCounteringId(p.id); }}
-                                  className="px-4 py-1.5 text-xs font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-sm transition-colors"
-                                >
-                                  Counter
-                                </button>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); respond(p.id, false); }}
-                                  disabled={responding === p.id}
-                                  className="px-4 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-sm transition-colors disabled:opacity-50"
-                                >
-                                  Decline
-                                </button>
-                              </div>
-                            )}
-                            <Link
-                              href={`/venue-portal/messages?artist=${p.artistSlug}&artistName=${encodeURIComponent(p.artistName)}`}
-                              className="text-xs text-muted hover:text-foreground transition-colors"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              Message Artist
-                            </Link>
-                            <div className="flex items-center gap-2 ml-auto flex-wrap">
+                          {/* Actions — divided from the details block by a
+                              hairline border, primary response buttons on
+                              the left, secondary links (Message / Add Loan
+                              / Open) on the right. */}
+                          <div className="mt-5 pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {canRespond({ status: p.status, requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id, "venue") && (
+                                <>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); respond(p.id, true); }}
+                                    disabled={responding === p.id}
+                                    className="px-3.5 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 hover:bg-emerald-50 rounded-sm transition-colors disabled:opacity-50"
+                                  >
+                                    {responding === p.id ? "…" : "Accept"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setCounteringId(p.id); }}
+                                    className="px-3.5 py-1.5 text-xs font-medium text-amber-700 border border-amber-300 hover:bg-amber-50 rounded-sm transition-colors"
+                                  >
+                                    Counter
+                                  </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); respond(p.id, false); }}
+                                    disabled={responding === p.id}
+                                    className="px-3.5 py-1.5 text-xs font-medium text-red-700 border border-red-300 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-50"
+                                  >
+                                    Decline
+                                  </button>
+                                </>
+                              )}
                               {p.status === "Pending" && isRequester({ requester_user_id: p.requesterUserId }, user?.id) && (
-                                <span className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-sm">
+                                <span className="px-3 py-1.5 text-[11px] font-medium text-amber-700 border border-amber-200 rounded-sm">
                                   Awaiting their response
                                 </span>
                               )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+                              <Link
+                                href={`/venue-portal/messages?artist=${p.artistSlug}&artistName=${encodeURIComponent(p.artistName)}`}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-muted border border-transparent hover:text-foreground hover:border-border rounded-sm transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Message artist
+                              </Link>
                               <Link
                                 href={`/placements/${encodeURIComponent(p.id)}`}
                                 onClick={(e) => e.stopPropagation()}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-sm transition-colors"
                               >
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                                Add Loan / Consignment Record
+                                Add Loan / Consignment
                               </Link>
                               <Link
                                 href={`/placements/${encodeURIComponent(p.id)}`}
                                 onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground bg-[#F5F3F0] border border-border hover:bg-[#EBE8E4] rounded-sm transition-colors"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground border border-border hover:bg-[#F5F3F0] rounded-sm transition-colors"
                               >
                                 Open full placement
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
@@ -1255,60 +1269,60 @@ export default function VenuePlacementsPage() {
                       } : x))}
                     />
 
-                    {/* Mobile action layout — Accept/Counter/Decline on
-                        their own row so they don't wrap awkwardly next to
-                        the wider "Add Loan / Consignment Record" chip. */}
-                    {canRespond({ status: p.status, requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id, "venue") && (
-                      <div className="flex items-center gap-2 mt-3 flex-wrap">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); respond(p.id, true); }}
-                          disabled={responding === p.id}
-                          className="px-4 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-sm transition-colors disabled:opacity-50"
-                        >
-                          {responding === p.id ? "…" : "Accept"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setCounteringId(p.id); }}
-                          className="px-4 py-1.5 text-xs font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-sm transition-colors"
-                        >
-                          Counter
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); respond(p.id, false); }}
-                          disabled={responding === p.id}
-                          className="px-4 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-sm transition-colors disabled:opacity-50"
-                        >
-                          Decline
-                        </button>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
-                      <Link
-                        href={`/venue-portal/messages?artist=${p.artistSlug}&artistName=${encodeURIComponent(p.artistName)}`}
-                        className="text-xs text-muted hover:text-foreground transition-colors"
-                      >
-                        Message Artist
-                      </Link>
-                      <div className="flex items-center gap-2 ml-auto flex-wrap">
-                        {p.status === "Pending" && isRequester({ requester_user_id: p.requesterUserId }, user?.id) && (
-                          <span className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-sm">
-                            Awaiting their response
-                          </span>
-                        )}
+                    {/* Mobile actions — outline-only buttons, primary on
+                        top row, secondary on bottom. Hairline separator
+                        from the details block above. */}
+                    <div className="mt-3 pt-3 border-t border-border space-y-2">
+                      {canRespond({ status: p.status, requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id, "venue") && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); respond(p.id, true); }}
+                            disabled={responding === p.id}
+                            className="flex-1 px-3.5 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 hover:bg-emerald-50 rounded-sm transition-colors disabled:opacity-50"
+                          >
+                            {responding === p.id ? "…" : "Accept"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setCounteringId(p.id); }}
+                            className="flex-1 px-3.5 py-1.5 text-xs font-medium text-amber-700 border border-amber-300 hover:bg-amber-50 rounded-sm transition-colors"
+                          >
+                            Counter
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); respond(p.id, false); }}
+                            disabled={responding === p.id}
+                            className="flex-1 px-3.5 py-1.5 text-xs font-medium text-red-700 border border-red-300 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-50"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      )}
+                      {p.status === "Pending" && isRequester({ requester_user_id: p.requesterUserId }, user?.id) && (
+                        <span className="inline-block px-3 py-1.5 text-[11px] font-medium text-amber-700 border border-amber-200 rounded-sm">
+                          Awaiting their response
+                        </span>
+                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Link
                           href={`/placements/${encodeURIComponent(p.id)}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-sm transition-colors"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                          Add Loan / Consignment Record
-                        </Link>
-                        <Link
-                          href={`/placements/${encodeURIComponent(p.id)}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground bg-[#F5F3F0] border border-border hover:bg-[#EBE8E4] rounded-sm transition-colors"
+                          className="inline-flex items-center justify-center gap-1 flex-1 min-w-[140px] px-3 py-1.5 text-xs font-medium text-foreground border border-border hover:bg-[#F5F3F0] rounded-sm transition-colors"
                         >
                           Open full placement
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                        </Link>
+                        <Link
+                          href={`/placements/${encodeURIComponent(p.id)}`}
+                          className="inline-flex items-center justify-center gap-1 flex-1 min-w-[140px] px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-sm transition-colors"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                          Loan record
+                        </Link>
+                        <Link
+                          href={`/venue-portal/messages?artist=${p.artistSlug}&artistName=${encodeURIComponent(p.artistName)}`}
+                          className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium text-muted hover:text-foreground transition-colors"
+                        >
+                          Message artist
                         </Link>
                       </div>
                     </div>
