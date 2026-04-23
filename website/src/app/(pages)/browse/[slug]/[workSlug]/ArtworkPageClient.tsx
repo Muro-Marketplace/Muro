@@ -126,17 +126,54 @@ export default function ArtworkPageClient({
               </span>
             </div>
           ) : (
-            <select
-              value={selectedSizeIdx}
-              onChange={(e) => setSelectedSizeIdx(Number(e.target.value))}
-              className="w-full px-3.5 py-3 bg-background border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-foreground/50 cursor-pointer transition-colors"
-            >
-              {work.pricing.map((sp, i) => (
-                <option key={sp.label} value={i}>
-                  {sp.label} — £{sp.price}
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                value={selectedSizeIdx}
+                onChange={(e) => setSelectedSizeIdx(Number(e.target.value))}
+                className="w-full px-3.5 py-3 bg-background border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-foreground/50 cursor-pointer transition-colors"
+              >
+                {work.pricing.map((sp, i) => {
+                  // Append the per-size stock count when the artist
+                  // has set one. 0 flags the size as sold out.
+                  const stock = sp.quantityAvailable;
+                  const stockSuffix = typeof stock === "number"
+                    ? (stock <= 0 ? " — Sold out" : ` — ${stock} available`)
+                    : "";
+                  return (
+                    <option
+                      key={sp.label}
+                      value={i}
+                      disabled={typeof stock === "number" && stock <= 0}
+                    >
+                      {sp.label} — £{sp.price}{stockSuffix}
+                    </option>
+                  );
+                })}
+              </select>
+              {/* Per-size availability list — only shown when the
+                  artist has split stock by size, so the default
+                  "one number fits all" flow stays uncluttered. */}
+              {work.pricing.some((sp) => typeof sp.quantityAvailable === "number") && (
+                <ul className="mt-2 space-y-0.5">
+                  {work.pricing.map((sp) => {
+                    const stock = sp.quantityAvailable;
+                    const label = typeof stock !== "number"
+                      ? "—"
+                      : stock <= 0
+                        ? "Sold out"
+                        : `${stock} available`;
+                    return (
+                      <li key={sp.label} className="flex justify-between text-[11px]">
+                        <span className="text-muted">{sp.label}</span>
+                        <span className={`${typeof stock === "number" && stock <= 0 ? "text-red-600" : "text-foreground/70"}`}>
+                          {label}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
           )}
         </div>
       )}

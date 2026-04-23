@@ -34,6 +34,14 @@ interface WorkFormState {
   inStorePricing: string[];
   /** When true, the In-store column is shown in the sizes table. */
   inStoreEnabled: boolean;
+  /** When true, the sizes table exposes a per-size Qty column so
+      the artist can split their total availability across sizes
+      (e.g. 3 of A4, 1 of A3). When false we fall back to the
+      single work-level quantityAvailable field. */
+  stockPerSize: boolean;
+  /** Stock count per size, aligned by index with `sizes`. Empty
+      string = unlimited for that size. */
+  sizeStock: string[];
   detectedRatio: number | null;
   quantityAvailable: string;
   frameOptions: { label: string; priceUplift: string; imageUrl?: string }[];
@@ -95,6 +103,8 @@ const emptyWork: WorkFormState = {
   inStorePrice: "",
   inStorePricing: [],
   inStoreEnabled: false,
+  stockPerSize: false,
+  sizeStock: [],
   detectedRatio: null,
   quantityAvailable: "",
   frameOptions: [],
@@ -266,6 +276,11 @@ export default function PortfolioPage() {
       inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
       inStorePricing: w.inStorePricing ? w.inStorePricing.map((p) => String(p.price)) : [],
       inStoreEnabled: Array.isArray(w.inStorePricing) && w.inStorePricing.some((p) => p.price > 0),
+      // Rehydrate the per-size Qty column from each SizePricing's
+      // optional quantityAvailable. If any size carries a number we
+      // flip the toggle on so the column shows.
+      stockPerSize: w.pricing.some((p) => typeof p.quantityAvailable === "number"),
+      sizeStock: w.pricing.map((p) => typeof p.quantityAvailable === "number" ? String(p.quantityAvailable) : ""),
       detectedRatio: null,
       quantityAvailable: (w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable != null
         ? String((w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable)
@@ -371,7 +386,16 @@ export default function PortfolioPage() {
   }
 
   function addSize() {
-    setForm((p) => ({ ...p, sizes: [...p.sizes, { label: "", price: 0 }] }));
+    setForm((p) => ({
+      ...p,
+      sizes: [...p.sizes, { label: "", price: 0 }],
+      // Keep the parallel per-size arrays aligned so a new row
+      // doesn't silently drop / mis-align shipping / in-store / qty
+      // values when the user edits them.
+      sizeShipping: p.shippingPerSize ? [...p.sizeShipping, ""] : p.sizeShipping,
+      inStorePricing: p.inStoreEnabled ? [...p.inStorePricing, ""] : p.inStorePricing,
+      sizeStock: p.stockPerSize ? [...p.sizeStock, ""] : p.sizeStock,
+    }));
   }
 
   function updateSize(index: number, field: "label" | "price", value: string | number) {
@@ -382,7 +406,13 @@ export default function PortfolioPage() {
   }
 
   function removeSize(index: number) {
-    setForm((p) => ({ ...p, sizes: p.sizes.filter((_, i) => i !== index) }));
+    setForm((p) => ({
+      ...p,
+      sizes: p.sizes.filter((_, i) => i !== index),
+      sizeShipping: p.sizeShipping.filter((_, i) => i !== index),
+      inStorePricing: p.inStorePricing.filter((_, i) => i !== index),
+      sizeStock: p.sizeStock.filter((_, i) => i !== index),
+    }));
   }
 
   function handleSubmit() {
@@ -433,7 +463,21 @@ export default function PortfolioPage() {
       medium: form.medium,
       dimensions: form.dimensions,
       priceBand: `From \u00a3${lowestPrice}`,
-      pricing: validSizes.map((s) => ({ label: s.label, price: s.price })),
+      // Attach per-size stock when the toggle is on. Find the
+      // matching sizeStock entry by label so filter + add rows stay
+      // aligned even if the array indexes have drifted.
+      pricing: validSizes.map((s) => {
+        const base: { label: string; price: number; quantityAvailable?: number } = {
+          label: s.label,
+          price: s.price,
+        };
+        if (form.stockPerSize) {
+          const raw = form.sizeStock[form.sizes.findIndex((x) => x.label === s.label)];
+          const n = raw === undefined || raw === "" ? NaN : Number(raw);
+          if (Number.isFinite(n) && n >= 0) base.quantityAvailable = Math.floor(n);
+        }
+        return base;
+      }),
       available: form.available && (!qtyFinite || qtyVal! > 0),
       color: "#C17C5A",
       description: form.description.trim(),
@@ -848,6 +892,26 @@ export default function PortfolioPage() {
                   />
                   <span className="text-xs text-muted">Also sold in-store at venues</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.stockPerSize}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((p) => ({
+                        ...p,
+                        stockPerSize: checked,
+                        // Seed an empty entry for each existing size
+                        // when turning on; leave blank = unlimited.
+                        sizeStock: checked
+                          ? (p.sizeStock.length === p.sizes.length ? p.sizeStock : p.sizes.map(() => ""))
+                          : [],
+                      }));
+                    }}
+                    className="w-3.5 h-3.5 rounded-sm border border-border accent-accent"
+                  />
+                  <span className="text-xs text-muted">Different quantity per size</span>
+                </label>
               </div>
 
               {/* Quick-add standard sizes */}
@@ -899,6 +963,7 @@ export default function PortfolioPage() {
                   "110px",                  // Price (£ + input)
                   form.shippingPerSize ? "140px" : null,
                   form.inStoreEnabled   ? "110px" : null,
+                  form.stockPerSize     ? "90px"  : null,
                   "20px",                   // Remove
                 ].filter(Boolean).join(" ");
                 return (
@@ -912,6 +977,7 @@ export default function PortfolioPage() {
                       <div className="text-right pr-1">Price</div>
                       {form.shippingPerSize && <div className="text-right pr-1">Shipping</div>}
                       {form.inStoreEnabled && <div className="text-right pr-1">In-store</div>}
+                      {form.stockPerSize && <div className="text-right pr-1">Qty</div>}
                       <div />
                     </div>
                     <div className="divide-y divide-border/60">
@@ -993,6 +1059,24 @@ export default function PortfolioPage() {
                                   })}
                                   placeholder="—"
                                   className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
+                                />
+                              </div>
+                            )}
+                            {form.stockPerSize && (
+                              <div className="flex items-center gap-1 justify-end">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="1"
+                                  value={form.sizeStock[i] ?? ""}
+                                  onChange={(e) => setForm((p) => {
+                                    const updated = [...(p.sizeStock.length ? p.sizeStock : p.sizes.map(() => ""))];
+                                    updated[i] = e.target.value;
+                                    return { ...p, sizeStock: updated };
+                                  })}
+                                  placeholder="∞"
+                                  className="w-[70px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
+                                  aria-label="Quantity available at this size"
                                 />
                               </div>
                             )}
