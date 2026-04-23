@@ -549,12 +549,12 @@ export default function PlacementDetailClient({ placementId }: Props) {
             </div>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">QR display</p>
-              <p className="text-sm font-medium text-foreground">
+              <p className="text-xl font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
+                {placement.qr_enabled && placement.revenue_share_percent != null && placement.revenue_share_percent > 0 && (
+                  <> &mdash; {placement.revenue_share_percent}% share on QR sales</>
+                )}
               </p>
-              {placement.qr_enabled && placement.revenue_share_percent != null && (
-                <p className="text-[11px] text-muted mt-1">{placement.revenue_share_percent}% share on QR sales</p>
-              )}
             </div>
           </>
         ) : (
@@ -566,7 +566,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
             </div>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">QR display</p>
-              <p className="text-sm font-medium text-foreground">
+              <p className="text-xl font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
               </p>
             </div>
