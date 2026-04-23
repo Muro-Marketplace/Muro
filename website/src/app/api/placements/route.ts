@@ -640,9 +640,16 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: true, countered: true });
     }
 
-    // Can only respond to pending placements
-    if ((status === "active" || status === "declined") && existing.status !== "pending") {
-      return NextResponse.json({ error: "Can only respond to pending requests" }, { status: 400 });
+    // Accept / decline: only block the no-op cases (already in that
+    // terminal state). Anything else in flight — pending, countered,
+    // mid-update — is fine to respond to. A counter doesn't change
+    // status, but this also covers any odd intermediate state we
+    // might land in (e.g. a stale row briefly flagged something else).
+    if (status === "active" && existing.status === "active") {
+      return NextResponse.json({ error: "Already accepted" }, { status: 400 });
+    }
+    if (status === "declined" && existing.status === "declined") {
+      return NextResponse.json({ error: "Already declined" }, { status: 400 });
     }
 
     // Artist cannot unilaterally change a pending placement into something other than active/declined

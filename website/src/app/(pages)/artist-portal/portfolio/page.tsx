@@ -32,6 +32,8 @@ interface WorkFormState {
   sizeShipping: string[];
   inStorePrice: string;
   inStorePricing: string[];
+  /** When true, the In-store column is shown in the sizes table. */
+  inStoreEnabled: boolean;
   detectedRatio: number | null;
   quantityAvailable: string;
   frameOptions: { label: string; priceUplift: string; imageUrl?: string }[];
@@ -92,6 +94,7 @@ const emptyWork: WorkFormState = {
   sizeShipping: [],
   inStorePrice: "",
   inStorePricing: [],
+  inStoreEnabled: false,
   detectedRatio: null,
   quantityAvailable: "",
   frameOptions: [],
@@ -262,6 +265,7 @@ export default function PortfolioPage() {
       sizeShipping: [],
       inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
       inStorePricing: w.inStorePricing ? w.inStorePricing.map((p) => String(p.price)) : [],
+      inStoreEnabled: Array.isArray(w.inStorePricing) && w.inStorePricing.some((p) => p.price > 0),
       detectedRatio: null,
       quantityAvailable: (w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable != null
         ? String((w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable)
@@ -793,9 +797,13 @@ export default function PortfolioPage() {
               </div>
             </div>
 
-            {/* Sizes & Pricing */}
+            {/* Sizes, shipping and in-store — one unified table so the
+                artist sets everything about a size in one row. Shipping
+                and in-store columns only appear when their respective
+                toggles are on; frame add-ons stay below as they apply
+                across all sizes rather than per-size. */}
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium">Available Sizes & Prices <span className="text-accent">*</span></label>
                 <button
                   type="button"
@@ -804,6 +812,42 @@ export default function PortfolioPage() {
                 >
                   + Add custom size
                 </button>
+              </div>
+
+              {/* Column toggles */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.shippingPerSize}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((p) => ({
+                        ...p,
+                        shippingPerSize: checked,
+                        sizeShipping: checked ? p.sizes.map(() => "") : [],
+                      }));
+                    }}
+                    className="w-3.5 h-3.5 rounded-sm border border-border accent-accent"
+                  />
+                  <span className="text-xs text-muted">Different shipping per size</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.inStoreEnabled}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((p) => ({
+                        ...p,
+                        inStoreEnabled: checked,
+                        inStorePricing: checked ? (p.inStorePricing.length ? p.inStorePricing : p.sizes.map(() => "")) : [],
+                      }));
+                    }}
+                    className="w-3.5 h-3.5 rounded-sm border border-border accent-accent"
+                  />
+                  <span className="text-xs text-muted">Also sold in-store at venues</span>
+                </label>
               </div>
 
               {/* Quick-add standard sizes */}
@@ -839,200 +883,277 @@ export default function PortfolioPage() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                {form.sizes.map((size, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <input
-                      type="text"
-                      value={size.label}
-                      onChange={(e) => updateSize(i, "label", e.target.value)}
-                      placeholder='e.g. 12×16" (A3)'
-                      className={`${inputClass} flex-1`}
-                    />
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-sm text-muted">&pound;</span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={size.price || ""}
-                        onChange={(e) => updateSize(i, "price", Number(e.target.value) || 0)}
-                        placeholder="Price"
-                        className="w-24 bg-background border border-border rounded-sm px-3 py-3 text-sm text-foreground text-right focus:outline-none focus:border-accent/60"
-                      />
-                    </div>
-                    {form.sizes.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeSize(i)}
-                        className="text-muted hover:text-red-500 transition-colors shrink-0"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted mt-2">Set a price for each size. You can type custom sizes or use the suggestions above.</p>
-            </div>
-
-            {/* Shipping price */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Shipping Price</label>
-              {!form.shippingPerSize && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted">&pound;</span>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={form.shippingPrice}
-                    onChange={(e) => setForm((p) => ({ ...p, shippingPrice: e.target.value }))}
-                    placeholder={defaultShipping || "9.95"}
-                    className="w-32 bg-background border border-border rounded-sm px-3 py-3 text-sm text-foreground text-right focus:outline-none focus:border-accent/60"
-                  />
-                </div>
-              )}
-              <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.shippingPerSize}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setForm((p) => ({
-                      ...p,
-                      shippingPerSize: checked,
-                      sizeShipping: checked ? p.sizes.map(() => "") : [],
-                    }));
-                  }}
-                  className="w-3.5 h-3.5 rounded-sm border border-border accent-accent"
-                />
-                <span className="text-xs text-muted">Set different shipping per size</span>
-              </label>
-              {form.shippingPerSize && (
-                <div className="mt-3 space-y-2">
-                  {form.sizes.map((size, i) => {
-                    if (!size.label.trim()) return null;
-                    // Per-size estimate. The size label itself is the
-                    // dimension string ("A3", "50 x 70 cm"), so feed that
-                    // into the calculator.
-                    const est = estimateShipping({
-                      dimensions: size.label,
-                      framed: false,
-                      medium: form.medium,
-                    });
-                    const current = form.sizeShipping[i] || "";
-                    return (
-                      <div key={i} className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted w-28 truncate">{size.label}</span>
-                          <span className="text-xs text-muted">&pound;</span>
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={current}
-                            onChange={(e) => setForm((p) => {
-                              const updated = [...p.sizeShipping];
-                              updated[i] = e.target.value;
-                              return { ...p, sizeShipping: updated };
-                            })}
-                            placeholder={est ? est.cost.toFixed(2) : (defaultShipping || "9.95")}
-                            className="w-20 bg-background border border-border rounded-sm px-2 py-1.5 text-xs text-foreground text-right focus:outline-none focus:border-accent/60"
-                          />
-                          {est && (
-                            <button
-                              type="button"
-                              onClick={() => setForm((p) => {
-                                const updated = [...p.sizeShipping];
-                                updated[i] = est.cost.toFixed(2);
-                                return { ...p, sizeShipping: updated };
-                              })}
-                              className="text-[10px] text-accent hover:text-accent-hover whitespace-nowrap"
-                              title={`${tierLabel(est.tier)} · ${est.estimatedDays}`}
-                            >
-                              Use &pound;{est.cost.toFixed(2)}
-                            </button>
+              {/* Desktop table — columns adjust based on toggles */}
+              <div className="hidden sm:block overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[10px] text-muted uppercase tracking-wider">
+                      <th className="text-left font-medium pb-2 pr-3">Size</th>
+                      <th className="text-right font-medium pb-2 px-2 whitespace-nowrap">Price</th>
+                      {form.shippingPerSize && <th className="text-right font-medium pb-2 px-2 whitespace-nowrap">Shipping</th>}
+                      {form.inStoreEnabled && <th className="text-right font-medium pb-2 px-2 whitespace-nowrap">In-store</th>}
+                      <th className="w-6 pb-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.sizes.map((size, i) => {
+                      const shipEst = estimateShipping({ dimensions: size.label || form.dimensions, framed: false, medium: form.medium });
+                      const shipCurrent = form.sizeShipping[i] || "";
+                      const storeCurrent = form.inStorePricing?.[i] || "";
+                      return (
+                        <tr key={i} className="border-t border-border/60">
+                          <td className="py-2 pr-3">
+                            <input
+                              type="text"
+                              value={size.label}
+                              onChange={(e) => updateSize(i, "label", e.target.value)}
+                              placeholder='e.g. 12×16" (A3)'
+                              className="w-full bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
+                            />
+                          </td>
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-1 justify-end">
+                              <span className="text-xs text-muted">£</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={size.price || ""}
+                                onChange={(e) => updateSize(i, "price", Number(e.target.value) || 0)}
+                                placeholder="Price"
+                                className="w-24 bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
+                              />
+                            </div>
+                          </td>
+                          {form.shippingPerSize && (
+                            <td className="py-2 px-2">
+                              <div className="flex items-center gap-1 justify-end">
+                                <span className="text-xs text-muted">£</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={shipCurrent}
+                                  onChange={(e) => setForm((p) => {
+                                    const updated = [...p.sizeShipping];
+                                    updated[i] = e.target.value;
+                                    return { ...p, sizeShipping: updated };
+                                  })}
+                                  placeholder={shipEst ? shipEst.cost.toFixed(2) : (defaultShipping || "9.95")}
+                                  className="w-20 bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
+                                />
+                              </div>
+                              {shipEst && !shipCurrent && (
+                                <button
+                                  type="button"
+                                  onClick={() => setForm((p) => {
+                                    const updated = [...p.sizeShipping];
+                                    updated[i] = shipEst.cost.toFixed(2);
+                                    return { ...p, sizeShipping: updated };
+                                  })}
+                                  className="text-[10px] text-accent hover:text-accent-hover mt-1 block ml-auto"
+                                  title={`${tierLabel(shipEst.tier)} · ${shipEst.estimatedDays}`}
+                                >
+                                  Use £{shipEst.cost.toFixed(2)}
+                                </button>
+                              )}
+                            </td>
                           )}
-                        </div>
-                        {est && !current && (
-                          <p className="text-[10px] text-muted pl-[120px]">
-                            Suggested {tierLabel(est.tier).toLowerCase()}, {est.estimatedDays} &middot; {est.estimatedWeightKg}kg
-                          </p>
+                          {form.inStoreEnabled && (
+                            <td className="py-2 px-2">
+                              <div className="flex items-center gap-1 justify-end">
+                                <span className="text-xs text-muted">£</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={storeCurrent}
+                                  onChange={(e) => setForm((p) => {
+                                    const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
+                                    updated[i] = e.target.value;
+                                    return { ...p, inStorePricing: updated };
+                                  })}
+                                  placeholder="—"
+                                  className="w-20 bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
+                                />
+                              </div>
+                            </td>
+                          )}
+                          <td className="py-2 pl-1">
+                            {form.sizes.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeSize(i)}
+                                className="text-muted hover:text-red-500 transition-colors"
+                                aria-label="Remove size"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile — stacked cards per size. The table doesn't fit
+                  well on small viewports when multiple columns are on. */}
+              <div className="sm:hidden space-y-3">
+                {form.sizes.map((size, i) => {
+                  const shipEst = estimateShipping({ dimensions: size.label || form.dimensions, framed: false, medium: form.medium });
+                  const shipCurrent = form.sizeShipping[i] || "";
+                  const storeCurrent = form.inStorePricing?.[i] || "";
+                  return (
+                    <div key={i} className="bg-background border border-border rounded-sm p-3">
+                      <div className="flex items-start gap-2">
+                        <input
+                          type="text"
+                          value={size.label}
+                          onChange={(e) => updateSize(i, "label", e.target.value)}
+                          placeholder='e.g. 12×16" (A3)'
+                          className="flex-1 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
+                        />
+                        {form.sizes.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeSize(i)}
+                            className="p-2 text-muted hover:text-red-500 transition-colors"
+                            aria-label="Remove size"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+                          </button>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-              {!form.shippingPerSize && (
-                <p className="text-[10px] text-muted mt-1.5">
-                  Leave blank to use the suggested rate for this size. Set to 0 for free shipping.
-                </p>
-              )}
-
-              {/* Shipping calculator suggestion for the single-price mode.
-                  Uses dimensions + medium to pick a tier and a weight band.
-                  Per-size suggestions render inline above when the artist
-                  has chosen "different shipping per size". */}
-              {form.dimensions && !form.shippingPerSize && (() => {
-                const est = estimateShipping({ dimensions: form.dimensions, framed: false, medium: form.medium });
-                if (!est) return null;
-                return (
-                  <div className="mt-3 flex items-start gap-2 p-3 bg-accent/5 border border-accent/20 rounded-sm">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5">
-                      <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
-                    </svg>
-                    <div className="flex-1 text-xs">
-                      <p className="text-foreground">
-                        Suggested: <span className="font-semibold">£{est.cost.toFixed(2)}</span> — {tierLabel(est.tier)}, {est.estimatedDays}
-                      </p>
-                      <p className="text-muted text-[11px] mt-0.5">
-                        Based on {est.longestEdgeCm}cm longest edge · {est.estimatedWeightKg}kg packaged{form.medium ? ` (${form.medium.toLowerCase()})` : ""}.
-                      </p>
-                      {!form.shippingPrice && (
-                        <button
-                          type="button"
-                          onClick={() => setForm((p) => ({ ...p, shippingPrice: est.cost.toFixed(2) }))}
-                          className="mt-1.5 text-[11px] font-medium text-accent hover:text-accent-hover"
-                        >
-                          Use this price →
-                        </button>
-                      )}
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[10px] text-muted uppercase tracking-wider">Price</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-muted">£</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={size.price || ""}
+                              onChange={(e) => updateSize(i, "price", Number(e.target.value) || 0)}
+                              placeholder="Price"
+                              className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
+                            />
+                          </div>
+                        </label>
+                        {form.shippingPerSize && (
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[10px] text-muted uppercase tracking-wider">Shipping</span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-muted">£</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={shipCurrent}
+                                onChange={(e) => setForm((p) => {
+                                  const updated = [...p.sizeShipping];
+                                  updated[i] = e.target.value;
+                                  return { ...p, sizeShipping: updated };
+                                })}
+                                placeholder={shipEst ? shipEst.cost.toFixed(2) : (defaultShipping || "9.95")}
+                                className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
+                              />
+                            </div>
+                            {shipEst && !shipCurrent && (
+                              <button
+                                type="button"
+                                onClick={() => setForm((p) => {
+                                  const updated = [...p.sizeShipping];
+                                  updated[i] = shipEst.cost.toFixed(2);
+                                  return { ...p, sizeShipping: updated };
+                                })}
+                                className="text-[10px] text-accent hover:text-accent-hover text-left"
+                                title={`${tierLabel(shipEst.tier)} · ${shipEst.estimatedDays}`}
+                              >
+                                Use £{shipEst.cost.toFixed(2)} ({tierLabel(shipEst.tier).toLowerCase()})
+                              </button>
+                            )}
+                          </label>
+                        )}
+                        {form.inStoreEnabled && (
+                          <label className="flex flex-col gap-1">
+                            <span className="text-[10px] text-muted uppercase tracking-wider">In-store</span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-muted">£</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={storeCurrent}
+                                onChange={(e) => setForm((p) => {
+                                  const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
+                                  updated[i] = e.target.value;
+                                  return { ...p, inStorePricing: updated };
+                                })}
+                                placeholder="—"
+                                className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
+                              />
+                            </div>
+                          </label>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
-            </div>
+                  );
+                })}
+              </div>
 
-            {/* In-store price per size */}
-            <div>
-              <label className="block text-sm font-medium mb-2">In-Store Prices <span className="text-muted font-normal">(optional)</span></label>
-              <p className="text-[10px] text-muted mb-3">
-                Set prices for the original piece when displayed in a venue. Customers can buy in person with no shipping. Leave blank for sizes not available in store.
+              <p className="text-[10px] text-muted mt-2">
+                Set a price for each size. Enable the toggles above to add per-size shipping or in-store prices as extra columns.
               </p>
-              <div className="space-y-2">
-                {form.sizes.map((size, i) => (
-                  size.label.trim() ? (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-xs text-muted w-28 truncate">{size.label}</span>
-                      <span className="text-xs text-muted">&pound;</span>
+
+              {/* Single-price shipping fallback — only visible when the
+                  per-size toggle is off. Keeps one shipping number for
+                  the whole artwork. */}
+              {!form.shippingPerSize && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <label className="text-sm font-medium sm:w-40 shrink-0">Shipping price</label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm text-muted">£</span>
                       <input
                         type="number"
                         min={0}
                         step="0.01"
-                        value={form.inStorePricing?.[i] || ""}
-                        onChange={(e) => setForm((p) => {
-                          const updated = [...(p.inStorePricing || p.sizes.map(() => ""))];
-                          updated[i] = e.target.value;
-                          return { ...p, inStorePricing: updated };
-                        })}
-                        placeholder="Not in store"
-                        className="w-24 bg-background border border-border rounded-sm px-2 py-1.5 text-xs text-foreground text-right focus:outline-none focus:border-accent/60"
+                        value={form.shippingPrice}
+                        onChange={(e) => setForm((p) => ({ ...p, shippingPrice: e.target.value }))}
+                        placeholder={defaultShipping || "9.95"}
+                        className="w-32 bg-background border border-border rounded-sm px-3 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                       />
+                      <span className="text-[10px] text-muted ml-2">Blank = default · 0 = free</span>
                     </div>
-                  ) : null
-                ))}
-              </div>
+                  </div>
+                  {form.dimensions && (() => {
+                    const est = estimateShipping({ dimensions: form.dimensions, framed: false, medium: form.medium });
+                    if (!est) return null;
+                    return (
+                      <div className="mt-2 flex items-start gap-2 p-3 bg-accent/5 border border-accent/20 rounded-sm text-xs">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0 mt-0.5">
+                          <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+                        </svg>
+                        <div className="flex-1">
+                          <p className="text-foreground">
+                            Suggested: <span className="font-semibold">£{est.cost.toFixed(2)}</span> — {tierLabel(est.tier)}, {est.estimatedDays}
+                          </p>
+                          {!form.shippingPrice && (
+                            <button
+                              type="button"
+                              onClick={() => setForm((p) => ({ ...p, shippingPrice: est.cost.toFixed(2) }))}
+                              className="mt-1 text-[11px] font-medium text-accent hover:text-accent-hover"
+                            >
+                              Use this price →
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
 
             {/* Available toggle */}

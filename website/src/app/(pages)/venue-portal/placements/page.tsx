@@ -1015,13 +1015,12 @@ export default function VenuePlacementsPage() {
                             placement={{
                               id: p.id,
                               status: p.status.toLowerCase(),
+                              createdAt: p.createdAtTs ? new Date(p.createdAtTs).toISOString() : null,
                               acceptedAt: p.acceptedAt,
                               scheduledFor: p.scheduledFor,
                               installedAt: p.installedAt,
                               liveFrom: p.liveFrom,
                               collectedAt: p.collectedAt,
-                              proposedStage: p.proposedStage,
-                              proposedByUserId: p.proposedByUserId,
                             }}
                             canAdvance={p.status === "Active"}
                             currentUserId={user?.id}
@@ -1033,8 +1032,6 @@ export default function VenuePlacementsPage() {
                               installedAt: next.installedAt ?? x.installedAt,
                               liveFrom: next.liveFrom ?? x.liveFrom,
                               collectedAt: next.collectedAt ?? x.collectedAt,
-                              proposedStage: next.proposedStage ?? x.proposedStage,
-                              proposedByUserId: next.proposedByUserId ?? x.proposedByUserId,
                             } : x))}
                           />
 
