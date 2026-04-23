@@ -894,7 +894,8 @@ export default function PortfolioPage() {
                 // in-store cells are fixed-width; the last column is
                 // the remove icon.
                 const cols = [
-                  "minmax(140px, 340px)",   // Size
+                  "minmax(140px, 360px)",   // Size
+                  "1fr",                    // Spacer — pushes price columns to the right edge
                   "110px",                  // Price (£ + input)
                   form.shippingPerSize ? "140px" : null,
                   form.inStoreEnabled   ? "110px" : null,
@@ -907,6 +908,7 @@ export default function PortfolioPage() {
                       style={{ gridTemplateColumns: cols }}
                     >
                       <div>Size</div>
+                      <div />
                       <div className="text-right pr-1">Price</div>
                       {form.shippingPerSize && <div className="text-right pr-1">Shipping</div>}
                       {form.inStoreEnabled && <div className="text-right pr-1">In-store</div>}
@@ -930,6 +932,7 @@ export default function PortfolioPage() {
                               placeholder='e.g. 12×16" (A3)'
                               className="bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60 min-w-0"
                             />
+                            <div />
                             <div className="flex items-center gap-1 justify-end">
                               <span className="text-xs text-muted">£</span>
                               <input
@@ -970,7 +973,7 @@ export default function PortfolioPage() {
                                     className="text-[10px] text-accent hover:text-accent-hover whitespace-nowrap"
                                     title={`${tierLabel(shipEst.tier)} · ${shipEst.estimatedDays}`}
                                   >
-                                    Use £{shipEst.cost.toFixed(2)}
+                                    Recommended £{shipEst.cost.toFixed(2)}
                                   </button>
                                 )}
                               </div>
@@ -1086,7 +1089,7 @@ export default function PortfolioPage() {
                                 className="text-[10px] text-accent hover:text-accent-hover text-left"
                                 title={`${tierLabel(shipEst.tier)} · ${shipEst.estimatedDays}`}
                               >
-                                Use £{shipEst.cost.toFixed(2)} ({tierLabel(shipEst.tier).toLowerCase()})
+                                Recommended £{shipEst.cost.toFixed(2)} ({tierLabel(shipEst.tier).toLowerCase()})
                               </button>
                             )}
                           </label>
