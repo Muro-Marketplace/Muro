@@ -325,23 +325,37 @@ export default function VenuePlacementsPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [worksLoading, setWorksLoading] = useState(false);
 
-  // Pre-populate from URL params (from browse lightbox)
+  // Pre-populate from URL params (from browse lightbox / artist page)
   useEffect(() => {
     const paramArtist = searchParams.get("artist");
     const paramName = searchParams.get("artistName");
     const paramWork = searchParams.get("work");
     const paramWorkImage = searchParams.get("workImage");
+    // `works` carries the comma-joined list of every tick the venue
+    // made on the artist's profile so ALL of them preselect here,
+    // not just the first. Falls back to `work` when only one piece
+    // was passed (lightbox Request-Placement button).
+    const paramWorks = searchParams.get("works");
 
     if (paramArtist) {
       setArtistSlug(paramArtist);
       setArtistName(paramName || paramArtist);
       setShowForm(true);
 
-      // Pre-select the work from lightbox (no specific size — opens
-      // the picker on the card so the venue can choose one).
-      if (paramWork) {
-        setSelectedWorkSizes({ [paramWork]: "" });
-        setSizePickerFor(paramWork);
+      // Build the preselection map. Empty-string value = "Any size"
+      // default; the user can open each card's picker to refine.
+      const titles = paramWorks
+        ? paramWorks.split(",").map((t) => t.trim()).filter(Boolean)
+        : paramWork
+          ? [paramWork]
+          : [];
+      if (titles.length > 0) {
+        const next: Record<string, string> = {};
+        for (const t of titles) next[t] = "";
+        setSelectedWorkSizes(next);
+        // Only auto-pop the size picker on a single-work entry; with
+        // multiple it just clutters the screen.
+        if (titles.length === 1) setSizePickerFor(titles[0]);
       }
 
       // Load artist's full portfolio

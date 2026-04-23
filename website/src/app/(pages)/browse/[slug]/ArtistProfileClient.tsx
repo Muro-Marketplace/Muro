@@ -52,10 +52,23 @@ export default function ArtistProfileClient({
   }
 
   function handleRequestPlacement() {
-    const workTitles = Array.from(selectedForPlacement).map((i) => filteredWorks[i]?.title).filter(Boolean);
+    const workTitles = Array.from(selectedForPlacement).map((i) => filteredWorks[i]?.title).filter(Boolean) as string[];
     const firstWork = filteredWorks[Array.from(selectedForPlacement)[0]];
     if (userType === "venue") {
-      router.push(`/venue-portal/placements?artist=${artistSlug}&artistName=${encodeURIComponent(artistName)}&work=${encodeURIComponent(workTitles[0] || "")}&workImage=${encodeURIComponent(firstWork?.image || "")}`);
+      // Pass ALL ticked works through so every one of them is
+      // preselected on the request form — not just the first. The
+      // legacy `work` / `workImage` params stay for compat; the new
+      // `works` param is the full comma-joined list that drives the
+      // multi-artwork preselection.
+      const params = new URLSearchParams();
+      params.set("artist", artistSlug);
+      params.set("artistName", artistName);
+      if (workTitles.length > 0) {
+        params.set("work", workTitles[0]);
+        if (firstWork?.image) params.set("workImage", firstWork.image);
+        params.set("works", workTitles.join(","));
+      }
+      router.push(`/venue-portal/placements?${params.toString()}`);
     } else if (userType === "artist") {
       router.push(`/artist-portal/placements`);
     }
@@ -269,26 +282,22 @@ export default function ArtistProfileClient({
                     </div>
                   </div>
                   {/* Top-left cluster: selection tick (venue only) then
-                      the heart (Save) to its right. Moved off the bottom
-                      of the image so the icons don't cover the price
-                      line underneath. Selection stays tick-shaped —
-                      an outlined rounded square that fills with the
-                      accent colour once ticked. */}
+                      the heart (Save) to its right. Same checkmark in
+                      both states — transparent-ish when unselected,
+                      filled accent circle with white tick once ticked. */}
                   {user && userType === "venue" && (
                     <button
                       onClick={(e) => { e.stopPropagation(); togglePlacementSelection(index); }}
-                      className={`absolute top-3 left-3 w-7 h-7 rounded-md flex items-center justify-center transition-all z-10 ${
+                      className={`absolute top-3 left-3 w-7 h-7 rounded-full flex items-center justify-center transition-all z-10 ${
                         selectedForPlacement.has(index)
                           ? "bg-accent text-white shadow-md"
-                          : "bg-white/80 text-foreground/70 border border-white/70 opacity-0 group-hover:opacity-100 hover:bg-white hover:text-accent backdrop-blur-sm"
+                          : "bg-white/60 text-accent opacity-0 group-hover:opacity-100 hover:bg-white backdrop-blur-sm"
                       }`}
                       title={selectedForPlacement.has(index) ? "Deselect" : "Select for placement"}
                     >
-                      {selectedForPlacement.has(index) ? (
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="10" height="10" rx="1.5" /></svg>
-                      )}
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="2 7 5.5 10.5 12 3.5" />
+                      </svg>
                     </button>
                   )}
                   <div className={`absolute top-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${user && userType === "venue" ? "left-12" : "left-3"}`}>
