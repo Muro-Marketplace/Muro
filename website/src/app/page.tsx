@@ -115,39 +115,6 @@ export default function Home() {
       {/* ─── CONTENT SECTIONS ─── */}
       <div ref={contentRef} className="bg-background">
 
-          {/* Logged-in personalised block replaces the For-Venues / For-Artists
-              pitch sections below. A signed-in user already knows the value
-              prop; they want shortcuts into their portal, not another "Apply
-              to Join" CTA. */}
-          {user && (
-            <section className="py-12 lg:py-20 bg-surface border-b border-border">
-              <div className="max-w-[1000px] mx-auto px-6 lg:px-10 text-center">
-                <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
-                  Welcome back
-                </p>
-                <h2 className="font-serif text-3xl md:text-4xl text-foreground mb-4 leading-tight">
-                  Pick up where you left off
-                </h2>
-                <p className="text-muted mb-8">
-                  Jump into your portal, browse fresh work, or reply to your messages.
-                </p>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
-                  <Link href={portalBase} className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
-                    {portalLabel}
-                  </Link>
-                  <Link href="/browse" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
-                    Browse Marketplace
-                  </Link>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Promo pitch blocks only render for logged-out visitors. Signed-in
-              users see the block above instead — they don't need the "Are
-              you an artist? / Looking for art?" framing anymore. */}
-          {!user && (
-          <>
           {/* ─── FOR VENUES ─── */}
           <section className="py-12 lg:py-28 bg-surface border-b border-border">
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
@@ -219,17 +186,22 @@ export default function Home() {
                   </p>
                 </div>
 
-                {/* Venue-oriented hero image — a real interior with art on
-                    the wall, not a nature collage. Frames the message
-                    "this is where your art lives". */}
-                <div className="hidden sm:block relative aspect-[4/5] rounded-sm overflow-hidden">
-                  <Image
-                    src="https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=1200&h=1500&fit=crop"
-                    alt="Gallery wall inside a modern cafe with framed artwork"
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 1024px) 50vw, 550px"
-                  />
+                <div className="hidden sm:grid grid-cols-5 grid-rows-4 gap-2 aspect-square">
+                  <div className="col-span-3 row-span-2 relative rounded-sm overflow-hidden">
+                    <Image src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&h=400&fit=crop" alt="Moody urban street photography" fill className="object-cover" sizes="25vw" />
+                  </div>
+                  <div className="col-span-2 row-span-1 relative rounded-sm overflow-hidden">
+                    <Image src="https://images.unsplash.com/photo-1418065460487-3e41a6c84dc5?w=400&h=400&fit=crop" alt="Misty forest landscape" fill className="object-cover" sizes="15vw" />
+                  </div>
+                  <div className="col-span-2 row-span-1 relative rounded-sm overflow-hidden">
+                    <Image src="https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=400&h=200&fit=crop" alt="Vintage film camera" fill className="object-cover" sizes="15vw" />
+                  </div>
+                  <div className="col-span-2 row-span-2 relative rounded-sm overflow-hidden">
+                    <Image src="https://images.unsplash.com/photo-1484406566174-9da000fda645?w=400&h=400&fit=crop" alt="Deer in misty woodland" fill className="object-cover" sizes="15vw" />
+                  </div>
+                  <div className="col-span-3 row-span-2 relative rounded-sm overflow-hidden">
+                    <Image src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop" alt="Mountain landscape at night" fill className="object-cover" sizes="25vw" />
+                  </div>
                 </div>
               </div>
               </AnimateIn>
@@ -283,8 +255,6 @@ export default function Home() {
               </AnimateIn>
             </div>
           </section>
-          </>
-          )}
 
           {/* ─── HOW IT WORKS ─── */}
           <section className="py-20 lg:py-28 bg-foreground">

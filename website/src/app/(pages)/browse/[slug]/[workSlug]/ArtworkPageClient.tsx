@@ -34,6 +34,7 @@ export default function ArtworkPageClient({
   const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
   const selectedFrame = frameOptions[selectedFrameIdx];
   const frameUplift = selectedFrame?.priceUplift || 0;
+  const [wallVizOpen, setWallVizOpen] = useState(false);
 
   const selectedPricing = work.pricing[selectedSizeIdx] || work.pricing[0];
   const displayPrice = selectedPricing
@@ -68,6 +69,16 @@ export default function ArtworkPageClient({
         </span>
         <SaveButton type="work" itemId={work.id} size="sm" />
       </div>
+
+      {/* About this piece — the artist's own description. Was being
+          stored but never rendered, so it looked like saving the
+          description on portfolio did nothing. */}
+      {work.description && work.description.trim() && (
+        <div className="mb-6">
+          <p className="text-[10px] text-muted uppercase tracking-[0.18em] mb-2">About this piece</p>
+          <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">{work.description.trim()}</p>
+        </div>
+      )}
 
       {/* Details */}
       <dl className="space-y-2.5 mb-6 text-[13px]">
@@ -307,6 +318,16 @@ export default function ArtworkPageClient({
           </button>
         )}
         <button
+          onClick={() => setWallVizOpen(true)}
+          className="w-full px-5 py-3 text-sm font-medium text-foreground border border-border hover:border-foreground/50 rounded-sm transition-colors inline-flex items-center justify-center gap-2"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+          </svg>
+          View on your wall
+        </button>
+
+        <button
           onClick={() => {
             const nameParam = artistName ? `&artistName=${encodeURIComponent(artistName)}` : "";
             if (user && userType === "venue") {
@@ -324,16 +345,35 @@ export default function ArtworkPageClient({
           Message the artist
           <span className="ml-1">→</span>
         </button>
-
-        <div className="mt-8">
-          <WallVisualiser
-            artworkImage={work.image}
-            artworkTitle={work.title}
-            artworkWidthCm={null}
-            artworkHeightCm={null}
-          />
-        </div>
       </div>
+
+      {/* Wall visualiser — opens as a modal from the "View on your wall"
+          CTA so the main page layout stays tight. */}
+      {wallVizOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4" onClick={() => setWallVizOpen(false)}>
+          <div className="bg-background rounded-sm max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <p className="text-sm font-medium text-foreground">View on your wall</p>
+              <button
+                type="button"
+                onClick={() => setWallVizOpen(false)}
+                className="p-1 text-muted hover:text-foreground transition-colors"
+                aria-label="Close"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <WallVisualiser
+                artworkImage={work.image}
+                artworkTitle={work.title}
+                artworkWidthCm={null}
+                artworkHeightCm={null}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

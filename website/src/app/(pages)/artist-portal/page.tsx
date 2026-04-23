@@ -149,20 +149,31 @@ export default function ArtistPortalPage() {
       const activityItems: ActivityItem[] = [];
       const conversations = data.conversations || [];
 
+      const mySlug = profile.slug || "";
+      const myUserId = profile.user_id || "";
       for (const p of placements.slice(0, 10)) {
         const time = p.responded_at || p.created_at;
         const venueName = formatName(p.venue);
         const placementLink = `/placements/${encodeURIComponent(p.id)}`;
-        if (p.status === "pending") {
+        const iAmRequester = p.requester_user_id && p.requester_user_id === myUserId;
+        if (p.status === "pending" && !iAmRequester) {
           activityItems.push({ id: "p-" + p.id, text: `Placement request: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
-        } else if (p.status === "active") {
+        } else if (p.status === "active" && iAmRequester) {
+          // Artist hears back when their request was accepted.
           activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
-        } else if (p.status === "declined") {
+        } else if (p.status === "active" && !iAmRequester) {
+          // Artist accepted an incoming venue request — surface the success quietly.
+          activityItems.push({ id: "pa-" + p.id, text: `Placement live: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
+        } else if (p.status === "declined" && iAmRequester) {
           activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${p.work_title || "Artwork"}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
         }
       }
 
       for (const c of conversations) {
+        // Only surface inbound messages — things the artist needs to
+        // react to. If the latest message was sent by them, skip it.
+        const isInbound = c.latestSender && c.latestSender !== mySlug;
+        if (!isInbound) continue;
         const name = formatName(c.otherParty);
         const preview = c.latestMessage?.slice(0, 50) || "";
         activityItems.push({ id: "m-" + c.conversationId, text: `${name}: "${preview}${c.latestMessage?.length > 50 ? "..." : ""}"`, time: formatRelativeTime(c.lastActivity), sortTime: new Date(c.lastActivity).getTime(), type: c.unreadCount > 0 ? "enquiry" : "message", link: "/artist-portal/messages" });

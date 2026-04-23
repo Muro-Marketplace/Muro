@@ -40,13 +40,14 @@ export async function GET(request: Request) {
       const orders = ordersRes.data || [];
       const messages = messagesRes.data || [];
 
-      // Group messages into conversations
-      const convMap: Record<string, { otherParty: string; latestMessage: string; lastActivity: string; unreadCount: number }> = {};
+      // Group messages into conversations. latestSender is carried so the
+      // dashboard activity feed can filter out messages the user sent.
+      const convMap: Record<string, { otherParty: string; latestMessage: string; latestSender: string; lastActivity: string; unreadCount: number }> = {};
       for (const msg of messages) {
         const cid = msg.conversation_id;
         if (!convMap[cid]) {
           const otherParty = msg.recipient_slug === slug ? msg.sender_name : msg.recipient_slug;
-          convMap[cid] = { otherParty, latestMessage: msg.content, lastActivity: msg.created_at, unreadCount: 0 };
+          convMap[cid] = { otherParty, latestMessage: msg.content, latestSender: msg.sender_name, lastActivity: msg.created_at, unreadCount: 0 };
         }
         if (!msg.is_read && msg.recipient_slug === slug) convMap[cid].unreadCount++;
       }

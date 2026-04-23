@@ -52,6 +52,7 @@ interface RemotePlacement extends PlacementLifecycle {
   live_from: string | null;
   collected_at: string | null;
   revenue_earned_gbp: number | null;
+  message: string | null;
   created_at: string;
 }
 
@@ -98,6 +99,9 @@ export default function PlacementContextPanel({
   const [counterOpen, setCounterOpen] = useState(false);
   const [counterRevShare, setCounterRevShare] = useState<number>(0);
   const [counterQr, setCounterQr] = useState<boolean>(true);
+  // Paid-loan and QR are now independent toggles on the counter form so
+  // paid-loan + QR + rev share can be expressed in one counter.
+  const [counterPaidLoan, setCounterPaidLoan] = useState<boolean>(false);
   const [counterFee, setCounterFee] = useState<number | "">("");
   const [counterNote, setCounterNote] = useState("");
 
@@ -249,14 +253,21 @@ export default function PlacementContextPanel({
     setBusyAction("counter");
     setError(null);
     try {
-      const arrangementType = counterQr ? (counterRevShare > 0 ? "revenue_share" : "free_loan") : "free_loan";
+      // Derive arrangement_type from the two toggles. free_loan is the DB
+      // value for "has a monthly fee" (the column name is legacy); pure
+      // revenue share has no fee.
+      const arrangementType = counterPaidLoan
+        ? "free_loan"
+        : counterQr
+          ? "revenue_share"
+          : "free_loan";
       const body = {
         id: (current as RemotePlacement).id,
         counter: {
           arrangementType,
           revenueSharePercent: counterQr && counterRevShare > 0 ? counterRevShare : undefined,
           qrEnabled: counterQr,
-          monthlyFeeGbp: !counterQr && typeof counterFee === "number" ? counterFee : undefined,
+          monthlyFeeGbp: counterPaidLoan && typeof counterFee === "number" ? counterFee : undefined,
           message: counterNote.trim() || undefined,
         },
       };
@@ -451,17 +462,14 @@ export default function PlacementContextPanel({
 
   // Has placement \u2014 show progress panel.
   const p = current as RemotePlacement;
-  // Derive the headline arrangement label from the actual data rather than
-  // trusting the raw arrangement_type, which historically got set to
-  // "free_loan" even for QR-only revenue shares. Rules:
-  //   \u2022 Monthly fee > 0              \u2192 Paid loan
-  //   \u2022 No fee but QR enabled        \u2192 Revenue share (even if DB says "free_loan")
-  //   \u2022 Explicit "revenue_share"     \u2192 Revenue share
-  //   \u2022 "purchase"                   \u2192 Direct purchase
-  //   \u2022 Anything else                \u2192 Free display
-  const hasFee = typeof p.monthly_fee_gbp === "number" && p.monthly_fee_gbp > 0;
-  // "Paid loan + QR" when both are in play — rev share on QR scans tops up
-  // the monthly fee. Single labels otherwise.
+  // Derive the headline arrangement label from actual data rather than
+  // trusting the raw arrangement_type. For legacy rows where the fee was
+  // dropped by an earlier insert retry, fall back to parsing £X/month out
+  // of the request message so a paid loan isn't mislabelled.
+  const msg = p.message || "";
+  const msgFeeMatch = msg.match(/(?:\u00a3|gbp)\s?(\d{2,5})\s?(?:\/?\s?m|per\s*m|\/\s*mo|a\s*m)/i);
+  const msgFee = msgFeeMatch ? parseFloat(msgFeeMatch[1]) : 0;
+  const hasFee = (typeof p.monthly_fee_gbp === "number" && p.monthly_fee_gbp > 0) || msgFee > 0;
   const arrangementLabel = hasFee
     ? (p.qr_enabled ? "Paid loan + QR" : "Paid loan")
     : p.arrangement_type === "purchase"
@@ -603,7 +611,11 @@ export default function PlacementContextPanel({
               setCounterOpen(true);
               setCounterRevShare(p.revenue_share_percent || 0);
               setCounterQr(p.qr_enabled ?? true);
-              setCounterFee(p.monthly_fee_gbp ?? "");
+              // Seed the paid-loan toggle from the existing fee so counters
+              // preserve whatever the current arrangement expresses.
+              const currentFee = typeof p.monthly_fee_gbp === "number" ? p.monthly_fee_gbp : 0;
+              setCounterPaidLoan(currentFee > 0);
+              setCounterFee(currentFee > 0 ? currentFee : "");
             }} className="px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-full transition-colors">
               Counter
             </button>
@@ -623,28 +635,63 @@ export default function PlacementContextPanel({
         {error && <p className="text-[11px] text-red-600 mt-2">{error}</p>}
       </div>
 
-      {/* Counter form */}
+      {/* Counter form — mirrors the new-request shape so the full range of
+          arrangements is expressible: Paid loan (+ optional QR + rev share),
+          Revenue share only, or a pure free display. */}
       {counterOpen && (
         <div className="px-5 py-4 border-b border-border bg-surface">
           <Header title="Counter offer" subtitle="Adjust the terms before sending back." />
           <div className="mt-3 space-y-3">
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setCounterQr(true)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${counterQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>QR Display</button>
-              <button type="button" onClick={() => setCounterQr(false)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${!counterQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>Paid Loan</button>
-            </div>
-            {counterQr ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted flex-1">Revenue share</span>
+            {/* Paid loan toggle — checkbox because you can combine with QR. */}
+            <label className="flex items-center justify-between gap-2 cursor-pointer">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-foreground">Paid loan</p>
+                <p className="text-[10px] text-muted leading-snug">Venue pays the artist monthly to display the work.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCounterPaidLoan(!counterPaidLoan)}
+                className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${counterPaidLoan ? "bg-accent" : "bg-border"}`}
+                aria-pressed={counterPaidLoan}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${counterPaidLoan ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+              </button>
+            </label>
+            {counterPaidLoan && (
+              <div className="flex items-center gap-2 pl-0">
+                <span className="text-xs text-muted flex-1">Monthly fee</span>
+                <span className="text-xs text-muted">£</span>
+                <input type="number" min={0} value={counterFee} onChange={(e) => { const v = e.target.value; if (v === "") { setCounterFee(""); return; } const n = Number(v); if (!Number.isNaN(n)) setCounterFee(n); }} placeholder="e.g. 80" className="w-20 px-2 py-1.5 bg-surface border border-border rounded-lg text-xs focus:outline-none focus:border-accent/50" />
+              </div>
+            )}
+
+            {/* QR toggle — independent so you can have Paid loan + QR, or
+                QR-only revenue share. */}
+            <label className="flex items-center justify-between gap-2 cursor-pointer">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-foreground">QR display</p>
+                <p className="text-[10px] text-muted leading-snug">Let visitors buy via a QR code. Venue earns a share of sales.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCounterQr(!counterQr)}
+                className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${counterQr ? "bg-accent" : "bg-border"}`}
+                aria-pressed={counterQr}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${counterQr ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+              </button>
+            </label>
+            {counterQr && (
+              <div className="flex items-center gap-2 pl-0">
+                <span className="text-xs text-muted flex-1">{counterPaidLoan ? "Share on QR sales" : "Revenue share"}</span>
                 <input type="number" min={0} max={50} value={counterRevShare} onChange={(e) => setCounterRevShare(Number(e.target.value) || 0)} className="w-16 px-2 py-1.5 bg-surface border border-border rounded-lg text-xs text-center focus:outline-none focus:border-accent/50" />
                 <span className="text-xs text-muted">%</span>
               </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted flex-1">Monthly fee</span>
-                <span className="text-xs text-muted">£</span>
-                <input type="number" min={0} value={counterFee} onChange={(e) => { const v = e.target.value; if (v === "") { setCounterFee(""); return; } const n = Number(v); if (!Number.isNaN(n)) setCounterFee(n); }} className="w-20 px-2 py-1.5 bg-surface border border-border rounded-lg text-xs focus:outline-none focus:border-accent/50" />
-              </div>
             )}
+            {!counterPaidLoan && !counterQr && (
+              <p className="text-[10px] text-muted italic">Neither option selected — sending as a free display.</p>
+            )}
+
             <textarea value={counterNote} onChange={(e) => setCounterNote(e.target.value)} placeholder="Add a note (optional)" rows={2} className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:border-accent/50 resize-none" />
             <div className="flex gap-2">
               <button onClick={handleCounterSubmit} disabled={busyAction === "counter"} className="flex-1 px-3 py-2 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-full transition-colors disabled:opacity-60">

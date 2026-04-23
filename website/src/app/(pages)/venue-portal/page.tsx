@@ -149,16 +149,22 @@ export default function VenueDashboardPage() {
       // Build Recent Activity — mirror of artist portal
       const activityItems: ActivityItem[] = [];
 
+      const myUserId = profile.user_id || "";
       for (const p of placements.slice(0, 15)) {
         const time = p.responded_at || p.created_at;
         if (!time) continue;
         const artistName = formatName(p.artist_slug || "");
         const workTitle = p.work_title || "Artwork";
-        if (p.status === "pending") {
+        // Only surface placement activity that requires attention — skip
+        // pending requests the venue sent (they already know) and
+        // accepted/declined responses to inbound requests the venue
+        // didn't send.
+        const iAmRequester = p.requester_user_id && p.requester_user_id === myUserId;
+        if (p.status === "pending" && !iAmRequester) {
           activityItems.push({ id: "p-" + p.id, text: `Placement request: ${workTitle}${artistName ? ` — ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: `/placements/${encodeURIComponent(p.id as string)}` });
-        } else if (p.status === "active") {
+        } else if (p.status === "active" && iAmRequester) {
           activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${workTitle}${artistName ? ` — ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_accepted", link: `/placements/${encodeURIComponent(p.id as string)}` });
-        } else if (p.status === "declined") {
+        } else if (p.status === "declined" && iAmRequester) {
           activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${workTitle}${artistName ? ` — ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_declined", link: `/placements/${encodeURIComponent(p.id as string)}` });
         }
       }

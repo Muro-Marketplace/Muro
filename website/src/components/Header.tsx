@@ -241,11 +241,16 @@ export default function Header() {
         const placementsRes = await authFetch("/api/placements");
         const placementsData = await placementsRes.json();
         for (const p of (placementsData.placements || []).slice(0, 10)) {
-          if (p.status === "pending") {
+          // Suppress notifications for placement requests *this user sent*
+          // — they already know they sent it. Same applies to accept /
+          // decline actions they performed themselves.
+          const iAmRequester = p.requester_user_id && p.requester_user_id === user?.id;
+          if (p.status === "pending" && !iAmRequester) {
             notifs.push({ id: p.id, type: "placement", title: "Placement Request", description: `${p.work_title || "Artwork"} — ${p.venue || p.artist_slug || ""}`, time: p.created_at, link: `${portalBase}/placements` });
-          } else if (p.status === "active" && p.responded_at) {
+          } else if (p.status === "active" && p.responded_at && iAmRequester) {
+            // Requester hears back on their request being accepted.
             notifs.push({ id: p.id + "-a", type: "placement_accepted", title: "Placement Accepted", description: `${p.work_title || "Artwork"} — ${p.venue || p.artist_slug || ""}`, time: p.responded_at, link: `${portalBase}/placements` });
-          } else if (p.status === "declined" && p.responded_at) {
+          } else if (p.status === "declined" && p.responded_at && iAmRequester) {
             notifs.push({ id: p.id + "-d", type: "placement_declined", title: "Placement Declined", description: `${p.work_title || "Artwork"} — ${p.venue || p.artist_slug || ""}`, time: p.responded_at, link: `${portalBase}/placements` });
           }
         }

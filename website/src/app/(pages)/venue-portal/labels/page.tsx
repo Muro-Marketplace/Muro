@@ -26,6 +26,7 @@ interface Placement {
 interface ArtistLookup {
   slug: string;
   name: string;
+  works?: { title: string; medium?: string; dimensions?: string; priceBand?: string }[];
 }
 
 export default function VenueLabelsPage() {
@@ -64,7 +65,23 @@ export default function VenueLabelsPage() {
             const artistData = await artistRes.json();
             const map: Record<string, ArtistLookup> = {};
             for (const a of (artistData.artists || [])) {
-              if (slugs.includes(a.slug)) map[a.slug] = { slug: a.slug, name: a.name };
+              if (slugs.includes(a.slug)) {
+                map[a.slug] = {
+                  slug: a.slug,
+                  name: a.name,
+                  // Carry the works list so the label preview can show
+                  // per-work medium / dimensions / price when the venue
+                  // ticks those options.
+                  works: Array.isArray(a.works)
+                    ? a.works.map((w: { title: string; medium?: string; dimensions?: string; priceBand?: string }) => ({
+                        title: w.title,
+                        medium: w.medium,
+                        dimensions: w.dimensions,
+                        priceBand: w.priceBand,
+                      }))
+                    : [],
+                };
+              }
             }
             setArtistsBySlug(map);
           } catch { /* fall back to formatting the slug */ }
@@ -125,11 +142,23 @@ export default function VenueLabelsPage() {
   function buildLabels(indices: number[]): LabelData[] {
     return indices.map((i) => {
       const p = placements[i];
+      // Match the placement back to the artist's listed work so we can
+      // show medium / dimensions / price when the venue ticks those
+      // options. Fallbacks are safe — missing fields just render blank
+      // on the label.
+      const artist = artistsBySlug[p.artist_slug];
+      const work = artist?.works?.find((w) => w.title === p.work_title);
       return {
         artistName: formatArtistName(p.artist_slug),
         artistSlug: p.artist_slug,
         venueName: venueName || (p.venue ?? undefined),
         workTitle: p.work_title,
+        workMedium: options.showMedium ? (work?.medium || undefined) : undefined,
+        workDimensions: options.showDimensions ? (work?.dimensions || undefined) : undefined,
+        workPrice: options.showPrice ? (work?.priceBand || undefined) : undefined,
+        _sourceMedium: work?.medium,
+        _sourcePrice: work?.priceBand,
+        _sourceDimensions: work?.dimensions,
         quantity: getQty(i),
         labelSize,
         tagline: (labelSize === "large" || labelSize === "xlarge") ? tagline || undefined : undefined,
