@@ -93,14 +93,19 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
     offersPrints: profile.offers_prints,
     offersFramed: profile.offers_framed,
     availableSizes: profile.available_sizes || [],
-    openToCommissions: profile.open_to_commissions,
+    openToCommissions: profile.open_to_commissions ?? true,
     isFoundingArtist: profile.is_founding_artist,
     themes: profile.themes || [],
     deliveryRadius: profile.delivery_radius,
-    openToFreeLoan: profile.open_to_free_loan,
-    openToRevenueShare: profile.open_to_revenue_share,
+    // Default to "open" when the DB flag is null/undefined. Legacy artist
+    // rows created before these columns existed were being filtered out
+    // from venue arrangement filters (#10) even though the artist hadn't
+    // opted out. Better to show them and let the venue enquire than to
+    // hide them by default.
+    openToFreeLoan: profile.open_to_free_loan ?? true,
+    openToRevenueShare: profile.open_to_revenue_share ?? true,
     revenueSharePercent: profile.revenue_share_percent,
-    openToOutrightPurchase: profile.open_to_outright_purchase,
+    openToOutrightPurchase: profile.open_to_outright_purchase ?? true,
     canProvideFrames: profile.can_provide_frames,
     canArrangeFraming: profile.can_arrange_framing,
     venueTypesSuitedFor: profile.venue_types_suited_for || [],

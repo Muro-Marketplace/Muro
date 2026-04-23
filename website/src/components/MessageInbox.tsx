@@ -396,9 +396,29 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   }, [conversations, searchQuery]);
 
   if (loading) {
+    // Skeleton layout mirrors the real three-pane inbox so the page doesn't
+    // flash from empty → populated. Feels much less jarring on slow networks.
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-13rem)]">
-        <p className="text-muted text-sm">Loading messages...</p>
+      <div className="flex h-[calc(100vh-13rem)] border border-border rounded-2xl overflow-hidden bg-surface shadow-sm animate-pulse">
+        <div className="hidden sm:flex w-80 shrink-0 border-r border-border flex-col">
+          <div className="px-4 py-3 border-b border-border">
+            <div className="h-9 rounded-full bg-border/40" />
+          </div>
+          <div className="flex-1 py-2">
+            {[0,1,2,3,4].map((i) => (
+              <div key={i} className="px-4 py-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-border/50 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-24 rounded bg-border/50" />
+                  <div className="h-2.5 w-40 rounded bg-border/30" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-muted text-sm">Loading messages…</p>
+        </div>
       </div>
     );
   }

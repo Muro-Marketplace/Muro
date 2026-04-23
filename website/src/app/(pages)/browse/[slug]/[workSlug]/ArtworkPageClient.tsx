@@ -7,6 +7,7 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import SaveButton from "@/components/SaveButton";
 import { useToast } from "@/context/ToastContext";
+import WallVisualiser from "@/components/WallVisualiser";
 
 interface ArtworkPageClientProps {
   work: ArtistWork;
@@ -282,6 +283,15 @@ export default function ArtworkPageClient({
           Message the artist
           <span className="ml-1">→</span>
         </button>
+
+        <div className="mt-8">
+          <WallVisualiser
+            artworkImage={work.image}
+            artworkTitle={work.title}
+            artworkWidthCm={null}
+            artworkHeightCm={null}
+          />
+        </div>
       </div>
     </div>
   );

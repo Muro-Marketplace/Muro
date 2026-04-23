@@ -216,12 +216,21 @@ export async function POST(request: Request) {
     const resolvedSenderSlug = senderArtist?.slug || senderVenue?.slug || parsed.data.senderName;
 
     // Resolve the recipient user_id from their slug so RLS can scope reads to
-    // both parties (F29). Try artist first, then venue; null is acceptable for
-    // legacy recipients that don't exist.
+    // both parties. Try artist first, then venue. If the slug matches nothing,
+    // reject the send with a clear error rather than quietly delivering a
+    // message that nobody will ever see — that was the source of the "tried
+    // to message a venue and got silently redirected" issue (#18).
     const { data: recipArtist } = await db.from("artist_profiles").select("user_id").eq("slug", recipientSlug).maybeSingle();
-    const recipientUserId = recipArtist?.user_id
-      || (await db.from("venue_profiles").select("user_id").eq("slug", recipientSlug).maybeSingle()).data?.user_id
-      || null;
+    const { data: recipVenue } = !recipArtist
+      ? await db.from("venue_profiles").select("user_id").eq("slug", recipientSlug).maybeSingle()
+      : { data: null };
+    const recipientUserId = recipArtist?.user_id || recipVenue?.user_id || null;
+    if (!recipArtist && !recipVenue) {
+      return NextResponse.json(
+        { error: "We couldn't find that recipient on Wallplace. They may not have an account yet. If you want us to invite them, reply with their email and we'll send them an onboarding link." },
+        { status: 404 },
+      );
+    }
 
     // If the client didn't pass a conversationId, try to find an existing
     // thread between these two slugs first, then fall back to the
