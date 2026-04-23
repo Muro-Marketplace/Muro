@@ -503,14 +503,14 @@ export default function PlacementDetailClient({ placementId }: Props) {
           <>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Revenue share</p>
-              <p className="text-xl font-medium text-foreground">
+              <p className="text-lg font-medium text-foreground">
                 {placement.revenue_share_percent != null ? `${placement.revenue_share_percent}%` : "Not set"}
               </p>
               <p className="text-[11px] text-muted mt-1">Artist&rsquo;s share of QR-code sales</p>
             </div>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Earned so far</p>
-              <p className="text-xl font-medium text-foreground">
+              <p className="text-lg font-medium text-foreground">
                 &pound;{(placement.revenue_earned_gbp ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
@@ -533,7 +533,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                 const isPaidLoan = fee > 0;
                 return (
                   <>
-                    <p className="text-xl font-medium text-foreground">
+                    <p className="text-lg font-medium text-foreground">
                       {isPaidLoan ? `\u00a3${fee.toLocaleString()}/month` : "Free display"}
                     </p>
                     <p className="text-[11px] text-muted mt-1">
@@ -549,7 +549,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
             </div>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">QR display</p>
-              <p className="text-xl font-medium text-foreground">
+              <p className="text-lg font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
                 {placement.qr_enabled && placement.revenue_share_percent != null && placement.revenue_share_percent > 0 && (
                   <> &mdash; {placement.revenue_share_percent}% share on QR sales</>
@@ -561,12 +561,12 @@ export default function PlacementDetailClient({ placementId }: Props) {
           <>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Direct purchase</p>
-              <p className="text-xl font-medium text-foreground">Venue owns the work</p>
+              <p className="text-lg font-medium text-foreground">Venue owns the work</p>
               <p className="text-[11px] text-muted mt-1">Outright sale &mdash; no ongoing split</p>
             </div>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">QR display</p>
-              <p className="text-xl font-medium text-foreground">
+              <p className="text-lg font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
               </p>
             </div>
