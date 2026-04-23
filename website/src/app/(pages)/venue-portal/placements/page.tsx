@@ -868,6 +868,7 @@ export default function VenuePlacementsPage() {
                     <th className="text-left text-xs text-muted font-medium px-4 py-3">Status</th>
                     <th className="text-left text-xs text-muted font-medium px-4 py-3">Date</th>
                     <th className="text-right text-xs text-muted font-medium px-4 py-3">Earned</th>
+                    <th className="text-left text-xs text-muted font-medium px-4 py-3 whitespace-nowrap">Request</th>
                     <th className="text-right text-xs text-muted font-medium px-6 py-3"></th>
                   </tr>
                 </thead>
@@ -919,11 +920,6 @@ export default function VenuePlacementsPage() {
                                     <option value="Sold">Sold</option>
                                   </select>
                                 )}
-                                {/* Direction chip always visible so the
-                                    venue can tell sent vs received at a
-                                    glance on every row regardless of
-                                    status. */}
-                                {dir && <PlacementDirectionTag direction={dir} size="compact" />}
                               </div>
                               {(p.status === "Active" || p.status === "Completed" || p.status === "Sold") && (
                                 <MiniStatusBar p={p} />
@@ -937,6 +933,12 @@ export default function VenuePlacementsPage() {
                         {p.revenueSharePercent != null && p.revenueSharePercent > 0
                           ? `\u00a3${(p.revenueEarned ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                           : <span className="text-muted">-</span>}
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {(() => {
+                          const dir = directionFor({ requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id);
+                          return dir ? <PlacementDirectionTag direction={dir} /> : <span className="text-[11px] text-muted">—</span>;
+                        })()}
                       </td>
                       <td className="px-6 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-3">
@@ -958,7 +960,7 @@ export default function VenuePlacementsPage() {
                     </tr>
                     {expandedId === p.id && (
                       <tr>
-                        <td colSpan={7} className="px-6 py-4 bg-background border-t border-border">
+                        <td colSpan={8} className="px-6 py-4 bg-background border-t border-border">
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                             <div>
                               <p className="text-muted mb-0.5">Artist</p>

@@ -658,6 +658,7 @@ export default function PlacementsPage() {
                 <th className="text-left text-xs text-muted font-medium px-4 py-3">Status</th>
                 <th className="text-left text-xs text-muted font-medium px-4 py-3">Date</th>
                 <th className="text-right text-xs text-muted font-medium px-4 py-3">Payout</th>
+                <th className="text-left text-xs text-muted font-medium px-4 py-3 whitespace-nowrap">Request</th>
                 <th className="text-right text-xs text-muted font-medium px-6 py-3"></th>
               </tr>
             </thead>
@@ -706,10 +707,6 @@ export default function PlacementsPage() {
                           <option value="Sold">Sold</option>
                         </select>
                       )}
-                      {/* Direction chip is shown on every status, not just
-                          Pending, so the artist can always see at a glance
-                          whether they sent or received each placement. */}
-                      {p.direction && <PlacementDirectionTag direction={p.direction} size="compact" />}
                     </div>
                     {(p.status === "Active" || p.status === "Completed" || p.status === "Sold") && (
                       <MiniStatusBar p={p} />
@@ -719,6 +716,11 @@ export default function PlacementsPage() {
                   <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.date}</td>
                   <td className="px-4 py-3.5 text-right font-medium text-foreground">
                     {p.revenue ?? <span className="text-muted">-</span>}
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    {p.direction
+                      ? <PlacementDirectionTag direction={p.direction} />
+                      : <span className="text-[11px] text-muted">—</span>}
                   </td>
                   <td className="px-6 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-3">
@@ -757,7 +759,7 @@ export default function PlacementsPage() {
                 </tr>
                 {expandedId === p.id && (
                   <tr>
-                    <td colSpan={7} className="px-6 py-4 bg-background border-t border-border">
+                    <td colSpan={8} className="px-6 py-4 bg-background border-t border-border">
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                         <div>
                           <p className="text-muted mb-0.5">Venue</p>

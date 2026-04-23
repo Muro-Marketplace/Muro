@@ -123,13 +123,50 @@ export async function GET(request: Request) {
       }
     } catch { /* leave counts empty if analytics table missing */ }
 
-    const enriched = placements.map((p) => ({
-      ...p,
-      revenue_earned_gbp: p.id && earnedByPlacement[p.id as string]
-        ? Math.round(earnedByPlacement[p.id as string] * 100) / 100
-        : 0,
-      qr_scans: p.id ? (qrByPlacement[p.id as string] || 0) : 0,
-    }));
+    // Backfill requester_user_id for any row where it's NULL by reading
+    // the sender of the first placement_request message that references
+    // the placement. This happens on rows that predate migration 008 or
+    // where the insert-fallback path stripped the column. Otherwise the
+    // UI can't tell "sent" vs "received" and defaults everything to
+    // "Received", which is what the user was seeing.
+    const missingRequester = placements.filter((p) => !p.requester_user_id && p.id).map((p) => p.id as string);
+    const inferredRequesters: Record<string, string> = {};
+    if (missingRequester.length > 0) {
+      // Pull all placement_request messages whose metadata.placementId is
+      // one of the missing ids. Supabase doesn't support an `in` match on
+      // a JSON key directly, so fall back to scanning the most recent
+      // placement_request rows and filtering client-side.
+      const { data: reqMsgs } = await db
+        .from("messages")
+        .select("sender_id, sender_name, metadata")
+        .eq("message_type", "placement_request")
+        .order("created_at", { ascending: true })
+        .limit(500);
+      for (const m of (reqMsgs || []) as Array<{ sender_id: string | null; sender_name: string | null; metadata: Record<string, unknown> | null }>) {
+        const pid = m.metadata?.placementId as string | undefined;
+        if (!pid || !missingRequester.includes(pid)) continue;
+        if (inferredRequesters[pid]) continue;
+        if (m.sender_id) inferredRequesters[pid] = m.sender_id;
+      }
+      // For any we resolved, write them back so subsequent reads are
+      // cheap and gating (canRespond) can trust requester_user_id going
+      // forward. Fire-and-forget — a failure here doesn't hurt the GET.
+      for (const [pid, uid] of Object.entries(inferredRequesters)) {
+        db.from("placements").update({ requester_user_id: uid }).eq("id", pid).then(() => {}, () => {});
+      }
+    }
+
+    const enriched = placements.map((p) => {
+      const resolvedRequester = p.requester_user_id || (p.id ? inferredRequesters[p.id as string] : null) || null;
+      return {
+        ...p,
+        requester_user_id: resolvedRequester,
+        revenue_earned_gbp: p.id && earnedByPlacement[p.id as string]
+          ? Math.round(earnedByPlacement[p.id as string] * 100) / 100
+          : 0,
+        qr_scans: p.id ? (qrByPlacement[p.id as string] || 0) : 0,
+      };
+    });
 
     return NextResponse.json({ placements: enriched, userType: role.type });
   } catch {

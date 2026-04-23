@@ -55,13 +55,10 @@ export default function PlacementDirectionTag({ direction, size = "default", cla
 }
 
 /**
- * Helper — tells you what direction chip to show from the placement row
- * + the viewing user's id.
- *
- * Modern rows carry requester_user_id — we compare that to the viewer.
- * Legacy rows without the field default to "received" so the chip still
- * renders; Accept/Counter/Decline remain strict-gated via canRespond()
- * so a display-only default can't cause an accidental self-accept.
+ * Helper — tells you what direction chip to show from the placement
+ * row + the viewing user's id. Relies on requester_user_id being
+ * populated (the /api/placements GET handler now backfills it from the
+ * original placement_request message when it's missing).
  */
 export function directionFor(
   placement: {
@@ -71,13 +68,6 @@ export function directionFor(
   },
   userId: string | null | undefined,
 ): PlacementDirection | null {
-  if (!userId) return null;
-  if (placement.requester_user_id) {
-    return placement.requester_user_id === userId ? "sent" : "received";
-  }
-  // Legacy fallback — assume the viewer is on the receiving side. This
-  // matches the historical "venue requests, artist accepts" pattern for
-  // rows that predate migration 008.
-  if (placement.artist_user_id === userId || placement.venue_user_id === userId) return "received";
-  return null;
+  if (!userId || !placement.requester_user_id) return null;
+  return placement.requester_user_id === userId ? "sent" : "received";
 }
