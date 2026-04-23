@@ -390,7 +390,7 @@ export default function PlacementContextPanel({
   // No placement \u2014 show the Request a Placement form.
   if (!current) {
     return (
-      <aside className="w-full h-full bg-[#FAF8F5] border-l border-border flex flex-col overflow-y-auto">
+      <aside id="placement-request-form" className="w-full h-full bg-[#FAF8F5] border-l border-border flex flex-col overflow-y-auto">
         <div className="px-5 py-6 border-b border-border">
           <Header title="Request a Placement" subtitle={`Start a placement with ${otherPartyName}.`} />
         </div>

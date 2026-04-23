@@ -10,6 +10,7 @@ import { uploadImage } from "@/lib/upload";
 import PlacementLoanForm from "./PlacementLoanForm";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import PlacementQRModal from "@/components/PlacementQRModal";
+import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 import { slugify } from "@/lib/slugify";
 
 interface PlacementRow {
@@ -572,6 +573,11 @@ export default function PlacementDetailClient({ placementId }: Props) {
           </p>
         </div>
       </div>
+
+      {/* Negotiation log — every offer / counter / response that led
+          to the current terms. Only rendered when there's something to
+          show. */}
+      <PlacementNegotiationLog placementId={placementId} />
 
       {/* Messages + notes */}
       {(placement.message || placement.notes) && (

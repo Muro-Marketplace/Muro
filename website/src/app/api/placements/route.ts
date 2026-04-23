@@ -451,7 +451,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "ID and valid status required" }, { status: 400 });
     }
 
-    const { id, status, stage, counter } = parsed.data;
+    const { id, status, stage, counter, stageDate } = parsed.data;
     if (!status && !stage && !counter) {
       return NextResponse.json({ error: "status, stage, or counter required" }, { status: 400 });
     }
@@ -683,11 +683,16 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "Placement must be active to advance the stage" }, { status: 400 });
       }
 
-      if (stage === "scheduled") updates.scheduled_for = now;
-      if (stage === "installed") updates.installed_at = now;
-      if (stage === "live") updates.live_from = now;
+      // Use the explicit stageDate when the caller supplied one (e.g.
+      // the Schedule date picker on the progress bar), otherwise fall
+      // back to the current timestamp. Accepts any ISO 8601 string;
+      // future dates are fine so venues can pre-schedule installs.
+      const ts = stageDate || now;
+      if (stage === "scheduled") updates.scheduled_for = ts;
+      if (stage === "installed") updates.installed_at = ts;
+      if (stage === "live") updates.live_from = ts;
       if (stage === "collected") {
-        updates.collected_at = now;
+        updates.collected_at = ts;
         updates.status = "completed";
       }
       // Clear any lingering proposal columns left over from the old flow.

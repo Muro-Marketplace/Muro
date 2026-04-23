@@ -64,6 +64,8 @@ interface ArtistWork {
   image: string;
   medium: string;
   priceBand: string;
+  dimensions?: string;
+  pricing?: { label: string; price: number }[];
 }
 
 const statusBadge = (status: string) => statusBadgeClass(sharedNormaliseStatus(status));
@@ -812,23 +814,65 @@ export default function VenuePlacementsPage() {
               )}
             </div>
 
-            {/* Preferred dimensions — lets the venue request a specific size
-                rather than accepting whatever the artist's default is. Free-
-                form so metric and imperial both work. Attached to the message
-                so the artist sees it alongside the request. */}
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Preferred size / dimensions <span className="text-muted font-normal">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={preferredDimensions}
-                onChange={(e) => setPreferredDimensions(e.target.value)}
-                placeholder="e.g. A2, 60x80cm, 24x36 in, or 'largest you have'"
-                className={inputClass}
-              />
-              <p className="text-xs text-muted mt-1">We&rsquo;ll share this with the artist so they can confirm what they have available.</p>
-            </div>
+            {/* Preferred size — dropdown of the artist's published sizes
+                plus a "Custom size" escape hatch. Previously this was a
+                freeform input; most venues just didn't know what to put.
+                Pulling from the artist's actual sizes reduces mismatches
+                and makes pricing explicit. */}
+            {(() => {
+              const selected = artistWorks.filter((w) => selectedWorks.has(w.title));
+              const seen = new Set<string>();
+              const sizeOptions: { label: string; value: string }[] = [];
+              for (const w of selected) {
+                if (Array.isArray(w.pricing)) {
+                  for (const s of w.pricing) {
+                    if (s?.label && !seen.has(s.label)) {
+                      seen.add(s.label);
+                      sizeOptions.push({
+                        label: s.price > 0 ? `${s.label} — £${s.price.toFixed(0)}` : s.label,
+                        value: s.label,
+                      });
+                    }
+                  }
+                } else if (w.dimensions && !seen.has(w.dimensions)) {
+                  seen.add(w.dimensions);
+                  sizeOptions.push({ label: w.dimensions, value: w.dimensions });
+                }
+              }
+              const isCustom = preferredDimensions !== "" && !seen.has(preferredDimensions);
+              return (
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Preferred size <span className="text-muted font-normal">(optional)</span>
+                  </label>
+                  <select
+                    value={isCustom ? "__custom__" : preferredDimensions}
+                    onChange={(e) => {
+                      if (e.target.value === "__custom__") setPreferredDimensions(" ");
+                      else setPreferredDimensions(e.target.value);
+                    }}
+                    className={inputClass}
+                    disabled={sizeOptions.length === 0}
+                  >
+                    <option value="">{sizeOptions.length === 0 ? "Select a work first" : "No preference"}</option>
+                    {sizeOptions.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                    <option value="__custom__">Custom size…</option>
+                  </select>
+                  {isCustom && (
+                    <input
+                      type="text"
+                      value={preferredDimensions.trim()}
+                      onChange={(e) => setPreferredDimensions(e.target.value)}
+                      placeholder="e.g. A2, 60x80cm, 24x36 in"
+                      className={`${inputClass} mt-2`}
+                    />
+                  )}
+                  <p className="text-xs text-muted mt-1">We&rsquo;ll share this with the artist so they can confirm what they have available.</p>
+                </div>
+              );
+            })()}
 
             {/* Message to artist */}
             <div>

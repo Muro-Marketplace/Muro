@@ -107,6 +107,10 @@ export const placementUpdateSchema = z.object({
   id: safeString(100),
   status: z.enum(["pending", "active", "declined", "completed", "paused"]).optional(),
   stage: z.enum(["scheduled", "installed", "live", "collected"]).optional(),
+  // Optional explicit stage timestamp in ISO 8601. Lets the user pick
+  // a future install date instead of being forced to "now". Used by the
+  // progress bar's Schedule action.
+  stageDate: z.string().datetime().optional(),
   // A counter offer keeps the row pending but revises the terms and hands the
   // "needs to respond" role back to the original requester.
   counter: z.object({

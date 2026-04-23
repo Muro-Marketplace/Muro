@@ -875,7 +875,28 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                   </button>
                 </div>
               )}
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
+                {/* Quick shortcut to the placement request panel so users
+                    can start a request without leaving the chat. On
+                    desktop the panel is already visible on the right,
+                    but the button still scrolls attention to it / pops
+                    the mobile drawer. */}
+                {selectedConvData && selectedOtherParty !== "wallplace-support" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPanelOpenMobile(true);
+                      if (typeof document !== "undefined") {
+                        document.getElementById("placement-request-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }
+                    }}
+                    title="Request placement"
+                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-accent bg-accent/5 border border-accent/30 hover:bg-accent/10 rounded-full transition-colors"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                    <span className="hidden sm:inline">Placement</span>
+                  </button>
+                )}
                 <input type="text" value={reply} onChange={(e) => { setReply(e.target.value); if (sendError) setSendError(null); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }} maxLength={5000} placeholder="Type a message..." className="flex-1 px-3 py-2.5 bg-background border border-border rounded-full text-sm focus:outline-none focus:border-accent/50" />
                 <button onClick={handleSendReply} disabled={!reply.trim() || sending || reply.length > 5000} className="px-4 py-2.5 bg-accent text-white text-sm font-medium rounded-full hover:bg-accent-hover transition-colors disabled:opacity-40">
                   {sending ? "..." : "Send"}
