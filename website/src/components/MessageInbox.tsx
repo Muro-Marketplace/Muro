@@ -689,7 +689,15 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                               </div>
                             );
                           }
-                          if (!isMe) {
+                          // Gate Accept/Decline strictly: prefer the
+                          // explicit requesterUserId carried in metadata,
+                          // fall back to message-sender match for legacy
+                          // rows that predate the field.
+                          const metaRequesterId = (meta.requesterUserId as string | undefined) || undefined;
+                          const iAmRequester = metaRequesterId
+                            ? metaRequesterId === user?.id
+                            : isMe;
+                          if (!iAmRequester) {
                             return (
                               <div className="px-3.5 py-2 border-t border-border flex gap-2">
                                 <button onClick={() => handlePlacementResponse(msg, true)} className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-full transition-colors">Accept</button>
@@ -697,7 +705,11 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                               </div>
                             );
                           }
-                          return null;
+                          return (
+                            <div className="px-3.5 py-2 border-t border-border">
+                              <p className="text-[11px] text-muted italic">Awaiting response</p>
+                            </div>
+                          );
                         })()}
                         <div className="px-3.5 py-1.5 bg-[#FAF8F5]">
                           <p className="text-[9px] text-muted">{timeAgo(msg.created_at)}</p>
@@ -787,14 +799,14 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
             />
           </div>
           {panelOpenMobile && (
-            <div className="lg:hidden fixed inset-0 z-50 flex">
+            // Sits BELOW the site header (fixed, z-[100]) by starting at
+            // top-14 on mobile (h-14 header). Without that, iOS Safari
+            // clips the top of the panel behind the header bar and the
+            // progress tracker disappears.
+            <div className="lg:hidden fixed top-14 left-0 right-0 bottom-0 z-50 flex">
               <div className="flex-1 bg-black/40" onClick={() => setPanelOpenMobile(false)} />
-              {/* Single scroll container — the panel's own aside handles
-                  overflow. Nesting two scrollers was cutting the top of
-                  the panel off on iOS Safari (the inner scroll started
-                  mid-way). */}
               <div className="w-[min(360px,90vw)] bg-surface border-l border-border shadow-xl flex flex-col h-full">
-                <div className="flex-1 min-h-0">
+                <div className="flex-1 min-h-0 overflow-y-auto">
                   <PlacementContextPanel
                     onClose={() => setPanelOpenMobile(false)}
                     otherPartySlug={selectedOtherParty}

@@ -196,7 +196,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const cid = conversationId || `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // Deterministic conversation ID between two slugs so the thread always
+    // resolves to the same row regardless of who sent first. Without this,
+    // artist-to-venue messages could land in a brand-new random cid while
+    // the UI was still keyed on a stale prior conversation — the thread
+    // appeared to "jump" to the wrong venue.
+    function deterministicCid(slugA: string, slugB: string): string {
+      const [a, b] = [slugA, slugB].sort();
+      return `dm-${a}__${b}`;
+    }
 
     const db = getSupabaseAdmin();
 
@@ -214,6 +222,24 @@ export async function POST(request: Request) {
     const recipientUserId = recipArtist?.user_id
       || (await db.from("venue_profiles").select("user_id").eq("slug", recipientSlug).maybeSingle()).data?.user_id
       || null;
+
+    // If the client didn't pass a conversationId, try to find an existing
+    // thread between these two slugs first, then fall back to the
+    // deterministic id so both sides land on the same row.
+    let cid = conversationId;
+    if (!cid) {
+      const det = deterministicCid(resolvedSenderSlug, recipientSlug);
+      const { data: existing } = await db
+        .from("messages")
+        .select("conversation_id")
+        .or(
+          `and(sender_name.eq.${resolvedSenderSlug},recipient_slug.eq.${recipientSlug}),and(sender_name.eq.${recipientSlug},recipient_slug.eq.${resolvedSenderSlug})`,
+        )
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      cid = existing?.conversation_id || det;
+    }
 
     // Try insert with new columns first, fall back to base columns if they don't exist yet
     const baseRow = {
@@ -282,9 +308,21 @@ export async function POST(request: Request) {
           revenue_share_percent: (m.revenueSharePercent as number) || null,
           status: "pending",
           message: content,
+          requester_user_id: auth.user!.id,
           created_at: new Date().toISOString(),
         });
         if (placementError) console.error("Placement insert error:", placementError);
+
+        // Re-stamp the message row we just inserted with requesterUserId
+        // so MessageInbox can gate Accept/Decline reliably even if the
+        // client sender_id is missing (legacy anon rows).
+        await db
+          .from("messages")
+          .update({ metadata: { ...(metadata as Record<string, unknown>), placementId, requesterUserId: auth.user!.id } })
+          .eq("conversation_id", cid)
+          .eq("sender_id", auth.user!.id)
+          .eq("message_type", "placement_request")
+          .is("metadata->>requesterUserId", null);
 
         // Notify the recipient about the placement request
         const recipientIsArtist = !senderIsArtist;

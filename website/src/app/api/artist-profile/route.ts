@@ -63,6 +63,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Name and slug are required" }, { status: 400 });
     }
 
+    // Profiles created via the claim flow land in "pending" review. An
+    // admin flips this to "approved" once they've reviewed the artist
+    // application. Until then the profile is not surfaced on /browse.
     const { error } = await upsertArtistProfile(auth.user!.id, {
       slug,
       name,
@@ -71,6 +74,7 @@ export async function POST(request: Request) {
       short_bio: shortBio || "",
       instagram: instagram || "",
       website: website || "",
+      review_status: "pending",
     });
 
     if (error) {

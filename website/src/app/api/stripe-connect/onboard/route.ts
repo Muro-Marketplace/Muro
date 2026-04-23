@@ -39,7 +39,18 @@ export async function POST(request: Request) {
         card_payments: { requested: true },
         transfers: { requested: true },
       },
-      metadata: { user_id: user.id, account_type: accountType },
+      business_profile: {
+        name: "Wallplace",
+        product_description:
+          accountType === "venue"
+            ? "Venue receiving artwork sales via Wallplace marketplace"
+            : "Artist selling original artwork via Wallplace marketplace",
+        url: process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.art",
+      },
+      settings: {
+        payouts: { statement_descriptor: "WALLPLACE" },
+      },
+      metadata: { user_id: user.id, account_type: accountType, platform: "wallplace" },
     });
 
     accountId = account.id;

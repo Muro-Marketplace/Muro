@@ -115,6 +115,39 @@ export default function Home() {
       {/* ─── CONTENT SECTIONS ─── */}
       <div ref={contentRef} className="bg-background">
 
+          {/* Logged-in personalised block replaces the For-Venues / For-Artists
+              pitch sections below. A signed-in user already knows the value
+              prop; they want shortcuts into their portal, not another "Apply
+              to Join" CTA. */}
+          {user && (
+            <section className="py-12 lg:py-20 bg-surface border-b border-border">
+              <div className="max-w-[1000px] mx-auto px-6 lg:px-10 text-center">
+                <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
+                  Welcome back
+                </p>
+                <h2 className="font-serif text-3xl md:text-4xl text-foreground mb-4 leading-tight">
+                  Pick up where you left off
+                </h2>
+                <p className="text-muted mb-8">
+                  Jump into your portal, browse fresh work, or reply to your messages.
+                </p>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
+                  <Link href={portalBase} className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                    {portalLabel}
+                  </Link>
+                  <Link href="/browse" className="inline-flex items-center justify-center px-7 py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                    Browse Marketplace
+                  </Link>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Promo pitch blocks only render for logged-out visitors. Signed-in
+              users see the block above instead — they don't need the "Are
+              you an artist? / Looking for art?" framing anymore. */}
+          {!user && (
+          <>
           {/* ─── FOR VENUES ─── */}
           <section className="py-12 lg:py-28 bg-surface border-b border-border">
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
@@ -150,9 +183,7 @@ export default function Home() {
                     </li>
                     <li className="flex items-center gap-4 px-5 py-4 bg-background border border-border rounded-sm hover:border-accent/40 transition-colors">
                       <span className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
-                          <path d="M12 2v20M17 5H9a3 3 0 000 6h6a3 3 0 010 6H7" />
-                        </svg>
+                        <span className="text-accent text-lg font-serif font-semibold leading-none">&pound;</span>
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-base font-semibold text-foreground">Paid Loan</p>
@@ -252,6 +283,8 @@ export default function Home() {
               </AnimateIn>
             </div>
           </section>
+          </>
+          )}
 
           {/* ─── HOW IT WORKS ─── */}
           <section className="py-20 lg:py-28 bg-foreground">

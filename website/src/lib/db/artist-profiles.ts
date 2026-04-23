@@ -48,6 +48,9 @@ export interface DbArtistProfile {
   default_shipping_price?: number | null;
   ships_internationally?: boolean;
   international_shipping_price?: number | null;
+  /** "pending" for new claim-flow profiles; "approved" once admin reviews. */
+  review_status?: "pending" | "approved" | "rejected";
+  approved_at?: string | null;
 }
 
 export interface DbArtistWork {
@@ -174,14 +177,32 @@ export async function getArtistProfileBySlug(slug: string) {
 }
 
 export async function getAllDatabaseArtists(): Promise<Artist[]> {
-  const { data: profiles } = await supabase
-    .from("artist_profiles")
-    .select("*")
-    .order("created_at", { ascending: false });
+  // Only surface profiles the admin has approved. Profiles created through
+  // /apply/claim default to pending and stay hidden until review_status
+  // flips to "approved". Legacy rows without the column get treated as
+  // approved (the query below falls back if the column doesn't exist yet).
+  let profiles: unknown[] | null = null;
+  {
+    const res = await supabase
+      .from("artist_profiles")
+      .select("*")
+      .eq("review_status", "approved")
+      .order("created_at", { ascending: false });
+    if (res.error && /review_status/.test(res.error.message)) {
+      // Column not yet migrated — fall back to the old behaviour.
+      const all = await supabase
+        .from("artist_profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
+      profiles = all.data;
+    } else {
+      profiles = res.data;
+    }
+  }
 
   if (!profiles || profiles.length === 0) return [];
 
-  const profileIds = profiles.map((p) => p.id);
+  const profileIds = profiles.map((p) => (p as { id: string }).id);
   const { data: allWorks } = await supabase
     .from("artist_works")
     .select("*")
@@ -189,8 +210,9 @@ export async function getAllDatabaseArtists(): Promise<Artist[]> {
     .order("sort_order", { ascending: true });
 
   return profiles.map((profile) => {
-    const works = (allWorks || []).filter((w) => w.artist_id === profile.id);
-    return dbProfileToArtist(profile as DbArtistProfile, works as DbArtistWork[]);
+    const p = profile as DbArtistProfile;
+    const works = (allWorks || []).filter((w) => w.artist_id === p.id);
+    return dbProfileToArtist(p, works as DbArtistWork[]);
   });
 }
 

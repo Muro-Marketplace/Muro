@@ -678,9 +678,7 @@ function BrowsePortfoliosPageInner() {
               filters.paidLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={filters.paidLoan ? "text-accent" : "text-muted"}>
-              <path d="M12 2v20M17 5H9a3 3 0 000 6h6a3 3 0 010 6H7" />
-            </svg>
+            <span className={`text-base font-serif font-semibold leading-none w-4 text-center ${filters.paidLoan ? "text-accent" : "text-muted"}`}>&pound;</span>
             <div>
               <p className="text-sm font-medium">Paid Loan</p>
               <p className="text-[10px] text-muted">Monthly fee to display the work</p>

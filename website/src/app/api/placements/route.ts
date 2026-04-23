@@ -375,6 +375,10 @@ export async function POST(request: Request) {
           qrEnabled: parsed.data[0].qrEnabled ?? true,
           monthlyFeeGbp: parsed.data[0].monthlyFeeGbp ?? null,
           placementIds,
+          // Gate Accept/Decline on this explicitly. The requester must
+          // never see the response controls on their own request, even
+          // if sender_id is stripped or mismatched.
+          requesterUserId: auth.user!.id,
         },
       };
 
@@ -443,6 +447,25 @@ export async function PATCH(request: Request) {
 
     if (!isArtist && !isVenue) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+    }
+
+    // Block pending-review artists from accepting placements. They can
+    // still set up their profile, but they can't commit to a placement
+    // arrangement until admin has approved them. Accepting a decline/
+    // counter on their own prior request is allowed; only acceptance of
+    // an incoming request is gated.
+    if (isArtist && status === "active") {
+      const { data: profile } = await db
+        .from("artist_profiles")
+        .select("review_status")
+        .eq("user_id", auth.user!.id)
+        .maybeSingle();
+      if (profile && profile.review_status === "pending") {
+        return NextResponse.json(
+          { error: "Your application is still under review. You can accept placements once we've approved your profile." },
+          { status: 403 },
+        );
+      }
     }
 
     // F39 — approval logic
@@ -563,6 +586,8 @@ export async function PATCH(request: Request) {
               revenueSharePercent: counter.revenueSharePercent ?? null,
               qrEnabled: counter.qrEnabled ?? null,
               monthlyFeeGbp: counter.monthlyFeeGbp ?? null,
+              // Counter flips roles — the counter-er now awaits response.
+              requesterUserId: auth.user!.id,
             },
           });
 
