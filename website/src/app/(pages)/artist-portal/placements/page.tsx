@@ -129,6 +129,10 @@ export default function PlacementsPage() {
   const [respondError, setRespondError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
   const showArchived = activeTab === "Archived";
+  // Archived tab badge: always shows the real count regardless of
+  // which tab is active, via a separate lightweight GET that fires
+  // on mount and after any archive / unarchive mutation.
+  const [archivedCount, setArchivedCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState<"all" | "7d" | "30d" | "90d" | "year">("all");
   // Archived is a filter tab rather than a separate toggle — derive
@@ -159,6 +163,17 @@ export default function PlacementsPage() {
   // Interacted venues for dropdown
   const [venues, setVenues] = useState<InteractedVenue[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(false);
+
+  // Fire-and-forget archived count — keeps the Archived tab badge
+  // live whether the user is on that tab or not.
+  const loadArchivedCount = React.useCallback(async () => {
+    if (!artist) return;
+    try {
+      const res = await authFetch("/api/placements?archived=1");
+      const data = await res.json();
+      setArchivedCount(Array.isArray(data?.placements) ? data.placements.length : 0);
+    } catch { /* badge falls back to 0 */ }
+  }, [artist]);
 
   // Load placements. Exposed via useCallback so callers (e.g. counter
   // dialog onSuccess) can trigger a fresh fetch.
@@ -234,7 +249,8 @@ export default function PlacementsPage() {
   useEffect(() => {
     if (!artist || initialised) return;
     loadPlacements();
-  }, [artist, initialised, loadPlacements]);
+    loadArchivedCount();
+  }, [artist, initialised, loadPlacements, loadArchivedCount]);
 
   // Re-fetch when the user toggles the Archived filter.
   useEffect(() => {
@@ -404,6 +420,7 @@ export default function PlacementsPage() {
       return;
     }
     loadPlacements();
+    loadArchivedCount();
   }
 
   function toggleSelected(id: string) {
@@ -432,6 +449,7 @@ export default function PlacementsPage() {
         return;
       }
       loadPlacements();
+      loadArchivedCount();
     } catch (err) {
       setPlacements(snapshot);
       console.error("Placement archive error:", err);
@@ -758,10 +776,14 @@ export default function PlacementsPage() {
           don't break Completed / Archived onto a second row. */}
       <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex-nowrap">
         {tabs.map((tab) => {
+          // Archived count comes from the separate fetch so the badge
+          // stays accurate on every tab. Other tabs derive from the
+          // currently-loaded placements; when viewing the archive
+          // those counts hide (placements only holds archived rows).
           const onArchivedTab = activeTab === "Archived";
           let count: number | null;
           if (tab === "Archived") {
-            count = onArchivedTab ? placements.length : null;
+            count = archivedCount;
           } else if (onArchivedTab) {
             count = null;
           } else if (tab === "All") {

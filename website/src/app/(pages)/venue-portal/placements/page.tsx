@@ -299,6 +299,10 @@ export default function VenuePlacementsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Count of archived placements shown on the 'Archived' tab badge.
+  // Updated on mount + after every archive / unarchive action so the
+  // number stays fresh regardless of which tab the user is on.
+  const [archivedCount, setArchivedCount] = useState(0);
   // The Archived filter tab controls what we fetch — ?archived=1
   // returns the user's archive rather than their live list.
   const showArchived = activeTab === "Archived";
@@ -398,6 +402,18 @@ export default function VenuePlacementsPage() {
     setWorksLoading(false);
   }
 
+  // Fire-and-forget archived count — keeps the Archived tab badge in
+  // sync regardless of which tab is active. Runs alongside the main
+  // placements load and on every mutation that could change it.
+  const loadArchivedCount = React.useCallback(async () => {
+    try {
+      const res = await authFetch("/api/placements?archived=1");
+      const data = await res.json();
+      const count = Array.isArray(data?.placements) ? data.placements.length : 0;
+      setArchivedCount(count);
+    } catch { /* badge falls back to 0 */ }
+  }, []);
+
   // Load existing placements. Exposed via useCallback so callers
   // (e.g. counter-dialog onSuccess) can trigger a fresh fetch.
   const loadPlacements = React.useCallback(async () => {
@@ -468,6 +484,7 @@ export default function VenuePlacementsPage() {
   }, [showArchived]);
 
   useEffect(() => { loadPlacements(); }, [loadPlacements]);
+  useEffect(() => { loadArchivedCount(); }, [loadArchivedCount]);
 
   // Listen for any placement mutation dispatched from Messages / Counter
   // dialog / Stepper so the list refreshes without a manual reload.
@@ -683,6 +700,7 @@ export default function VenuePlacementsPage() {
       return;
     }
     loadPlacements();
+    loadArchivedCount();
   }
 
   function toggleSelected(id: string) {
@@ -710,8 +728,10 @@ export default function VenuePlacementsPage() {
         alert(body?.error || `Could not ${unarchive ? "unarchive" : "archive"} placement (HTTP ${res.status})`);
         return;
       }
-      // Reload so the current tab (main / archived) picks up the change.
+      // Reload so the current tab (main / archived) picks up the
+      // change, and refresh the archived-count badge on the tab row.
       loadPlacements();
+      loadArchivedCount();
     } catch (err) {
       setPlacements(snapshot);
       console.error("Placement archive error:", err);
@@ -1071,13 +1091,15 @@ export default function VenuePlacementsPage() {
           don't break 'Completed' / 'Archived' onto a second row. */}
       <div className="flex gap-1 mb-4 border-b border-border overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex-nowrap">
         {tabs.map((tab) => {
-          // Archived is a separately-fetched list so its count only
-          // makes sense when that tab is active. Other tabs compute
-          // from the currently-loaded placements.
+          // Archived uses a separately-fetched count (archivedCount)
+          // so the badge is accurate regardless of which tab is
+          // active. Other tabs compute from the currently-loaded
+          // placements; when the Archived tab is selected those
+          // counts hide since `placements` only holds archived rows.
           const onArchivedTab = activeTab === "Archived";
           let count: number | null;
           if (tab === "Archived") {
-            count = onArchivedTab ? placements.length : null;
+            count = archivedCount;
           } else if (onArchivedTab) {
             count = null;
           } else if (tab === "All") {
