@@ -237,14 +237,6 @@ export default function ArtistOrdersPage() {
             <p className="text-sm font-medium">{selected.shipping?.fullName}</p>
             <p className="text-sm text-muted">{selected.shipping?.addressLine1}{selected.shipping?.addressLine2 ? `, ${selected.shipping.addressLine2}` : ""}</p>
             <p className="text-sm text-muted">{selected.shipping?.city}, {selected.shipping?.postcode}</p>
-            {selected.shipping?.phone && (
-              <p className="text-sm text-muted mt-1">
-                Phone:{" "}
-                <a href={`tel:${selected.shipping.phone.replace(/\s+/g, "")}`} className="text-accent hover:underline">
-                  {selected.shipping.phone}
-                </a>
-              </p>
-            )}
           </div>
 
           {/* Refund management */}

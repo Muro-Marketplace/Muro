@@ -334,8 +334,8 @@ export default function Header() {
             (user ? (userType === "venue" ? venueNavLinks : loggedInNavLinks) : publicNavLinks).map((link) => {
               const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
               const activeClass = isActive
-                ? (isPortal || !showSolid ? "text-white font-semibold" : "text-foreground font-semibold")
-                : (isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground");
+                ? (isPortal || !showSolid ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
+                : (isPortal || !showSolid ? "text-white/70 hover:text-white cursor-pointer" : "text-muted hover:text-foreground cursor-pointer");
 
               if (link.subLinks && link.subLinks.length > 0) {
                 const isMarketplace = link.href === "/browse";

@@ -866,6 +866,24 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
     }
 
+    // Clear child / linking rows first. If any of these tables hold a
+    // foreign key to placements.id with ON DELETE RESTRICT, the main row
+    // delete will silently return 0 rows and the placement will "come
+    // back" on reload. Order matters: side tables → orders linkage →
+    // messages → placements itself.
+    await Promise.all([
+      db.from("placement_records").delete().eq("placement_id", id),
+      db.from("placement_photos").delete().eq("placement_id", id),
+      db.from("messages").delete().eq("conversation_id", `placement-${id}`),
+    ]).catch((err) => {
+      // Non-fatal: the tables may not exist in every env.
+      console.warn("Side-table cleanup for placement", id, "failed:", err);
+    });
+    // Detach any orders that referenced this placement so the main row
+    // can go. We don't want to delete the orders — they're the payment
+    // record of truth — but we do need to drop the foreign key link.
+    await db.from("orders").update({ placement_id: null }).eq("placement_id", id).then(() => {}, () => {});
+
     // Use .select() after .delete() to get back the deleted row(s). Lets us
     // confirm the delete actually removed something — if the row is still
     // there on the next GET, we know whether Supabase silently dropped the
@@ -883,23 +901,15 @@ export async function DELETE(request: Request) {
     }
 
     if (!deleted || deleted.length === 0) {
-      // No row came back — RLS or a constraint blocked it silently. Surface
-      // a real error rather than reporting success, so the client can
-      // rollback instead of lying to the user.
+      // No row came back — RLS or a lingering FK constraint blocked it.
+      // Surface a real error rather than reporting success, so the client
+      // can rollback instead of lying to the user.
       console.warn("Placement DELETE returned no rows for id=", id);
       return NextResponse.json(
         { error: "Delete did not remove any row (possible RLS policy or FK constraint). Check Supabase logs." },
         { status: 500 },
       );
     }
-
-    // Best-effort: also clear placement-scoped side tables so a future
-    // recreate with the same id doesn't drag old records back in view.
-    await Promise.all([
-      db.from("placement_records").delete().eq("placement_id", id),
-      db.from("placement_photos").delete().eq("placement_id", id),
-      db.from("messages").delete().eq("conversation_id", `placement-${id}`),
-    ]).catch(() => { /* side tables may not exist in all envs */ });
 
     return NextResponse.json({ success: true, deletedId: deleted[0]?.id });
   } catch (err) {

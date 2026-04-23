@@ -18,7 +18,7 @@
  *   Large     | ≤ 120cm      | ≤ 15kg | £24.00      | £65
  *   Oversized | > 120cm      | > 15kg | £45.00      | £120
  *
- * £250+ orders automatically add the signature-on-delivery uplift (£2)
+ * £100+ orders automatically add the signature-on-delivery uplift (£2)
  * — this mirrors the terms policy.
  */
 
@@ -35,7 +35,7 @@ export interface ShippingEstimate {
   tier: ShippingTier;
   /** Human-readable delivery window. */
   estimatedDays: string;
-  /** Whether signature-on-delivery applies (£250+ orders). */
+  /** Whether signature-on-delivery applies (£100+ orders). */
   requiresSignature: boolean;
   /** Longest edge in cm used in the calculation. */
   longestEdgeCm: number;
@@ -179,7 +179,7 @@ const PRICING: Record<ShippingTier, { uk: number; international: number; days: s
 };
 
 /** Orders at or above this price automatically ship signed-for. Terms §7. */
-export const SIGNATURE_THRESHOLD_GBP = 250;
+export const SIGNATURE_THRESHOLD_GBP = 100;
 const SIGNATURE_UPLIFT_GBP = 2;
 
 interface EstimateInput {

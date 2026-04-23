@@ -207,15 +207,36 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     loadOtherPartyWorks(other);
   }, [selectedConv, conversations, loadOtherPartyWorks]);
 
-  // Scroll to bottom (most recent messages) when thread loads or new message sent
+  // Scroll to the latest message whenever the selected thread changes or
+  // new messages arrive. Uses two attempts (sync + rAF-deferred) because
+  // the first paint often fires before the messages column has its final
+  // height, which would cause scrollIntoView to land at the wrong offset.
   useEffect(() => {
     const scrollToBottom = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
+      const el = messagesEndRef.current;
+      if (!el) return;
+      el.scrollIntoView({ behavior: "instant", block: "end" });
+      // Fallback in case the end-anchor is hidden inside an overflow
+      // container that scrollIntoView can't resolve — walk up and scroll
+      // the nearest scrollable ancestor to the bottom.
+      let parent: HTMLElement | null = el.parentElement;
+      while (parent) {
+        const overflowY = window.getComputedStyle(parent).overflowY;
+        if (overflowY === "auto" || overflowY === "scroll") {
+          parent.scrollTop = parent.scrollHeight;
+          break;
+        }
+        parent = parent.parentElement;
+      }
     };
     scrollToBottom();
-    const timer = setTimeout(scrollToBottom, 150);
-    return () => clearTimeout(timer);
-  }, [messages]);
+    const raf = requestAnimationFrame(scrollToBottom);
+    const timer = setTimeout(scrollToBottom, 200);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [messages, selectedConv]);
 
   const selectedConvData = conversations.find((c) => c.conversationId === selectedConv);
 
@@ -607,7 +628,6 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-muted">{messages.length} messages</p>
                 </div>
                 {/* Report button — inline on row 1 */}
                 <button

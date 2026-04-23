@@ -1669,7 +1669,7 @@ function BrowsePortfoliosPageInner() {
                     <button type="button" onClick={clearGalleryFilters} className="text-sm text-accent hover:text-accent-hover transition-colors cursor-pointer">Clear all filters</button>
                   </div>
                 ) : (
-                <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-5 space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {filteredGalleryWorks.slice(0, loadedWorks).map((work) => {
                     const workSlug = slugify(work.title);
                     // ArtistProfileClient opens the lightbox when ?work= is present,
@@ -1681,7 +1681,7 @@ function BrowsePortfoliosPageInner() {
                       ? calcDistance(userCoords.lat, userCoords.lng, work.artistCoordinates.lat, work.artistCoordinates.lng)
                       : null;
                     return (
-                      <div key={work.id} className="group block break-inside-avoid mb-5">
+                      <div key={work.id} className="group block">
                         <div className="bg-surface border border-border/50 rounded-lg overflow-hidden flex flex-col">
                           {/* Image */}
                           <div

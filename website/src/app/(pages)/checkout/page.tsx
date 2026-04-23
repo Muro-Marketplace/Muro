@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 import type { ShippingInfo } from "@/lib/types";
-import { resolveShippingCost, tierLabel } from "@/lib/shipping-calculator";
+import { resolveShippingCost, tierLabel, SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -74,7 +74,7 @@ export default function CheckoutPage() {
       });
       let rate = resolved.cost;
       if (rate == null) rate = isInternational ? FALLBACK_MEDIUM_INT : FALLBACK_MEDIUM_UK;
-      if (resolved.estimate?.requiresSignature || item.price >= 250) {
+      if (resolved.estimate?.requiresSignature || item.price >= SIGNATURE_THRESHOLD_GBP) {
         group.needsSignature = true;
       }
       if (resolved.source === "estimate" && resolved.estimate) {
@@ -371,7 +371,7 @@ export default function CheckoutPage() {
                   </svg>
                   <div>
                     <span className="text-foreground font-medium">Dispatched within 7 days.</span>{" "}
-                    Most orders arrive within 5&ndash;10 working days once dispatched. Orders of &pound;250+ are sent signed-for.
+                    Most orders arrive within 5&ndash;10 working days once dispatched. Orders of &pound;{SIGNATURE_THRESHOLD_GBP}+ are sent signed-for.
                   </div>
                 </div>
               </div>

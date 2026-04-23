@@ -140,10 +140,13 @@ export async function POST(request: Request) {
           }
         }
 
-        // Calculate splits
-        venueRevenue = Math.round(total * (venueRevSharePct / 100) * 100) / 100;
-        platformFee = Math.round(total * (platformFeePct / 100) * 100) / 100;
-        artistRevenue = Math.round((total - venueRevenue - platformFee) * 100) / 100;
+        // Calculate splits. Platform fee and venue revenue are computed on
+        // the subtotal (artwork value only) — shipping is not subject to
+        // the cut and flows straight through to the artist, who pays the
+        // courier out of pocket.
+        venueRevenue = Math.round(subtotal * (venueRevSharePct / 100) * 100) / 100;
+        platformFee = Math.round(subtotal * (platformFeePct / 100) * 100) / 100;
+        artistRevenue = Math.round((subtotal - venueRevenue - platformFee + shippingCost) * 100) / 100;
 
         const paymentIntentId = typeof session.payment_intent === "string"
           ? session.payment_intent
