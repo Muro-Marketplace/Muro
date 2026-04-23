@@ -298,6 +298,8 @@ export default function VenuePlacementsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [dateFilter, setDateFilter] = useState<"all" | "7d" | "30d" | "90d" | "year">("all");
   const [placements, setPlacements] = useState<PlacementRequest[]>([]);
   const [counteringId, setCounteringId] = useState<string | null>(null);
@@ -648,6 +650,46 @@ export default function VenuePlacementsPage() {
       method: "PATCH",
       body: JSON.stringify({ id, status: statusMap[newStatus] || "active" }),
     }).catch((err) => console.error("Status update error:", err));
+  }
+
+  // Bulk archive — fires one DELETE per selected id, then reloads.
+  // Uses the same endpoint the single-row bin icon uses so there's
+  // no new code path to keep in sync.
+  async function bulkArchiveSelected() {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    const count = ids.length;
+    const verb = showArchived ? "unarchive" : "archive";
+    if (!confirm(`${verb === "archive" ? "Archive" : "Unarchive"} ${count} placement${count === 1 ? "" : "s"}?`)) return;
+    setBulkBusy(true);
+    const snapshot = placements;
+    // Optimistic: drop them from the current view.
+    setPlacements((prev) => prev.filter((p) => !selectedIds.has(p.id)));
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        const url = `/api/placements?id=${encodeURIComponent(id)}${showArchived ? "&unarchive=1" : ""}`;
+        const res = await authFetch(url, { method: "DELETE" });
+        if (!res.ok && res.status !== 404) failed++;
+      } catch { failed++; }
+    }
+    setSelectedIds(new Set());
+    setBulkBusy(false);
+    if (failed > 0) {
+      setPlacements(snapshot);
+      alert(`Couldn't ${verb} ${failed} of ${count} placements. They've been put back on-screen.`);
+      return;
+    }
+    loadPlacements();
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   // Archive or unarchive — the bin icon on the list. Hides the row
@@ -1095,15 +1137,68 @@ export default function VenuePlacementsPage() {
         <p className="text-muted text-sm py-12 text-center">Loading placements...</p>
       ) : (
         <>
+          {/* Bulk-select action bar — appears only when at least one
+              row is ticked so the normal view isn't cluttered with
+              an empty toolbar. */}
+          {selectedIds.size > 0 && (
+            <div className="mb-3 flex items-center justify-between gap-3 px-4 py-2.5 bg-accent/5 border border-accent/30 rounded-sm">
+              <p className="text-sm text-foreground">
+                <span className="font-medium">{selectedIds.size}</span>
+                <span className="text-muted"> selected</span>
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs text-muted hover:text-foreground transition-colors"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={bulkArchiveSelected}
+                  disabled={bulkBusy}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-accent bg-background border border-accent/30 hover:bg-accent/10 rounded-sm transition-colors disabled:opacity-60"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 7h18v4H3zM5 11v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" />
+                    <line x1="10" y1="16" x2="14" y2="16" />
+                  </svg>
+                  {bulkBusy
+                    ? (showArchived ? "Unarchiving…" : "Archiving…")
+                    : (showArchived ? "Unarchive selected" : "Archive selected")}
+                </button>
+              </div>
+            </div>
+          )}
           {/* Table - desktop */}
           <div className="bg-surface border border-border rounded-sm hidden sm:block">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-background">
+                    <th className="w-10 px-3 py-3">
+                      {(() => {
+                        const allSelected = filtered.length > 0 && filtered.every((p) => selectedIds.has(p.id));
+                        const someSelected = filtered.some((p) => selectedIds.has(p.id));
+                        return (
+                          <input
+                            type="checkbox"
+                            aria-label={allSelected ? "Clear selection" : "Select all placements"}
+                            checked={allSelected}
+                            ref={(el) => { if (el) el.indeterminate = !allSelected && someSelected; }}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedIds(new Set(filtered.map((p) => p.id)));
+                              else setSelectedIds(new Set());
+                            }}
+                            className="w-3.5 h-3.5 rounded-sm border border-border accent-accent cursor-pointer align-middle"
+                          />
+                        );
+                      })()}
+                    </th>
                     <th className="text-left text-xs text-muted font-medium px-6 py-3">Piece</th>
                     <th className="text-left text-xs text-muted font-medium px-4 py-3">Artist</th>
-                    <th className="text-left text-xs text-muted font-medium px-4 py-3">Type</th>
+                    <th className="text-left text-xs text-muted font-medium px-4 py-3 whitespace-nowrap">Type</th>
                     <th className="text-left text-xs text-muted font-medium px-4 py-3">Status</th>
                     <th className="text-left text-xs text-muted font-medium px-4 py-3">Date</th>
                     <th className="text-right text-xs text-muted font-medium px-4 py-3">Earned</th>
@@ -1115,6 +1210,15 @@ export default function VenuePlacementsPage() {
                   {filtered.map((p) => (
                     <React.Fragment key={p.id}>
                     <tr className="hover:bg-background/60 transition-colors cursor-pointer" onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}>
+                      <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${p.workTitle}`}
+                          checked={selectedIds.has(p.id)}
+                          onChange={() => toggleSelected(p.id)}
+                          className="w-3.5 h-3.5 rounded-sm border border-border accent-accent cursor-pointer align-middle"
+                        />
+                      </td>
                       <td className="px-6 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
@@ -1136,8 +1240,8 @@ export default function VenuePlacementsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.artistName}</td>
-                      <td className="px-4 py-3.5">
-                        <span className="text-xs border border-border rounded-sm px-2 py-0.5 text-muted">
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className="text-xs border border-border rounded-sm px-2 py-0.5 text-muted whitespace-nowrap">
                           {p.type}{p.revenueSharePercent ? ` (${p.revenueSharePercent}%)` : ""}
                         </span>
                       </td>
@@ -1224,7 +1328,7 @@ export default function VenuePlacementsPage() {
                     </tr>
                     {expandedId === p.id && (
                       <tr>
-                        <td colSpan={8} className="px-6 py-4 bg-background border-t border-border">
+                        <td colSpan={9} className="px-6 py-4 bg-background border-t border-border">
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                             <div>
                               <p className="text-muted mb-0.5">Artist</p>
