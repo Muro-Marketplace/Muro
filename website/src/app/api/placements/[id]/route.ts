@@ -104,6 +104,19 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     effectiveRequesterId = firstRequester;
   }
 
+  // Version log for the loan/consignment record. Best-effort: if the
+  // migration hasn't been applied (033), this just returns empty.
+  let recordVersions: Array<Record<string, unknown>> = [];
+  try {
+    const { data: versionRows } = await db
+      .from("placement_record_versions")
+      .select("id, changed_by_user_id, changed_by_role, changed_fields, snapshot, created_at")
+      .eq("placement_id", id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    recordVersions = (versionRows as Array<Record<string, unknown>>) || [];
+  } catch { /* table doesn't exist yet — ignore */ }
+
   return NextResponse.json({
     placement: {
       ...placement,
@@ -111,6 +124,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       revenue_earned_gbp: Math.round(revenueEarned * 100) / 100,
     },
     record: record || null,
+    recordVersions,
     photos: photos || [],
     artist: artistProfile || null,
     venue: venueProfile || null,

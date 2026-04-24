@@ -75,6 +75,15 @@ export interface PlacementRecord {
   artist_approved_at?: string | null;
 }
 
+export interface RecordVersion {
+  id: string;
+  changed_by_user_id: string;
+  changed_by_role: "artist" | "venue" | null;
+  changed_fields: string[];
+  snapshot?: Record<string, unknown>;
+  created_at: string;
+}
+
 interface PhotoRow {
   id: string;
   url: string;
@@ -92,6 +101,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
   const { user, loading: authLoading } = useAuth();
   const [placement, setPlacement] = useState<PlacementRow | null>(null);
   const [record, setRecord] = useState<PlacementRecord | null>(null);
+  const [recordVersions, setRecordVersions] = useState<RecordVersion[]>([]);
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [artist, setArtist] = useState<{ name: string; slug: string; image?: string } | null>(null);
   const [venue, setVenue] = useState<{ name: string; slug: string; image?: string; location?: string; city?: string } | null>(null);
@@ -128,6 +138,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
       const data = await res.json();
       setPlacement(data.placement);
       setRecord(data.record);
+      setRecordVersions(Array.isArray(data.recordVersions) ? data.recordVersions : []);
       setPhotos(data.photos || []);
       setArtist(data.artist);
       setVenue(data.venue);
@@ -814,13 +825,20 @@ export default function PlacementDetailClient({ placementId }: Props) {
               placementId={placementId}
               record={record}
               viewerRole={viewerRole}
+              versions={recordVersions}
               placementSeed={{
                 arrangementType: placement.arrangement_type,
                 revenueSharePercent: placement.revenue_share_percent ?? null,
                 monthlyFeeGbp: placement.monthly_fee_gbp ?? null,
                 qrEnabled: placement.qr_enabled ?? null,
               }}
-              onSaved={(updated) => setRecord(updated)}
+              onSaved={(updated, opts) => {
+                setRecord(updated);
+                // A reload pulls fresh version history after a save
+                // that reset approvals, so the log / banner stay in
+                // sync without relying on the form to synthesise them.
+                if (opts?.approvalsReset) load({ silent: true });
+              }}
             />
           ) : (
             <div className="bg-surface border border-border rounded-sm p-6 text-center text-sm text-muted">

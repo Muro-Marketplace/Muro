@@ -141,11 +141,70 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     row.artist_approved_at = d.artistApproved ? new Date().toISOString() : null;
   }
 
+  // Pull the full existing row so we can diff + snapshot. For a new
+  // record there's nothing to snapshot; we insert straight away and
+  // skip the re-approval reset (the initial save has nothing to reset).
   const { data: existing } = await db
     .from("placement_records")
-    .select("id")
+    .select("*")
     .eq("placement_id", id)
     .maybeSingle();
+
+  // Detect which CONTENT fields actually changed. Approval ticks +
+  // timestamps are explicitly excluded: toggling approval must never
+  // reset the other party's approval, only actual terms changes do.
+  const APPROVAL_COLUMNS = new Set([
+    "venue_approved", "venue_approved_at",
+    "artist_approved", "artist_approved_at",
+    "updated_at",
+  ]);
+  function valuesDiffer(a: unknown, b: unknown): boolean {
+    if (a === b) return false;
+    // treat null / undefined / "" as equivalent so ticking through a
+    // blank field doesn't spuriously look like a change.
+    const aEmpty = a === null || a === undefined || a === "";
+    const bEmpty = b === null || b === undefined || b === "";
+    if (aEmpty && bEmpty) return false;
+    if (Array.isArray(a) && Array.isArray(b)) return JSON.stringify(a) !== JSON.stringify(b);
+    return a !== b;
+  }
+  const changedFields: string[] = [];
+  if (existing) {
+    for (const [key, val] of Object.entries(row)) {
+      if (APPROVAL_COLUMNS.has(key)) continue;
+      if (key === "placement_id" || key === "artist_user_id" || key === "venue_user_id") continue;
+      if (valuesDiffer((existing as Record<string, unknown>)[key], val)) {
+        changedFields.push(key);
+      }
+    }
+  }
+  const contentChanged = changedFields.length > 0;
+
+  // If real content changed, snapshot the current row and reset both
+  // approval ticks. The two parties have to re-approve the revised
+  // terms — this is what gives each side confidence the other isn't
+  // editing behind their back.
+  if (existing && contentChanged) {
+    const changedByRole = placement.artist_user_id === auth.user!.id ? "artist" : "venue";
+    const versionInsert = await db.from("placement_record_versions").insert({
+      placement_id: id,
+      version_of_record_id: (existing as Record<string, unknown>).id || null,
+      changed_by_user_id: auth.user!.id,
+      changed_by_role: changedByRole,
+      snapshot: existing,
+      changed_fields: changedFields,
+    });
+    if (versionInsert.error) {
+      // Non-fatal: if the migration hasn't been applied, we still save
+      // the edit rather than blocking the user.
+      console.warn("placement_record_versions insert skipped:", versionInsert.error.message);
+    }
+    // Reset approvals — force a re-sign by both parties.
+    row.venue_approved = false;
+    row.venue_approved_at = null;
+    row.artist_approved = false;
+    row.artist_approved_at = null;
+  }
 
   // Retry path: artist_approved / artist_approved_at may not exist yet in
   // older environments (migration 031). Strip those columns and try again
@@ -174,5 +233,10 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: "Failed to save" }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true,
+    changedFields,
+    approvalsReset: contentChanged,
+  });
 }
+

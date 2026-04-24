@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { authFetch } from "@/lib/api-client";
 import { uploadContract } from "@/lib/upload";
-import type { PlacementRecord } from "./PlacementDetailClient";
+import type { PlacementRecord, RecordVersion } from "./PlacementDetailClient";
 import DatePicker from "@/components/DatePicker";
 
 interface Props {
@@ -20,11 +20,99 @@ interface Props {
     monthlyFeeGbp?: number | null;
     qrEnabled?: boolean | null;
   };
-  onSaved: (r: PlacementRecord) => void;
+  /** Version history (newest-first). Each entry = a snapshot of the
+   *  record BEFORE a save that changed at least one content field. */
+  versions?: RecordVersion[];
+  onSaved: (r: PlacementRecord, opts?: { approvalsReset?: boolean }) => void;
 }
 
 function strOr(v: unknown): string {
   return v === null || v === undefined ? "" : String(v);
+}
+
+// Map raw DB column names to human labels for the "what changed" line.
+const FIELD_LABELS: Record<string, string> = {
+  record_type: "Record type",
+  qr_enabled: "QR enabled",
+  start_date: "Start date",
+  review_date: "Review date",
+  collection_date: "Collection date",
+  agreed_value_gbp: "Agreed value",
+  insured_value_gbp: "Insured value",
+  sale_price_gbp: "Sale price",
+  venue_share_percent: "Venue share",
+  platform_commission_percent: "Platform commission",
+  artist_payout_terms: "Payout terms",
+  monthly_display_fee_gbp: "Monthly fee",
+  condition_in: "Condition at check-in",
+  condition_out: "Condition at check-out",
+  damage_notes: "Damage notes",
+  location_in_venue: "Location in venue",
+  piece_count: "Number of pieces",
+  delivered_by: "Delivered by",
+  collection_responsible: "Collection responsible",
+  exclusive_to_venue: "Exclusive to venue",
+  available_for_sale: "Available for sale",
+  logistics_notes: "Logistics notes",
+  contract_attachment_url: "Contract",
+  internal_notes: "Internal notes",
+};
+
+function VersionLog({ versions, approvalsPending }: { versions: RecordVersion[]; approvalsPending: boolean }) {
+  const [open, setOpen] = useState(false);
+  const latest = versions[0];
+  const whoLatest = latest?.changed_by_role
+    ? latest.changed_by_role === "artist" ? "Artist" : "Venue"
+    : "Someone";
+  const latestWhen = latest ? new Date(latest.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const latestFields = latest?.changed_fields || [];
+  const fieldLabel = (name: string) => FIELD_LABELS[name] || name.replace(/_/g, " ");
+  return (
+    <div className={`rounded-sm border px-4 py-3 space-y-2 ${approvalsPending && latest ? "bg-amber-50 border-amber-200" : "bg-surface border-border"}`}>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-foreground">
+            {latest
+              ? `${whoLatest} edited this record`
+              : "No edits yet"}
+          </p>
+          {latestWhen && (
+            <p className="text-[11px] text-muted">
+              {latestWhen}
+              {latestFields.length > 0 && (
+                <> — {latestFields.slice(0, 4).map(fieldLabel).join(", ")}{latestFields.length > 4 ? ` + ${latestFields.length - 4} more` : ""}</>
+              )}
+            </p>
+          )}
+          {approvalsPending && latest && (
+            <p className="text-[11px] text-amber-800 mt-1">
+              Approvals were cleared — both parties need to tick the record again.
+            </p>
+          )}
+        </div>
+        {versions.length > 0 && (
+          <button type="button" onClick={() => setOpen((v) => !v)} className="text-[11px] text-accent hover:underline shrink-0">
+            {open ? "Hide history" : `View history (${versions.length})`}
+          </button>
+        )}
+      </div>
+      {open && versions.length > 0 && (
+        <ul className="space-y-1.5 pt-2 border-t border-border">
+          {versions.map((v) => (
+            <li key={v.id} className="text-[11px]">
+              <span className="text-muted">{new Date(v.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+              <span className="text-foreground ml-2">
+                {v.changed_by_role === "artist" ? "Artist" : v.changed_by_role === "venue" ? "Venue" : "Someone"}
+              </span>
+              {v.changed_fields && v.changed_fields.length > 0 && (
+                <span className="text-muted ml-1">— {v.changed_fields.map(fieldLabel).join(", ")}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function ApprovalRow({
@@ -89,7 +177,7 @@ function numOrNull(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export default function PlacementLoanForm({ placementId, record, viewerRole, placementSeed, onSaved }: Props) {
+export default function PlacementLoanForm({ placementId, record, viewerRole, placementSeed, versions, onSaved }: Props) {
   // Map the placement's arrangement_type to the loan record's recordType.
   // Both "free_loan" (paid loan with monthly fee) and "purchase" map to
   // "loan" — the artwork is going on the wall, money flows differently.
@@ -199,6 +287,14 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
         setSaving(false);
         return;
       }
+      const saveResult = await res.json().catch(() => ({})) as { approvalsReset?: boolean; changedFields?: string[] };
+      // If real content changed, the server clears both approval ticks so
+      // the other party has to re-approve. Mirror that locally so the UI
+      // doesn't briefly show stale "approved" state before the load.
+      const resetApprovals = saveResult.approvalsReset === true;
+      if (resetApprovals) {
+        setForm((prev) => ({ ...prev, venueApproved: false, artistApproved: false }));
+      }
       // Reflect saved payload back to parent
       onSaved({
         ...record,
@@ -225,13 +321,14 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
         logistics_notes: payload.logisticsNotes,
         contract_attachment_url: payload.contractAttachmentUrl,
         internal_notes: payload.internalNotes,
-        ...(viewerRole === "venue"
-          ? { venue_approved: form.venueApproved, venue_approved_at: form.venueApproved ? new Date().toISOString() : null }
-          : {}),
-        ...(viewerRole === "artist"
-          ? { artist_approved: form.artistApproved, artist_approved_at: form.artistApproved ? new Date().toISOString() : null }
-          : {}),
-      });
+        ...(resetApprovals
+          ? { venue_approved: false, venue_approved_at: null, artist_approved: false, artist_approved_at: null }
+          : viewerRole === "venue"
+            ? { venue_approved: form.venueApproved, venue_approved_at: form.venueApproved ? new Date().toISOString() : null }
+            : viewerRole === "artist"
+              ? { artist_approved: form.artistApproved, artist_approved_at: form.artistApproved ? new Date().toISOString() : null }
+              : {}),
+      }, { approvalsReset: resetApprovals });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch {
@@ -244,8 +341,18 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
   const inputCls = "w-full px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60";
   const labelCls = "block text-xs font-medium text-muted uppercase tracking-wider mb-1";
 
+  const latestVersion = (versions || [])[0];
+  const approvalsPending = !(record.venue_approved && record.artist_approved);
+
   return (
     <div className="bg-surface border border-border rounded-sm p-4 sm:p-6 space-y-6">
+      {/* Audit trail: the most recent edit banner + a click-to-expand
+          version log. This is what gives each party confidence the
+          other isn't editing behind their back — every save is here. */}
+      {(latestVersion || approvalsPending) && (
+        <VersionLog versions={versions || []} approvalsPending={approvalsPending} />
+      )}
+
       {/* Type + toggles */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
