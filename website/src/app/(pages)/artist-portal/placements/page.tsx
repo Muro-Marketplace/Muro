@@ -719,9 +719,13 @@ export default function PlacementsPage() {
                   );
                 })}
               </div>
-              {/* Size selector for selected works */}
+              {/* Per-work size — optional. Default is "Any size" so the
+                  artist can send the request without committing to a
+                  specific size per work; the venue can still negotiate
+                  from there. */}
               {selectedWorks.size > 0 && (
                 <div className="mt-3 space-y-2">
+                  <p className="text-[11px] text-muted">Size per work is optional — leave on "Any size" to let the venue pick.</p>
                   {Array.from(selectedWorks).map((workIndex) => {
                     const work = works[workIndex];
                     if (!work) return null;
@@ -733,7 +737,7 @@ export default function PlacementsPage() {
                           onChange={(e) => setWorkSizes((prev) => ({ ...prev, [workIndex]: e.target.value }))}
                           className="px-2 py-1.5 bg-background border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50"
                         >
-                          <option value="">Select size</option>
+                          <option value="">Any size</option>
                           {work.pricing?.map((p) => (
                             <option key={p.label} value={p.label}>{p.label}</option>
                           ))}
