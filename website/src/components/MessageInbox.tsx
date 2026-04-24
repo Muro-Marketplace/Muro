@@ -168,6 +168,20 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     return () => { if (threadPollRef.current) clearInterval(threadPollRef.current); };
   }, [selectedConv, loadThread]);
 
+  // React immediately when a placement changes elsewhere (e.g. the user
+  // accepts / declines / counters from My Placements or the full
+  // placement page). Without this the inbox only caught up on its 8s
+  // thread poll — the request card stayed stuck showing Accept/Decline
+  // long after the user had acted from another surface.
+  useEffect(() => {
+    const handler = () => {
+      loadConversations(true);
+      if (selectedConv) loadThread(selectedConv, true);
+    };
+    window.addEventListener("wallplace:placement-changed", handler);
+    return () => window.removeEventListener("wallplace:placement-changed", handler);
+  }, [loadConversations, loadThread, selectedConv]);
+
   // Load the works the current user can offer (artist) or pick from (venue).
   const loadOtherPartyWorks = useCallback(async (otherPartySlug: string) => {
     if (portalType === "artist" && works && works.length > 0) {
