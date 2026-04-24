@@ -28,9 +28,7 @@ Hard blockers — security, legal, or the app simply doesn't work.
 
 ### Supabase dashboard
 
-- ⬜ Apply migration `034_rls_core_tables.sql`. Options:
-  - Supabase SQL editor → paste the file → run
-  - `supabase db push` if using the CLI with a linked project
+
 - ⬜ **Verify the RLS lockdown worked.** In SQL editor:
   ```sql
   SET LOCAL ROLE anon;
