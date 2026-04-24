@@ -959,6 +959,15 @@ export async function PATCH(request: Request) {
         }
       }
     }
+    // Notify + post thread message on any pending → active/declined
+    // transition. The notification half is gated on knowing who the
+    // requester is (so we have someone to email/bell). The in-thread
+    // placement_response message is NOT gated on that — it only needs
+    // to know the two slugs, and it's essential for the messages view
+    // to reflect the latest decision. (Previously both were inside the
+    // same `if (notifyRequesterId && …)`, so any placement with a
+    // missing requester_user_id AND no recoverable fallback silently
+    // left the messages panel stuck on Accept/Counter/Decline.)
     if (
       notifyRequesterId &&
       existing.status === "pending" &&
@@ -994,7 +1003,12 @@ export async function PATCH(request: Request) {
       } catch (err) {
         console.warn("Response notification skipped:", err);
       }
+    }
 
+    if (
+      existing.status === "pending" &&
+      (status === "active" || status === "declined")
+    ) {
       // Post a placement_response message in the existing conversation so
       // the messages view reflects the decision without the user having to
       // click Accept/Decline there too. Any prior placement_request

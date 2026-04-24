@@ -91,8 +91,30 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
 
   // Mobile: right-side panel toggle
   const [panelOpenMobile, setPanelOpenMobile] = useState(false);
-  // Placement id currently being countered via the inline dialog.
+  // Placement id currently being countered via the inline dialog,
+  // plus the latest known terms for the placement so the counter form
+  // opens pre-filled with whatever the other party offered — the user
+  // should be editing an offer, not retyping it from scratch.
   const [counteringId, setCounteringId] = useState<string | null>(null);
+  const [counterInitial, setCounterInitial] = useState<{
+    monthly_fee_gbp?: number | null;
+    revenue_share_percent?: number | null;
+    qr_enabled?: boolean | null;
+  } | undefined>(undefined);
+  // Open the counter dialog for a placement by deriving current terms
+  // from the most recent placement_request message on the thread.
+  const openCounterDialog = useCallback((placementId: string) => {
+    const latest = [...messages]
+      .filter((m) => m.message_type === "placement_request" && (m.metadata as Record<string, unknown> | undefined)?.placementId === placementId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    const meta = (latest?.metadata || {}) as Record<string, unknown>;
+    setCounterInitial({
+      monthly_fee_gbp: typeof meta.monthlyFeeGbp === "number" ? (meta.monthlyFeeGbp as number) : null,
+      revenue_share_percent: typeof meta.revenueSharePercent === "number" ? (meta.revenueSharePercent as number) : null,
+      qr_enabled: typeof meta.qrEnabled === "boolean" ? (meta.qrEnabled as boolean) : null,
+    });
+    setCounteringId(placementId);
+  }, [messages]);
 
   const slugRef = useRef(userSlug);
   slugRef.current = userSlug;
@@ -889,7 +911,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                                   {!accepted && iAmOfferer && typeof placementId === "string" && (
                                     <button
                                       type="button"
-                                      onClick={() => setCounteringId(placementId)}
+                                      onClick={() => openCounterDialog(placementId)}
                                       className="px-2.5 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
                                     >
                                       Counter with new terms
@@ -918,7 +940,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                                 {placementIdForCounter && (
                                   <button
                                     type="button"
-                                    onClick={() => setCounteringId(placementIdForCounter)}
+                                    onClick={() => openCounterDialog(placementIdForCounter)}
                                     className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
                                   >
                                     Counter
@@ -1094,8 +1116,9 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         <CounterPlacementDialog
           placementId={counteringId}
           currentUserId={user?.id}
-          onClose={() => setCounteringId(null)}
-          onSuccess={() => { setCounteringId(null); if (selectedConv) loadThread(selectedConv); }}
+          initial={counterInitial}
+          onClose={() => { setCounteringId(null); setCounterInitial(undefined); }}
+          onSuccess={() => { setCounteringId(null); setCounterInitial(undefined); if (selectedConv) loadThread(selectedConv); }}
         />
       )}
     </div>

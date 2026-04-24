@@ -157,6 +157,9 @@ export default function PlacementsPage() {
   const [monthlyFee, setMonthlyFee] = useState<number | "">("");
   const [selectedWorks, setSelectedWorks] = useState<Set<number>>(new Set());
   const [workSizes, setWorkSizes] = useState<Record<number, string>>({});
+  // Which card's size picker is currently open. Only one picker can be
+  // open at a time so the dropdowns don't overlap each other's bounds.
+  const [sizePickerFor, setSizePickerFor] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -321,13 +324,51 @@ export default function PlacementsPage() {
       .finally(() => setVenuesLoading(false));
   }, [showForm, venues.length]);
 
+  // Card click toggles selection with "Any size" as the default.
+  // Picking a specific size is an explicit opt-in via the "Pick size" /
+  // "Change size" corner button — mirrors the venue-side UX so the two
+  // portals feel consistent.
   function toggleWork(index: number) {
     setSelectedWorks((prev) => {
       const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
+      if (next.has(index)) {
+        next.delete(index);
+        // Also clear the size on deselect so a re-select starts from
+        // "Any size", not whatever was picked previously.
+        setWorkSizes((prevSizes) => {
+          const nextSizes = { ...prevSizes };
+          delete nextSizes[index];
+          return nextSizes;
+        });
+      } else {
+        next.add(index);
+      }
       return next;
     });
+    setSizePickerFor(null);
+  }
+  function setWorkSize(index: number, sizeLabel: string) {
+    setWorkSizes((prev) => ({ ...prev, [index]: sizeLabel }));
+    setSelectedWorks((prev) => {
+      if (prev.has(index)) return prev;
+      const next = new Set(prev);
+      next.add(index);
+      return next;
+    });
+    setSizePickerFor(null);
+  }
+  function removeWork(index: number) {
+    setSelectedWorks((prev) => {
+      const next = new Set(prev);
+      next.delete(index);
+      return next;
+    });
+    setWorkSizes((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    setSizePickerFor(null);
   }
 
   async function handleSubmit() {
@@ -434,11 +475,22 @@ export default function PlacementsPage() {
       Active: "active", Pending: "pending", Declined: "declined",
       Completed: "completed", Sold: "completed",
     };
+    const apiStatus = statusMap[newStatus] || "active";
     setPlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
     authFetch("/api/placements", {
       method: "PATCH",
-      body: JSON.stringify({ id, status: statusMap[newStatus] || "active" }),
-    }).catch((err) => console.error("Status update error:", err));
+      body: JSON.stringify({ id, status: apiStatus }),
+    })
+      .then(() => {
+        if (typeof window !== "undefined") {
+          // Fan out so the inbox and any other open surface refreshes
+          // immediately instead of waiting for the next poll.
+          window.dispatchEvent(new CustomEvent("wallplace:placement-changed", {
+            detail: { placementId: id, action: apiStatus === "declined" ? "decline" : apiStatus === "active" ? "accept" : "status" },
+          }));
+        }
+      })
+      .catch((err) => console.error("Status update error:", err));
   }
 
   // Bulk archive / unarchive — mirrors the single-row bin, just
@@ -717,7 +769,10 @@ export default function PlacementsPage() {
               </div>
             )}
 
-            {/* Select works */}
+            {/* Select works — card-overlay picker matching the venue
+                side. A plain click toggles selection with "Any size" as
+                the default; a corner Pick size / Change size button
+                opens an inline dropdown to choose a specific size. */}
             <div>
               <label className="block text-sm font-medium mb-2">
                 Select Works <span className="text-accent">*</span>
@@ -725,58 +780,103 @@ export default function PlacementsPage() {
                   <span className="text-accent ml-2 font-normal">{selectedWorks.size} selected</span>
                 )}
               </label>
-              <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
+              <p className="text-xs text-muted mb-3">
+                Click a work to include it. Leave size on &ldquo;Any size&rdquo; if you&rsquo;re flexible, or pick one to propose a specific size.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {works.map((work, i) => {
                   const selected = selectedWorks.has(i);
+                  const chosenSize = workSizes[i] || "";
+                  const pickerOpen = sizePickerFor === i;
+                  const sizes = Array.isArray(work.pricing) && work.pricing.length > 0
+                    ? work.pricing
+                    : (work.dimensions ? [{ label: work.dimensions, price: 0 }] : []);
                   return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => toggleWork(i)}
-                      className={`relative aspect-square rounded-sm overflow-hidden border-2 transition-all ${
-                        selected ? "border-accent shadow-sm" : "border-transparent hover:border-border"
-                      }`}
-                    >
-                      <Image src={work.image} alt={work.title} fill className="object-cover" sizes="80px" />
-                      {selected && (
-                        <div className="absolute inset-0 bg-accent/20 flex items-center justify-center">
-                          <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center">
-                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
+                    <div key={i} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => toggleWork(i)}
+                        className={`relative block w-full aspect-square rounded-sm overflow-hidden border-2 transition-all ${
+                          selected ? "border-accent shadow-sm" : "border-transparent hover:border-border"
+                        }`}
+                      >
+                        {work.image && (
+                          <Image src={work.image} alt={work.title} fill className="object-cover" sizes="160px" />
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pt-6 pb-1.5">
+                          <p className="text-[11px] font-medium text-white truncate text-left">{work.title}</p>
+                        </div>
+                        {selected && (
+                          <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+                            <span className="px-1.5 py-0.5 rounded-sm bg-accent text-white text-[10px] font-medium">
+                              {chosenSize || "Any size"}
+                            </span>
                           </div>
+                        )}
+                      </button>
+                      {selected && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setSizePickerFor((prev) => (prev === i ? null : i)); }}
+                          className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-sm bg-white/90 text-foreground text-[10px] font-medium border border-border hover:border-foreground/30 z-10"
+                        >
+                          {chosenSize ? "Change size" : "Pick size"}
+                        </button>
+                      )}
+                      {pickerOpen && (
+                        <div
+                          className="absolute left-0 right-0 mt-1 bg-background border border-border rounded-sm shadow-lg z-20 overflow-hidden"
+                          style={{ top: "100%" }}
+                        >
+                          <div className="px-3 py-2 border-b border-border">
+                            <p className="text-[10px] font-medium uppercase tracking-wider text-muted">Pick a size</p>
+                            <p className="text-[11px] text-foreground truncate">{work.title}</p>
+                          </div>
+                          <ul className="max-h-56 overflow-y-auto py-1">
+                            {sizes.length === 0 && (
+                              <li className="px-3 py-2 text-[11px] text-muted">No sizes published yet.</li>
+                            )}
+                            {sizes.map((s) => (
+                              <li key={s.label}>
+                                <button
+                                  type="button"
+                                  onClick={() => setWorkSize(i, s.label)}
+                                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-[12px] hover:bg-surface transition-colors ${
+                                    chosenSize === s.label ? "bg-accent/5 text-accent font-medium" : "text-foreground"
+                                  }`}
+                                >
+                                  <span className="truncate">{s.label}</span>
+                                  {s.price > 0 && <span className="text-muted text-[11px]">&pound;{s.price.toFixed(0)}</span>}
+                                </button>
+                              </li>
+                            ))}
+                            <li>
+                              <button
+                                type="button"
+                                onClick={() => setWorkSize(i, "")}
+                                className={`w-full flex items-center px-3 py-2 text-[12px] hover:bg-surface transition-colors ${
+                                  selected && !chosenSize ? "bg-accent/5 text-accent font-medium" : "text-muted"
+                                }`}
+                              >
+                                Any size — let the venue pick
+                              </button>
+                            </li>
+                            <li className="border-t border-border mt-1">
+                              <button
+                                type="button"
+                                onClick={() => removeWork(i)}
+                                className="w-full flex items-center px-3 py-2 text-[12px] text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                Remove from selection
+                              </button>
+                            </li>
+                          </ul>
                         </div>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
-              {/* Per-work size — optional. Default is "Any size" so the
-                  artist can send the request without committing to a
-                  specific size per work; the venue can still negotiate
-                  from there. */}
-              {selectedWorks.size > 0 && (
-                <div className="mt-3 space-y-2">
-                  <p className="text-[11px] text-muted">Size per work is optional — leave on "Any size" to let the venue pick.</p>
-                  {Array.from(selectedWorks).map((workIndex) => {
-                    const work = works[workIndex];
-                    if (!work) return null;
-                    return (
-                      <div key={workIndex} className="flex items-center gap-3 text-xs">
-                        <span className="text-foreground font-medium w-32 truncate">{work.title}</span>
-                        <select
-                          value={workSizes[workIndex] || ""}
-                          onChange={(e) => setWorkSizes((prev) => ({ ...prev, [workIndex]: e.target.value }))}
-                          className="px-2 py-1.5 bg-background border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50"
-                        >
-                          <option value="">Any size</option>
-                          {work.pricing?.map((p) => (
-                            <option key={p.label} value={p.label}>{p.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             {/* Message to venue */}

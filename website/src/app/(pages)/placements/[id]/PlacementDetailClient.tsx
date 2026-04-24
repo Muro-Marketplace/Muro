@@ -251,6 +251,9 @@ export default function PlacementDetailClient({ placementId }: Props) {
         return;
       }
       await load({ silent: true });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: placement.id, action: accept ? "accept" : "decline" } }));
+      }
     } catch {
       setRespondError("Network error. Please try again.");
     } finally {

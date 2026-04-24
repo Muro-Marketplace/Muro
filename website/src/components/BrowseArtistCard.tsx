@@ -124,15 +124,27 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
           <p className="text-xs text-muted mt-0.5">
             {disciplineLabel(artist.primaryMedium, artist.discipline)} · {artist.location}
           </p>
-          {(offers.length > 0 || formats.length > 0) && (
+          {offers.length > 0 && (
             <p className="text-[11px] text-muted/70 mt-1">
-              {offers.join(" · ")}{offers.length > 0 && formats.length > 0 ? " · " : ""}{formats.join(", ")}
+              {offers.join(" · ")}
             </p>
           )}
           {artist.openToRevenueShare && artist.revenueSharePercent != null && artist.revenueSharePercent > 0 && !(userType === "customer") && (
             <p className="text-[11px] text-accent font-medium mt-1">
               {artist.revenueSharePercent}% Revenue Share
             </p>
+          )}
+          {formats.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2.5">
+              {formats.map((f) => (
+                <span
+                  key={f}
+                  className="text-[10px] tracking-wide uppercase text-muted/80 px-1.5 py-0.5 border border-border/70 rounded-sm"
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       </div>

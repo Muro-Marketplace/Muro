@@ -692,11 +692,20 @@ export default function VenuePlacementsPage() {
       Active: "active", Pending: "pending", Declined: "declined",
       Completed: "completed", Sold: "completed",
     };
+    const apiStatus = statusMap[newStatus] || "active";
     setPlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
     authFetch("/api/placements", {
       method: "PATCH",
-      body: JSON.stringify({ id, status: statusMap[newStatus] || "active" }),
-    }).catch((err) => console.error("Status update error:", err));
+      body: JSON.stringify({ id, status: apiStatus }),
+    })
+      .then(() => {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("wallplace:placement-changed", {
+            detail: { placementId: id, action: apiStatus === "declined" ? "decline" : apiStatus === "active" ? "accept" : "status" },
+          }));
+        }
+      })
+      .catch((err) => console.error("Status update error:", err));
   }
 
   // Bulk archive — fires one DELETE per selected id, then reloads.

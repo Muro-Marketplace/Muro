@@ -45,10 +45,17 @@ interface Props {
 
 export default function CounterPlacementDialog({ placementId, currentUserId, initial, onClose, onSuccess }: Props) {
   const seedFee = typeof initial?.monthly_fee_gbp === "number" ? initial.monthly_fee_gbp : 0;
+  const seedRev = typeof initial?.revenue_share_percent === "number" ? initial.revenue_share_percent : 0;
   const [paidLoan, setPaidLoan] = useState<boolean>(seedFee > 0);
   const [fee, setFee] = useState<number | "">(seedFee > 0 ? seedFee : "");
+  // Default QR on. If the initial terms passed `qr_enabled`, honour it;
+  // otherwise leave the toggle on so the user immediately sees the
+  // revenue-share field in its editable state.
   const [qr, setQr] = useState<boolean>(initial?.qr_enabled ?? true);
-  const [revShare, setRevShare] = useState<number>(initial?.revenue_share_percent || 0);
+  // Allow "" so the user can fully clear the number and retype. Number
+  // state only — stuck-at-zero happened because the state was `number`
+  // and `Number("") || 0` coerced backspace back to 0 every keystroke.
+  const [revShare, setRevShare] = useState<number | "">(seedRev > 0 ? seedRev : "");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +68,7 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
       // name). Pure revenue share has no fee.
       const arrangementType: "free_loan" | "revenue_share" = paidLoan ? "free_loan" : qr ? "revenue_share" : "free_loan";
       const finalMonthlyFee = paidLoan && typeof fee === "number" ? fee : null;
-      const finalRevShare = qr && revShare > 0 ? revShare : null;
+      const finalRevShare = qr && typeof revShare === "number" && revShare > 0 ? revShare : null;
       const res = await authFetch("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({
@@ -185,7 +192,13 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
                 min={0}
                 max={50}
                 value={revShare}
-                onChange={(e) => setRevShare(Number(e.target.value) || 0)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "") { setRevShare(""); return; }
+                  const n = Number(v);
+                  if (!Number.isNaN(n)) setRevShare(n);
+                }}
+                placeholder="e.g. 15"
                 className="w-16 px-2 py-2 bg-surface border border-border rounded-sm text-sm text-center focus:outline-none focus:border-accent/50"
               />
               <span className="text-xs text-muted">%</span>
