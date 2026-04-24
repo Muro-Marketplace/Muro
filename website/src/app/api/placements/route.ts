@@ -4,7 +4,18 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
 import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
+import { sendEmail } from "@/lib/email/send";
+import { VenueNewPlacementRequest } from "@/emails/templates/placements/VenueNewPlacementRequest";
+import { ArtistPlacementAccepted } from "@/emails/templates/placements/ArtistPlacementAccepted";
+import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPlacementDeclined";
+import { PlacementVenueDeclinedArtistRequest } from "@/emails/templates/placements/PlacementVenueDeclinedArtistRequest";
+import { PlacementCounterOfferReceived } from "@/emails/templates/placements/PlacementCounterOfferReceived";
+import { PlacementScheduled } from "@/emails/templates/placements/PlacementScheduled";
+import { PlacementArtworkInstalled } from "@/emails/templates/placements/PlacementArtworkInstalled";
+import { PlacementEnded } from "@/emails/templates/placements/PlacementEnded";
 import { z } from "zod";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 // Every handler on this route must read live DB state — not a cached Route
 // Handler response. Without this, Next.js was serving a stale GET response
@@ -400,15 +411,67 @@ export async function POST(request: Request) {
     if (notifyUserId) {
       const { data: { user: notifyUser } } = await db.auth.admin.getUserById(notifyUserId);
       if (notifyUser?.email) {
-        notifyPlacementRequest({
-          email: notifyUser.email,
-          venueName: venueProfile!.name,
-          artistName: artistProfile!.name,
-          workTitles: parsed.data.map((p) => p.workTitle),
-          arrangementType: parsed.data[0].type,
-          revenueSharePercent: parsed.data[0].revenueSharePercent,
-          message: parsed.data[0].message,
-        }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+        const placementIdForLink = parsed.data[0]?.id;
+        // Build an arrangement-summary string the shared template expects.
+        const termsSummary = (() => {
+          const parts: string[] = [];
+          const t = parsed.data[0].type;
+          const fee = parsed.data[0].monthlyFeeGbp ?? 0;
+          const rev = parsed.data[0].revenueSharePercent ?? 0;
+          if (t === "revenue_share") parts.push(`Revenue share · ${rev || 0}%`);
+          else if (t === "purchase") parts.push("Direct purchase");
+          else parts.push("Paid loan");
+          if (fee > 0) parts.push(`£${fee}/mo`);
+          if (rev > 0 && t !== "revenue_share") parts.push(`${rev}% on QR sales`);
+          return parts.join(" · ");
+        })();
+        const placementUrl = placementIdForLink
+          ? `${SITE}/placements/${encodeURIComponent(placementIdForLink)}`
+          : `${SITE}/${fromVenue ? "artist-portal" : "venue-portal"}/placements`;
+
+        // If the artist initiated the request, the venue is the recipient —
+        // send the polished VenueNewPlacementRequest template. For
+        // venue-initiated (artist receives), we don't yet have a matching
+        // polished template, so fall back to the legacy helper.
+        if (!fromVenue) {
+          await sendEmail({
+            idempotencyKey: `placement_request:${placementIdForLink}:to_venue`,
+            template: "venue_new_placement_request",
+            category: "placements",
+            to: notifyUser.email,
+            subject: `New placement request from ${artistProfile!.name}`,
+            userId: notifyUserId,
+            react: VenueNewPlacementRequest({
+              firstName: notifyUser.user_metadata?.first_name || venueProfile!.name.split(" ")[0] || "there",
+              venueName: venueProfile!.name,
+              artist: {
+                id: artistProfile!.user_id || "",
+                name: artistProfile!.name,
+                slug: artistProfile!.slug,
+                avatar: `${SITE}/avatars/${artistProfile!.slug}.jpg`,
+                location: "",
+                primaryMedium: "",
+                url: `${SITE}/browse/${artistProfile!.slug}`,
+              },
+              artistProfileUrl: `${SITE}/browse/${artistProfile!.slug}`,
+              placementUrl,
+              requestedWorks: parsed.data.map((p) => p.workTitle),
+              proposedTerms: termsSummary,
+              message: parsed.data[0].message || undefined,
+            }),
+            metadata: { placementId: placementIdForLink, arrangementType: parsed.data[0].type },
+          });
+        } else {
+          notifyPlacementRequest({
+            email: notifyUser.email,
+            venueName: venueProfile!.name,
+            artistName: artistProfile!.name,
+            workTitles: parsed.data.map((p) => p.workTitle),
+            arrangementType: parsed.data[0].type,
+            revenueSharePercent: parsed.data[0].revenueSharePercent,
+            message: parsed.data[0].message,
+          }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+        }
       }
 
       // In-app notification (F9)
@@ -834,6 +897,37 @@ export async function PATCH(request: Request) {
               body: `${mine.name} sent revised terms`,
               link: `/placements/${encodeURIComponent(id)}`,
             }).catch(() => {});
+
+            // Email the counterparty (the new recipient of the request).
+            // Idempotency includes the updated_at so serial counters on
+            // the same row each send their own email.
+            try {
+              const { data: { user: counterpartyUser } } = await db.auth.admin.getUserById(counterpartyUserId);
+              if (counterpartyUser?.email) {
+                const changedTerms: string[] = [];
+                if (counter.arrangementType !== undefined) changedTerms.push(`Arrangement: ${counter.arrangementType.replace("_", " ")}`);
+                if (counter.monthlyFeeGbp !== undefined) changedTerms.push(`Monthly fee: £${counter.monthlyFeeGbp}`);
+                if (counter.revenueSharePercent !== undefined) changedTerms.push(`Revenue share: ${counter.revenueSharePercent}%`);
+                if (counter.qrEnabled !== undefined) changedTerms.push(counter.qrEnabled ? "QR enabled" : "QR disabled");
+                await sendEmail({
+                  idempotencyKey: `placement_counter:${id}:${Date.now()}`,
+                  template: "placement_counter_offer_received",
+                  category: "placements",
+                  to: counterpartyUser.email,
+                  subject: `${mine.name} sent revised terms`,
+                  userId: counterpartyUserId,
+                  react: PlacementCounterOfferReceived({
+                    firstName: counterpartyUser.user_metadata?.first_name || theirs.name.split(" ")[0] || "there",
+                    counterpartyName: mine.name,
+                    placementUrl: `${SITE}/placements/${encodeURIComponent(id)}`,
+                    changedTerms: changedTerms.length ? changedTerms : ["Revised terms — open the placement to review"],
+                  }),
+                  metadata: { placementId: id },
+                });
+              }
+            } catch (err) {
+              console.error("Counter email error:", err);
+            }
           }
         }
       } catch (err) {
@@ -939,6 +1033,124 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Failed to update placement" }, { status: 500 });
     }
 
+    // ─── Stage transition emails ───
+    // Once the DB update is committed, fan out an email to both parties
+    // for the stages users actually want reminders of. Idempotency keyed
+    // by placement-id + stage so repeats are no-ops.
+    if (stage && existing.artist_user_id && existing.venue_user_id) {
+      try {
+        const [{ data: { user: artistUser } }, { data: { user: venueUser } }] = await Promise.all([
+          db.auth.admin.getUserById(existing.artist_user_id),
+          db.auth.admin.getUserById(existing.venue_user_id),
+        ]);
+        const [{ data: artistP }, { data: venueP }] = await Promise.all([
+          db.from("artist_profiles").select("name").eq("user_id", existing.artist_user_id).single(),
+          db.from("venue_profiles").select("name").eq("user_id", existing.venue_user_id).single(),
+        ]);
+        const artistName = artistP?.name || "The artist";
+        const venueName = venueP?.name || existing.venue || "The venue";
+        const placementUrl = `${SITE}/placements/${encodeURIComponent(id)}`;
+
+        async function sendToParty(opts: {
+          user: typeof artistUser;
+          firstName: string;
+          template: string;
+          subject: string;
+          react: Parameters<typeof sendEmail>[0]["react"];
+          userId: string;
+          idempotencyKey: string;
+        }) {
+          if (!opts.user?.email) return;
+          await sendEmail({
+            idempotencyKey: opts.idempotencyKey,
+            template: opts.template,
+            category: "placements",
+            to: opts.user.email,
+            subject: opts.subject,
+            userId: opts.userId,
+            react: opts.react,
+            metadata: { placementId: id, stage },
+          });
+        }
+
+        const scheduledLabel = updates.scheduled_for
+          ? new Date(updates.scheduled_for as string).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+          : "soon";
+
+        if (stage === "scheduled") {
+          for (const party of [
+            { user: artistUser, name: artistName, uid: existing.artist_user_id },
+            { user: venueUser, name: venueName, uid: existing.venue_user_id },
+          ]) {
+            await sendToParty({
+              user: party.user,
+              firstName: (party.name).split(" ")[0] || "there",
+              userId: party.uid,
+              idempotencyKey: `placement_scheduled:${id}:${party.uid}`,
+              template: "placement_scheduled",
+              subject: `Install scheduled for ${scheduledLabel}`,
+              react: PlacementScheduled({
+                firstName: (party.name).split(" ")[0] || "there",
+                placementUrl,
+                venueName,
+                artistName,
+                scheduledDate: scheduledLabel,
+              }),
+            });
+          }
+        }
+
+        if (stage === "installed") {
+          for (const party of [
+            { user: artistUser, name: artistName, uid: existing.artist_user_id },
+            { user: venueUser, name: venueName, uid: existing.venue_user_id },
+          ]) {
+            await sendToParty({
+              user: party.user,
+              firstName: (party.name).split(" ")[0] || "there",
+              userId: party.uid,
+              idempotencyKey: `placement_installed:${id}:${party.uid}`,
+              template: "placement_artwork_installed",
+              subject: `${artistName}'s work is now at ${venueName}`,
+              react: PlacementArtworkInstalled({
+                firstName: (party.name).split(" ")[0] || "there",
+                placementUrl,
+                venueName,
+                artistName,
+                installedWorks: [],
+                qrLabelsUrl: `${SITE}/artist-portal/labels?venue=${encodeURIComponent(existing.venue_slug || "")}`,
+              }),
+            });
+          }
+        }
+
+        if (stage === "collected") {
+          for (const party of [
+            { user: artistUser, name: artistName, uid: existing.artist_user_id },
+            { user: venueUser, name: venueName, uid: existing.venue_user_id },
+          ]) {
+            await sendToParty({
+              user: party.user,
+              firstName: (party.name).split(" ")[0] || "there",
+              userId: party.uid,
+              idempotencyKey: `placement_ended:${id}:${party.uid}`,
+              template: "placement_ended",
+              subject: `Your placement at ${venueName} has ended`,
+              react: PlacementEnded({
+                firstName: (party.name).split(" ")[0] || "there",
+                placementUrl,
+                venueName,
+                returnInstructionsUrl: `${placementUrl}?record=open`,
+                reviewUrl: `${placementUrl}/review`,
+              }),
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Stage email error:", err);
+      }
+    }
+
     // On pending → active/declined, notify the requester. If the column
     // was NULL we try to infer from the first placement_request message —
     // otherwise the decliner's decision never reaches the other party's
@@ -982,12 +1194,87 @@ export async function PATCH(request: Request) {
           .single();
 
         if (requesterUser?.email && artistProfile) {
-          notifyPlacementResponse({
-            email: requesterUser.email,
-            artistName: artistProfile.name,
-            venueName: existing.venue || "Venue",
-            accepted: status === "active",
-          }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+          // New pipeline: polished template + logging + preferences check.
+          // Legacy notifyPlacementResponse is retained below as a safety
+          // net while we confirm deliverability on the new path.
+          const requesterFirstName = requesterUser.user_metadata?.first_name
+            || (artistProfile.name || "there").split(" ")[0];
+          const placementUrl = `${SITE}/placements/${encodeURIComponent(id)}`;
+          const venueName = existing.venue || "Venue";
+
+          // Figure out who the requester is (artist vs venue) so we pick
+          // the right template. The requester is whoever isn't us (the
+          // responder).
+          const responderIsArtist = auth.user!.id === existing.artist_user_id;
+          const requesterIsArtist = !responderIsArtist;
+
+          if (status === "active") {
+            if (requesterIsArtist) {
+              await sendEmail({
+                idempotencyKey: `placement_response:${id}:accepted`,
+                template: "artist_placement_accepted",
+                category: "placements",
+                to: requesterUser.email,
+                subject: `${venueName} accepted your placement`,
+                userId: notifyRequesterId,
+                react: ArtistPlacementAccepted({
+                  firstName: requesterFirstName,
+                  venueName,
+                  placementUrl,
+                  nextSteps: [
+                    `Confirm install date with ${venueName}`,
+                    "Print QR labels for each piece",
+                    "Finalise the consignment record",
+                  ],
+                  qrLabelsUrl: `${SITE}/artist-portal/labels?venue=${encodeURIComponent(existing.venue_slug || "")}`,
+                  consignmentRecordUrl: `${placementUrl}?record=open`,
+                }),
+                metadata: { placementId: id },
+              });
+            } else {
+              // Venue was the requester — fall back to legacy for now;
+              // we don't have a "venue placement accepted" template
+              // pointed at the venue-as-requester flow yet.
+              notifyPlacementResponse({
+                email: requesterUser.email,
+                artistName: artistProfile.name,
+                venueName,
+                accepted: true,
+              }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+            }
+          } else if (status === "declined") {
+            if (requesterIsArtist) {
+              await sendEmail({
+                idempotencyKey: `placement_response:${id}:declined`,
+                template: "artist_placement_declined",
+                category: "placements",
+                to: requesterUser.email,
+                subject: `${venueName} passed on this placement`,
+                userId: notifyRequesterId,
+                react: ArtistPlacementDeclined({
+                  firstName: requesterFirstName,
+                  venueName,
+                  discoverMoreVenuesUrl: `${SITE}/spaces-looking-for-art`,
+                }),
+                metadata: { placementId: id },
+              });
+            } else {
+              await sendEmail({
+                idempotencyKey: `placement_response:${id}:declined`,
+                template: "placement_venue_declined_artist_request",
+                category: "placements",
+                to: requesterUser.email,
+                subject: `${artistProfile.name} passed on your placement request`,
+                userId: notifyRequesterId,
+                react: PlacementVenueDeclinedArtistRequest({
+                  firstName: requesterFirstName,
+                  artistName: artistProfile.name,
+                  browseArtistsUrl: `${SITE}/browse`,
+                }),
+                metadata: { placementId: id },
+              });
+            }
+          }
         }
 
         // In-app notification to the requester. Deep-link to the

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { applySchema } from "@/lib/validations";
-import { notifyAdminNewApplication, confirmApplicationToArtist } from "@/lib/email";
+import { notifyAdminNewApplication } from "@/lib/email";
+import { sendEmail } from "@/lib/email/send";
+import { ArtistApplicationSubmitted } from "@/emails/templates/artist-additions/ArtistApplicationSubmitted";
 import { checkRateLimit } from "@/lib/rate-limit";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 export async function POST(request: Request) {
   const limited = checkRateLimit(request, 5, 60000);
@@ -103,9 +107,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fire-and-forget email notifications
+    // Admin ping — keep the legacy helper, it's internal only.
     notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium });
-    confirmApplicationToArtist({ name: d.name, email: d.email });
+
+    // Applicant receipt via the new pipeline (polished template, logged,
+    // preference-aware). We key idempotency off the email address so a
+    // double-submit from the form doesn't double-send.
+    await sendEmail({
+      idempotencyKey: `artist_application_submitted:${d.email.toLowerCase()}`,
+      template: "artist_application_submitted",
+      category: "placements",
+      to: d.email,
+      subject: "We've received your Wallplace application",
+      react: ArtistApplicationSubmitted({
+        firstName: (d.name || "there").split(" ")[0],
+        reviewTimelineDays: 3,
+        portfolioUrl: `${SITE}/artist-portal/portfolio`,
+      }),
+      metadata: { email: d.email, location: d.location },
+    });
 
     return NextResponse.json({ success: true });
   } catch {

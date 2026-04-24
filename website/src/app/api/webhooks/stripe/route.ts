@@ -4,8 +4,22 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer } from "@/lib/stripe-connect";
 import { notifyArtistNewOrder, notifyVenueOrderFromPlacement, notifyCurationCustomerPaid } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
+import { sendEmail } from "@/lib/email/send";
+import { CustomerOrderReceipt } from "@/emails/templates/orders/CustomerOrderReceipt";
+import { ArtistOrderConfirmation } from "@/emails/templates/orders/ArtistOrderConfirmation";
+import { ArtistWorkSold } from "@/emails/templates/orders/ArtistWorkSold";
+import { ArtistPayoutSent } from "@/emails/templates/payments/ArtistPayoutSent";
+import { ArtistPayoutFailed } from "@/emails/templates/payments/ArtistPayoutFailed";
+import { SubscriptionPaymentFailed } from "@/emails/templates/payments/SubscriptionPaymentFailed";
+import { SubscriptionTrialEnding } from "@/emails/templates/payments/SubscriptionTrialEnding";
+import { SubscriptionUpgraded } from "@/emails/templates/payments/SubscriptionUpgraded";
+import { SubscriptionCancelled } from "@/emails/templates/payments/SubscriptionCancelled";
+import { SubscriptionRenewalReceipt } from "@/emails/templates/payments/SubscriptionRenewalReceipt";
+import { ArtistStripeKycNeeded } from "@/emails/templates/artist-additions/ArtistStripeKycNeeded";
 import { platformFeePercentForArtist, DEFAULT_PLAN_FEE_PERCENT } from "@/lib/platform-fee";
 import type Stripe from "stripe";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -260,12 +274,116 @@ export async function POST(request: Request) {
           const cartItemsForNotify = session.metadata?.cart_items ? JSON.parse(session.metadata.cart_items) : [];
           const firstItemTitle = cartItemsForNotify[0]?.title || "Artwork";
 
+          // Customer order receipt (legally required under CCR 2013).
+          // Keyed by payment_intent so Stripe retries don't double-send.
+          const buyerEmail = session.customer_email || session.metadata?.shipping_email;
+          if (buyerEmail) {
+            const buyerName = session.metadata?.shipping_name || "there";
+            // Adapt the cart items shape to the OrderSummary component.
+            const orderItems = (cartItemsForNotify as Array<{
+              title?: string; artistName?: string; qty?: number; quantity?: number; size?: string; image?: string; price?: number;
+            }>).map((item) => ({
+              title: item.title || "Artwork",
+              artistName: item.artistName || firstArtistSlug || "Artist",
+              quantity: Number(item.qty ?? item.quantity ?? 1),
+              size: item.size,
+              image: item.image || `${SITE}/placeholder-work.jpg`,
+              lineTotal: {
+                amount: Math.round((item.price ?? 0) * Number(item.qty ?? item.quantity ?? 1) * 100),
+                currency: "GBP" as const,
+              },
+            }));
+            await sendEmail({
+              idempotencyKey: `order_receipt:${paymentIntentId || orderId}`,
+              template: "customer_order_receipt",
+              category: "orders_and_payouts",
+              to: buyerEmail,
+              subject: `Your Wallplace order ${orderId}`,
+              react: CustomerOrderReceipt({
+                firstName: buyerName.split(" ")[0] || "there",
+                orderNumber: orderId,
+                orderUrl: `${SITE}/orders/${orderId}`,
+                orderDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+                items: orderItems,
+                subtotal: { amount: Math.round(subtotal * 100), currency: "GBP" },
+                shipping: { amount: Math.round(shippingCost * 100), currency: "GBP" },
+                total: { amount: Math.round(total * 100), currency: "GBP" },
+                billingAddress: {
+                  name: buyerName,
+                  line1: session.metadata?.shipping_address1 || "",
+                  line2: session.metadata?.shipping_address2 || undefined,
+                  city: session.metadata?.shipping_city || "",
+                  postcode: session.metadata?.shipping_postcode || "",
+                  country: session.metadata?.shipping_country || "United Kingdom",
+                },
+                shippingAddress: {
+                  name: buyerName,
+                  line1: session.metadata?.shipping_address1 || "",
+                  line2: session.metadata?.shipping_address2 || undefined,
+                  city: session.metadata?.shipping_city || "",
+                  postcode: session.metadata?.shipping_postcode || "",
+                  country: session.metadata?.shipping_country || "United Kingdom",
+                },
+                supportUrl: `${SITE}/support`,
+              }),
+              metadata: { orderId, paymentIntentId },
+            });
+          }
+
           // Notify artist — email + in-app bell notification.
           if (artistUserId) {
             const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistUserId);
             const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", artistUserId).single();
             if (artistUser?.email && artistProfile) {
-              notifyArtistNewOrder({ email: artistUser.email, artistName: artistProfile.name, orderId, itemTitle: firstItemTitle, total, artistRevenue }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+              // Two emails to the artist: the celebration ("you made a sale")
+              // and the operational receipt (order confirmation). They serve
+              // different purposes — the first is emotional, the second
+              // itemised and record-worthy. Idempotency keys are distinct.
+              await sendEmail({
+                idempotencyKey: `artist_work_sold:${paymentIntentId || orderId}`,
+                template: "artist_work_sold",
+                category: "orders_and_payouts",
+                to: artistUser.email,
+                subject: `You made a sale — ${firstItemTitle}`,
+                userId: artistUserId,
+                react: ArtistWorkSold({
+                  firstName: (artistProfile.name || "there").split(" ")[0],
+                  workTitle: firstItemTitle,
+                  orderNumber: orderId,
+                  saleAmount: { amount: Math.round(artistRevenue * 100), currency: "GBP" },
+                  nextSteps: [
+                    "Pack the piece securely (packing guidelines in the portal)",
+                    "Print the shipping label we've generated",
+                    "Drop off or arrange collection within 3 business days",
+                  ],
+                  orderUrl: `${SITE}/artist-portal/orders/${orderId}`,
+                  shippingInstructionsUrl: `${SITE}/artist-portal/orders/${orderId}/ship`,
+                }),
+                metadata: { orderId, paymentIntentId },
+              });
+              await sendEmail({
+                idempotencyKey: `artist_order_confirmation:${paymentIntentId || orderId}`,
+                template: "artist_order_confirmation",
+                category: "orders_and_payouts",
+                to: artistUser.email,
+                subject: `Order ${orderId} — ${firstItemTitle}`,
+                userId: artistUserId,
+                react: ArtistOrderConfirmation({
+                  firstName: (artistProfile.name || "there").split(" ")[0],
+                  orderNumber: orderId,
+                  workTitle: firstItemTitle,
+                  buyerFirstName: (session.metadata?.shipping_name || "your buyer").split(" ")[0],
+                  orderUrl: `${SITE}/artist-portal/orders/${orderId}`,
+                  nextSteps: [
+                    "Ship within 3 business days",
+                    "Mark as shipped in the portal",
+                    "Payout lands 2 business days after delivery",
+                  ],
+                }),
+                metadata: { orderId, paymentIntentId },
+              });
+              // Legacy helper is a no-op now — the new pipeline covers it.
+              void notifyArtistNewOrder;
             }
             // In-app sale notification, deep-linked to the artist orders
             // page so they can acknowledge the sale and start fulfilment.
@@ -385,6 +503,43 @@ export async function POST(request: Request) {
 
     if (error) console.error("Subscription update error:", error);
 
+    // ─── Upgraded email (plan changed) ───
+    // Stripe's `customer.subscription.updated` fires for a lot of reasons
+    // (renewal, status tick, cancel-at-period-end, plan change). We only
+    // want to email on a real plan change, so compare previous plan in DB.
+    if (event.type === "customer.subscription.updated") {
+      try {
+        const { data: profile } = await db
+          .from("artist_profiles")
+          .select("user_id, name, subscription_plan")
+          .eq("stripe_customer_id", customerId)
+          .maybeSingle();
+        if (profile && profile.user_id && profile.subscription_plan && profile.subscription_plan !== plan) {
+          const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+          if (user?.email) {
+            await sendEmail({
+              idempotencyKey: `subscription_upgraded:${subscription.id}:${plan}`,
+              template: "subscription_upgraded",
+              category: "orders_and_payouts",
+              to: user.email,
+              subject: `You're now on ${plan.charAt(0).toUpperCase() + plan.slice(1)}`,
+              userId: profile.user_id,
+              react: SubscriptionUpgraded({
+                firstName: (profile.name || "there").split(" ")[0],
+                oldPlan: (profile.subscription_plan as string).charAt(0).toUpperCase() + (profile.subscription_plan as string).slice(1),
+                newPlan: plan.charAt(0).toUpperCase() + plan.slice(1),
+                billingDate: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+                accountUrl: `${SITE}/artist-portal/billing`,
+              }),
+              metadata: { subscriptionId: subscription.id, oldPlan: profile.subscription_plan, newPlan: plan },
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Upgraded email error:", err);
+      }
+    }
+
     // ─── Referral credit (item 25) ───
     // First time this referred artist enters a paid status, extend the
     // referrer's free_until by 30 days. referral_credited_at guards against
@@ -426,6 +581,57 @@ export async function POST(request: Request) {
     }
   }
 
+  // ─── Trial ending soon ───
+  // Stripe fires `customer.subscription.trial_will_end` 3 days before trial
+  // end. The template is also fired on invoice.upcoming if the customer
+  // has 1 day left — we rely on Stripe's single event and make one send.
+  if (event.type === "customer.subscription.trial_will_end") {
+    const subscription = event.data.object as Stripe.Subscription;
+    const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+    const priceId = subscription.items.data[0]?.price?.id || "";
+    let planLabel = "Premium";
+    if (priceId === process.env.STRIPE_PRICE_PRO || priceId === process.env.STRIPE_PRICE_PRO_ANNUAL) planLabel = "Pro";
+    else if (priceId === process.env.STRIPE_PRICE_CORE || priceId === process.env.STRIPE_PRICE_CORE_ANNUAL) planLabel = "Core";
+
+    try {
+      const { data: profile } = await db
+        .from("artist_profiles")
+        .select("user_id, name")
+        .eq("stripe_customer_id", customerId)
+        .maybeSingle();
+      if (profile?.user_id) {
+        const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+        if (user?.email) {
+          const trialEndDate = subscription.trial_end
+            ? new Date(subscription.trial_end * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+            : "soon";
+          await sendEmail({
+            idempotencyKey: `trial_ending:${subscription.id}`,
+            template: "subscription_trial_ending",
+            category: "promotions",
+            to: user.email,
+            subject: `Your ${planLabel} trial ends ${trialEndDate}`,
+            userId: profile.user_id,
+            react: SubscriptionTrialEnding({
+              firstName: (profile.name || "there").split(" ")[0],
+              planName: planLabel,
+              trialEndDate,
+              upgradeUrl: `${SITE}/artist-portal/billing`,
+              benefits: [
+                "Unlimited works in your portfolio",
+                "Priority matching with venues",
+                "Advanced QR analytics",
+              ],
+            }),
+            metadata: { subscriptionId: subscription.id },
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Trial-ending email error:", err);
+    }
+  }
+
   if (event.type === "customer.subscription.deleted") {
     const subscription = event.data.object as Stripe.Subscription;
     const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
@@ -436,6 +642,42 @@ export async function POST(request: Request) {
       .eq("stripe_customer_id", customerId);
 
     if (error) console.error("Subscription delete error:", error);
+
+    // Cancellation confirmation email.
+    try {
+      const { data: profile } = await db
+        .from("artist_profiles")
+        .select("user_id, name, subscription_plan")
+        .eq("stripe_customer_id", customerId)
+        .maybeSingle();
+      if (profile?.user_id) {
+        const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+        if (user?.email) {
+          const accessEndsAt = subscription.cancel_at
+            ? new Date(subscription.cancel_at * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+            : "the end of this billing period";
+          const planLabel = ((profile.subscription_plan as string) || "plan").charAt(0).toUpperCase() + ((profile.subscription_plan as string) || "plan").slice(1);
+          await sendEmail({
+            idempotencyKey: `subscription_cancelled:${subscription.id}`,
+            template: "subscription_cancelled",
+            category: "orders_and_payouts",
+            to: user.email,
+            subject: `Your ${planLabel} subscription is cancelled`,
+            userId: profile.user_id,
+            react: SubscriptionCancelled({
+              firstName: (profile.name || "there").split(" ")[0],
+              planName: planLabel,
+              accessEndsAt,
+              reactivateUrl: `${SITE}/artist-portal/billing`,
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { subscriptionId: subscription.id },
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Cancelled email error:", err);
+    }
   }
 
   if (event.type === "invoice.payment_failed") {
@@ -449,19 +691,58 @@ export async function POST(request: Request) {
         .eq("stripe_customer_id", customerId);
 
       if (error) console.error("Payment failed update error:", error);
+
+      // Dunning email — keyed on attempt so each retry sends one reminder.
+      try {
+        const { data: profile } = await db
+          .from("artist_profiles")
+          .select("user_id, name, subscription_plan")
+          .eq("stripe_customer_id", customerId)
+          .maybeSingle();
+        if (profile?.user_id) {
+          const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+          if (user?.email) {
+            const amountDue = { amount: invoice.amount_due, currency: (invoice.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" };
+            // `next_payment_attempt` is Stripe's scheduled retry timestamp.
+            const retryDate = invoice.next_payment_attempt
+              ? new Date(invoice.next_payment_attempt * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+              : "shortly";
+            const planLabel = ((profile.subscription_plan as string) || "Wallplace").charAt(0).toUpperCase() + ((profile.subscription_plan as string) || "Wallplace").slice(1);
+            await sendEmail({
+              idempotencyKey: `payment_failed:${invoice.id}:${invoice.attempt_count}`,
+              template: "subscription_payment_failed",
+              category: "orders_and_payouts",
+              to: user.email,
+              subject: `Payment failed on your ${planLabel} subscription`,
+              userId: profile.user_id,
+              react: SubscriptionPaymentFailed({
+                firstName: (profile.name || "there").split(" ")[0],
+                planName: planLabel,
+                amountDue,
+                retryDate,
+                updatePaymentUrl: `${SITE}/artist-portal/billing`,
+                supportUrl: `${SITE}/support`,
+              }),
+              metadata: { invoiceId: invoice.id, attempt: invoice.attempt_count },
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Payment-failed email error:", err);
+      }
     }
   }
 
-  // ─── Invoice paid — recover past_due subscriptions ───
+  // ─── Invoice paid — renewal receipt + past_due recovery ───
   if (event.type === "invoice.paid") {
     const invoice = event.data.object as Stripe.Invoice;
     const customerId = typeof invoice.customer === "string" ? invoice.customer : (invoice.customer as Stripe.Customer)?.id;
 
     if (customerId) {
-      // Only recover if currently past_due
+      // Recovery: if they were past_due and this invoice paid, set active.
       const { data: profile } = await db
         .from("artist_profiles")
-        .select("subscription_status")
+        .select("user_id, name, subscription_status, subscription_plan")
         .eq("stripe_customer_id", customerId)
         .single();
 
@@ -470,8 +751,121 @@ export async function POST(request: Request) {
           .from("artist_profiles")
           .update({ subscription_status: "active" })
           .eq("stripe_customer_id", customerId);
-
         if (error) console.error("Invoice paid recovery error:", error);
+      }
+
+      // Renewal receipt — only for recurring charges, not the initial
+      // signup invoice (which is covered by subscription_created or the
+      // checkout receipt). `billing_reason` is the source of truth.
+      // Skip trial-ending invoices with zero amount.
+      const isRenewal = invoice.billing_reason === "subscription_cycle";
+      if (isRenewal && invoice.amount_paid > 0 && profile?.user_id) {
+        try {
+          const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+          if (user?.email) {
+            const planLabel = ((profile.subscription_plan as string) || "Wallplace").charAt(0).toUpperCase() + ((profile.subscription_plan as string) || "Wallplace").slice(1);
+            const renewedAt = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+            const nextBillingDate = invoice.period_end
+              ? new Date(invoice.period_end * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+              : "next period";
+            await sendEmail({
+              idempotencyKey: `renewal_receipt:${invoice.id}`,
+              template: "subscription_renewal_receipt",
+              category: "orders_and_payouts",
+              to: user.email,
+              subject: `Receipt for your ${planLabel} subscription`,
+              userId: profile.user_id,
+              react: SubscriptionRenewalReceipt({
+                firstName: (profile.name || "there").split(" ")[0],
+                planName: planLabel,
+                amount: { amount: invoice.amount_paid, currency: (invoice.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" },
+                renewedAt,
+                nextBillingDate,
+                invoiceUrl: invoice.hosted_invoice_url || `${SITE}/artist-portal/billing`,
+              }),
+              metadata: { invoiceId: invoice.id },
+            });
+          }
+        } catch (err) {
+          console.error("Renewal receipt email error:", err);
+        }
+      }
+    }
+  }
+
+  // ─── Payout failed — notify artist so they can fix bank details ───
+  if (event.type === "payout.failed") {
+    const payout = event.data.object as Stripe.Payout;
+    const connectAccountId = (event as Stripe.Event & { account?: string }).account;
+    if (connectAccountId) {
+      const { data: artistProfile } = await db
+        .from("artist_profiles")
+        .select("user_id, name")
+        .eq("stripe_connect_account_id", connectAccountId)
+        .maybeSingle();
+      if (artistProfile?.user_id) {
+        const { data: { user } } = await db.auth.admin.getUserById(artistProfile.user_id);
+        if (user?.email) {
+          await sendEmail({
+            idempotencyKey: `payout_failed:${payout.id}`,
+            template: "artist_payout_failed",
+            category: "orders_and_payouts",
+            to: user.email,
+            subject: "Payout couldn't be sent",
+            userId: artistProfile.user_id,
+            react: ArtistPayoutFailed({
+              firstName: (artistProfile.name || "there").split(" ")[0],
+              payoutAmount: { amount: payout.amount, currency: (payout.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" },
+              reason: payout.failure_message || payout.failure_code || "Stripe rejected the transfer.",
+              fixPayoutUrl: `${SITE}/artist-portal/billing`,
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { payoutId: payout.id },
+          });
+        }
+      }
+    }
+  }
+
+  // ─── Payout paid — notify the artist ───
+  // Fires when Stripe sends money from the artist's Connect account to
+  // their bank. We look the artist up via `destination` (the Connect
+  // account id) and send the polished `artist_payout_sent` template.
+  if (event.type === "payout.paid") {
+    const payout = event.data.object as Stripe.Payout;
+    // The Connect account this payout came from lives on event.account.
+    const connectAccountId = (event as Stripe.Event & { account?: string }).account;
+    if (connectAccountId) {
+      const { data: artistProfile } = await db
+        .from("artist_profiles")
+        .select("user_id, name")
+        .eq("stripe_connect_account_id", connectAccountId)
+        .maybeSingle();
+      if (artistProfile?.user_id) {
+        const { data: { user } } = await db.auth.admin.getUserById(artistProfile.user_id);
+        if (user?.email) {
+          const amount = { amount: payout.amount, currency: (payout.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" };
+          const arrival = payout.arrival_date
+            ? new Date(payout.arrival_date * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+            : "shortly";
+          await sendEmail({
+            idempotencyKey: `payout_sent:${payout.id}`,
+            template: "artist_payout_sent",
+            category: "orders_and_payouts",
+            to: user.email,
+            subject: `Payout on the way: £${(payout.amount / 100).toFixed(2)}`,
+            userId: artistProfile.user_id,
+            react: ArtistPayoutSent({
+              firstName: (artistProfile.name || "there").split(" ")[0],
+              payoutAmount: amount,
+              payoutDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+              expectedArrival: arrival,
+              payoutUrl: `${SITE}/artist-portal/billing/payouts`,
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { payoutId: payout.id, connectAccountId },
+          });
+        }
       }
     }
   }
@@ -503,6 +897,48 @@ export async function POST(request: Request) {
       .from("artist_profiles")
       .update({ stripe_connect_onboarding_complete: isComplete })
       .eq("stripe_connect_account_id", account.id);
+
+    // KYC-needed email: Stripe populates `requirements.currently_due` when
+    // the Connect account is missing info. We only email the artist side
+    // (venue Connect accounts are payouts-to-venue and tend to be simpler).
+    // Idempotency includes the requirements hash so repeated "nothing
+    // changed" deliveries don't trigger extra sends.
+    const currentlyDue = account.requirements?.currently_due || [];
+    if (currentlyDue.length > 0) {
+      try {
+        const { data: artistProfile } = await db
+          .from("artist_profiles")
+          .select("user_id, name")
+          .eq("stripe_connect_account_id", account.id)
+          .maybeSingle();
+        if (artistProfile?.user_id) {
+          const { data: { user } } = await db.auth.admin.getUserById(artistProfile.user_id);
+          if (user?.email) {
+            const hash = currentlyDue.sort().join(",").slice(0, 60);
+            await sendEmail({
+              idempotencyKey: `stripe_kyc:${account.id}:${hash}`,
+              template: "artist_stripe_kyc_needed",
+              category: "orders_and_payouts",
+              to: user.email,
+              subject: "Stripe needs more info to keep payouts flowing",
+              userId: artistProfile.user_id,
+              react: ArtistStripeKycNeeded({
+                firstName: (artistProfile.name || "there").split(" ")[0],
+                requestedDocuments: currentlyDue.slice(0, 8),
+                stripeUrl: `${SITE}/artist-portal/billing`,
+                deadline: account.requirements?.current_deadline
+                  ? new Date(account.requirements.current_deadline * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+                  : undefined,
+                supportUrl: `${SITE}/support`,
+              }),
+              metadata: { accountId: account.id, currentlyDue },
+            });
+          }
+        }
+      } catch (err) {
+        console.error("KYC email error:", err);
+      }
+    }
   }
 
   return NextResponse.json({ received: true });

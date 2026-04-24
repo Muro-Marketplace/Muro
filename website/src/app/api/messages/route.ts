@@ -3,9 +3,43 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { messageSchema } from "@/lib/validations";
 import { moderateMessage } from "@/lib/moderation";
-import { notifyNewMessage, notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
+import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
+import { sendEmail } from "@/lib/email/send";
+import { MessageUnreadNotification } from "@/emails/templates/messages/MessageUnreadNotification";
 import { artists as staticArtists } from "@/data/artists";
 import { venues as staticVenues } from "@/data/venues";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
+
+// Helper: send a message_unread notification via the new pipeline. Fires
+// immediately for MVP — once Inngest is wired, this becomes a delayed
+// event that cancels if the recipient reads the message in-app first.
+async function sendMessageUnreadEmail(args: {
+  recipientEmail: string;
+  recipientUserId: string | null;
+  recipientFirstName: string;
+  senderName: string;
+  messagePreview: string;
+  conversationId: string;
+  messageId: string | number;
+}) {
+  const conversationUrl = `${SITE}/artist-portal/messages?c=${encodeURIComponent(args.conversationId)}`;
+  await sendEmail({
+    idempotencyKey: `message_unread:${args.messageId}`,
+    template: "message_unread_notification",
+    category: "messages",
+    to: args.recipientEmail,
+    subject: `${args.senderName} sent you a message`,
+    userId: args.recipientUserId ?? undefined,
+    react: MessageUnreadNotification({
+      firstName: args.recipientFirstName,
+      senderName: args.senderName,
+      messagePreview: args.messagePreview.length > 200 ? args.messagePreview.slice(0, 197) + "…" : args.messagePreview,
+      conversationUrl,
+      muteMessagesUrl: `${SITE}/account/email`,
+    }),
+  });
+}
 
 // Slug → Human Readable (last-resort fallback used when we have no
 // artist/venue profile match — turns "fin-coles" into "Fin Coles").
@@ -395,7 +429,17 @@ export async function POST(request: Request) {
         if (recipientArtist.message_notifications_enabled !== false && recipientArtist.user_id) {
           const { data: { user: recipientUser } } = await db.auth.admin.getUserById(recipientArtist.user_id);
           if (recipientUser?.email) {
-            notifyNewMessage({ email: recipientUser.email, name: recipientArtist.name, senderName: resolvedSenderSlug, messagePreview: content });
+            await sendMessageUnreadEmail({
+              recipientEmail: recipientUser.email,
+              recipientUserId: recipientArtist.user_id,
+              recipientFirstName: recipientArtist.name.split(" ")[0] || "there",
+              senderName: resolvedSenderSlug,
+              messagePreview: content,
+              conversationId: cid || "",
+              // Sending immediately for MVP — once Inngest is wired, queue
+              // with a 10-minute delay and cancel-if-read.
+              messageId: Date.now(),
+            });
           }
         }
       } else {
@@ -408,7 +452,15 @@ export async function POST(request: Request) {
         if (vp?.user_id && vp.message_notifications_enabled !== false) {
           const { data: { user: recipientUser } } = await db.auth.admin.getUserById(vp.user_id);
           if (recipientUser?.email) {
-            notifyNewMessage({ email: recipientUser.email, name: vp.name, senderName: resolvedSenderSlug, messagePreview: content });
+            await sendMessageUnreadEmail({
+              recipientEmail: recipientUser.email,
+              recipientUserId: vp.user_id,
+              recipientFirstName: vp.name.split(" ")[0] || "there",
+              senderName: resolvedSenderSlug,
+              messagePreview: content,
+              conversationId: cid || "",
+              messageId: Date.now(),
+            });
           }
         }
       }

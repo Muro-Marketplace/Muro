@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { slugify } from "@/lib/slugify";
+import { sendEmail } from "@/lib/email/send";
+import { ArtistApplicationApproved } from "@/emails/templates/artist-additions/ArtistApplicationApproved";
+import { ArtistApplicationRejected } from "@/emails/templates/artist-additions/ArtistApplicationRejected";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 export async function PUT(
   request: Request,
@@ -48,6 +53,24 @@ export async function PUT(
       if (updateError) {
         console.error("Reject update error:", updateError);
         return NextResponse.json({ error: "Failed to reject application" }, { status: 500 });
+      }
+
+      // Rejection email — graceful decline with optional feedback.
+      if (app.email) {
+        await sendEmail({
+          idempotencyKey: `application_rejected:${id}`,
+          template: "artist_application_rejected",
+          category: "placements",
+          to: app.email,
+          subject: "A note on your Wallplace application",
+          react: ArtistApplicationRejected({
+            firstName: (app.name || "there").split(" ")[0],
+            feedback: (body.feedback as string | undefined) || undefined,
+            reapplyInMonths: 6,
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { applicationId: id },
+        });
       }
 
       return NextResponse.json({ success: true, status: "rejected" });
@@ -153,6 +176,25 @@ export async function PUT(
       .from("artist_applications")
       .update({ status: "accepted" })
       .eq("id", id);
+
+    // Approved email. For new invited users, Supabase's invite email
+    // already landed — this is the brand-polished follow-up.
+    if (app.email) {
+      await sendEmail({
+        idempotencyKey: `application_approved:${id}`,
+        template: "artist_application_approved",
+        category: "placements",
+        to: app.email,
+        subject: "You're in — welcome to Wallplace",
+        userId,
+        react: ArtistApplicationApproved({
+          firstName: (app.name || "there").split(" ")[0],
+          goLiveUrl: `${SITE}/artist-portal`,
+          welcomeMessage: (body.welcomeMessage as string | undefined) || undefined,
+        }),
+        metadata: { applicationId: id, userId },
+      });
+    }
 
     return NextResponse.json({
       success: true,

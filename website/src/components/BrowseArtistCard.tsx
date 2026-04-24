@@ -139,7 +139,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               {formats.map((f) => (
                 <span
                   key={f}
-                  className="text-[10px] tracking-wide uppercase text-muted/80 px-1.5 py-0.5 border border-border/70 rounded-sm"
+                  className="text-[10px] text-muted/80 px-1.5 py-0.5 border border-border/70 rounded-sm"
                 >
                   {f}
                 </span>

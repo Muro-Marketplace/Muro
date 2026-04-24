@@ -3,6 +3,11 @@ import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { notifyRefundDecision } from "@/lib/email";
+import { sendEmail } from "@/lib/email/send";
+import { CustomerRefundConfirmation } from "@/emails/templates/orders/CustomerRefundConfirmation";
+import { ArtistRefundNotification } from "@/emails/templates/orders/ArtistRefundNotification";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
@@ -204,14 +209,66 @@ export async function POST(request: Request) {
       })
       .eq("id", refundRequestId);
 
-    // 5. Notify the buyer (fire-and-forget)
+    // 5. Notify the buyer (legacy helper — retained as safety net) + send
+    // the polished CustomerRefundConfirmation via the new pipeline so the
+    // email lands in email_events and respects preferences.
     if (refundReq.requester_email || order.buyer_email) {
+      const buyerEmail = refundReq.requester_email || order.buyer_email;
       notifyRefundDecision({
-        buyerEmail: refundReq.requester_email || order.buyer_email,
+        buyerEmail,
         orderId: order.id,
         approved: true,
         amount: refundReq.amount,
       }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+
+      const buyerFirstName = (order.shipping?.fullName || "").split(" ")[0] || "there";
+      await sendEmail({
+        idempotencyKey: `customer_refund:${refundRequestId}`,
+        template: "customer_refund_confirmation",
+        category: "orders_and_payouts",
+        to: buyerEmail,
+        subject: `Refund on the way for order ${order.id}`,
+        react: CustomerRefundConfirmation({
+          firstName: buyerFirstName,
+          orderNumber: order.id,
+          refundAmount: { amount: refundAmountCents, currency: "GBP" },
+          refundReason: (refundReq.reason as string | undefined) || undefined,
+          expectedArrival: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+          supportUrl: `${SITE}/support`,
+        }),
+        metadata: { orderId: order.id, refundRequestId },
+      });
+    }
+
+    // Artist-side refund notification — so they can track what's owed back.
+    if (order.artist_user_id) {
+      try {
+        const { data: { user: artistUser } } = await db.auth.admin.getUserById(order.artist_user_id);
+        const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", order.artist_user_id).single();
+        if (artistUser?.email) {
+          const items = Array.isArray(order.items) ? order.items : [];
+          const workTitle = (items[0] as { title?: string })?.title || "Artwork";
+          await sendEmail({
+            idempotencyKey: `artist_refund:${refundRequestId}`,
+            template: "artist_refund_notification",
+            category: "orders_and_payouts",
+            to: artistUser.email,
+            subject: `Refund issued on order ${order.id}`,
+            userId: order.artist_user_id,
+            react: ArtistRefundNotification({
+              firstName: (artistProfile?.name || "there").split(" ")[0],
+              orderNumber: order.id,
+              workTitle,
+              refundAmount: { amount: refundAmountCents, currency: "GBP" },
+              reason: (refundReq.reason as string | undefined) || undefined,
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { orderId: order.id, refundRequestId },
+          });
+        }
+      } catch (err) {
+        console.error("Artist refund email error:", err);
+      }
     }
 
     return NextResponse.json({

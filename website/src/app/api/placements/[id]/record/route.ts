@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { sendEmail } from "@/lib/email/send";
+import { PlacementConsignmentRecordCreated } from "@/emails/templates/placements/PlacementConsignmentRecordCreated";
+import { PlacementContractCountersigned } from "@/emails/templates/placements/PlacementContractCountersigned";
 import { z } from "zod";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 const recordSchema = z.object({
   recordType: z.enum(["loan", "consignment"]).optional(),
@@ -231,6 +236,95 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   if (error) {
     console.error("placement_records save error:", error);
     return NextResponse.json({ error: "Failed to save" }, { status: 500 });
+  }
+
+  // ─── Email triggers ───
+  //   1. First-ever create → PlacementConsignmentRecordCreated (both parties)
+  //   2. Both parties now approved → PlacementContractCountersigned (both parties)
+  // Best-effort; failures don't roll back the save.
+  try {
+    const wasNewRecord = !existing;
+    const prevVenueApproved = existing ? (existing as Record<string, unknown>).venue_approved === true : false;
+    const prevArtistApproved = existing ? (existing as Record<string, unknown>).artist_approved === true : false;
+    const nextVenueApproved = "venue_approved" in row
+      ? row.venue_approved === true
+      : prevVenueApproved && !contentChanged;
+    const nextArtistApproved = "artist_approved" in row
+      ? row.artist_approved === true
+      : prevArtistApproved && !contentChanged;
+    const transitionedToBoth =
+      (nextVenueApproved && nextArtistApproved) &&
+      (!prevVenueApproved || !prevArtistApproved || contentChanged);
+
+    if (wasNewRecord || transitionedToBoth) {
+      const [{ data: { user: artistUser } }, { data: { user: venueUser } }] = await Promise.all([
+        db.auth.admin.getUserById(placement.artist_user_id),
+        db.auth.admin.getUserById(placement.venue_user_id),
+      ]);
+      const [{ data: artistP }, { data: venueP }] = await Promise.all([
+        db.from("artist_profiles").select("name").eq("user_id", placement.artist_user_id).single(),
+        db.from("venue_profiles").select("name").eq("user_id", placement.venue_user_id).single(),
+      ]);
+      const artistName = artistP?.name || "The artist";
+      const venueName = venueP?.name || "The venue";
+      const placementUrl = `${SITE}/placements/${encodeURIComponent(id)}`;
+      const recordOpenUrl = `${placementUrl}?record=open`;
+
+      if (wasNewRecord) {
+        for (const party of [
+          { user: artistUser, name: artistName, uid: placement.artist_user_id },
+          { user: venueUser, name: venueName, uid: placement.venue_user_id },
+        ]) {
+          if (!party.user?.email) continue;
+          await sendEmail({
+            idempotencyKey: `record_created:${id}:${party.uid}`,
+            template: "placement_consignment_record_created",
+            category: "legal",
+            to: party.user.email,
+            subject: `Consignment record ready for ${artistName} × ${venueName}`,
+            userId: party.uid,
+            react: PlacementConsignmentRecordCreated({
+              firstName: party.name.split(" ")[0] || "there",
+              placementUrl,
+              consignmentRecordUrl: recordOpenUrl,
+              venueName,
+              artistName,
+              works: [],
+              termsSummary: d.recordType ? `${d.recordType}${d.monthlyDisplayFeeGbp ? ` · £${d.monthlyDisplayFeeGbp}/mo` : ""}${d.venueSharePercent ? ` · ${d.venueSharePercent}% to venue` : ""}` : "Terms pending",
+            }),
+            metadata: { placementId: id },
+          });
+        }
+      }
+
+      if (transitionedToBoth) {
+        const signedAt = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+        for (const party of [
+          { user: artistUser, name: artistName, uid: placement.artist_user_id, counter: venueName },
+          { user: venueUser, name: venueName, uid: placement.venue_user_id, counter: artistName },
+        ]) {
+          if (!party.user?.email) continue;
+          await sendEmail({
+            idempotencyKey: `record_countersigned:${id}:${party.uid}:${signedAt}`,
+            template: "placement_contract_countersigned",
+            category: "legal",
+            to: party.user.email,
+            subject: `Contract countersigned by ${party.counter}`,
+            userId: party.uid,
+            react: PlacementContractCountersigned({
+              firstName: party.name.split(" ")[0] || "there",
+              placementUrl,
+              contractUrl: recordOpenUrl,
+              signedAt,
+              counterpartyName: party.counter,
+            }),
+            metadata: { placementId: id },
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Record email error:", err);
   }
 
   return NextResponse.json({
