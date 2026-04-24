@@ -38,6 +38,113 @@ const SIZE_OPTIONS = [
   "Oversized (120cm+)",
 ];
 
+// Small stand-in card that mirrors the public venue preview on /venues/[slug]
+// — every field flips in real time as the user edits. Goal: make the
+// editor feel like you're building the public page, not filling out a
+// form in isolation.
+function LivePreview({
+  name,
+  type,
+  location,
+  wallSpace,
+  footfall,
+  images,
+  styles,
+  themes,
+  arrangements,
+  displayWallSpace,
+  displayLighting,
+  displayInstall,
+  displayRotation,
+}: {
+  name: string;
+  type: string;
+  location: string;
+  wallSpace: string;
+  footfall: string;
+  images: string[];
+  styles: string[];
+  themes: string[];
+  arrangements: string[];
+  displayWallSpace: string;
+  displayLighting: string;
+  displayInstall: string;
+  displayRotation: string;
+}) {
+  const hero = images[0] || "";
+  return (
+    <div className="text-xs">
+      <div className="relative h-32 bg-border/30">
+        {hero && (
+          <Image src={hero} alt="" fill className="object-cover" sizes="340px" />
+        )}
+        {!hero && (
+          <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted">
+            Add a venue photo
+          </div>
+        )}
+        {images.length > 1 && (
+          <span className="absolute bottom-2 right-2 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded-full">
+            {images.length} photos
+          </span>
+        )}
+      </div>
+      <div className="p-4 space-y-3">
+        <div>
+          <p className="text-sm font-medium text-foreground truncate">{name}</p>
+          <p className="text-[11px] text-muted truncate">{[type, location].filter(Boolean).join(" · ") || "Type · Location"}</p>
+        </div>
+
+        {arrangements.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {arrangements.map((a) => (
+              <span key={a} className="text-[10px] px-1.5 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-sm">{a}</span>
+            ))}
+          </div>
+        )}
+
+        {(wallSpace || footfall) && (
+          <div className="flex items-center gap-2 text-[10px] text-muted">
+            {wallSpace && <span>{wallSpace}</span>}
+            {wallSpace && footfall && <span className="w-0.5 h-0.5 rounded-full bg-muted" />}
+            {footfall && <span>{footfall}</span>}
+          </div>
+        )}
+
+        {styles.length > 0 && (
+          <div>
+            <p className="text-[9px] uppercase tracking-wider text-muted mb-1">Looking for</p>
+            <div className="flex flex-wrap gap-1">
+              {styles.slice(0, 5).map((s) => (
+                <span key={s} className="text-[10px] px-1.5 py-0.5 bg-accent/5 text-accent border border-accent/20 rounded-full">{s}</span>
+              ))}
+              {styles.length > 5 && <span className="text-[10px] text-muted">+{styles.length - 5}</span>}
+            </div>
+          </div>
+        )}
+
+        {(displayWallSpace || displayLighting || displayInstall || displayRotation) && (
+          <div className="pt-2 border-t border-border space-y-1">
+            <p className="text-[9px] uppercase tracking-wider text-muted">Display needs</p>
+            {displayWallSpace && <p className="text-[10px] text-foreground/80"><span className="text-muted">Wall:</span> {displayWallSpace}</p>}
+            {displayLighting && <p className="text-[10px] text-foreground/80"><span className="text-muted">Lighting:</span> {displayLighting}</p>}
+            {displayInstall && <p className="text-[10px] text-foreground/80"><span className="text-muted">Install:</span> {displayInstall}</p>}
+            {displayRotation && <p className="text-[10px] text-foreground/80"><span className="text-muted">Rotation:</span> {displayRotation}</p>}
+          </div>
+        )}
+
+        {themes.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {themes.slice(0, 4).map((t) => (
+              <span key={t} className="text-[10px] px-1.5 py-0.5 bg-surface text-muted border border-border rounded-full">{t}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Toggle({
   checked,
   onChange,
@@ -277,7 +384,12 @@ export default function VenueProfilePage() {
         </div>
       </div>
 
-      <div className="space-y-5 max-w-2xl">
+      {/* Two-column layout: editor on the left, a LIVE preview of the
+          public venue card on the right so the user can see exactly how
+          artists will see the profile as they build it. Preview stacks
+          below the editor on mobile. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-8">
+        <div className="space-y-5 min-w-0">
         {/* Venue Details */}
         <div className="bg-white border border-border rounded-sm">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -508,6 +620,45 @@ export default function VenueProfilePage() {
         {/* Bottom spacer */}
         <div className="flex items-center gap-4">
         </div>
+        </div>
+
+        {/* Live preview — mirrors the public /venues/[slug] card so the
+            venue can see exactly how artists will see them as they edit.
+            Sticky on desktop, in-line on mobile. */}
+        <aside className="lg:sticky lg:top-24 lg:self-start">
+          <div className="bg-white border border-border rounded-sm overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted">Live preview</p>
+              {venue?.slug && (
+                <a href={`/venues/${venue.slug}`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-accent hover:underline">
+                  Open full page
+                </a>
+              )}
+            </div>
+            <LivePreview
+              name={detailName || "Your venue"}
+              type={detailType || "Venue type"}
+              location={detailLocation || "Location"}
+              wallSpace={detailWallSpace}
+              footfall={detailFootfall}
+              images={venueImages}
+              styles={styles}
+              themes={themes}
+              arrangements={[
+                revenueShare && "Revenue share",
+                freeLoan && "Paid loan",
+                directPurchase && "Direct purchase",
+              ].filter(Boolean) as string[]}
+              displayWallSpace={displayWallSpace}
+              displayLighting={displayLighting}
+              displayInstall={displayInstall}
+              displayRotation={displayRotation}
+            />
+          </div>
+          <p className="mt-3 text-[11px] text-muted leading-relaxed">
+            This is exactly what artists see on Spaces and on your public venue page. Changes show here live — don&rsquo;t forget to hit <strong className="text-foreground">Save</strong>.
+          </p>
+        </aside>
       </div>
     </VenuePortalLayout>
   );
