@@ -562,17 +562,42 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
           </label>
         </div>
         {form.contractAttachmentUrl && (
-          <a
-            href={form.contractAttachmentUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={async () => {
+              // The stored value might be an opaque contract reference
+              // (new rows, private bucket) or a legacy absolute URL. Either
+              // way, exchange it via /api/contracts/sign so the server
+              // confirms the viewer is a party AND hands back a short-lived
+              // signed URL for the new ones. Legacy URLs are returned as-is.
+              const ref = form.contractAttachmentUrl.trim();
+              if (/^https?:\/\//.test(ref) && !ref.startsWith("contract:")) {
+                // A pasted external link (Drive, Dropbox, etc.) — open directly.
+                window.open(ref, "_blank", "noopener,noreferrer");
+                return;
+              }
+              try {
+                const res = await authFetch("/api/contracts/sign", {
+                  method: "POST",
+                  body: JSON.stringify({ placementId, ref }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.signedUrl) {
+                  setContractUploadError(data.error || "Could not open contract.");
+                  return;
+                }
+                window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+              } catch {
+                setContractUploadError("Network error opening contract.");
+              }
+            }}
             className="mt-2 inline-flex items-center gap-1.5 text-xs text-accent hover:underline"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
             </svg>
             View attached contract
-          </a>
+          </button>
         )}
         {(contractUploadError || fieldErrors.contractAttachmentUrl) && (
           <p className="mt-1 text-xs text-red-600">{contractUploadError || fieldErrors.contractAttachmentUrl}</p>

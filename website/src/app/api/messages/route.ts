@@ -242,12 +242,26 @@ export async function POST(request: Request) {
 
     const db = getSupabaseAdmin();
 
-    // Resolve the authenticated user's actual slug (never trust client-provided senderName)
-    const { data: senderArtist } = await db.from("artist_profiles").select("slug").eq("user_id", auth.user!.id).single();
+    // Resolve the authenticated user's actual slug from their profile.
+    // Never trust the client-provided `senderName` — the old fallback
+    // (`|| parsed.data.senderName`) let an authenticated user without a
+    // profile impersonate anyone by passing that slug in the body. If the
+    // user has no artist/venue profile, reject outright rather than
+    // quietly delivering a spoofed message.
+    const { data: senderArtist } = await db.from("artist_profiles").select("slug").eq("user_id", auth.user!.id).maybeSingle();
     const { data: senderVenue } = !senderArtist
-      ? await db.from("venue_profiles").select("slug").eq("user_id", auth.user!.id).single()
+      ? await db.from("venue_profiles").select("slug").eq("user_id", auth.user!.id).maybeSingle()
       : { data: null };
-    const resolvedSenderSlug = senderArtist?.slug || senderVenue?.slug || parsed.data.senderName;
+    const resolvedSenderSlug = senderArtist?.slug || senderVenue?.slug || null;
+    if (!resolvedSenderSlug) {
+      return NextResponse.json(
+        { error: "Your account is not set up to send messages yet — complete your artist or venue profile first." },
+        { status: 403 },
+      );
+    }
+    // Derive sender type from the profile we found, not the client input —
+    // another impersonation vector otherwise.
+    const resolvedSenderType: "artist" | "venue" = senderArtist ? "artist" : "venue";
 
     // Resolve the recipient user_id from their slug so RLS can scope reads to
     // both parties. Try artist first, then venue. If the slug matches nothing,
@@ -289,7 +303,7 @@ export async function POST(request: Request) {
       conversation_id: cid,
       sender_id: auth.user!.id,
       sender_name: resolvedSenderSlug,
-      sender_type: senderType || "anonymous",
+      sender_type: resolvedSenderType,
       recipient_slug: recipientSlug,
       recipient_user_id: recipientUserId,
       content,
@@ -328,8 +342,10 @@ export async function POST(request: Request) {
       const m = metadata as Record<string, unknown>;
       const placementId = `p-msg-${Date.now()}`;
 
-      // Determine who is artist and who is venue
-      const senderIsArtist = senderType === "artist";
+      // Determine who is artist and who is venue — use the server-resolved
+      // role, not the client-provided `senderType`, to close the same
+      // impersonation vector that `resolvedSenderSlug` fixes above.
+      const senderIsArtist = resolvedSenderType === "artist";
       const artistSlug = senderIsArtist ? resolvedSenderSlug : recipientSlug;
       const venueSlug = senderIsArtist ? recipientSlug : resolvedSenderSlug;
 
