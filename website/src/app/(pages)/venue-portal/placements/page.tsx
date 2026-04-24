@@ -1408,6 +1408,12 @@ export default function VenuePlacementsPage() {
                               <p className="text-muted mb-0.5">Arrangement</p>
                               <p className="text-foreground font-medium">{p.type}{p.revenueSharePercent ? ` (${p.revenueSharePercent}%)` : ""}</p>
                             </div>
+                            {typeof p.monthlyFeeGbp === "number" && p.monthlyFeeGbp > 0 && (
+                              <div>
+                                <p className="text-muted mb-0.5">Monthly fee</p>
+                                <p className="text-foreground font-medium">&pound;{p.monthlyFeeGbp.toFixed(2)}</p>
+                              </div>
+                            )}
                             <div>
                               <p className="text-muted mb-0.5">Requested</p>
                               <p className="text-foreground font-medium">{p.date}</p>

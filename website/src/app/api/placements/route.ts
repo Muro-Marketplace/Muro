@@ -605,15 +605,19 @@ export async function PATCH(request: Request) {
       !!existing.venue_user_id &&
       existing.artist_user_id === existing.venue_user_id;
 
-    // Belt-and-braces: even if requester_user_id didn't flip on a prior
-    // counter (e.g. the column update warned instead of erroring), the
-    // most recent counter message carries the counterer's user_id in
-    // metadata.requesterUserId. If that matches the current user, they
-    // are effectively the current requester and must not accept/decline
-    // their own counter. This also runs for `counter` requests now — the
-    // original offerer being unable to counter their own declined offer
-    // was because `isRequester` hadn't been resolved via the messages
-    // fallback when the column wasn't populated.
+    // Work out who currently owes a response, from the message trail.
+    // Precedence for "the current requester" is:
+    //   1. Sender of the most recent counter-offer (counters flip role).
+    //   2. Sender of the original placement_request (fallback when the
+    //      column is NULL and no counter exists yet).
+    // If that person is the authenticated user, they cannot accept /
+    // decline / counter their own outstanding offer.
+    //
+    // Earlier versions of this block conflated the two lookups and,
+    // after a counter from the OTHER party, erroneously promoted the
+    // original offerer back into "current requester" via the fallback
+    // — which blocked them from responding to the counter. Keep the
+    // two resolutions separate.
     if (!isRequester) {
       const { data: reqMsgs } = await db
         .from("messages")
@@ -621,26 +625,22 @@ export async function PATCH(request: Request) {
         .eq("message_type", "placement_request")
         .order("created_at", { ascending: false })
         .limit(50);
-      let foundFromCounter = false;
-      let fallbackSender: string | null = null;
-      for (const m of (reqMsgs || []) as Array<{ sender_id: string | null; metadata: Record<string, unknown> | null; created_at: string }>) {
+      let latestCounterSender: string | null = null;
+      let originalOfferSender: string | null = null;
+      for (const m of (reqMsgs || []) as Array<{ sender_id: string | null; metadata: Record<string, unknown> | null }>) {
         if (m.metadata?.placementId !== id) continue;
-        if (!foundFromCounter && m.metadata?.counter === true) {
-          const s = (m.metadata?.requesterUserId as string | undefined) || m.sender_id;
-          if (s && s === auth.user!.id) {
-            isRequester = true;
-            foundFromCounter = true;
-            break;
-          }
+        const sender = (m.metadata?.requesterUserId as string | undefined) || m.sender_id;
+        if (!sender) continue;
+        if (m.metadata?.counter === true) {
+          if (!latestCounterSender) latestCounterSender = sender;
+        } else {
+          // Newest-first iteration: each overwrite lands on an older
+          // row, so the final value is the oldest = original offer.
+          originalOfferSender = sender;
         }
-        // Track the oldest placement_request sender as the original
-        // requester — used when there's no counter and the column is
-        // NULL. This fixes "original offerer can't counter a declined
-        // offer" on legacy rows.
-        const s = (m.metadata?.requesterUserId as string | undefined) || m.sender_id;
-        if (s) fallbackSender = s; // list is newest-first so last wins = oldest
       }
-      if (!isRequester && fallbackSender && fallbackSender === auth.user!.id) {
+      const effectiveRequester = latestCounterSender || originalOfferSender;
+      if (effectiveRequester && effectiveRequester === auth.user!.id) {
         isRequester = true;
       }
     }
