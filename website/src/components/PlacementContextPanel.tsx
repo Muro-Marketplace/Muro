@@ -669,6 +669,37 @@ export default function PlacementContextPanel({
           </div>
         )}
 
+        {/* Declined state: a decline doesn't end the deal — whoever
+            made the last offer (the requester) can revise it with new
+            terms. The decliner sees a passive "waiting on them" note. */}
+        {displayStatus === "Declined" && !counterOpen && (() => {
+          const iAmRequester = !!p.requester_user_id && p.requester_user_id === userId;
+          if (iAmRequester) {
+            return (
+              <div className="mt-3 space-y-2">
+                <p className="text-[11px] text-red-600">Your offer was declined. Send a revised offer to keep negotiating.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCounterOpen(true);
+                    setCounterRevShare(p.revenue_share_percent || 0);
+                    setCounterQr(p.qr_enabled ?? true);
+                    const currentFee = typeof p.monthly_fee_gbp === "number" ? p.monthly_fee_gbp : 0;
+                    setCounterPaidLoan(currentFee > 0);
+                    setCounterFee(currentFee > 0 ? currentFee : "");
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
+                >
+                  Counter with new terms
+                </button>
+              </div>
+            );
+          }
+          return (
+            <p className="mt-3 text-[11px] text-muted">You declined — the other party can come back with revised terms.</p>
+          );
+        })()}
+
         {displayStatus === "Pending" && !canViewerRespond && (() => {
           const iAmRequester = !!p.requester_user_id && p.requester_user_id === userId;
           // Two states where the viewer can't respond:

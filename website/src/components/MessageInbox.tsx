@@ -836,16 +836,24 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           })()}
                         </div>
                         {(() => {
-                          // Check if this placement request has already been responded to
+                          // Has THIS request (or a newer one) been responded to?
+                          // We compare timestamps: if the most-recent response
+                          // happened AFTER this request message, it applies.
+                          // If a newer counter-request has since been sent on
+                          // the same placement, this check correctly treats
+                          // the latest counter as outstanding — the old card
+                          // no longer blocks Accept/Counter/Decline on the
+                          // newer offer.
                           const placementId = meta.placementId;
-                          const hasResponse = messages.some(
-                            (m) => m.message_type === "placement_response" && m.metadata?.placementId === placementId
-                          );
-                          const responseMsg = messages.find(
-                            (m) => m.message_type === "placement_response" && m.metadata?.placementId === placementId
-                          );
-                          if (hasResponse && responseMsg) {
-                            const accepted = responseMsg.metadata?.status === "active";
+                          const responsesForThis = messages
+                            .filter((m) => m.message_type === "placement_response" && m.metadata?.placementId === placementId)
+                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                          const latestResponse = responsesForThis[0];
+                          const thisRequestTs = new Date(msg.created_at).getTime();
+                          const latestResponseTs = latestResponse ? new Date(latestResponse.created_at).getTime() : 0;
+                          const respondedToThis = !!latestResponse && latestResponseTs >= thisRequestTs;
+                          if (respondedToThis && latestResponse) {
+                            const accepted = latestResponse.metadata?.status === "active";
                             // Gate for the Counter-on-declined button: the
                             // original offerer (requester) may revise terms;
                             // the decliner waits for them.
