@@ -42,18 +42,24 @@ export default function PlacementQRModal({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    generateQRDataURL(targetUrl)
-      .then((url) => { if (!cancelled) setQrDataUrl(url); })
-      .catch(() => { if (!cancelled) setQrDataUrl(null); });
-    return () => { cancelled = true; };
-  }, [open, targetUrl]);
+    // Regenerate the data URL whenever qrSize changes so the downloadable
+    // PNG matches what the user has sized on-screen. Debounced to avoid
+    // encoding on every slider tick.
+    const handle = setTimeout(() => {
+      generateQRDataURL(targetUrl, Math.round(qrSize))
+        .then((url) => { if (!cancelled) setQrDataUrl(url); })
+        .catch(() => { if (!cancelled) setQrDataUrl(null); });
+    }, 80);
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [open, targetUrl, qrSize]);
 
-  function startDrag(e: React.PointerEvent<HTMLButtonElement>) {
+  function startDrag(e: React.PointerEvent<HTMLElement>) {
     e.preventDefault();
+    e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     dragStateRef.current = { startX: e.clientX, startY: e.clientY, startSize: qrSize };
   }
-  function onDrag(e: React.PointerEvent<HTMLButtonElement>) {
+  function onDrag(e: React.PointerEvent<HTMLElement>) {
     if (!dragStateRef.current) return;
     // Use the larger of the two axes so a diagonal drag scales naturally.
     const dx = e.clientX - dragStateRef.current.startX;
@@ -62,7 +68,7 @@ export default function PlacementQRModal({
     const next = Math.min(QR_MAX, Math.max(QR_MIN, dragStateRef.current.startSize + delta));
     setQrSize(next);
   }
-  function endDrag(e: React.PointerEvent<HTMLButtonElement>) {
+  function endDrag(e: React.PointerEvent<HTMLElement>) {
     dragStateRef.current = null;
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
@@ -97,27 +103,30 @@ export default function PlacementQRModal({
         <div className="p-6 flex flex-col items-center gap-4">
           {qrDataUrl ? (
             <>
-              <div className="relative inline-block" style={{ width: qrSize, height: qrSize }}>
+              {/* Drag ANYWHERE on the QR container to resize. Still shows
+                  a bottom-right grip as a visual hint; a range slider
+                  below is the belt-and-braces control for users who
+                  don't realise the QR itself is draggable. */}
+              <div
+                className="relative inline-block cursor-nwse-resize select-none touch-none"
+                style={{ width: qrSize, height: qrSize }}
+                onPointerDown={startDrag}
+                onPointerMove={onDrag}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={qrDataUrl}
                   alt="Placement QR code"
                   width={qrSize}
                   height={qrSize}
-                  className="rounded-sm select-none"
+                  className="rounded-sm select-none pointer-events-none"
                   draggable={false}
                 />
-                {/* Drag handle on the bottom-right corner — pinch-zoom-by-mouse
-                    so users can size the code to match what they're printing. */}
-                <button
-                  type="button"
-                  onPointerDown={startDrag}
-                  onPointerMove={onDrag}
-                  onPointerUp={endDrag}
-                  onPointerCancel={endDrag}
-                  className="absolute bottom-0 right-0 translate-x-1/3 translate-y-1/3 w-6 h-6 rounded-full bg-foreground text-white border-2 border-white shadow-lg flex items-center justify-center cursor-nwse-resize hover:bg-accent transition-colors"
-                  title="Drag to resize"
-                  aria-label="Drag to resize QR code"
+                <div
+                  className="absolute bottom-0 right-0 translate-x-1/3 translate-y-1/3 w-6 h-6 rounded-full bg-foreground text-white border-2 border-white shadow-lg flex items-center justify-center pointer-events-none"
+                  aria-hidden
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="15 3 21 3 21 9" />
@@ -125,11 +134,22 @@ export default function PlacementQRModal({
                     <line x1="21" y1="3" x2="14" y2="10" />
                     <line x1="3" y1="21" x2="10" y2="14" />
                   </svg>
-                </button>
+                </div>
               </div>
-              <p className="text-[11px] text-muted">
-                Size: <span className="text-foreground font-medium tabular-nums">{Math.round(qrSize)}px</span> — drag the corner to resize
-              </p>
+              <div className="w-full max-w-xs flex items-center gap-3">
+                <input
+                  type="range"
+                  min={QR_MIN}
+                  max={QR_MAX}
+                  step={10}
+                  value={qrSize}
+                  onChange={(e) => setQrSize(Number(e.target.value))}
+                  className="flex-1 accent-accent"
+                  aria-label="QR size"
+                />
+                <span className="text-[11px] text-muted tabular-nums w-12 text-right">{Math.round(qrSize)}px</span>
+              </div>
+              <p className="text-[10px] text-muted">Drag the QR, or slide, to resize. The downloaded PNG keeps this size.</p>
               <div className="text-center">
                 {artistName && <p className="text-xs text-muted">{artistName}</p>}
                 <p className="text-[11px] text-muted break-all">{targetUrl}</p>

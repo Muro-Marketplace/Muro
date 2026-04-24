@@ -9,8 +9,11 @@ import { themes as allThemes } from "@/data/themes";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
+import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
+import { slugify } from "@/lib/slugify";
+import { useSearchParams } from "next/navigation";
 
 const primaryMediums = [
   "Oil Painting", "Watercolour", "Acrylic Painting", "Drawing & Illustration",
@@ -63,6 +66,42 @@ interface ProfileState {
   venueTypesSuitedFor: string[];
 }
 
+/** Empty profile state for a brand-new artist who has just completed
+ *  the claim flow but doesn't yet have a saved artist_profiles row —
+ *  so the editor can render the full form instead of a dead-end.
+ *  First Save PUTs this to the API, which upserts a new row. */
+function emptyProfile(nameSeed: string): ProfileState {
+  return {
+    name: nameSeed,
+    location: "",
+    postcode: "",
+    primaryMedium: "",
+    discipline: "",
+    subStyles: [],
+    shortBio: "",
+    extendedBio: "",
+    instagram: "",
+    website: "",
+    styleTags: [],
+    themes: [],
+    bannerImage: "",
+    profileImage: "",
+    offersOriginals: false,
+    offersPrints: false,
+    offersFramed: false,
+    openToCommissions: false,
+    openToFreeLoan: false,
+    openToRevenueShare: false,
+    revenueSharePercent: 10,
+    openToOutrightPurchase: false,
+    canProvideFrames: false,
+    canArrangeFraming: false,
+    availableSizes: [],
+    deliveryRadius: "",
+    venueTypesSuitedFor: [],
+  };
+}
+
 function initProfile(a: Artist): ProfileState {
   return {
     name: a.name,
@@ -97,7 +136,22 @@ function initProfile(a: Artist): ProfileState {
 
 export default function ProfileEditorPage() {
   const { artist, loading: artistLoading, profileId, refetch } = useCurrentArtist();
+  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const isWelcome = searchParams?.get("welcome") === "1";
   const [profile, setProfile] = useState<ProfileState | null>(null);
+  // Derive a slug up-front so we can save a brand-new profile that has
+  // no artist_profiles row yet. Prefer the profile's existing slug,
+  // then user metadata, then the display name, then the email prefix.
+  const derivedSlug = (() => {
+    if (artist?.slug) return artist.slug;
+    const metaSlug = (user?.user_metadata?.artist_slug as string | undefined) || "";
+    if (metaSlug) return metaSlug;
+    const displayName = (user?.user_metadata?.display_name as string | undefined) || "";
+    if (displayName) return slugify(displayName) || `artist-${Date.now()}`;
+    const emailPrefix = (user?.email || "").split("@")[0];
+    return slugify(emailPrefix) || `artist-${Date.now()}`;
+  })();
   const [saved, setSaved] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [newTag, setNewTag] = useState("");
@@ -113,22 +167,33 @@ export default function ProfileEditorPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    if (artist && !profile) {
+    if (profile) return;
+    if (artist) {
       setProfile(initProfile(artist));
+      return;
     }
-  }, [artist, profile]);
+    // Once auth is loaded and we know there's no artist row yet, seed
+    // an empty form so a brand-new user coming from /apply/claim can
+    // fill out their full profile instead of hitting a dead-end page.
+    if (!artistLoading && user) {
+      const seedName = (user.user_metadata?.display_name as string | undefined)
+        || (user.email || "").split("@")[0]
+        || "";
+      setProfile(emptyProfile(seedName));
+    }
+  }, [artist, artistLoading, profile, user]);
 
   useUnsavedWarning(hasUnsavedChanges);
 
   useEffect(() => {
-    if (!artist) return;
+    if (!artist) { setWorks([]); return; }
     setWorks([...artist.works]);
   }, [artist]);
 
-  if (artistLoading || !artist || !profile) {
+  if (artistLoading || !profile) {
     return (
       <ArtistPortalLayout activePath="/artist-portal/profile">
-        <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found."}</p>
+        <p className="text-muted text-sm py-12 text-center">Loading...</p>
       </ArtistPortalLayout>
     );
   }
@@ -208,13 +273,15 @@ export default function ProfileEditorPage() {
   async function handleSave() {
     if (!profile) return;
 
-    // Save to Supabase
+    // Save to Supabase. upsertArtistProfile handles both "first save for
+    // a freshly-claimed account" (no existing row yet) and "update
+    // existing profile", so we don't need a separate path for new users.
     try {
       const res = await authFetch("/api/artist-profile", {
         method: "PUT",
         body: JSON.stringify({
           name: profile.name,
-          slug: artist!.slug,
+          slug: artist?.slug || derivedSlug,
           profile_image: profile.profileImage,
           banner_image: profile.bannerImage,
           short_bio: profile.shortBio,
@@ -282,15 +349,32 @@ export default function ProfileEditorPage() {
             >
               Save Changes
             </button>
-            <Link
-              href={`/browse/${artist.slug}`}
-              target="_blank"
-              className="text-sm text-accent hover:text-accent-hover transition-colors"
-            >
-              Preview Profile &rarr;
-            </Link>
+            {artist?.slug && (
+              <Link
+                href={`/browse/${artist.slug}`}
+                target="_blank"
+                className="text-sm text-accent hover:text-accent-hover transition-colors"
+              >
+                Preview Profile &rarr;
+              </Link>
+            )}
           </div>
         </div>
+
+        {/* First-time welcome — surfaced when the user arrives from the
+            claim flow. Keeps the "you're approved once admin reviews
+            you" expectation visible while the user fills everything in. */}
+        {isWelcome && (
+          <div className="mb-6 bg-accent/5 border border-accent/20 rounded-sm p-4">
+            <p className="text-sm font-medium text-foreground">Build your full profile</p>
+            <p className="text-xs text-muted mt-1 leading-relaxed">
+              You can fill everything out now — photos, statement, works, pricing.
+              Your profile only goes live on the marketplace once our team has
+              approved your application, so there&rsquo;s no rush, but the more
+              complete it is the faster the review.
+            </p>
+          </div>
+        )}
 
         {/* Save success */}
         {saved && (

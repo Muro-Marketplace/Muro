@@ -140,10 +140,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       const res = await authFetch(`/api/messages/${convId}`);
       const data = await res.json();
       if (data.messages) {
-        setMessages((prev) => {
-          if (prev.length !== data.messages.length) return data.messages;
-          return prev;
-        });
+        // Replace the full array even when the length matches — content
+        // may have changed (pinned, deleted, edited) and the scroll-to-
+        // bottom effect only refires when the messages reference changes.
+        // The tiny cost of occasional re-renders beats showing stale
+        // content after switching between threads with equal counts.
+        setMessages(data.messages);
       }
       await authFetch(`/api/messages/${convId}`, {
         method: "PATCH",
@@ -158,11 +160,14 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   }, []);
 
   useEffect(() => {
-    if (!selectedConv) {
-      setMessages([]);
-      if (threadPollRef.current) clearInterval(threadPollRef.current);
-      return;
-    }
+    // Always clear the previous thread's messages when switching, so
+    // the scroll-to-bottom effect runs against the NEW thread once it
+    // loads — and we don't briefly flash messages from the last thread
+    // we had open. (Before this, opening another thread could leave the
+    // scroll position landed on the previous thread's content.)
+    setMessages([]);
+    if (threadPollRef.current) clearInterval(threadPollRef.current);
+    if (!selectedConv) return;
     loadThread(selectedConv);
     threadPollRef.current = setInterval(() => loadThread(selectedConv, true), 8000);
     return () => { if (threadPollRef.current) clearInterval(threadPollRef.current); };

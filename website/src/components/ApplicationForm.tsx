@@ -303,10 +303,10 @@ export default function ApplicationForm() {
             Start building your profile while we review
           </h3>
           <p className="text-sm text-muted leading-relaxed mb-5">
-            Applications with a finished profile get reviewed faster and land
-            better with venues. Claim your Wallplace space in under two
-            minutes — add a photo, a sentence about your practice, whatever
-            you have to hand. You can finish it any time.
+            Applications with a finished profile get reviewed faster and
+            have a better chance of acceptance. Claim your Wallplace space
+            in under two minutes — add a photo, a sentence about your
+            practice, whatever you have to hand. You can finish it any time.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
             <Link

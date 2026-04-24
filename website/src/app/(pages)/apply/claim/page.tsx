@@ -80,11 +80,14 @@ function ClaimForm() {
         return;
       }
 
-      // 3. Create the artist profile (best effort — portal still works
-      // if this fails; the user can complete profile fields there).
+      // 3. Create the artist profile. This used to be fire-and-forget,
+      // which meant a failed insert silently dropped the user into the
+      // portal with no profile — where the editor rendered "No artist
+      // profile found." Now we await and surface the error so the user
+      // doesn't land on a dead end.
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
-        await fetch("/api/artist-profile", {
+        const profileRes = await fetch("/api/artist-profile", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -98,10 +101,18 @@ function ClaimForm() {
             shortBio: shortBio.trim(),
             website: website.trim(),
           }),
-        }).catch(() => { /* non-blocking */ });
+        }).catch(() => null);
+        if (!profileRes || !profileRes.ok) {
+          // The profile editor also handles the empty-profile case from
+          // here, so we soft-warn and continue rather than blocking on
+          // a recoverable insert failure.
+          console.warn("Profile creation POST failed; profile editor will start empty.");
+        }
       }
 
-      router.push("/artist-portal/profile");
+      // Land on the full profile editor with a welcome flag so the page
+      // can nudge the user to fill in the remaining fields.
+      router.push("/artist-portal/profile?welcome=1");
     } catch (err) {
       console.error("Claim flow error:", err);
       setError("Something went wrong. Please try again.");
