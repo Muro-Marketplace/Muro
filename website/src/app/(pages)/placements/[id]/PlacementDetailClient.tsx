@@ -99,6 +99,9 @@ export default function PlacementDetailClient({ placementId }: Props) {
   const [responding, setResponding] = useState<"accept" | "decline" | null>(null);
   const [respondError, setRespondError] = useState<string | null>(null);
   const [counterOpen, setCounterOpen] = useState(false);
+  // Loan record is collapsed by default but auto-expands once a record
+  // exists so users land on the data instead of having to click open.
+  const [loanRecordOpen, setLoanRecordOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -150,6 +153,17 @@ export default function PlacementDetailClient({ placementId }: Props) {
     };
   }, [user, load]);
 
+  // Auto-open the loan record drawer the first time a record turns up,
+  // so users don't have to expand it manually. Won't reopen if the user
+  // has since collapsed it.
+  const [loanRecordAutoOpened, setLoanRecordAutoOpened] = useState(false);
+  useEffect(() => {
+    if (record && !loanRecordAutoOpened) {
+      setLoanRecordOpen(true);
+      setLoanRecordAutoOpened(true);
+    }
+  }, [record, loanRecordAutoOpened]);
+
   async function handleAdvance(stage: "scheduled" | "installed" | "live" | "collected") {
     if (!placement) return;
     try {
@@ -160,6 +174,25 @@ export default function PlacementDetailClient({ placementId }: Props) {
       if (!res.ok) return;
       await load();
     } catch { /* ignore; next load will reconcile */ }
+  }
+
+  async function handleUndoStage(stage: "scheduled" | "installed" | "live" | "collected") {
+    if (!placement) return;
+    if (!confirm(`Undo "${stage}"? You can restamp it later.`)) return;
+    try {
+      const res = await authFetch("/api/placements", {
+        method: "PATCH",
+        body: JSON.stringify({ id: placement.id, unsetStage: stage }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Could not undo stage.");
+        return;
+      }
+      await load();
+    } catch {
+      alert("Network error. Please try again.");
+    }
   }
 
   async function handleRespond(accept: boolean) {
@@ -403,21 +436,41 @@ export default function PlacementDetailClient({ placementId }: Props) {
                   );
                 })}
               </ol>
-              {/* Advance action — one button for the next unreached
-                  stage. Kept inline under the progress bar so there's
-                  a single source of truth for "where are we" and
-                  "what's next". */}
-              {placement.status === "active" && nextKey && nextLabel && (
-                <div className="mt-4 pt-3 border-t border-border">
-                  <button
-                    type="button"
-                    onClick={() => handleAdvance(nextKey)}
-                    className="px-3.5 py-1.5 text-xs font-medium text-accent bg-accent/5 border border-accent/30 hover:bg-accent/10 rounded-sm transition-colors"
-                  >
-                    Mark {nextLabel.toLowerCase()}
-                  </button>
-                </div>
-              )}
+              {/* Advance + Undo actions — kept side-by-side so the user
+                  has both the "what's next" and "I overshot" controls
+                  in one place. Undo targets the most recent reached
+                  advanceable stage; if there isn't one, the button
+                  doesn't render. */}
+              {(placement.status === "active" || placement.status === "completed") && (() => {
+                const advanceableKeys = new Set(advanceable);
+                const lastReached = [...lifecycle].reverse().find((s) => s.reached && advanceableKeys.has(s.key as typeof advanceable[number]));
+                const lastReachedKey = lastReached?.key as ("scheduled" | "installed" | "live" | "collected" | undefined);
+                const showAdvanceBtn = placement.status === "active" && nextKey && nextLabel;
+                const showUndoBtn = !!lastReachedKey;
+                if (!showAdvanceBtn && !showUndoBtn) return null;
+                return (
+                  <div className="mt-4 pt-3 border-t border-border flex items-center gap-2 flex-wrap">
+                    {showAdvanceBtn && nextKey && nextLabel && (
+                      <button
+                        type="button"
+                        onClick={() => handleAdvance(nextKey)}
+                        className="px-3.5 py-1.5 text-xs font-medium text-accent bg-accent/5 border border-accent/30 hover:bg-accent/10 rounded-sm transition-colors"
+                      >
+                        Mark {nextLabel.toLowerCase()}
+                      </button>
+                    )}
+                    {showUndoBtn && lastReachedKey && (
+                      <button
+                        type="button"
+                        onClick={() => handleUndoStage(lastReachedKey)}
+                        className="px-3 py-1.5 text-xs font-medium text-muted bg-background border border-border hover:text-foreground hover:border-foreground/30 rounded-sm transition-colors"
+                      >
+                        Undo {lastReachedKey}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           );
         })()}
@@ -677,32 +730,64 @@ export default function PlacementDetailClient({ placementId }: Props) {
         </div>
       )}
 
-      {/* Loan / consignment record */}
+      {/* Loan / consignment record — collapsible so it doesn't dominate
+          the page. Defaults open if a record exists, closed if not.
+          Pre-fills new records with the agreed terms from the placement
+          itself (revenue share %, monthly fee, QR enabled, type) so the
+          user isn't re-typing data they already negotiated. */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl text-foreground">Loan / consignment record</h2>
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <button
+            type="button"
+            onClick={() => setLoanRecordOpen((v) => !v)}
+            className="flex items-center gap-2 text-left flex-1 min-w-0"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`shrink-0 transition-transform ${loanRecordOpen ? "rotate-90" : ""}`}
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            <h2 className="font-serif text-xl text-foreground">Loan / consignment record</h2>
+            {!record && <span className="text-xs text-muted">(not yet created)</span>}
+          </button>
           {!record && (
             <button
               type="button"
               onClick={createRecordIfMissing}
               disabled={creatingRecord}
-              className="px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors disabled:opacity-60"
+              className="px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors disabled:opacity-60 shrink-0"
             >
               {creatingRecord ? "Creating…" : "+ Add record"}
             </button>
           )}
         </div>
-        {record ? (
-          <PlacementLoanForm
-            placementId={placementId}
-            record={record}
-            viewerRole={viewerRole}
-            onSaved={(updated) => setRecord(updated)}
-          />
-        ) : (
-          <div className="bg-surface border border-border rounded-sm p-6 text-center text-sm text-muted">
-            No loan/consignment record yet.
-          </div>
+        {loanRecordOpen && (
+          record ? (
+            <PlacementLoanForm
+              placementId={placementId}
+              record={record}
+              viewerRole={viewerRole}
+              placementSeed={{
+                arrangementType: placement.arrangement_type,
+                revenueSharePercent: placement.revenue_share_percent ?? null,
+                monthlyFeeGbp: placement.monthly_fee_gbp ?? null,
+                qrEnabled: placement.qr_enabled ?? null,
+              }}
+              onSaved={(updated) => setRecord(updated)}
+            />
+          ) : (
+            <div className="bg-surface border border-border rounded-sm p-6 text-center text-sm text-muted">
+              No loan/consignment record yet. Click <strong>+ Add record</strong> above to start one prefilled with the agreed terms.
+            </div>
+          )
         )}
       </div>
 

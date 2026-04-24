@@ -124,6 +124,10 @@ export const placementUpdateSchema = z.object({
   // a future install date instead of being forced to "now". Used by the
   // progress bar's Schedule action.
   stageDate: z.string().datetime().optional(),
+  // Reverse a previously-stamped stage. Powers the Undo button on the
+  // progress bar — clears the timestamp on that stage (and only the
+  // most recently reached stage is allowed, see API for the gate).
+  unsetStage: z.enum(["scheduled", "installed", "live", "collected"]).optional(),
   // A counter offer keeps the row pending but revises the terms and hands the
   // "needs to respond" role back to the original requester.
   counter: z.object({

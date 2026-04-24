@@ -22,6 +22,11 @@ interface DemandVenue {
   interestedInDirectPurchase: boolean;
   description: string;
   image: string;
+  images?: string[];
+  displayWallSpace?: string;
+  displayLighting?: string;
+  displayInstallNotes?: string;
+  displayRotationFrequency?: string;
 }
 
 interface DemandStats {
@@ -276,9 +281,34 @@ export default function SpacesLookingForArtPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filtered.map((venue) => (
                 <div id={`venue-${venue.slug}`} key={venue.slug} className={`bg-surface border border-border rounded-sm overflow-hidden transition-all scroll-mt-24 target:ring-2 target:ring-accent ${canSeeDetails ? "hover:border-accent/30 hover:shadow-sm" : ""}`}>
-                  {venue.image && (
-                    <div className={`h-40 relative bg-border/20 ${!canSeeDetails ? "blur-sm" : ""}`}>
-                      <Image src={venue.image} alt={canSeeDetails ? venue.name : "Venue"} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+                  {/* Hero image: prefer the venue's own gallery (uploaded
+                      via the venue portal). Falls back to the legacy single
+                      image if no gallery exists. */}
+                  {(() => {
+                    const gallery = (venue.images || []).filter(Boolean);
+                    const hero = gallery[0] || venue.image;
+                    if (!hero) return null;
+                    return (
+                      <div className={`h-40 relative bg-border/20 ${!canSeeDetails ? "blur-sm" : ""}`}>
+                        <Image src={hero} alt={canSeeDetails ? venue.name : "Venue"} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+                        {gallery.length > 1 && canSeeDetails && (
+                          <span className="absolute bottom-2 right-2 text-[10px] bg-black/60 text-white px-2 py-0.5 rounded-full">
+                            {gallery.length} photos
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {/* Thumbnail strip — additional uploaded photos shown
+                      under the hero so artists get a real sense of the
+                      space, not just the headline shot. */}
+                  {canSeeDetails && (venue.images || []).length > 1 && (
+                    <div className="flex gap-1 px-2 pt-2 overflow-x-auto">
+                      {(venue.images || []).slice(1, 5).map((url, i) => (
+                        <div key={i} className="relative w-16 h-12 shrink-0 rounded-sm overflow-hidden border border-border bg-background">
+                          <Image src={url} alt="" fill className="object-cover" sizes="64px" />
+                        </div>
+                      ))}
                     </div>
                   )}
                   <div className="p-5">
@@ -320,10 +350,37 @@ export default function SpacesLookingForArtPage() {
                     </div>
 
                     {/* Details */}
-                    <div className="flex items-center gap-3 text-[10px] text-muted">
+                    <div className="flex items-center gap-3 text-[10px] text-muted flex-wrap">
                       {venue.wallSpace && <span>{venue.wallSpace}</span>}
                       {venue.approximateFootfall && <><span className="w-0.5 h-0.5 rounded-full bg-muted" /><span>{venue.approximateFootfall}</span></>}
                     </div>
+
+                    {/* Description + display needs — only shown to subscribers
+                        so the venue's full pitch isn't leaked to drive-by
+                        visitors, but is visible to artists who can act on it. */}
+                    {canSeeDetails && (
+                      <>
+                        {venue.description && (
+                          <p className="mt-3 text-xs text-foreground/80 leading-relaxed line-clamp-3">{venue.description}</p>
+                        )}
+                        {(venue.displayWallSpace || venue.displayLighting || venue.displayInstallNotes || venue.displayRotationFrequency) && (
+                          <div className="mt-3 grid grid-cols-1 gap-1.5">
+                            {venue.displayWallSpace && (
+                              <p className="text-[10px] text-muted"><span className="text-foreground/70 font-medium">Wall:</span> {venue.displayWallSpace}</p>
+                            )}
+                            {venue.displayLighting && (
+                              <p className="text-[10px] text-muted"><span className="text-foreground/70 font-medium">Lighting:</span> {venue.displayLighting}</p>
+                            )}
+                            {venue.displayInstallNotes && (
+                              <p className="text-[10px] text-muted"><span className="text-foreground/70 font-medium">Install:</span> {venue.displayInstallNotes}</p>
+                            )}
+                            {venue.displayRotationFrequency && (
+                              <p className="text-[10px] text-muted"><span className="text-foreground/70 font-medium">Rotation:</span> {venue.displayRotationFrequency}</p>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
 
                     {/* Message button for subscribers / Lock for non-subscribers */}
                     {canSeeDetails && canMessageVenues ? (

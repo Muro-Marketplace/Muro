@@ -31,8 +31,11 @@ export default function ArtworkPageClient({
   const { showToast } = useToast();
   const [selectedSizeIdx, setSelectedSizeIdx] = useState(0);
   const frameOptions = work.frameOptions && work.frameOptions.length > 0 ? work.frameOptions : [];
-  const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
-  const selectedFrame = frameOptions[selectedFrameIdx];
+  // -1 means "no frame" — the buyer wants the bare canvas. Default is no
+  // frame so the price quoted above is exactly what they pay until they
+  // explicitly opt in to a frame.
+  const [selectedFrameIdx, setSelectedFrameIdx] = useState(-1);
+  const selectedFrame = selectedFrameIdx >= 0 ? frameOptions[selectedFrameIdx] : undefined;
   const frameUplift = selectedFrame?.priceUplift || 0;
   const [wallVizOpen, setWallVizOpen] = useState(false);
 
@@ -187,6 +190,7 @@ export default function ArtworkPageClient({
             onChange={(e) => setSelectedFrameIdx(Number(e.target.value))}
             className="w-full px-3.5 py-3 bg-background border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-foreground/50 cursor-pointer transition-colors"
           >
+            <option value={-1}>No frame</option>
             {frameOptions.map((f, i) => (
               <option key={f.label} value={i}>
                 {f.label}{f.priceUplift > 0 ? ` — +£${f.priceUplift}` : ""}

@@ -16,32 +16,57 @@ export async function GET(request: Request) {
   try {
     const db = getSupabaseAdmin();
 
-    // Fetch DB venue profiles
-    const { data: dbVenues } = await db
-      .from("venue_profiles")
-      .select("slug, name, type, location, city, postcode, wall_space, description, image, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, interested_in_collections, preferred_styles, preferred_themes")
-      .order("created_at", { ascending: false });
+    // Fetch DB venue profiles. Try to pull the optional gallery + display
+    // columns (added in migrations 022 and 028); if the schema isn't
+    // applied those columns just come back undefined and we render
+    // without them.
+    let dbVenues: Array<Record<string, unknown>> | null = null;
+    {
+      const { data, error } = await db
+        .from("venue_profiles")
+        .select("slug, name, type, location, city, postcode, wall_space, description, image, images, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, interested_in_collections, preferred_styles, preferred_themes, display_wall_space, display_lighting, display_install_notes, display_rotation_frequency")
+        .order("created_at", { ascending: false });
+      if (error) {
+        const fallback = await db
+          .from("venue_profiles")
+          .select("slug, name, type, location, city, postcode, wall_space, description, image, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, interested_in_collections, preferred_styles, preferred_themes")
+          .order("created_at", { ascending: false });
+        dbVenues = (fallback.data as Array<Record<string, unknown>> | null) || null;
+      } else {
+        dbVenues = (data as Array<Record<string, unknown>> | null) || null;
+      }
+    }
+
+    const asString = (v: unknown) => (typeof v === "string" ? v : "");
+    const asStringArray = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
     // Merge: DB venues override static by slug
-    const dbSlugs = new Set((dbVenues || []).map((v) => v.slug));
+    const dbSlugs = new Set((dbVenues || []).map((v) => v.slug as string));
     const staticOnly = staticVenues.filter((v) => !dbSlugs.has(v.slug));
 
     const allVenues = [
       ...(dbVenues || []).map((v) => ({
-        slug: v.slug,
-        name: v.name,
-        type: v.type || "Venue",
-        location: v.city || v.location || "",
+        slug: v.slug as string,
+        name: v.name as string,
+        type: (v.type as string) || "Venue",
+        location: (v.city as string) || (v.location as string) || "",
         coordinates: null as { lat: number; lng: number } | null, // DB venues don't have coords yet
-        wallSpace: v.wall_space || "",
-        approximateFootfall: v.approximate_footfall || "",
-        preferredStyles: v.preferred_styles || [],
-        preferredThemes: v.preferred_themes || [],
-        interestedInFreeLoan: v.interested_in_free_loan ?? true,
-        interestedInRevenueShare: v.interested_in_revenue_share ?? false,
-        interestedInDirectPurchase: v.interested_in_direct_purchase ?? false,
-        description: v.description || "",
-        image: v.image || "",
+        wallSpace: (v.wall_space as string) || "",
+        approximateFootfall: (v.approximate_footfall as string) || "",
+        preferredStyles: asStringArray(v.preferred_styles),
+        preferredThemes: asStringArray(v.preferred_themes),
+        interestedInFreeLoan: (v.interested_in_free_loan as boolean | null) ?? true,
+        interestedInRevenueShare: (v.interested_in_revenue_share as boolean | null) ?? false,
+        interestedInDirectPurchase: (v.interested_in_direct_purchase as boolean | null) ?? false,
+        description: (v.description as string) || "",
+        image: (v.image as string) || "",
+        // Optional gallery + display fields. Empty defaults so the client
+        // can render conditionally without null-checking each one.
+        images: asStringArray(v.images),
+        displayWallSpace: asString(v.display_wall_space),
+        displayLighting: asString(v.display_lighting),
+        displayInstallNotes: asString(v.display_install_notes),
+        displayRotationFrequency: asString(v.display_rotation_frequency),
         source: "database" as const,
       })),
       ...staticOnly.map((v) => ({
@@ -59,6 +84,11 @@ export async function GET(request: Request) {
         interestedInDirectPurchase: v.interestedInDirectPurchase,
         description: v.description,
         image: v.image,
+        images: v.images || [],
+        displayWallSpace: v.displayWallSpace || "",
+        displayLighting: v.displayLighting || "",
+        displayInstallNotes: v.displayInstallNotes || "",
+        displayRotationFrequency: v.displayRotationFrequency || "",
         source: "static" as const,
       })),
     ];

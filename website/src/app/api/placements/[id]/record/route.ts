@@ -33,7 +33,11 @@ const recordSchema = z.object({
   availableForSale: z.boolean().optional(),
 
   logisticsNotes: z.string().max(4000).optional(),
-  contractAttachmentUrl: z.string().url().max(2000).or(z.literal("")).optional(),
+  // Accept blank or any reasonable URL/string — pasted Drive/Dropbox
+  // links don't always parse with strict z.url() and the user just sees
+  // an opaque "invalid URL" error. We do a lightweight client-side
+  // check on save instead.
+  contractAttachmentUrl: z.string().max(2000).optional(),
   internalNotes: z.string().max(4000).optional(),
   venueApproved: z.boolean().optional(),
 });
@@ -51,7 +55,25 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   const body = await request.json().catch(() => null);
   const parsed = recordSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid record data" }, { status: 400 });
+    // Surface the offending fields and reasons. Generic "Invalid record
+    // data" left users staring at a form with no clue what to fix —
+    // most often it was an empty contract URL parsed as URL, or an
+    // out-of-range percentage from a paste.
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const path = issue.path.join(".") || "_root";
+      if (!fieldErrors[path]) fieldErrors[path] = issue.message;
+    }
+    const fields = Object.keys(fieldErrors);
+    return NextResponse.json(
+      {
+        error: fields.length === 1
+          ? `${fields[0]}: ${fieldErrors[fields[0]]}`
+          : `Some fields need attention: ${fields.join(", ")}.`,
+        fieldErrors,
+      },
+      { status: 400 },
+    );
   }
 
   const db = getSupabaseAdmin();

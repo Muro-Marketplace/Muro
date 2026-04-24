@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/api-client";
+import { uploadContract } from "@/lib/upload";
 import type { PlacementRecord } from "./PlacementDetailClient";
 import DatePicker from "@/components/DatePicker";
 
@@ -9,6 +10,16 @@ interface Props {
   placementId: string;
   record: PlacementRecord;
   viewerRole?: "artist" | "venue" | null;
+  /** Auto-fill source: take the agreed terms from the parent placement so
+   *  the user doesn't re-type revenue share, monthly fee, QR enabled, or
+   *  record type. Each field only seeds when the record itself has no
+   *  value for it — manual edits always win. */
+  placementSeed?: {
+    arrangementType?: string;
+    revenueSharePercent?: number | null;
+    monthlyFeeGbp?: number | null;
+    qrEnabled?: boolean | null;
+  };
   onSaved: (r: PlacementRecord) => void;
 }
 
@@ -23,19 +34,29 @@ function numOrNull(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export default function PlacementLoanForm({ placementId, record, viewerRole, onSaved }: Props) {
+export default function PlacementLoanForm({ placementId, record, viewerRole, placementSeed, onSaved }: Props) {
+  // Map the placement's arrangement_type to the loan record's recordType.
+  // Both "free_loan" (paid loan with monthly fee) and "purchase" map to
+  // "loan" — the artwork is going on the wall, money flows differently.
+  // "revenue_share" maps to "consignment" since the artist still owns
+  // it and gets a share of QR sales.
+  const seedRecordType = placementSeed?.arrangementType === "revenue_share" ? "consignment" : "loan";
   const [form, setForm] = useState({
-    recordType: record.record_type || "loan",
-    qrEnabled: record.qr_enabled ?? true,
+    recordType: record.record_type || seedRecordType,
+    qrEnabled: record.qr_enabled ?? placementSeed?.qrEnabled ?? true,
     startDate: strOr(record.start_date),
     reviewDate: strOr(record.review_date),
     collectionDate: strOr(record.collection_date),
     agreedValueGbp: strOr(record.agreed_value_gbp),
     insuredValueGbp: strOr(record.insured_value_gbp),
     salePriceGbp: strOr(record.sale_price_gbp),
-    venueSharePercent: strOr(record.venue_share_percent),
+    venueSharePercent: record.venue_share_percent != null
+      ? strOr(record.venue_share_percent)
+      : (placementSeed?.revenueSharePercent != null ? strOr(placementSeed.revenueSharePercent) : ""),
     artistPayoutTerms: record.artist_payout_terms || "",
-    monthlyDisplayFeeGbp: strOr(record.monthly_display_fee_gbp),
+    monthlyDisplayFeeGbp: record.monthly_display_fee_gbp != null
+      ? strOr(record.monthly_display_fee_gbp)
+      : (placementSeed?.monthlyFeeGbp != null ? strOr(placementSeed.monthlyFeeGbp) : ""),
     conditionIn: record.condition_in || "",
     conditionOut: record.condition_out || "",
     damageNotes: record.damage_notes || "",
@@ -53,15 +74,33 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, onS
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [contractUploading, setContractUploading] = useState(false);
+  const [contractUploadError, setContractUploadError] = useState<string | null>(null);
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((p) => ({ ...p, [key]: value }));
     setSaved(false);
+    setFieldErrors((prev) => {
+      if (!prev[key as string]) return prev;
+      const next = { ...prev };
+      delete next[key as string];
+      return next;
+    });
   }
 
   async function handleSave() {
     setSaving(true);
     setError(null);
+    setFieldErrors({});
+    // Light client-side check on the contract URL — the API now accepts
+    // any string so we keep the friendly "looks like a URL?" check here.
+    if (form.contractAttachmentUrl && !/^https?:\/\//i.test(form.contractAttachmentUrl.trim())) {
+      setFieldErrors({ contractAttachmentUrl: "Add http:// or https:// at the start of the link." });
+      setError("Contract link should start with http:// or https://");
+      setSaving(false);
+      return;
+    }
     try {
       const payload = {
         recordType: form.recordType,
@@ -97,6 +136,9 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, onS
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error || "Could not save");
+        if (body.fieldErrors && typeof body.fieldErrors === "object") {
+          setFieldErrors(body.fieldErrors as Record<string, string>);
+        }
         setSaving(false);
         return;
       }
@@ -300,10 +342,60 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, onS
         <textarea rows={2} value={form.logisticsNotes} onChange={(e) => update("logisticsNotes", e.target.value)} className={inputCls} />
       </div>
 
-      {/* Contract + internal */}
+      {/* Contract: upload (PDF/Word/JPG) OR paste a link. Either way we
+          end up with a single contract URL stored on the record so both
+          parties can open it later. */}
       <div>
-        <label className={labelCls}>Signed contract URL</label>
-        <input type="url" value={form.contractAttachmentUrl} onChange={(e) => update("contractAttachmentUrl", e.target.value)} placeholder="https://…" className={inputCls} />
+        <label className={labelCls}>Signed contract</label>
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-stretch">
+          <input
+            type="text"
+            value={form.contractAttachmentUrl}
+            onChange={(e) => update("contractAttachmentUrl", e.target.value)}
+            placeholder="https://…"
+            className={`flex-1 ${inputCls} ${fieldErrors.contractAttachmentUrl ? "border-red-400" : ""}`}
+          />
+          <label className={`inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-sm border cursor-pointer transition-colors ${contractUploading ? "border-border text-muted opacity-60 cursor-not-allowed" : "border-accent text-accent hover:bg-accent/5"}`}>
+            {contractUploading ? "Uploading…" : "Upload PDF / image"}
+            <input
+              type="file"
+              accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png"
+              className="hidden"
+              disabled={contractUploading}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setContractUploading(true);
+                setContractUploadError(null);
+                try {
+                  const url = await uploadContract(file);
+                  update("contractAttachmentUrl", url);
+                } catch (err) {
+                  setContractUploadError(err instanceof Error ? err.message : "Upload failed");
+                } finally {
+                  setContractUploading(false);
+                  e.target.value = "";
+                }
+              }}
+            />
+          </label>
+        </div>
+        {form.contractAttachmentUrl && (
+          <a
+            href={form.contractAttachmentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex items-center gap-1.5 text-xs text-accent hover:underline"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+            </svg>
+            View attached contract
+          </a>
+        )}
+        {(contractUploadError || fieldErrors.contractAttachmentUrl) && (
+          <p className="mt-1 text-xs text-red-600">{contractUploadError || fieldErrors.contractAttachmentUrl}</p>
+        )}
       </div>
       <div>
         <label className={labelCls}>Internal notes</label>

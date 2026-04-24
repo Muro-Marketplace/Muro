@@ -4,6 +4,55 @@ import { resizeImage } from "./image";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
+// Contracts: PDFs and common Office formats so a venue/artist can upload
+// the signed agreement and have it travel with the placement record.
+const ALLOWED_DOC_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/jpeg",
+  "image/png",
+];
+
+/**
+ * Upload a contract / document file (PDF, Word, or scanned image) to the
+ * `contracts` bucket and return the public URL. Lighter validation than
+ * uploadImage — no resize, just MIME + size checks.
+ */
+export async function uploadContract(file: File): Promise<string> {
+  if (!ALLOWED_DOC_TYPES.includes(file.type)) {
+    throw new Error("Allowed contract formats: PDF, Word, JPEG, PNG.");
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`File too large: ${(file.size / 1024 / 1024).toFixed(1)}MB. Maximum: 10MB`);
+  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("You must be signed in to upload contracts.");
+
+  const ext = file.name.split(".").pop() || "pdf";
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
+  const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName || `contract.${ext}`}`;
+
+  // Try `contracts` bucket first; fall back to `collections` so the upload
+  // works even before the bucket is provisioned. The URL is still public,
+  // and the contract metadata is what surfaces it on the placement record.
+  for (const bucket of ["contracts", "collections"] as const) {
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, { cacheControl: "86400", upsert: false, contentType: file.type });
+    if (!error) {
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+      return urlData.publicUrl;
+    }
+    // Only fall through on missing-bucket — propagate other errors.
+    if (!String(error.message || "").toLowerCase().includes("not found")) {
+      console.error("Contract upload error:", error);
+      throw new Error("Contract upload failed. Please try again.");
+    }
+  }
+  throw new Error("Contract storage is not configured yet. Please paste a link instead.");
+}
+
 /**
  * Upload an image to Supabase Storage and return the public URL.
  * Validates file size and MIME type, resizes large images before uploading.

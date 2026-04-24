@@ -129,6 +129,43 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
   const hasSchedule = !!placement.scheduledFor;
   const canEditSchedule = canAdvance && placement.status === "active" && hasSchedule && !placement.installedAt;
 
+  // Most-recent advanceable stage that has a timestamp = what Undo
+  // should pull back. Requested + Accepted aren't advanceable so they're
+  // never undo targets — those are decisions, not stage marks.
+  const lastReached = [...steps].reverse().find((s) => s.advanceable && !!s.timestamp);
+  const lastReachedStage = lastReached ? (lastReached.key as Stage) : null;
+  const showUndo = canAdvance && !!lastReachedStage && (placement.status === "active" || placement.status === "completed");
+
+  async function undoStage(stage: Stage) {
+    if (!confirm(`Undo "${stage}"? This clears the timestamp and lets you restamp it later.`)) return;
+    setBusy(stage);
+    setError(null);
+    try {
+      const res = await authFetch("/api/placements", {
+        method: "PATCH",
+        body: JSON.stringify({ id: placement.id, unsetStage: stage }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Could not undo stage");
+        return;
+      }
+      const next: PlacementStepperData = { ...placement };
+      if (stage === "scheduled") next.scheduledFor = null;
+      if (stage === "installed") next.installedAt = null;
+      if (stage === "live") next.liveFrom = null;
+      if (stage === "collected") { next.collectedAt = null; next.status = "active"; }
+      onChange?.(next);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: placement.id, action: "undo", stage } }));
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="mt-3">
       <ol className="flex items-start gap-1 overflow-x-auto pb-1">
@@ -190,10 +227,37 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
                 {busy === nextStage ? "Updating…" : `Mark ${label}`}
               </button>
             )}
+            {showUndo && lastReachedStage && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); undoStage(lastReachedStage); }}
+                disabled={busy !== null}
+                className="px-3 py-1.5 text-xs font-medium text-muted bg-background border border-border hover:text-foreground hover:border-foreground/30 rounded-sm transition-colors disabled:opacity-60"
+                title={`Undo ${lastReachedStage}`}
+              >
+                Undo {lastReachedStage}
+              </button>
+            )}
             {error && <span className="text-xs text-red-600">{error}</span>}
           </div>
         );
       })()}
+      {/* Undo also surfaces when there's no further stage to advance — e.g.
+          after marking Collected, the user might realise it was premature
+          and want to roll back. */}
+      {!showAdvance && showUndo && lastReachedStage && (
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); undoStage(lastReachedStage); }}
+            disabled={busy !== null}
+            className="px-3 py-1.5 text-xs font-medium text-muted bg-background border border-border hover:text-foreground hover:border-foreground/30 rounded-sm transition-colors disabled:opacity-60"
+          >
+            Undo {lastReachedStage}
+          </button>
+          {error && <span className="text-xs text-red-600">{error}</span>}
+        </div>
+      )}
       {/* Let the user revise the install date once set, as long as
           install hasn't happened yet. */}
       {canEditSchedule && !schedulePickerOpen && (

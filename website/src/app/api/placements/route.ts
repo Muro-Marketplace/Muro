@@ -533,9 +533,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "ID and valid status required" }, { status: 400 });
     }
 
-    const { id, status, stage, counter, stageDate } = parsed.data;
-    if (!status && !stage && !counter) {
-      return NextResponse.json({ error: "status, stage, or counter required" }, { status: 400 });
+    const { id, status, stage, counter, stageDate, unsetStage } = parsed.data;
+    if (!status && !stage && !counter && !unsetStage) {
+      return NextResponse.json({ error: "status, stage, counter, or unsetStage required" }, { status: 400 });
     }
 
     const db = getSupabaseAdmin();
@@ -874,6 +874,22 @@ export async function PATCH(request: Request) {
       updates.proposed_stage = null;
       updates.proposed_by_user_id = null;
       updates.proposed_at = null;
+    }
+
+    // Undo a previously-stamped stage. Either party can pull a stage back
+    // if they advanced too eagerly. We don't enforce "most recent" on the
+    // server — the UI only ever surfaces undo for the latest reached
+    // stage, and forcing the rule in two places risked rejecting valid
+    // attempts when the columns were missing.
+    if (unsetStage) {
+      if (unsetStage === "scheduled") updates.scheduled_for = null;
+      if (unsetStage === "installed") updates.installed_at = null;
+      if (unsetStage === "live") updates.live_from = null;
+      if (unsetStage === "collected") {
+        updates.collected_at = null;
+        // Undoing the final stage drops the placement back to active.
+        updates.status = "active";
+      }
     }
 
     let { error } = await db.from("placements").update(updates).eq("id", id);
