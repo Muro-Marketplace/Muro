@@ -716,6 +716,7 @@ function WallVisualizerInner(props: ExtendedProps) {
             <ItemToolbar
               item={selectedItem}
               sizes={workById[selectedItem.work_id]?.sizes}
+              orientation={workById[selectedItem.work_id]?.orientation}
               onChange={(partial) => handleItemChange(selectedItem.id, partial)}
               onBringForward={handleBringForward}
               onSendBack={handleSendBack}

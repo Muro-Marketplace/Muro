@@ -15,20 +15,14 @@ import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { slugify } from "@/lib/slugify";
 import { useSearchParams } from "next/navigation";
 
-const primaryMediums = [
-  "Oil Painting", "Watercolour", "Acrylic Painting", "Drawing & Illustration",
-  "Street Photography", "Landscape Photography", "Portrait Photography",
-  "Documentary Photography", "Fine Art Photography", "Abstract Photography",
-  "Architectural Photography", "Still Life Photography", "Printmaking",
-  "Mixed Media", "Collage", "Digital Art", "Sculpture", "Textile Art", "Other",
-];
+// `primaryMediums` and `sizeOptions` removed alongside the Primary
+// Medium dropdown (replaced by Discipline) and the profile-level
+// Available Sizes chip set (sizes belong on individual works).
 
 const deliveryOptions = [
   "Within 5 miles", "Within 10 miles", "Within 15 miles",
   "Central London only", "Greater London", "London + South East", "Nationwide",
 ];
-
-const sizeOptions = ["A5", "A4", "A3", "A2", "A1", "50x70cm", "70x100cm", "Custom"];
 
 const venueTypes = [
   "Cafes & Coffee Shops", "Restaurants & Bars", "Hotels & Hospitality",
@@ -40,13 +34,24 @@ interface ProfileState {
   name: string;
   location: string;
   postcode: string;
+  /**
+   * `primaryMedium` is retained on the state so the saved API payload
+   * doesn't break older rows, but it's not surfaced in the UI any
+   * more — Discipline is the canonical taxonomy field. New profiles
+   * leave it as "".
+   */
   primaryMedium: string;
   discipline: DisciplineId | "";
   subStyles: string[];
-  shortBio: string;
-  extendedBio: string;
+  /**
+   * Single bio field. The first 300 characters become the public short
+   * bio (shown on cards / search hits); the full text is the extended
+   * bio (shown on the artist's full page). Two separate fields used to
+   * exist — they were redundant and forced artists to write the same
+   * thing twice.
+   */
+  bio: string;
   instagram: string;
-  website: string;
   styleTags: string[];
   themes: string[];
   bannerImage: string;
@@ -59,8 +64,19 @@ interface ProfileState {
   openToRevenueShare: boolean;
   revenueSharePercent: number;
   openToOutrightPurchase: boolean;
-  canProvideFrames: boolean;
-  canArrangeFraming: boolean;
+  /**
+   * Single "can provide framing" flag. Replaces the previous pair
+   * (`canProvideFrames` + `canArrangeFraming`) which were confusingly
+   * close in meaning. Save handler writes both DB columns to true when
+   * this is set so existing search filters don't break.
+   */
+  canProvideFraming: boolean;
+  /**
+   * Available sizes used to be a profile-level chip set. Removed from
+   * the UI per #6 — sizes belong on individual works, not the profile.
+   * State retained so the API payload doesn't drop the column on
+   * existing rows; we just leave whatever was there alone.
+   */
   availableSizes: string[];
   deliveryRadius: string;
   venueTypesSuitedFor: string[];
@@ -78,10 +94,8 @@ function emptyProfile(nameSeed: string): ProfileState {
     primaryMedium: "",
     discipline: "",
     subStyles: [],
-    shortBio: "",
-    extendedBio: "",
+    bio: "",
     instagram: "",
-    website: "",
     styleTags: [],
     themes: [],
     bannerImage: "",
@@ -94,8 +108,7 @@ function emptyProfile(nameSeed: string): ProfileState {
     openToRevenueShare: false,
     revenueSharePercent: 10,
     openToOutrightPurchase: false,
-    canProvideFrames: false,
-    canArrangeFraming: false,
+    canProvideFraming: false,
     availableSizes: [],
     deliveryRadius: "",
     venueTypesSuitedFor: [],
@@ -103,6 +116,11 @@ function emptyProfile(nameSeed: string): ProfileState {
 }
 
 function initProfile(a: Artist): ProfileState {
+  // Merge the legacy short/extended bios into a single field. Prefer
+  // the longer "extended" bio when both exist; otherwise fall back to
+  // the short one. New saves write to both columns to keep older
+  // consumers happy.
+  const mergedBio = a.extendedBio?.trim() || a.shortBio?.trim() || "";
   return {
     name: a.name,
     location: a.location,
@@ -110,10 +128,8 @@ function initProfile(a: Artist): ProfileState {
     primaryMedium: a.primaryMedium,
     discipline: a.discipline || "",
     subStyles: [...(a.subStyles || [])],
-    shortBio: a.shortBio,
-    extendedBio: a.extendedBio,
+    bio: mergedBio,
     instagram: a.instagram,
-    website: a.website || "",
     styleTags: [...a.styleTags],
     themes: [...a.themes],
     bannerImage: a.works[0]?.image || "",
@@ -126,8 +142,9 @@ function initProfile(a: Artist): ProfileState {
     openToRevenueShare: a.openToRevenueShare,
     revenueSharePercent: a.revenueSharePercent || 10,
     openToOutrightPurchase: a.openToOutrightPurchase,
-    canProvideFrames: a.canProvideFrames,
-    canArrangeFraming: a.canArrangeFraming,
+    // Treat the legacy pair as "either provides framing" — collapse to
+    // the new single flag.
+    canProvideFraming: a.canProvideFrames || a.canArrangeFraming,
     availableSizes: [...a.availableSizes],
     deliveryRadius: a.deliveryRadius,
     venueTypesSuitedFor: [...a.venueTypesSuitedFor],
@@ -230,7 +247,38 @@ export default function ProfileEditorPage() {
     if (!file) return;
     setUploading(true);
     const url = await uploadImage(file, "artworks");
-    setWorkForm((p) => ({ ...p, image: url }));
+
+    // Read the image's natural dimensions in parallel — used to set
+    // orientation automatically + suggest a dimensions string the user
+    // can refine. Without this, replacing an image left the form's
+    // orientation pointing at the *previous* image's aspect ratio.
+    const detected = await new Promise<{
+      orientation: "landscape" | "portrait" | "square";
+    } | null>((resolve) => {
+      try {
+        const img = new globalThis.Image();
+        img.onload = () => {
+          const ratio = img.naturalWidth / img.naturalHeight;
+          if (ratio > 1.05) resolve({ orientation: "landscape" });
+          else if (ratio < 0.95) resolve({ orientation: "portrait" });
+          else resolve({ orientation: "square" });
+        };
+        img.onerror = () => resolve(null);
+        img.src = url;
+      } catch {
+        resolve(null);
+      }
+    });
+
+    setWorkForm((p) => ({
+      ...p,
+      image: url,
+      // Replace orientation based on the new image. If the user typed a
+      // dimensions string already, keep it (they may know better than
+      // pixel aspect — a print can crop differently). Otherwise leave
+      // dimensions blank so they can fill it in fresh.
+      orientation: detected?.orientation ?? p.orientation,
+    }));
     setUploading(false);
   }
 
@@ -277,6 +325,11 @@ export default function ProfileEditorPage() {
     // a freshly-claimed account" (no existing row yet) and "update
     // existing profile", so we don't need a separate path for new users.
     try {
+      // Bio: split single field back into short (≤300 chars for cards)
+      // and extended (full text). New rows get both columns populated.
+      const shortBio = profile.bio.slice(0, 300).trim();
+      const extendedBio = profile.bio.trim();
+
       const res = await authFetch("/api/artist-profile", {
         method: "PUT",
         body: JSON.stringify({
@@ -284,8 +337,8 @@ export default function ProfileEditorPage() {
           slug: artist?.slug || derivedSlug,
           profile_image: profile.profileImage,
           banner_image: profile.bannerImage,
-          short_bio: profile.shortBio,
-          extended_bio: profile.extendedBio,
+          short_bio: shortBio,
+          extended_bio: extendedBio,
           location: profile.location,
           postcode: profile.postcode,
           primary_medium: profile.primaryMedium,
@@ -294,7 +347,9 @@ export default function ProfileEditorPage() {
           style_tags: profile.styleTags,
           themes: profile.themes,
           instagram: profile.instagram,
-          website: profile.website,
+          // Website removed from UI (#2). Send empty so existing rows
+          // get cleared rather than retaining a stale value.
+          website: "",
           offers_originals: profile.offersOriginals,
           offers_prints: profile.offersPrints,
           offers_framed: profile.offersFramed,
@@ -304,8 +359,10 @@ export default function ProfileEditorPage() {
           open_to_revenue_share: profile.openToRevenueShare,
           revenue_share_percent: profile.revenueSharePercent,
           open_to_outright_purchase: profile.openToOutrightPurchase,
-          can_provide_frames: profile.canProvideFrames,
-          can_arrange_framing: profile.canArrangeFraming,
+          // Single framing flag drives both legacy columns so existing
+          // search filters keep matching.
+          can_provide_frames: profile.canProvideFraming,
+          can_arrange_framing: profile.canProvideFraming,
           delivery_radius: profile.deliveryRadius,
           venue_types_suited_for: profile.venueTypesSuitedFor,
         }),
@@ -457,47 +514,40 @@ export default function ProfileEditorPage() {
                 />
               </div>
             </div>
+            {/*
+             * Primary Medium removed — Discipline (in the section
+             * below) is the canonical taxonomy field and was duplicated.
+             *
+             * Bio: single field. The first 300 characters become the
+             * card-level "short" bio at save time; the full text becomes
+             * the extended bio.
+             */}
             <div>
-              <label className={labelClass}>Primary Medium</label>
-              <select value={profile.primaryMedium} onChange={(e) => update("primaryMedium", e.target.value)} className={inputClass}>
-                <option value="">Select</option>
-                {primaryMediums.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Short Bio <span className="text-muted font-normal">({profile.shortBio.length}/300)</span></label>
+              <label className={labelClass}>
+                Bio
+                <span className="text-muted font-normal ml-2 text-xs">
+                  First 300 characters used as your short bio on cards
+                  &mdash; the rest shows on your full profile.
+                </span>
+              </label>
               <textarea
-                value={profile.shortBio}
-                onChange={(e) => update("shortBio", e.target.value.slice(0, 300))}
-                rows={3}
-                placeholder="A brief introduction shown at the top of your profile"
-                className={`${inputClass} resize-none`}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Extended Bio</label>
-              <textarea
-                value={profile.extendedBio}
-                onChange={(e) => update("extendedBio", e.target.value)}
-                rows={5}
-                placeholder="Tell your full story – background, practice, exhibitions, influences"
+                value={profile.bio}
+                onChange={(e) => update("bio", e.target.value)}
+                rows={6}
+                placeholder="Tell your story — background, practice, exhibitions, influences. The opening lines should grip."
                 className={`${inputClass} resize-none`}
               />
             </div>
           </div>
         </div>
 
-        {/* 3. Social & Links */}
+        {/* 3. Instagram (Website removed — wasn't surfaced publicly) */}
         <div className={sectionClass}>
-          <h2 className="text-lg font-medium mb-5">Social & Links</h2>
-          <div className="grid grid-cols-2 gap-5">
+          <h2 className="text-lg font-medium mb-5">Social</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
               <label className={labelClass}>Instagram</label>
               <input type="text" value={profile.instagram} onChange={(e) => update("instagram", e.target.value)} placeholder="@yourhandle" className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Website</label>
-              <input type="text" value={profile.website} onChange={(e) => update("website", e.target.value)} placeholder="https://yoursite.com" className={inputClass} />
             </div>
           </div>
         </div>
@@ -655,8 +705,10 @@ export default function ProfileEditorPage() {
                 { key: "offersPrints" as const, label: "Prints & reproductions" },
                 { key: "offersFramed" as const, label: "Framed works" },
                 { key: "openToCommissions" as const, label: "Commissions" },
-                { key: "canProvideFrames" as const, label: "Can provide frames" },
-                { key: "canArrangeFraming" as const, label: "Can arrange framing" },
+                // Single "framing" affirmative — replaces the previous
+                // "can provide frames" + "can arrange framing" pair,
+                // which were saying nearly the same thing in two ways.
+                { key: "canProvideFraming" as const, label: "Can provide framing" },
               ]).map(({ key, label }) => (
                 <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
                   <button
@@ -716,26 +768,10 @@ export default function ProfileEditorPage() {
             </div>
           )}
 
-          {/* Available sizes */}
-          <div className="mb-6">
-            <label className={labelClass}>Available sizes</label>
-            <div className="flex flex-wrap gap-1.5">
-              {sizeOptions.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => toggleArrayItem("availableSizes", size)}
-                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors ${
-                    profile.availableSizes.includes(size)
-                      ? "bg-foreground text-white border-foreground"
-                      : "border-border text-muted hover:border-foreground/30"
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Available sizes section removed — sizes belong on
+              individual works (Sizes & Prices on each work form), not
+              the profile. Profile-level sizes were never surfaced
+              meaningfully and forced artists to duplicate information. */}
 
           {/* Delivery */}
           <div className="mb-6">
@@ -889,6 +925,27 @@ export default function ProfileEditorPage() {
           <Link href="/artist-portal/collections" className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium border border-border text-foreground rounded-sm hover:border-foreground/30 transition-colors">
             Manage Collections
           </Link>
+        </div>
+
+        {/*
+         * Bottom Save Changes — duplicates the top button so users on
+         * a long edit page don't have to scroll back up after filling
+         * everything out. Same handler; same disabled-when-clean
+         * affordance via hasUnsavedChanges.
+         */}
+        <div className="flex items-center justify-between gap-4 py-6 border-t border-border">
+          <p className="text-xs text-muted">
+            {hasUnsavedChanges
+              ? "You have unsaved changes."
+              : "All changes saved."}
+          </p>
+          <button
+            onClick={handleSave}
+            disabled={!hasUnsavedChanges}
+            className="px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Save Changes
+          </button>
         </div>
 
       </div>

@@ -17,7 +17,10 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SizeVariant } from "@/lib/visualizer/dimensions";
+import type {
+  SizeVariant,
+  WorkOrientation,
+} from "@/lib/visualizer/dimensions";
 import {
   FRAME_STYLES,
   defaultFrameConfig,
@@ -34,6 +37,11 @@ interface Props {
   onDelete: () => void;
   /** Available size variants for the work this item references. */
   sizes?: SizeVariant[];
+  /** Work's intended orientation — when a chosen size variant disagrees
+   *  (e.g. label parses as portrait but the work is a landscape image)
+   *  we swap width/height before committing. Same logic as
+   *  `pickDefaultSize` for initial drops. */
+  orientation?: WorkOrientation;
 }
 
 export default function ItemToolbar({
@@ -44,6 +52,7 @@ export default function ItemToolbar({
   onDuplicate,
   onDelete,
   sizes,
+  orientation,
 }: Props) {
   const styleDef = useMemo(() => getFrameStyle(item.frame.style), [item.frame.style]);
 
@@ -69,13 +78,27 @@ export default function ItemToolbar({
             currentLabel={item.size_label ?? null}
             currentWidthCm={item.width_cm}
             currentHeightCm={item.height_cm}
-            onPick={(v) =>
+            onPick={(v) => {
+              // Same orientation-swap logic as pickDefaultSize. The
+              // listed pricing label may be a rotated form of the
+              // actual print (e.g. '20×28" (50×70cm)' parses as 50×70
+              // portrait but the artwork is landscape). Swap so the
+              // image isn't squashed into the wrong-aspect box.
+              let widthCm = v.widthCm;
+              let heightCm = v.heightCm;
+              if (orientation && orientation !== "square") {
+                const isPortrait = heightCm > widthCm;
+                const wantsPortrait = orientation === "portrait";
+                if (isPortrait !== wantsPortrait) {
+                  [widthCm, heightCm] = [heightCm, widthCm];
+                }
+              }
               onChange({
-                width_cm: v.widthCm,
-                height_cm: v.heightCm,
+                width_cm: widthCm,
+                height_cm: heightCm,
                 size_label: v.label,
-              })
-            }
+              });
+            }}
           />
           <span className="h-4 w-px bg-black/10" />
         </>
@@ -223,15 +246,16 @@ function SizeDropdown({
     };
   }, [open]);
 
-  // Trigger label: prefer the parenthesised hint when it's short
-  // (e.g. "12×16\" (A3)" → "A3"); otherwise show cm.
+  // Trigger label: drop the parenthesised hint entirely (we surface the
+  // metric size + price separately in the menu). For "12×16\" (A3)"
+  // we just show "12×16\"". Cleaner than the old "show what's in the
+  // brackets" approach.
   const triggerLabel = useMemo(() => {
     if (currentLabel) {
-      const parens = /\(([^)]+)\)/.exec(currentLabel);
-      if (parens) return parens[1];
-      return currentLabel.length > 14
-        ? currentLabel.slice(0, 12) + "…"
-        : currentLabel;
+      const stripped = stripBrackets(currentLabel);
+      return stripped.length > 14
+        ? stripped.slice(0, 12) + "…"
+        : stripped;
     }
     return `${Math.round(currentWidthCm)}×${Math.round(currentHeightCm)} cm`;
   }, [currentLabel, currentWidthCm, currentHeightCm]);
@@ -284,7 +308,7 @@ function SizeDropdown({
                       : "text-stone-700 hover:bg-stone-50"
                   }`}
                 >
-                  <span className="font-medium truncate">{v.label}</span>
+                  <span className="font-medium truncate">{stripBrackets(v.label)}</span>
                   <span
                     className={`tabular-nums shrink-0 text-[10px] ${
                       active ? "text-white/70" : "text-stone-400"
@@ -302,4 +326,14 @@ function SizeDropdown({
       )}
     </div>
   );
+}
+
+/**
+ * Drop the parenthesised hint from a size label and trim any leftover
+ * whitespace. '12×16" (A3)' → '12×16"'. Pure display formatting —
+ * persistence still uses the original label so we can match against
+ * pricing variants reliably.
+ */
+function stripBrackets(label: string): string {
+  return label.replace(/\s*\([^)]*\)\s*/g, " ").trim();
 }
