@@ -137,6 +137,16 @@ export default function PortfolioPage() {
     fromIndex: number;
     overIndex: number | null;
   } | null>(null);
+
+  // ── Bulk edit state ────────────────────────────────────────────────
+  // Shopify-style multi-select. `selectMode` is the explicit mode
+  // toggle (turning it on shows checkboxes on every card and hides
+  // the per-card hover overlay). `selectedIds` tracks which works
+  // are currently checked. `bulkApplyOpen` opens a small picker for
+  // "Apply prices from…" so the user can pick a source work.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkApplyOpen, setBulkApplyOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingExtra, setUploadingExtra] = useState(false);
   const [initialised, setInitialised] = useState(false);
@@ -271,6 +281,81 @@ export default function PortfolioPage() {
     const [moved] = next.splice(fromIndex, 1);
     next.splice(toIndex, 0, moved);
     saveWorks(next);
+  }
+
+  // ── Bulk edit actions ──────────────────────────────────────────────
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setBulkApplyOpen(false);
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(works.map((w) => w.id)));
+  }
+
+  /** Apply availability=true|false to every selected work. */
+  function bulkSetAvailability(available: boolean) {
+    if (selectedIds.size === 0) return;
+    const next = works.map((w) =>
+      selectedIds.has(w.id) ? { ...w, available } : w,
+    );
+    saveWorks(next);
+    showToast(
+      `Marked ${selectedIds.size} work${selectedIds.size === 1 ? "" : "s"} as ${available ? "available" : "sold"}`,
+    );
+  }
+
+  /** Delete every selected work (with confirm). */
+  function bulkDelete() {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (!confirm(`Delete ${count} work${count === 1 ? "" : "s"}? This can't be undone.`)) return;
+
+    // Best-effort: fire the API delete for each. saveWorks(filtered)
+    // also POSTs the remaining works which is harmless.
+    Array.from(selectedIds).forEach((id) => {
+      authFetch(`/api/artist-works?id=${id}`, { method: "DELETE" }).catch(
+        (err) => console.error("Bulk delete error:", err),
+      );
+    });
+    saveWorks(works.filter((w) => !selectedIds.has(w.id)));
+    showToast(`Deleted ${count} work${count === 1 ? "" : "s"}`);
+    exitSelectMode();
+  }
+
+  /**
+   * Copy the source work's pricing array (sizes + prices) onto every
+   * selected work. The single most-requested bulk action: most artists
+   * sell at consistent print sizes + prices across pieces.
+   */
+  function bulkApplyPricesFrom(sourceWork: ArtistWork) {
+    if (selectedIds.size === 0) return;
+    const next = works.map((w) => {
+      if (!selectedIds.has(w.id)) return w;
+      const newPricing = sourceWork.pricing.map((p) => ({ ...p }));
+      const lowest = Math.min(...newPricing.map((p) => p.price));
+      return {
+        ...w,
+        pricing: newPricing,
+        priceBand: `From £${lowest}`,
+      };
+    });
+    saveWorks(next);
+    showToast(
+      `Applied prices from "${sourceWork.title}" to ${selectedIds.size} work${selectedIds.size === 1 ? "" : "s"}`,
+    );
+    setBulkApplyOpen(false);
   }
 
   function openAdd(seed?: Partial<WorkFormState>) {
@@ -1496,9 +1581,40 @@ export default function PortfolioPage() {
       )}
 
       {/* Works grid */}
-      <div className="bg-surface border border-border rounded-sm p-6">
-        <div className="flex items-center justify-between mb-5">
+      <div className="bg-surface border border-border rounded-sm p-6 pb-24">
+        <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
           <h2 className="text-base font-medium">Works ({works.length})</h2>
+          {/* Select-mode toggle + select-all when active. */}
+          {works.length > 0 && (
+            <div className="flex items-center gap-2">
+              {selectMode ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={selectAll}
+                    className="text-xs text-accent hover:text-accent-hover"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exitSelectMode}
+                    className="text-xs text-muted hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSelectMode(true)}
+                  className="text-xs text-stone-700 hover:text-foreground border border-border rounded-sm px-3 py-1.5"
+                >
+                  Select multiple
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {works.length === 0 ? (
@@ -1522,18 +1638,22 @@ export default function PortfolioPage() {
                   reorderDrag !== null &&
                   reorderDrag.overIndex === index &&
                   reorderDrag.fromIndex !== index;
+                const isChecked = selectedIds.has(work.id);
                 return (
                   <div
                     key={work.id}
-                    draggable
+                    // Drag-to-reorder is disabled in select mode so a
+                    // click on a card reads cleanly as a selection
+                    // toggle, not a drag start.
+                    draggable={!selectMode}
                     onDragStart={(e) => {
+                      if (selectMode) return;
                       e.dataTransfer.effectAllowed = "move";
-                      // Some browsers require a payload to start a drag.
                       e.dataTransfer.setData("text/plain", work.id);
                       setReorderDrag({ fromIndex: index, overIndex: null });
                     }}
                     onDragOver={(e) => {
-                      if (!reorderDrag) return;
+                      if (selectMode || !reorderDrag) return;
                       e.preventDefault();
                       e.dataTransfer.dropEffect = "move";
                       if (reorderDrag.overIndex !== index) {
@@ -1542,17 +1662,25 @@ export default function PortfolioPage() {
                     }}
                     onDragEnd={() => setReorderDrag(null)}
                     onDrop={(e) => {
+                      if (selectMode) return;
                       e.preventDefault();
                       if (!reorderDrag) return;
                       reorderWorks(reorderDrag.fromIndex, index);
                       setReorderDrag(null);
                     }}
-                    className={`relative group rounded-sm overflow-hidden border transition-all cursor-grab active:cursor-grabbing ${
+                    onClick={() => {
+                      if (selectMode) toggleSelected(work.id);
+                    }}
+                    className={`relative group rounded-sm overflow-hidden border transition-all ${
+                      selectMode ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"
+                    } ${
                       isDraggingSource
                         ? "border-border opacity-40"
                         : isDropTarget
                           ? "border-accent ring-2 ring-accent/40"
-                          : "border-border"
+                          : isChecked
+                            ? "border-accent ring-2 ring-accent/40"
+                            : "border-border"
                     }`}
                     onMouseEnter={() => setHoveredWork(index)}
                     onMouseLeave={() => setHoveredWork(null)}
@@ -1561,7 +1689,44 @@ export default function PortfolioPage() {
                       <Image src={work.image} alt={work.title} fill className="object-cover" sizes="(max-width: 768px) 50vw, 33vw" />
                     </div>
 
-                    {hoveredWork === index && reorderDrag === null && (
+                    {/* Checkbox in top-left when select mode is on. */}
+                    {selectMode && (
+                      <div
+                        className="absolute top-2 left-2 z-10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelected(work.id);
+                        }}
+                      >
+                        <span
+                          className={`block w-5 h-5 rounded-sm border-2 flex items-center justify-center ${
+                            isChecked
+                              ? "bg-accent border-accent"
+                              : "bg-white/95 border-white/95"
+                          }`}
+                        >
+                          {isChecked && (
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 14 14"
+                              fill="none"
+                              stroke="white"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                            >
+                              <polyline points="2 7 5.5 10.5 12 3.5" />
+                            </svg>
+                          )}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Hover actions hidden in select mode — the click
+                        target there belongs entirely to the checkbox. */}
+                    {!selectMode &&
+                      hoveredWork === index &&
+                      reorderDrag === null && (
                       <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2 transition-opacity">
                         <button
                           onClick={() => openEdit(index)}
@@ -1604,6 +1769,93 @@ export default function PortfolioPage() {
           </>
         )}
       </div>
+
+      {/*
+       * Sticky bulk-action bar — Shopify-style. Appears at the bottom
+       * of the viewport whenever ≥1 work is selected in select mode.
+       * Stays out of the way otherwise, and the X dismisses without
+       * clearing other selection state.
+       */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-foreground text-white shadow-2xl">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3">
+            <p className="text-sm font-medium mr-2">
+              {selectedIds.size} selected
+            </p>
+            <button
+              type="button"
+              onClick={() => bulkSetAvailability(true)}
+              className="text-xs px-3 py-1.5 rounded-sm bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              Mark available
+            </button>
+            <button
+              type="button"
+              onClick={() => bulkSetAvailability(false)}
+              className="text-xs px-3 py-1.5 rounded-sm bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              Mark sold
+            </button>
+            {/* Apply prices — pops a small picker that lets the artist
+                choose a source work to copy pricing from. */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setBulkApplyOpen((v) => !v)}
+                className="text-xs px-3 py-1.5 rounded-sm bg-white/10 hover:bg-white/20 transition-colors"
+              >
+                Apply prices from… ▾
+              </button>
+              {bulkApplyOpen && (
+                <ul
+                  role="listbox"
+                  className="absolute bottom-full mb-2 left-0 max-h-64 w-72 overflow-y-auto rounded-sm bg-white text-foreground shadow-xl border border-border"
+                >
+                  {works
+                    .filter((w) => !selectedIds.has(w.id))
+                    .map((source) => (
+                      <li key={source.id}>
+                        <button
+                          type="button"
+                          onClick={() => bulkApplyPricesFrom(source)}
+                          className="w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center justify-between gap-3"
+                        >
+                          <span className="truncate font-medium">
+                            {source.title}
+                          </span>
+                          <span className="text-stone-400 shrink-0">
+                            {source.pricing.length} size
+                            {source.pricing.length === 1 ? "" : "s"}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  {works.filter((w) => !selectedIds.has(w.id)).length === 0 && (
+                    <li className="px-3 py-2 text-xs text-stone-400">
+                      No other works to copy from.
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={bulkDelete}
+              className="text-xs px-3 py-1.5 rounded-sm bg-red-500/20 hover:bg-red-500/30 transition-colors text-red-200"
+            >
+              Delete
+            </button>
+            <span className="flex-1" />
+            <button
+              type="button"
+              onClick={exitSelectMode}
+              className="text-xs px-3 py-1.5 rounded-sm hover:bg-white/10 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </ArtistPortalLayout>
   );
 }
