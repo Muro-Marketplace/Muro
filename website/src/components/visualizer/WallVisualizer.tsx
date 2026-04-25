@@ -7,17 +7,28 @@
  *   - layout state (background, dimensions, items, selection)
  *   - works data (fetched once, kept as both list + lookup map)
  *   - high-level interactions: add/move/resize/delete/duplicate/z-order
+ *   - render flow (POST /render → preview modal, 429 → upgrade modal)
+ *   - auto-save (debounced PATCH /layouts/[lid] when wallId+layoutId set)
  *
  * Composes:
  *   - WorksPanel       (presentational)
  *   - WallCanvas       (Konva, dynamic-imported with ssr:false)
- *   - QuotaChip        (self-fetching)
+ *   - QuotaChip        (self-fetching, refreshes after each render)
  *   - ItemToolbar      (visible when an item is selected)
  *   - WallConfigBar    (preset/colour/dimensions)
+ *   - UpgradeModal     (shown on 429 or chip-out click)
+ *   - RenderPreview    (shown after a successful render)
  *
  * Feature flag:
  *   Returns null when WALL_VISUALIZER_V1 is off, so embedding routes
  *   compile + render fine.
+ *
+ * Persistence model:
+ *   - Pass `wall` + `initialLayout` to enable auto-save + render. Without
+ *     them, the editor runs in "preview only" mode (no persistence — fine
+ *     for the customer artwork-page sheet, etc.)
+ *   - Auto-save PATCHes the layout 800ms after the last edit. The hook
+ *     handles stale-while-saving so a fast typist can't outrun it.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,13 +36,20 @@ import dynamic from "next/dynamic";
 import { isFlagOn } from "@/lib/feature-flags";
 import { defaultFrameConfig } from "@/lib/visualizer/frames";
 import { PRESET_WALLS, getPresetWall } from "@/lib/visualizer/preset-walls";
+import { useAutoSave } from "@/lib/visualizer/use-auto-save";
 import type {
   LayoutBackground,
+  QuotaConsumeResult,
   VisualizerEditorProps,
+  VisualizerTier,
+  Wall,
   WallItem,
+  WallLayout,
 } from "@/lib/visualizer/types";
 import ItemToolbar from "./ItemToolbar";
 import QuotaChip from "./QuotaChip";
+import RenderPreview from "./RenderPreview";
+import UpgradeModal, { type UpgradeReason } from "./UpgradeModal";
 import WorksPanel, { type PanelWork } from "./WorksPanel";
 
 const WallCanvas = dynamic(() => import("./WallCanvas"), {
@@ -52,10 +70,27 @@ const DEFAULT_ITEM_HEIGHT_CM = 80;
 // ── Public props ────────────────────────────────────────────────────────
 
 interface ExtendedProps extends VisualizerEditorProps {
-  /** Bearer token for authenticated API calls (quota, works fetch). */
+  /** Bearer token for authenticated API calls (quota, works fetch, render, save). */
   authToken?: string | null;
   /** Pre-supplied work to lock onto (artwork-page entry). */
   lockedWork?: PanelWork | null;
+  /** Loaded wall — required for auto-save + render. */
+  wall?: Wall | null;
+  /** Loaded initial layout — required for auto-save + render. */
+  initialLayout?: WallLayout | null;
+}
+
+interface LastRender {
+  publicUrl: string;
+  cached: boolean;
+  costUnits: number;
+  meta?: {
+    width: number;
+    height: number;
+    itemCount: number;
+    skippedItems: number;
+    durationMs: number;
+  };
 }
 
 export default function WallVisualizer(props: ExtendedProps) {
@@ -66,19 +101,72 @@ export default function WallVisualizer(props: ExtendedProps) {
 // ── Inner ───────────────────────────────────────────────────────────────
 
 function WallVisualizerInner(props: ExtendedProps) {
-  const initialPreset = getPresetWall(DEFAULT_PRESET_ID) ?? PRESET_WALLS[0];
+  const fallbackPreset = getPresetWall(DEFAULT_PRESET_ID) ?? PRESET_WALLS[0];
 
-  // ── Layout state ──────────────────────────────────────────────────
-  const [background, setBackground] = useState<LayoutBackground>({
-    kind: "preset",
-    preset_id: initialPreset.id,
-    color_hex: initialPreset.defaultColorHex,
-  });
-  const [widthCm, setWidthCm] = useState(initialPreset.defaultWidthCm);
-  const [heightCm, setHeightCm] = useState(initialPreset.defaultHeightCm);
-  const [items, setItems] = useState<WallItem[]>([]);
+  // ── Layout state — hydrated from `wall` + `initialLayout` if present
+  const [background, setBackground] = useState<LayoutBackground>(() =>
+    seedBackground(props.wall, fallbackPreset),
+  );
+  const [widthCm, setWidthCm] = useState(
+    () => props.wall?.width_cm ?? fallbackPreset.defaultWidthCm,
+  );
+  const [heightCm, setHeightCm] = useState(
+    () => props.wall?.height_cm ?? fallbackPreset.defaultHeightCm,
+  );
+  const [items, setItems] = useState<WallItem[]>(
+    () => props.initialLayout?.items ?? [],
+  );
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [refreshNonce] = useState(0);
+
+  // ── Render flow state ─────────────────────────────────────────────
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [renderInFlight, setRenderInFlight] = useState(false);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [lastRender, setLastRender] = useState<LastRender | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | undefined>(undefined);
+  const [upgradeTier, setUpgradeTier] = useState<VisualizerTier | null>(null);
+  const [upgradeResetsAt, setUpgradeResetsAt] = useState<string | null>(null);
+
+  const canPersist = Boolean(props.wall && props.initialLayout);
+
+  // ── Auto-save ─────────────────────────────────────────────────────
+  // The value we save is the items array + dimensions. Background isn't
+  // editable when persisting (the wall is fixed) — but if we ever expose
+  // colour edits on a saved wall we'll wire it through here.
+  const layoutSnapshot = useMemo(
+    () => ({ items, width_cm: widthCm, height_cm: heightCm }),
+    [items, widthCm, heightCm],
+  );
+
+  const saveLayout = useCallback(
+    async (snap: { items: WallItem[]; width_cm: number; height_cm: number }) => {
+      if (!props.wall || !props.initialLayout) return;
+      const url = `/api/walls/${props.wall.id}/layouts/${props.initialLayout.id}`;
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          ...(props.authToken
+            ? { Authorization: `Bearer ${props.authToken}` }
+            : {}),
+        },
+        body: JSON.stringify({ items: snap.items }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Save failed (${res.status}): ${txt || res.statusText}`);
+      }
+    },
+    [props.wall, props.initialLayout, props.authToken],
+  );
+
+  const { status: saveStatus, errorMessage: saveError } = useAutoSave(
+    layoutSnapshot,
+    saveLayout,
+    { enabled: canPersist },
+  );
 
   // ── Works data (lifted from WorksPanel) ───────────────────────────
   const [works, setWorks] = useState<PanelWork[]>([]);
@@ -91,8 +179,33 @@ function WallVisualizerInner(props: ExtendedProps) {
       return;
     }
     if (props.mode === "venue_my_walls") {
-      setWorks([]);
-      return;
+      // Venues need to pick from artworks they've saved or seen — for the
+      // MVP we surface a curated browse fetch (top featured) to give them
+      // something to drag in. Future: hook into saved_items + recent
+      // placements.
+      let cancelled = false;
+      setWorksLoading(true);
+      setWorksError(null);
+      fetch("/api/browse-artists?limit=24", {
+        headers: props.authToken
+          ? { Authorization: `Bearer ${props.authToken}` }
+          : {},
+        cache: "no-store",
+      })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((data: { artists?: Array<{ works?: Array<Record<string, unknown>> }> }) => {
+          if (cancelled) return;
+          const flattened = (data.artists ?? [])
+            .flatMap((a) => a.works ?? [])
+            .map(normaliseWork)
+            .filter((w): w is PanelWork => w !== null);
+          setWorks(flattened);
+        })
+        .catch((e) => !cancelled && setWorksError(String(e)))
+        .finally(() => !cancelled && setWorksLoading(false));
+      return () => {
+        cancelled = true;
+      };
     }
     if (props.mode === "artist_mockup" || props.mode === "artist_showroom") {
       let cancelled = false;
@@ -235,6 +348,91 @@ function WallVisualizerInner(props: ExtendedProps) {
     setSelectedItemId(null);
   }, [selectedItemId]);
 
+  // ── Render flow ───────────────────────────────────────────────────
+  const handleRender = useCallback(async () => {
+    if (!props.wall || !props.initialLayout) {
+      setRenderError("Save the wall first to render.");
+      return;
+    }
+    if (renderInFlight) return;
+    if (items.length === 0) {
+      setRenderError("Drag at least one artwork onto the wall.");
+      return;
+    }
+
+    setRenderInFlight(true);
+    setRenderError(null);
+    try {
+      const url = `/api/walls/${props.wall.id}/layouts/${props.initialLayout.id}/render`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(props.authToken
+            ? { Authorization: `Bearer ${props.authToken}` }
+            : {}),
+        },
+        body: JSON.stringify({ kind: "standard", items }),
+      });
+
+      // Always bump the chip — we may have spent units even on failure
+      // (only some failures refund), and a chip showing stale "10 left"
+      // after a 429 would be confusing.
+      setRefreshNonce((n) => n + 1);
+
+      if (res.status === 429) {
+        const body = (await res.json().catch(() => ({}))) as Partial<
+          QuotaConsumeResult & { error?: string }
+        >;
+        const reason = (body as { reason?: UpgradeReason }).reason;
+        const tier = (body as { tier?: VisualizerTier }).tier ?? null;
+        const resets = (body as { resets_at?: string }).resets_at ?? null;
+        setUpgradeReason(reason);
+        setUpgradeTier(tier);
+        setUpgradeResetsAt(resets);
+        setUpgradeOpen(true);
+        return;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as Record<string, unknown>));
+        const msg =
+          typeof body.error === "string"
+            ? body.error
+            : `Render failed (${res.status}).`;
+        setRenderError(msg);
+        return;
+      }
+
+      const json = (await res.json()) as {
+        publicUrl: string;
+        cached: boolean;
+        cost_units: number;
+        meta?: LastRender["meta"];
+      };
+      setLastRender({
+        publicUrl: json.publicUrl,
+        cached: Boolean(json.cached),
+        costUnits: Number(json.cost_units ?? 0),
+        meta: json.meta,
+      });
+      setPreviewOpen(true);
+    } catch (err) {
+      setRenderError(
+        err instanceof Error ? err.message : "Render failed unexpectedly.",
+      );
+    } finally {
+      setRenderInFlight(false);
+    }
+  }, [props.wall, props.initialLayout, props.authToken, items, renderInFlight]);
+
+  // Auto-clear render errors after a few seconds.
+  useEffect(() => {
+    if (!renderError) return;
+    const t = setTimeout(() => setRenderError(null), 5000);
+    return () => clearTimeout(t);
+  }, [renderError]);
+
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div className="flex h-full w-full bg-stone-50">
@@ -259,12 +457,19 @@ function WallVisualizerInner(props: ExtendedProps) {
           onAddItem={(workId, xCm, yCm) => addItemAt(workId, xCm, yCm)}
         />
 
-        {/* Floating quota chip */}
-        <div className="absolute top-3 right-3">
+        {/* Top bar — quota chip + (when persisting) save status */}
+        <div className="absolute top-3 right-3 flex items-center gap-2">
+          {canPersist && <SaveStatus status={saveStatus} error={saveError} />}
           <QuotaChip
             ownerTypeHint={ownerTypeFromMode(props.mode)}
             authToken={props.authToken ?? null}
             refreshNonce={refreshNonce}
+            onUpgradeClick={() => {
+              setUpgradeReason("daily");
+              setUpgradeTier(null);
+              setUpgradeResetsAt(null);
+              setUpgradeOpen(true);
+            }}
           />
         </div>
 
@@ -300,7 +505,97 @@ function WallVisualizerInner(props: ExtendedProps) {
             onClose={props.onClose}
           />
         </div>
+
+        {/* Bottom-right floating render button (only when persisting) */}
+        {canPersist && (
+          <div className="absolute bottom-3 right-3 flex flex-col items-end gap-2">
+            {renderError && (
+              <div className="px-3 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs max-w-[260px] text-right">
+                {renderError}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleRender}
+              disabled={renderInFlight}
+              className="px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-medium shadow-lg hover:bg-stone-800 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {renderInFlight ? (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                  Rendering…
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="6,4 20,12 6,20" />
+                  </svg>
+                  Render
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Modals */}
+      <UpgradeModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        reason={upgradeReason}
+        currentTier={upgradeTier}
+        resetsAt={upgradeResetsAt}
+      />
+      <RenderPreview
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        publicUrl={lastRender?.publicUrl ?? null}
+        cached={lastRender?.cached ?? false}
+        costUnits={lastRender?.costUnits ?? 0}
+        meta={lastRender?.meta}
+      />
+    </div>
+  );
+}
+
+// ── Save status ──────────────────────────────────────────────────────────
+
+function SaveStatus({
+  status,
+  error,
+}: {
+  status: ReturnType<typeof useAutoSave>["status"];
+  error: string | null;
+}) {
+  let label = "";
+  let dotColour = "bg-stone-300";
+  let textColour = "text-stone-500";
+  if (status === "idle") {
+    label = "All saved";
+  } else if (status === "dirty") {
+    label = "Unsaved changes";
+    dotColour = "bg-amber-400";
+    textColour = "text-amber-700";
+  } else if (status === "saving") {
+    label = "Saving…";
+    dotColour = "bg-stone-400 animate-pulse";
+  } else if (status === "saved") {
+    label = "Saved";
+    dotColour = "bg-emerald-500";
+    textColour = "text-stone-600";
+  } else if (status === "error") {
+    label = error ? "Save failed" : "Save failed";
+    dotColour = "bg-red-500";
+    textColour = "text-red-700";
+  }
+
+  return (
+    <div
+      title={error ?? undefined}
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/80 backdrop-blur border border-black/5 text-xs"
+    >
+      <span className={`h-2 w-2 rounded-full ${dotColour}`} />
+      <span className={textColour}>{label}</span>
     </div>
   );
 }
@@ -408,6 +703,30 @@ function WallConfigBar({
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
+
+function seedBackground(
+  wall: Wall | null | undefined,
+  fallback: { id: string; defaultColorHex: string },
+): LayoutBackground {
+  if (!wall) {
+    return {
+      kind: "preset",
+      preset_id: fallback.id,
+      color_hex: fallback.defaultColorHex,
+    };
+  }
+  if (wall.kind === "uploaded") {
+    return {
+      kind: "uploaded",
+      image_path: wall.source_image_path ?? "",
+    };
+  }
+  return {
+    kind: "preset",
+    preset_id: wall.preset_id ?? fallback.id,
+    color_hex: wall.wall_color_hex ?? fallback.defaultColorHex,
+  };
+}
 
 function normaliseWork(raw: Record<string, unknown>): PanelWork | null {
   const id = typeof raw.id === "string" ? raw.id : null;

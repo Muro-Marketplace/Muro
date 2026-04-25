@@ -11,6 +11,7 @@ const navItems = [
   { label: "Venue Profile", href: "/venue-portal/profile" },
   { label: "Messages", href: "/venue-portal/messages" },
   { label: "Placements", href: "/venue-portal/placements" },
+  { label: "My Walls", href: "/venue-portal/walls" },
   { label: "Saved", href: "/venue-portal/saved" },
   { label: "QR Labels", href: "/venue-portal/labels" },
   { label: "My Orders", href: "/venue-portal/orders" },
@@ -61,7 +62,8 @@ export default function VenuePortalLayout({
 
   function isActive(href: string) {
     if (href === "/venue-portal") return pathname === "/venue-portal";
-    return pathname === href;
+    // For section roots like /venue-portal/walls, also match nested paths.
+    return pathname === href || pathname.startsWith(`${href}/`);
   }
 
   const NavContent = () => (
