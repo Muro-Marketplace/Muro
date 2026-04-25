@@ -216,37 +216,42 @@ export function buildSizeVariants(
  * Pick the best default size when a work is dragged onto a wall.
  *
  * Order of preference:
- *   1. The work's `dimensions` (the natural/original size) if it parses.
- *   2. The smallest size variant from pricing[] (least overwhelming).
+ *   1. The LARGEST listed pricing variant — this is what the venue is
+ *      likely to actually buy and hang. Visually accurate to the item
+ *      they're previewing.
+ *   2. The natural `dimensions` field (the original artwork size) if it
+ *      parses — works as a fallback when no print sizes are listed.
  *   3. null — caller falls back to its own default.
  *
- * The smallest variant is picked over the middle/largest because:
- *   - Venues will almost always want to scale UP from "natural" rather
- *     than down (you can resize on the canvas anyway).
- *   - The smallest price is the most accessible option, so it's the
- *     most realistic listing.
+ * Why "largest variant first" instead of natural?
+ *   In testing, artists list works at "natural" sizes that often don't
+ *   match any of the print sizes they actually sell — and venues
+ *   visualising a piece want to see what they'd actually receive in the
+ *   post. The largest print is also the most visually impactful default
+ *   for "how would this look on my wall?". Users can swap to any other
+ *   size via the toolbar dropdown.
  */
 export function pickDefaultSize(input: {
   dimensions: string | null | undefined;
   variants: SizeVariant[];
 }): { widthCm: number; heightCm: number; sizeLabel?: string } | null {
+  if (input.variants.length > 0) {
+    // Largest by area.
+    const largest = [...input.variants].sort(
+      (a, b) => b.widthCm * b.heightCm - a.widthCm * a.heightCm,
+    )[0];
+    return {
+      widthCm: largest.widthCm,
+      heightCm: largest.heightCm,
+      sizeLabel: largest.label,
+    };
+  }
   const natural = parseDimensions(input.dimensions ?? null);
   if (natural) {
     return {
       widthCm: natural.widthCm,
       heightCm: natural.heightCm,
       sizeLabel: input.dimensions ?? undefined,
-    };
-  }
-  if (input.variants.length > 0) {
-    // Smallest by area.
-    const smallest = [...input.variants].sort(
-      (a, b) => a.widthCm * a.heightCm - b.widthCm * b.heightCm,
-    )[0];
-    return {
-      widthCm: smallest.widthCm,
-      heightCm: smallest.heightCm,
-      sizeLabel: smallest.label,
     };
   }
   return null;

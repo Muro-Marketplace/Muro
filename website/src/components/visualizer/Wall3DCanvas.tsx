@@ -204,6 +204,10 @@ export default function Wall3DCanvas({
             kind={background.kind}
           />
 
+          {/* Venue dressing — café/gallery furniture so the scene reads
+              as somewhere a customer might actually see the artwork. */}
+          <VenueDressing wallW={wallW} wallH={wallH} />
+
           {items
             .slice()
             .sort((a, b) => a.z_index - b.z_index)
@@ -278,9 +282,11 @@ function Room({
   wallImageUrl: string | null;
   kind: LayoutBackground["kind"];
 }) {
-  const wallTexture = useOptionalTexture(
+  const wallTexState = useOptionalTexture(
     kind === "uploaded" ? wallImageUrl : null,
   );
+  const wallTexture =
+    wallTexState.kind === "ready" ? wallTexState.texture : null;
   const floorTexture = useProceduralWoodTexture();
 
   return (
@@ -414,7 +420,7 @@ function ArtworkMesh({
   const finishDef = getFrameFinish(item.frame.style, item.frame.finish);
   const frameColor = finishDef?.borderColor ?? "#222222";
 
-  const texture = useOptionalTexture(imageUrl ?? null);
+  const texState = useOptionalTexture(imageUrl ?? null);
 
   // ── Drag handling ──────────────────────────────────────────────────
   // Capture pointer events on the artwork mesh and translate to wall
@@ -576,12 +582,18 @@ function ArtworkMesh({
           the soft contact shadow below handles the visual cue. */}
       <mesh receiveShadow position={[0, 0, FRAME_DEPTH_M / 2]}>
         <planeGeometry args={[innerW, innerH]} />
-        {texture ? (
+        {texState.kind === "ready" ? (
           <meshStandardMaterial
-            map={texture}
+            map={texState.texture}
             roughness={0.55}
             metalness={0.02}
           />
+        ) : texState.kind === "error" ? (
+          // Visible red tint = "image failed to load" — much more useful
+          // than silently rendering grey when CORS blocks a host.
+          <meshStandardMaterial color="#7B1F1F" roughness={0.7} />
+        ) : texState.kind === "loading" ? (
+          <meshStandardMaterial color="#3A3A3A" roughness={0.85} />
         ) : (
           <meshStandardMaterial color="#888888" roughness={0.7} />
         )}
@@ -853,6 +865,219 @@ function ResizeHandle({
   );
 }
 
+// ── Venue dressing ──────────────────────────────────────────────────────
+
+/**
+ * Simple café/gallery props that fill the floor in front of the wall —
+ * a small round bistro table with two chairs, a pendant ceiling light
+ * with a visible cone of light, and a tall houseplant in the corner.
+ *
+ * All built from primitive geometries (no model files) so they ship in
+ * the existing bundle and scale with the wall dimensions. They're set
+ * to `pointerEvents={false}` style behaviour by giving them no event
+ * handlers — the artwork drag/drop logic is unaffected.
+ */
+function VenueDressing({ wallW, wallH }: { wallW: number; wallH: number }) {
+  // Anchor everything to the LEFT side of the wall so the right side
+  // (where the perpendicular wall meets) stays clear for orbit views.
+  const tableX = -wallW * 0.25;
+  const tableZ = 1.0;
+  const tableTopY = 0.74;
+  const tableRadius = 0.36;
+
+  return (
+    <group>
+      {/* Bistro table */}
+      <group position={[tableX, 0, tableZ]}>
+        {/* Pedestal base */}
+        <mesh position={[0, 0.025, 0]} receiveShadow castShadow>
+          <cylinderGeometry args={[0.18, 0.22, 0.05, 24]} />
+          <meshStandardMaterial color="#1A1814" roughness={0.6} metalness={0.3} />
+        </mesh>
+        {/* Pole */}
+        <mesh position={[0, tableTopY / 2, 0]} receiveShadow castShadow>
+          <cylinderGeometry args={[0.04, 0.04, tableTopY - 0.05, 16]} />
+          <meshStandardMaterial color="#1A1814" roughness={0.4} metalness={0.4} />
+        </mesh>
+        {/* Top */}
+        <mesh
+          position={[0, tableTopY + 0.015, 0]}
+          receiveShadow
+          castShadow
+        >
+          <cylinderGeometry args={[tableRadius, tableRadius, 0.03, 32]} />
+          <meshStandardMaterial color="#3A2C1F" roughness={0.45} />
+        </mesh>
+        {/* Coffee cup — small detail */}
+        <mesh
+          position={[0.08, tableTopY + 0.06, 0.05]}
+          receiveShadow
+          castShadow
+        >
+          <cylinderGeometry args={[0.04, 0.035, 0.06, 16]} />
+          <meshStandardMaterial color="#F5F1EB" roughness={0.6} />
+        </mesh>
+        <mesh
+          position={[0.08, tableTopY + 0.094, 0.05]}
+          receiveShadow
+        >
+          <cylinderGeometry args={[0.038, 0.038, 0.002, 16]} />
+          <meshStandardMaterial color="#3F2A1B" roughness={0.5} />
+        </mesh>
+      </group>
+
+      {/* Two chairs — simple wooden bistro silhouettes */}
+      <BistroChair position={[tableX - 0.55, 0, tableZ + 0.25]} rotationY={0.6} />
+      <BistroChair
+        position={[tableX + 0.55, 0, tableZ + 0.25]}
+        rotationY={-0.6}
+      />
+
+      {/* Houseplant in the right-back corner of the floor */}
+      <Houseplant position={[wallW * 0.32, 0, 0.4]} />
+
+      {/* Pendant light hanging in front of the wall, casting a cone of light */}
+      <PendantLight
+        position={[tableX, wallH - 0.3, tableZ]}
+        ceilingY={wallH}
+      />
+    </group>
+  );
+}
+
+function BistroChair({
+  position,
+  rotationY,
+}: {
+  position: [number, number, number];
+  rotationY: number;
+}) {
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      {/* Seat */}
+      <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.4, 0.04, 0.4]} />
+        <meshStandardMaterial color="#2A1F16" roughness={0.7} />
+      </mesh>
+      {/* Backrest */}
+      <mesh position={[0, 0.7, -0.18]} castShadow receiveShadow>
+        <boxGeometry args={[0.4, 0.5, 0.04]} />
+        <meshStandardMaterial color="#2A1F16" roughness={0.7} />
+      </mesh>
+      {/* 4 legs */}
+      {(
+        [
+          [-0.17, 0.225, -0.17],
+          [0.17, 0.225, -0.17],
+          [-0.17, 0.225, 0.17],
+          [0.17, 0.225, 0.17],
+        ] as const
+      ).map(([x, y, z], i) => (
+        <mesh key={i} position={[x, y, z]} castShadow receiveShadow>
+          <boxGeometry args={[0.04, 0.45, 0.04]} />
+          <meshStandardMaterial color="#1F1612" roughness={0.7} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Houseplant({
+  position,
+}: {
+  position: [number, number, number];
+}) {
+  return (
+    <group position={position}>
+      {/* Pot */}
+      <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.18, 0.14, 0.36, 24]} />
+        <meshStandardMaterial color="#A07655" roughness={0.85} />
+      </mesh>
+      {/* Soil ring */}
+      <mesh position={[0, 0.36, 0]} receiveShadow>
+        <cylinderGeometry args={[0.17, 0.17, 0.01, 24]} />
+        <meshStandardMaterial color="#1A1308" roughness={0.95} />
+      </mesh>
+      {/* Foliage — stack of slightly translucent green spheres for a
+          loose plant silhouette without modelling individual leaves. */}
+      <mesh position={[0, 0.7, 0]} castShadow>
+        <sphereGeometry args={[0.32, 16, 16]} />
+        <meshStandardMaterial color="#3F5C32" roughness={0.95} />
+      </mesh>
+      <mesh position={[-0.1, 0.95, 0.05]} castShadow>
+        <sphereGeometry args={[0.22, 16, 16]} />
+        <meshStandardMaterial color="#4A6E3D" roughness={0.95} />
+      </mesh>
+      <mesh position={[0.12, 1.05, -0.06]} castShadow>
+        <sphereGeometry args={[0.18, 16, 16]} />
+        <meshStandardMaterial color="#36502A" roughness={0.95} />
+      </mesh>
+      <mesh position={[0.05, 1.18, 0.04]} castShadow>
+        <sphereGeometry args={[0.13, 16, 16]} />
+        <meshStandardMaterial color="#446635" roughness={0.95} />
+      </mesh>
+    </group>
+  );
+}
+
+function PendantLight({
+  position,
+  ceilingY,
+}: {
+  position: [number, number, number];
+  ceilingY: number;
+}) {
+  const [px, py, pz] = position;
+  const cordTop = ceilingY;
+  const cordBottom = py + 0.2;
+  const cordLength = cordTop - cordBottom;
+  return (
+    <group>
+      {/* Cord — thin black cylinder from ceiling to lampshade */}
+      <mesh
+        position={[px, (cordTop + cordBottom) / 2, pz]}
+      >
+        <cylinderGeometry args={[0.005, 0.005, cordLength, 8]} />
+        <meshStandardMaterial color="#1A1A1A" roughness={0.5} />
+      </mesh>
+      {/* Brass canopy where cord meets ceiling */}
+      <mesh position={[px, ceilingY - 0.005, pz]}>
+        <cylinderGeometry args={[0.06, 0.06, 0.01, 16]} />
+        <meshStandardMaterial color="#C9A064" roughness={0.3} metalness={0.7} />
+      </mesh>
+      {/* Lampshade — inverted cone */}
+      <mesh position={[px, py, pz]} castShadow>
+        <coneGeometry args={[0.18, 0.24, 24, 1, true]} />
+        <meshStandardMaterial
+          color="#1A1814"
+          roughness={0.6}
+          metalness={0.5}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {/* Bulb glow — small emissive sphere visible from below */}
+      <mesh position={[px, py - 0.05, pz]}>
+        <sphereGeometry args={[0.05, 16, 16]} />
+        <meshBasicMaterial color="#FFE3A6" />
+      </mesh>
+      {/* Spot light cone aimed straight down — adds a warm puddle of
+          light on the table below. */}
+      <spotLight
+        position={[px, py - 0.04, pz]}
+        target-position={[px, 0, pz]}
+        angle={Math.PI / 4}
+        penumbra={0.6}
+        intensity={1.2}
+        distance={3}
+        color="#FFCB85"
+        castShadow
+        decay={2}
+      />
+    </group>
+  );
+}
+
 // ── Procedural wood floor ──────────────────────────────────────────────
 
 /**
@@ -942,48 +1167,61 @@ function useProceduralWoodTexture(): THREE.Texture | null {
 
 // ── Texture loading ────────────────────────────────────────────────────
 
+type TextureState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ready"; texture: THREE.Texture }
+  | { kind: "error"; message: string };
+
 /**
- * Load an image URL into a THREE.Texture. Returns null while loading
- * or on failure — caller renders a neutral fallback material.
- *
- * Uses useEffect (not useMemo — useMemo is for memoization, not side
- * effects, and was causing textures to never load reliably).
+ * Load an image URL into a THREE.Texture. Goes via `new Image()` rather
+ * than THREE's TextureLoader so cross-origin attribution is set on the
+ * image *before* the request is made — TextureLoader sometimes loses
+ * the crossOrigin between r3f re-renders. Exposes a state machine so
+ * the caller can render a placeholder while loading and a visible
+ * red-tinted fallback when the load fails (instead of silent grey).
  */
-function useOptionalTexture(url: string | null): THREE.Texture | null {
-  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+function useOptionalTexture(url: string | null): TextureState {
+  const [state, setState] = useState<TextureState>({ kind: "idle" });
 
   useEffect(() => {
     if (!url) {
-      setTexture(null);
+      setState({ kind: "idle" });
       return;
     }
+    setState({ kind: "loading" });
+
     let cancelled = false;
     let createdTexture: THREE.Texture | null = null;
-    const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin("anonymous");
-    loader.load(
-      url,
-      (tex) => {
-        if (cancelled) {
-          tex.dispose();
-          return;
-        }
-        // sRGB so the JPEG / WebP colours match what people see in the
-        // 2D editor. Anisotropic filter for crispness at glancing angles.
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.anisotropy = 8;
-        // THREE defaults flipY=true which renders correctly on a plane
-        // facing the camera — leave it at the default.
-        createdTexture = tex;
-        setTexture(tex);
-      },
-      undefined,
-      (err) => {
-        if (cancelled) return;
-        console.warn("[Wall3DCanvas] texture load failed:", url, err);
-        setTexture(null);
-      },
-    );
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => {
+      if (cancelled) return;
+      const tex = new THREE.Texture(img);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.needsUpdate = true;
+      createdTexture = tex;
+      setState({ kind: "ready", texture: tex });
+    };
+
+    img.onerror = () => {
+      if (cancelled) return;
+      console.warn(
+        "[Wall3DCanvas] texture load failed (CORS or 404?):",
+        url,
+      );
+      setState({
+        kind: "error",
+        message: "Image failed to load — check CORS / network",
+      });
+    };
+
+    img.src = url;
 
     return () => {
       cancelled = true;
@@ -991,5 +1229,5 @@ function useOptionalTexture(url: string | null): THREE.Texture | null {
     };
   }, [url]);
 
-  return texture;
+  return state;
 }

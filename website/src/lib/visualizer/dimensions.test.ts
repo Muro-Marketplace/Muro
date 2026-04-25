@@ -187,22 +187,31 @@ describe("pickDefaultSize", () => {
     { label: "A2", widthCm: 42, heightCm: 59.4, priceGbp: 400 },
   ];
 
-  it("uses the natural dimensions when present", () => {
+  it("prefers the LARGEST variant when pricing[] is present (even if natural also parses)", () => {
     const r = pickDefaultSize({ dimensions: "70 x 50 cm", variants });
+    expect(r!.widthCm).toBe(42);
+    expect(r!.heightCm).toBe(59.4);
+    expect(r!.sizeLabel).toBe("A2");
+  });
+
+  it("falls back to natural dimensions when no variants are listed", () => {
+    const r = pickDefaultSize({ dimensions: "70 x 50 cm", variants: [] });
     expect(r!.widthCm).toBe(70);
     expect(r!.heightCm).toBe(50);
   });
 
-  it("falls back to smallest variant when natural unparseable", () => {
-    const r = pickDefaultSize({ dimensions: "Medium", variants });
-    expect(r!.widthCm).toBe(21);
-    expect(r!.heightCm).toBe(29.7);
-    expect(r!.sizeLabel).toBe("A4");
+  it("falls back to natural when variants is empty + dimensions parses", () => {
+    const r = pickDefaultSize({ dimensions: "A3", variants: [] });
+    expect(r!.widthCm).toBe(29.7);
+    expect(r!.heightCm).toBe(42);
   });
 
   it("returns null when nothing can be parsed", () => {
     expect(
       pickDefaultSize({ dimensions: null, variants: [] }),
+    ).toBeNull();
+    expect(
+      pickDefaultSize({ dimensions: "Medium", variants: [] }),
     ).toBeNull();
   });
 });
