@@ -64,18 +64,34 @@ const STANDARD_SIZES: [number, number, string][] = [
   [40, 30, 'A0'],
 ];
 
-/** Given an aspect ratio (w/h), return standard sizes that closely match */
+/**
+ * Given an aspect ratio (w/h), return standard sizes that closely match.
+ *
+ * Label format: `{w}×{h}" ({wCm}×{hCm} cm)` — inch measurement up
+ * front (matches the "STANDARD_SIZES" naming most artists shop in)
+ * with the cm equivalent in brackets so venues sourcing in metric
+ * see the actual dimensions at a glance. The third element of
+ * STANDARD_SIZES (paper-size code) is kept for future use but no
+ * longer surfaces in the label — repeating it as `(8×6")` was
+ * redundant and `(A4)` alone hid the cm value users actually need.
+ */
 function getSuggestedSizes(ratio: number): SizeEntry[] {
   const isLandscape = ratio >= 1;
   const normalRatio = isLandscape ? ratio : 1 / ratio;
 
   return STANDARD_SIZES
-    .map(([w, h, name]) => {
+    .map(([w, h]) => {
       const sizeRatio = Math.max(w, h) / Math.min(w, h);
       const diff = Math.abs(sizeRatio - normalRatio);
       const wDisplay = isLandscape ? Math.max(w, h) : Math.min(w, h);
       const hDisplay = isLandscape ? Math.min(w, h) : Math.max(w, h);
-      return { label: `${wDisplay}×${hDisplay}" (${name})`, price: 0, diff };
+      const wCm = Math.round(wDisplay * 2.54);
+      const hCm = Math.round(hDisplay * 2.54);
+      return {
+        label: `${wDisplay}×${hDisplay}" (${wCm}×${hCm} cm)`,
+        price: 0,
+        diff,
+      };
     })
     .filter((s) => s.diff < 0.3) // Within 30% aspect ratio tolerance
     .sort((a, b) => a.diff - b.diff)
@@ -84,7 +100,7 @@ function getSuggestedSizes(ratio: number): SizeEntry[] {
 }
 
 const defaultSizes: SizeEntry[] = [
-  { label: '10×8" (A4)', price: 0 },
+  { label: '10×8" (25×20 cm)', price: 0 },
 ];
 
 const emptyWork: WorkFormState = {
