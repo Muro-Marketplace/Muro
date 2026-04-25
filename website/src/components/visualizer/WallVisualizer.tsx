@@ -67,6 +67,17 @@ const WallCanvas = dynamic(() => import("./WallCanvas"), {
   ),
 });
 
+const Wall3DCanvas = dynamic(() => import("./Wall3DCanvas"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full bg-stone-100 grid place-items-center text-xs text-stone-400">
+      Loading 3D scene…
+    </div>
+  ),
+});
+
+type ViewMode = "2d" | "3d";
+
 // ── Constants ───────────────────────────────────────────────────────────
 
 const DEFAULT_PRESET_ID = "minimal_white";
@@ -129,6 +140,7 @@ function WallVisualizerInner(props: ExtendedProps) {
     () => props.initialLayout?.items ?? [],
   );
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("2d");
 
   // ── Render flow state ─────────────────────────────────────────────
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -643,21 +655,37 @@ function WallVisualizerInner(props: ExtendedProps) {
       />
 
       <div className="relative flex-1 min-w-0">
-        <WallCanvas
-          background={background}
-          widthCm={widthCm}
-          heightCm={heightCm}
-          items={items}
-          workById={workById}
-          selectedItemId={selectedItemId}
-          onSelectItem={setSelectedItemId}
-          onItemChange={handleItemChange}
-          onAddItem={(workId, xCm, yCm) => addItemAt(workId, xCm, yCm)}
-          bgImageUrl={props.bgImageUrl ?? null}
-        />
+        {viewMode === "3d" ? (
+          <Wall3DCanvas
+            background={background}
+            widthCm={widthCm}
+            heightCm={heightCm}
+            items={items}
+            workById={workById}
+            selectedItemId={selectedItemId}
+            onSelectItem={setSelectedItemId}
+            onItemChange={handleItemChange}
+            onAddItem={(workId, xCm, yCm) => addItemAt(workId, xCm, yCm)}
+            bgImageUrl={props.bgImageUrl ?? null}
+          />
+        ) : (
+          <WallCanvas
+            background={background}
+            widthCm={widthCm}
+            heightCm={heightCm}
+            items={items}
+            workById={workById}
+            selectedItemId={selectedItemId}
+            onSelectItem={setSelectedItemId}
+            onItemChange={handleItemChange}
+            onAddItem={(workId, xCm, yCm) => addItemAt(workId, xCm, yCm)}
+            bgImageUrl={props.bgImageUrl ?? null}
+          />
+        )}
 
-        {/* Top bar — quota chip + (when persisting) save status */}
+        {/* Top bar — view-mode toggle + quota chip + save status */}
         <div className="absolute top-3 right-3 flex items-center gap-2">
+          <ViewModeToggle value={viewMode} onChange={setViewMode} />
           {canPersist && (
             <SaveStatus
               status={saveStatus}
@@ -766,6 +794,53 @@ function WallVisualizerInner(props: ExtendedProps) {
         costUnits={lastRender?.costUnits ?? 0}
         meta={lastRender?.meta}
       />
+    </div>
+  );
+}
+
+// ── View mode toggle (2D / 3D) ──────────────────────────────────────────
+
+function ViewModeToggle({
+  value,
+  onChange,
+}: {
+  value: ViewMode;
+  onChange: (next: ViewMode) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="View mode"
+      className="inline-flex items-center gap-0.5 p-0.5 rounded-full bg-white/85 backdrop-blur border border-black/10 shadow-sm text-xs"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === "2d"}
+        title="Flat 2D editor — fast, precise alignment"
+        onClick={() => onChange("2d")}
+        className={`px-2.5 py-1 rounded-full transition ${
+          value === "2d"
+            ? "bg-stone-900 text-white"
+            : "text-stone-600 hover:text-stone-900"
+        }`}
+      >
+        2D
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === "3d"}
+        title="3D room — orbit-rotate to see how it'd look in person"
+        onClick={() => onChange("3d")}
+        className={`px-2.5 py-1 rounded-full transition ${
+          value === "3d"
+            ? "bg-stone-900 text-white"
+            : "text-stone-600 hover:text-stone-900"
+        }`}
+      >
+        3D
+      </button>
     </div>
   );
 }

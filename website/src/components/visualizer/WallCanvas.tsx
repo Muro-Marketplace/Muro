@@ -392,6 +392,12 @@ function CanvasItem({
 }: CanvasItemProps) {
   const groupRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
+  // Aspect ratio captured at the start of every transform. Konva's
+  // `keepRatio` was producing portrait output for landscape inputs on
+  // some setups (likely an aspect-detection edge case with Group
+  // children), so we explicitly enforce the original aspect ourselves
+  // in boundBoxFunc — the most reliable way to keep proportions.
+  const transformAspectRef = useRef<number>(1);
 
   // Pixel position + size derived from cm.
   const pxX = wallOriginX + item.x_cm * pxPerCm;
@@ -483,18 +489,16 @@ function CanvasItem({
   );
 
   // ── Resize handling ─────────────────────────────────────────────────
-  // Read the new dimensions from `width × scaleX` and `height × scaleY`
-  // independently — Konva's `keepRatio` constrains scaleX === scaleY
-  // when the Group has explicit width and height set (which it does in
-  // the JSX below). Earlier we averaged scaleX+scaleY which silently
-  // landed at the wrong aspect when the Group's bounding box didn't
-  // match its children, producing the "always portrait" output.
+  // Read the new dimensions from `width × scaleX` and the captured
+  // aspect ratio. boundBoxFunc has already enforced the aspect lock —
+  // we re-derive height from width to guarantee no drift creeps in.
   const handleTransformEnd = useCallback(() => {
     const node = groupRef.current;
     if (!node) return;
 
     const newWPx = node.width() * node.scaleX();
-    const newHPx = node.height() * node.scaleY();
+    const aspect = transformAspectRef.current || 1;
+    const newHPx = newWPx / aspect;
     // Reset scale so future drags compute against width/height directly.
     node.scaleX(1);
     node.scaleY(1);
@@ -537,6 +541,11 @@ function CanvasItem({
         onDragStart={onSelect}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
+        onTransformStart={() => {
+          // Lock in the aspect at the moment the user grabs an anchor.
+          // pxW/pxH at this point are the live cm-derived dimensions.
+          transformAspectRef.current = pxH > 0 ? pxW / pxH : 1;
+        }}
         onTransformEnd={handleTransformEnd}
       >
         {/*
@@ -628,6 +637,23 @@ function CanvasItem({
             const maxPx = MAX_ITEM_CM * pxPerCm;
             if (newBox.width < minPx || newBox.height < minPx) return oldBox;
             if (newBox.width > maxPx || newBox.height > maxPx) return oldBox;
+
+            // Force the original aspect ratio. Konva's keepRatio prop
+            // wasn't doing this reliably for our Group with children, so
+            // we constrain explicitly: the dragged dimension wins, the
+            // other follows from the captured aspect.
+            const aspect = transformAspectRef.current;
+            if (aspect > 0) {
+              // Detect which side of the box is being dragged by
+              // comparing the change vs oldBox. The bigger relative
+              // change is the "led" dimension; the other follows.
+              const dW = Math.abs(newBox.width - oldBox.width);
+              const dH = Math.abs(newBox.height - oldBox.height);
+              if (dW >= dH) {
+                return { ...newBox, height: newBox.width / aspect };
+              }
+              return { ...newBox, width: newBox.height * aspect };
+            }
             return newBox;
           }}
         />

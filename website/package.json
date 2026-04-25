@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@react-email/components": "^1.0.12",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.0",
     "@supabase/supabase-js": "^2.103.0",
     "@types/qrcode": "^1.5.6",
     "@upstash/ratelimit": "^2.0.8",
@@ -32,6 +34,7 @@
     "resend": "^6.10.0",
     "sharp": "^0.34.5",
     "stripe": "^22.0.1",
+    "three": "^0.184.0",
     "use-image": "^1.1.4",
     "zod": "^4.3.6"
   },
@@ -44,6 +47,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.184.0",
     "@vitest/ui": "^2.1.9",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
