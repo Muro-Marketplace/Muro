@@ -158,6 +158,12 @@ export default function Wall3DCanvas({
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.05,
         }}
+        // r3f fires this when a pointer-down doesn't hit any mesh with
+        // a handler — e.g. clicking the wall, floor, or a chair (none of
+        // which have onPointerDown). Use it to deselect, replacing the
+        // old invisible DropPlane click which couldn't fire because
+        // `visible={false}` opts the mesh out of raycasting.
+        onPointerMissed={() => onSelectItem(null)}
       >
         <Suspense fallback={null}>
           {/* Three-point lighting for an interior photo feel. */}
@@ -234,15 +240,14 @@ export default function Wall3DCanvas({
               />
             ))}
 
-          <DropPlane
-            wallW={wallW}
-            wallH={wallH}
+          <DropBridge
             // Captures camera + raycaster + DOM rect, exposes pickAt
             // upwards for the parent's HTML drop handler.
             onReady={(api) => {
               dropHandlerRef.current = api;
             }}
-            onClickEmpty={() => onSelectItem(null)}
+            wallW={wallW}
+            wallH={wallH}
           />
 
           <OrbitControls
@@ -709,32 +714,34 @@ function FrameMoulding({
   );
 }
 
-// ── Drop / empty-click plane ───────────────────────────────────────────
+// ── Drop bridge ────────────────────────────────────────────────────────
 
 interface DropPlaneApi {
   pickAt: (clientX: number, clientY: number) => { xCm: number; yCm: number } | null;
 }
 
-function DropPlane({
+/**
+ * Renders nothing; just exposes `pickAt(clientX, clientY)` upwards so
+ * the parent's HTML drop handler can convert mouse coordinates to wall
+ * coordinates by raycasting against the back-wall plane. Sits inside
+ * <Canvas> because that's where useThree() is available.
+ */
+function DropBridge({
   wallW,
   wallH,
   onReady,
-  onClickEmpty,
 }: {
   wallW: number;
   wallH: number;
   onReady: (api: DropPlaneApi) => void;
-  onClickEmpty: () => void;
 }) {
   const { camera, raycaster, gl } = useThree();
-  // Sync the ref-bridge once on mount and whenever camera/wall change
-  // (rare). Using a small useMemo to avoid re-instantiating the plane.
   const wallPlane = useMemo(
     () => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),
     [],
   );
 
-  useMemo(() => {
+  useEffect(() => {
     const api: DropPlaneApi = {
       pickAt: (clientX, clientY) => {
         const rect = gl.domElement.getBoundingClientRect();
@@ -757,20 +764,7 @@ function DropPlane({
     onReady(api);
   }, [camera, raycaster, gl, wallPlane, wallW, wallH, onReady]);
 
-  return (
-    <mesh
-      position={[0, wallH / 2, -0.001]}
-      onPointerDown={(e) => {
-        // Only deselect when clicking the wall itself (no item handler intercepts).
-        if (e.button !== 0) return;
-        e.stopPropagation();
-        onClickEmpty();
-      }}
-    >
-      <planeGeometry args={[wallW, wallH]} />
-      <meshBasicMaterial visible={false} />
-    </mesh>
-  );
+  return null;
 }
 
 // ── Selection outline ──────────────────────────────────────────────────
@@ -1174,12 +1168,18 @@ type TextureState =
   | { kind: "error"; message: string };
 
 /**
- * Load an image URL into a THREE.Texture. Goes via `new Image()` rather
- * than THREE's TextureLoader so cross-origin attribution is set on the
- * image *before* the request is made — TextureLoader sometimes loses
- * the crossOrigin between r3f re-renders. Exposes a state machine so
- * the caller can render a placeholder while loading and a visible
- * red-tinted fallback when the load fails (instead of silent grey).
+ * Load an image URL into a THREE.Texture.
+ *
+ * Uses THREE.TextureLoader directly — the previous `new Image()`
+ * approach was occasionally settling but the `setState` from inside
+ * the onload callback wasn't triggering an r3f re-render reliably (a
+ * known interaction between r3f's render-loop scheduling and React
+ * state updates dispatched from non-r3f event handlers). TextureLoader
+ * piggybacks on r3f's loader cache and the texture's `needsUpdate`
+ * flag is observed on the next render frame deterministically.
+ *
+ * Verbose console output is intentional — when a host blocks CORS or
+ * 404s we want to see exactly which URL failed.
  */
 function useOptionalTexture(url: string | null): TextureState {
   const [state, setState] = useState<TextureState>({ kind: "idle" });
@@ -1190,42 +1190,49 @@ function useOptionalTexture(url: string | null): TextureState {
       return;
     }
     setState({ kind: "loading" });
+    if (typeof window !== "undefined") {
+      console.log("[Wall3D texture] loading:", url);
+    }
+
+    const loader = new THREE.TextureLoader();
+    loader.crossOrigin = "anonymous";
 
     let cancelled = false;
-    let createdTexture: THREE.Texture | null = null;
+    let texture: THREE.Texture | null = null;
 
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-
-    img.onload = () => {
-      if (cancelled) return;
-      const tex = new THREE.Texture(img);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = 8;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
-      tex.magFilter = THREE.LinearFilter;
-      tex.needsUpdate = true;
-      createdTexture = tex;
-      setState({ kind: "ready", texture: tex });
-    };
-
-    img.onerror = () => {
-      if (cancelled) return;
-      console.warn(
-        "[Wall3DCanvas] texture load failed (CORS or 404?):",
-        url,
-      );
-      setState({
-        kind: "error",
-        message: "Image failed to load — check CORS / network",
-      });
-    };
-
-    img.src = url;
+    loader.load(
+      url,
+      (tex) => {
+        if (cancelled) {
+          tex.dispose();
+          return;
+        }
+        const img = tex.image as HTMLImageElement | undefined;
+        console.log(
+          "[Wall3D texture] ready:",
+          url,
+          img ? `${img.width}×${img.height}` : "(no image data)",
+        );
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = 8;
+        tex.needsUpdate = true;
+        texture = tex;
+        setState({ kind: "ready", texture: tex });
+      },
+      undefined,
+      (err) => {
+        if (cancelled) return;
+        console.error("[Wall3D texture] FAILED:", url, err);
+        setState({
+          kind: "error",
+          message: "Image failed to load — check console for the URL",
+        });
+      },
+    );
 
     return () => {
       cancelled = true;
-      if (createdTexture) createdTexture.dispose();
+      if (texture) texture.dispose();
     };
   }, [url]);
 
