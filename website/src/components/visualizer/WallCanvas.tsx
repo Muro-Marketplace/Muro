@@ -75,6 +75,13 @@ interface Props {
   onItemChange: (id: string, partial: Partial<WallItem>) => void;
   /** Called when a work is dropped onto the canvas. Coords are wall-cm. */
   onAddItem: (workId: string, xCm: number, yCm: number) => void;
+  /**
+   * Display URL for an uploaded wall photo. The parent resolves this
+   * from the wall's storage path → short-lived signed URL on the
+   * server (the bucket is private). When omitted, the canvas falls
+   * back to background.image_path (works for already-public assets).
+   */
+  bgImageUrl?: string | null;
 }
 
 export default function WallCanvas({
@@ -87,6 +94,7 @@ export default function WallCanvas({
   onSelectItem,
   onItemChange,
   onAddItem,
+  bgImageUrl,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -152,8 +160,13 @@ export default function WallCanvas({
   }, []);
 
   // ── Background image ────────────────────────────────────────────────
+  // Prefer the explicit `bgImageUrl` prop (a signed URL from the API)
+  // because uploaded photos live in a private bucket and `image_path`
+  // alone is just a storage key. Fall back to `image_path` for any
+  // future public-asset path.
   const bgImageSrc =
-    background.kind === "uploaded" ? background.image_path : null;
+    bgImageUrl ??
+    (background.kind === "uploaded" ? background.image_path : null);
   const [bgImage] = useImage(bgImageSrc ?? "", "anonymous");
   const wallColor =
     background.kind === "preset" ? `#${background.color_hex}` : "#FFFFFF";

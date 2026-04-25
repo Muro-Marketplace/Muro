@@ -3,13 +3,14 @@
 /**
  * /venue-portal/walls/new — wall creation flow.
  *
- * Two steps in one page:
- *   1. Pick a preset (clickable swatch grid) OR type a custom hex
- *   2. Set wall name + width/height (cm)
+ * Two top-level tabs:
+ *   1. Preset — pick a stock wall colour + dimensions
+ *   2. Upload photo — upload a real photograph of your wall, then set
+ *      dimensions
  *
- * On submit:
+ * Either path:
  *   - POST /api/walls → wall row
- *   - POST /api/walls/{id}/layouts → first layout row (always created so
+ *   - POST /api/walls/{id}/layouts → first layout (always created so
  *     the editor has something to attach to immediately)
  *   - Redirect to /venue-portal/walls/{id}
  *
@@ -19,7 +20,7 @@
  *   - 5xx → generic banner
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
@@ -30,6 +31,8 @@ import type { Wall, WallLayout } from "@/lib/visualizer/types";
 
 const DEFAULT_PRESET_ID = "minimal_white";
 
+type Mode = "preset" | "upload";
+
 export default function NewVenueWallPage() {
   const router = useRouter();
   const { session } = useAuth();
@@ -38,12 +41,23 @@ export default function NewVenueWallPage() {
   const initialPreset =
     getPresetWall(DEFAULT_PRESET_ID) ?? PRESET_WALLS[0];
 
+  const [mode, setMode] = useState<Mode>("preset");
+
+  // Preset mode state
   const [presetId, setPresetId] = useState(initialPreset.id);
   const [colorHex, setColorHex] = useState(initialPreset.defaultColorHex);
+
+  // Upload mode state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [photoPath, setPhotoPath] = useState<string | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Shared state
   const [name, setName] = useState("");
   const [widthCm, setWidthCm] = useState(initialPreset.defaultWidthCm);
   const [heightCm, setHeightCm] = useState(initialPreset.defaultHeightCm);
-
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [capError, setCapError] = useState<string | null>(null);
@@ -72,6 +86,45 @@ export default function NewVenueWallPage() {
     setHeightCm(preset.defaultHeightCm);
   }
 
+  async function handleFilePicked(file: File) {
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/walls/upload-photo", {
+        method: "POST",
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {},
+        body: fd,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          (body as { error?: string }).error ??
+            `Upload failed (${res.status})`,
+        );
+      }
+      const json = (await res.json()) as {
+        path: string;
+        signedUrl: string | null;
+      };
+      setPhotoPath(json.path);
+      setPhotoPreviewUrl(
+        json.signedUrl ?? URL.createObjectURL(file),
+      );
+    } catch (err) {
+      setUploadError(
+        err instanceof Error ? err.message : "Upload failed.",
+      );
+      setPhotoPath(null);
+      setPhotoPreviewUrl(null);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
@@ -87,25 +140,42 @@ export default function NewVenueWallPage() {
       setError("Please give the wall a name.");
       return;
     }
+    if (mode === "upload" && !photoPath) {
+      setError("Please upload a photo of your wall first.");
+      return;
+    }
 
     setSubmitting(true);
     try {
-      // 1) Create the wall.
+      // 1) Build the create-wall payload (discriminated union by `kind`).
+      const payload =
+        mode === "preset"
+          ? {
+              kind: "preset" as const,
+              owner_type: "venue" as const,
+              name: trimmedName,
+              preset_id: presetId,
+              width_cm: clamp(widthCm, 50, 1000),
+              height_cm: clamp(heightCm, 50, 1000),
+              wall_color_hex: colorHex.replace(/^#/, "").toUpperCase(),
+            }
+          : {
+              kind: "uploaded" as const,
+              owner_type: "venue" as const,
+              name: trimmedName,
+              source_image_path: photoPath!,
+              width_cm: clamp(widthCm, 50, 1000),
+              height_cm: clamp(heightCm, 50, 1000),
+              wall_color_hex: "FFFFFF",
+            };
+
       const wallRes = await fetch("/api/walls", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          kind: "preset",
-          owner_type: "venue",
-          name: trimmedName,
-          preset_id: presetId,
-          width_cm: clamp(widthCm, 50, 1000),
-          height_cm: clamp(heightCm, 50, 1000),
-          wall_color_hex: colorHex.replace(/^#/, "").toUpperCase(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (wallRes.status === 402) {
@@ -172,8 +242,8 @@ export default function NewVenueWallPage() {
             New Wall
           </h1>
           <p className="text-sm text-muted">
-            Give your wall a name, choose a preset, and set its real
-            dimensions. You can change anything later.
+            Pick a preset for a clean colour-block wall, or upload a
+            photo of your actual wall to see artworks composited onto it.
           </p>
         </div>
 
@@ -198,60 +268,187 @@ export default function NewVenueWallPage() {
           </div>
         )}
 
+        {/* Mode tabs */}
+        <div
+          role="tablist"
+          aria-label="Wall source"
+          className="inline-flex items-center gap-1 mb-6 p-1 rounded-full bg-stone-100"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "preset"}
+            onClick={() => setMode("preset")}
+            className={`px-4 py-1.5 text-xs rounded-full transition ${
+              mode === "preset"
+                ? "bg-white text-stone-900 shadow-sm"
+                : "text-stone-600 hover:text-stone-900"
+            }`}
+          >
+            Preset
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "upload"}
+            onClick={() => setMode("upload")}
+            className={`px-4 py-1.5 text-xs rounded-full transition ${
+              mode === "upload"
+                ? "bg-white text-stone-900 shadow-sm"
+                : "text-stone-600 hover:text-stone-900"
+            }`}
+          >
+            Upload photo
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Preset picker */}
-          <div>
-            <label className="block text-xs font-medium text-foreground mb-2">
-              Preset
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {PRESET_WALLS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => pickPreset(p.id)}
-                  className={`p-3 rounded-lg border text-left transition ${
-                    presetId === p.id
-                      ? "border-stone-900 ring-1 ring-stone-900"
-                      : "border-border hover:border-stone-300"
-                  }`}
-                >
-                  <div
-                    className="h-12 w-full rounded mb-2"
-                    style={{ backgroundColor: `#${p.defaultColorHex}` }}
+          {/* === PRESET PANEL === */}
+          {mode === "preset" && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-2">
+                  Preset
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {PRESET_WALLS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => pickPreset(p.id)}
+                      className={`p-3 rounded-lg border text-left transition ${
+                        presetId === p.id
+                          ? "border-stone-900 ring-1 ring-stone-900"
+                          : "border-border hover:border-stone-300"
+                      }`}
+                    >
+                      <div
+                        className="h-12 w-full rounded mb-2"
+                        style={{ backgroundColor: `#${p.defaultColorHex}` }}
+                      />
+                      <p className="text-xs font-medium text-foreground truncate">
+                        {p.name}
+                      </p>
+                      <p className="text-[10px] text-muted tabular-nums">
+                        {p.defaultWidthCm}×{p.defaultHeightCm}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-medium text-foreground">
+                  Wall colour
+                </label>
+                <input
+                  type="color"
+                  value={`#${colorHex}`}
+                  onChange={(e) =>
+                    setColorHex(
+                      e.target.value.replace(/^#/, "").toUpperCase(),
+                    )
+                  }
+                  className="h-8 w-12 rounded border border-border bg-transparent"
+                />
+                <span className="text-xs text-muted tabular-nums">
+                  #{colorHex}
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* === UPLOAD PANEL === */}
+          {mode === "upload" && (
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-2">
+                Wall photo
+              </label>
+
+              {photoPreviewUrl ? (
+                <div className="relative rounded-lg overflow-hidden border border-border bg-stone-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photoPreviewUrl}
+                    alt="Your wall"
+                    className="w-full max-h-72 object-contain"
                   />
-                  <p className="text-xs font-medium text-foreground truncate">
-                    {p.name}
-                  </p>
-                  <p className="text-[10px] text-muted tabular-nums">
-                    {p.defaultWidthCm}×{p.defaultHeightCm}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoPath(null);
+                      setPhotoPreviewUrl(null);
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = "";
+                      }
+                    }}
+                    className="absolute top-2 right-2 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur text-white text-[11px] hover:bg-black/75"
+                  >
+                    Replace
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="w-full py-12 rounded-lg border-2 border-dashed border-border bg-stone-50 hover:border-stone-300 hover:bg-stone-100 transition flex flex-col items-center gap-2 disabled:opacity-60"
+                >
+                  {uploading ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-stone-400 animate-pulse" />
+                      <span className="text-sm text-stone-600">Uploading…</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        width="28"
+                        height="28"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        className="text-stone-400"
+                      >
+                        <path d="M12 4v12M6 10l6-6 6 6" strokeLinecap="round" />
+                        <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" strokeLinecap="round" />
+                      </svg>
+                      <span className="text-sm font-medium text-foreground">
+                        Click to choose a photo
+                      </span>
+                      <span className="text-[11px] text-muted">
+                        JPG, PNG, or WebP · up to 15&nbsp;MB
+                      </span>
+                    </>
+                  )}
                 </button>
-              ))}
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFilePicked(f);
+                }}
+                className="hidden"
+              />
+
+              {uploadError && (
+                <p className="mt-2 text-xs text-red-600">{uploadError}</p>
+              )}
+
+              <p className="text-[11px] text-muted mt-2 leading-relaxed">
+                Take or pick a straight-on photo of the wall, lit evenly.
+                You&apos;ll see artworks composited on top — measurements
+                are based on the dimensions you enter below, not the
+                photo&apos;s pixels.
+              </p>
             </div>
-          </div>
+          )}
 
-          {/* Custom colour */}
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-medium text-foreground">
-              Wall colour
-            </label>
-            <input
-              type="color"
-              value={`#${colorHex}`}
-              onChange={(e) =>
-                setColorHex(
-                  e.target.value.replace(/^#/, "").toUpperCase(),
-                )
-              }
-              className="h-8 w-12 rounded border border-border bg-transparent"
-            />
-            <span className="text-xs text-muted tabular-nums">
-              #{colorHex}
-            </span>
-          </div>
-
-          {/* Name */}
+          {/* === SHARED FIELDS === */}
           <div>
             <label
               htmlFor="wall-name"
@@ -271,7 +468,6 @@ export default function NewVenueWallPage() {
             />
           </div>
 
-          {/* Dimensions */}
           <div>
             <label className="block text-xs font-medium text-foreground mb-1.5">
               Real dimensions (cm)
@@ -311,7 +507,6 @@ export default function NewVenueWallPage() {
             </p>
           </div>
 
-          {/* Submit */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <Link
               href="/venue-portal/walls"
@@ -321,7 +516,9 @@ export default function NewVenueWallPage() {
             </Link>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={
+                submitting || (mode === "upload" && (!photoPath || uploading))
+              }
               className="px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 disabled:opacity-60"
             >
               {submitting ? "Creating…" : "Create wall"}

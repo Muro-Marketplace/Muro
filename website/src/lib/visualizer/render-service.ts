@@ -25,9 +25,12 @@
  */
 
 import sharp from "sharp";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeFrameGeometry } from "./frames";
 import { generateFrameSvg } from "./frame-svg";
 import type { LayoutBackground, WallItem } from "./types";
+
+const PHOTOS_BUCKET = "wall-photos";
 
 // ── Tuning ──────────────────────────────────────────────────────────────
 
@@ -87,22 +90,56 @@ export async function renderLayout(input: RenderInput): Promise<RenderResult> {
   const wallX = (OUTPUT_WIDTH_PX - wallPxW) / 2;
   const wallY = (OUTPUT_HEIGHT_PX - wallPxH) / 2;
 
-  // 2. Build wall layer (solid colour for now — Phase 2 layers a photo
-  //    on top when `background.kind === "uploaded"` and `image_path` set).
-  const wallColor =
-    input.background.kind === "preset"
-      ? `#${input.background.color_hex}`
-      : "#FFFFFF";
-  const wallBuffer = await sharp({
-    create: {
-      width: Math.round(wallPxW),
-      height: Math.round(wallPxH),
-      channels: 4,
-      background: hexToRgb(wallColor, 1),
-    },
-  })
-    .png()
-    .toBuffer();
+  // 2. Build wall layer.
+  //    - preset: solid colour rect from `wall_color_hex`.
+  //    - uploaded: download the source photo from the wall-photos
+  //      bucket and resize it to fit the wall area exactly. Falls back
+  //      to white-rect-with-warning if the download fails.
+  const wallW = Math.round(wallPxW);
+  const wallH = Math.round(wallPxH);
+  let wallBuffer: Buffer;
+  if (input.background.kind === "uploaded" && input.background.image_path) {
+    const photo = await fetchWallPhoto(input.background.image_path);
+    if (photo) {
+      // Resize the photo to exactly the wall area. We use `cover` so a
+      // wide photo of a wall fills the area without letterboxing — the
+      // user sized the wall in cm; pixel cropping is fine.
+      wallBuffer = await sharp(photo)
+        .resize({ width: wallW, height: wallH, fit: "cover" })
+        .png()
+        .toBuffer();
+    } else {
+      console.warn(
+        "[render] could not load wall photo; falling back to white",
+        input.background.image_path,
+      );
+      wallBuffer = await sharp({
+        create: {
+          width: wallW,
+          height: wallH,
+          channels: 4,
+          background: hexToRgb("#FFFFFF", 1),
+        },
+      })
+        .png()
+        .toBuffer();
+    }
+  } else {
+    const wallColor =
+      input.background.kind === "preset"
+        ? `#${input.background.color_hex}`
+        : "#FFFFFF";
+    wallBuffer = await sharp({
+      create: {
+        width: wallW,
+        height: wallH,
+        channels: 4,
+        background: hexToRgb(wallColor, 1),
+      },
+    })
+      .png()
+      .toBuffer();
+  }
 
   // 3. Build composite list. Order matters — z-index.
   const composites: sharp.OverlayOptions[] = [
@@ -312,6 +349,31 @@ async function renderItem(
       top: itemY,
     },
   ];
+}
+
+// ── Storage fetching (wall photos) ──────────────────────────────────────
+
+/**
+ * Download an uploaded wall photo from the private `wall-photos`
+ * bucket using the service-role client. Returns null on any failure —
+ * the caller falls back to a solid colour wall.
+ */
+async function fetchWallPhoto(path: string): Promise<Buffer | null> {
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db.storage
+      .from(PHOTOS_BUCKET)
+      .download(path);
+    if (error || !data) {
+      console.warn("[render] wall photo download failed:", error?.message);
+      return null;
+    }
+    const arr = await data.arrayBuffer();
+    return Buffer.from(arr);
+  } catch (err) {
+    console.warn("[render] wall photo download threw:", err);
+    return null;
+  }
 }
 
 // ── Image fetching ──────────────────────────────────────────────────────

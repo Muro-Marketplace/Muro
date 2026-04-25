@@ -15,14 +15,42 @@
 import { NextResponse } from "next/server";
 import { isFlagOn } from "@/lib/feature-flags";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { updateWallSchema } from "@/lib/visualizer/validations";
 import {
   deleteWall,
   getWallById,
   updateWall,
 } from "@/lib/visualizer/walls-db";
+import type { Wall } from "@/lib/visualizer/types";
 
 export const dynamic = "force-dynamic";
+
+const PHOTOS_BUCKET = "wall-photos";
+
+/**
+ * Resolve a signed display URL for an uploaded wall photo. Returns
+ * null when the wall isn't of `kind === 'uploaded'` or when signing
+ * fails (the editor will gracefully degrade to the solid colour).
+ *
+ * 1 hour TTL — long enough for an editor session, short enough that a
+ * leaked URL self-expires.
+ */
+async function signWallPhotoUrl(wall: Wall): Promise<string | null> {
+  if (wall.kind !== "uploaded" || !wall.source_image_path) return null;
+  const db = getSupabaseAdmin();
+  const { data, error } = await db.storage
+    .from(PHOTOS_BUCKET)
+    .createSignedUrl(wall.source_image_path, 60 * 60);
+  if (error || !data?.signedUrl) {
+    console.warn(
+      "[walls/[id]] could not sign photo URL:",
+      error?.message ?? "no url",
+    );
+    return null;
+  }
+  return data.signedUrl;
+}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -54,7 +82,9 @@ async function resolveAndAuthorize(request: Request, ctx: RouteContext) {
 export async function GET(request: Request, ctx: RouteContext) {
   const r = await resolveAndAuthorize(request, ctx);
   if (r.errResponse) return r.errResponse;
-  return NextResponse.json({ wall: r.wall });
+  // Sign the photo URL for uploaded walls so the editor can <img> it.
+  const sourceImageUrl = await signWallPhotoUrl(r.wall!);
+  return NextResponse.json({ wall: r.wall, sourceImageUrl });
 }
 
 export async function PATCH(request: Request, ctx: RouteContext) {

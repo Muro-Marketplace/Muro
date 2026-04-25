@@ -84,6 +84,12 @@ interface ExtendedProps extends VisualizerEditorProps {
   wall?: Wall | null;
   /** Loaded initial layout — required for auto-save + render. */
   initialLayout?: WallLayout | null;
+  /**
+   * Display URL for the wall photo (uploaded walls only). Resolved by
+   * the parent page from the GET /api/walls/[id] response — the
+   * Storage bucket is private so we can't use the path directly.
+   */
+  bgImageUrl?: string | null;
 }
 
 interface LastRender {
@@ -558,6 +564,7 @@ function WallVisualizerInner(props: ExtendedProps) {
           onSelectItem={setSelectedItemId}
           onItemChange={handleItemChange}
           onAddItem={(workId, xCm, yCm) => addItemAt(workId, xCm, yCm)}
+          bgImageUrl={props.bgImageUrl ?? null}
         />
 
         {/* Top bar — quota chip + (when persisting) save status */}

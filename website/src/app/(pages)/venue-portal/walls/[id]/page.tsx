@@ -36,7 +36,13 @@ const WallVisualizer = dynamic(
 
 type LoadState =
   | { kind: "loading" }
-  | { kind: "ready"; wall: Wall; layout: WallLayout }
+  | {
+      kind: "ready";
+      wall: Wall;
+      layout: WallLayout;
+      /** Signed URL for the wall photo when wall.kind === "uploaded". */
+      sourceImageUrl: string | null;
+    }
   | { kind: "missing" }
   | { kind: "error"; message: string };
 
@@ -99,7 +105,10 @@ export default function VenueWallEditorPage({
           throw new Error(`Layouts fetch ${layoutsRes.status}`);
         }
 
-        const wallJson = (await wallRes.json()) as { wall: Wall };
+        const wallJson = (await wallRes.json()) as {
+          wall: Wall;
+          sourceImageUrl: string | null;
+        };
         const layoutsJson = (await layoutsRes.json()) as {
           layouts: WallLayout[];
         };
@@ -139,7 +148,12 @@ export default function VenueWallEditorPage({
         }
 
         if (cancelled) return;
-        setState({ kind: "ready", wall: wallJson.wall, layout: activeLayout });
+        setState({
+          kind: "ready",
+          wall: wallJson.wall,
+          layout: activeLayout,
+          sourceImageUrl: wallJson.sourceImageUrl ?? null,
+        });
       } catch (err) {
         if (cancelled) return;
         setState({
@@ -265,6 +279,7 @@ export default function VenueWallEditorPage({
             mode="venue_my_walls"
             wall={state.wall}
             initialLayout={state.layout}
+            bgImageUrl={state.sourceImageUrl}
             authToken={session?.access_token ?? null}
             onClose={() => router.push("/venue-portal/walls")}
           />
