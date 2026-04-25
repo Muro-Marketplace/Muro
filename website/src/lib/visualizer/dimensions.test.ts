@@ -214,6 +214,45 @@ describe("pickDefaultSize", () => {
       pickDefaultSize({ dimensions: "Medium", variants: [] }),
     ).toBeNull();
   });
+
+  it("swaps dims when the variant disagrees with work orientation", () => {
+    // Variant is portrait (50<70) but the work is a landscape image —
+    // swap so the artwork doesn't get squashed into a portrait box.
+    const r = pickDefaultSize({
+      dimensions: "70 x 50 cm",
+      variants: [
+        { label: "20×28\" (50×70cm)", widthCm: 50, heightCm: 70 },
+      ],
+      orientation: "landscape",
+    });
+    expect(r!.widthCm).toBe(70);
+    expect(r!.heightCm).toBe(50);
+    expect(r!.sizeLabel).toBe("20×28\" (50×70cm)");
+  });
+
+  it("leaves dims alone when orientation already matches", () => {
+    const r = pickDefaultSize({
+      dimensions: "50 x 70 cm",
+      variants: [
+        { label: "Portrait big", widthCm: 50, heightCm: 70 },
+      ],
+      orientation: "portrait",
+    });
+    expect(r!.widthCm).toBe(50);
+    expect(r!.heightCm).toBe(70);
+  });
+
+  it("ignores square orientation hint", () => {
+    const r = pickDefaultSize({
+      dimensions: "50 x 70 cm",
+      variants: [
+        { label: "P", widthCm: 50, heightCm: 70 },
+      ],
+      orientation: "square",
+    });
+    expect(r!.widthCm).toBe(50);
+    expect(r!.heightCm).toBe(70);
+  });
 });
 
 // ── Cycling ─────────────────────────────────────────────────────────────

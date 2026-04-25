@@ -48,6 +48,7 @@ import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import {
   Environment,
   OrbitControls,
+  useTexture,
 } from "@react-three/drei";
 import * as THREE from "three";
 import {
@@ -287,27 +288,30 @@ function Room({
   wallImageUrl: string | null;
   kind: LayoutBackground["kind"];
 }) {
-  const wallTexState = useOptionalTexture(
-    kind === "uploaded" ? wallImageUrl : null,
-  );
-  const wallTexture =
-    wallTexState.kind === "ready" ? wallTexState.texture : null;
   const floorTexture = useProceduralWoodTexture();
+  const showWallPhoto = kind === "uploaded" && !!wallImageUrl;
 
   return (
     <group>
-      {/* Back wall — z=0 plane, rises from y=0 to y=wallH. */}
-      <mesh position={[0, wallH / 2, 0]} receiveShadow>
-        <planeGeometry args={[wallW, wallH]} />
-        {wallTexture ? (
-          <meshStandardMaterial map={wallTexture} roughness={0.9} />
-        ) : (
-          <meshStandardMaterial
-            color={wallColor}
-            roughness={0.95}
-          />
-        )}
-      </mesh>
+      {/* Back wall — z=0 plane. Either solid colour or an uploaded photo
+          texture (loaded via Suspense + drei's useTexture). */}
+      {showWallPhoto ? (
+        <Suspense
+          fallback={
+            <mesh position={[0, wallH / 2, 0]} receiveShadow>
+              <planeGeometry args={[wallW, wallH]} />
+              <meshStandardMaterial color={wallColor} roughness={0.95} />
+            </mesh>
+          }
+        >
+          <TexturedWall url={wallImageUrl!} wallW={wallW} wallH={wallH} />
+        </Suspense>
+      ) : (
+        <mesh position={[0, wallH / 2, 0]} receiveShadow>
+          <planeGeometry args={[wallW, wallH]} />
+          <meshStandardMaterial color={wallColor} roughness={0.95} />
+        </mesh>
+      )}
 
       {/* Floor — procedural wood plank texture for warmth + grain. */}
       <mesh
@@ -425,7 +429,9 @@ function ArtworkMesh({
   const finishDef = getFrameFinish(item.frame.style, item.frame.finish);
   const frameColor = finishDef?.borderColor ?? "#222222";
 
-  const texState = useOptionalTexture(imageUrl ?? null);
+  // Texture loading is handled by drei's useTexture (Suspense-based)
+  // inside <ArtworkPlane> — the imperative useOptionalTexture path
+  // wasn't reliably triggering r3f re-renders on this React/r3f combo.
 
   // ── Drag handling ──────────────────────────────────────────────────
   // Capture pointer events on the artwork mesh and translate to wall
@@ -582,27 +588,28 @@ function ArtworkMesh({
         />
       )}
 
-      {/* Artwork plane — castShadow false because a shadow from a
-          near-coplanar plane onto its own wall causes ugly z-fighting;
-          the soft contact shadow below handles the visual cue. */}
-      <mesh receiveShadow position={[0, 0, FRAME_DEPTH_M / 2]}>
-        <planeGeometry args={[innerW, innerH]} />
-        {texState.kind === "ready" ? (
-          <meshStandardMaterial
-            map={texState.texture}
-            roughness={0.55}
-            metalness={0.02}
-          />
-        ) : texState.kind === "error" ? (
-          // Visible red tint = "image failed to load" — much more useful
-          // than silently rendering grey when CORS blocks a host.
-          <meshStandardMaterial color="#7B1F1F" roughness={0.7} />
-        ) : texState.kind === "loading" ? (
-          <meshStandardMaterial color="#3A3A3A" roughness={0.85} />
+      {/* Artwork plane — castShadow off (a coplanar plane casting onto
+          its own wall causes z-fighting; the contact shadow below
+          handles the visual cue). The plane uses drei's useTexture
+          inside Suspense — fallback is a grey placeholder while the
+          image loads. */}
+      <Suspense
+        fallback={
+          <mesh receiveShadow position={[0, 0, FRAME_DEPTH_M / 2]}>
+            <planeGeometry args={[innerW, innerH]} />
+            <meshStandardMaterial color="#3A3A3A" roughness={0.85} />
+          </mesh>
+        }
+      >
+        {imageUrl ? (
+          <ArtworkPlane url={imageUrl} width={innerW} height={innerH} />
         ) : (
-          <meshStandardMaterial color="#888888" roughness={0.7} />
+          <mesh receiveShadow position={[0, 0, FRAME_DEPTH_M / 2]}>
+            <planeGeometry args={[innerW, innerH]} />
+            <meshStandardMaterial color="#888888" roughness={0.7} />
+          </mesh>
         )}
-      </mesh>
+      </Suspense>
 
       {/* Selection: thin rectangular outline + 4 corner resize handles. */}
       {selected && (
@@ -1072,6 +1079,61 @@ function PendantLight({
   );
 }
 
+// ── Texture-loading components (Suspense-based) ────────────────────────
+
+/**
+ * Renders a textured plane using drei's useTexture. Goes through r3f's
+ * loader cache + Suspense — the imperative `new Image()` →
+ * `THREE.Texture` path we previously used didn't reliably trigger
+ * re-renders, so the parent meshes stayed in the loading-grey state
+ * even after the image had successfully fetched.
+ */
+function ArtworkPlane({
+  url,
+  width,
+  height,
+}: {
+  url: string;
+  width: number;
+  height: number;
+}) {
+  const texture = useTexture(url);
+  // Tag every freshly-loaded texture with the right colour space.
+  // useTexture caches per URL so this only runs once per image.
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return (
+    <mesh receiveShadow position={[0, 0, FRAME_DEPTH_M / 2]}>
+      <planeGeometry args={[width, height]} />
+      <meshStandardMaterial
+        map={texture}
+        roughness={0.55}
+        metalness={0.02}
+      />
+    </mesh>
+  );
+}
+
+function TexturedWall({
+  url,
+  wallW,
+  wallH,
+}: {
+  url: string;
+  wallW: number;
+  wallH: number;
+}) {
+  const texture = useTexture(url);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return (
+    <mesh position={[0, wallH / 2, 0]} receiveShadow>
+      <planeGeometry args={[wallW, wallH]} />
+      <meshStandardMaterial map={texture} roughness={0.9} />
+    </mesh>
+  );
+}
+
 // ── Procedural wood floor ──────────────────────────────────────────────
 
 /**
@@ -1159,82 +1221,3 @@ function useProceduralWoodTexture(): THREE.Texture | null {
   return texture;
 }
 
-// ── Texture loading ────────────────────────────────────────────────────
-
-type TextureState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "ready"; texture: THREE.Texture }
-  | { kind: "error"; message: string };
-
-/**
- * Load an image URL into a THREE.Texture.
- *
- * Uses THREE.TextureLoader directly — the previous `new Image()`
- * approach was occasionally settling but the `setState` from inside
- * the onload callback wasn't triggering an r3f re-render reliably (a
- * known interaction between r3f's render-loop scheduling and React
- * state updates dispatched from non-r3f event handlers). TextureLoader
- * piggybacks on r3f's loader cache and the texture's `needsUpdate`
- * flag is observed on the next render frame deterministically.
- *
- * Verbose console output is intentional — when a host blocks CORS or
- * 404s we want to see exactly which URL failed.
- */
-function useOptionalTexture(url: string | null): TextureState {
-  const [state, setState] = useState<TextureState>({ kind: "idle" });
-
-  useEffect(() => {
-    if (!url) {
-      setState({ kind: "idle" });
-      return;
-    }
-    setState({ kind: "loading" });
-    if (typeof window !== "undefined") {
-      console.log("[Wall3D texture] loading:", url);
-    }
-
-    const loader = new THREE.TextureLoader();
-    loader.crossOrigin = "anonymous";
-
-    let cancelled = false;
-    let texture: THREE.Texture | null = null;
-
-    loader.load(
-      url,
-      (tex) => {
-        if (cancelled) {
-          tex.dispose();
-          return;
-        }
-        const img = tex.image as HTMLImageElement | undefined;
-        console.log(
-          "[Wall3D texture] ready:",
-          url,
-          img ? `${img.width}×${img.height}` : "(no image data)",
-        );
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.anisotropy = 8;
-        tex.needsUpdate = true;
-        texture = tex;
-        setState({ kind: "ready", texture: tex });
-      },
-      undefined,
-      (err) => {
-        if (cancelled) return;
-        console.error("[Wall3D texture] FAILED:", url, err);
-        setState({
-          kind: "error",
-          message: "Image failed to load — check console for the URL",
-        });
-      },
-    );
-
-    return () => {
-      cancelled = true;
-      if (texture) texture.dispose();
-    };
-  }, [url]);
-
-  return state;
-}

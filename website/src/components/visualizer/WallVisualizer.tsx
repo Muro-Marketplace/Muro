@@ -347,6 +347,7 @@ function WallVisualizerInner(props: ExtendedProps) {
     const picked = pickDefaultSize({
       dimensions: work.dimensions ?? null,
       variants: work.sizes ?? [],
+      orientation: work.orientation,
     });
 
     let itemW = picked?.widthCm ?? Math.min(DEFAULT_ITEM_WIDTH_CM, widthCm * 0.4);
@@ -415,6 +416,7 @@ function WallVisualizerInner(props: ExtendedProps) {
         const picked = pickDefaultSize({
           dimensions: work.dimensions ?? null,
           variants: work.sizes ?? [],
+          orientation: work.orientation,
         });
         if (picked) {
           itemW = picked.widthCm;
@@ -1066,6 +1068,18 @@ function normaliseWork(raw: Record<string, unknown>): PanelWork | null {
         ? ((raw as { _artistName: string })._artistName)
         : undefined;
 
+  // Pull orientation if the API surfaced it. Some sources won't (the
+  // placement-derived endpoint stores work_image only) — that's fine,
+  // pickDefaultSize tolerates it being absent.
+  const rawOrientation =
+    typeof raw.orientation === "string" ? raw.orientation : undefined;
+  const orientation: PanelWork["orientation"] =
+    rawOrientation === "portrait" ||
+    rawOrientation === "landscape" ||
+    rawOrientation === "square"
+      ? rawOrientation
+      : undefined;
+
   return {
     id,
     title,
@@ -1075,6 +1089,7 @@ function normaliseWork(raw: Record<string, unknown>): PanelWork | null {
     widthCm: parsedNatural?.widthCm,
     heightCm: parsedNatural?.heightCm,
     sizes: sizes.length > 0 ? sizes : undefined,
+    orientation,
   };
 }
 

@@ -25,7 +25,10 @@
  */
 
 import { useMemo, useState } from "react";
-import type { SizeVariant } from "@/lib/visualizer/dimensions";
+import type {
+  SizeVariant,
+  WorkOrientation,
+} from "@/lib/visualizer/dimensions";
 import type { VisualizerMode } from "@/lib/visualizer/types";
 
 export interface PanelWork {
@@ -40,6 +43,9 @@ export interface PanelWork {
   heightCm?: number;
   /** All listed size variants (parsed from the work's pricing array). */
   sizes?: SizeVariant[];
+  /** Intended orientation — used to align the picked size to the
+   *  artwork's actual rotation when pricing labels disagree. */
+  orientation?: WorkOrientation;
 }
 
 type Tab = "my" | "saved" | "all";

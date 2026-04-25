@@ -42,6 +42,7 @@ interface ArtistWorkRow {
   image: string | null;
   dimensions: string | null;
   pricing: unknown;
+  orientation?: string | null;
 }
 
 interface WorkResponse {
@@ -51,6 +52,7 @@ interface WorkResponse {
   dimensions?: string;
   pricing?: unknown;
   artistName?: string;
+  orientation?: string;
 }
 
 export async function GET(request: Request) {
@@ -67,7 +69,9 @@ export async function GET(request: Request) {
   //    installed/live — venues planning the install want both.
   const { data: placements, error: pErr } = await db
     .from("placements")
-    .select("id, work_id, work_title, work_image, status, artist_user_id, artist_slug")
+    .select(
+      "id, work_id, work_title, work_image, status, artist_user_id, artist_slug",
+    )
     .eq("venue_user_id", auth.user!.id)
     .eq("status", "active");
 
@@ -89,7 +93,7 @@ export async function GET(request: Request) {
   if (workIds.length > 0) {
     const { data: works } = await db
       .from("artist_works")
-      .select("id, title, image, dimensions, pricing")
+      .select("id, title, image, dimensions, pricing, orientation")
       .in("id", workIds);
     for (const row of (works ?? []) as ArtistWorkRow[]) {
       worksById[row.id] = row;
@@ -138,6 +142,7 @@ export async function GET(request: Request) {
       image,
       dimensions: work?.dimensions ?? undefined,
       pricing: work?.pricing,
+      orientation: work?.orientation ?? undefined,
       artistName: p.artist_user_id
         ? artistNameById[p.artist_user_id]
         : undefined,

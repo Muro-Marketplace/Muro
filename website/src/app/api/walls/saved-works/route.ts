@@ -23,6 +23,7 @@ interface ArtistWorkRow {
   image: string | null;
   dimensions: string | null;
   pricing: unknown;
+  orientation: string | null;
   artist_id: string | null;
 }
 
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
   // 2. Resolve to artwork rows.
   const { data: works } = await db
     .from("artist_works")
-    .select("id, title, image, dimensions, pricing, artist_id")
+    .select("id, title, image, dimensions, pricing, orientation, artist_id")
     .in("id", savedIds);
 
   const rows = (works ?? []) as ArtistWorkRow[];
@@ -99,6 +100,7 @@ export async function GET(request: Request) {
       image: r.image!,
       dimensions: r.dimensions ?? undefined,
       pricing: r.pricing,
+      orientation: r.orientation ?? undefined,
       artistName: r.artist_id ? artistNameByProfileId[r.artist_id] : undefined,
     }));
 

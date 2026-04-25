@@ -64,6 +64,7 @@ export default function ArtworkPageClient({
       widthCm: parsed?.widthCm,
       heightCm: parsed?.heightCm,
       sizes: sizes.length > 0 ? sizes : undefined,
+      orientation: work.orientation,
     };
   }, [work, artistName]);
 

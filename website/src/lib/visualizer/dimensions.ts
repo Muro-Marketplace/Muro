@@ -213,6 +213,16 @@ export function buildSizeVariants(
 }
 
 /**
+ * Optional cue for which orientation the work should display in. Comes
+ * from `ArtistWork.orientation` in the static seed; database-backed
+ * works can populate it the same way. When supplied, pickDefaultSize
+ * swaps dims so the chosen size matches the work's intended
+ * orientation — fixes the "every portrait shows landscape" bug where
+ * the listed pricing label is in the rotated form.
+ */
+export type WorkOrientation = "portrait" | "landscape" | "square";
+
+/**
  * Pick the best default size when a work is dragged onto a wall.
  *
  * Order of preference:
@@ -223,38 +233,54 @@ export function buildSizeVariants(
  *      parses — works as a fallback when no print sizes are listed.
  *   3. null — caller falls back to its own default.
  *
- * Why "largest variant first" instead of natural?
- *   In testing, artists list works at "natural" sizes that often don't
- *   match any of the print sizes they actually sell — and venues
- *   visualising a piece want to see what they'd actually receive in the
- *   post. The largest print is also the most visually impactful default
- *   for "how would this look on my wall?". Users can swap to any other
- *   size via the toolbar dropdown.
+ * After picking, dims are swapped if the result disagrees with the
+ * work's orientation hint. Listed prices like '20×28" (50×70cm)' parse
+ * as 50×70 (portrait) but the underlying artwork might be a landscape
+ * — without the swap, the image gets squashed into the wrong-shape box.
  */
 export function pickDefaultSize(input: {
   dimensions: string | null | undefined;
   variants: SizeVariant[];
+  orientation?: WorkOrientation;
 }): { widthCm: number; heightCm: number; sizeLabel?: string } | null {
+  let result: { widthCm: number; heightCm: number; sizeLabel?: string } | null;
+
   if (input.variants.length > 0) {
     // Largest by area.
     const largest = [...input.variants].sort(
       (a, b) => b.widthCm * b.heightCm - a.widthCm * a.heightCm,
     )[0];
-    return {
+    result = {
       widthCm: largest.widthCm,
       heightCm: largest.heightCm,
       sizeLabel: largest.label,
     };
+  } else {
+    const natural = parseDimensions(input.dimensions ?? null);
+    if (natural) {
+      result = {
+        widthCm: natural.widthCm,
+        heightCm: natural.heightCm,
+        sizeLabel: input.dimensions ?? undefined,
+      };
+    } else {
+      return null;
+    }
   }
-  const natural = parseDimensions(input.dimensions ?? null);
-  if (natural) {
-    return {
-      widthCm: natural.widthCm,
-      heightCm: natural.heightCm,
-      sizeLabel: input.dimensions ?? undefined,
-    };
+
+  // Orientation alignment.
+  if (input.orientation && input.orientation !== "square") {
+    const isPortrait = result.heightCm > result.widthCm;
+    const wantsPortrait = input.orientation === "portrait";
+    if (isPortrait !== wantsPortrait) {
+      result = {
+        widthCm: result.heightCm,
+        heightCm: result.widthCm,
+        sizeLabel: result.sizeLabel,
+      };
+    }
   }
-  return null;
+  return result;
 }
 
 /**
