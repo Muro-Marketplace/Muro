@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import Combobox from "@/components/Combobox";
 import { type ArtistWork, type Artist } from "@/data/artists";
 import { themes as allThemes } from "@/data/themes";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
@@ -15,9 +16,291 @@ import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { slugify } from "@/lib/slugify";
 import { useSearchParams } from "next/navigation";
 
-// `primaryMediums` and `sizeOptions` removed alongside the Primary
-// Medium dropdown (replaced by Discipline) and the profile-level
-// Available Sizes chip set (sizes belong on individual works).
+// Catalogue of common artwork mediums for the per-work Combobox. The
+// list is intentionally permissive — artists almost always have edge
+// cases ("oil + gold leaf", "cyanotype on cotton") so the combobox
+// allows custom entries while still suggesting the standards.
+export const WORK_MEDIUM_OPTIONS = [
+  "Oil on canvas",
+  "Oil on board",
+  "Oil on linen",
+  "Acrylic on canvas",
+  "Acrylic on board",
+  "Watercolour on paper",
+  "Gouache on paper",
+  "Ink on paper",
+  "Pencil on paper",
+  "Graphite on paper",
+  "Charcoal on paper",
+  "Pastel on paper",
+  "Mixed media on paper",
+  "Mixed media on canvas",
+  "Mixed media on board",
+  "Collage",
+  "Linocut print",
+  "Screen print",
+  "Etching",
+  "Lithograph",
+  "Woodcut print",
+  "Giclée print",
+  "C-type print",
+  "Archival pigment print",
+  "Silver gelatin print",
+  "Digital print",
+  "Photograph",
+  "Digital art",
+  "Sculpture",
+  "Ceramic",
+  "Textile",
+  "Other",
+];
+
+// ── Work image dropzone ────────────────────────────────────────────────
+
+/**
+ * Drag-and-drop or click-to-pick image upload for the work form.
+ *
+ * Behaviour:
+ *   - Click anywhere on the panel to open the system file picker.
+ *   - Drag a file (or paste from clipboard, supported by the browser)
+ *     and the panel highlights to confirm it'll accept the drop.
+ *   - Multiple files dropped → uses the first one.
+ *   - Non-image dropped → ignored (the OS already filters most cases).
+ *
+ * Picker copy nudges users towards the broader file selection (#9):
+ * macOS Safari/Chrome show the "Photos" folder by default unless the
+ * user explicitly browses elsewhere — surfacing "Browse all files" in
+ * the hint helps them find their iPhotos / Pictures folders. We can't
+ * change the OS picker chrome itself.
+ */
+function WorkImageDropzone({
+  imageUrl,
+  inputRef,
+  onChange,
+  onFile,
+}: {
+  imageUrl: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onFile: (file: File) => void | Promise<void>;
+}) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <div
+      onClick={() => inputRef.current?.click()}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        if (!hover) setHover(true);
+      }}
+      onDragLeave={() => setHover(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setHover(false);
+        const file = Array.from(e.dataTransfer.files).find((f) =>
+          f.type.startsWith("image/"),
+        );
+        if (file) onFile(file);
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
+      className={`flex items-center gap-4 p-3 rounded-sm border-2 border-dashed cursor-pointer transition-colors ${
+        hover
+          ? "border-accent bg-accent/5"
+          : "border-border hover:border-foreground/30"
+      }`}
+    >
+      {imageUrl ? (
+        <div className="w-28 h-20 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
+          <Image
+            src={imageUrl}
+            alt="Preview"
+            fill
+            className="object-cover"
+            sizes="112px"
+          />
+        </div>
+      ) : (
+        <div className="w-28 h-20 rounded-sm bg-border/20 shrink-0 flex items-center justify-center">
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            className="text-muted"
+          >
+            <path d="M12 4v12M6 10l6-6 6 6" />
+            <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+          </svg>
+        </div>
+      )}
+      <div className="flex-1">
+        <p className="text-sm font-medium text-foreground">
+          {imageUrl ? "Replace image" : "Upload image"}
+        </p>
+        <p className="text-[11px] text-muted mt-1 leading-snug">
+          Drag &amp; drop here, or click to browse all files (Pictures,
+          iPhotos, Downloads…). JPG, PNG, or WebP.
+        </p>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={onChange}
+        onClick={(e) => e.stopPropagation()}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+// ── Tags field ──────────────────────────────────────────────────────────
+
+/**
+ * Unified chip-toggle + search input. Replaces the old trio of
+ * Sub-styles / Style Tags / Themes. Caller supplies the suggestion
+ * pool (e.g. discipline sub-styles + canonical themes); user can pick
+ * from suggestions, search to narrow, or add free-text custom tags.
+ */
+function TagsField({
+  value,
+  onChange,
+  suggestions,
+  formatSuggestion,
+  label,
+  placeholder,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+  suggestions: string[];
+  formatSuggestion?: (raw: string) => string;
+  label: string;
+  placeholder?: string;
+}) {
+  const [query, setQuery] = useState("");
+
+  const fmt = formatSuggestion ?? ((s: string) => s);
+
+  // Suggestions filtered by current search, with already-selected
+  // entries pulled out (they appear above as filled chips).
+  const filteredSuggestions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return suggestions
+      .filter((s) => !value.includes(s))
+      .filter((s) =>
+        q
+          ? s.toLowerCase().includes(q) || fmt(s).toLowerCase().includes(q)
+          : true,
+      );
+  }, [suggestions, value, query, fmt]);
+
+  const trimmedQuery = query.trim();
+  const showAddCustom =
+    trimmedQuery.length > 0 &&
+    !value.some((v) => v.toLowerCase() === trimmedQuery.toLowerCase()) &&
+    !suggestions.some((s) => s.toLowerCase() === trimmedQuery.toLowerCase());
+
+  function add(tag: string) {
+    if (!tag.trim()) return;
+    if (value.includes(tag)) return;
+    onChange([...value, tag]);
+    setQuery("");
+  }
+
+  function remove(tag: string) {
+    onChange(value.filter((t) => t !== tag));
+  }
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-foreground mb-2">
+        {label}
+      </label>
+
+      {/* Selected chips */}
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {value.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-foreground text-white rounded-sm"
+            >
+              {fmt(tag)}
+              <button
+                type="button"
+                onClick={() => remove(tag)}
+                className="hover:text-accent transition-colors"
+                aria-label={`Remove ${fmt(tag)}`}
+              >
+                &times;
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Search + add-custom input */}
+      <div className="flex gap-2 mb-3">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && trimmedQuery) {
+              e.preventDefault();
+              add(trimmedQuery);
+            }
+          }}
+          placeholder={placeholder}
+          className="w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors"
+        />
+        {showAddCustom && (
+          <button
+            type="button"
+            onClick={() => add(trimmedQuery)}
+            className="shrink-0 px-3 py-2 text-xs font-medium text-accent border border-accent/40 rounded-sm hover:bg-accent/5 transition-colors"
+          >
+            + Add &ldquo;{trimmedQuery}&rdquo;
+          </button>
+        )}
+      </div>
+
+      {/* Suggestion chips */}
+      {filteredSuggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {filteredSuggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => add(s)}
+              className="px-3 py-1.5 text-xs rounded-sm border border-border text-muted hover:border-foreground/30 hover:text-foreground transition-colors"
+            >
+              {fmt(s)}
+            </button>
+          ))}
+        </div>
+      )}
+      {filteredSuggestions.length === 0 && trimmedQuery && !showAddCustom && (
+        <p className="text-xs text-muted">
+          All matching tags are already added.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Catalogue of common artwork mediums for the per-work Combobox. The
 
 const deliveryOptions = [
   "Within 5 miles", "Within 10 miles", "Within 15 miles",
@@ -42,7 +325,6 @@ interface ProfileState {
    */
   primaryMedium: string;
   discipline: DisciplineId | "";
-  subStyles: string[];
   /**
    * Single bio field. The first 300 characters become the public short
    * bio (shown on cards / search hits); the full text is the extended
@@ -52,8 +334,18 @@ interface ProfileState {
    */
   bio: string;
   instagram: string;
-  styleTags: string[];
-  themes: string[];
+  /**
+   * Unified tags array — replaces the previous trio of `subStyles`,
+   * `styleTags`, and `themes` which were three near-identical chip
+   * lists in the UI. At save time we split this list back into the
+   * three DB columns so older readers (search filters, browse pages)
+   * keep matching:
+   *   - sub_styles  = entries that match the current discipline's
+   *                   allowed sub-styles
+   *   - themes      = entries that match the canonical themes list
+   *   - style_tags  = the full list (catch-all)
+   */
+  tags: string[];
   bannerImage: string;
   profileImage: string;
   offersOriginals: boolean;
@@ -93,11 +385,9 @@ function emptyProfile(nameSeed: string): ProfileState {
     postcode: "",
     primaryMedium: "",
     discipline: "",
-    subStyles: [],
     bio: "",
     instagram: "",
-    styleTags: [],
-    themes: [],
+    tags: [],
     bannerImage: "",
     profileImage: "",
     offersOriginals: false,
@@ -121,17 +411,24 @@ function initProfile(a: Artist): ProfileState {
   // the short one. New saves write to both columns to keep older
   // consumers happy.
   const mergedBio = a.extendedBio?.trim() || a.shortBio?.trim() || "";
+  // Merge the legacy trio (sub-styles, style tags, themes) into a
+  // single de-duped tags array — that's what the new UI works with.
+  const mergedTags = Array.from(
+    new Set<string>([
+      ...(a.subStyles || []),
+      ...(a.styleTags || []),
+      ...(a.themes || []),
+    ]),
+  );
   return {
     name: a.name,
     location: a.location,
     postcode: a.postcode || "",
     primaryMedium: a.primaryMedium,
     discipline: a.discipline || "",
-    subStyles: [...(a.subStyles || [])],
     bio: mergedBio,
     instagram: a.instagram,
-    styleTags: [...a.styleTags],
-    themes: [...a.themes],
+    tags: mergedTags,
     bannerImage: a.works[0]?.image || "",
     profileImage: a.image,
     offersOriginals: a.offersOriginals,
@@ -171,7 +468,6 @@ export default function ProfileEditorPage() {
   })();
   const [saved, setSaved] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [newTag, setNewTag] = useState("");
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
 
@@ -306,7 +602,7 @@ export default function ProfileEditorPage() {
     setHasUnsavedChanges(true);
   }
 
-  function toggleArrayItem(key: "styleTags" | "themes" | "availableSizes" | "venueTypesSuitedFor", item: string) {
+  function toggleArrayItem(key: "tags" | "availableSizes" | "venueTypesSuitedFor", item: string) {
     setProfile((prev) => {
       if (!prev) return prev;
       return {
@@ -330,6 +626,17 @@ export default function ProfileEditorPage() {
       const shortBio = profile.bio.slice(0, 300).trim();
       const extendedBio = profile.bio.trim();
 
+      // Tags: split unified list into the three legacy columns so
+      // older readers (browse filters, public pages) keep matching.
+      const allowedSubStyles = new Set<string>(
+        getDisciplineById(profile.discipline as DisciplineId | "" || "")?.subStyles ?? [],
+      );
+      const allowedThemes = new Set<string>(allThemes);
+      const subStyles = profile.tags.filter((t) => allowedSubStyles.has(t));
+      const themes = profile.tags.filter((t) => allowedThemes.has(t));
+      // style_tags is the full list (catch-all + custom entries).
+      const styleTags = profile.tags;
+
       const res = await authFetch("/api/artist-profile", {
         method: "PUT",
         body: JSON.stringify({
@@ -343,9 +650,9 @@ export default function ProfileEditorPage() {
           postcode: profile.postcode,
           primary_medium: profile.primaryMedium,
           discipline: profile.discipline || null,
-          sub_styles: profile.subStyles,
-          style_tags: profile.styleTags,
-          themes: profile.themes,
+          sub_styles: subStyles,
+          style_tags: styleTags,
+          themes: themes,
           instagram: profile.instagram,
           // Website removed from UI (#2). Send empty so existing rows
           // get cleared rather than retaining a stale value.
@@ -554,12 +861,13 @@ export default function ProfileEditorPage() {
 
 
 
-        {/* 4a. Discipline & Sub-styles */}
+        {/* 4. Discipline + Tags (merged) */}
         <div className={sectionClass}>
-          <h2 className="text-lg font-medium mb-2">Discipline & Sub-styles</h2>
+          <h2 className="text-lg font-medium mb-2">Discipline & Tags</h2>
           <p className="text-xs text-muted mb-5">
-            Pick the single top-level discipline your work sits in, then any
-            sub-styles that describe it. Venues browse by these.
+            Pick the discipline your work sits in, then add tags that
+            describe it. Venues browse by these. Suggestions are based on
+            your discipline — search to narrow down or type any custom tag.
           </p>
 
           {/* Discipline radio group */}
@@ -573,11 +881,9 @@ export default function ProfileEditorPage() {
                     key={d.id}
                     type="button"
                     onClick={() => {
-                      // Switching discipline prunes sub-styles that don't belong
-                      // to the new discipline, so the persisted list stays tidy.
-                      const allowed = new Set<string>(getDisciplineById(d.id)?.subStyles ?? []);
-                      const prunedSubStyles = profile.subStyles.filter((s) => allowed.has(s));
-                      setProfile((prev) => prev ? { ...prev, discipline: d.id, subStyles: prunedSubStyles } : prev);
+                      setProfile((prev) =>
+                        prev ? { ...prev, discipline: d.id } : prev,
+                      );
                       setSaved(false);
                       setHasUnsavedChanges(true);
                     }}
@@ -602,94 +908,23 @@ export default function ProfileEditorPage() {
             </div>
           </div>
 
-          {/* Sub-style multi-select — filtered to the chosen discipline */}
-          {profile.discipline && (
-            <div>
-              <label className={labelClass}>Sub-styles</label>
-              <div className="flex flex-wrap gap-1.5">
-                {(getDisciplineById(profile.discipline)?.subStyles ?? []).map((sub) => {
-                  const active = profile.subStyles.includes(sub);
-                  return (
-                    <button
-                      key={sub}
-                      type="button"
-                      onClick={() => {
-                        const next = active
-                          ? profile.subStyles.filter((s) => s !== sub)
-                          : [...profile.subStyles, sub];
-                        update("subStyles", next);
-                      }}
-                      className={`px-3 py-1.5 text-xs rounded-sm border transition-colors ${
-                        active
-                          ? "bg-foreground text-white border-foreground"
-                          : "border-border text-muted hover:border-foreground/30"
-                      }`}
-                      aria-pressed={active}
-                    >
-                      {formatSubStyleLabel(sub)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 4. Style & Themes */}
-        <div className={sectionClass}>
-          <h2 className="text-lg font-medium mb-5">Style & Themes</h2>
-
-          {/* Style tags */}
-          <div className="mb-6">
-            <label className={labelClass}>Style Tags</label>
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {profile.styleTags.map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-foreground text-white rounded-sm">
-                  {tag}
-                  <button onClick={() => toggleArrayItem("styleTags", tag)} className="hover:text-accent transition-colors">&times;</button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newTag.trim()) {
-                    e.preventDefault();
-                    if (!profile.styleTags.includes(newTag.trim())) {
-                      update("styleTags", [...profile.styleTags, newTag.trim()]);
-                    }
-                    setNewTag("");
-                  }
-                }}
-                placeholder="Add a tag and press Enter"
-                className={`${inputClass} flex-1`}
-              />
-            </div>
-          </div>
-
-          {/* Themes */}
-          <div>
-            <label className={labelClass}>Themes</label>
-            <div className="flex flex-wrap gap-1.5">
-              {allThemes.map((theme) => (
-                <button
-                  key={theme}
-                  type="button"
-                  onClick={() => toggleArrayItem("themes", theme)}
-                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors ${
-                    profile.themes.includes(theme)
-                      ? "bg-foreground text-white border-foreground"
-                      : "border-border text-muted hover:border-foreground/30"
-                  }`}
-                >
-                  {theme}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Unified Tags — replaces the previous trio of Sub-styles +
+              Style Tags + Themes. Suggestions = discipline sub-styles +
+              all themes (de-duped). The search box filters suggestions
+              and lets users add anything custom via Enter or the
+              "+ add" affordance. */}
+          <TagsField
+            value={profile.tags}
+            onChange={(next) => update("tags", next)}
+            suggestions={(() => {
+              const discSubs =
+                getDisciplineById(profile.discipline)?.subStyles ?? [];
+              return Array.from(new Set([...discSubs, ...allThemes]));
+            })()}
+            formatSuggestion={formatSubStyleLabel}
+            label="Tags"
+            placeholder="Search or add a tag…"
+          />
         </div>
 
         {/* 5. Commercial Terms */}
@@ -818,28 +1053,44 @@ export default function ProfileEditorPage() {
             <div className="bg-background border border-border rounded-sm p-5 mb-5 space-y-4">
               <h3 className="text-sm font-medium">{editingWorkIndex !== null ? "Edit Work" : "Add New Work"}</h3>
 
-              {/* Image upload */}
-              <div className="flex items-start gap-4">
-                {workForm.image ? (
-                  <div className="w-28 h-20 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
-                    <Image src={workForm.image} alt="Preview" fill className="object-cover" sizes="112px" />
-                  </div>
-                ) : (
-                  <div className="w-28 h-20 rounded-sm border-2 border-dashed border-border flex items-center justify-center shrink-0">
-                    <span className="text-[10px] text-muted">No image</span>
-                  </div>
-                )}
-                <div>
-                  <input ref={workImageRef} type="file" accept="image/*" onChange={handleWorkImageUpload} className="hidden" />
-                  <button type="button" onClick={() => workImageRef.current?.click()} className="px-3 py-2 text-xs font-medium border border-border rounded-sm hover:border-foreground/30 transition-colors">
-                    {workForm.image ? "Replace" : "Upload Image"}
-                  </button>
-                </div>
-              </div>
+              {/* Image upload — clickable + drag-drop target. Drop a
+                  file from Finder / Explorer / iPhotos and it uploads
+                  the same way as the file-picker path. The whole zone
+                  is the drop target so users don't have to aim at a
+                  small button. */}
+              <WorkImageDropzone
+                imageUrl={workForm.image}
+                inputRef={workImageRef}
+                onChange={handleWorkImageUpload}
+                onFile={async (file) => {
+                  // Mirror the existing handler's logic (upload +
+                  // detect orientation) by synthesising a fake event.
+                  // Keeps a single source of truth for the upload flow
+                  // and dimension auto-detection.
+                  const dt = new DataTransfer();
+                  dt.items.add(file);
+                  const fakeEvent = {
+                    target: { files: dt.files },
+                  } as unknown as React.ChangeEvent<HTMLInputElement>;
+                  await handleWorkImageUpload(fakeEvent);
+                }}
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <input type="text" value={workForm.title} onChange={(e) => setWorkForm((p) => ({ ...p, title: e.target.value }))} placeholder="Title *" className={inputClass} />
-                <input type="text" value={workForm.medium} onChange={(e) => setWorkForm((p) => ({ ...p, medium: e.target.value }))} placeholder="Medium *" className={inputClass} />
+                {/* Medium — searchable + mandatory combobox. Suggests
+                    standard mediums (oil, acrylic, watercolour…) but
+                    accepts free text via "Use 'foo'" for one-off
+                    techniques. Required to submit. */}
+                <Combobox
+                  value={workForm.medium}
+                  onChange={(next) => setWorkForm((p) => ({ ...p, medium: next }))}
+                  options={WORK_MEDIUM_OPTIONS}
+                  allowCustom
+                  required
+                  placeholder="Medium * (search or type)"
+                  className={inputClass}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <input type="text" value={workForm.dimensions} onChange={(e) => setWorkForm((p) => ({ ...p, dimensions: e.target.value }))} placeholder="Dimensions" className={inputClass} />

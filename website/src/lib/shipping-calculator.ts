@@ -7,16 +7,19 @@
  * flag using sensible density assumptions (canvas ~0.6 kg/m² unframed,
  * +~1.5 kg for a timber frame + glass up to A2, +~3 kg above).
  *
- * Pricing is modelled on Royal Mail + Parcelforce tracked tiers so
- * artwork isn't going in general post:
+ * Pricing is modelled on Royal Mail + Parcelforce tracked rates with
+ * a small margin for packaging materials (cardboard, corner protectors,
+ * tissue), recalibrated 2026-04 against current courier prices — the
+ * old table was running ~25-30% above real costs and pricing artists
+ * out of orders unnecessarily:
  *
  *   Tier      | Longest edge | Weight | Domestic UK | International
  *   --------- | ------------ | ------ | ----------- | -------------
- *   Flat      | ≤ A4 (30cm)  | ≤ 1kg  | £4.50       | £12
- *   Small     | ≤ 50cm       | ≤ 2kg  | £8.50       | £22
- *   Medium    | ≤ 80cm       | ≤ 5kg  | £14.50      | £38
- *   Large     | ≤ 120cm      | ≤ 15kg | £24.00      | £65
- *   Oversized | > 120cm      | > 15kg | £45.00      | £120
+ *   Flat      | ≤ A4 (30cm)  | ≤ 1kg  | £3.50       | £10
+ *   Small     | ≤ 50cm       | ≤ 2kg  | £6.50       | £18
+ *   Medium    | ≤ 80cm       | ≤ 5kg  | £10.50      | £28
+ *   Large     | ≤ 120cm      | ≤ 15kg | £18.00      | £48
+ *   Oversized | > 120cm      | > 15kg | £35.00      | £95
  *
  * £100+ orders automatically add the signature-on-delivery uplift (£2)
  * — this mirrors the terms policy.
@@ -171,11 +174,11 @@ function tierForSize(longestEdgeCm: number, weightKg: number): ShippingTier {
 }
 
 const PRICING: Record<ShippingTier, { uk: number; international: number; days: string }> = {
-  flat:      { uk: 4.50,  international: 12.00, days: "2–3 working days" },
-  small:     { uk: 8.50,  international: 22.00, days: "3–5 working days" },
-  medium:    { uk: 14.50, international: 38.00, days: "3–7 working days" },
-  large:     { uk: 24.00, international: 65.00, days: "5–10 working days" },
-  oversized: { uk: 45.00, international: 120.00, days: "7–14 working days (specialist courier)" },
+  flat:      { uk: 3.50,  international: 10.00, days: "2–3 working days" },
+  small:     { uk: 6.50,  international: 18.00, days: "3–5 working days" },
+  medium:    { uk: 10.50, international: 28.00, days: "3–7 working days" },
+  large:     { uk: 18.00, international: 48.00, days: "5–10 working days" },
+  oversized: { uk: 35.00, international: 95.00, days: "7–14 working days (specialist courier)" },
 };
 
 /** Orders at or above this price automatically ship signed-for. Terms §7. */

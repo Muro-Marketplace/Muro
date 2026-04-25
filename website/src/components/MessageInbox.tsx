@@ -142,9 +142,24 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     return () => { if (convPollRef.current) clearInterval(convPollRef.current); };
   }, [loadConversations]);
 
-  // Handle initialArtistSlug
+  // Handle initialArtistSlug — runs ONCE per slug arrival.
+  //
+  // Bug we're fixing (#15): the effect previously had `conversations`
+  // in its dep array, so every 15-second poll re-fired the selection
+  // back to the notification target. When the user clicked a different
+  // conversation in the list, the next poll would silently snap them
+  // back to the artist whose notification originally opened the inbox.
+  //
+  // Fix: track the last-handled slug in a ref so the effect only acts
+  // when the prop *changes*, not when the conversations list refreshes.
+  // We still depend on `loading` because we need the conversations to
+  // be fetched at least once before the first lookup.
+  const handledInitialSlugRef = useRef<string | null>(null);
   useEffect(() => {
     if (!initialArtistSlug || loading) return;
+    if (handledInitialSlugRef.current === initialArtistSlug) return;
+    handledInitialSlugRef.current = initialArtistSlug;
+
     const existing = conversations.find((c) => c.otherParty === initialArtistSlug);
     if (existing) {
       setSelectedConv(existing.conversationId);
@@ -153,7 +168,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       setComposeRecipient(initialArtistSlug);
       setComposeRecipientName(initialArtistName || initialArtistSlug);
     }
-  }, [initialArtistSlug, initialArtistName, loading, conversations]);
+    // Don't depend on `conversations` — it polls and would re-fire the
+    // selection. We use the ref above to enforce one-shot behaviour;
+    // when conversations finishes loading we still get one chance to
+    // act because `loading` flips false at that moment, not on polls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialArtistSlug, initialArtistName, loading]);
 
   // Load thread
   const loadThread = useCallback(async (convId: string, silent = false) => {
@@ -234,17 +254,20 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   }, [selectedConv, conversations, loadOtherPartyWorks]);
 
   // Scroll to the latest message whenever the selected thread changes or
-  // new messages arrive. Uses two attempts (sync + rAF-deferred) because
-  // the first paint often fires before the messages column has its final
-  // height, which would cause scrollIntoView to land at the wrong offset.
+  // new messages arrive. Multiple staggered attempts because images +
+  // long content can shift layout well after first paint, and an early
+  // scroll lands above the actual bottom. We bail when messages are
+  // empty (the placeholder state between thread switches) — the next
+  // pass after the array fills runs the real scroll.
   useEffect(() => {
+    if (messages.length === 0) return;
     const scrollToBottom = () => {
       const el = messagesEndRef.current;
       if (!el) return;
-      el.scrollIntoView({ behavior: "instant", block: "end" });
-      // Fallback in case the end-anchor is hidden inside an overflow
-      // container that scrollIntoView can't resolve — walk up and scroll
-      // the nearest scrollable ancestor to the bottom.
+      el.scrollIntoView({ block: "end" });
+      // Fallback: walk up to the nearest scrollable ancestor and force
+      // its scrollTop to the bottom. Catches cases where scrollIntoView
+      // mis-resolves inside nested overflow contexts.
       let parent: HTMLElement | null = el.parentElement;
       while (parent) {
         const overflowY = window.getComputedStyle(parent).overflowY;
@@ -256,11 +279,15 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       }
     };
     scrollToBottom();
-    const raf = requestAnimationFrame(scrollToBottom);
-    const timer = setTimeout(scrollToBottom, 200);
+    const r1 = requestAnimationFrame(scrollToBottom);
+    const t1 = setTimeout(scrollToBottom, 100);
+    const t2 = setTimeout(scrollToBottom, 400);
+    const t3 = setTimeout(scrollToBottom, 1200);
     return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(timer);
+      cancelAnimationFrame(r1);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
     };
   }, [messages, selectedConv]);
 
