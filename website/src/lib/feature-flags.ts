@@ -43,10 +43,12 @@ const FLAGS: Record<FeatureFlag, FlagDef> = {
   WALL_VISUALIZER_V1: {
     envKey: "NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1",
     devDefault: true,
-    prodDefault: false,
+    prodDefault: true,
     description:
       "Phase 1 wall visualizer (preset walls, customer + venue flows, " +
-      "non-AI render). Disabled in production until all 12 PRs land.",
+      "non-AI render, plus artist showroom + mockup-attach). On in " +
+      "prod by default — set NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1=0 in " +
+      "Vercel to kill-switch if it misbehaves.",
   },
 };
 

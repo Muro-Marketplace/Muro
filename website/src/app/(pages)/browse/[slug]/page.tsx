@@ -165,22 +165,24 @@ export default async function ArtistProfilePage({
             Back to Marketplace
           </Link>
 
-          {/* Three-column layout on desktop: photo (left, 240px) →
-              identity + bio (centre, flexible) → metadata (right,
-              260px). The bio column is squeezed a touch from the
-              previous 1fr so the metadata sidebar fits without pushing
-              anything off-screen on a 13" laptop. On mobile everything
-              stacks. */}
-          <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_260px] gap-8 lg:gap-10 items-start">
-            {/* LEFT — square photo + Instagram. */}
+          {/* Three-column layout on desktop: photo + CTAs (left, 220px)
+              → identity + bio (centre, flexible) → metadata (right,
+              260px). The photo is shrunk slightly from 240→220px so
+              that stacking Message + Request Placement under it doesn't
+              push the column taller than the bio column. */}
+          <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_260px] gap-8 lg:gap-10 items-start">
+            {/* LEFT — square photo + CTAs + Instagram. CTAs sit
+                directly under the photo so the buyer's eye flows
+                face → name → action. Both buttons render full-width
+                of the column for visual weight as the primary CTA. */}
             <div className="space-y-3">
-              <div className="relative aspect-square w-full max-w-[240px] rounded-sm overflow-hidden bg-stone-100 border border-border">
+              <div className="relative aspect-square w-full max-w-[220px] rounded-sm overflow-hidden bg-stone-100 border border-border">
                 <Image
                   src={artist.image || `https://picsum.photos/seed/${artist.slug}/600/600`}
                   alt={artist.name}
                   fill
                   className="object-cover"
-                  sizes="240px"
+                  sizes="220px"
                   priority
                 />
                 {artist.isFoundingArtist && (
@@ -192,17 +194,23 @@ export default async function ArtistProfilePage({
                   </span>
                 )}
               </div>
-              {artist.instagram && (
-                <a
-                  href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
-                  {artist.instagram}
-                </a>
-              )}
+              <div className="flex flex-col gap-2 max-w-[220px]">
+                <MessageArtistButton
+                  artistSlug={artist.slug}
+                  artistName={artist.name}
+                  variant="accent"
+                  size="md"
+                  fullWidth
+                />
+                <PlacementButton
+                  artistSlug={artist.slug}
+                  artistName={artist.name}
+                  fullWidth
+                />
+              </div>
+              {/* @instagram moved into the centre column, alongside
+                  discipline + location, to keep the left column from
+                  stacking too tall. */}
             </div>
 
             {/* CENTRE — identity + bio + tags + CTAs. */}
@@ -213,7 +221,23 @@ export default async function ArtistProfilePage({
               <h1 className="font-serif text-4xl lg:text-5xl text-foreground leading-tight tracking-tight mb-2">
                 {artist.name}
               </h1>
-              <p className="text-muted text-sm mb-6">{artist.location}</p>
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                <p className="text-muted text-sm">{artist.location}</p>
+                {artist.instagram && (
+                  <>
+                    <span className="text-border">·</span>
+                    <a
+                      href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
+                      {artist.instagram}
+                    </a>
+                  </>
+                )}
+              </div>
 
               {(artist.subStyles && artist.subStyles.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 mb-6">
@@ -244,11 +268,8 @@ export default async function ArtistProfilePage({
                   ))}
                 </div>
               )}
-
-              <div className="flex flex-wrap gap-2">
-                <MessageArtistButton artistSlug={artist.slug} artistName={artist.name} variant="accent" size="md" />
-                <PlacementButton artistSlug={artist.slug} artistName={artist.name} />
-              </div>
+              {/* CTAs moved to under the photo on the left so the
+                  primary action sits next to the artist's face. */}
             </div>
 
             {/* RIGHT — metadata sidebar. Stacks all the venue-relevant

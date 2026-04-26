@@ -17,6 +17,7 @@ import {
   parseDimensions,
 } from "@/lib/visualizer/dimensions";
 import { resolveShippingCost, tierLabel, SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
+import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 
 interface ArtworkPageClientProps {
   work: ArtistWork;
@@ -152,7 +153,7 @@ export default function ArtworkPageClient({
           </p>
           {work.pricing.length === 1 ? (
             <div className="flex items-baseline justify-between py-3 border-y border-border">
-              <span className="text-sm text-foreground">{work.pricing[0].label}</span>
+              <span className="text-sm text-foreground">{formatSizeLabelForDisplay(work.pricing[0].label)}</span>
               <span className="font-serif text-xl text-foreground">
                 £{work.pricing[0].price}
               </span>
@@ -166,7 +167,7 @@ export default function ArtworkPageClient({
                   const stock = sp.quantityAvailable;
                   return {
                     value: String(i),
-                    label: `${sp.label} — £${sp.price}`,
+                    label: `${formatSizeLabelForDisplay(sp.label)} — £${sp.price}`,
                     description: typeof stock === "number"
                       ? (stock <= 0 ? "Sold out" : `${stock} available`)
                       : undefined,
@@ -189,7 +190,7 @@ export default function ArtworkPageClient({
                         : `${stock} available`;
                     return (
                       <li key={sp.label} className="flex justify-between text-[11px]">
-                        <span className="text-muted">{sp.label}</span>
+                        <span className="text-muted">{formatSizeLabelForDisplay(sp.label)}</span>
                         <span className={`${typeof stock === "number" && stock <= 0 ? "text-red-600" : "text-foreground/70"}`}>
                           {label}
                         </span>

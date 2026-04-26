@@ -8,14 +8,20 @@ interface MessageArtistButtonProps {
   artistName: string;
   variant?: "accent" | "primary";
   size?: "md" | "lg";
+  /** When true, the button stretches to fill its parent and drops the
+   *  default `min-width` so it doesn't blow out narrow columns. */
+  fullWidth?: boolean;
 }
 
-export default function MessageArtistButton({ artistSlug, artistName, variant = "accent", size = "md" }: MessageArtistButtonProps) {
+export default function MessageArtistButton({ artistSlug, artistName, variant = "accent", size = "md", fullWidth = false }: MessageArtistButtonProps) {
   const { user, userType } = useAuth();
   const router = useRouter();
 
-  const baseStyles = "inline-flex items-center justify-center font-medium rounded-sm transition-colors min-w-[140px]";
-  const sizeStyles = size === "lg" ? "px-8 py-3.5 text-sm font-semibold min-w-[200px]" : "px-5 py-2.5 text-sm";
+  const widthStyles = fullWidth ? "w-full" : "min-w-[140px]";
+  const baseStyles = `inline-flex items-center justify-center font-medium rounded-sm transition-colors ${widthStyles}`;
+  const sizeStyles = size === "lg"
+    ? `px-8 py-3.5 text-sm font-semibold ${fullWidth ? "" : "min-w-[200px]"}`
+    : "px-5 py-2.5 text-sm";
   const variantStyles = variant === "primary"
     ? "bg-foreground text-white hover:bg-foreground/90"
     : "bg-accent text-white hover:bg-accent-hover";

@@ -42,7 +42,15 @@ export default function ArtworkImageViewer({ src, alt, aspectRatio, images }: Pr
           className="relative bg-[#f5f5f3] rounded-sm overflow-hidden select-none"
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="relative w-full" style={{ aspectRatio }}>
+          {/* Container shape stays driven by the work's aspect ratio,
+              but the height is capped at ~80vh so a tall portrait
+              never blows past the viewport on a 13" laptop. The image
+              uses object-contain so it letter-boxes inside the cap
+              rather than getting cropped. */}
+          <div
+            className="relative w-full mx-auto max-h-[calc(100vh-12rem)]"
+            style={{ aspectRatio }}
+          >
             <Image
               key={activeSrc}
               src={activeSrc}

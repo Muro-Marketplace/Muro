@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
+import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 
 interface ArtistProfileClientProps {
   artistName: string;
@@ -272,7 +273,7 @@ export default function ArtistProfileClient({
                           work.pricing.length === 0
                             ? null
                             : work.pricing.length === 1
-                              ? work.pricing[0].label
+                              ? formatSizeLabelForDisplay(work.pricing[0].label)
                               : `${work.pricing.length} sizes available`;
                         const subtitleParts = [work.medium, sizesText].filter(
                           (p): p is string => Boolean(p),
