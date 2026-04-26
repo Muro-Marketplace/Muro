@@ -11,7 +11,11 @@ const options = [
   {
     label: "Artist",
     description: "Showcase your work to venues and buyers across the UK. Get discovered, get placed, get paid.",
-    href: "/apply",
+    // Routes to /signup/artist (account first), which then forwards
+    // into /apply once the user is signed in. The application page
+    // itself is auth-gated — anyone hitting /apply directly while
+    // logged out is redirected here.
+    href: "/signup/artist",
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 19l7-7 3 3-7 7-3-3z" />
@@ -60,7 +64,7 @@ export default function SignUpPage() {
         <div className="absolute inset-0 bg-black/55" />
       </div>
 
-      <div className="w-full max-w-md px-6 py-16 -mt-[20vh] sm:mt-0">
+      <div className="w-full max-w-md px-6 py-16 -mt-[14vh] sm:mt-0">
         {/* Heading */}
         <div className="text-center mb-10">
           <h1 className="text-3xl lg:text-4xl font-serif mb-2 text-white">Join Wallplace</h1>

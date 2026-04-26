@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import TermsCheckbox from "@/components/TermsCheckbox";
+import { useAuth } from "@/context/AuthContext";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
 
 const primaryMediums = [
@@ -167,8 +168,23 @@ const initialState: FormState = {
 };
 
 export default function ApplicationForm() {
+  const { user, displayName } = useAuth();
   const [form, setForm] = useState<FormState>(initialState);
   const [submitted, setSubmitted] = useState(false);
+  // Prefill name + email once the auth context resolves. We can't
+  // use them as the initial state because AuthContext is async on
+  // first render and the form component might mount before the
+  // session is fetched. Update on user change so a sign-in mid-form
+  // also lands the values, but only when the artist hasn't already
+  // typed something else (preserves any partial draft).
+  useEffect(() => {
+    if (!user) return;
+    setForm((prev) => ({
+      ...prev,
+      email: prev.email || user.email || "",
+      name: prev.name || displayName || "",
+    }));
+  }, [user, displayName]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   // Field-level validation errors keyed by form field name. Populated from

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import ApplicationForm from "@/components/ApplicationForm";
+import ApplicationGate from "@/components/ApplicationGate";
 
 export const metadata: Metadata = {
   title: "Apply to Join – Wallplace",
@@ -108,9 +108,11 @@ export default function ApplyPage() {
               </p>
             </div>
 
-            {/* Form */}
+            {/* Form — gated by auth. Anonymous visitors are pushed
+                through /signup/artist first so the application
+                always belongs to a real Supabase account. */}
             <div>
-              <ApplicationForm />
+              <ApplicationGate />
             </div>
           </div>
         </div>
