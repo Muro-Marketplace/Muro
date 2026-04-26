@@ -9,6 +9,11 @@ export interface SizePricing {
       falls back to the work-level `quantityAvailable` (legacy
       artworks) or treats the size as unlimited. */
   quantityAvailable?: number | null;
+  /** Optional per-size domestic shipping price. When set on at least
+      one size of a work, the cart uses these instead of the
+      work-level `shippingPrice`. Stored alongside `price` in the
+      `artist_works.pricing` JSON column — no migration needed. */
+  shippingPrice?: number | null;
 }
 
 export interface ArtistWork {

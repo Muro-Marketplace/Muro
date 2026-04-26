@@ -228,6 +228,14 @@ export default function PortfolioPage() {
   const [bulkEditTargetIds, setBulkEditTargetIds] = useState<Set<string>>(
     new Set(),
   );
+  // Single-form "Copy from another work…" picker. Lives next to
+  // the size table header in the Add/Edit work form. Picking a
+  // source seeds the form's sizes / prices in-place, so artists
+  // setting up a new work in a series don't have to re-key every
+  // size and price by hand.
+  const [formCopyKind, setFormCopyKind] = useState<"sizes" | "prices" | null>(
+    null,
+  );
   // Spreadsheet-style price editor. Opens a modal with one row per
   // (work × size) so you can scan and tweak many prices at once
   // without clicking into each work individually.
@@ -1048,6 +1056,91 @@ export default function PortfolioPage() {
     setBulkEditTargetIds(new Set());
   }
 
+  /**
+   * Apply a source work's sizes or prices into the currently-open
+   * Add/Edit form. Used by the picker that lives next to the size
+   * table header.
+   *
+   * "sizes": replace the form's size labels with the source's. Each
+   * row's price and shipping price come pre-seeded from the source —
+   * artists in a series usually want both anyway, and they can clear
+   * individual cells if needed.
+   *
+   * "prices": index-aligned, like the bulk-edit version. Source
+   * row i's price ↔ form row i's price. Source's per-size shipping
+   * is propagated where set. Work-level shipping / in-store prices
+   * are also copied IF the source has them set, so a new work in a
+   * series picks up "the usual" defaults in one click.
+   */
+  function applyCopyFromSourceToForm(
+    source: ArtistWork,
+    kind: "sizes" | "prices",
+  ) {
+    setForm((p) => {
+      if (kind === "sizes") {
+        const newSizes = source.pricing.map((s) => ({
+          label: s.label,
+          price: s.price,
+        }));
+        const newSizeShipping = source.pricing.map((s) =>
+          typeof s.shippingPrice === "number" ? String(s.shippingPrice) : "",
+        );
+        const anyShipping = newSizeShipping.some((v) => v !== "");
+        return {
+          ...p,
+          sizes: newSizes,
+          // Reset parallel arrays so they line up with the new sizes.
+          shippingPerSize: anyShipping,
+          sizeShipping: newSizeShipping,
+          stockPerSize: false,
+          sizeStock: newSizes.map(() => ""),
+          inStorePricing: newSizes.map(() => ""),
+        };
+      }
+      // kind === "prices" — index-aligned per-row copy.
+      const nextSizes = p.sizes.map((s, i) => ({
+        ...s,
+        price: source.pricing[i]?.price ?? s.price,
+      }));
+      const nextSizeShipping = p.sizes.map((_, i) => {
+        const shipping = source.pricing[i]?.shippingPrice;
+        return typeof shipping === "number" ? String(shipping) : "";
+      });
+      const anyShipping = nextSizeShipping.some((v) => v !== "");
+      const nextInStorePricing =
+        Array.isArray(source.inStorePricing) &&
+        source.inStorePricing.length > 0
+          ? p.sizes.map((_, i) => {
+              const v = source.inStorePricing![i]?.price;
+              return typeof v === "number" && v > 0 ? String(v) : "";
+            })
+          : p.inStorePricing;
+      return {
+        ...p,
+        sizes: nextSizes,
+        sizeShipping: anyShipping ? nextSizeShipping : p.sizeShipping,
+        shippingPerSize: anyShipping || p.shippingPerSize,
+        shippingPrice:
+          source.shippingPrice != null
+            ? String(source.shippingPrice)
+            : p.shippingPrice,
+        inStorePrice:
+          source.inStorePrice != null
+            ? String(source.inStorePrice)
+            : p.inStorePrice,
+        inStorePricing: nextInStorePricing,
+        inStoreEnabled:
+          (Array.isArray(source.inStorePricing) &&
+            source.inStorePricing.length > 0) ||
+          source.inStorePrice != null
+            ? true
+            : p.inStoreEnabled,
+      };
+    });
+    setFormCopyKind(null);
+    showToast(`Applied ${kind} from "${source.title}"`);
+  }
+
   function bulkEditApplyToTargets() {
     if (!bulkEditPendingSource || bulkEditApplyKind === null) return;
     const source = bulkEditPendingSource;
@@ -1075,14 +1168,30 @@ export default function PortfolioPage() {
           priceBand: lowest > 0 ? `From £${lowest}` : w.priceBand,
         };
       }
-      // kind === "prices"
-      const lookup = new Map(
-        source.pricing.map((s) => [s.label.toLowerCase(), s.price]),
-      );
-      const nextPricing: SizePricing[] = w.pricing.map((s) => ({
-        ...s,
-        price: lookup.get(s.label.toLowerCase()) ?? s.price,
-      }));
+      // kind === "prices" — copy row-by-row (index-aligned), not by
+      // matching size labels. Artists asked for this: their size
+      // tables don't always use identical labels (e.g. "A4 print"
+      // vs "A4 / 30×21cm") but the row order is consistent across
+      // a series, so the i-th source row ↔ i-th target row gives
+      // them what they actually want. Target rows beyond the
+      // source's length keep their existing price.
+      //
+      // Per-size shipping is brought along the same way: if the
+      // source set a row-i shipping price, that lands on the
+      // target's row i. We don't blank out an existing target
+      // shipping just because the source didn't set one — preserve
+      // it explicitly.
+      const nextPricing: SizePricing[] = w.pricing.map((s, i) => {
+        const sourceRow = source.pricing[i];
+        const next: SizePricing = {
+          ...s,
+          price: sourceRow?.price ?? s.price,
+        };
+        if (sourceRow?.shippingPrice != null) {
+          next.shippingPrice = sourceRow.shippingPrice;
+        }
+        return next;
+      });
       const lowest = Math.min(...nextPricing.map((p) => p.price));
       const result: ArtistWork = {
         ...w,
@@ -1102,18 +1211,19 @@ export default function PortfolioPage() {
         Array.isArray(source.inStorePricing) &&
         source.inStorePricing.length > 0
       ) {
-        // Per-size in-store pricing — clone matching labels by name so a
-        // target that has different size labels still gets a sensible
-        // result. Drop labels the target doesn't carry.
-        const inStoreLookup = new Map(
-          source.inStorePricing.map((s) => [s.label.toLowerCase(), s.price]),
-        );
-        result.inStorePricing = nextPricing
-          .filter((p) => inStoreLookup.has(p.label.toLowerCase()))
-          .map((p) => ({
+        // Per-size in-store pricing — index-aligned, same as the
+        // main pricing copy above. Source row i's in-store price
+        // lands on target row i. Drops rows where source had no
+        // in-store entry so we don't seed zeros into the target.
+        const inStoreCloned = nextPricing
+          .map((p, i) => ({
             label: p.label,
-            price: inStoreLookup.get(p.label.toLowerCase()) ?? 0,
-          }));
+            price: source.inStorePricing![i]?.price ?? 0,
+          }))
+          .filter((p) => p.price > 0);
+        if (inStoreCloned.length > 0) {
+          result.inStorePricing = inStoreCloned;
+        }
       }
       return result;
     });
@@ -1197,8 +1307,19 @@ export default function PortfolioPage() {
       orientation: w.orientation || "landscape",
       sizes: w.pricing.map((p) => ({ label: p.label, price: p.price })),
       shippingPrice: w.shippingPrice != null ? String(w.shippingPrice) : "",
-      shippingPerSize: false,
-      sizeShipping: [],
+      // Rehydrate per-size shipping. Previously hard-coded to `false`
+      // / `[]` here, which meant opening a work that HAD per-size
+      // shipping silently lost it: the toggle showed off, the column
+      // disappeared, and Save Changes overwrote the work without the
+      // per-size values. Now we look at `pricing[i].shippingPrice`:
+      // if any size carries a number, the toggle flips on and the
+      // column is populated.
+      shippingPerSize: w.pricing.some(
+        (p) => typeof p.shippingPrice === "number",
+      ),
+      sizeShipping: w.pricing.map((p) =>
+        typeof p.shippingPrice === "number" ? String(p.shippingPrice) : "",
+      ),
       inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
       inStorePricing: w.inStorePricing ? w.inStorePricing.map((p) => String(p.price)) : [],
       inStoreEnabled: Array.isArray(w.inStorePricing) && w.inStorePricing.some((p) => p.price > 0),
@@ -1405,14 +1526,34 @@ export default function PortfolioPage() {
       // matching sizeStock entry by label so filter + add rows stay
       // aligned even if the array indexes have drifted.
       pricing: validSizes.map((s) => {
-        const base: { label: string; price: number; quantityAvailable?: number } = {
+        const base: {
+          label: string;
+          price: number;
+          quantityAvailable?: number;
+          shippingPrice?: number;
+        } = {
           label: s.label,
           price: s.price,
         };
+        // Look up the original form.sizes index by label so the
+        // sizeStock / sizeShipping arrays stay aligned even if the
+        // artist removed empty rows above this one.
+        const formIdx = form.sizes.findIndex((x) => x.label === s.label);
         if (form.stockPerSize) {
-          const raw = form.sizeStock[form.sizes.findIndex((x) => x.label === s.label)];
+          const raw = form.sizeStock[formIdx];
           const n = raw === undefined || raw === "" ? NaN : Number(raw);
           if (Number.isFinite(n) && n >= 0) base.quantityAvailable = Math.floor(n);
+        }
+        // Per-size shipping is the bug-fix: we previously dropped it
+        // on the floor (no SizePricing.shippingPrice field) so the
+        // form's per-size values never made it to the DB. Now we
+        // persist them when the toggle is on AND the row has a
+        // numeric value. Empty rows are skipped so the work-level
+        // `shippingPrice` can still apply for that size.
+        if (form.shippingPerSize) {
+          const raw = form.sizeShipping[formIdx];
+          const n = raw === undefined || raw === "" ? NaN : Number(raw);
+          if (Number.isFinite(n) && n >= 0) base.shippingPrice = n;
         }
         return base;
       }),
@@ -1575,13 +1716,32 @@ export default function PortfolioPage() {
       {/* Add/Edit Form */}
       {showForm && (
         <div className="bg-surface border border-border rounded-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-5">
+          {/* Sticky form header — title on the left, Cancel + primary
+              save on the right. The save button used to live only at
+              the very bottom of a long form; on mobile + on works
+              with lots of size rows the artist had to scroll past
+              everything to commit changes. Mirroring it at the top
+              (with the same handleSubmit) means Save Changes is
+              always one tap away. The bottom button stays as a
+              fall-through for desktop scroll-flow. */}
+          <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
             <h2 className="text-base font-medium">
               {editingIndex !== null ? "Edit Work" : "Add New Work"}
             </h2>
-            <button onClick={() => setShowForm(false)} className="text-xs text-muted hover:text-foreground transition-colors">
-              Cancel
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowForm(false)}
+                className="text-xs text-muted hover:text-foreground transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="text-xs px-4 py-2 rounded-sm bg-foreground text-white hover:bg-foreground/90 transition-colors font-medium"
+              >
+                {editingIndex !== null ? "Save Changes" : "Add Work"}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-5">
@@ -1879,15 +2039,33 @@ export default function PortfolioPage() {
                 toggles are on; frame add-ons stay below as they apply
                 across all sizes rather than per-size. */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
                 <label className="text-sm font-medium">Available Sizes & Prices <span className="text-accent">*</span></label>
-                <button
-                  type="button"
-                  onClick={addSize}
-                  className="text-xs text-accent hover:text-accent-hover transition-colors"
-                >
-                  + Add custom size
-                </button>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Copy-from picker — opens a small dropdown of the
+                      artist's existing works (excluding the one being
+                      edited). Picking a source seeds either size
+                      labels or row-aligned prices into the form. */}
+                  <FormCopyFromPicker
+                    works={works.filter(
+                      (w) =>
+                        editingIndex === null ||
+                        w.id !== works[editingIndex]?.id,
+                    )}
+                    activeKind={formCopyKind}
+                    onToggleOpen={(k) =>
+                      setFormCopyKind(formCopyKind === k ? null : k)
+                    }
+                    onPick={applyCopyFromSourceToForm}
+                  />
+                  <button
+                    type="button"
+                    onClick={addSize}
+                    className="text-xs text-accent hover:text-accent-hover transition-colors"
+                  >
+                    + Add custom size
+                  </button>
+                </div>
               </div>
 
               {/* Column toggles */}
@@ -3220,11 +3398,18 @@ export default function PortfolioPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="bulk-add-title"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-sm p-4"
+          // pt-20 leaves clearance for the artist-portal sticky nav
+          // (and the global header above it) so the modal's title +
+          // image dropzone aren't hidden behind it. Without the
+          // explicit top inset the modal centred to viewport-mid
+          // and on shorter screens the upper edge sat under the
+          // bar — clicking the dropzone still worked but the artist
+          // couldn't actually see what they were dropping into.
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm pt-20 sm:pt-24 pb-4 px-4 overflow-y-auto"
           onClick={() => !bulkAddSaving && setBulkAddOpen(false)}
         >
           <div
-            className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-lg bg-white shadow-2xl border border-border"
+            className="w-full max-w-5xl max-h-[calc(100vh-7rem)] sm:max-h-[calc(100vh-8rem)] flex flex-col rounded-lg bg-white shadow-2xl border border-border"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -4115,6 +4300,92 @@ function CopyFromSourceButton({
           )}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * Compact two-button picker that lives inside the Add/Edit work form
+ * next to the size table header. Each button toggles a small popover
+ * listing the artist's other works; picking one calls `onPick` which
+ * mutates the open form. Surfaces the same Copy-from affordance the
+ * bulk-add modal already has, just for the single-form flow.
+ *
+ * Why a separate component (vs. reusing CopyFromSourceButton):
+ *   - That one styles for the dark sticky bulk-edit toolbar (white
+ *     text on transparent bg). This one needs the lighter accent
+ *     style to fit the form chrome.
+ *   - This one only takes ArtistWork sources (no drafts), so the
+ *     dropdown is simpler.
+ */
+function FormCopyFromPicker({
+  works,
+  activeKind,
+  onToggleOpen,
+  onPick,
+}: {
+  works: ArtistWork[];
+  activeKind: "sizes" | "prices" | null;
+  onToggleOpen: (k: "sizes" | "prices") => void;
+  onPick: (source: ArtistWork, kind: "sizes" | "prices") => void;
+}) {
+  const candidates = works.filter((w) =>
+    w.pricing.some((p) => p.label && p.price > 0),
+  );
+  if (candidates.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-3">
+      {(["sizes", "prices"] as const).map((kind) => (
+        <div key={kind} className="relative">
+          <button
+            type="button"
+            onClick={() => onToggleOpen(kind)}
+            className={`text-xs transition-colors ${
+              activeKind === kind
+                ? "text-foreground"
+                : "text-accent hover:text-accent-hover"
+            }`}
+          >
+            Copy {kind} from… ▾
+          </button>
+          {activeKind === kind && (
+            <ul
+              role="listbox"
+              className="absolute right-0 top-full mt-1 max-h-72 w-72 overflow-y-auto rounded-sm bg-white text-foreground shadow-xl border border-border z-30"
+            >
+              {candidates.map((source) => (
+                <li key={source.id}>
+                  <button
+                    type="button"
+                    onClick={() => onPick(source, kind)}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center gap-2"
+                  >
+                    <span className="relative w-7 h-7 rounded-sm overflow-hidden bg-border/30 shrink-0">
+                      {source.image && (
+                        <Image
+                          src={source.image}
+                          alt=""
+                          fill
+                          className="object-cover"
+                          sizes="28px"
+                        />
+                      )}
+                    </span>
+                    <span className="truncate font-medium flex-1">
+                      {source.title}
+                    </span>
+                    <span className="text-stone-400 shrink-0">
+                      {source.pricing.length} size
+                      {source.pricing.length === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
