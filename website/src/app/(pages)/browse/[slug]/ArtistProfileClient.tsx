@@ -255,15 +255,35 @@ export default function ArtistProfileClient({
                   {/* Transparent overlay to block save-as */}
                   <div className="absolute inset-0" />
 
-                  {/* Hover overlay */}
+                  {/* Hover overlay. Subtitle reads off sizes from
+                      pricing rather than the raw `dimensions` field —
+                      `dimensions` often holds a "1920 × 1080 px" string
+                      auto-set during upload, which means nothing to a
+                      buyer. Single size renders as the label
+                      ("12×16\""); multiple sizes shows the count
+                      ("3 sizes available"). */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/55 transition-colors duration-300 flex items-end pointer-events-none group-hover:pointer-events-auto">
                     <div className="p-5 w-full opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
                       <h3 className="text-white font-sans font-medium text-sm leading-snug mb-1">
                         {work.title}
                       </h3>
-                      <p className="text-white/70 text-xs mb-1.5">
-                        {work.medium} &middot; {work.dimensions}
-                      </p>
+                      {(() => {
+                        const sizesText =
+                          work.pricing.length === 0
+                            ? null
+                            : work.pricing.length === 1
+                              ? work.pricing[0].label
+                              : `${work.pricing.length} sizes available`;
+                        const subtitleParts = [work.medium, sizesText].filter(
+                          (p): p is string => Boolean(p),
+                        );
+                        if (subtitleParts.length === 0) return null;
+                        return (
+                          <p className="text-white/70 text-xs mb-1.5">
+                            {subtitleParts.join(" · ")}
+                          </p>
+                        );
+                      })()}
                       <div className="flex items-center justify-between">
                         <p className="text-white text-sm font-medium">
                           {work.priceBand}
