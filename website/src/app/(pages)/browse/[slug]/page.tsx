@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { artists } from "@/data/artists";
 import { getDisciplineById, resolveDiscipline, formatSubStyleLabel, disciplineLabel } from "@/data/categories";
-import { getCollectionsByArtist } from "@/data/collections";
+import { getCollectionsByArtistSlug } from "@/lib/db/artist-collections";
 import Button from "@/components/Button";
 import CollectionCard from "@/components/CollectionCard";
 import MessageArtistButton from "@/components/MessageArtistButton";
@@ -166,16 +166,18 @@ export default async function ArtistProfilePage({
 
           {/* ─── MOBILE LAYOUT (< lg) ───────────────────────────── */}
           <div className="lg:hidden">
-            {/* Identity header — small square photo on the left,
-                discipline + name + location stacked on the right. */}
+            {/* Identity header — bigger photo + bigger type so the
+                hero feels like a header rather than a notification
+                row. Photo bumped 96 → 128, name bumped 2xl → 3xl,
+                location/@insta promoted from xs/[11px] to sm/xs. */}
             <div className="flex items-start gap-4 mb-4">
-              <div className="relative w-24 h-24 rounded-sm overflow-hidden bg-stone-100 border border-border shrink-0">
+              <div className="relative w-32 h-32 rounded-sm overflow-hidden bg-stone-100 border border-border shrink-0">
                 <Image
                   src={artist.image || `https://picsum.photos/seed/${artist.slug}/600/600`}
                   alt={artist.name}
                   fill
                   className="object-cover"
-                  sizes="96px"
+                  sizes="128px"
                   priority
                 />
                 {artist.isFoundingArtist && (
@@ -188,21 +190,21 @@ export default async function ArtistProfilePage({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] text-muted uppercase tracking-[0.18em] mb-1">
+                <p className="text-[11px] text-muted uppercase tracking-[0.18em] mb-1.5">
                   {disciplineLabel(artist.primaryMedium, artist.discipline)}
                 </p>
-                <h1 className="font-serif text-2xl text-foreground leading-tight tracking-tight mb-1">
+                <h1 className="font-serif text-3xl text-foreground leading-tight tracking-tight mb-1.5">
                   {artist.name}
                 </h1>
-                <p className="text-muted text-xs">{artist.location}</p>
+                <p className="text-muted text-sm">{artist.location}</p>
                 {artist.instagram && (
                   <a
                     href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-foreground transition-colors mt-1"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors mt-1.5"
                   >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
                     {artist.instagram}
                   </a>
                 )}
@@ -239,9 +241,9 @@ export default async function ArtistProfilePage({
               </div>
             )}
 
-            {/* Mobile CTAs — stacked, full-width. Primary action
-                (Message) on top so a thumb-tap reaches it first. */}
-            <div className="flex flex-col gap-2 mb-6">
+            {/* Mobile CTAs — side-by-side, half-width each. Both
+                stretch to fill their column so neither dominates. */}
+            <div className="grid grid-cols-2 gap-2 mb-6">
               <MessageArtistButton
                 artistSlug={artist.slug}
                 artistName={artist.name}
@@ -513,23 +515,11 @@ export default async function ArtistProfilePage({
         works={artist.works}
       />
 
-      {/* Collections */}
-      {(() => {
-        const artistCollections = getCollectionsByArtist(artist.slug);
-        if (artistCollections.length === 0) return null;
-        return (
-          <section className="py-10 lg:py-14 border-t border-border">
-            <div className="max-w-[1200px] mx-auto px-6">
-              <h2 className="text-2xl mb-6">Collections</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {artistCollections.map((col) => (
-                  <CollectionCard key={col.id} collection={col} />
-                ))}
-              </div>
-            </div>
-          </section>
-        );
-      })()}
+      {/* Collections — pulled from the DB by artist slug. The seed
+          getCollectionsByArtist() only filtered an empty seed array,
+          so collections created in the artist portal never surfaced
+          here; getCollectionsByArtistSlug() goes to Supabase. */}
+      <CollectionsSection artistSlug={artist.slug} artistName={artist.name} />
 
       {/* CTA Block — hidden for artists viewing other artists */}
       <PlacementCTASection>
@@ -552,5 +542,33 @@ export default async function ArtistProfilePage({
         </section>
       </PlacementCTASection>
     </div>
+  );
+}
+
+/**
+ * Async section that fetches the artist's collections from Supabase
+ * server-side and renders the grid. Returns null if there's nothing
+ * to show so the divider line above doesn't appear over empty space.
+ */
+async function CollectionsSection({
+  artistSlug,
+  artistName,
+}: {
+  artistSlug: string;
+  artistName: string;
+}) {
+  const collections = await getCollectionsByArtistSlug(artistSlug, artistName);
+  if (collections.length === 0) return null;
+  return (
+    <section className="py-10 lg:py-14 border-t border-border">
+      <div className="max-w-[1200px] mx-auto px-6">
+        <h2 className="text-2xl mb-6">Collections</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {collections.map((col) => (
+            <CollectionCard key={col.id} collection={col} />
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }

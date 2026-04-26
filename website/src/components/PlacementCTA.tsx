@@ -25,11 +25,13 @@ export function PlacementButton({
       href={`/venue-portal/placements?artist=${artistSlug}&artistName=${encodeURIComponent(artistName)}`}
       variant={variant}
       size={size}
-      // py-2 override matches MessageArtistButton's fullWidth styling
-      // so the two stacked buttons read as the same weight (slimmer
-      // than the default md px-6 py-2.5 — the column is narrow so
-      // chunky CTAs feel cramped).
-      className={fullWidth ? "w-full justify-center py-2" : undefined}
+      // !py-2 override matches MessageArtistButton's fullWidth
+      // styling so the two stacked buttons read as the same height.
+      // The `!` is required because Button's md sizeClass already
+      // applies py-2.5, and Tailwind sorts py-2.5 AFTER py-2 in the
+      // generated stylesheet — same specificity, later wins, so a
+      // plain "py-2" override loses. Important wins.
+      className={fullWidth ? "w-full justify-center !py-2" : undefined}
     >
       Request Placement
     </Button>
