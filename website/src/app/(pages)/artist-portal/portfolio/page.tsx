@@ -32,6 +32,27 @@ interface BulkPriceRow {
   isNew: boolean;
 }
 
+/**
+ * One draft in the bulk-add flow — a candidate ArtistWork the artist
+ * has dragged in but not yet saved. Mirrors the shape of WorkFormState
+ * but trimmed to just the fields the bulk UI surfaces; the rest get
+ * sensible defaults at save time.
+ */
+interface BulkAddDraft {
+  /** Local-only key. Discarded on save. */
+  draftId: string;
+  /** Uploaded image URL — empty until upload settles. */
+  imageUrl: string;
+  /** Object URL for instant preview while the upload is in flight. */
+  imagePreview: string;
+  uploading: boolean;
+  title: string;
+  dimensions: string;
+  orientation: "landscape" | "portrait" | "square";
+  sizes: SizeEntry[];
+  available: boolean;
+}
+
 interface WorkFormState {
   title: string;
   medium: string;
@@ -183,6 +204,14 @@ export default function PortfolioPage() {
   // without clicking into each work individually.
   const [bulkPricesOpen, setBulkPricesOpen] = useState(false);
   const [bulkPriceRows, setBulkPriceRows] = useState<BulkPriceRow[]>([]);
+  // Bulk-add modal state. Drag images in, edit titles + sizes for
+  // each in parallel, then save them all in one go.
+  const [bulkAddOpen, setBulkAddOpen] = useState(false);
+  const [bulkAddDrafts, setBulkAddDrafts] = useState<BulkAddDraft[]>([]);
+  const [bulkAddDragOver, setBulkAddDragOver] = useState(false);
+  const [bulkAddApplyOpen, setBulkAddApplyOpen] = useState(false);
+  const [bulkAddSaving, setBulkAddSaving] = useState(false);
+  const bulkAddInputRef = useRef<HTMLInputElement>(null);
   // Spreadsheet-style row selection for the bulk-price modal. Tracks
   // row indexes (not workIds) because two rows on the same work are
   // distinct selections.
@@ -535,6 +564,174 @@ export default function PortfolioPage() {
       });
       return next;
     });
+  }
+
+  // ── Bulk add ────────────────────────────────────────────────────
+
+  function openBulkAdd() {
+    setBulkAddDrafts([]);
+    setBulkAddOpen(true);
+    setBulkAddApplyOpen(false);
+  }
+
+  /**
+   * Upload N files in parallel and push them into the drafts list.
+   * Each draft starts with a sensible auto-detected orientation +
+   * suggested sizes (no prices) so the artist can scan-and-tweak
+   * rather than start from scratch on every card.
+   */
+  async function bulkAddFiles(files: File[]) {
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    if (images.length === 0) return;
+
+    // Seed drafts immediately with previews so the UI feels instant
+    // while uploads run in parallel.
+    const seeded = images.map<BulkAddDraft>((f) => ({
+      draftId: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      imageUrl: "",
+      imagePreview: URL.createObjectURL(f),
+      uploading: true,
+      title: f.name.replace(/\.[^.]+$/, "").slice(0, 200),
+      dimensions: "",
+      orientation: "landscape",
+      sizes: [{ label: '10×8" (25×20 cm)', price: 0 }],
+      available: true,
+    }));
+    setBulkAddDrafts((prev) => [...prev, ...seeded]);
+
+    // Upload + replace each seed in turn. Settle independently so a
+    // single slow upload doesn't gate the others.
+    await Promise.all(
+      images.map(async (file, i) => {
+        const draftId = seeded[i].draftId;
+        try {
+          // Detect orientation + suggested sizes from the natural
+          // dimensions BEFORE the upload comes back, since the upload
+          // strips the file blob. Same logic as the single-add flow.
+          const img = new window.Image();
+          const objectUrl = URL.createObjectURL(file);
+          img.src = objectUrl;
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+          const ratio = img.naturalWidth / img.naturalHeight;
+          URL.revokeObjectURL(objectUrl);
+          const orientation: "landscape" | "portrait" | "square" =
+            ratio > 1.05 ? "landscape" : ratio < 0.95 ? "portrait" : "square";
+          const suggested = getSuggestedSizes(ratio);
+          const sizesToUse =
+            suggested.length > 0
+              ? suggested.map((s) => ({ label: s.label, price: 0 }))
+              : [{ label: '10×8" (25×20 cm)', price: 0 }];
+
+          const url = await uploadImage(file, "artworks");
+
+          setBulkAddDrafts((prev) =>
+            prev.map((d) =>
+              d.draftId === draftId
+                ? {
+                    ...d,
+                    imageUrl: url,
+                    uploading: false,
+                    orientation,
+                    sizes: sizesToUse,
+                    dimensions: `${img.naturalWidth} × ${img.naturalHeight} px`,
+                  }
+                : d,
+            ),
+          );
+        } catch (err) {
+          console.error("Bulk-add upload failed:", err);
+          setBulkAddDrafts((prev) =>
+            prev.map((d) =>
+              d.draftId === draftId ? { ...d, uploading: false } : d,
+            ),
+          );
+        }
+      }),
+    );
+  }
+
+  function bulkAddRemoveDraft(draftId: string) {
+    setBulkAddDrafts((prev) => prev.filter((d) => d.draftId !== draftId));
+  }
+
+  function bulkAddUpdateDraft(
+    draftId: string,
+    patch: Partial<BulkAddDraft>,
+  ) {
+    setBulkAddDrafts((prev) =>
+      prev.map((d) => (d.draftId === draftId ? { ...d, ...patch } : d)),
+    );
+  }
+
+  /**
+   * Apply pricing (sizes + prices) from a chosen source onto every
+   * in-flight draft. Source can be either an existing ArtistWork or
+   * one of the drafts currently being edited — picking from another
+   * draft makes the "set the first one then clone" flow trivial.
+   */
+  function bulkAddApplyFrom(source: { sizes: SizeEntry[] }) {
+    if (source.sizes.length === 0) return;
+    setBulkAddDrafts((prev) =>
+      prev.map((d) => ({
+        ...d,
+        sizes: source.sizes.map((s) => ({ ...s })),
+      })),
+    );
+    setBulkAddApplyOpen(false);
+    showToast(`Applied sizes to ${bulkAddDrafts.length} draft${bulkAddDrafts.length === 1 ? "" : "s"}`);
+  }
+
+  /**
+   * Save every draft as a new ArtistWork. Drafts missing an image are
+   * silently dropped (the artist hasn't finished setting them up);
+   * drafts with no priced size are flagged so they can fix before
+   * saving. saveWorks() handles the network sync.
+   */
+  function bulkAddSaveAll() {
+    const valid = bulkAddDrafts.filter(
+      (d) =>
+        !d.uploading &&
+        d.imageUrl &&
+        d.title.trim().length > 0 &&
+        d.sizes.some((s) => s.label && s.price > 0),
+    );
+    if (valid.length === 0) {
+      setFormError(
+        "Each draft needs an image, a title, and at least one priced size.",
+      );
+      return;
+    }
+
+    setBulkAddSaving(true);
+    const newWorks: ArtistWork[] = valid.map((d, i) => {
+      const validSizes = d.sizes.filter((s) => s.label && s.price > 0);
+      const lowest = Math.min(...validSizes.map((s) => s.price));
+      return {
+        id: `${artist!.slug}-${Date.now()}-${i}`,
+        title: d.title.trim(),
+        medium: "",
+        dimensions: d.dimensions,
+        priceBand: `From £${lowest}`,
+        pricing: validSizes.map((s) => ({ label: s.label, price: s.price })),
+        available: d.available,
+        color: "#C17C5A",
+        image: d.imageUrl,
+        orientation: d.orientation,
+      };
+    });
+
+    // Append to the existing works array; saveWorks handles the API
+    // sync and the UI update.
+    saveWorks([...works, ...newWorks]);
+    showToast(
+      `Added ${newWorks.length} work${newWorks.length === 1 ? "" : "s"}`,
+    );
+    setBulkAddSaving(false);
+    setBulkAddOpen(false);
+    setBulkAddDrafts([]);
   }
 
   function openBulkPricesAll() {
@@ -2037,6 +2234,13 @@ export default function PortfolioPage() {
                   >
                     Bulk edit prices
                   </button>
+                  <button
+                    type="button"
+                    onClick={openBulkAdd}
+                    className="text-xs text-white bg-accent hover:bg-accent-hover border border-accent rounded-sm px-3 py-1.5"
+                  >
+                    + Bulk add works
+                  </button>
                 </>
               )}
             </div>
@@ -2046,9 +2250,15 @@ export default function PortfolioPage() {
         {works.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-muted mb-4">No works yet. Add your first piece to get started.</p>
-            <button onClick={() => openAdd()} className="text-sm text-accent hover:text-accent-hover transition-colors">
-              + Add your first work
-            </button>
+            <div className="flex items-center justify-center gap-3">
+              <button onClick={() => openAdd()} className="text-sm text-accent hover:text-accent-hover transition-colors">
+                + Add your first work
+              </button>
+              <span className="text-border">·</span>
+              <button onClick={openBulkAdd} className="text-sm text-stone-700 hover:text-foreground transition-colors">
+                Bulk add multiple
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -2616,6 +2826,458 @@ export default function PortfolioPage() {
           </div>
         </div>
       )}
+
+      {/*
+       * Bulk-add modal — drop multiple images, edit each draft side
+       * by side, optionally clone sizes/prices across the lot, then
+       * Save All to push them to the works table in one go.
+       */}
+      {bulkAddOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-add-title"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => !bulkAddSaving && setBulkAddOpen(false)}
+        >
+          <div
+            className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-lg bg-white shadow-2xl border border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 id="bulk-add-title" className="font-serif text-lg text-foreground">
+                  Bulk add artworks
+                </h2>
+                <p className="text-xs text-muted mt-0.5">
+                  Drop multiple images at once, edit each one&apos;s
+                  title and sizes side by side, then save them all in
+                  one go.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !bulkAddSaving && setBulkAddOpen(false)}
+                className="text-muted hover:text-foreground"
+                aria-label="Close"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Toolbar */}
+            {bulkAddDrafts.length > 0 && (
+              <div className="px-5 py-2 border-b border-border bg-stone-50 flex flex-wrap items-center gap-3 text-xs">
+                <span className="text-muted">
+                  {bulkAddDrafts.length} draft{bulkAddDrafts.length === 1 ? "" : "s"}
+                </span>
+                <span className="text-border">·</span>
+                {/* Apply sizes & prices from… picker. Pulls from
+                    existing works AND the other drafts so once you set
+                    the first one you can clone it. */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setBulkAddApplyOpen((v) => !v)}
+                    className="px-3 py-1.5 rounded-sm border border-border hover:border-foreground/30 transition-colors"
+                  >
+                    Copy sizes &amp; prices from… ▾
+                  </button>
+                  {bulkAddApplyOpen && (
+                    <ul
+                      role="listbox"
+                      className="absolute top-full mt-1 left-0 max-h-72 w-80 overflow-y-auto rounded-sm bg-white text-foreground shadow-xl border border-border z-10"
+                    >
+                      {bulkAddDrafts
+                        .filter((d) => d.sizes.some((s) => s.label && s.price > 0))
+                        .map((d) => (
+                          <li key={d.draftId}>
+                            <button
+                              type="button"
+                              onClick={() => bulkAddApplyFrom({ sizes: d.sizes })}
+                              className="w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center gap-2"
+                            >
+                              <span className="relative w-7 h-7 rounded-sm overflow-hidden bg-border/30 shrink-0">
+                                {d.imagePreview && (
+                                  <Image src={d.imagePreview} alt="" fill className="object-cover" sizes="28px" />
+                                )}
+                              </span>
+                              <span className="truncate font-medium flex-1">
+                                {d.title || "(untitled draft)"}
+                              </span>
+                              <span className="text-stone-400 shrink-0">
+                                {d.sizes.filter((s) => s.price > 0).length} size{d.sizes.filter((s) => s.price > 0).length === 1 ? "" : "s"}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      {works.map((source) => (
+                        <li key={source.id}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              bulkAddApplyFrom({
+                                sizes: source.pricing.map((p) => ({
+                                  label: p.label,
+                                  price: p.price,
+                                })),
+                              })
+                            }
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center gap-2 border-t border-border/50"
+                          >
+                            <span className="relative w-7 h-7 rounded-sm overflow-hidden bg-border/30 shrink-0">
+                              <Image src={source.image} alt="" fill className="object-cover" sizes="28px" />
+                            </span>
+                            <span className="truncate font-medium flex-1">{source.title}</span>
+                            <span className="text-stone-400 shrink-0">
+                              {source.pricing.length} size{source.pricing.length === 1 ? "" : "s"}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                      {bulkAddDrafts.filter((d) => d.sizes.some((s) => s.label && s.price > 0)).length === 0 && works.length === 0 && (
+                        <li className="px-3 py-2 text-xs text-stone-400">
+                          Set prices on a draft first, or save an existing work to copy from.
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => bulkAddInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-sm border border-border hover:border-foreground/30"
+                >
+                  + Add more images
+                </button>
+              </div>
+            )}
+
+            {/* Content */}
+            <div className="overflow-y-auto flex-1 min-h-0 p-5">
+              <input
+                ref={bulkAddInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length > 0) bulkAddFiles(files);
+                  if (e.target) e.target.value = "";
+                }}
+              />
+
+              {bulkAddDrafts.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => bulkAddInputRef.current?.click()}
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types?.includes("Files")) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "copy";
+                      if (!bulkAddDragOver) setBulkAddDragOver(true);
+                    }
+                  }}
+                  onDragLeave={() => setBulkAddDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setBulkAddDragOver(false);
+                    const files = Array.from(e.dataTransfer.files ?? []);
+                    if (files.length > 0) bulkAddFiles(files);
+                  }}
+                  className={`w-full rounded-lg border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-3 py-24 ${
+                    bulkAddDragOver
+                      ? "border-accent bg-accent/10"
+                      : "border-border bg-stone-50 hover:border-accent hover:bg-accent/5"
+                  }`}
+                >
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-stone-400">
+                    <path d="M12 4v12M6 10l6-6 6 6" strokeLinecap="round" />
+                    <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" strokeLinecap="round" />
+                  </svg>
+                  <p className="text-base font-medium text-foreground">
+                    {bulkAddDragOver ? "Drop to upload" : "Drop multiple images here"}
+                  </p>
+                  <p className="text-xs text-muted">
+                    or click to choose. JPG, PNG, or WebP — each becomes a draft you can edit before saving.
+                  </p>
+                </button>
+              ) : (
+                <div
+                  className={`grid gap-4 ${
+                    bulkAddDragOver ? "ring-2 ring-accent/40 rounded-md p-2 bg-accent/5" : ""
+                  }`}
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types?.includes("Files")) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "copy";
+                      if (!bulkAddDragOver) setBulkAddDragOver(true);
+                    }
+                  }}
+                  onDragLeave={() => setBulkAddDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setBulkAddDragOver(false);
+                    const files = Array.from(e.dataTransfer.files ?? []);
+                    if (files.length > 0) bulkAddFiles(files);
+                  }}
+                >
+                  {bulkAddDrafts.map((draft) => (
+                    <BulkAddDraftCard
+                      key={draft.draftId}
+                      draft={draft}
+                      onChange={(patch) => bulkAddUpdateDraft(draft.draftId, patch)}
+                      onRemove={() => bulkAddRemoveDraft(draft.draftId)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-3 shrink-0">
+              <p className="text-xs text-muted">
+                {bulkAddDrafts.filter((d) => d.imageUrl && d.title.trim() && d.sizes.some((s) => s.label && s.price > 0)).length}
+                {" / "}
+                {bulkAddDrafts.length} ready to save
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => !bulkAddSaving && setBulkAddOpen(false)}
+                  disabled={bulkAddSaving}
+                  className="text-sm text-muted hover:text-foreground px-3 py-2 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={bulkAddSaveAll}
+                  disabled={bulkAddSaving || bulkAddDrafts.length === 0}
+                  className="px-4 py-2 rounded-sm bg-accent text-white text-sm font-medium hover:bg-accent-hover disabled:opacity-50"
+                >
+                  {bulkAddSaving ? "Saving…" : `Save ${bulkAddDrafts.length} work${bulkAddDrafts.length === 1 ? "" : "s"}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </ArtistPortalLayout>
+  );
+}
+
+// ── Bulk-add draft card ─────────────────────────────────────────────
+
+/**
+ * Side-by-side editor card for a single bulk-add draft. The card is
+ * intentionally lean — title + sizes table + available toggle. Anything
+ * the artist wants to fine-tune (medium, description, framing options,
+ * shipping override) can be set after saving via the regular Edit Work
+ * flow.
+ *
+ * "Suggest sizes" re-runs the aspect-ratio-based suggestion against
+ * the image so the artist can wipe whatever's there and start from
+ * the recommended set if they typed dimensions and want fresh sizes.
+ */
+function BulkAddDraftCard({
+  draft,
+  onChange,
+  onRemove,
+}: {
+  draft: BulkAddDraft;
+  onChange: (patch: Partial<BulkAddDraft>) => void;
+  onRemove: () => void;
+}) {
+  function suggestSizesFromDraft() {
+    // Use the orientation as a proxy ratio when we don't have the
+    // exact pixel dimensions on hand any more (the file blob is gone
+    // after upload). 1.33 / 1 / 0.75 are reasonable defaults that
+    // produce sensible cm values.
+    const ratio =
+      draft.orientation === "landscape"
+        ? 1.33
+        : draft.orientation === "portrait"
+          ? 0.75
+          : 1.0;
+    const suggested = getSuggestedSizes(ratio);
+    if (suggested.length === 0) return;
+    onChange({
+      sizes: suggested.map((s) => ({ label: s.label, price: 0 })),
+    });
+  }
+
+  return (
+    <div className="border border-border rounded-md bg-background overflow-hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-0">
+        {/* Image side */}
+        <div className="relative bg-stone-100 aspect-square sm:aspect-auto sm:min-h-[180px]">
+          {draft.imagePreview ? (
+            <Image
+              src={draft.imagePreview}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="180px"
+              unoptimized
+            />
+          ) : (
+            <div className="absolute inset-0 grid place-items-center text-xs text-muted">
+              No image
+            </div>
+          )}
+          {draft.uploading && (
+            <div className="absolute inset-0 grid place-items-center bg-black/40 text-white text-xs">
+              Uploading…
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={onRemove}
+            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white text-xs hover:bg-red-600"
+            aria-label="Remove draft"
+            title="Remove from bulk add"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Form side */}
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-[11px] font-medium text-muted mb-1">Title</label>
+            <input
+              type="text"
+              value={draft.title}
+              onChange={(e) => onChange({ title: e.target.value })}
+              placeholder="e.g. Last Light on Mare Street"
+              className="w-full bg-background border border-border rounded-sm px-3 py-1.5 text-sm focus:outline-none focus:border-accent/60"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-muted mb-1">Dimensions</label>
+              <input
+                type="text"
+                value={draft.dimensions}
+                onChange={(e) => onChange({ dimensions: e.target.value })}
+                placeholder="e.g. 50 × 70 cm"
+                className="w-full bg-background border border-border rounded-sm px-2 py-1.5 text-sm focus:outline-none focus:border-accent/60"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-muted mb-1">Orientation</label>
+              <select
+                value={draft.orientation}
+                onChange={(e) =>
+                  onChange({
+                    orientation: e.target.value as
+                      | "landscape"
+                      | "portrait"
+                      | "square",
+                  })
+                }
+                className="w-full bg-background border border-border rounded-sm px-2 py-1.5 text-sm focus:outline-none focus:border-accent/60"
+              >
+                <option value="landscape">Landscape</option>
+                <option value="portrait">Portrait</option>
+                <option value="square">Square</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[11px] font-medium text-muted">Sizes &amp; prices</label>
+              <button
+                type="button"
+                onClick={suggestSizesFromDraft}
+                className="text-[11px] text-accent hover:text-accent-hover"
+                title="Replace the size list with sizes suggested by the image's orientation"
+              >
+                Suggest sizes
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {draft.sizes.map((s, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={s.label}
+                    onChange={(e) => {
+                      const next = [...draft.sizes];
+                      next[i] = { ...next[i], label: e.target.value };
+                      onChange({ sizes: next });
+                    }}
+                    placeholder='e.g. 12×16" (30×40 cm)'
+                    className="flex-1 bg-background border border-border rounded-sm px-2 py-1.5 text-sm focus:outline-none focus:border-accent/60"
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-xs text-muted">£</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={s.price || ""}
+                      onChange={(e) => {
+                        const next = [...draft.sizes];
+                        next[i] = {
+                          ...next[i],
+                          price: e.target.value === "" ? 0 : Number(e.target.value),
+                        };
+                        onChange({ sizes: next });
+                      }}
+                      placeholder="0"
+                      className="w-20 bg-background border border-border rounded-sm px-2 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:border-accent/60"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = draft.sizes.filter((_, j) => j !== i);
+                      onChange({ sizes: next.length > 0 ? next : [{ label: "", price: 0 }] });
+                    }}
+                    className="w-7 h-7 inline-flex items-center justify-center text-muted hover:text-red-500"
+                    aria-label="Remove size"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  onChange({
+                    sizes: [...draft.sizes, { label: "", price: 0 }],
+                  })
+                }
+                className="text-[11px] text-accent hover:text-accent-hover"
+              >
+                + Add size
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              id={`avail-${draft.draftId}`}
+              type="checkbox"
+              checked={draft.available}
+              onChange={(e) => onChange({ available: e.target.checked })}
+            />
+            <label htmlFor={`avail-${draft.draftId}`} className="text-xs text-foreground">
+              Available
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
