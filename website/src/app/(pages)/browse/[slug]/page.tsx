@@ -73,12 +73,23 @@ function TermPill({ label, yes }: { label: string; yes: boolean }) {
 /**
  * Pill used for the "Sells" group — quieter neutral chip, no tick.
  * Matches the format chips on the marketplace BrowseArtistCard so the
- * card → profile transition feels consistent. Reads as a tag, not a
- * checked-off commitment.
+ * card → profile transition feels consistent.
+ *
+ * Always renders Originals / Prints / Framed (all three) so a venue
+ * scanning can see what's missing as well as what's offered. Unsupported
+ * formats render with strikethrough + faded styling — clearer than
+ * just hiding them, since hiding can read as "I forgot to fill this in".
  */
-function SellsPill({ label }: { label: string }) {
+function SellsPill({ label, yes }: { label: string; yes: boolean }) {
   return (
-    <span className="inline-block text-[11px] text-muted/90 px-2 py-0.5 border border-border/70 rounded-sm bg-surface">
+    <span
+      className={`inline-block text-[11px] px-2 py-0.5 border rounded-sm ${
+        yes
+          ? "text-foreground/80 bg-surface border-border/70"
+          : "text-muted/50 bg-surface/50 border-border/40 line-through"
+      }`}
+      title={yes ? `Sells ${label.toLowerCase()}` : `Doesn't sell ${label.toLowerCase()}`}
+    >
       {label}
     </span>
   );
@@ -112,13 +123,14 @@ export default async function ArtistProfilePage({
   // social-card fallback in generateMetadata.
   //
   // Split offerings (what they sell) from terms (how they let venues
-  // host) — the marketplace cards already do this, and merging them
-  // into one row makes both feel like an undifferentiated bag of pills.
+  // host). Offerings always render all three formats so venues can
+  // see what the artist DOESN'T do (greyed-out / strikethrough)
+  // alongside what they do — clearer than hiding the missing ones.
   const offerings = [
     { label: "Originals", yes: artist.offersOriginals },
     { label: "Prints", yes: artist.offersPrints },
     { label: "Framed", yes: artist.offersFramed },
-  ].filter((o) => o.yes);
+  ];
   const terms = [
     {
       label: artist.revenueSharePercent
@@ -153,18 +165,22 @@ export default async function ArtistProfilePage({
             Back to Marketplace
           </Link>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-10 lg:gap-14 items-start">
-            {/* LEFT — square photo + Instagram + facts + Sells/Terms.
-                All the meta-data lives here so the right column stays
-                short and the Portfolio header pushes up. */}
-            <div className="space-y-5">
-              <div className="relative aspect-square w-full max-w-[280px] rounded-sm overflow-hidden bg-stone-100 border border-border">
+          {/* Three-column layout on desktop: photo (left, 240px) →
+              identity + bio (centre, flexible) → metadata (right,
+              260px). The bio column is squeezed a touch from the
+              previous 1fr so the metadata sidebar fits without pushing
+              anything off-screen on a 13" laptop. On mobile everything
+              stacks. */}
+          <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_260px] gap-8 lg:gap-10 items-start">
+            {/* LEFT — square photo + Instagram. */}
+            <div className="space-y-3">
+              <div className="relative aspect-square w-full max-w-[240px] rounded-sm overflow-hidden bg-stone-100 border border-border">
                 <Image
                   src={artist.image || `https://picsum.photos/seed/${artist.slug}/600/600`}
                   alt={artist.name}
                   fill
                   className="object-cover"
-                  sizes="280px"
+                  sizes="240px"
                   priority
                 />
                 {artist.isFoundingArtist && (
@@ -187,81 +203,9 @@ export default async function ArtistProfilePage({
                   {artist.instagram}
                 </a>
               )}
-
-              {/* Facts — Location / Delivery / Suited for. Stacked
-                  vertically because the column is narrow (280px). */}
-              <div className="grid grid-cols-1 gap-y-3 pt-5 border-t border-border max-w-[280px]">
-                <div>
-                  <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Location</p>
-                  <p className="text-sm font-medium text-foreground">{artist.location || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Delivery</p>
-                  <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Suited for</p>
-                  <p className="text-sm font-medium text-foreground">
-                    {artist.venueTypesSuitedFor.length > 0
-                      ? artist.venueTypesSuitedFor.slice(0, 3).join(", ")
-                      : "Any venue"}
-                  </p>
-                </div>
-              </div>
-
-              {hasStats && (
-                <div className="flex items-center gap-5 pt-4 border-t border-border max-w-[280px]">
-                  {(artist.totalPlacements ?? 0) > 0 && (
-                    <div>
-                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{artist.totalPlacements}</p>
-                      <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Venue{artist.totalPlacements !== 1 ? "s" : ""}</p>
-                    </div>
-                  )}
-                  {(artist.totalSales ?? 0) > 0 && (
-                    <div>
-                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{artist.totalSales}</p>
-                      <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Sold</p>
-                    </div>
-                  )}
-                  {(artist.totalViews ?? 0) > 0 && (
-                    <div>
-                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{artist.totalViews}</p>
-                      <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Views</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Sells + Terms — pushed into the side column so the
-                  right side stays focused on the artist's voice. Sells
-                  uses the marketplace card's neutral chip (no tick);
-                  Terms keeps the accent-tinted tick pill — Terms are
-                  commitments, Sells are inventory categories. */}
-              {offerings.length > 0 && (
-                <div className="pt-4 border-t border-border max-w-[280px]">
-                  <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Sells</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {offerings.map((o) => (
-                      <SellsPill key={o.label} label={o.label} />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {terms.length > 0 && (
-                <div className="pt-4 border-t border-border max-w-[280px]">
-                  <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Terms</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {terms.map((t) => (
-                      <TermPill key={t.label} label={t.label} yes={t.yes} />
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* RIGHT — identity + bio + tags + CTAs. Nothing else. The
-                shorter the right column gets, the higher the Portfolio
-                header sits below the hero. */}
+            {/* CENTRE — identity + bio + tags + CTAs. */}
             <div className="min-w-0">
               <p className="text-[11px] text-muted uppercase tracking-[0.18em] mb-3">
                 {disciplineLabel(artist.primaryMedium, artist.discipline)}
@@ -306,6 +250,79 @@ export default async function ArtistProfilePage({
                 <PlacementButton artistSlug={artist.slug} artistName={artist.name} />
               </div>
             </div>
+
+            {/* RIGHT — metadata sidebar. Stacks all the venue-relevant
+                facts so a buyer scanning for "would this work in my
+                space" can see everything in one column without
+                scrolling past the bio. Hairlines separate each group. */}
+            <aside className="space-y-4">
+              <div className="grid grid-cols-1 gap-y-3">
+                <div>
+                  <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Location</p>
+                  <p className="text-sm font-medium text-foreground">{artist.location || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Delivery</p>
+                  <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Suited for</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {artist.venueTypesSuitedFor.length > 0
+                      ? artist.venueTypesSuitedFor.slice(0, 3).join(", ")
+                      : "Any venue"}
+                  </p>
+                </div>
+              </div>
+
+              {hasStats && (
+                <div className="flex items-center gap-5 pt-4 border-t border-border">
+                  {(artist.totalPlacements ?? 0) > 0 && (
+                    <div>
+                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{artist.totalPlacements}</p>
+                      <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Venue{artist.totalPlacements !== 1 ? "s" : ""}</p>
+                    </div>
+                  )}
+                  {(artist.totalSales ?? 0) > 0 && (
+                    <div>
+                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{artist.totalSales}</p>
+                      <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Sold</p>
+                    </div>
+                  )}
+                  {(artist.totalViews ?? 0) > 0 && (
+                    <div>
+                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{artist.totalViews}</p>
+                      <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Views</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sells always renders Originals / Prints / Framed in
+                  the same order so the row reads consistently across
+                  every artist. Unsupported formats render with
+                  strikethrough so the absence is explicit. Terms keeps
+                  the accent-tinted tick pill — Terms are commitments
+                  the artist opted into, Sells are inventory categories. */}
+              <div className="pt-4 border-t border-border">
+                <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Sells</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {offerings.map((o) => (
+                    <SellsPill key={o.label} label={o.label} yes={o.yes} />
+                  ))}
+                </div>
+              </div>
+              {terms.length > 0 && (
+                <div className="pt-4 border-t border-border">
+                  <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Terms</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {terms.map((t) => (
+                      <TermPill key={t.label} label={t.label} yes={t.yes} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </aside>
           </div>
         </div>
       </section>

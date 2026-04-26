@@ -449,7 +449,6 @@ export default function ProfileEditorPage() {
   })();
   const [saved, setSaved] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const bannerInputRef = useRef<HTMLInputElement>(null);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
 
   // All hooks must be declared before any conditional returns
@@ -748,50 +747,12 @@ export default function ProfileEditorPage() {
           </div>
         )}
 
-        {/* 1. Banner & Profile Photo */}
+        {/* 1. Profile Photo — banner removed since the public profile
+            no longer surfaces a hero image (Variant A layout). The
+            bannerImage field stays in state so the API payload doesn't
+            wipe existing values, but no UI to set it. */}
         <div className={sectionClass}>
-          <h2 className="text-lg font-medium mb-5">Banner & Profile Photo</h2>
-
-          {/* Banner — click or drag-drop a file to set */}
-          <div className="mb-5">
-            <label className={labelClass}>Banner Image</label>
-            <div
-              className={`relative h-40 rounded-sm overflow-hidden bg-border/20 mb-3 group cursor-pointer transition-shadow ${
-                dragOver === "banner" ? "ring-2 ring-accent" : ""
-              }`}
-              onClick={() => bannerInputRef.current?.click()}
-              onDragOver={(e) => {
-                if (e.dataTransfer.types?.includes("Files")) {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "copy";
-                  if (dragOver !== "banner") setDragOver("banner");
-                }
-              }}
-              onDragLeave={() => setDragOver(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(null);
-                const file = e.dataTransfer.files?.[0];
-                if (file) handleFile("bannerImage", file);
-              }}
-            >
-              {profile.bannerImage ? (
-                <Image src={profile.bannerImage} alt="Banner" fill className="object-cover" sizes="800px" />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm text-muted">
-                    {dragOver === "banner" ? "Drop to upload" : "Click or drag a banner here"}
-                  </span>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                <span className="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                  {dragOver === "banner" ? "Drop to replace" : "Change Banner"}
-                </span>
-              </div>
-            </div>
-            <input ref={bannerInputRef} type="file" accept="image/*" onChange={(e) => handleFileUpload("bannerImage", e)} className="hidden" />
-          </div>
+          <h2 className="text-lg font-medium mb-5">Profile Photo</h2>
 
           {/* Profile pic — click or drag-drop */}
           <div>
