@@ -176,18 +176,79 @@ function WallVisualizerInner(props: ExtendedProps) {
     [items, widthCm, heightCm],
   );
 
+  // Track the last successfully-saved wall dimensions so the
+  // wall-PATCH gate stays accurate across multiple autosave cycles.
+  // `props.wall` comes from the parent and only refreshes if the
+  // parent re-fetches after save — without this ref we'd compare
+  // against the stale prop and fire a wall PATCH on every save once
+  // dimensions have changed even once. Initialised lazily from the
+  // first wall snapshot so a freshly-mounted editor starts in sync.
+  const lastSavedDimsRef = useRef<{ width_cm: number; height_cm: number } | null>(
+    null,
+  );
+  if (lastSavedDimsRef.current === null && props.wall) {
+    lastSavedDimsRef.current = {
+      width_cm: props.wall.width_cm,
+      height_cm: props.wall.height_cm,
+    };
+  }
+
   const saveLayout = useCallback(
     async (snap: { items: WallItem[]; width_cm: number; height_cm: number }) => {
       if (!props.wall || !props.initialLayout) return;
+      const headers = {
+        "content-type": "application/json",
+        ...(props.authToken
+          ? { Authorization: `Bearer ${props.authToken}` }
+          : {}),
+      };
+
+      // Wall dimensions live on the WALL row (width_cm / height_cm),
+      // not the layout — the layout owns items + per-item geometry,
+      // the wall owns the physical canvas size. Previously this
+      // callback only PATCHed the layout, so resizing the wall was
+      // silently a no-op: items snapshot updated in autosave state,
+      // dimensions changed locally, but the DB wall row stayed at
+      // the original 300×240. Refreshing reverted the resize because
+      // hydration reads from the wall row.
+      //
+      // Two PATCHes (wall first, then layout). The wall PATCH only
+      // fires when dims actually changed since the last successful
+      // save (tracked by lastSavedDimsRef so a stale `props.wall`
+      // doesn't make every save re-fire the wall PATCH).
+      const lastSaved =
+        lastSavedDimsRef.current ?? {
+          width_cm: props.wall.width_cm,
+          height_cm: props.wall.height_cm,
+        };
+      const wallDimsChanged =
+        snap.width_cm !== lastSaved.width_cm ||
+        snap.height_cm !== lastSaved.height_cm;
+      if (wallDimsChanged) {
+        const wallRes = await fetch(`/api/walls/${props.wall.id}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({
+            width_cm: snap.width_cm,
+            height_cm: snap.height_cm,
+          }),
+        });
+        if (!wallRes.ok) {
+          const txt = await wallRes.text().catch(() => "");
+          throw new Error(
+            `Save failed (${wallRes.status}): ${txt || wallRes.statusText}`,
+          );
+        }
+        lastSavedDimsRef.current = {
+          width_cm: snap.width_cm,
+          height_cm: snap.height_cm,
+        };
+      }
+
       const url = `/api/walls/${props.wall.id}/layouts/${props.initialLayout.id}`;
       const res = await fetch(url, {
         method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-          ...(props.authToken
-            ? { Authorization: `Bearer ${props.authToken}` }
-            : {}),
-        },
+        headers,
         body: JSON.stringify({ items: snap.items }),
       });
       if (!res.ok) {
