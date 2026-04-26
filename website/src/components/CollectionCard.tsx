@@ -1,3 +1,13 @@
+"use client";
+
+// onContextMenu={(e) => e.preventDefault()} on the wrapping <div> and
+// the <Image> are event-handler props, and Next.js 16 / React Server
+// Components forbid passing those from a server component down to a
+// child. This card is rendered server-side from <CollectionsSection>
+// inside /browse/[slug]/page.tsx — without "use client" the whole
+// profile route 500s with "Event handlers cannot be passed to Client
+// Component props" the moment the artist has at least one renderable
+// collection. (The digest seen in prod was 1299673914.)
 import Link from "next/link";
 import Image from "next/image";
 import type { ArtistCollection } from "@/data/collections";
