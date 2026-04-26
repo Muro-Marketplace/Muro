@@ -19,6 +19,19 @@ interface SizeEntry {
   price: number;
 }
 
+/** One row in the bulk-price spreadsheet — flattened (work × size). */
+interface BulkPriceRow {
+  workId: string;
+  workTitle: string;
+  workImage: string;
+  /** Index into the original pricing array; useful for re-sequencing. */
+  sizeIndex: number;
+  label: string;
+  price: number;
+  /** Set when the row is a placeholder for a work that had no sizes. */
+  isNew: boolean;
+}
+
 interface WorkFormState {
   title: string;
   medium: string;
@@ -165,8 +178,18 @@ export default function PortfolioPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkApplyOpen, setBulkApplyOpen] = useState(false);
+  // Spreadsheet-style price editor. Opens a modal with one row per
+  // (work × size) so you can scan and tweak many prices at once
+  // without clicking into each work individually.
+  const [bulkPricesOpen, setBulkPricesOpen] = useState(false);
+  const [bulkPriceRows, setBulkPriceRows] = useState<BulkPriceRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadingExtra, setUploadingExtra] = useState(false);
+  // Highlights the dropzone when a file is hovered. Mirrored separately
+  // for the primary image vs additional-images zones so dragging onto
+  // one doesn't light up the other.
+  const [dragMain, setDragMain] = useState(false);
+  const [dragExtras, setDragExtras] = useState(false);
   const [initialised, setInitialised] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const extraFileInputRef = useRef<HTMLInputElement>(null);
@@ -353,6 +376,86 @@ export default function PortfolioPage() {
   }
 
   /**
+   * Open the spreadsheet-style price editor. Flattens every (work × size)
+   * combo from the selected works into a single rows array so the artist
+   * can tab between cells and tweak prices in bulk. Saves on submit by
+   * folding the edited rows back onto each work's `pricing` array.
+   */
+  function openBulkPrices() {
+    if (selectedIds.size === 0) return;
+    const rows: BulkPriceRow[] = [];
+    works
+      .filter((w) => selectedIds.has(w.id))
+      .forEach((w) => {
+        // Works with no sizes still show a placeholder row so the artist
+        // can add their first size from this view.
+        if (!w.pricing || w.pricing.length === 0) {
+          rows.push({
+            workId: w.id,
+            workTitle: w.title,
+            workImage: w.image,
+            sizeIndex: 0,
+            label: "",
+            price: 0,
+            isNew: true,
+          });
+          return;
+        }
+        w.pricing.forEach((p, i) => {
+          rows.push({
+            workId: w.id,
+            workTitle: w.title,
+            workImage: w.image,
+            sizeIndex: i,
+            label: p.label,
+            price: p.price,
+            isNew: false,
+          });
+        });
+      });
+    setBulkPriceRows(rows);
+    setBulkPricesOpen(true);
+  }
+
+  function saveBulkPrices() {
+    // Fold rows back onto works, grouped by workId. Empty-label or
+    // £0-price rows are dropped so users can clear a row to delete it.
+    const byWork = new Map<string, BulkPriceRow[]>();
+    bulkPriceRows.forEach((r) => {
+      const arr = byWork.get(r.workId) ?? [];
+      arr.push(r);
+      byWork.set(r.workId, arr);
+    });
+
+    const next = works.map((w) => {
+      if (!byWork.has(w.id)) return w;
+      const rowsForWork = byWork.get(w.id)!;
+      const newPricing = rowsForWork
+        .filter((r) => r.label.trim() && r.price > 0)
+        .map((r) => ({
+          label: r.label.trim(),
+          price: Math.round(r.price * 100) / 100,
+        }));
+      if (newPricing.length === 0) {
+        // Don't accidentally wipe a work's only sizes if the artist
+        // emptied them all — leave the original pricing intact.
+        return w;
+      }
+      const lowest = Math.min(...newPricing.map((p) => p.price));
+      return {
+        ...w,
+        pricing: newPricing,
+        priceBand: `From £${lowest}`,
+      };
+    });
+    saveWorks(next);
+    showToast(
+      `Updated prices for ${byWork.size} work${byWork.size === 1 ? "" : "s"}`,
+    );
+    setBulkPricesOpen(false);
+  }
+
+  /**
    * Copy the source work's pricing array (sizes + prices) onto every
    * selected work. The single most-requested bulk action: most artists
    * sell at consistent print sizes + prices across pieces.
@@ -481,9 +584,13 @@ export default function PortfolioPage() {
     }
   }
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Core upload routine — accepts a raw File so it can be called from
+  // both the file-input change event and the drag-and-drop handler.
+  async function handleImageFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setFormError("Please choose an image file (JPG, PNG, or WebP).");
+      return;
+    }
     setUploading(true);
 
     // Detect image dimensions before upload
@@ -515,9 +622,17 @@ export default function PortfolioPage() {
     setUploading(false);
   }
 
-  async function handleAdditionalImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await handleImageFile(file);
+    // Clear the input so the same file can be re-picked.
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleAdditionalImageFiles(files: File[]) {
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
 
     const plan = artist?.subscriptionPlan || "core";
     const totalLimit = IMAGE_LIMITS[plan] ?? 3;
@@ -527,13 +642,12 @@ export default function PortfolioPage() {
 
     if (canAdd === 0) {
       setFormError(`Your ${plan} plan allows ${totalLimit} image${totalLimit === 1 ? "" : "s"} per artwork.`);
-      if (extraFileInputRef.current) extraFileInputRef.current.value = "";
       return;
     }
 
     setUploadingExtra(true);
     setFormError("");
-    const toUpload = files.slice(0, canAdd);
+    const toUpload = imageFiles.slice(0, canAdd);
     try {
       const urls = await Promise.all(toUpload.map((f) => uploadImage(f, "artworks")));
       const clean = urls.filter((u) => typeof u === "string" && u.length > 0);
@@ -543,8 +657,13 @@ export default function PortfolioPage() {
       setFormError("One or more images failed to upload.");
     } finally {
       setUploadingExtra(false);
-      if (extraFileInputRef.current) extraFileInputRef.current.value = "";
     }
+  }
+
+  async function handleAdditionalImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    await handleAdditionalImageFiles(files);
+    if (extraFileInputRef.current) extraFileInputRef.current.value = "";
   }
 
   function removeAdditionalImage(index: number) {
@@ -819,7 +938,9 @@ export default function PortfolioPage() {
           </div>
 
           <div className="space-y-5">
-            {/* Image upload */}
+            {/* Image upload — supports drag-drop. Both the empty state
+                and the populated state listen for drops so artists can
+                replace by dragging without having to click "Replace". */}
             <div>
               <label className="block text-sm font-medium mb-2">Image <span className="text-accent">*</span></label>
               <input
@@ -830,14 +951,34 @@ export default function PortfolioPage() {
                 className="hidden"
               />
               {form.imagePreview ? (
-                <div className="space-y-3">
+                <div
+                  className="space-y-3"
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types?.includes("Files")) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "copy";
+                      if (!dragMain) setDragMain(true);
+                    }
+                  }}
+                  onDragLeave={() => setDragMain(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragMain(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleImageFile(file);
+                  }}
+                >
                   {/*
                    * Big preview: artists need to actually see the work
                    * they're editing. Caps height so a tall portrait
                    * doesn't push the rest of the form off-screen, and
                    * uses object-contain so we never crop their image.
                    */}
-                  <div className="relative w-full max-w-2xl rounded-sm overflow-hidden bg-stone-100 border border-border">
+                  <div
+                    className={`relative w-full max-w-2xl rounded-sm overflow-hidden bg-stone-100 border ${
+                      dragMain ? "border-accent ring-2 ring-accent/30" : "border-border"
+                    }`}
+                  >
                     <div className="relative w-full" style={{ aspectRatio: "4 / 3" }}>
                       <Image
                         src={form.imagePreview}
@@ -846,6 +987,13 @@ export default function PortfolioPage() {
                         className="object-contain"
                         sizes="(max-width: 768px) 100vw, 640px"
                       />
+                      {dragMain && (
+                        <div className="absolute inset-0 grid place-items-center bg-accent/15 backdrop-blur-[1px]">
+                          <span className="text-xs font-medium text-accent bg-white px-3 py-1.5 rounded-full shadow">
+                            Drop to replace
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -856,16 +1004,36 @@ export default function PortfolioPage() {
                     >
                       {uploading ? "Uploading..." : "Replace Image"}
                     </button>
-                    <p className="text-[10px] text-muted">JPG, PNG, or WebP. Recommended minimum 1200px wide.</p>
+                    <p className="text-[10px] text-muted">JPG, PNG, or WebP — drag-and-drop supported. Recommended minimum 1200px wide.</p>
                   </div>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full max-w-2xl rounded-sm border-2 border-dashed border-border hover:border-accent hover:bg-accent/5 transition-colors flex flex-col items-center justify-center gap-2 py-16"
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types?.includes("Files")) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "copy";
+                      if (!dragMain) setDragMain(true);
+                    }
+                  }}
+                  onDragLeave={() => setDragMain(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragMain(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleImageFile(file);
+                  }}
+                  className={`w-full max-w-2xl rounded-sm border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-2 py-16 ${
+                    dragMain
+                      ? "border-accent bg-accent/10"
+                      : "border-border hover:border-accent hover:bg-accent/5"
+                  }`}
                 >
-                  <span className="text-sm text-muted">{uploading ? "Uploading..." : "Upload Image"}</span>
+                  <span className="text-sm text-muted">
+                    {uploading ? "Uploading..." : dragMain ? "Drop to upload" : "Click or drag an image here"}
+                  </span>
                   <span className="text-[10px] text-muted">JPG, PNG, or WebP. Recommended minimum 1200px wide.</span>
                 </button>
               )}
@@ -909,7 +1077,27 @@ export default function PortfolioPage() {
                       Your {plan} plan includes 1 image per artwork. <a href="/pricing" className="text-accent hover:text-accent-hover">Upgrade</a> to add more.
                     </p>
                   ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                    <div
+                      className={`grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 rounded-sm transition-colors ${
+                        dragExtras ? "ring-2 ring-accent/40 bg-accent/5 p-1" : ""
+                      }`}
+                      onDragOver={(e) => {
+                        if (atLimit) return;
+                        if (e.dataTransfer.types?.includes("Files")) {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "copy";
+                          if (!dragExtras) setDragExtras(true);
+                        }
+                      }}
+                      onDragLeave={() => setDragExtras(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragExtras(false);
+                        if (atLimit) return;
+                        const files = Array.from(e.dataTransfer.files ?? []);
+                        if (files.length > 0) handleAdditionalImageFiles(files);
+                      }}
+                    >
                       {form.additionalImages.map((img, i) => (
                         <div
                           key={img + i}
@@ -1603,7 +1791,7 @@ export default function PortfolioPage() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={handleSubmit}
-                disabled={!form.title || !form.medium || form.sizes.filter((s) => s.label && s.price > 0).length === 0}
+                disabled={!form.title || form.sizes.filter((s) => s.label && s.price > 0).length === 0}
                 className="px-6 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {editingIndex !== null ? "Save Changes" : "Add Work"}
@@ -1832,6 +2020,13 @@ export default function PortfolioPage() {
             >
               Mark sold
             </button>
+            <button
+              type="button"
+              onClick={openBulkPrices}
+              className="text-xs px-3 py-1.5 rounded-sm bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              Edit sizes &amp; prices
+            </button>
             {/* Apply prices — pops a small picker that lets the artist
                 choose a source work to copy pricing from. */}
             <div className="relative">
@@ -1889,6 +2084,207 @@ export default function PortfolioPage() {
             >
               Done
             </button>
+          </div>
+        </div>
+      )}
+
+      {/*
+       * Spreadsheet-style bulk-price editor. Modal opens on top of the
+       * bulk-action bar; rows scroll inside the modal when the list is
+       * long. Each row is fully editable inline.
+       */}
+      {bulkPricesOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-prices-title"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={() => setBulkPricesOpen(false)}
+        >
+          <div
+            className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-lg bg-white shadow-2xl border border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2
+                  id="bulk-prices-title"
+                  className="font-serif text-lg text-foreground"
+                >
+                  Edit sizes &amp; prices
+                </h2>
+                <p className="text-xs text-muted mt-0.5">
+                  {bulkPriceRows.length} row{bulkPriceRows.length === 1 ? "" : "s"} across {selectedIds.size} work{selectedIds.size === 1 ? "" : "s"}.
+                  Edit a row, leave it blank to remove that size, or click <em>Add size</em> on a work.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBulkPricesOpen(false)}
+                className="text-muted hover:text-foreground"
+                aria-label="Close"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-y-auto flex-1 min-h-0">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-stone-50 border-b border-border text-xs text-muted uppercase tracking-wider">
+                  <tr>
+                    <th className="text-left font-medium px-4 py-2 w-2/5">Work</th>
+                    <th className="text-left font-medium px-4 py-2">Size label</th>
+                    <th className="text-right font-medium px-4 py-2 w-32">Price (£)</th>
+                    <th className="px-2 py-2 w-10" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulkPriceRows.map((row, idx) => {
+                    // Row groups: only show the work title + thumb on the
+                    // first row for that work, so the table doesn't repeat
+                    // and the visual scan is easier.
+                    const prev = idx > 0 ? bulkPriceRows[idx - 1] : null;
+                    const startsGroup = !prev || prev.workId !== row.workId;
+                    return (
+                      <tr
+                        key={`${row.workId}-${row.sizeIndex}-${idx}`}
+                        className={`border-b border-border/60 ${startsGroup ? "" : "border-t-0"}`}
+                      >
+                        <td className="px-4 py-2 align-middle">
+                          {startsGroup ? (
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="relative w-8 h-8 rounded-sm overflow-hidden bg-border/30 shrink-0">
+                                {row.workImage && (
+                                  <Image
+                                    src={row.workImage}
+                                    alt=""
+                                    fill
+                                    className="object-cover"
+                                    sizes="32px"
+                                  />
+                                )}
+                              </div>
+                              <span className="truncate text-foreground">{row.workTitle}</span>
+                            </div>
+                          ) : (
+                            <span className="text-stone-300">↳</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 align-middle">
+                          <input
+                            type="text"
+                            value={row.label}
+                            onChange={(e) =>
+                              setBulkPriceRows((rows) => {
+                                const next = [...rows];
+                                next[idx] = { ...next[idx], label: e.target.value };
+                                return next;
+                              })
+                            }
+                            placeholder='e.g. 12×16" (30×40 cm)'
+                            className="w-full bg-background border border-border rounded-sm px-2 py-1.5 text-sm focus:outline-none focus:border-accent/60"
+                          />
+                        </td>
+                        <td className="px-4 py-2 align-middle">
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={row.price || ""}
+                            onChange={(e) =>
+                              setBulkPriceRows((rows) => {
+                                const next = [...rows];
+                                next[idx] = {
+                                  ...next[idx],
+                                  price: e.target.value === "" ? 0 : Number(e.target.value),
+                                };
+                                return next;
+                              })
+                            }
+                            placeholder="0"
+                            className="w-full bg-background border border-border rounded-sm px-2 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:border-accent/60"
+                          />
+                        </td>
+                        <td className="px-2 py-2 align-middle text-right">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setBulkPriceRows((rows) => rows.filter((_, i) => i !== idx))
+                            }
+                            className="w-7 h-7 inline-flex items-center justify-center text-muted hover:text-red-500 transition-colors"
+                            aria-label="Remove size"
+                            title="Remove size"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M3 3l8 8M11 3L3 11" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* "Add size" buttons grouped by work — one per selected
+                  work, placed below the table so the artist can extend
+                  any work's size list inline. */}
+              <div className="px-4 py-3 border-t border-border bg-stone-50/60 space-y-1.5">
+                {Array.from(selectedIds).map((id) => {
+                  const w = works.find((x) => x.id === id);
+                  if (!w) return null;
+                  return (
+                    <div key={id} className="flex items-center gap-2 text-xs">
+                      <span className="text-muted truncate">+ Add size to</span>
+                      <span className="font-medium text-foreground truncate">{w.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkPriceRows((rows) => [
+                            ...rows,
+                            {
+                              workId: w.id,
+                              workTitle: w.title,
+                              workImage: w.image,
+                              sizeIndex: rows.filter((r) => r.workId === w.id).length,
+                              label: "",
+                              price: 0,
+                              isNew: true,
+                            },
+                          ]);
+                        }}
+                        className="text-accent hover:text-accent-hover"
+                      >
+                        Add size
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setBulkPricesOpen(false)}
+                className="text-sm text-muted hover:text-foreground px-3 py-2"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveBulkPrices}
+                className="px-4 py-2 rounded-sm bg-foreground text-white text-sm font-medium hover:bg-foreground/90"
+              >
+                Save changes
+              </button>
+            </div>
           </div>
         </div>
       )}
