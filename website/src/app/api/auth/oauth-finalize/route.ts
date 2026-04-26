@@ -19,6 +19,7 @@
 
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { triggerWelcomeIfNeeded } from "@/lib/email/welcome";
 
 const ALLOWED_ROLES = ["artist", "customer", "venue"] as const;
 type Role = (typeof ALLOWED_ROLES)[number];
@@ -113,6 +114,18 @@ export async function POST(request: Request) {
         console.error("[oauth-finalize] artist profile insert failed:", insertError);
       }
     }
+  }
+
+  // Step 3: fire welcome email (idempotent — safe to retry).
+  // We do this here rather than the client because we need server-side
+  // access to artist/venue profile state to compute the checklist, and
+  // we already have an authenticated admin client in scope.
+  try {
+    await triggerWelcomeIfNeeded(user.id);
+  } catch (err) {
+    // Non-fatal: the user is signed in. Welcome can be re-attempted by
+    // AuthContext on the next SIGNED_IN event.
+    console.error("[oauth-finalize] welcome trigger failed:", err);
   }
 
   return NextResponse.json({ ok: true, role: finalRole });

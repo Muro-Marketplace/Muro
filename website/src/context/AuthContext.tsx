@@ -73,6 +73,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const nextId = s?.user?.id || null;
           if (prevId === nextId) return prev;
           fetchSubscription(s?.user ?? null);
+          // Fire welcome (idempotent) on every fresh sign-in — covers email
+          // verification + password signins. OAuth signups also hit this,
+          // but they've already had welcome fired by oauth-finalize, so the
+          // call here is a no-op (welcomed_at + idempotency_key).
+          if (s?.user && s.access_token) {
+            // Fire-and-forget; we don't block UI on email send.
+            fetch("/api/auth/welcome", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${s.access_token}` },
+            }).catch(() => { /* best-effort */ });
+          }
           return s?.user ?? null;
         });
       }

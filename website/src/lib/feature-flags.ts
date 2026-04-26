@@ -28,7 +28,7 @@
  *   if (isFlagOn("WALL_VISUALIZER_V1")) { ... }
  */
 
-export type FeatureFlag = "WALL_VISUALIZER_V1";
+export type FeatureFlag = "WALL_VISUALIZER_V1" | "OAUTH_GOOGLE_APPLE";
 
 interface FlagDef {
   envKey: string;
@@ -49,6 +49,16 @@ const FLAGS: Record<FeatureFlag, FlagDef> = {
       "non-AI render, plus artist showroom + mockup-attach). On in " +
       "prod by default — set NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1=0 in " +
       "Vercel to kill-switch if it misbehaves.",
+  },
+  OAUTH_GOOGLE_APPLE: {
+    envKey: "NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE",
+    devDefault: false,
+    prodDefault: false,
+    description:
+      "Show 'Continue with Google / Apple' on login + signup. Off until the " +
+      "providers are enabled in the Supabase dashboard and the OAuth client " +
+      "credentials (Google Cloud, Apple Developer) are configured. Flip to 1 " +
+      "in Vercel once both are live.",
   },
 };
 
