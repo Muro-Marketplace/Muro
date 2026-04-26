@@ -60,7 +60,7 @@ export default function SignUpPage() {
         <div className="absolute inset-0 bg-black/55" />
       </div>
 
-      <div className="w-full max-w-md px-6 py-16 -mt-[8vh] sm:mt-0">
+      <div className="w-full max-w-md px-6 py-16 -mt-[20vh] sm:mt-0">
         {/* Heading */}
         <div className="text-center mb-10">
           <h1 className="text-3xl lg:text-4xl font-serif mb-2 text-white">Join Wallplace</h1>

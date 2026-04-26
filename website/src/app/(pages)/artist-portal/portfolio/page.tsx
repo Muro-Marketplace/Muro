@@ -784,12 +784,12 @@ export default function PortfolioPage() {
       prev.map((d) => {
         if (!bulkAddTargetIds.has(d.draftId)) return d;
         if (kind === "sizes") {
-          // Copy the source's size labels onto the draft. Reset the
-          // parallel arrays (shipping/inStore) to match the new
-          // size count — the artist either re-types or runs the
-          // "Copy prices" flow next. Pre-seeds shipping from the
-          // source row when available so a single Copy-sizes step
-          // already brings the matching shipping bands.
+          // Copy LABELS only. Existing prices for matching labels
+          // (case-insensitive) are kept so an artist who priced
+          // first then aligned the table to a reference work doesn't
+          // lose their numbers. Shipping arrays reset to empty —
+          // sizes flow doesn't carry shipping. The artist runs Copy
+          // Prices next if they want the source's numbers.
           const nextSizes = sourceSizes.map((s) => {
             const existing = d.sizes.find(
               (x) => x.label.toLowerCase() === s.label.toLowerCase(),
@@ -802,10 +802,7 @@ export default function PortfolioPage() {
           return {
             ...d,
             sizes: nextSizes,
-            shippingPrices: nextSizes.map((_, i) => {
-              const v = sourceShipping?.[i];
-              return typeof v === "number" ? String(v) : "";
-            }),
+            shippingPrices: nextSizes.map(() => ""),
             inStorePrices: nextSizes.map(() => ""),
           };
         }
@@ -1108,20 +1105,26 @@ export default function PortfolioPage() {
   }
 
   /**
-   * Apply a source work's sizes or prices into the currently-open
+   * Apply a source work's sizes OR prices into the currently-open
    * Add/Edit form. Used by the picker that lives next to the size
-   * table header.
+   * table header. The two operations are strictly independent —
+   * "Copy sizes" must NOT seed prices, "Copy prices" must NOT touch
+   * size labels. Lumping them together led to artists clicking
+   * "Copy sizes" expecting just the labels and finding the prices
+   * had been overwritten too. This was the bug the user flagged:
+   * "autofill sizes from another work… also autofills prices,
+   * should just be sizes".
    *
-   * "sizes": replace the form's size labels with the source's. Each
-   * row's price and shipping price come pre-seeded from the source —
-   * artists in a series usually want both anyway, and they can clear
-   * individual cells if needed.
+   * "sizes" — replace the form's size labels with the source's.
+   * For matching labels keep the form's existing prices; for new
+   * labels seed price=0 so the artist explicitly fills them in.
+   * Shipping arrays reset to empty (prices flow brings shipping;
+   * sizes flow doesn't).
    *
-   * "prices": index-aligned, like the bulk-edit version. Source
-   * row i's price ↔ form row i's price. Source's per-size shipping
-   * is propagated where set. Work-level shipping / in-store prices
-   * are also copied IF the source has them set, so a new work in a
-   * series picks up "the usual" defaults in one click.
+   * "prices" — index-aligned. Source row i's price ↔ form row i's
+   * price. Per-size shipping comes along where set on the source.
+   * Work-level shipping / in-store prices also propagate IF the
+   * source has them. Size LABELS are never touched.
    */
   function applyCopyFromSourceToForm(
     source: ArtistWork,
@@ -1129,26 +1132,33 @@ export default function PortfolioPage() {
   ) {
     setForm((p) => {
       if (kind === "sizes") {
-        const newSizes = source.pricing.map((s) => ({
-          label: s.label,
-          price: s.price,
-        }));
-        const newSizeShipping = source.pricing.map((s) =>
-          typeof s.shippingPrice === "number" ? String(s.shippingPrice) : "",
+        // Replace labels only. Prices for matching labels are
+        // preserved (case-insensitive) so an artist who sets up
+        // their prices first then aligns the size table to a
+        // reference work doesn't lose their numbers.
+        const existingByLabel = new Map(
+          p.sizes.map((s) => [s.label.toLowerCase(), s.price]),
         );
-        const anyShipping = newSizeShipping.some((v) => v !== "");
+        const newSizes: SizeEntry[] = source.pricing.map((s) => ({
+          label: s.label,
+          price: existingByLabel.get(s.label.toLowerCase()) ?? 0,
+        }));
         return {
           ...p,
           sizes: newSizes,
-          // Reset parallel arrays so they line up with the new sizes.
-          shippingPerSize: anyShipping,
-          sizeShipping: newSizeShipping,
+          // Reset parallel arrays so they line up with the new
+          // labels — but keep them empty (no shipping/in-store
+          // copied through the sizes flow).
+          shippingPerSize: false,
+          sizeShipping: newSizes.map(() => ""),
           stockPerSize: false,
           sizeStock: newSizes.map(() => ""),
           inStorePricing: newSizes.map(() => ""),
         };
       }
-      // kind === "prices" — index-aligned per-row copy.
+      // kind === "prices" — index-aligned per-row copy. Labels are
+      // left as-is; only the price (and optionally per-size
+      // shipping) is filled in.
       const nextSizes = p.sizes.map((s, i) => ({
         ...s,
         price: source.pricing[i]?.price ?? s.price,
@@ -2525,8 +2535,45 @@ export default function PortfolioPage() {
                       <span className="text-[10px] text-muted ml-2">Blank = default · 0 = free</span>
                     </div>
                   </div>
-                  {form.dimensions && (() => {
-                    const est = estimateShipping({ dimensions: form.dimensions, framed: false, medium: form.medium });
+                  {(() => {
+                    // Suggest work-level shipping based on the SMALLEST
+                    // priced size label, not form.dimensions. The
+                    // dimensions field is auto-filled from the image's
+                    // pixel size on upload ("1920 × 1080 px") — those
+                    // numbers are large enough that the calculator's
+                    // mm-fallback kicks in (any number > 300 → divide
+                    // by 10), spitting out 192cm → oversized → £35.
+                    // The smallest size label ("10×8\"" / "A4") parses
+                    // correctly and gives the cheapest tier the artist
+                    // actually ships, which is what "default" shipping
+                    // means: the floor charge applied when the buyer
+                    // picks the smallest size and the artist hasn't
+                    // set per-size shipping.
+                    const validSizes = form.sizes.filter(
+                      (s) => s.label && s.price > 0,
+                    );
+                    let baseLabel = "";
+                    let smallestArea = Infinity;
+                    for (const s of validSizes) {
+                      const e = estimateShipping({
+                        dimensions: s.label,
+                        framed: false,
+                        medium: form.medium,
+                      });
+                      if (!e) continue;
+                      const area = e.longestEdgeCm * e.longestEdgeCm;
+                      if (area < smallestArea) {
+                        smallestArea = area;
+                        baseLabel = s.label;
+                      }
+                    }
+                    const est = baseLabel
+                      ? estimateShipping({
+                          dimensions: baseLabel,
+                          framed: false,
+                          medium: form.medium,
+                        })
+                      : null;
                     if (!est) return null;
                     return (
                       <div className="mt-2 flex items-start gap-2 p-3 bg-accent/5 border border-accent/20 rounded-sm text-xs">

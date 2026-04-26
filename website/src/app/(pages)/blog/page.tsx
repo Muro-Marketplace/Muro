@@ -12,7 +12,7 @@ export default function BlogPage() {
   return (
     <div className="bg-background">
       {/* Hero */}
-      <section className="relative -mt-14 lg:-mt-16 min-h-[35vh] lg:min-h-[42vh] flex items-center overflow-hidden"
+      <section className="relative -mt-14 lg:-mt-16 min-h-[50vh] lg:min-h-[42vh] flex items-center justify-center pt-14 lg:pt-16 overflow-hidden"
         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1471107340929-a87cd0f5b5f3?w=1920&h=800&fit=crop&crop=center')", backgroundSize: "cover", backgroundPosition: "center" }}
       >
         <div className="absolute inset-0 bg-black/70" />

@@ -26,7 +26,7 @@ export default function HowItWorksPage() {
         <div className="absolute inset-0 bg-black/60" />
       </div>
 
-      <div className="text-center px-6 py-16 -mt-[8vh] sm:mt-0">
+      <div className="text-center px-6 py-16 -mt-[20vh] sm:mt-0">
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">How It Works</p>
         <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-white mb-4">I am a...</h1>
         <p className="text-lg text-white/50 max-w-md mx-auto mb-12">
