@@ -214,7 +214,20 @@ export default function PortfolioPage() {
   // "Apply prices from…" so the user can pick a source work.
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkApplyOpen, setBulkApplyOpen] = useState(false);
+  // Bulk-edit Copy-from flow. Mirrors the bulk-add modal's two-step
+  // pattern: (1) pick a kind ("sizes" or "prices") + a source work,
+  // then (2) tick exactly which works in the selection to apply to
+  // and click Apply. Replaces the older one-shot dropdown that
+  // immediately overwrote every selected work — that gave artists
+  // no chance to exclude works that were intentionally different.
+  const [bulkEditApplyKind, setBulkEditApplyKind] = useState<
+    "sizes" | "prices" | null
+  >(null);
+  const [bulkEditPendingSource, setBulkEditPendingSource] =
+    useState<ArtistWork | null>(null);
+  const [bulkEditTargetIds, setBulkEditTargetIds] = useState<Set<string>>(
+    new Set(),
+  );
   // Spreadsheet-style price editor. Opens a modal with one row per
   // (work × size) so you can scan and tweak many prices at once
   // without clicking into each work individually.
@@ -993,27 +1006,124 @@ export default function PortfolioPage() {
   }
 
   /**
-   * Copy the source work's pricing array (sizes + prices) onto every
-   * selected work. The single most-requested bulk action: most artists
-   * sell at consistent print sizes + prices across pieces.
+   * Two-step Copy-from flow for the bulk-edit toolbar (mirrors the
+   * bulk-add modal pattern).
+   *
+   * Step 1 — `bulkEditPickSource`: artist picks which work to copy
+   * from. The target set defaults to every work currently selected
+   * EXCEPT the source itself (applying to the source is a no-op).
+   *
+   * Step 2 — `bulkEditApplyToTargets`: artist ticks which targets to
+   * keep, hits Apply. Behaviour depends on `bulkEditApplyKind`:
+   *
+   *   - "sizes": copy size LABELS only. For matching labels keep the
+   *     target's existing price; for new labels, default price=0
+   *     (artist fills in afterwards). Doesn't touch shipping or
+   *     in-store prices.
+   *
+   *   - "prices": fill in £ values for size labels the target already
+   *     has. Labels not present in the source stay untouched. Also
+   *     propagates the source's `shippingPrice`, `inStorePrice` and
+   *     `inStorePricing` IF the source has them set — this matches
+   *     how artists actually price: shipping & in-store are usually
+   *     consistent across a series, so when copying prices from a
+   *     "reference" piece we want to clone those too. We only
+   *     overwrite when the source has a value, so a target's existing
+   *     shipping isn't wiped by a source that hasn't set one.
    */
-  function bulkApplyPricesFrom(sourceWork: ArtistWork) {
-    if (selectedIds.size === 0) return;
+  function bulkEditPickSource(source: ArtistWork) {
+    setBulkEditPendingSource(source);
+    setBulkEditTargetIds(
+      new Set(
+        works
+          .filter((w) => selectedIds.has(w.id) && w.id !== source.id)
+          .map((w) => w.id),
+      ),
+    );
+  }
+
+  function bulkEditCancelApply() {
+    setBulkEditApplyKind(null);
+    setBulkEditPendingSource(null);
+    setBulkEditTargetIds(new Set());
+  }
+
+  function bulkEditApplyToTargets() {
+    if (!bulkEditPendingSource || bulkEditApplyKind === null) return;
+    const source = bulkEditPendingSource;
+    const kind = bulkEditApplyKind;
+    if (bulkEditTargetIds.size === 0) return;
+
     const next = works.map((w) => {
-      if (!selectedIds.has(w.id)) return w;
-      const newPricing = sourceWork.pricing.map((p) => ({ ...p }));
-      const lowest = Math.min(...newPricing.map((p) => p.price));
-      return {
+      if (!bulkEditTargetIds.has(w.id)) return w;
+      if (kind === "sizes") {
+        const nextPricing: SizePricing[] = source.pricing.map((s) => {
+          const existing = w.pricing.find(
+            (x) => x.label.toLowerCase() === s.label.toLowerCase(),
+          );
+          return {
+            label: s.label,
+            price: existing?.price ?? 0,
+            quantityAvailable: existing?.quantityAvailable ?? null,
+          };
+        });
+        const prices = nextPricing.map((p) => p.price).filter((n) => n > 0);
+        const lowest = prices.length > 0 ? Math.min(...prices) : 0;
+        return {
+          ...w,
+          pricing: nextPricing,
+          priceBand: lowest > 0 ? `From £${lowest}` : w.priceBand,
+        };
+      }
+      // kind === "prices"
+      const lookup = new Map(
+        source.pricing.map((s) => [s.label.toLowerCase(), s.price]),
+      );
+      const nextPricing: SizePricing[] = w.pricing.map((s) => ({
+        ...s,
+        price: lookup.get(s.label.toLowerCase()) ?? s.price,
+      }));
+      const lowest = Math.min(...nextPricing.map((p) => p.price));
+      const result: ArtistWork = {
         ...w,
-        pricing: newPricing,
-        priceBand: `From £${lowest}`,
+        pricing: nextPricing,
+        priceBand: lowest > 0 ? `From £${lowest}` : w.priceBand,
       };
+      // Only overwrite work-level shipping / in-store fields when the
+      // source has them set — matches the user's ask: "if the one I'm
+      // copying from has those prices available too".
+      if (source.shippingPrice != null) {
+        result.shippingPrice = source.shippingPrice;
+      }
+      if (source.inStorePrice != null) {
+        result.inStorePrice = source.inStorePrice;
+      }
+      if (
+        Array.isArray(source.inStorePricing) &&
+        source.inStorePricing.length > 0
+      ) {
+        // Per-size in-store pricing — clone matching labels by name so a
+        // target that has different size labels still gets a sensible
+        // result. Drop labels the target doesn't carry.
+        const inStoreLookup = new Map(
+          source.inStorePricing.map((s) => [s.label.toLowerCase(), s.price]),
+        );
+        result.inStorePricing = nextPricing
+          .filter((p) => inStoreLookup.has(p.label.toLowerCase()))
+          .map((p) => ({
+            label: p.label,
+            price: inStoreLookup.get(p.label.toLowerCase()) ?? 0,
+          }));
+      }
+      return result;
     });
     saveWorks(next);
     showToast(
-      `Applied prices from "${sourceWork.title}" to ${selectedIds.size} work${selectedIds.size === 1 ? "" : "s"}`,
+      `Applied ${kind} from "${source.title}" to ${bulkEditTargetIds.size} work${
+        bulkEditTargetIds.size === 1 ? "" : "s"
+      }`,
     );
-    setBulkApplyOpen(false);
+    bulkEditCancelApply();
   }
 
   function openAdd(seed?: Partial<WorkFormState>) {
@@ -2577,6 +2687,129 @@ export default function PortfolioPage() {
        * Stays out of the way otherwise, and the X dismisses without
        * clearing other selection state.
        */}
+      {/* Target picker — sits just above the dark bulk-action toolbar
+          and shows after the artist picks a source. Defaults targets
+          to "everything currently selected, minus the source" so the
+          common case (clone across the lot) is one click; deselecting
+          anything that was intentionally priced differently is a
+          checkbox tick away. */}
+      {selectMode &&
+        selectedIds.size > 0 &&
+        bulkEditPendingSource &&
+        bulkEditApplyKind && (
+          <div className="fixed bottom-[64px] left-0 right-0 z-40 bg-white border-t border-border shadow-2xl">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+              <div className="flex flex-wrap items-center gap-3 mb-2 text-xs">
+                <span className="font-medium text-foreground">
+                  Apply {bulkEditApplyKind} from{" "}
+                  <em className="font-serif italic">
+                    {bulkEditPendingSource.title}
+                  </em>{" "}
+                  to:
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setBulkEditTargetIds(
+                      new Set(
+                        works
+                          .filter(
+                            (w) =>
+                              selectedIds.has(w.id) &&
+                              w.id !== bulkEditPendingSource.id,
+                          )
+                          .map((w) => w.id),
+                      ),
+                    )
+                  }
+                  className="text-accent hover:text-accent-hover"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkEditTargetIds(new Set())}
+                  className="text-muted hover:text-foreground"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 mb-3 max-h-32 overflow-y-auto">
+                {works
+                  .filter(
+                    (w) =>
+                      selectedIds.has(w.id) &&
+                      w.id !== bulkEditPendingSource.id,
+                  )
+                  .map((w) => {
+                    const checked = bulkEditTargetIds.has(w.id);
+                    return (
+                      <label
+                        key={w.id}
+                        className={`inline-flex items-center gap-2 px-2 py-1 rounded-sm border cursor-pointer text-xs ${
+                          checked
+                            ? "border-accent bg-white"
+                            : "border-border bg-stone-50 text-muted"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            setBulkEditTargetIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(w.id);
+                              else next.delete(w.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="relative w-5 h-5 rounded-sm overflow-hidden bg-border/30 shrink-0">
+                          {w.image && (
+                            <Image
+                              src={w.image}
+                              alt=""
+                              fill
+                              className="object-cover"
+                              sizes="20px"
+                            />
+                          )}
+                        </span>
+                        <span className="truncate max-w-[10rem]">{w.title}</span>
+                      </label>
+                    );
+                  })}
+                {works.filter(
+                  (w) =>
+                    selectedIds.has(w.id) && w.id !== bulkEditPendingSource.id,
+                ).length === 0 && (
+                  <span className="text-xs text-muted">
+                    No other selected works to apply to.
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={bulkEditCancelApply}
+                  className="text-xs text-muted hover:text-foreground px-2 py-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={bulkEditApplyToTargets}
+                  disabled={bulkEditTargetIds.size === 0}
+                  className="text-xs px-3 py-1 rounded-sm bg-foreground text-white hover:bg-foreground/90 disabled:opacity-40"
+                >
+                  Apply to {bulkEditTargetIds.size} work
+                  {bulkEditTargetIds.size === 1 ? "" : "s"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       {selectMode && selectedIds.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-foreground text-white shadow-2xl">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3">
@@ -2604,48 +2837,47 @@ export default function PortfolioPage() {
             >
               Edit sizes &amp; prices
             </button>
-            {/* Apply prices — pops a small picker that lets the artist
-                choose a source work to copy pricing from. */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setBulkApplyOpen((v) => !v)}
-                className="text-xs px-3 py-1.5 rounded-sm bg-white/10 hover:bg-white/20 transition-colors"
-              >
-                Copy sizes &amp; prices from… ▾
-              </button>
-              {bulkApplyOpen && (
-                <ul
-                  role="listbox"
-                  className="absolute bottom-full mb-2 left-0 max-h-64 w-72 overflow-y-auto rounded-sm bg-white text-foreground shadow-xl border border-border"
-                >
-                  {works
-                    .filter((w) => !selectedIds.has(w.id))
-                    .map((source) => (
-                      <li key={source.id}>
-                        <button
-                          type="button"
-                          onClick={() => bulkApplyPricesFrom(source)}
-                          className="w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center justify-between gap-3"
-                        >
-                          <span className="truncate font-medium">
-                            {source.title}
-                          </span>
-                          <span className="text-stone-400 shrink-0">
-                            {source.pricing.length} size
-                            {source.pricing.length === 1 ? "" : "s"}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  {works.filter((w) => !selectedIds.has(w.id)).length === 0 && (
-                    <li className="px-3 py-2 text-xs text-stone-400">
-                      No other works to copy from.
-                    </li>
-                  )}
-                </ul>
-              )}
-            </div>
+            {/* Two separate buttons — sizes and prices are independent
+                operations. Picking a source kicks open the target
+                picker (rendered as a panel above this toolbar) so the
+                artist can deselect any work that's intentionally
+                priced differently before applying. */}
+            <CopyFromSourceButton
+              label="Copy sizes from…"
+              kind="sizes"
+              activeKind={bulkEditApplyKind}
+              works={works}
+              excludeIds={
+                bulkEditPendingSource
+                  ? new Set([bulkEditPendingSource.id])
+                  : new Set()
+              }
+              onToggleOpen={() => {
+                setBulkEditApplyKind(
+                  bulkEditApplyKind === "sizes" ? null : "sizes",
+                );
+                setBulkEditPendingSource(null);
+              }}
+              onPick={bulkEditPickSource}
+            />
+            <CopyFromSourceButton
+              label="Copy prices from…"
+              kind="prices"
+              activeKind={bulkEditApplyKind}
+              works={works}
+              excludeIds={
+                bulkEditPendingSource
+                  ? new Set([bulkEditPendingSource.id])
+                  : new Set()
+              }
+              onToggleOpen={() => {
+                setBulkEditApplyKind(
+                  bulkEditApplyKind === "prices" ? null : "prices",
+                );
+                setBulkEditPendingSource(null);
+              }}
+              onPick={bulkEditPickSource}
+            />
             <button
               type="button"
               onClick={bulkDelete}
@@ -3779,6 +4011,106 @@ function CopyFromButton({
           {draftsWithSizes.length === 0 && works.length === 0 && (
             <li className="px-3 py-2 text-xs text-stone-400">
               Set prices on a draft first, or save an existing work to copy from.
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Source-picker button for the bulk-edit toolbar. Two of these
+ * render side-by-side in the dark sticky toolbar — one for "Copy
+ * sizes from…" and one for "Copy prices from…". Picking a source
+ * here calls `onPick(source)` which kicks open the target picker
+ * panel above the toolbar (rendered separately, not by this
+ * component).
+ *
+ * Different from `CopyFromButton` above: that one is for the
+ * bulk-add modal where sources are mostly drafts (BulkAddDraft) and
+ * targets are sibling drafts. This one is for the bulk-edit
+ * toolbar where sources are existing ArtistWork rows and targets
+ * are other selected works on the page. Keeping them separate
+ * avoids dragging draft-specific shape constraints into the edit
+ * flow and vice versa.
+ */
+function CopyFromSourceButton({
+  label,
+  kind,
+  activeKind,
+  works,
+  excludeIds,
+  onToggleOpen,
+  onPick,
+}: {
+  label: string;
+  kind: "sizes" | "prices";
+  activeKind: "sizes" | "prices" | null;
+  works: ArtistWork[];
+  excludeIds: Set<string>;
+  onToggleOpen: () => void;
+  onPick: (source: ArtistWork) => void;
+}) {
+  const isOpen = activeKind === kind;
+  // Only show works that have at least one priced size — copying from
+  // a work with empty pricing leaves the target with zeros, which
+  // confuses the artist far more than just hiding empty sources.
+  const candidates = works.filter(
+    (w) =>
+      !excludeIds.has(w.id) &&
+      w.pricing.some((p) => p.label && p.price > 0),
+  );
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggleOpen}
+        className={`text-xs px-3 py-1.5 rounded-sm transition-colors ${
+          isOpen
+            ? "bg-white text-foreground"
+            : "bg-white/10 hover:bg-white/20 text-white"
+        }`}
+      >
+        {label} ▾
+      </button>
+      {isOpen && (
+        <ul
+          role="listbox"
+          className="absolute bottom-full mb-2 left-0 max-h-72 w-80 overflow-y-auto rounded-sm bg-white text-foreground shadow-xl border border-border"
+        >
+          {candidates.map((source) => (
+            <li key={source.id}>
+              <button
+                type="button"
+                onClick={() => onPick(source)}
+                className="w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center gap-2"
+              >
+                <span className="relative w-7 h-7 rounded-sm overflow-hidden bg-border/30 shrink-0">
+                  {source.image && (
+                    <Image
+                      src={source.image}
+                      alt=""
+                      fill
+                      className="object-cover"
+                      sizes="28px"
+                    />
+                  )}
+                </span>
+                <span className="truncate font-medium flex-1">
+                  {source.title}
+                </span>
+                <span className="text-stone-400 shrink-0">
+                  {source.pricing.length} size
+                  {source.pricing.length === 1 ? "" : "s"}
+                </span>
+              </button>
+            </li>
+          ))}
+          {candidates.length === 0 && (
+            <li className="px-3 py-2 text-xs text-stone-400">
+              No other works with pricing to copy from.
             </li>
           )}
         </ul>
