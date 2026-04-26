@@ -128,6 +128,13 @@ interface FormState {
   hearAbout: string;
   selectedPlan: string;
   referralCode: string;
+  /** Up to 3 publicly-accessible image URLs for artists who don't have
+      a portfolio site or socials to link. Optional — the proper
+      portfolio gets built on the artist profile after the application
+      is accepted. Stored as a single comma-separated string in the
+      `portfolio_link` DB field for now (alongside the main link)
+      until we add a dedicated samples column. */
+  sampleWorkUrls: string[];
 }
 
 const initialState: FormState = {
@@ -156,6 +163,7 @@ const initialState: FormState = {
   hearAbout: "",
   selectedPlan: "core",
   referralCode: "",
+  sampleWorkUrls: ["", "", ""],
 };
 
 export default function ApplicationForm() {
@@ -212,7 +220,11 @@ export default function ApplicationForm() {
     if (!form.location.trim()) localErrors.location = "Where are you based?";
     if (!form.traderStatus) localErrors.traderStatus = "Pick whether you're applying as an individual or a business.";
     if (!form.discipline) localErrors.discipline = "Pick the discipline that best matches your work.";
-    if (!form.primaryMedium) localErrors.primaryMedium = "Pick your primary medium.";
+    // Primary medium is now optional — the discipline + sub-styles
+    // selection above already gives us enough to categorise the
+    // applicant's work, and forcing artists to pick one specific
+    // medium (e.g. "Acrylic") felt restrictive for mixed-media
+    // practitioners. They can still set it from their profile.
     if (!form.deliveryRadius) localErrors.deliveryRadius = "How far can you deliver?";
     const offersAny = form.offersOriginals || form.offersPrints || form.offersFramed || form.offersCommissions;
     if (!offersAny) localErrors.offers = "Pick at least one type of work you can supply.";
@@ -421,7 +433,7 @@ export default function ApplicationForm() {
           </div>
           <div className="md:col-span-2">
             <label htmlFor="portfolioLink" className={labelClass}>
-              Website / Portfolio
+              Website / Portfolio <span className="text-muted font-normal">(optional)</span>
             </label>
             <input
               type="text"
@@ -436,6 +448,39 @@ export default function ApplicationForm() {
               Any public link that shows your work. Share what you have — you can add more later when you build your profile on Wallplace.
             </p>
             {fieldError("portfolioLink")}
+          </div>
+
+          {/* Sample work URLs — escape hatch for artists who have no
+              website / Insta / portfolio to link. Three optional URL
+              slots; we tell them up front they can also do this on
+              their profile after applying so they don't feel
+              pressured to fill them right now. */}
+          <div className="md:col-span-2">
+            <label className={labelClass}>
+              Sample works <span className="text-muted font-normal">(optional)</span>
+            </label>
+            <p className="text-xs text-muted mb-3">
+              No website or Instagram? Paste up to three public links to
+              images of your work (Google Drive, Imgur, Dropbox, etc.).
+              You can also skip this and upload sample works straight
+              to your profile after we accept your application.
+            </p>
+            <div className="space-y-2">
+              {form.sampleWorkUrls.map((url, i) => (
+                <input
+                  key={i}
+                  type="url"
+                  value={url}
+                  onChange={(e) => {
+                    const next = [...form.sampleWorkUrls];
+                    next[i] = e.target.value;
+                    setForm((prev) => ({ ...prev, sampleWorkUrls: next }));
+                  }}
+                  placeholder={`Link to sample ${i + 1} (optional)`}
+                  className={inputClass}
+                />
+              ))}
+            </div>
           </div>
           <div className="md:col-span-2">
             <label htmlFor="traderStatus" className={labelClass}>
@@ -552,17 +597,16 @@ export default function ApplicationForm() {
 
           <div>
             <label htmlFor="primaryMedium" className={labelClass}>
-              Primary Medium <span className="text-accent">*</span>
+              Primary Medium <span className="text-muted font-normal">(optional)</span>
             </label>
             <select
               id="primaryMedium"
               name="primaryMedium"
               value={form.primaryMedium}
               onChange={handleChange}
-              required
               className={inputClassFor("primaryMedium")}
             >
-              <option value="">Select your primary medium</option>
+              <option value="">Select your primary medium (optional)</option>
               {primaryMediums.map((medium) => (
                 <option key={medium} value={medium}>
                   {medium}

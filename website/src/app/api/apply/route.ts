@@ -48,10 +48,24 @@ export async function POST(request: Request) {
       location: d.location,
       instagram: d.instagram || null,
       website: d.website || null,
-      primary_medium: d.primaryMedium,
+      primary_medium: d.primaryMedium || null,
       discipline: d.discipline || null,
       sub_styles: d.subStyles || [],
-      portfolio_link: d.portfolioLink,
+      // Merge `sampleWorkUrls` into `portfolio_link` until we have a
+      // dedicated samples column. Existing portfolio link kept on its
+      // own line, sample URLs follow on subsequent lines so admins
+      // reviewing the application see everything in one place.
+      portfolio_link: (() => {
+        const samples = (d as { sampleWorkUrls?: string[] }).sampleWorkUrls
+          ?.map((u) => u?.trim())
+          .filter((u): u is string => !!u && u.length > 0);
+        const main = d.portfolioLink?.trim() || "";
+        if (!samples || samples.length === 0) return main;
+        const sampleBlock = samples
+          .map((u, i) => `Sample ${i + 1}: ${u}`)
+          .join("\n");
+        return main ? `${main}\n${sampleBlock}` : sampleBlock;
+      })(),
       artist_statement: d.artistStatement,
       trader_status: d.traderStatus || null,
       business_name: d.businessName || null,
@@ -108,7 +122,9 @@ export async function POST(request: Request) {
     }
 
     // Admin ping — keep the legacy helper, it's internal only.
-    notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium });
+    // primaryMedium is optional now; fall back to a placeholder so
+    // the admin notification helper's required-string contract holds.
+    notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium || "—" });
 
     // Applicant receipt via the new pipeline (polished template, logged,
     // preference-aware). We key idempotency off the email address so a

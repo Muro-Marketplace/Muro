@@ -46,7 +46,10 @@ export const applySchema = z.object({
   traderStatus: z.enum(["consumer", "business"]).optional().or(z.literal("")),
   businessName: optionalString(200),
   vatNumber: optionalString(40),
-  primaryMedium: safeString(100),
+  // Optional — discipline + sub-styles cover most categorisation
+  // needs and forcing a single primary medium felt restrictive
+  // for mixed-media artists. UI now labels this "(optional)".
+  primaryMedium: optionalString(100),
   // Phase 3 taxonomy. Optional to keep back-compat with any in-flight forms.
   // "digital" accepted for legacy payloads — it maps onto drawing on read.
   discipline: z
@@ -57,6 +60,10 @@ export const applySchema = z.object({
   // match here. Users were previously bouncing off the API silently because
   // these were required server-side.
   portfolioLink: optionalString(500),
+  // Up to 3 sample-work URLs from artists who have no website /
+  // socials to link. Stored alongside portfolioLink in the DB —
+  // see /api/apply for the merge.
+  sampleWorkUrls: z.array(z.string().max(500)).max(3).optional(),
   artistStatement: optionalString(2000),
   offersOriginals: z.boolean().optional(),
   offersPrints: z.boolean().optional(),
