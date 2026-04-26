@@ -232,6 +232,9 @@ export default function VenueProfilePage() {
   // Venue photos — gallery of the actual space.
   const [venueImages, setVenueImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  // Lights up the venue-photo gallery when files are being dragged
+  // over it, so the drop target is obvious.
+  const [dragOverGallery, setDragOverGallery] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Load preferences from venue data
@@ -452,9 +455,38 @@ export default function VenueProfilePage() {
               />
             </label>
           </div>
-          <div className="p-5">
+          {/* Drag-drop zone wrapping the gallery — drop one or more
+              photos anywhere inside the panel to upload (subject to the
+              10-photo cap). */}
+          <div
+            className={`p-5 transition-colors ${
+              dragOverGallery ? "bg-accent/5 ring-2 ring-accent/40 ring-inset" : ""
+            }`}
+            onDragOver={(e) => {
+              if (e.dataTransfer.types?.includes("Files") && venueImages.length < 10) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+                if (!dragOverGallery) setDragOverGallery(true);
+              }
+            }}
+            onDragLeave={() => setDragOverGallery(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOverGallery(false);
+              if (venueImages.length >= 10) return;
+              const dt = new DataTransfer();
+              Array.from(e.dataTransfer.files ?? []).forEach((f) => {
+                if (f.type.startsWith("image/")) dt.items.add(f);
+              });
+              if (dt.files.length > 0) handleAddImages(dt.files);
+            }}
+          >
             {venueImages.length === 0 ? (
-              <p className="text-sm text-muted">No photos yet. Add a few to bring your space to life.</p>
+              <p className="text-sm text-muted">
+                {dragOverGallery
+                  ? "Drop to upload"
+                  : "No photos yet. Drag photos in or click Add photos to bring your space to life."}
+              </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {venueImages.map((url) => (

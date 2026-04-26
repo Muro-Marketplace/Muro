@@ -478,6 +478,10 @@ export default function ProfileEditorPage() {
   const [workForm, setWorkForm] = useState<{ title: string; medium: string; dimensions: string; image: string; orientation: "portrait" | "landscape" | "square"; available: boolean; sizes: { label: string; price: number }[] }>({ title: "", medium: "", dimensions: "", image: "", orientation: "landscape", available: true, sizes: [{ label: '8\u00d710" (A4)', price: 0 }] });
   const workImageRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  // Tracks which avatar slot has a drag over it so we can light up the
+  // right dropzone (banner vs profile pic) without the other one
+  // flashing too.
+  const [dragOver, setDragOver] = useState<"banner" | "profile" | null>(null);
 
   useEffect(() => {
     if (profile) return;
@@ -511,13 +515,28 @@ export default function ProfileEditorPage() {
     );
   }
 
-  async function handleFileUpload(field: "bannerImage" | "profileImage", e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Core upload — accepts a raw File so it can be called from the
+  // file-input change event AND a drag-drop handler. Anything image
+  // typed gets accepted; non-images are silently rejected since the
+  // browser already filters most cases at the OS picker.
+  async function handleFile(
+    field: "bannerImage" | "profileImage",
+    file: File,
+  ) {
+    if (!file.type.startsWith("image/")) return;
     setUploading(true);
     const url = await uploadImage(file, "avatars");
     update(field, url);
     setUploading(false);
+  }
+
+  async function handleFileUpload(
+    field: "bannerImage" | "profileImage",
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = e.target.files?.[0];
+    if (file) await handleFile(field, file);
+    if (e.target) e.target.value = "";
   }
 
   function saveWorks(updated: ArtistWork[]) {
@@ -752,29 +771,71 @@ export default function ProfileEditorPage() {
         <div className={sectionClass}>
           <h2 className="text-lg font-medium mb-5">Banner & Profile Photo</h2>
 
-          {/* Banner */}
+          {/* Banner — click or drag-drop a file to set */}
           <div className="mb-5">
             <label className={labelClass}>Banner Image</label>
-            <div className="relative h-40 rounded-sm overflow-hidden bg-border/20 mb-3 group cursor-pointer" onClick={() => bannerInputRef.current?.click()}>
+            <div
+              className={`relative h-40 rounded-sm overflow-hidden bg-border/20 mb-3 group cursor-pointer transition-shadow ${
+                dragOver === "banner" ? "ring-2 ring-accent" : ""
+              }`}
+              onClick={() => bannerInputRef.current?.click()}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types?.includes("Files")) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                  if (dragOver !== "banner") setDragOver("banner");
+                }
+              }}
+              onDragLeave={() => setDragOver(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(null);
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleFile("bannerImage", file);
+              }}
+            >
               {profile.bannerImage ? (
                 <Image src={profile.bannerImage} alt="Banner" fill className="object-cover" sizes="800px" />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm text-muted">Click to upload banner</span>
+                  <span className="text-sm text-muted">
+                    {dragOver === "banner" ? "Drop to upload" : "Click or drag a banner here"}
+                  </span>
                 </div>
               )}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                <span className="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">Change Banner</span>
+                <span className="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                  {dragOver === "banner" ? "Drop to replace" : "Change Banner"}
+                </span>
               </div>
             </div>
             <input ref={bannerInputRef} type="file" accept="image/*" onChange={(e) => handleFileUpload("bannerImage", e)} className="hidden" />
           </div>
 
-          {/* Profile pic */}
+          {/* Profile pic — click or drag-drop */}
           <div>
             <label className={labelClass}>Profile Photo</label>
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-full overflow-hidden bg-border/20 relative shrink-0 group cursor-pointer" onClick={() => profilePicInputRef.current?.click()}>
+              <div
+                className={`w-20 h-20 rounded-full overflow-hidden bg-border/20 relative shrink-0 group cursor-pointer transition-shadow ${
+                  dragOver === "profile" ? "ring-2 ring-accent" : ""
+                }`}
+                onClick={() => profilePicInputRef.current?.click()}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types?.includes("Files")) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                    if (dragOver !== "profile") setDragOver("profile");
+                  }
+                }}
+                onDragLeave={() => setDragOver(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(null);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleFile("profileImage", file);
+                }}
+              >
                 {profile.profileImage ? (
                   <Image src={profile.profileImage} alt="Profile" fill className="object-cover" sizes="80px" />
                 ) : (

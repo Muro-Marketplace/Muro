@@ -183,6 +183,16 @@ export default function PortfolioPage() {
   // without clicking into each work individually.
   const [bulkPricesOpen, setBulkPricesOpen] = useState(false);
   const [bulkPriceRows, setBulkPriceRows] = useState<BulkPriceRow[]>([]);
+  // Spreadsheet-style row selection for the bulk-price modal. Tracks
+  // row indexes (not workIds) because two rows on the same work are
+  // distinct selections.
+  const [bulkPriceSelected, setBulkPriceSelected] = useState<Set<number>>(
+    new Set(),
+  );
+  // Last-clicked row drives Shift-click range selection.
+  const bulkPriceAnchorRef = useRef<number | null>(null);
+  // Quick "set selected to £X" input.
+  const [bulkPriceFillValue, setBulkPriceFillValue] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [uploadingExtra, setUploadingExtra] = useState(false);
   // Highlights the dropzone when a file is hovered. Mirrored separately
@@ -381,6 +391,187 @@ export default function PortfolioPage() {
    * can tab between cells and tweak prices in bulk. Saves on submit by
    * folding the edited rows back onto each work's `pricing` array.
    */
+  /**
+   * Open the bulk-price editor on every work, regardless of whether the
+   * user has entered select-mode. Most artists hit "Bulk edit prices"
+   * because they want to scan _everything_ — making them tick boxes
+   * first is friction.
+   */
+  // Whenever the modal opens or the row list changes shape, clear the
+  // spreadsheet-style row selection so it doesn't reference stale
+  // indexes (a removed row would leave a phantom highlight).
+  useEffect(() => {
+    if (!bulkPricesOpen) {
+      setBulkPriceSelected(new Set());
+      bulkPriceAnchorRef.current = null;
+      setBulkPriceFillValue("");
+    }
+  }, [bulkPricesOpen]);
+
+  // Cmd/Ctrl + C / V keyboard shortcuts when the modal is open. Only
+  // fires when the focused element isn't a real input — otherwise the
+  // user copying inside an input field would get hijacked.
+  useEffect(() => {
+    if (!bulkPricesOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const tag = (document.activeElement?.tagName || "").toLowerCase();
+      const isField =
+        tag === "input" || tag === "textarea" || tag === "select";
+      if (isField) return;
+      if (e.key === "c" || e.key === "C") {
+        if (bulkPriceSelected.size === 0) return;
+        e.preventDefault();
+        bulkPriceCopySelected();
+      } else if (e.key === "v" || e.key === "V") {
+        if (bulkPriceSelected.size === 0) return;
+        e.preventDefault();
+        bulkPricePasteIntoSelected();
+      } else if (e.key === "a" || e.key === "A") {
+        e.preventDefault();
+        const all = new Set<number>();
+        for (let i = 0; i < bulkPriceRows.length; i++) all.add(i);
+        setBulkPriceSelected(all);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulkPricesOpen, bulkPriceSelected, bulkPriceRows.length]);
+
+  /**
+   * Toggle/range-extend row selection. Plain click sets the anchor +
+   * single-selects the row. Shift-click extends from the anchor.
+   * Cmd/Ctrl-click toggles the row in the existing set.
+   */
+  function bulkPriceClickRow(idx: number, e: React.MouseEvent) {
+    if (e.shiftKey && bulkPriceAnchorRef.current !== null) {
+      const a = bulkPriceAnchorRef.current;
+      const lo = Math.min(a, idx);
+      const hi = Math.max(a, idx);
+      const next = new Set<number>();
+      for (let i = lo; i <= hi; i++) next.add(i);
+      setBulkPriceSelected(next);
+      return;
+    }
+    if (e.metaKey || e.ctrlKey) {
+      setBulkPriceSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(idx)) next.delete(idx);
+        else next.add(idx);
+        return next;
+      });
+      bulkPriceAnchorRef.current = idx;
+      return;
+    }
+    setBulkPriceSelected(new Set([idx]));
+    bulkPriceAnchorRef.current = idx;
+  }
+
+  /**
+   * Apply the fill value to every selected row. Empty input is treated
+   * as "no change" so the artist can highlight rows + paste prices via
+   * Cmd+V instead.
+   */
+  function bulkPriceApplyFill() {
+    const v = bulkPriceFillValue.trim();
+    if (!v) return;
+    const num = Number(v);
+    if (!Number.isFinite(num) || num < 0) return;
+    setBulkPriceRows((rows) =>
+      rows.map((r, i) =>
+        bulkPriceSelected.has(i) ? { ...r, price: num } : r,
+      ),
+    );
+  }
+
+  /**
+   * Copy the selected rows' prices as newline-separated values so
+   * artists can paste them into Excel / Numbers / Sheets. We use the
+   * row order as displayed.
+   */
+  async function bulkPriceCopySelected() {
+    const indexes = Array.from(bulkPriceSelected).sort((a, b) => a - b);
+    if (indexes.length === 0) return;
+    const text = indexes
+      .map((i) => bulkPriceRows[i]?.price ?? 0)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard permissions can fail in tests / older browsers.
+      // Falling back is fine — the user can use the fill input.
+    }
+  }
+
+  /**
+   * Read newline-separated numbers from the clipboard and write them
+   * into the selected rows in order. Currency symbols, commas, and
+   * whitespace are stripped. Excess values are ignored; missing values
+   * leave the corresponding row unchanged.
+   */
+  async function bulkPricePasteIntoSelected() {
+    const indexes = Array.from(bulkPriceSelected).sort((a, b) => a - b);
+    if (indexes.length === 0) return;
+    let text = "";
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      return;
+    }
+    const values = text
+      .split(/\r?\n|\t/)
+      .map((s) => s.trim().replace(/[£$€,]/g, ""))
+      .filter((s) => s.length > 0)
+      .map((s) => Number(s))
+      .filter((n) => Number.isFinite(n) && n >= 0);
+    if (values.length === 0) return;
+    setBulkPriceRows((rows) => {
+      const next = [...rows];
+      indexes.forEach((rowIdx, i) => {
+        if (i < values.length) {
+          next[rowIdx] = { ...next[rowIdx], price: values[i] };
+        }
+      });
+      return next;
+    });
+  }
+
+  function openBulkPricesAll() {
+    if (works.length === 0) return;
+    setSelectedIds(new Set(works.map((w) => w.id)));
+    // Build rows from `works` directly so we don't race the next
+    // render of selectedIds before openBulkPrices reads it.
+    const rows: BulkPriceRow[] = [];
+    works.forEach((w) => {
+      if (!w.pricing || w.pricing.length === 0) {
+        rows.push({
+          workId: w.id,
+          workTitle: w.title,
+          workImage: w.image,
+          sizeIndex: 0,
+          label: "",
+          price: 0,
+          isNew: true,
+        });
+        return;
+      }
+      w.pricing.forEach((p, i) => {
+        rows.push({
+          workId: w.id,
+          workTitle: w.title,
+          workImage: w.image,
+          sizeIndex: i,
+          label: p.label,
+          price: p.price,
+          isNew: false,
+        });
+      });
+    });
+    setBulkPriceRows(rows);
+    setBulkPricesOpen(true);
+  }
+
   function openBulkPrices() {
     if (selectedIds.size === 0) return;
     const rows: BulkPriceRow[] = [];
@@ -1808,7 +1999,9 @@ export default function PortfolioPage() {
       <div className="bg-surface border border-border rounded-sm p-6 pb-24">
         <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
           <h2 className="text-base font-medium">Works ({works.length})</h2>
-          {/* Select-mode toggle + select-all when active. */}
+          {/* Select-mode toggle + select-all when active. The Bulk-edit
+              prices button skips select-mode entirely — clicking opens
+              the spreadsheet table with every work pre-loaded. */}
           {works.length > 0 && (
             <div className="flex items-center gap-2">
               {selectMode ? (
@@ -1829,13 +2022,22 @@ export default function PortfolioPage() {
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setSelectMode(true)}
-                  className="text-xs text-stone-700 hover:text-foreground border border-border rounded-sm px-3 py-1.5"
-                >
-                  Select multiple
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectMode(true)}
+                    className="text-xs text-stone-700 hover:text-foreground border border-border rounded-sm px-3 py-1.5"
+                  >
+                    Select multiple
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openBulkPricesAll}
+                    className="text-xs text-stone-700 hover:text-foreground border border-border rounded-sm px-3 py-1.5"
+                  >
+                    Bulk edit prices
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -1989,6 +2191,20 @@ export default function PortfolioPage() {
                   </div>
                 );
               })}
+              {/* In-grid "+ Add new work" tile so the artist doesn't
+                  have to scroll to the top to add another. Hidden in
+                  select-mode where the focus is on the existing
+                  selection. */}
+              {!selectMode && (
+                <button
+                  type="button"
+                  onClick={() => openAdd()}
+                  className="aspect-square flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-sm text-muted hover:border-accent hover:text-accent hover:bg-accent/5 transition-colors"
+                >
+                  <span className="text-2xl leading-none">+</span>
+                  <span className="text-xs font-medium">Add new work</span>
+                </button>
+              )}
             </div>
           </>
         )}
@@ -2035,7 +2251,7 @@ export default function PortfolioPage() {
                 onClick={() => setBulkApplyOpen((v) => !v)}
                 className="text-xs px-3 py-1.5 rounded-sm bg-white/10 hover:bg-white/20 transition-colors"
               >
-                Apply prices from… ▾
+                Copy sizes &amp; prices from… ▾
               </button>
               {bulkApplyOpen && (
                 <ul
@@ -2132,11 +2348,92 @@ export default function PortfolioPage() {
               </button>
             </div>
 
+            {/* Selection toolbar — only shown when rows are highlighted.
+                Lets the artist set a flat price for the selection or
+                copy/paste prices to/from a spreadsheet (also Cmd+C/V).
+                Sits above the table so it's always discoverable. */}
+            {bulkPriceSelected.size > 0 && (
+              <div className="px-5 py-2 border-b border-border bg-accent/5 text-xs flex flex-wrap items-center gap-2">
+                <span className="font-medium text-foreground">
+                  {bulkPriceSelected.size} row
+                  {bulkPriceSelected.size === 1 ? "" : "s"} selected
+                </span>
+                <span className="text-muted">·</span>
+                <label className="flex items-center gap-1">
+                  <span className="text-muted">Set price £</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={bulkPriceFillValue}
+                    onChange={(e) => setBulkPriceFillValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") bulkPriceApplyFill();
+                    }}
+                    placeholder="0"
+                    className="w-20 bg-white border border-border rounded-sm px-2 py-1 text-right tabular-nums"
+                  />
+                  <button
+                    type="button"
+                    onClick={bulkPriceApplyFill}
+                    disabled={!bulkPriceFillValue.trim()}
+                    className="ml-1 px-2 py-1 rounded-sm bg-foreground text-white text-[11px] hover:bg-foreground/90 disabled:opacity-40"
+                  >
+                    Apply
+                  </button>
+                </label>
+                <span className="text-muted">·</span>
+                <button
+                  type="button"
+                  onClick={bulkPriceCopySelected}
+                  className="px-2 py-1 rounded-sm bg-white border border-border hover:border-foreground/30"
+                  title="Copy selected prices (⌘C)"
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={bulkPricePasteIntoSelected}
+                  className="px-2 py-1 rounded-sm bg-white border border-border hover:border-foreground/30"
+                  title="Paste prices into selected rows (⌘V)"
+                >
+                  Paste
+                </button>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => setBulkPriceSelected(new Set())}
+                  className="text-muted hover:text-foreground"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
             {/* Table */}
             <div className="overflow-y-auto flex-1 min-h-0">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-stone-50 border-b border-border text-xs text-muted uppercase tracking-wider">
                   <tr>
+                    <th className="px-3 py-2 w-8">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all rows"
+                        checked={
+                          bulkPriceRows.length > 0 &&
+                          bulkPriceSelected.size === bulkPriceRows.length
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const all = new Set<number>();
+                            for (let i = 0; i < bulkPriceRows.length; i++) all.add(i);
+                            setBulkPriceSelected(all);
+                          } else {
+                            setBulkPriceSelected(new Set());
+                          }
+                        }}
+                      />
+                    </th>
                     <th className="text-left font-medium px-4 py-2 w-2/5">Work</th>
                     <th className="text-left font-medium px-4 py-2">Size label</th>
                     <th className="text-right font-medium px-4 py-2 w-32">Price (£)</th>
@@ -2150,12 +2447,43 @@ export default function PortfolioPage() {
                     // and the visual scan is easier.
                     const prev = idx > 0 ? bulkPriceRows[idx - 1] : null;
                     const startsGroup = !prev || prev.workId !== row.workId;
+                    const isSelected = bulkPriceSelected.has(idx);
                     return (
                       <tr
                         key={`${row.workId}-${row.sizeIndex}-${idx}`}
-                        className={`border-b border-border/60 ${startsGroup ? "" : "border-t-0"}`}
+                        className={`border-b border-border/60 ${startsGroup ? "" : "border-t-0"} ${
+                          isSelected ? "bg-accent/8" : ""
+                        }`}
                       >
-                        <td className="px-4 py-2 align-middle">
+                        <td className="px-3 py-2 align-middle">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select row ${idx + 1}`}
+                            checked={isSelected}
+                            onChange={() => {
+                              setBulkPriceSelected((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(idx)) next.delete(idx);
+                                else next.add(idx);
+                                return next;
+                              });
+                              bulkPriceAnchorRef.current = idx;
+                            }}
+                            onClick={(e) => {
+                              // Shift-click on the checkbox extends the
+                              // range from the anchor — same behaviour
+                              // as clicking the row body.
+                              if (e.shiftKey) {
+                                e.preventDefault();
+                                bulkPriceClickRow(idx, e);
+                              }
+                            }}
+                          />
+                        </td>
+                        <td
+                          className="px-4 py-2 align-middle cursor-pointer select-none"
+                          onClick={(e) => bulkPriceClickRow(idx, e)}
+                        >
                           {startsGroup ? (
                             <div className="flex items-center gap-2 min-w-0">
                               <div className="relative w-8 h-8 rounded-sm overflow-hidden bg-border/30 shrink-0">
