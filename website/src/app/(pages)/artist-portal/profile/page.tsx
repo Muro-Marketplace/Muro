@@ -1043,9 +1043,16 @@ export default function ProfileEditorPage() {
         <div className={sectionClass}>
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-medium">Your Works</h2>
-            <button type="button" onClick={openAddWork} className="text-sm text-accent hover:text-accent-hover transition-colors">
+            {/* Send adds to /artist-portal/portfolio so there's one
+                authoritative place to manage works. The inline form
+                below is preserved for in-place edits of existing
+                pieces, but new-work creation always goes via Portfolio. */}
+            <Link
+              href="/artist-portal/portfolio"
+              className="text-sm text-accent hover:text-accent-hover transition-colors"
+            >
               + Add Work
-            </button>
+            </Link>
           </div>
 
           {/* Add/Edit Work Form */}
