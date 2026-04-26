@@ -139,7 +139,7 @@ export default function CustomerSignUpPage() {
                 onClick={async () => {
                   await supabase.auth.signInWithOAuth({
                     provider: "google",
-                    options: { redirectTo: `${window.location.origin}/browse`, queryParams: { access_type: "offline", prompt: "consent" } },
+                    options: { redirectTo: `${window.location.origin}/auth/callback?role=customer&next=%2Fbrowse`, queryParams: { access_type: "offline", prompt: "consent" } },
                   });
                 }}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-border rounded-sm text-sm font-medium text-foreground hover:bg-background transition-colors"
@@ -152,7 +152,7 @@ export default function CustomerSignUpPage() {
                 onClick={async () => {
                   await supabase.auth.signInWithOAuth({
                     provider: "apple",
-                    options: { redirectTo: `${window.location.origin}/browse` },
+                    options: { redirectTo: `${window.location.origin}/auth/callback?role=customer&next=%2Fbrowse` },
                   });
                 }}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-border rounded-sm text-sm font-medium text-foreground hover:bg-background transition-colors"

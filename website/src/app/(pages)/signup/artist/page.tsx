@@ -193,7 +193,7 @@ export default function ArtistSignUpPage() {
                   await supabase.auth.signInWithOAuth({
                     provider: "google",
                     options: {
-                      redirectTo: `${window.location.origin}/apply`,
+                      redirectTo: `${window.location.origin}/auth/callback?role=artist&next=%2Fapply`,
                       queryParams: {
                         access_type: "offline",
                         prompt: "consent",
@@ -212,7 +212,7 @@ export default function ArtistSignUpPage() {
                   await supabase.auth.signInWithOAuth({
                     provider: "apple",
                     options: {
-                      redirectTo: `${window.location.origin}/apply`,
+                      redirectTo: `${window.location.origin}/auth/callback?role=artist&next=%2Fapply`,
                     },
                   });
                 }}
