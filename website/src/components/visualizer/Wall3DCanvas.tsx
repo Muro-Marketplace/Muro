@@ -1102,14 +1102,18 @@ function ArtworkPlane({
   // useTexture caches per URL so this only runs once per image.
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
+  // meshBasicMaterial + toneMapped:false renders the image at its
+  // true colour values regardless of room lighting. Standard PBR
+  // material got washed out by the bright key light + Environment
+  // IBL — artwork plates would lose contrast and look milky. The
+  // frame around the plane keeps using meshStandardMaterial so it
+  // still reads as a 3D object catching shadows; only the printed
+  // surface ignores light, same way a real print's pigment doesn't
+  // photometrically respond to ambient like a glossy mug would.
   return (
-    <mesh receiveShadow position={[0, 0, FRAME_DEPTH_M / 2]}>
+    <mesh position={[0, 0, FRAME_DEPTH_M / 2]}>
       <planeGeometry args={[width, height]} />
-      <meshStandardMaterial
-        map={texture}
-        roughness={0.55}
-        metalness={0.02}
-      />
+      <meshBasicMaterial map={texture} toneMapped={false} />
     </mesh>
   );
 }

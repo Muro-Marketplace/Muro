@@ -149,15 +149,14 @@ export default async function ArtistProfilePage({
 
   return (
     <div className="bg-background">
-      {/* Variant A — no banner. Square profile photo on the left,
-          identity + bio + facts in a generous right column. The
-          gallery-website feel: the artist's first work shows up on
-          scroll instead of fighting a hero image. */}
-      <section className="pt-8 lg:pt-12 pb-2">
-        <div className="max-w-[1200px] mx-auto px-6">
+      {/* Variant A — no banner. Mobile gets a dedicated compact
+          layout (header pair, full-width CTAs, stacked metadata);
+          desktop renders the three-column grid. */}
+      <section className="pt-6 lg:pt-12 pb-2">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
           <Link
             href="/browse"
-            className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground mb-8"
+            className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground mb-5 lg:mb-8"
           >
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 11L5 7l4-4" />
@@ -165,12 +164,165 @@ export default async function ArtistProfilePage({
             Back to Marketplace
           </Link>
 
-          {/* Three-column layout on desktop: photo + CTAs (left, 220px)
-              → identity + bio (centre, flexible) → metadata (right,
-              260px). The photo is shrunk slightly from 240→220px so
-              that stacking Message + Request Placement under it doesn't
-              push the column taller than the bio column. */}
-          <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_260px] gap-8 lg:gap-10 items-start">
+          {/* ─── MOBILE LAYOUT (< lg) ───────────────────────────── */}
+          <div className="lg:hidden">
+            {/* Identity header — small square photo on the left,
+                discipline + name + location stacked on the right. */}
+            <div className="flex items-start gap-4 mb-4">
+              <div className="relative w-24 h-24 rounded-sm overflow-hidden bg-stone-100 border border-border shrink-0">
+                <Image
+                  src={artist.image || `https://picsum.photos/seed/${artist.slug}/600/600`}
+                  alt={artist.name}
+                  fill
+                  className="object-cover"
+                  sizes="96px"
+                  priority
+                />
+                {artist.isFoundingArtist && (
+                  <span
+                    className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-white/90 backdrop-blur-sm text-[9px] font-medium text-foreground rounded-sm"
+                    title="Founding Artist"
+                  >
+                    Founding
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-muted uppercase tracking-[0.18em] mb-1">
+                  {disciplineLabel(artist.primaryMedium, artist.discipline)}
+                </p>
+                <h1 className="font-serif text-2xl text-foreground leading-tight tracking-tight mb-1">
+                  {artist.name}
+                </h1>
+                <p className="text-muted text-xs">{artist.location}</p>
+                {artist.instagram && (
+                  <a
+                    href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-foreground transition-colors mt-1"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
+                    {artist.instagram}
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {(artist.subStyles && artist.subStyles.length > 0) && (
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {artist.subStyles.slice(0, 6).map((s) => (
+                  <span
+                    key={s}
+                    className="inline-block px-2 py-0.5 text-[10px] font-medium text-foreground/70 bg-surface border border-border rounded-full"
+                  >
+                    {formatSubStyleLabel(s)}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <p className="text-foreground/85 leading-relaxed text-[14px] mb-4">
+              {artist.shortBio}
+            </p>
+
+            {artist.styleTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-5">
+                {artist.styleTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-block px-2 py-0.5 text-[10px] font-medium text-foreground/65 bg-surface border border-border rounded-sm"
+                  >
+                    {formatSubStyleLabel(tag)}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Mobile CTAs — stacked, full-width. Primary action
+                (Message) on top so a thumb-tap reaches it first. */}
+            <div className="flex flex-col gap-2 mb-6">
+              <MessageArtistButton
+                artistSlug={artist.slug}
+                artistName={artist.name}
+                variant="accent"
+                size="md"
+                fullWidth
+              />
+              <PlacementButton
+                artistSlug={artist.slug}
+                artistName={artist.name}
+                fullWidth
+              />
+            </div>
+
+            {/* Metadata — compact stacked rows under the CTAs. The
+                full sidebar from desktop wouldn't fit cleanly so we
+                use a 2-col grid for the facts and full-width pill
+                rows for Sells / Terms. */}
+            <div className="border-t border-border pt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+              <div>
+                <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Delivery</p>
+                <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Suited for</p>
+                <p className="text-sm font-medium text-foreground">
+                  {artist.venueTypesSuitedFor.length > 0
+                    ? artist.venueTypesSuitedFor.slice(0, 2).join(", ")
+                    : "Any venue"}
+                </p>
+              </div>
+            </div>
+
+            {hasStats && (
+              <div className="flex items-center gap-5 pt-4 mt-4 border-t border-border">
+                {(artist.totalPlacements ?? 0) > 0 && (
+                  <div>
+                    <p className="text-base font-serif font-semibold text-foreground leading-none">{artist.totalPlacements}</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Venue{artist.totalPlacements !== 1 ? "s" : ""}</p>
+                  </div>
+                )}
+                {(artist.totalSales ?? 0) > 0 && (
+                  <div>
+                    <p className="text-base font-serif font-semibold text-foreground leading-none">{artist.totalSales}</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Sold</p>
+                  </div>
+                )}
+                {(artist.totalViews ?? 0) > 0 && (
+                  <div>
+                    <p className="text-base font-serif font-semibold text-foreground leading-none">{artist.totalViews}</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Views</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="pt-4 mt-4 border-t border-border">
+              <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Sells</p>
+              <div className="flex flex-wrap gap-1.5">
+                {offerings.map((o) => (
+                  <SellsPill key={o.label} label={o.label} yes={o.yes} />
+                ))}
+              </div>
+            </div>
+            {terms.length > 0 && (
+              <div className="pt-4 mt-4 border-t border-border">
+                <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Terms</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {terms.map((t) => (
+                    <TermPill key={t.label} label={t.label} yes={t.yes} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ─── DESKTOP LAYOUT (lg+) ───────────────────────────── */}
+          {/* Three-column layout: photo + CTAs (left, 220px) →
+              identity + bio (centre, flexible) → metadata (right,
+              260px). */}
+          <div className="hidden lg:grid grid-cols-[220px_minmax(0,1fr)_260px] gap-10 items-start">
             {/* LEFT — square photo + CTAs + Instagram. CTAs sit
                 directly under the photo so the buyer's eye flows
                 face → name → action. Both buttons render full-width
