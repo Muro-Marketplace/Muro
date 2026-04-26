@@ -194,7 +194,11 @@ export default async function ArtistProfilePage({
                   </span>
                 )}
               </div>
-              <div className="flex flex-col gap-2 max-w-[220px]">
+              {/* CTAs sit just below the photo with a generous gap so
+                  the pair reads as two distinct actions, not a stacked
+                  pill. Both stretch to the column width for visual
+                  weight. */}
+              <div className="flex flex-col gap-2.5 max-w-[220px] pt-1">
                 <MessageArtistButton
                   artistSlug={artist.slug}
                   artistName={artist.name}
@@ -221,23 +225,19 @@ export default async function ArtistProfilePage({
               <h1 className="font-serif text-4xl lg:text-5xl text-foreground leading-tight tracking-tight mb-2">
                 {artist.name}
               </h1>
-              <div className="flex flex-wrap items-center gap-3 mb-6">
-                <p className="text-muted text-sm">{artist.location}</p>
-                {artist.instagram && (
-                  <>
-                    <span className="text-border">·</span>
-                    <a
-                      href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
-                      {artist.instagram}
-                    </a>
-                  </>
-                )}
-              </div>
+              <p className="text-muted text-sm">{artist.location}</p>
+              {artist.instagram && (
+                <a
+                  href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors mt-1.5"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
+                  {artist.instagram}
+                </a>
+              )}
+              <div className="mb-6" />
 
               {(artist.subStyles && artist.subStyles.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 mb-6">

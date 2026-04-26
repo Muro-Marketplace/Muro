@@ -25,7 +25,9 @@ export function PlacementButton({
       href={`/venue-portal/placements?artist=${artistSlug}&artistName=${encodeURIComponent(artistName)}`}
       variant={variant}
       size={size}
-      className={fullWidth ? "w-full justify-center" : undefined}
+      // py-3 override matches MessageArtistButton's fullWidth styling
+      // so the two stacked buttons read as the same weight.
+      className={fullWidth ? "w-full justify-center py-3" : undefined}
     >
       Request Placement
     </Button>
