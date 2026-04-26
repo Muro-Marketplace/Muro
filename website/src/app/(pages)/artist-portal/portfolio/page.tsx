@@ -210,8 +210,9 @@ export default function PortfolioPage() {
   // Shopify-style multi-select. `selectMode` is the explicit mode
   // toggle (turning it on shows checkboxes on every card and hides
   // the per-card hover overlay). `selectedIds` tracks which works
-  // are currently checked. `bulkApplyOpen` opens a small picker for
-  // "Apply prices from…" so the user can pick a source work.
+  // are currently checked. The Copy-from trio
+  // (`bulkEditApplyKind` / `bulkEditPendingSource` / `bulkEditTargetIds`)
+  // drives the source-then-targets-then-apply picker below.
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Bulk-edit Copy-from flow. Mirrors the bulk-add modal's two-step
@@ -472,7 +473,12 @@ export default function PortfolioPage() {
   function exitSelectMode() {
     setSelectMode(false);
     setSelectedIds(new Set());
-    setBulkApplyOpen(false);
+    // Replaced bulkApplyOpen with the bulkEdit* trio. Wipe each so
+    // re-entering select mode doesn't leak a half-open Copy-from
+    // picker from the previous session.
+    setBulkEditApplyKind(null);
+    setBulkEditPendingSource(null);
+    setBulkEditTargetIds(new Set());
   }
 
   function toggleSelected(id: string) {
