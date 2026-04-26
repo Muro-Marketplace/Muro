@@ -13,6 +13,7 @@ const navItems = [
   { label: "Dashboard", href: "/artist-portal" },
   { label: "Edit Profile", href: "/artist-portal/profile" },
   { label: "My Portfolio", href: "/artist-portal/portfolio" },
+  { label: "Showroom", href: "/artist-portal/showroom" },
   { label: "Messages", href: "/artist-portal/messages" },
   { label: "Placements", href: "/artist-portal/placements" },
   { label: "Collections", href: "/artist-portal/collections" },
