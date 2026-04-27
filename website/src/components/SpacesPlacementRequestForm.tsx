@@ -67,8 +67,12 @@ export default function SpacesPlacementRequestForm({
     return arr;
   }, [venue]);
 
-  const [selectedWorkId, setSelectedWorkId] = useState<string | null>(
-    works[0]?.id || null,
+  // Multi-work selection. A single placement row carries the primary
+  // work in workTitle/Image and any extras in extra_works (migration
+  // 027). Order matters — first selected becomes the primary so we
+  // track an ordered array, not a Set.
+  const [selectedWorkIds, setSelectedWorkIds] = useState<string[]>(
+    works[0]?.id ? [works[0].id] : [],
   );
   const [arrangement, setArrangement] = useState<Arrangement>(
     supported[0] || "revenue_share",
@@ -79,29 +83,49 @@ export default function SpacesPlacementRequestForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedWork = works.find((w) => w.id === selectedWorkId) || null;
+  const selectedWorks = useMemo(
+    () =>
+      selectedWorkIds
+        .map((id) => works.find((w) => w.id === id))
+        .filter((w): w is ArtistWork => !!w),
+    [selectedWorkIds, works],
+  );
+  const primaryWork = selectedWorks[0] || null;
+
+  function toggleWork(id: string) {
+    setSelectedWorkIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      return [...prev, id];
+    });
+  }
 
   const canSubmit =
-    !!selectedWork &&
+    !!primaryWork &&
     !!arrangement &&
     message.trim().length >= 20 &&
     !submitting;
 
   async function handleSubmit() {
-    if (!canSubmit || !selectedWork) return;
+    if (!canSubmit || !primaryWork) return;
     setError(null);
     setSubmitting(true);
     try {
       const placementId = crypto.randomUUID();
+      const extras = selectedWorks.slice(1).map((w) => ({
+        title: w.title,
+        image: w.image,
+        size: w.dimensions || null,
+      }));
       const payload = {
         fromVenue: false,
         placements: [
           {
             id: placementId,
             venueSlug: venue.slug,
-            workTitle: selectedWork.title,
-            workImage: selectedWork.image,
-            requestedDimensions: selectedWork.dimensions || null,
+            workTitle: primaryWork.title,
+            workImage: primaryWork.image,
+            requestedDimensions: primaryWork.dimensions || null,
+            extraWorks: extras.length > 0 ? extras : undefined,
             type: arrangement,
             revenueSharePercent:
               arrangement === "revenue_share" ? revenueShare : null,
@@ -196,27 +220,49 @@ export default function SpacesPlacementRequestForm({
         </button>
       </div>
 
-      {/* Work picker */}
+      {/* Work picker — multi-select. Tap a thumbnail to add or remove
+          it; the first selected becomes the primary, the rest go on
+          the same placement as `extra_works`. The order chip helps the
+          artist see which is the headline. */}
       <div>
-        <p className="text-[10px] text-muted uppercase tracking-wider mb-2">
-          Work to place
-        </p>
+        <div className="flex items-baseline justify-between mb-2 gap-2">
+          <p className="text-[10px] text-muted uppercase tracking-wider">
+            Work{selectedWorks.length === 1 ? "" : "s"} to place{" "}
+            <span className="text-muted/70 normal-case tracking-normal">
+              ({selectedWorks.length} selected)
+            </span>
+          </p>
+          {selectedWorks.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setSelectedWorkIds(primaryWork ? [primaryWork.id] : [])}
+              className="text-[10px] text-muted hover:text-foreground transition-colors"
+            >
+              Clear extras
+            </button>
+          )}
+        </div>
         {worksLoading ? (
           <p className="text-[11px] text-muted">Loading your works…</p>
         ) : (
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
             {works.map((w) => {
-              const active = w.id === selectedWorkId;
+              const order = selectedWorkIds.indexOf(w.id);
+              const active = order >= 0;
               return (
                 <button
                   key={w.id}
-                  onClick={() => setSelectedWorkId(w.id)}
+                  onClick={() => toggleWork(w.id)}
                   className={`relative shrink-0 w-16 h-16 rounded-sm overflow-hidden border-2 transition-colors ${
                     active
                       ? "border-accent ring-1 ring-accent/30"
                       : "border-border hover:border-foreground/30"
                   }`}
-                  title={w.title}
+                  title={
+                    active
+                      ? `${order === 0 ? "Primary work" : `Extra work #${order}`} — ${w.title}`
+                      : `Add ${w.title}`
+                  }
                   type="button"
                 >
                   <Image
@@ -227,19 +273,30 @@ export default function SpacesPlacementRequestForm({
                     className="object-cover"
                   />
                   {active && (
-                    <span className="absolute inset-0 bg-accent/15 pointer-events-none" />
+                    <>
+                      <span className="absolute inset-0 bg-accent/15 pointer-events-none" />
+                      <span className="absolute top-0.5 left-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-accent text-white text-[9px] font-bold leading-none pointer-events-none">
+                        {order === 0 ? "1" : order + 1}
+                      </span>
+                    </>
                   )}
                 </button>
               );
             })}
           </div>
         )}
-        {selectedWork && (
+        {primaryWork && (
           <p className="text-[11px] text-muted mt-1.5">
             <span className="text-foreground/80 font-medium">
-              {selectedWork.title}
+              {primaryWork.title}
             </span>
-            {selectedWork.dimensions ? ` · ${selectedWork.dimensions}` : ""}
+            {primaryWork.dimensions ? ` · ${primaryWork.dimensions}` : ""}
+            {selectedWorks.length > 1 && (
+              <span className="text-muted/70">
+                {" "}
+                + {selectedWorks.length - 1} more
+              </span>
+            )}
           </p>
         )}
       </div>

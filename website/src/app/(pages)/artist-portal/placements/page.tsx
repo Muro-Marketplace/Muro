@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import PlacementActionItems from "@/components/PlacementActionItems";
 import PlacementStepper, { type PlacementStepperData } from "@/components/PlacementStepper";
@@ -151,6 +152,67 @@ export default function PlacementsPage() {
 
   // Form state
   const [venueSlug, setVenueSlug] = useState("");
+  // Ref for the new-placement form so we can scroll to it when an
+  // external link (e.g. /spaces-looking-for-art) deep-links here with
+  // ?venue=<slug>.
+  const formRef = useRef<HTMLDivElement | null>(null);
+  const searchParams = useSearchParams();
+  const venuePrefill = searchParams?.get("venue") || "";
+
+  // When a `?venue=<slug>` param is present (e.g. from the Spaces page
+  // "Open in My Placements" link), prefill the form's venue and open
+  // it. Runs once per pathname change — using prefillAppliedRef so a
+  // user who manually clears the venue can still clear it without us
+  // re-prefilling on rerender. If the deep-linked venue isn't in the
+  // user's "interacted with" list yet, we fetch its public profile so
+  // the dropdown still has it as a selectable option.
+  const prefillAppliedRef = useRef<string>("");
+  useEffect(() => {
+    if (!venuePrefill) return;
+    if (prefillAppliedRef.current === venuePrefill) return;
+    prefillAppliedRef.current = venuePrefill;
+    setVenueSlug(venuePrefill);
+    setShowForm(true);
+
+    // Make sure the venue picker has this slug as an option even if
+    // the artist hasn't messaged the venue before — fetch the public
+    // profile and synthesise an InteractedVenue entry. Soft-fail: if
+    // the lookup 404s we still leave venueSlug set; the form's
+    // post-submit error path will surface the issue.
+    setVenues((prev) => {
+      if (prev.some((v) => v.slug === venuePrefill)) return prev;
+      return [{ slug: venuePrefill, name: venuePrefill }, ...prev];
+    });
+    fetch(`/api/venues/${encodeURIComponent(venuePrefill)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const venue = data?.venue;
+        if (!venue?.slug) return;
+        setVenues((prev) => {
+          const idx = prev.findIndex((v) => v.slug === venue.slug);
+          const entry: InteractedVenue = {
+            slug: venue.slug,
+            name: venue.name || venue.slug,
+            type: venue.type,
+            location: venue.location,
+          };
+          if (idx === -1) return [entry, ...prev];
+          const next = prev.slice();
+          next[idx] = entry;
+          return next;
+        });
+      })
+      .catch(() => { /* ignore — synthetic entry already in place */ });
+
+    // Scroll once the form has rendered. requestAnimationFrame waits
+    // for layout, then a small extra delay lets the form's expand
+    // animation settle before we scroll into view.
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    });
+  }, [venuePrefill]);
   // arrangementType derived from revenuePercent — no separate state needed
   const [revenuePercent, setRevenuePercent] = useState<number | "">(10);
   const [qrEnabled, setQrEnabled] = useState(true);
@@ -663,7 +725,7 @@ export default function PlacementsPage() {
           straight into the form without making them scroll past the
           action items. Matches the venue-side behaviour. */}
       {showForm && (
-        <div className="bg-surface border border-border rounded-sm p-6 mb-6">
+        <div ref={formRef} className="bg-surface border border-border rounded-sm p-6 mb-6 scroll-mt-24">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-base font-medium">Request Placement</h2>
             <button onClick={() => setShowForm(false)} className="text-xs text-muted hover:text-foreground transition-colors">Cancel</button>
