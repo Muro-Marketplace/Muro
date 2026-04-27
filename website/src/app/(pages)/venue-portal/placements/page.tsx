@@ -1211,7 +1211,7 @@ export default function VenuePlacementsPage() {
         <select
           value={dateFilter}
           onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)}
-          className="px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50"
+          className="wp-select px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50"
         >
           <option value="all">All time</option>
           <option value="7d">Last 7 days</option>

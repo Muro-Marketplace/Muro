@@ -2119,7 +2119,7 @@ export default function PortfolioPage() {
                 <select
                   value={form.orientation}
                   onChange={(e) => setForm((p) => ({ ...p, orientation: e.target.value as "portrait" | "landscape" | "square" }))}
-                  className={inputClass}
+                  className={`${inputClass} wp-select`}
                 >
                   <option value="landscape">Landscape</option>
                   <option value="portrait">Portrait</option>
@@ -3954,7 +3954,7 @@ function BulkAddDraftCard({
                       | "square",
                   })
                 }
-                className="w-full bg-background border border-border rounded-sm px-2 py-1.5 text-sm focus:outline-none focus:border-accent/60"
+                className="wp-select w-full bg-background border border-border rounded-sm px-2 py-1.5 text-sm focus:outline-none focus:border-accent/60"
               >
                 <option value="landscape">Landscape</option>
                 <option value="portrait">Portrait</option>

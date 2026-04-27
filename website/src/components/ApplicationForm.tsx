@@ -509,7 +509,7 @@ export default function ApplicationForm() {
               value={form.traderStatus}
               onChange={handleChange}
               required
-              className={inputClassFor("traderStatus")}
+              className={`${inputClassFor("traderStatus")} wp-select`}
             >
               <option value="">Select one</option>
               <option value="consumer">
@@ -620,7 +620,7 @@ export default function ApplicationForm() {
               name="primaryMedium"
               value={form.primaryMedium}
               onChange={handleChange}
-              className={inputClassFor("primaryMedium")}
+              className={`${inputClassFor("primaryMedium")} wp-select`}
             >
               <option value="">Select your primary medium (optional)</option>
               {primaryMediums.map((medium) => (
@@ -769,7 +769,7 @@ export default function ApplicationForm() {
               value={form.deliveryRadius}
               onChange={handleChange}
               required
-              className={inputClassFor("deliveryRadius")}
+              className={`${inputClassFor("deliveryRadius")} wp-select`}
             >
               <option value="">How far can you deliver artwork?</option>
               {deliveryRadiusOptions.map((option) => (
@@ -826,7 +826,7 @@ export default function ApplicationForm() {
           name="hearAbout"
           value={form.hearAbout}
           onChange={handleChange}
-          className={inputClass}
+          className={`${inputClass} wp-select`}
         >
           <option value="">Select an option</option>
           {hearAboutOptions.map((option) => (

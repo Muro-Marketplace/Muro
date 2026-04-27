@@ -1035,7 +1035,7 @@ export default function ProfileEditorPage() {
           {/* Delivery */}
           <div className="mb-6">
             <label className={labelClass}>Delivery radius</label>
-            <select value={profile.deliveryRadius} onChange={(e) => update("deliveryRadius", e.target.value)} className={inputClass}>
+            <select value={profile.deliveryRadius} onChange={(e) => update("deliveryRadius", e.target.value)} className={`${inputClass} wp-select`}>
               <option value="">Select</option>
               {deliveryOptions.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
@@ -1125,7 +1125,7 @@ export default function ProfileEditorPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <input type="text" value={workForm.dimensions} onChange={(e) => setWorkForm((p) => ({ ...p, dimensions: e.target.value }))} placeholder="Dimensions" className={inputClass} />
-                <select value={workForm.orientation} onChange={(e) => setWorkForm((p) => ({ ...p, orientation: e.target.value as "portrait" | "landscape" | "square" }))} className={inputClass}>
+                <select value={workForm.orientation} onChange={(e) => setWorkForm((p) => ({ ...p, orientation: e.target.value as "portrait" | "landscape" | "square" }))} className={`${inputClass} wp-select`}>
                   <option value="landscape">Landscape</option>
                   <option value="portrait">Portrait</option>
                   <option value="square">Square</option>
