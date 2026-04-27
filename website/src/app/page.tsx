@@ -32,8 +32,14 @@ export default function Home() {
           and message / notification indicators are always available. */}
       <Header />
 
-      {/* ─── HERO ─── full screen with transparent nav */}
-      <section className="relative min-h-screen flex flex-col">
+      {/* ─── HERO ─── full screen with transparent nav.
+           Mobile is min-h-[110vh] so the background image extends ~10vh
+           below the fold (matches the original design). The trust bar
+           wrapper carries mb-[10vh] to keep its scroll-down button at
+           the bottom of the visible viewport while the photo continues
+           below. Together they preserve the banner length without
+           shrinking the image. */}
+      <section className="relative min-h-[110vh] sm:min-h-screen flex flex-col">
         {/* Hero background image – scoped to hero only */}
         <div className="absolute inset-0 -z-10">
           <Image
@@ -46,8 +52,13 @@ export default function Home() {
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/40" />
         </div>
 
-        {/* Hero content */}
-        <div className="flex-1 flex items-center justify-center px-6 lg:px-10 pb-28 sm:pb-32">
+        {/* Hero content. On mobile we use top padding instead of
+            bottom padding so the centered logo + CTAs sit at the true
+            vertical centre of the viewport — the previous pb-28 was
+            visibly pulling them up into the top third because the
+            trust-bar wrapper already takes ~10vh + scroll button at
+            the bottom of the section. Desktop unchanged. */}
+        <div className="flex-1 flex items-center justify-center px-6 lg:px-10 pt-12 pb-0 sm:pt-0 sm:pb-32">
           <div className="max-w-[1400px] mx-auto w-full">
             <div className="max-w-2xl mx-auto text-center">
               <h1 className="font-serif text-[2.6rem] sm:text-5xl md:text-[4.5rem] lg:text-[5.5rem] leading-[0.9] tracking-[-0.02em] text-white mt-6 sm:mt-10 mb-7 sm:mb-6">
@@ -95,12 +106,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Scroll indicator + trust bar – anchored to bottom of the
-            hero on every viewport. The previous mobile push (110vh
-            height + 13vh bottom margin) shifted the centered logo /
-            CTAs upwards on phones; reverted to the desktop layout
-            so the content sits where it used to. */}
-        <div className="relative z-10 mt-auto">
+        {/* Scroll indicator + trust bar — pulled up on mobile so the
+            scroll-down chevron stays above the fold while the section
+            continues to 110vh and the background photo extends below.
+            On sm+ the trust bar sits at the natural bottom of the
+            normal-height (100vh) hero. */}
+        <div className="relative z-10 mt-auto mb-[10vh] sm:mb-0">
           {/* Scroll to see more */}
           <button
             onClick={scrollToContent}
