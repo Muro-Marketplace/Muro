@@ -33,7 +33,23 @@ export interface ArtistWork {
   inStorePrice?: number | null;
   inStorePricing?: SizePricing[];
   quantityAvailable?: number | null;
-  frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[];
+  /**
+   * Frame options offered for this work.
+   *
+   * - `priceUplift` is the default uplift; bigger sizes ramp by
+   *   perimeter from there unless overridden in `pricesBySize`.
+   * - `pricesBySize` maps a size label (matching `pricing[*].size`)
+   *   to an explicit £ uplift for that size. Lets an artist say
+   *   "A4 = £20, A2 = £45, 60×90 = £80" rather than relying on the
+   *   auto-scale. Sizes not listed in `pricesBySize` still use the
+   *   perimeter-scaled fallback.
+   */
+  frameOptions?: {
+    label: string;
+    priceUplift: number;
+    imageUrl?: string;
+    pricesBySize?: Record<string, number>;
+  }[];
 }
 
 export interface Artist {

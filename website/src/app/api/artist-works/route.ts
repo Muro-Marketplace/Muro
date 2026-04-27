@@ -37,18 +37,54 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "ID, title, and image are required" }, { status: 400 });
     }
 
+    // Sanitize the frame options. Each frame may carry an optional
+    // imageUrl thumbnail and a `pricesBySize` map of size-label → £
+    // uplift overrides for that size. Both are validated independently
+    // so a malformed extras blob doesn't poison the row.
     const sanitizedFrames = Array.isArray(frameOptions)
       ? frameOptions
-          .filter((f: unknown): f is { label: string; priceUplift: number } =>
+          .filter((f: unknown): f is {
+            label: string;
+            priceUplift: number;
+            imageUrl?: unknown;
+            pricesBySize?: unknown;
+          } =>
             !!f && typeof f === "object" && typeof (f as { label?: unknown }).label === "string" &&
             typeof (f as { priceUplift?: unknown }).priceUplift === "number" &&
             ((f as { label: string }).label.trim().length > 0),
           )
           .slice(0, 20)
-          .map((f) => ({
-            label: f.label.trim().slice(0, 80),
-            priceUplift: Math.max(0, Math.round(f.priceUplift * 100) / 100),
-          }))
+          .map((f) => {
+            const out: {
+              label: string;
+              priceUplift: number;
+              imageUrl?: string;
+              pricesBySize?: Record<string, number>;
+            } = {
+              label: f.label.trim().slice(0, 80),
+              priceUplift: Math.max(0, Math.round(f.priceUplift * 100) / 100),
+            };
+            if (typeof f.imageUrl === "string" && f.imageUrl.length > 0) {
+              out.imageUrl = f.imageUrl.slice(0, 1000);
+            }
+            if (
+              f.pricesBySize &&
+              typeof f.pricesBySize === "object" &&
+              !Array.isArray(f.pricesBySize)
+            ) {
+              const cleaned: Record<string, number> = {};
+              for (const [k, v] of Object.entries(
+                f.pricesBySize as Record<string, unknown>,
+              )) {
+                if (typeof k !== "string" || k.length === 0 || k.length > 100) continue;
+                const n = typeof v === "number" ? v : Number(v);
+                if (!Number.isFinite(n) || n < 0) continue;
+                cleaned[k] = Math.round(n * 100) / 100;
+              }
+              if (Object.keys(cleaned).length > 0) out.pricesBySize = cleaned;
+            }
+            return out;
+          })
       : [];
 
     // Tier-gated image count. Limits are TOTAL images (primary + extras).

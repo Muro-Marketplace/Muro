@@ -90,6 +90,16 @@ export default function ArtworkPageClient({
   // size labels can't be parsed.
   const frameUplift = (() => {
     if (!selectedFrame) return 0;
+    // Explicit per-size override wins. Set in the artist portfolio
+    // form; an artist who's said "A4 = £20, A2 = £45" gets exactly
+    // those values rather than the perimeter ramp.
+    const explicit = selectedPricing
+      ? (selectedFrame as { pricesBySize?: Record<string, number> }).pricesBySize?.[selectedPricing.label]
+      : undefined;
+    if (typeof explicit === "number" && Number.isFinite(explicit) && explicit >= 0) {
+      return Math.round(explicit * 100) / 100;
+    }
+
     const baseUplift = selectedFrame.priceUplift || 0;
     if (baseUplift <= 0) return 0;
     if (!work.pricing || work.pricing.length === 0) return baseUplift;

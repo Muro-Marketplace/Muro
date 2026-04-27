@@ -58,10 +58,18 @@ interface BulkAddDraft {
   shippingPrices: string[];
   /** Per-size in-store pickup prices. Parallel to `sizes`. */
   inStorePrices: string[];
-  /** Frame options offered for this work — applies across all sizes
-   *  (per-size frames not in the data model yet). Each frame option
-   *  is a free-text label + a £ price uplift. */
-  frameOptions: { label: string; priceUplift: string }[];
+  /** Frame options offered for this work. priceUplift is the default
+   *  (auto-scaled by perimeter for sizes not in pricesBySize).
+   *  pricesBySize lets the artist override the uplift per-size with
+   *  explicit values — handy when the perimeter ramp doesn't match
+   *  real-world frame moulding costs. Stored as strings so the
+   *  controlled inputs can be empty while typing. */
+  frameOptions: {
+    label: string;
+    priceUplift: string;
+    imageUrl?: string;
+    pricesBySize?: Record<string, string>;
+  }[];
   available: boolean;
   /** UI: which expandable sections are open on the draft card. */
   showShipping: boolean;
@@ -96,7 +104,12 @@ interface WorkFormState {
   sizeStock: string[];
   detectedRatio: number | null;
   quantityAvailable: string;
-  frameOptions: { label: string; priceUplift: string; imageUrl?: string }[];
+  frameOptions: {
+    label: string;
+    priceUplift: string;
+    imageUrl?: string;
+    pricesBySize?: Record<string, string>;
+  }[];
 }
 
 // Standard print sizes in inches [width, height] — always width <= height
@@ -1393,8 +1406,38 @@ export default function PortfolioPage() {
       quantityAvailable: (w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable != null
         ? String((w as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable)
         : "",
-      frameOptions: Array.isArray((w as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions)
-        ? (w as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions!.map((f) => ({ label: f.label, priceUplift: String(f.priceUplift), imageUrl: f.imageUrl }))
+      frameOptions: Array.isArray(
+        (w as ArtistWork & {
+          frameOptions?: {
+            label: string;
+            priceUplift: number;
+            imageUrl?: string;
+            pricesBySize?: Record<string, number>;
+          }[];
+        }).frameOptions,
+      )
+        ? (w as ArtistWork & {
+            frameOptions?: {
+              label: string;
+              priceUplift: number;
+              imageUrl?: string;
+              pricesBySize?: Record<string, number>;
+            }[];
+          }).frameOptions!.map((f) => ({
+            label: f.label,
+            priceUplift: String(f.priceUplift),
+            imageUrl: f.imageUrl,
+            // Stringify per-size prices so the controlled inputs in the
+            // form can render them. Empty / missing values stay empty
+            // strings, telling the form "use the default uplift".
+            ...(f.pricesBySize
+              ? {
+                  pricesBySize: Object.fromEntries(
+                    Object.entries(f.pricesBySize).map(([k, v]) => [k, String(v)]),
+                  ) as Record<string, string>,
+                }
+              : {}),
+          }))
         : [],
     };
     setForm(initial);
@@ -1581,11 +1624,28 @@ export default function PortfolioPage() {
     const qtyFinite = qtyVal !== null && Number.isFinite(qtyVal);
 
     const cleanFrameOptions = form.frameOptions
-      .map((f) => ({
-        label: f.label.trim(),
-        priceUplift: Number(f.priceUplift) || 0,
-        ...(f.imageUrl && f.imageUrl.length > 0 ? { imageUrl: f.imageUrl } : {}),
-      }))
+      .map((f) => {
+        // Convert pricesBySize from string-typed inputs back to numbers,
+        // dropping empty / invalid entries so the API only sees finite
+        // explicit overrides.
+        let pricesBySize: Record<string, number> | undefined;
+        if (f.pricesBySize) {
+          const cleaned: Record<string, number> = {};
+          for (const [size, raw] of Object.entries(f.pricesBySize)) {
+            if (raw === undefined || raw === "") continue;
+            const n = Number(raw);
+            if (!Number.isFinite(n) || n < 0) continue;
+            cleaned[size] = Math.round(n * 100) / 100;
+          }
+          if (Object.keys(cleaned).length > 0) pricesBySize = cleaned;
+        }
+        return {
+          label: f.label.trim(),
+          priceUplift: Number(f.priceUplift) || 0,
+          ...(f.imageUrl && f.imageUrl.length > 0 ? { imageUrl: f.imageUrl } : {}),
+          ...(pricesBySize ? { pricesBySize } : {}),
+        };
+      })
       .filter((f) => f.label.length > 0);
 
     const newWork: ArtistWork & { shippingPrice?: number; inStorePrice?: number; quantityAvailable?: number | null; frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] } = {
@@ -2635,10 +2695,11 @@ export default function PortfolioPage() {
             {/* Frame options */}
             <div>
               <label className="block text-sm font-medium mb-1">Frame options (optional)</label>
-              <p className="text-xs text-muted mb-3">Offer framed variants. Price uplift is added on top of the size price. Per-size pricing may be added later.</p>
-              <div className="space-y-2">
+              <p className="text-xs text-muted mb-3">Offer framed variants. The default uplift is added on top of the size price; below each frame, optionally set per-size £ overrides — leave a size blank to use the auto-scaled default.</p>
+              <div className="space-y-3">
                 {form.frameOptions.map((f, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={i} className="space-y-1.5">
+                  <div className="flex items-center gap-2">
                     {/* Frame preview / upload trigger with hover-remove on top-right */}
                     <div className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0">
                       <label className="absolute inset-0 border border-dashed border-border rounded-sm flex items-center justify-center overflow-hidden bg-surface cursor-pointer hover:border-accent/60 transition-colors" title={f.imageUrl ? "Replace image" : "Add image"}>
@@ -2726,6 +2787,60 @@ export default function PortfolioPage() {
                     >
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
                     </button>
+                  </div>
+                  {/* Per-size £ overrides — only show when at least
+                      two sizes are defined for this work. Leaving a
+                      cell blank uses the default uplift (auto-scaled
+                      by perimeter). */}
+                  {(() => {
+                    const sizesWithLabels = form.sizes.filter(
+                      (s) => s.label.trim().length > 0,
+                    );
+                    if (sizesWithLabels.length < 2) return null;
+                    return (
+                      <div className="ml-14 sm:ml-16 pl-3 border-l-2 border-border/50 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                        <span className="text-[10px] uppercase tracking-wider text-muted shrink-0">
+                          Per-size £
+                        </span>
+                        {sizesWithLabels.map((s) => (
+                          <div
+                            key={s.label}
+                            className="flex items-center gap-1"
+                            title={`Override the default uplift for ${s.label}. Leave blank to use the auto-scaled value.`}
+                          >
+                            <span className="text-[11px] text-muted/80 max-w-[80px] truncate">
+                              {s.label}
+                            </span>
+                            <span className="text-[11px] text-muted">+£</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={f.pricesBySize?.[s.label] ?? ""}
+                              onChange={(e) =>
+                                setForm((p) => {
+                                  const next = [...p.frameOptions];
+                                  const fr = { ...next[i] };
+                                  const pbs = { ...(fr.pricesBySize || {}) };
+                                  if (e.target.value === "") {
+                                    delete pbs[s.label];
+                                  } else {
+                                    pbs[s.label] = e.target.value;
+                                  }
+                                  fr.pricesBySize =
+                                    Object.keys(pbs).length > 0 ? pbs : undefined;
+                                  next[i] = fr;
+                                  return { ...p, frameOptions: next };
+                                })
+                              }
+                              placeholder="auto"
+                              className="w-14 bg-background border border-border rounded-sm px-1.5 py-1 text-xs focus:outline-none focus:border-accent/60"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                   </div>
                 ))}
                 <button
