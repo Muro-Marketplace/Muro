@@ -6,6 +6,17 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { geocodePostcode } from "@/lib/geocode";
 import { useAuth } from "@/context/AuthContext";
+import SpacesPlacementRequestForm, {
+  type SpacesVenueOption,
+} from "@/components/SpacesPlacementRequestForm";
+
+interface ArtistWorkLite {
+  id: string;
+  title: string;
+  image: string;
+  dimensions?: string | null;
+  medium?: string | null;
+}
 
 interface DemandVenue {
   slug: string;
@@ -68,9 +79,19 @@ export default function SpacesLookingForArtPage() {
     { label: "All", value: 9999 },
   ];
 
-  const { user, userType, loading: authLoading, subscriptionStatus, subscriptionPlan } = useAuth();
+  const { user, userType, loading: authLoading, subscriptionStatus, subscriptionPlan, session } = useAuth();
   const router = useRouter();
   const [ownVenueSlug, setOwnVenueSlug] = useState<string | null>(null);
+
+  // Artist-side state for the inline placement-request flow.
+  // - `myWorks` is loaded once per session (artists only).
+  // - `requestOpenSlug` tracks which venue card has the form expanded.
+  // - `sentRequests` records venues the artist has just requested in
+  //   this session, so the card flips to a success state.
+  const [myWorks, setMyWorks] = useState<ArtistWorkLite[]>([]);
+  const [worksLoading, setWorksLoading] = useState(false);
+  const [requestOpenSlug, setRequestOpenSlug] = useState<string | null>(null);
+  const [sentRequests, setSentRequests] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch("/api/venues/demand")
@@ -95,11 +116,41 @@ export default function SpacesLookingForArtPage() {
     })();
   }, [user, userType]);
 
+  // Load the signed-in artist's portfolio works once. The placement
+  // request form lets them pick which work they're proposing for the
+  // venue, so we need this list available when they expand a card.
+  useEffect(() => {
+    if (userType !== "artist" || !session?.access_token) return;
+    let cancelled = false;
+    setWorksLoading(true);
+    (async () => {
+      try {
+        const res = await fetch("/api/artist-works", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`Works fetch ${res.status}`);
+        const data = (await res.json()) as { works?: ArtistWorkLite[] };
+        if (!cancelled) setMyWorks(data.works || []);
+      } catch {
+        if (!cancelled) setMyWorks([]);
+      } finally {
+        if (!cancelled) setWorksLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userType, session?.access_token]);
+
   const isSubscribed = subscriptionStatus === "active" || subscriptionStatus === "trialing";
   // Venues are locked out of viewing other venues — this page is for artists/customers
   // discovering venue demand. Venues manage their own profile through /venue-portal.
   const canSeeDetails = userType !== "venue" && (isSubscribed || userType === "customer");
   const canMessageVenues = userType !== "venue" && (isSubscribed || userType === "customer");
+  // Inline placement requests are artist-only — customers and unauthenticated
+  // visitors can browse and message but not formally propose terms.
+  const canRequestPlacement = userType === "artist" && isSubscribed;
 
   async function handlePostcodeSearch() {
     if (!postcode.trim()) return;
@@ -409,20 +460,91 @@ export default function SpacesLookingForArtPage() {
 
                     {/* Message button for subscribers / Lock for non-subscribers */}
                     {canSeeDetails && canMessageVenues ? (
-                      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-3 flex-wrap">
-                        <button
-                          onClick={() => {
-                            const portalBase = userType === "artist" ? "/artist-portal" : "/venue-portal";
-                            router.push(`${portalBase}/messages?artist=${venue.slug}&artistName=${encodeURIComponent(venue.name)}`);
-                          }}
-                          className="text-xs font-medium text-accent hover:text-accent-hover transition-colors"
-                        >
-                          Message this venue &rarr;
-                        </button>
-                        <Link href={`/venues/${venue.slug}`} className="text-xs text-muted hover:text-foreground transition-colors">
-                          View full profile
-                        </Link>
-                      </div>
+                      <>
+                        {sentRequests[venue.slug] ? (
+                          // Just-sent confirmation — flips back to normal CTAs
+                          // once the artist clicks "Send another"; the placement
+                          // record itself stays in the artist's portal.
+                          <div className="mt-3 pt-3 border-t border-border bg-green-50/40 -mx-5 -mb-5 px-5 py-4 rounded-b-sm">
+                            <div className="flex items-start gap-2 mb-2">
+                              <span className="w-5 h-5 rounded-full bg-green-600 text-white flex items-center justify-center shrink-0">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-foreground">Request sent to {venue.name}</p>
+                                <p className="text-[11px] text-muted mt-0.5">
+                                  They&rsquo;ll get an email; you&rsquo;ll see their reply in your portal.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 mt-2">
+                              <Link
+                                href={`/placements/${encodeURIComponent(sentRequests[venue.slug])}`}
+                                className="text-[11px] font-medium text-accent hover:text-accent-hover transition-colors"
+                              >
+                                View placement &rarr;
+                              </Link>
+                              <button
+                                onClick={() => {
+                                  setSentRequests((prev) => {
+                                    const next = { ...prev };
+                                    delete next[venue.slug];
+                                    return next;
+                                  });
+                                }}
+                                className="text-[11px] text-muted hover:text-foreground transition-colors"
+                              >
+                                Send another
+                              </button>
+                            </div>
+                          </div>
+                        ) : requestOpenSlug === venue.slug && canRequestPlacement ? (
+                          // Inline form — artist picks a work + arrangement,
+                          // submits straight to /api/placements.
+                          <SpacesPlacementRequestForm
+                            venue={{
+                              slug: venue.slug,
+                              name: venue.name,
+                              interestedInRevenueShare: venue.interestedInRevenueShare,
+                              interestedInFreeLoan: venue.interestedInFreeLoan,
+                              interestedInDirectPurchase: venue.interestedInDirectPurchase,
+                            } as SpacesVenueOption}
+                            works={myWorks}
+                            worksLoading={worksLoading}
+                            authToken={session?.access_token ?? null}
+                            onCancel={() => setRequestOpenSlug(null)}
+                            onSuccess={(placementId) => {
+                              setSentRequests((prev) => ({ ...prev, [venue.slug]: placementId }));
+                              setRequestOpenSlug(null);
+                            }}
+                          />
+                        ) : (
+                          <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {canRequestPlacement && (
+                                <button
+                                  onClick={() => setRequestOpenSlug(venue.slug)}
+                                  className="text-xs font-semibold text-accent hover:text-accent-hover transition-colors"
+                                >
+                                  Request placement &rarr;
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  const portalBase = userType === "artist" ? "/artist-portal" : "/venue-portal";
+                                  router.push(`${portalBase}/messages?artist=${venue.slug}&artistName=${encodeURIComponent(venue.name)}`);
+                                }}
+                                className="text-xs font-medium text-muted hover:text-foreground transition-colors"
+                              >
+                                Message
+                              </button>
+                            </div>
+                            <Link href={`/venues/${venue.slug}`} className="text-xs text-muted hover:text-foreground transition-colors">
+                              View full profile
+                            </Link>
+                          </div>
+                        )}
+                      </>
                     ) : canSeeDetails && !canMessageVenues ? (
                       <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-3 flex-wrap">
                         <Link href="/artist-portal/billing" className="flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors">
