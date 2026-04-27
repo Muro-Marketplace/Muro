@@ -74,6 +74,23 @@ export default function Home() {
                   {user ? portalLabel : "Sign Up"}
                 </Link>
               </div>
+
+              {/* Demo-account funnel — secondary, low-pressure invitation
+                  for visitors who'd rather see the platform first. Lives
+                  here under the main hero CTAs so it doesn't compete
+                  with them visually but is impossible to miss. The
+                  /demo page funnels into a designated demo artist and
+                  demo venue profile — see src/data/demo.ts. */}
+              <p className="mt-7 sm:mt-6 text-sm text-white/60">
+                Just looking? See it as{" "}
+                <Link
+                  href="/demo"
+                  className="text-white/90 hover:text-white underline underline-offset-4 decoration-white/30 hover:decoration-white transition-colors font-medium"
+                >
+                  a demo artist or venue
+                </Link>
+                .
+              </p>
             </div>
           </div>
         </div>
