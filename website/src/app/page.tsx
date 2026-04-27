@@ -165,39 +165,38 @@ export default function Home() {
                     Completely free to browse and enquire.
                   </p>
 
-                  {/* Three core ways venues can get art. Stacked vertically
-                      so each row has room to breathe — the copy was wrapping
-                      awkwardly in a 3-column grid at this width. */}
-                  <ul className="space-y-2.5 mb-8 sm:mb-10">
-                    <li className="flex items-center gap-4 px-5 py-4 bg-background border border-border rounded-sm hover:border-accent/40 transition-colors">
-                      <span className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
-                          <rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M9 9h.01M14 9h.01M9 14h.01M14 14h.01" />
-                        </svg>
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base font-semibold text-foreground">Revenue Share</p>
-                        <p className="text-sm text-muted">Free to display. Earn a share when a QR scan sells the work.</p>
+                  {/* Three core ways venues can get art. Editorial list
+                      treatment — no card chrome, just a small accent
+                      icon, a bold label, and the supporting line. The
+                      previous bordered/back-filled boxes were the loudest
+                      thing on the section and competed with both the
+                      headline and the photo mosaic. */}
+                  <ul className="space-y-5 mb-8 sm:mb-10">
+                    <li className="flex gap-4">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 text-accent shrink-0">
+                        <rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M9 9h.01M14 9h.01M9 14h.01M14 14h.01" />
+                      </svg>
+                      <div>
+                        <p className="text-base font-medium text-foreground leading-snug">Revenue Share</p>
+                        <p className="text-sm text-muted leading-relaxed mt-0.5">Free to display. Earn a share when a QR scan sells the work.</p>
                       </div>
                     </li>
-                    <li className="flex items-center gap-4 px-5 py-4 bg-background border border-border rounded-sm hover:border-accent/40 transition-colors">
-                      <span className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
-                        <span className="text-accent text-lg font-serif font-semibold leading-none">&pound;</span>
+                    <li className="flex gap-4">
+                      <span className="mt-0.5 w-5 h-5 flex items-center justify-center text-accent shrink-0">
+                        <span className="text-lg font-serif font-medium leading-none">&pound;</span>
                       </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base font-semibold text-foreground">Paid Loan</p>
-                        <p className="text-sm text-muted">Pay the artist a monthly fee to display the work on your wall.</p>
+                      <div>
+                        <p className="text-base font-medium text-foreground leading-snug">Paid Loan</p>
+                        <p className="text-sm text-muted leading-relaxed mt-0.5">Pay the artist a monthly fee to display the work on your wall.</p>
                       </div>
                     </li>
-                    <li className="flex items-center gap-4 px-5 py-4 bg-background border border-border rounded-sm hover:border-accent/40 transition-colors">
-                      <span className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
-                          <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
-                        </svg>
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base font-semibold text-foreground">Direct Purchase</p>
-                        <p className="text-sm text-muted">Buy pieces outright for your permanent collection.</p>
+                    <li className="flex gap-4">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 text-accent shrink-0">
+                        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
+                      </svg>
+                      <div>
+                        <p className="text-base font-medium text-foreground leading-snug">Direct Purchase</p>
+                        <p className="text-sm text-muted leading-relaxed mt-0.5">Buy pieces outright for your permanent collection.</p>
                       </div>
                     </li>
                   </ul>
