@@ -14,9 +14,9 @@ interface ArtworkThumbProps {
 }
 
 const PADDING_CLASSES = {
-  sm: "inset-3 sm:inset-4",
-  md: "inset-4 sm:inset-6",
-  lg: "inset-6 sm:inset-8",
+  sm: "inset-2 sm:inset-2.5",
+  md: "inset-2.5 sm:inset-3.5",
+  lg: "inset-4 sm:inset-5",
 } as const;
 
 // Square presentation card for browsing/portfolio thumbnails. Mats the

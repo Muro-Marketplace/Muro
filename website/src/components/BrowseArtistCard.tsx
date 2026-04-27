@@ -59,7 +59,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
                 index === imgIndex ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
             >
-              <div className="absolute inset-4 sm:inset-6">
+              <div className="absolute inset-2.5 sm:inset-3.5">
                 <Image
                   src={src}
                   alt={`${artist.works[index]?.title || "Artwork"} by ${artist.name}`}
