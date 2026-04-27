@@ -165,14 +165,14 @@ export default function Home() {
                     Completely free to browse and enquire.
                   </p>
 
-                  {/* Three core ways venues can get art. Editorial list
-                      treatment — no card chrome, just a small accent
-                      icon, a bold label, and the supporting line. The
-                      previous bordered/back-filled boxes were the loudest
-                      thing on the section and competed with both the
-                      headline and the photo mosaic. */}
-                  <ul className="space-y-5 mb-8 sm:mb-10">
-                    <li className="flex gap-4">
+                  {/* Three core ways venues can get art. Single warm-
+                      tinted container with hairline dividers between
+                      rows — gives the items a card presence so they're
+                      visually distinct from the white section, but
+                      lighter than three individually bordered boxes
+                      (which read as the loudest thing on the section). */}
+                  <ul className="mb-8 sm:mb-10 bg-background rounded-md divide-y divide-border/60">
+                    <li className="flex gap-4 px-5 py-4">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 text-accent shrink-0">
                         <rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M9 9h.01M14 9h.01M9 14h.01M14 14h.01" />
                       </svg>
@@ -181,7 +181,7 @@ export default function Home() {
                         <p className="text-sm text-muted leading-relaxed mt-0.5">Free to display. Earn a share when a QR scan sells the work.</p>
                       </div>
                     </li>
-                    <li className="flex gap-4">
+                    <li className="flex gap-4 px-5 py-4">
                       <span className="mt-0.5 w-5 h-5 flex items-center justify-center text-accent shrink-0">
                         <span className="text-lg font-serif font-medium leading-none">&pound;</span>
                       </span>
@@ -190,7 +190,7 @@ export default function Home() {
                         <p className="text-sm text-muted leading-relaxed mt-0.5">Pay the artist a monthly fee to display the work on your wall.</p>
                       </div>
                     </li>
-                    <li className="flex gap-4">
+                    <li className="flex gap-4 px-5 py-4">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 text-accent shrink-0">
                         <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
                       </svg>
