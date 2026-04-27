@@ -649,8 +649,23 @@ export default function VenueProfilePage() {
           </div>
         </div>
 
-        {/* Bottom spacer */}
-        <div className="flex items-center gap-4">
+        {/* Bottom Save — mirrors the top Save action so users on long
+            forms (lots of style tags + arrangement details + display
+            specs) don't have to scroll back up to commit changes.
+            Same handler as the top button. saveError lives in the
+            top header so we don't double-render it. */}
+        <div className="flex items-center justify-end gap-3 pt-6 border-t border-border">
+          <p className="text-xs text-muted">
+            Make sure to save before leaving this page.
+          </p>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-60"
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
         </div>
         </div>
 

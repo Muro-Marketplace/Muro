@@ -103,6 +103,11 @@ export default function PlacementDetailClient({ placementId }: Props) {
   const [record, setRecord] = useState<PlacementRecord | null>(null);
   const [recordVersions, setRecordVersions] = useState<RecordVersion[]>([]);
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
+  // Quick-view lightbox state. Clicking a photo opens a full-screen
+  // overlay so the venue (or whoever) can actually see what they
+  // uploaded without leaving the page. Right-click + drag are
+  // disabled inline so casual save-as is blocked.
+  const [quickViewIdx, setQuickViewIdx] = useState<number | null>(null);
   const [artist, setArtist] = useState<{ name: string; slug: string; image?: string } | null>(null);
   const [venue, setVenue] = useState<{ name: string; slug: string; image?: string; location?: string; city?: string } | null>(null);
   const [viewerRole, setViewerRole] = useState<"artist" | "venue" | null>(null);
@@ -872,13 +877,39 @@ export default function PlacementDetailClient({ placementId }: Props) {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {photos.map((p) => (
-              <div key={p.id} className="relative group aspect-square bg-[#f5f5f3] rounded-sm overflow-hidden">
-                <Image src={p.url} alt={p.caption || "Placement photo"} fill className="object-cover" sizes="300px" />
+            {photos.map((p, i) => (
+              <div
+                key={p.id}
+                className="relative group aspect-square bg-[#f5f5f3] rounded-sm overflow-hidden cursor-zoom-in"
+                onClick={() => setQuickViewIdx(i)}
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                <Image
+                  src={p.url}
+                  alt={p.caption || "Placement photo"}
+                  fill
+                  className="object-cover pointer-events-none select-none"
+                  sizes="300px"
+                  draggable={false}
+                />
+                {/* Quick-view chip — visible on hover so the action is
+                    discoverable. The whole tile is clickable too. */}
+                <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <span className="text-[11px] font-medium text-white inline-flex items-center gap-1.5">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.35-4.35" />
+                    </svg>
+                    Quick View
+                  </span>
+                </div>
                 {p.uploader_user_id === user?.id && (
                   <button
                     type="button"
-                    onClick={() => handleDeletePhoto(p.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeletePhoto(p.id);
+                    }}
                     className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     aria-label="Delete photo"
                   >
@@ -890,6 +921,77 @@ export default function PlacementDetailClient({ placementId }: Props) {
           </div>
         )}
       </div>
+
+      {/* Quick-view lightbox. Click outside or hit Esc to close.
+          Image is `pointer-events-none` + draggable=false so a
+          right-click "save as" or drag-to-desktop both fail
+          quietly. Realistic version of the anti-save story —
+          determined users can still screenshot, but the casual
+          "drag the image off the page" path is gone. */}
+      {quickViewIdx !== null && photos[quickViewIdx] && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/85 flex items-center justify-center p-4"
+          onClick={() => setQuickViewIdx(null)}
+          onContextMenu={(e) => e.preventDefault()}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            onClick={() => setQuickViewIdx(null)}
+            aria-label="Close"
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+          {photos.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuickViewIdx(
+                    (quickViewIdx - 1 + photos.length) % photos.length,
+                  );
+                }}
+                aria-label="Previous photo"
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuickViewIdx((quickViewIdx + 1) % photos.length);
+                }}
+                aria-label="Next photo"
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            </>
+          )}
+          <div
+            className="relative max-w-[90vw] max-h-[85vh] select-none"
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photos[quickViewIdx].url}
+              alt={photos[quickViewIdx].caption || "Placement photo"}
+              className="max-w-[90vw] max-h-[85vh] object-contain pointer-events-none select-none"
+              draggable={false}
+            />
+            {photos[quickViewIdx].caption && (
+              <p className="absolute bottom-3 left-3 right-3 text-xs text-white/85 bg-black/40 px-3 py-1.5 rounded-sm">
+                {photos[quickViewIdx].caption}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

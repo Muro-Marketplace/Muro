@@ -933,6 +933,13 @@ function WallVisualizerInner(props: ExtendedProps) {
         cached={lastRender?.cached ?? false}
         costUnits={lastRender?.costUnits ?? 0}
         meta={lastRender?.meta}
+        // Hide the Download button + apply anti-save attributes when
+        // the viewer is a venue. Realistic save-prevention only —
+        // determined users can still screenshot, but right-click,
+        // drag-to-desktop, and the explicit Download CTA are gone.
+        // Artists keep download access because they want to share
+        // their renders on socials / attach to mockups.
+        venueViewer={props.mode === "venue_my_walls"}
         saveToArtwork={
           (props.mode === "artist_mockup" ||
             props.mode === "artist_showroom") &&

@@ -24,7 +24,7 @@
  *     can place at drop coordinates.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type {
   SizeVariant,
   WorkOrientation,
@@ -77,6 +77,13 @@ export default function WorksPanel({
 }: Props) {
   const [filter, setFilter] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("my");
+  // Lazy-load works in batches of 20. Venues with hundreds of saved
+  // works in the All tab were paying a layout-thrash + image-decode
+  // cost up front for content they'd never scroll through. The
+  // counter resets when the tab or the search filter changes so
+  // every list view starts at 20 fresh.
+  const PAGE_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const isVenueMode = mode === "venue_my_walls";
 
@@ -95,6 +102,19 @@ export default function WorksPanel({
           .includes(filter.toLowerCase()),
       )
     : list;
+
+  // Reset the lazy-load window whenever the underlying list changes
+  // (tab switch, search input). useEffect would also work but
+  // computing the slice + reset in a single render keeps things
+  // simple and the count never lags by a frame.
+  const filteredKey = `${activeTab}|${filter}|${filtered.length}`;
+  const lastKeyRef = useRef(filteredKey);
+  if (lastKeyRef.current !== filteredKey) {
+    lastKeyRef.current = filteredKey;
+    if (visibleCount !== PAGE_SIZE) setVisibleCount(PAGE_SIZE);
+  }
+  const visible = filtered.slice(0, visibleCount);
+  const hasMore = filtered.length > visibleCount;
 
   return (
     <aside className="h-full w-60 shrink-0 border-r border-black/5 bg-white/60 backdrop-blur flex flex-col">
@@ -165,7 +185,7 @@ export default function WorksPanel({
         )}
 
         <ul className="grid grid-cols-2 gap-2">
-          {filtered.map((w) => (
+          {visible.map((w) => (
             <li key={w.id}>
               <button
                 type="button"
@@ -204,6 +224,24 @@ export default function WorksPanel({
             </li>
           ))}
         </ul>
+        {/* Show more — incremental reveal at PAGE_SIZE per click. The
+            All tab on a venue with hundreds of saved works can still
+            scroll forever, but the initial render only pays for 20
+            cards. */}
+        {hasMore && (
+          <div className="px-1 pt-3 pb-1 text-center">
+            <button
+              type="button"
+              onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+              className="text-[11px] font-medium text-stone-700 hover:text-stone-900 transition-colors px-3 py-1.5 rounded border border-black/10 hover:border-black/30 bg-white"
+            >
+              Show {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more
+            </button>
+            <p className="mt-1 text-[10px] text-stone-400">
+              Showing {visible.length} of {filtered.length}
+            </p>
+          </div>
+        )}
       </div>
     </aside>
   );

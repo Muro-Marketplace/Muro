@@ -46,6 +46,13 @@ interface Props {
     durationMs: number;
   };
   saveToArtwork?: SaveToArtworkProps;
+  /** When true, hide the Download CTA + apply anti-save attributes
+      to the rendered image (right-click block, drag prevention,
+      pointer-events:none). Used in the venue context where the
+      composite is the artist's IP — venues shouldn't be able to
+      one-click save it off the platform. Determined users can
+      still screenshot, this just removes the casual save paths. */
+  venueViewer?: boolean;
 }
 
 export default function RenderPreview({
@@ -56,6 +63,7 @@ export default function RenderPreview({
   costUnits,
   meta,
   saveToArtwork,
+  venueViewer,
 }: Props) {
   // Esc to close.
   useEffect(() => {
@@ -98,14 +106,33 @@ export default function RenderPreview({
         className="w-full max-w-5xl flex flex-col gap-3"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Image */}
-        <div className="rounded-xl overflow-hidden bg-stone-900 shadow-2xl">
+        {/* Image. When venueViewer=true we wire up casual-save
+            blockers: right-click is consumed, the image is
+            pointer-events:none + draggable=false so neither the
+            context menu nor drag-to-desktop succeed, and we add a
+            second transparent overlay so even "save image as" via
+            keyboard shortcut hits an opaque-looking element first.
+            None of this stops a screenshot — this is a friction
+            layer, not DRM. */}
+        <div
+          className="rounded-xl overflow-hidden bg-stone-900 shadow-2xl relative select-none"
+          onContextMenu={venueViewer ? (e) => e.preventDefault() : undefined}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={publicUrl}
             alt="Wall visualisation"
-            className="w-full h-auto block"
+            className={`w-full h-auto block ${venueViewer ? "pointer-events-none select-none" : ""}`}
+            draggable={venueViewer ? false : undefined}
+            onContextMenu={venueViewer ? (e) => e.preventDefault() : undefined}
           />
+          {venueViewer && (
+            <div
+              className="absolute inset-0 pointer-events-auto"
+              onContextMenu={(e) => e.preventDefault()}
+              aria-hidden
+            />
+          )}
         </div>
 
         {/*
@@ -176,21 +203,29 @@ export default function RenderPreview({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <a
-              href={publicUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-full bg-white/10 text-xs hover:bg-white/15"
-            >
-              Open in new tab
-            </a>
-            <a
-              href={publicUrl}
-              download
-              className="px-3 py-1.5 rounded-full bg-white/10 text-xs hover:bg-white/15"
-            >
-              Download
-            </a>
+            {/* Open-in-new-tab + Download are hidden for venues —
+                they shouldn't be one-clicking the artist's render
+                off the platform. Artists keep these for sharing
+                + mockup workflows. */}
+            {!venueViewer && (
+              <>
+                <a
+                  href={publicUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-full bg-white/10 text-xs hover:bg-white/15"
+                >
+                  Open in new tab
+                </a>
+                <a
+                  href={publicUrl}
+                  download
+                  className="px-3 py-1.5 rounded-full bg-white/10 text-xs hover:bg-white/15"
+                >
+                  Download
+                </a>
+              </>
+            )}
             <button
               type="button"
               onClick={onClose}

@@ -128,10 +128,15 @@ export default function ArtistPortalPage() {
       const hasStyleTag = Array.isArray(profile.style_tags) && profile.style_tags.length > 0;
       const profileComplete = hasBio && hasLocation && hasStyleTag;
 
+      // "Set your shipping price" was removed — shipping is per-work
+      // (and per-size), not a single profile-level number, so a
+      // standalone onboarding step never matched how artists
+      // actually configure it. The shipping fields on the work form
+      // (with the row-level + size-level estimator) handle this in
+      // the right place.
       const items: OnboardingItem[] = [
         { key: "profile",  label: "Complete your profile",   complete: profileComplete,                                  href: "/artist-portal/profile" },
         { key: "work",     label: "Upload your first work",  complete: worksCount > 0,                                   href: "/artist-portal/portfolio" },
-        { key: "shipping", label: "Set your shipping price",  complete: profile.default_shipping_price != null,           href: "/artist-portal/portfolio" },
         { key: "payouts",  label: "Set up payouts",          complete: !!profile.stripe_connect_account_id,              href: "/artist-portal/billing" },
         { key: "placement",label: "Get your first placement", complete: placements.some((p: { status: string }) => p.status === "active"), href: "/artist-portal/placements" },
       ];
