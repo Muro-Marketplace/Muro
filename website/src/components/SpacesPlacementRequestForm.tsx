@@ -83,6 +83,13 @@ export default function SpacesPlacementRequestForm({
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // QR is implicit on revenue_share (the rev share IS the QR split),
+  // off by default on a paid loan (artist may want a pure
+  // display-fee deal), and off on direct purchase. Tracked
+  // independently so a paid-loan deal can opt-in to a QR split on
+  // top of the monthly fee.
+  const [qrEnabled, setQrEnabled] = useState<boolean>(true);
+  const [qrRevenueShare, setQrRevenueShare] = useState<number>(20);
 
   const selectedWorks = useMemo(
     () =>
@@ -119,25 +126,54 @@ export default function SpacesPlacementRequestForm({
         image: w.image,
         size: w.dimensions || null,
       }));
-      const payload = {
-        fromVenue: false,
-        placements: [
-          {
-            id: placementId,
-            venueSlug: venue.slug,
-            workTitle: primaryWork.title,
-            workImage: primaryWork.image,
-            requestedDimensions: primaryWork.dimensions || null,
-            extraWorks: extras.length > 0 ? extras : undefined,
-            type: arrangement,
-            revenueSharePercent:
-              arrangement === "revenue_share" ? revenueShare : null,
-            monthlyFeeGbp: arrangement === "free_loan" ? monthlyFee : null,
-            qrEnabled: true,
-            message: message.trim(),
-          },
-        ],
+      // Build the placement payload. The API's zod schema uses
+      // `.optional()` (not `.nullable()`) for revenueSharePercent /
+      // monthlyFeeGbp / requestedDimensions / extraWorks — passing
+      // null fails validation with the unhelpful "Invalid placement
+      // data" error. Use `undefined` (= field omitted) for fields
+      // that don't apply to the chosen arrangement.
+      type PlacementPayload = {
+        id: string;
+        venueSlug: string;
+        workTitle: string;
+        workImage: string;
+        type: Arrangement;
+        qrEnabled: boolean;
+        message?: string;
+        requestedDimensions?: string;
+        extraWorks?: typeof extras;
+        revenueSharePercent?: number;
+        monthlyFeeGbp?: number;
       };
+      const messageTrim = message.trim();
+      const placement: PlacementPayload = {
+        id: placementId,
+        venueSlug: venue.slug,
+        workTitle: primaryWork.title,
+        workImage: primaryWork.image,
+        type: arrangement,
+        // QR is implicit on revenue_share, opt-in on free_loan, off
+        // on direct purchase.
+        qrEnabled:
+          arrangement === "revenue_share"
+            ? true
+            : arrangement === "free_loan"
+              ? qrEnabled
+              : false,
+      };
+      if (messageTrim.length > 0) placement.message = messageTrim;
+      if (primaryWork.dimensions) placement.requestedDimensions = primaryWork.dimensions;
+      if (extras.length > 0) placement.extraWorks = extras;
+      if (arrangement === "revenue_share") {
+        placement.revenueSharePercent = revenueShare;
+      } else if (arrangement === "free_loan") {
+        placement.monthlyFeeGbp = monthlyFee;
+        // Optional rev share split on QR sales for paid loans.
+        if (qrEnabled && qrRevenueShare > 0) {
+          placement.revenueSharePercent = qrRevenueShare;
+        }
+      }
+      const payload = { fromVenue: false, placements: [placement] };
       const res = await fetch("/api/placements", {
         method: "POST",
         headers: {
@@ -392,6 +428,45 @@ export default function SpacesPlacementRequestForm({
             />
             <span className="text-xs text-muted">per month</span>
           </div>
+
+          {/* Optional QR split on top of the monthly fee. Off by
+              default — paid loans are typically pure display fees.
+              Tick the box to also offer the venue a % of QR sales. */}
+          <label className="mt-3 flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={qrEnabled}
+              onChange={(e) => setQrEnabled(e.target.checked)}
+              className="mt-0.5 accent-accent"
+            />
+            <span className="text-[11px] text-muted leading-relaxed">
+              <span className="text-foreground font-medium">
+                Add QR code with revenue share
+              </span>
+              <span className="block text-muted/80">
+                Venue also gets a % of any sales the QR drives, on top of
+                the monthly fee.
+              </span>
+            </span>
+          </label>
+          {qrEnabled && (
+            <div className="mt-2 ml-6 flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={qrRevenueShare}
+                onChange={(e) =>
+                  setQrRevenueShare(
+                    Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                  )
+                }
+                className="w-20 px-2.5 py-1.5 text-sm border border-border rounded-sm bg-background focus:outline-none focus:border-accent"
+              />
+              <span className="text-xs text-muted">% of QR sales</span>
+            </div>
+          )}
         </div>
       )}
       {arrangement === "purchase" && (
