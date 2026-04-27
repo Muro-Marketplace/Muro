@@ -33,9 +33,15 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
   return (
     <Link href={`/browse/${artist.slug}`} className="group block">
       <div className="bg-surface border border-border/50 rounded-lg overflow-hidden flex flex-col h-full">
-        {/* Image */}
+        {/* Image — square off-white "matting" frame so portrait,
+            landscape, square, and panoramic carousel slides all sit
+            uniformly without cropping the artist's work. The image
+            itself uses object-contain so true aspect ratio is
+            preserved. Wall visualisation surfaces still render the
+            artwork at its true proportions; this treatment is
+            display-only for browse/portfolio cards. */}
         <div
-          className="aspect-square relative overflow-hidden bg-border/20 rounded-t-lg select-none"
+          className="aspect-square relative overflow-hidden bg-[#F0EDE8] rounded-t-lg select-none"
           onContextMenu={(e) => e.preventDefault()}
           onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
           onTouchEnd={(e) => {
@@ -53,22 +59,21 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
                 index === imgIndex ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
             >
-              <Image
-                src={src}
-                alt={`${artist.works[index]?.title || "Artwork"} by ${artist.name}`}
-                fill
-                className="object-cover group-hover:scale-[1.03] transition-transform duration-700 pointer-events-none select-none"
-                sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                draggable={false}
-                onContextMenu={(e) => e.preventDefault()}
-              />
+              <div className="absolute inset-4 sm:inset-6">
+                <Image
+                  src={src}
+                  alt={`${artist.works[index]?.title || "Artwork"} by ${artist.name}`}
+                  fill
+                  className="object-contain group-hover:scale-[1.03] transition-transform duration-700 pointer-events-none select-none"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                />
+              </div>
             </div>
           ))}
           {/* Transparent overlay to block save-as */}
           <div className="absolute inset-0 pointer-events-none" />
-
-          {/* Subtle gradient at bottom for legibility */}
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/30 to-transparent" />
 
           {/* Featured chip for Pro-tier artists. Subtle accent pill
               in the top-left so it's visible at a glance in the
@@ -87,32 +92,34 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             </div>
           )}
 
-          {/* Nav arrows — desktop hover only */}
+          {/* Nav arrows — desktop hover only. Darker fill so they
+              read against the off-white matting (the previous
+              white/80 disappeared on the new background). */}
           {images.length > 1 && (
             <>
               <button
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setImgIndex((prev) => (prev - 1 + images.length) % images.length); }}
-                className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 hover:bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-foreground/80 text-white hover:bg-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-sm"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
               </button>
               <button
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setImgIndex((prev) => (prev + 1) % images.length); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 hover:bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-foreground/80 text-white hover:bg-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-sm"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6" /></svg>
               </button>
             </>
           )}
 
-          {/* Dot indicators — minimal */}
+          {/* Dot indicators — minimal, dark on the off-white frame */}
           {images.length > 1 && (
             <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1 z-20">
               {images.map((_, i) => (
                 <button
                   key={i}
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); setImgIndex(i); }}
-                  className={`w-1 h-1 rounded-full transition-colors ${i === imgIndex ? "bg-white" : "bg-white/40"}`}
+                  className={`w-1 h-1 rounded-full transition-colors ${i === imgIndex ? "bg-foreground" : "bg-foreground/30"}`}
                 />
               ))}
             </div>

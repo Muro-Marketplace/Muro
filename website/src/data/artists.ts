@@ -1803,7 +1803,7 @@ export const artists: Artist[] = [
     canArrangeFraming: true,
     venueTypesSuitedFor: ["Restaurants", "Hotels", "Cafés", "Salons"],
     coordinates: { lat: 51.5195, lng: -0.1520 },
-    image: "https://picsum.photos/seed/mia-lindstrom/800/1000",
+    image: "https://picsum.photos/seed/mia-lindstrom-portrait-v2/800/1000",
     works: [
       {
         id: "mia-lindstrom-1",

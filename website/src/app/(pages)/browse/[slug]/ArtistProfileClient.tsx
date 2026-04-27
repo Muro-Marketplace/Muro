@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
+import ArtworkThumb from "@/components/ArtworkThumb";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 
 interface ArtistProfileClientProps {
@@ -262,7 +263,7 @@ export default function ArtistProfileClient({
               <div
                 key={work.id}
                 id={`work-${slugify(work.title)}`}
-                className="group relative overflow-hidden rounded-sm bg-border/20 scroll-mt-24 cursor-pointer"
+                className="group relative overflow-hidden rounded-sm scroll-mt-24 cursor-pointer"
                 onClick={() => {
                   // Click on the card opens the full artwork page in a
                   // new tab. The hover "Quick look" icon still opens the
@@ -272,22 +273,23 @@ export default function ArtistProfileClient({
                   if (typeof window !== "undefined") window.open(href, "_blank", "noopener,noreferrer");
                 }}
               >
-                {/* Image with protection overlay */}
+                {/* Image with protection overlay. Square off-white
+                    matting so portrait, landscape, and panoramic
+                    works sit uniformly in the portfolio grid; the
+                    artwork itself stays at true aspect ratio. The
+                    full-detail / lightbox views below render the
+                    image at its real proportions. */}
                 <div
                   className="relative select-none"
                   onContextMenu={(e) => e.preventDefault()}
                   draggable={false}
                 >
-                  <Image
+                  <ArtworkThumb
                     src={work.image}
                     alt={work.title}
-                    width={work.orientation === "landscape" ? 750 : 600}
-                    height={work.orientation === "landscape" ? 500 : work.orientation === "square" ? 600 : 750}
-                    className="w-full h-auto object-cover group-hover:scale-[1.02] transition-transform duration-500 pointer-events-none select-none"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     quality={60}
-                    draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
+                    imageClassName="group-hover:scale-[1.02] transition-transform duration-500"
                   />
                   {/* Transparent overlay to block save-as */}
                   <div className="absolute inset-0" />

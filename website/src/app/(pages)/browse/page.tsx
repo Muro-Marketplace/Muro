@@ -14,6 +14,7 @@ import { geocodePostcode } from "@/lib/geocode";
 import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
+import ArtworkThumb from "@/components/ArtworkThumb";
 import SearchBar from "@/components/SearchBar";
 
 /** Haversine great-circle distance in miles */
@@ -190,12 +191,11 @@ function BrowsePortfoliosPageInner() {
   // right, top-to-bottom (CSS `columns-*` alone gives the masonry look but
   // fills top-to-bottom per column, which breaks the sort). We track the
   // viewport-based column count in state and recompute on resize.
-  const [galleryColCount, setGalleryColCount] = useState(4);
+  const [galleryColCount, setGalleryColCount] = useState(3);
   useEffect(() => {
     function compute() {
       const w = window.innerWidth;
-      if (w >= 1280) setGalleryColCount(4);
-      else if (w >= 1024) setGalleryColCount(3);
+      if (w >= 1024) setGalleryColCount(3);
       else if (w >= 640) setGalleryColCount(2);
       else setGalleryColCount(1);
     }
@@ -1740,23 +1740,18 @@ function BrowsePortfoliosPageInner() {
                         <div className="bg-surface border border-border/50 rounded-lg overflow-hidden flex flex-col">
                           {/* Image */}
                           <div
-                            className="relative overflow-hidden bg-border/20 rounded-t-lg select-none"
+                            className="relative overflow-hidden rounded-t-lg select-none"
                             onContextMenu={(e) => e.preventDefault()}
                           >
                             {/* Clicking the image opens the full artwork page in a new tab.
                                 The hover "eye" icon still triggers quick-look on the same tab. */}
-                            <a href={fullPageHref} target="_blank" rel="noopener noreferrer" aria-label={`Open ${work.title} in new tab`}>
-                              <Image
+                            <a href={fullPageHref} target="_blank" rel="noopener noreferrer" aria-label={`Open ${work.title} in new tab`} className="block">
+                              <ArtworkThumb
                                 src={work.image}
                                 alt={work.title}
-                                width={600}
-                                height={600}
-                                className="w-full h-auto object-cover group-hover:scale-[1.03] transition-transform duration-700 pointer-events-none select-none"
                                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                                draggable={false}
-                                onContextMenu={(e) => e.preventDefault()}
+                                imageClassName="group-hover:scale-[1.03] transition-transform duration-700"
                               />
-                              <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/20 to-transparent" />
                             </a>
                             {!work.available && (
                               <span className="absolute top-3 left-3 z-10 px-2 py-0.5 bg-black/70 text-white text-[10px] rounded-sm backdrop-blur-sm">
