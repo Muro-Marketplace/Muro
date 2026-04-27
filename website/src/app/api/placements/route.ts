@@ -8,6 +8,8 @@ import { sendEmail } from "@/lib/email/send";
 import { VenueNewPlacementRequest } from "@/emails/templates/placements/VenueNewPlacementRequest";
 import { ArtistPlacementAccepted } from "@/emails/templates/placements/ArtistPlacementAccepted";
 import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPlacementDeclined";
+import { ArtistPlacementRequestSent } from "@/emails/templates/placements/ArtistPlacementRequestSent";
+import { VenuePlacementAcceptedConfirmation } from "@/emails/templates/placements/VenuePlacementAcceptedConfirmation";
 import { PlacementVenueDeclinedArtistRequest } from "@/emails/templates/placements/PlacementVenueDeclinedArtistRequest";
 import { PlacementCounterOfferReceived } from "@/emails/templates/placements/PlacementCounterOfferReceived";
 import { PlacementScheduled } from "@/emails/templates/placements/PlacementScheduled";
@@ -489,6 +491,55 @@ export async function POST(request: Request) {
             message: parsed.data[0].message,
           }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
         }
+      }
+
+      // Receipt to the requester themselves — closes the "did it go
+      // through?" loop. Only wired for artist-initiated requests today;
+      // the venue-initiated flow falls back to the legacy notify and we
+      // can wire VenuePlacementRequestSent if/when one's added. Sent
+      // fire-and-forget so a flaky email service can't fail the
+      // placement create itself.
+      if (!fromVenue && auth.user?.email) {
+        const senderEmail = auth.user.email;
+        const senderUserId = auth.user.id;
+        const senderFirstName =
+          (auth.user.user_metadata?.first_name as string | undefined) ||
+          artistProfile!.name.split(" ")[0] ||
+          "there";
+        const placementIdForLink = parsed.data[0]?.id;
+        const placementUrl = placementIdForLink
+          ? `${SITE}/placements/${encodeURIComponent(placementIdForLink)}`
+          : `${SITE}/artist-portal/placements`;
+        const termsSummary = (() => {
+          const parts: string[] = [];
+          const t = parsed.data[0].type;
+          const fee = parsed.data[0].monthlyFeeGbp ?? 0;
+          const rev = parsed.data[0].revenueSharePercent ?? 0;
+          if (t === "revenue_share") parts.push(`Revenue share · ${rev || 0}%`);
+          else if (t === "purchase") parts.push("Direct purchase");
+          else parts.push("Paid loan");
+          if (fee > 0) parts.push(`£${fee}/mo`);
+          if (rev > 0 && t !== "revenue_share") parts.push(`${rev}% on QR sales`);
+          return parts.join(" · ");
+        })();
+        sendEmail({
+          idempotencyKey: `placement_request:${placementIdForLink}:to_artist`,
+          template: "artist_placement_request_sent",
+          category: "placements",
+          to: senderEmail,
+          subject: `Request sent to ${venueProfile!.name}`,
+          userId: senderUserId,
+          react: ArtistPlacementRequestSent({
+            firstName: senderFirstName,
+            venueName: venueProfile!.name,
+            placementUrl,
+            requestedWorks: parsed.data.map((p) => p.workTitle),
+            proposedTerms: termsSummary,
+          }),
+          metadata: { placementId: placementIdForLink },
+        }).catch((err) => {
+          if (err) console.error("Artist receipt email failed:", err);
+        });
       }
 
       // In-app notification (F9)
@@ -1249,15 +1300,27 @@ export async function PATCH(request: Request) {
                 metadata: { placementId: id },
               });
             } else {
-              // Venue was the requester — fall back to legacy for now;
-              // we don't have a "venue placement accepted" template
-              // pointed at the venue-as-requester flow yet.
-              notifyPlacementResponse({
-                email: requesterUser.email,
-                artistName: artistProfile.name,
-                venueName,
-                accepted: true,
-              }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+              // Venue was the requester — send their polished receipt
+              // confirming the artist accepted, with next-step nudges.
+              await sendEmail({
+                idempotencyKey: `placement_response:${id}:accepted`,
+                template: "venue_placement_accepted_confirmation",
+                category: "placements",
+                to: requesterUser.email,
+                subject: `Placement confirmed with ${artistProfile.name}`,
+                userId: notifyRequesterId,
+                react: VenuePlacementAcceptedConfirmation({
+                  firstName: requesterFirstName,
+                  artistName: artistProfile.name,
+                  placementUrl,
+                  nextSteps: [
+                    `Confirm install date with ${artistProfile.name}`,
+                    "Share venue logistics — opening hours, lighting, install timing",
+                    "Review the consignment record together",
+                  ],
+                }),
+                metadata: { placementId: id },
+              });
             }
           } else if (status === "declined") {
             if (requesterIsArtist) {
