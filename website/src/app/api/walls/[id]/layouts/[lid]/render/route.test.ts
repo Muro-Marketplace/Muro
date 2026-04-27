@@ -240,11 +240,18 @@ describe("POST render — quota gate", () => {
     expect(refundQuotaMock).not.toHaveBeenCalled();
   });
 
-  it("HD render charges 2 units", async () => {
+  it("HD render passes action=render_hd and work_ids to the quota gate", async () => {
+    // Per-artwork model (5334417): the route no longer passes a flat
+    // `units` value — consumeQuota auto-calculates per new work_id.
+    // What we can still assert is the action label flows through and
+    // the layout's work_ids reach the quota service in metadata.
     const { POST } = await import("./route");
     await POST(POST_REQ({ kind: "hd" }), ctx("wall-1", "lay-1"));
     expect(consumeQuotaMock).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "render_hd", units: 2 }),
+      expect.objectContaining({
+        action: "render_hd",
+        metadata: expect.objectContaining({ work_ids: ["w1"] }),
+      }),
     );
   });
 });

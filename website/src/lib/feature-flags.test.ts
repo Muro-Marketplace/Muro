@@ -50,8 +50,12 @@ describe("feature flags — explicit env wins", () => {
   it("malformed env value falls back to default", () => {
     process.env[ENV_KEY] = "maybe";
     setNodeEnv("production");
-    // production default for WALL_VISUALIZER_V1 is false
-    expect(isFlagOn("WALL_VISUALIZER_V1")).toBe(false);
+    // Visualizer is now on by default in prod (kill-switch model — set
+    // env=0 in Vercel to disable). Use OAUTH_GOOGLE_APPLE for the
+    // off-by-default malformed-env case so the assertion still tests
+    // the fallback behaviour rather than the specific flag.
+    process.env.NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE = "maybe";
+    expect(isFlagOn("OAUTH_GOOGLE_APPLE")).toBe(false);
   });
 });
 
@@ -67,10 +71,16 @@ describe("feature flags — defaults", () => {
     expect(isFlagOn("WALL_VISUALIZER_V1")).toBe(true);
   });
 
-  it("prod default is off", () => {
+  it("prod default is on (visualizer launched — env=0 to kill-switch)", () => {
     delete process.env[ENV_KEY];
     setNodeEnv("production");
-    expect(isFlagOn("WALL_VISUALIZER_V1")).toBe(false);
+    expect(isFlagOn("WALL_VISUALIZER_V1")).toBe(true);
+  });
+
+  it("OAUTH_GOOGLE_APPLE prod default is off (providers not yet wired)", () => {
+    delete process.env.NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE;
+    setNodeEnv("production");
+    expect(isFlagOn("OAUTH_GOOGLE_APPLE")).toBe(false);
   });
 });
 

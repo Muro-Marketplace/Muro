@@ -49,10 +49,12 @@ describe("getTierLimits — approved values", () => {
     expect(l.saved_walls).toBe(5);
   });
 
-  it("artist_pro = 25/500, unlimited walls + showroom", () => {
+  it("artist_pro = unlimited daily/monthly + walls + showroom", () => {
     const l = getTierLimits("artist_pro");
-    expect(l.daily).toBe(25);
-    expect(l.monthly).toBe(500);
+    // Switched to per-artwork in 5334417 — Pro now bypasses the daily/
+    // monthly cap entirely (sentinel -1).
+    expect(l.daily).toBe(-1);
+    expect(l.monthly).toBe(-1);
     expect(l.saved_walls).toBe(-1);
     expect(l.saved_layouts_per_wall).toBe(-1);
     expect(l.can_publish_showroom).toBe(true);
@@ -65,10 +67,12 @@ describe("getTierLimits — approved values", () => {
     expect(l.saved_walls).toBe(3);
   });
 
-  it("venue_premium = 20/400, unlimited walls (no showroom)", () => {
+  it("venue_premium = unlimited daily/monthly + walls (no showroom)", () => {
     const l = getTierLimits("venue_premium");
-    expect(l.daily).toBe(20);
-    expect(l.monthly).toBe(400);
+    // Switched to per-artwork in 5334417 — Venue Premium now bypasses
+    // the daily/monthly cap entirely (sentinel -1).
+    expect(l.daily).toBe(-1);
+    expect(l.monthly).toBe(-1);
     expect(l.saved_walls).toBe(-1);
     expect(l.can_publish_showroom).toBe(false);
   });
