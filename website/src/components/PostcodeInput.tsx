@@ -42,6 +42,45 @@ interface PostcodeInputProps {
 const UK_POSTCODE = /^[A-Z]{1,2}\d[A-Z\d]?\s\d[A-Z]{2}$/;
 
 const STORAGE_KEY = "wallplace-postcode";
+const COORDS_STORAGE_KEY = "wallplace-coords";
+
+function persistLocation(coords: { lat: number; lng: number }, label: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, label);
+    window.localStorage.setItem(
+      COORDS_STORAGE_KEY,
+      JSON.stringify({ lat: coords.lat, lng: coords.lng, label }),
+    );
+  } catch { /* ignore quota / Safari private mode */ }
+}
+
+/** Read previously-persisted coordinates so the parent can hydrate
+ *  on mount without needing to re-prompt or re-geocode. */
+export function readPersistedCoords(): { coords: { lat: number; lng: number }; label: string } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(COORDS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { lat?: number; lng?: number; label?: string };
+    if (typeof parsed.lat !== "number" || typeof parsed.lng !== "number") return null;
+    return {
+      coords: { lat: parsed.lat, lng: parsed.lng },
+      label: typeof parsed.label === "string" ? parsed.label : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Drop persisted location — called when the user clicks "change". */
+export function clearPersistedLocation(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(COORDS_STORAGE_KEY);
+  } catch { /* ignore */ }
+}
 
 /** Format raw input → uppercase, single-spaced UK postcode form. */
 function formatPostcode(raw: string): string {
@@ -87,9 +126,7 @@ export default function PostcodeInput({
       const coords = await geocodePostcode(value);
       setBusy(false);
       if (coords) {
-        try {
-          window.localStorage.setItem(STORAGE_KEY, value);
-        } catch { /* ignore */ }
+        persistLocation(coords, value);
         onError?.(false);
         onGeocoded(coords, value);
       } else if (touched) {
@@ -107,9 +144,7 @@ export default function PostcodeInput({
     const coords = await geocodePostcode(value);
     setBusy(false);
     if (coords) {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, value);
-      } catch { /* ignore */ }
+      persistLocation(coords, value);
       onError?.(false);
       onGeocoded(coords, value);
     } else {
@@ -123,11 +158,14 @@ export default function PostcodeInput({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeoBusy(false);
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        // Persist so the location survives navigation away and
+        // back. Without this, the user had to re-share their
+        // location every page load — exactly the complaint that
+        // triggered this fix.
+        persistLocation(coords, "Current location");
         onError?.(false);
-        onGeocoded(
-          { lat: pos.coords.latitude, lng: pos.coords.longitude },
-          "Current location",
-        );
+        onGeocoded(coords, "Current location");
       },
       () => {
         setGeoBusy(false);

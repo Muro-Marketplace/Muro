@@ -17,7 +17,7 @@ import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
 import ArtworkThumb from "@/components/ArtworkThumb";
 import SearchBar from "@/components/SearchBar";
-import PostcodeInput from "@/components/PostcodeInput";
+import PostcodeInput, { readPersistedCoords, clearPersistedLocation } from "@/components/PostcodeInput";
 
 /** Map the largest dimension in cm to a size band id. */
 function bandForCm(largestCm: number): "small" | "medium" | "large" | "xl" {
@@ -113,9 +113,12 @@ const DEFAULT_FILTERS: Filters = {
   // Distance slider is the only location control now (#9). Default
   // mode is "local" so the slider applies whenever the user has set
   // a location; without a location, the filter logic bails out so
-  // results are still global until a postcode/geo lands.
+  // results are still global until a postcode/geo lands. Default
+  // distance is "Anywhere" (9999 sentinel) so users see every artist
+  // by default — they have to actively dial the slider down to
+  // narrow the result set.
   mode: "local",
-  maxDistance: 25,
+  maxDistance: 9999,
   themes: [],
   originals: false,
   prints: false,
@@ -217,14 +220,19 @@ function BrowsePortfoliosPageInner() {
   }, [activeDiscipline, viewAs]);
 
   useEffect(() => {
+    // Default + each explicit view drive the same state. Without
+    // the default branch, clicking Portfolios → then the Galleries
+    // nav link (which goes to /browse with no view param) used to
+    // leave viewAs at "artists" so the page stayed on portfolios.
     if (viewParam === "collections") {
       setActiveDiscipline("collections");
-    } else if (viewParam === "gallery") {
-      setActiveDiscipline("");
-      setViewAs("works");
     } else if (viewParam === "portfolios") {
       setActiveDiscipline("");
       setViewAs("artists");
+    } else {
+      // viewParam === "gallery" or "" → Galleries is the default.
+      setActiveDiscipline("");
+      setViewAs("works");
     }
   }, [viewParam]);
   const [artistSort, setArtistSort] = useState<"featured" | "name" | "revenue_share" | "distance">("featured");
@@ -255,11 +263,21 @@ function BrowsePortfoliosPageInner() {
   // DB fetch lands a moment later.
   const [dataReady, setDataReady] = useState(false);
 
-  // User location state for Local mode
+  // User location state. Hydrated from localStorage on mount via
+  // useEffect (kept out of the lazy initialiser so we don't
+  // hydrate-mismatch SSR + client). Without this, navigating away
+  // from /browse and back wiped the user's location every time.
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoRequesting, setGeoRequesting] = useState(false);
   const [postcodeInput, setPostcodeInput] = useState("");
   const [postcodeError, setPostcodeError] = useState(false);
+  useEffect(() => {
+    const stored = readPersistedCoords();
+    if (stored) {
+      setUserCoords(stored.coords);
+      if (stored.label) setPostcodeInput(stored.label);
+    }
+  }, []);
 
   // Fetch merged artists (static + database) on mount.
   //
@@ -689,7 +707,7 @@ function BrowsePortfoliosPageInner() {
                 Location set
                 <button
                   type="button"
-                  onClick={() => { setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
+                  onClick={() => { clearPersistedLocation(); setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
                   className="ml-1 text-[10px] text-muted underline cursor-pointer"
                 >
                   change
@@ -1096,8 +1114,8 @@ function BrowsePortfoliosPageInner() {
                         }}
                         className="appearance-none pl-3 pr-7 py-1.5 text-[11px] rounded-full border border-border bg-white text-foreground font-medium cursor-pointer focus:outline-none focus:border-foreground/50"
                       >
+                        <option value="gallery">Galleries</option>
                         <option value="portfolios">Portfolios</option>
-                        <option value="gallery">Gallery</option>
                         <option value="collections">Collections</option>
                       </select>
                       <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1168,13 +1186,15 @@ function BrowsePortfoliosPageInner() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* Portfolio/Gallery toggle */}
+                    {/* View toggle — Galleries first since that's the
+                        default landing view (#4) and matches the new
+                        nav order. */}
                     <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5 mr-1">
+                      <button type="button" onClick={() => { setViewAs("works"); setActiveDiscipline(""); }} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${activeDiscipline !== "collections" && (viewAs as string) === "works" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
+                        Galleries
+                      </button>
                       <button type="button" onClick={() => { setViewAs("artists"); setActiveDiscipline(""); }} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${activeDiscipline !== "collections" && (viewAs as string) === "artists" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
                         Portfolios
-                      </button>
-                      <button type="button" onClick={() => { setViewAs("works"); setActiveDiscipline(""); }} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${activeDiscipline !== "collections" && (viewAs as string) === "works" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
-                        Gallery
                       </button>
                       <button type="button" onClick={() => setActiveDiscipline("collections")} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${activeDiscipline === "collections" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
                         Collections
@@ -1417,7 +1437,7 @@ function BrowsePortfoliosPageInner() {
                             />
                             <button
                               type="button"
-                              onClick={() => { setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
+                              onClick={() => { clearPersistedLocation(); setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
                               className="text-[11px] text-muted underline hover:text-foreground"
                             >
                               Change postcode
@@ -1624,8 +1644,8 @@ function BrowsePortfoliosPageInner() {
                         }}
                         className="appearance-none pl-3 pr-7 py-1.5 text-[11px] rounded-full border border-border bg-white text-foreground font-medium cursor-pointer focus:outline-none focus:border-foreground/50"
                       >
+                        <option value="gallery">Galleries</option>
                         <option value="portfolios">Portfolios</option>
-                        <option value="gallery">Gallery</option>
                         <option value="collections">Collections</option>
                       </select>
                       <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1668,7 +1688,7 @@ function BrowsePortfoliosPageInner() {
                             Location set
                             <button
                               type="button"
-                              onClick={() => { setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
+                              onClick={() => { clearPersistedLocation(); setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
                               className="ml-1 text-[10px] text-muted underline cursor-pointer"
                             >
                               change
@@ -1832,11 +1852,11 @@ function BrowsePortfoliosPageInner() {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5 mr-1">
+                      <button type="button" onClick={() => { setViewAs("works"); setActiveDiscipline(""); }} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${activeDiscipline !== "collections" && (viewAs as string) === "works" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
+                        Galleries
+                      </button>
                       <button type="button" onClick={() => { setViewAs("artists"); setActiveDiscipline(""); }} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${activeDiscipline !== "collections" && (viewAs as string) === "artists" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
                         Portfolios
-                      </button>
-                      <button type="button" onClick={() => { setViewAs("works"); setActiveDiscipline(""); }} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${activeDiscipline !== "collections" && (viewAs as string) === "works" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
-                        Gallery
                       </button>
                       <button type="button" onClick={() => setActiveDiscipline("collections")} className={`px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer ${activeDiscipline === "collections" ? "bg-white text-foreground shadow-sm" : "text-muted hover:text-foreground"}`}>
                         Collections
@@ -2024,8 +2044,8 @@ function BrowsePortfoliosPageInner() {
                     }}
                     className="appearance-none pl-3 pr-7 py-1.5 text-[11px] rounded-full border border-border bg-white text-foreground font-medium cursor-pointer focus:outline-none focus:border-foreground/50"
                   >
+                    <option value="gallery">Galleries</option>
                     <option value="portfolios">Portfolios</option>
-                    <option value="gallery">Gallery</option>
                     <option value="collections">Collections</option>
                   </select>
                   <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -2049,7 +2069,7 @@ function BrowsePortfoliosPageInner() {
                     Location set
                     <button
                       type="button"
-                      onClick={() => { setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
+                      onClick={() => { clearPersistedLocation(); setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
                       className="ml-1 text-[10px] text-muted underline cursor-pointer"
                     >
                       change
@@ -2090,14 +2110,16 @@ function BrowsePortfoliosPageInner() {
                 </div>
               )}
             </div>
-            {/* Desktop view toggle — 3-way pill group, right-aligned */}
+            {/* Desktop view toggle — 3-way pill group, right-aligned.
+                Order matches the rest of the marketplace: Galleries
+                first, then Portfolios, then Collections. */}
             <div className="hidden lg:flex mb-6 items-center justify-end">
               <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5">
+                <button type="button" onClick={() => { setViewAs("works"); setActiveDiscipline(""); }} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
+                  Galleries
+                </button>
                 <button type="button" onClick={() => { setViewAs("artists"); setActiveDiscipline(""); }} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
                   Portfolios
-                </button>
-                <button type="button" onClick={() => { setViewAs("works"); setActiveDiscipline(""); }} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
-                  Gallery
                 </button>
                 <button type="button" onClick={() => setActiveDiscipline("collections")} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer bg-white text-foreground shadow-sm">
                   Collections
