@@ -846,44 +846,6 @@ function BrowsePortfoliosPageInner() {
         </div>
       </div>
 
-      {/* Style */}
-      <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
-          Style
-        </p>
-        <select
-          value={filters.styleMedium}
-          onChange={(e) => setFilter("styleMedium", e.target.value)}
-          className="w-full px-3 py-2 bg-[#F8F6F2] lg:bg-white border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
-        >
-          <option value="">All styles</option>
-          {allMediums.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Themes – dropdown */}
-      <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
-          Theme
-        </p>
-        <select
-          value={filters.themes[0] || ""}
-          onChange={(e) => setFilter("themes", e.target.value ? [e.target.value] : [])}
-          className="w-full px-3 py-2 bg-[#F8F6F2] lg:bg-white border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
-        >
-          <option value="">All themes</option>
-          {themes.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {/* Availability – commissions removed */}
       <div>
         <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
@@ -929,6 +891,46 @@ function BrowsePortfoliosPageInner() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Style + Theme moved to the bottom of the panel — they're
+          less actionable than the commercial filters above (location,
+          arrangement, availability, venue type) so the high-priority
+          options stay above the fold. */}
+      <div>
+        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+          Style
+        </p>
+        <select
+          value={filters.styleMedium}
+          onChange={(e) => setFilter("styleMedium", e.target.value)}
+          className="w-full px-3 py-2 bg-[#F8F6F2] lg:bg-white border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
+        >
+          <option value="">All styles</option>
+          {allMediums.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+          Theme
+        </p>
+        <select
+          value={filters.themes[0] || ""}
+          onChange={(e) => setFilter("themes", e.target.value ? [e.target.value] : [])}
+          className="w-full px-3 py-2 bg-[#F8F6F2] lg:bg-white border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
+        >
+          <option value="">All themes</option>
+          {themes.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Clear */}
@@ -1039,7 +1041,7 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8">
+              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto overflow-x-visible pr-2 -mr-2 scrollbar-thin">
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm font-medium text-foreground">
                     Filters
@@ -1366,7 +1368,7 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8">
+              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto overflow-x-visible pr-2 -mr-2 scrollbar-thin">
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm font-medium text-foreground">Filters</span>
                   {hasGalleryFilters && (
@@ -1526,24 +1528,6 @@ function BrowsePortfoliosPageInner() {
                     </div>
                   </div>
 
-                  {/* Style */}
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Style</p>
-                    <select value={galleryStyle} onChange={(e) => setGalleryStyle(e.target.value)} className="w-full px-3 py-2 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer">
-                      <option value="">All styles</option>
-                      {allMediums.map((m) => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Theme */}
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Theme</p>
-                    <select value={galleryTheme} onChange={(e) => setGalleryTheme(e.target.value)} className="w-full px-3 py-2 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer">
-                      <option value="">All themes</option>
-                      {themes.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-
                   {/* Availability */}
                   <div>
                     <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Availability</p>
@@ -1554,10 +1538,12 @@ function BrowsePortfoliosPageInner() {
                     </div>
                   </div>
 
-                  {/* Size band (#7) */}
+                  {/* Size band (#7) — tighter pills than before per UX
+                      pass: smaller padding, smaller label so the row
+                      doesn't dominate the panel. */}
                   <div>
                     <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Size</p>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-2 gap-1">
                       {SIZE_BANDS.map((b) => {
                         const active = gallerySizes.has(b.id);
                         return (
@@ -1565,12 +1551,12 @@ function BrowsePortfoliosPageInner() {
                             key={b.id}
                             type="button"
                             onClick={() => toggleSize(b.id)}
-                            className={`px-3 py-2 rounded-sm border text-left transition-colors ${
+                            className={`px-2 py-1 rounded-sm border text-left transition-colors ${
                               active ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                             }`}
                           >
-                            <p className="text-sm font-medium">{b.label}</p>
-                            <p className="text-[10px] text-muted">{b.sub}</p>
+                            <p className="text-[11px] font-medium leading-tight">{b.label}</p>
+                            <p className="text-[9px] text-muted leading-tight">{b.sub}</p>
                           </button>
                         );
                       })}
@@ -1592,6 +1578,26 @@ function BrowsePortfoliosPageInner() {
                         <input type="range" min={0} max={1000} step={50} value={galleryPriceMax} onChange={(e) => { const v = Number(e.target.value); setGalleryPriceMax(Math.max(v, galleryPriceMin)); }} className="w-full accent-accent h-1.5 cursor-pointer" />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Style + Theme moved to the bottom — less
+                      actionable than location / arrangement /
+                      availability / size / price for buyers, so
+                      they sit below the high-priority filters. */}
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Style</p>
+                    <select value={galleryStyle} onChange={(e) => setGalleryStyle(e.target.value)} className="w-full px-3 py-2 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer">
+                      <option value="">All styles</option>
+                      {allMediums.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Theme</p>
+                    <select value={galleryTheme} onChange={(e) => setGalleryTheme(e.target.value)} className="w-full px-3 py-2 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer">
+                      <option value="">All themes</option>
+                      {themes.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
                   </div>
                 </div>
               </aside>
@@ -1752,20 +1758,6 @@ function BrowsePortfoliosPageInner() {
                       </div>
                     </div>
                     <div>
-                      <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Style</p>
-                      <select value={galleryStyle} onChange={(e) => setGalleryStyle(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm">
-                        <option value="">All styles</option>
-                        {allMediums.map((m) => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Theme</p>
-                      <select value={galleryTheme} onChange={(e) => setGalleryTheme(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm">
-                        <option value="">All themes</option>
-                        {themes.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div>
                       <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Availability</p>
                       <div className="space-y-1.5">
                         <CheckPill checked={galleryOriginals} onChange={setGalleryOriginals} label="Originals" />
@@ -1773,10 +1765,11 @@ function BrowsePortfoliosPageInner() {
                         <CheckPill checked={galleryFraming} onChange={setGalleryFraming} label="Framing" />
                       </div>
                     </div>
-                    {/* Size band (#7) — desktop filter panel copy. */}
+                    {/* Size band — tight pills (smaller than the
+                        original mobile copy). */}
                     <div>
                       <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Size</p>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-2 gap-1">
                         {SIZE_BANDS.map((b) => {
                           const active = gallerySizes.has(b.id);
                           return (
@@ -1784,12 +1777,12 @@ function BrowsePortfoliosPageInner() {
                               key={b.id}
                               type="button"
                               onClick={() => toggleSize(b.id)}
-                              className={`px-2.5 py-1.5 rounded-sm border text-left transition-colors ${
+                              className={`px-2 py-1 rounded-sm border text-left transition-colors ${
                                 active ? "border-accent bg-accent/5 text-foreground" : "border-border bg-white text-muted hover:border-foreground/30"
                               }`}
                             >
-                              <p className="text-xs font-medium">{b.label}</p>
-                              <p className="text-[10px] text-muted">{b.sub}</p>
+                              <p className="text-[11px] font-medium leading-tight">{b.label}</p>
+                              <p className="text-[9px] text-muted leading-tight">{b.sub}</p>
                             </button>
                           );
                         })}
@@ -1803,6 +1796,21 @@ function BrowsePortfoliosPageInner() {
                         <input type="range" min={0} max={1000} step={50} value={galleryPriceMin} onChange={(e) => { const v = Number(e.target.value); setGalleryPriceMin(Math.min(v, galleryPriceMax)); }} className="w-full accent-accent h-1.5" />
                         <input type="range" min={0} max={1000} step={50} value={galleryPriceMax} onChange={(e) => { const v = Number(e.target.value); setGalleryPriceMax(Math.max(v, galleryPriceMin)); }} className="w-full accent-accent h-1.5" />
                       </div>
+                    </div>
+                    {/* Style + Theme moved to the bottom. */}
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Style</p>
+                      <select value={galleryStyle} onChange={(e) => setGalleryStyle(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm">
+                        <option value="">All styles</option>
+                        {allMediums.map((m) => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Theme</p>
+                      <select value={galleryTheme} onChange={(e) => setGalleryTheme(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm">
+                        <option value="">All themes</option>
+                        {themes.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
                     </div>
                     {hasGalleryFilters && (
                       <button type="button" onClick={clearGalleryFilters} className="text-sm text-accent hover:text-accent-hover transition-colors cursor-pointer">Clear all filters</button>
