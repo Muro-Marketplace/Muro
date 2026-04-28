@@ -30,6 +30,7 @@ import type {
   WorkOrientation,
 } from "@/lib/visualizer/dimensions";
 import type { VisualizerMode } from "@/lib/visualizer/types";
+import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 
 export interface PanelWork {
   id: string;
@@ -211,7 +212,7 @@ export default function WorksPanel({
                   </p>
                   {w.dimensions && (
                     <p className="text-[10px] text-stone-500 truncate">
-                      {w.dimensions}
+                      {formatDimensionsForDisplay(w.dimensions)}
                       {w.sizes && w.sizes.length > 1 && (
                         <span className="ml-1 text-stone-400">
                           · {w.sizes.length} sizes

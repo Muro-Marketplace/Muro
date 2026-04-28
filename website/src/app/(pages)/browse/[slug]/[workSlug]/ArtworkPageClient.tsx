@@ -19,6 +19,7 @@ import {
 } from "@/lib/visualizer/dimensions";
 import { resolveShippingCost, tierLabel, SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
+import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 interface ArtworkPageClientProps {
   work: ArtistWork;
   artistName: string;
@@ -252,7 +253,7 @@ export default function ArtworkPageClient({
         {work.dimensions && (
           <div className="flex justify-between items-baseline">
             <dt className="text-muted uppercase tracking-wider text-[10px]">Dimensions</dt>
-            <dd className="text-foreground text-right">{work.dimensions}</dd>
+            <dd className="text-foreground text-right">{formatDimensionsForDisplay(work.dimensions)}</dd>
           </div>
         )}
       </dl>

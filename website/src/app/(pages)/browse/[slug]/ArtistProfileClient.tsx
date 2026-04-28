@@ -13,6 +13,7 @@ import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
 import ArtworkThumb from "@/components/ArtworkThumb";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
+import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 
 interface ArtistProfileClientProps {
   artistName: string;
@@ -601,7 +602,7 @@ export default function ArtistProfileClient({
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted">Dimensions</span>
-                  <span className="text-foreground font-medium">{currentWork.dimensions}</span>
+                  <span className="text-foreground font-medium">{formatDimensionsForDisplay(currentWork.dimensions)}</span>
                 </div>
               </div>
 

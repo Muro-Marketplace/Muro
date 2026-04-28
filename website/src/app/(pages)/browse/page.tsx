@@ -341,6 +341,15 @@ function BrowsePortfoliosPageInner() {
   // postcode is set; toggle UI removed in favour of the slider +
   // PostcodeInput pattern used by the other views.
   const [collectionsLocationMode, setCollectionsLocationMode] = useState<"global" | "local">("local");
+  // Collection-list filters (#42 parity pass) — bundle price + which
+  // arrangements the underlying artist is open to. Kept separate
+  // from the gallery filter state so toggling between views doesn't
+  // bleed filter values across.
+  const [collectionsPriceMin, setCollectionsPriceMin] = useState(0);
+  const [collectionsPriceMax, setCollectionsPriceMax] = useState(2000);
+  const [collectionsFreeLoan, setCollectionsFreeLoan] = useState(false);
+  const [collectionsRevShare, setCollectionsRevShare] = useState(false);
+  const [collectionsPurchase, setCollectionsPurchase] = useState(false);
 
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -641,18 +650,51 @@ function BrowsePortfoliosPageInner() {
   const hasGalleryFilters =
     !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || galleryLocationMode === "local" || gallerySizes.size > 0;
 
-  // Collections filtered by distance when user has enabled local mode.
-  // Artist coordinates are looked up via artistSlug.
+  // Collections filter pipeline. Distance + bundle-price + the
+  // artist's arrangement preferences (#42 — the user complaint was
+  // that collections only had location filtering vs portfolios/galleries
+  // which had the full set).
   const filteredCollections = useMemo(() => {
-    const base = collections.filter((c) => c.available);
-    if (collectionsLocationMode !== "local" || !userCoords) return base;
-    return base.filter((c) => {
-      const artist = artists.find((a) => a.slug === c.artistSlug);
-      if (!artist?.coordinates) return false;
-      const dist = calcDistance(userCoords.lat, userCoords.lng, artist.coordinates.lat, artist.coordinates.lng);
-      return dist <= filters.maxDistance;
+    return collections.filter((c) => {
+      if (!c.available) return false;
+      // Distance — only when the user has set a location.
+      if (collectionsLocationMode === "local" && userCoords) {
+        const artist = artists.find((a) => a.slug === c.artistSlug);
+        if (!artist?.coordinates) return false;
+        const dist = calcDistance(userCoords.lat, userCoords.lng, artist.coordinates.lat, artist.coordinates.lng);
+        if (dist > filters.maxDistance) return false;
+      }
+      // Bundle price.
+      if (collectionsPriceMin > 0 && (c.bundlePrice || 0) < collectionsPriceMin) return false;
+      if (collectionsPriceMax < 2000 && (c.bundlePrice || 0) > collectionsPriceMax) return false;
+      // Arrangement chips — use the underlying artist's openTo* flags
+      // (collections inherit terms from the artist, the same way the
+      // detail page surfaces them as chips).
+      if (collectionsFreeLoan || collectionsRevShare || collectionsPurchase) {
+        const artist = artists.find((a) => a.slug === c.artistSlug);
+        if (collectionsFreeLoan && !(artist?.openToFreeLoan ?? true)) return false;
+        if (collectionsRevShare && !(artist?.openToRevenueShare ?? true)) return false;
+        if (collectionsPurchase && !(artist?.openToOutrightPurchase ?? true)) return false;
+      }
+      return true;
     });
-  }, [collections, collectionsLocationMode, userCoords, artists, filters.maxDistance]);
+  }, [collections, collectionsLocationMode, userCoords, artists, filters.maxDistance, collectionsPriceMin, collectionsPriceMax, collectionsFreeLoan, collectionsRevShare, collectionsPurchase]);
+
+  const hasCollectionsFilters =
+    collectionsLocationMode === "local" ||
+    collectionsPriceMin > 0 ||
+    collectionsPriceMax < 2000 ||
+    collectionsFreeLoan ||
+    collectionsRevShare ||
+    collectionsPurchase;
+
+  function clearCollectionsFilters() {
+    setCollectionsPriceMin(0);
+    setCollectionsPriceMax(2000);
+    setCollectionsFreeLoan(false);
+    setCollectionsRevShare(false);
+    setCollectionsPurchase(false);
+  }
 
   function clearGalleryFilters() {
     setGalleryTheme(""); setGalleryMedium(""); setGalleryStyle(""); setGalleryAvailableOnly(false);
@@ -2168,6 +2210,59 @@ function BrowsePortfoliosPageInner() {
                     />
                     {postcodeError && <p className="text-[10px] text-red-400 mt-1">Postcode not found</p>}
                   </div>
+                )}
+              </div>
+            </div>
+            {/* Collections filter row (#42) — bundle price + arrangement
+                chips, in parity with the gallery / portfolio filter
+                pattern but trimmed to filters that actually apply at
+                the collection level. */}
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-5">
+              <div className="sm:max-w-xs sm:flex-1">
+                <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">
+                  Bundle price: £{collectionsPriceMin} – {collectionsPriceMax >= 2000 ? "£2000+" : `£${collectionsPriceMax}`}
+                </p>
+                <div className="space-y-2 px-1">
+                  <input type="range" min={0} max={2000} step={50} value={collectionsPriceMin} onChange={(e) => { const v = Number(e.target.value); setCollectionsPriceMin(Math.min(v, collectionsPriceMax)); }} className="w-full accent-accent h-1.5 cursor-pointer" />
+                  <input type="range" min={0} max={2000} step={50} value={collectionsPriceMax} onChange={(e) => { const v = Number(e.target.value); setCollectionsPriceMax(Math.max(v, collectionsPriceMin)); }} className="w-full accent-accent h-1.5 cursor-pointer" />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCollectionsFreeLoan((v) => !v)}
+                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
+                    collectionsFreeLoan ? "border-accent bg-accent/5 text-accent" : "border-border bg-white text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  Display
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCollectionsRevShare((v) => !v)}
+                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
+                    collectionsRevShare ? "border-accent bg-accent/5 text-accent" : "border-border bg-white text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  Rev share
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCollectionsPurchase((v) => !v)}
+                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
+                    collectionsPurchase ? "border-accent bg-accent/5 text-accent" : "border-border bg-white text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  Purchase
+                </button>
+                {hasCollectionsFilters && (
+                  <button
+                    type="button"
+                    onClick={clearCollectionsFilters}
+                    className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer"
+                  >
+                    Clear
+                  </button>
                 )}
               </div>
             </div>

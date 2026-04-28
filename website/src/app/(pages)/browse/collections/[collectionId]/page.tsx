@@ -9,6 +9,7 @@ import type { ArtistWork } from "@/data/artists";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import SaveButton from "@/components/SaveButton";
+import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 
 type CollectionWork = ArtistWork & {
   selectedSize?: string;
@@ -174,7 +175,7 @@ export default function CollectionDetailPage() {
                     <h3 className="text-sm font-medium">{work.title}</h3>
                     <p className="text-xs text-muted">
                       {work.medium}
-                      {work.dimensions ? ` · ${work.dimensions}` : ""}
+                      {work.dimensions ? ` · ${formatDimensionsForDisplay(work.dimensions)}` : ""}
                     </p>
                     {work.selectedSize && (
                       <div className="flex items-center justify-between mt-2">
@@ -283,12 +284,17 @@ export default function CollectionDetailPage() {
                     always discoverable. */}
                 {(() => {
                   if (!collection.available) return null;
-                  const workIdsParam = works.map((w) => w.id).filter(Boolean).join(",");
-                  if (!workIdsParam) return null;
+                  // Venue-portal placements form keys preselection by
+                  // work TITLE (not id), so pass titles here. Filter
+                  // out anything blank so an empty entry doesn't slip
+                  // into the comma-joined list and create a phantom
+                  // selection.
+                  const workTitlesParam = works.map((w) => w.title).filter(Boolean).join(",");
+                  if (!workTitlesParam) return null;
                   const params = new URLSearchParams({
                     artist: collection.artistSlug,
                     artistName: collection.artistName,
-                    works: workIdsParam,
+                    works: workTitlesParam,
                     prefillMessage: `Hi — we'd love to host the "${collection.name}" collection in our venue. Open to revenue share or paid loan, happy to discuss.`,
                   });
                   const venueHref = `/venue-portal/placements?${params.toString()}`;
