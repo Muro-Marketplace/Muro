@@ -1800,7 +1800,20 @@ function BrowsePortfoliosPageInner() {
                               )}
                             </div>
                             <p className="text-xs text-muted mt-0.5">
-                              {work.artistName} · {work.medium}
+                              {/* Clickable artist name (#40) — sends users
+                                  straight to the artist's portfolio page.
+                                  stopPropagation keeps the surrounding
+                                  card click handlers (eye icon / lightbox)
+                                  from firing when this link is tapped. */}
+                              <Link
+                                href={`/browse/${work.artistSlug}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:text-accent hover:underline transition-colors"
+                              >
+                                {work.artistName}
+                              </Link>
+                              {" · "}
+                              {work.medium}
                             </p>
                             <p className="text-xs text-foreground/80 mt-1 font-medium">
                               {work.priceBand}

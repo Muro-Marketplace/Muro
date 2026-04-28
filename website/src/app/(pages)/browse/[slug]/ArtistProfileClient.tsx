@@ -670,11 +670,23 @@ export default function ArtistProfileClient({
                   const frameUplift = currentFrame?.priceUplift || 0;
                   const sizeLabel = currentFrame ? `${selected.label} + ${currentFrame.label}` : selected.label;
                   const totalPrice = Math.round((selected.price + frameUplift) * 100) / 100;
+                  // Per-size stock cap with fallback to work-level
+                  // quantity for legacy works. Without this the lightbox
+                  // happily over-adds and the toast lies — the original
+                  // bug behind item #10.
+                  const sizeStock: number | null = (() => {
+                    const perSize = selected?.quantityAvailable;
+                    if (typeof perSize === "number") return perSize;
+                    if (typeof currentWork.quantityAvailable === "number") return currentWork.quantityAvailable;
+                    return null;
+                  })();
+                  const soldOut = typeof sizeStock === "number" && sizeStock <= 0;
                   return (
                     <>
                       <button
+                        disabled={soldOut}
                         onClick={() => {
-                          addItem({
+                          const r = addItem({
                             type: "work",
                             workId: currentWork.id,
                             artistSlug,
@@ -684,19 +696,29 @@ export default function ArtistProfileClient({
                             size: sizeLabel,
                             price: totalPrice,
                             quantity: 1,
+                            quantityAvailable: sizeStock ?? null,
                             shippingPrice: currentWork.shippingPrice ?? undefined,
                           });
+                          if (!r.ok) {
+                            showToast(
+                              r.reason === "out-of-stock"
+                                ? "This size is sold out"
+                                : `Only ${r.available} left at this size`,
+                            );
+                            return;
+                          }
                           navigatingAway.current = true;
                           setLightboxIndex(null);
                           router.push("/checkout");
                         }}
-                        className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
+                        className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Buy Now – £{totalPrice}
+                        {soldOut ? "Sold out" : `Buy Now – £${totalPrice}`}
                       </button>
                       <button
+                        disabled={soldOut}
                         onClick={() => {
-                          addItem({
+                          const r = addItem({
                             type: "work",
                             workId: currentWork.id,
                             artistSlug,
@@ -706,11 +728,20 @@ export default function ArtistProfileClient({
                             size: sizeLabel,
                             price: totalPrice,
                             quantity: 1,
+                            quantityAvailable: sizeStock ?? null,
                             shippingPrice: currentWork.shippingPrice ?? undefined,
                           });
-                          showToast("Added to basket");
+                          if (!r.ok) {
+                            showToast(
+                              r.reason === "out-of-stock"
+                                ? "This size is sold out"
+                                : `Only ${r.available} left at this size`,
+                            );
+                          } else {
+                            showToast("Added to basket");
+                          }
                         }}
-                        className="w-full px-5 py-2 text-sm font-medium text-foreground border border-border hover:border-foreground/30 rounded-sm transition-colors"
+                        className="w-full px-5 py-2 text-sm font-medium text-foreground border border-border hover:border-foreground/30 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Add to Basket
                       </button>

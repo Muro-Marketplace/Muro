@@ -360,7 +360,20 @@ export default function SpacesLookingForArtPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filtered.map((venue) => (
-                <div id={`venue-${venue.slug}`} key={venue.slug} className={`bg-surface border border-border rounded-sm overflow-hidden transition-all scroll-mt-24 target:ring-2 target:ring-accent ${canSeeDetails ? "hover:border-accent/30 hover:shadow-sm" : ""}`}>
+                <div id={`venue-${venue.slug}`} key={venue.slug} className={`relative bg-surface border border-border rounded-sm overflow-hidden transition-all scroll-mt-24 target:ring-2 target:ring-accent ${canSeeDetails ? "hover:border-accent/30 hover:shadow-sm" : ""}`}>
+                  {/* Whole-card link (#28). Sits at z-[1] above the
+                      static image/title/description so clicks anywhere
+                      "empty" navigate to the venue page. Action buttons
+                      below are wrapped in `relative z-[2]` so they keep
+                      receiving clicks. Suppressed for locked cards
+                      where the venue identity is hidden anyway. */}
+                  {canSeeDetails && (
+                    <Link
+                      href={`/venues/${venue.slug}`}
+                      className="absolute inset-0 z-[1]"
+                      aria-label={`View ${venue.name}`}
+                    />
+                  )}
                   {/* Hero image: prefer the venue's own gallery (uploaded
                       via the venue portal). Falls back to the legacy single
                       image if no gallery exists. */}
@@ -462,8 +475,12 @@ export default function SpacesLookingForArtPage() {
                       </>
                     )}
 
-                    {/* Message button for subscribers / Lock for non-subscribers */}
-                    {canSeeDetails && canMessageVenues ? (
+                    {/* Message button for subscribers / Lock for non-subscribers.
+                        Wrapped in `relative z-[2]` so the inline buttons sit
+                        above the whole-card stretched <Link> defined at the
+                        top of the card (#28). */}
+                    <div className="relative z-[2]">
+                      {canSeeDetails && canMessageVenues ? (
                       <>
                         {sentRequests[venue.slug] ? (
                           // Just-sent confirmation — flips back to normal CTAs
@@ -583,6 +600,7 @@ export default function SpacesLookingForArtPage() {
                         </Link>
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
               ))}

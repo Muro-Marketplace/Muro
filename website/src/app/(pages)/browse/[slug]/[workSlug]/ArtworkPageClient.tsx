@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { ArtistWork } from "@/data/artists";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -188,9 +189,12 @@ export default function ArtworkPageClient({
 
   return (
     <div className="flex flex-col">
-      {/* Artist */}
+      {/* Artist (#40) — clickable so visitors can hop straight to the
+          artist's portfolio without backing out to /browse first. */}
       <p className="text-[10px] text-muted uppercase tracking-[0.18em] mb-3">
-        {artistName}
+        <Link href={`/browse/${artistSlug}`} className="hover:text-accent hover:underline transition-colors">
+          {artistName}
+        </Link>
       </p>
 
       {/* Title */}

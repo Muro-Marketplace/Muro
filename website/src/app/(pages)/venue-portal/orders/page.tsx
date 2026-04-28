@@ -38,7 +38,7 @@ function VenueOrdersContent() {
   const searchParams = useSearchParams();
   // After a venue completes checkout the confirmation page sends them
   // here with ?tab=purchases, since the relevant order is the one
-  // they just placed (lives in "Orders I made"). Any other entry
+  // they just placed (lives in "My orders"). Any other entry
   // defaults to the sales tab.
   const initialTab: OrderTab = searchParams?.get("tab") === "purchases" ? "purchases" : "sales";
   const [orders, setOrders] = useState<Order[]>([]);
@@ -124,7 +124,7 @@ function VenueOrdersContent() {
               : "border-transparent text-muted hover:text-foreground"
           }`}
         >
-          Orders I made ({purchaseOrders.length})
+          My orders ({purchaseOrders.length})
         </button>
       </div>
 

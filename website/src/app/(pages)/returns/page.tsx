@@ -61,7 +61,7 @@ export default function ReturnsPage() {
                   <ul className="list-disc pl-6 space-y-2">
                     <li>Refund requests are typically reviewed within 5 business days</li>
                     <li>Approved refunds are processed via Stripe and appear on your statement within 5&ndash;10 business days</li>
-                    <li>If a refund request is rejected, you will receive a reason and can escalate via our <a href="/terms#dispute-resolution" className="text-accent hover:underline">dispute resolution process</a></li>
+                    <li>If a refund request is rejected, you will receive a reason and can escalate via our <a href="/complaints" className="text-accent hover:underline">dispute resolution process</a></li>
                   </ul>
                 </div>
               </div>

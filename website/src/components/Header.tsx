@@ -309,10 +309,13 @@ export default function Header() {
     >
       <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
         <div className="flex items-center justify-between h-14 lg:h-16">
-          {/* Logo */}
+          {/* Logo. Slight negative margin (#36) compensates for the
+              optical inset of the serif "W" so the visual edge of the
+              logo aligns with the marketplace filter buttons / portal
+              nav items below it on /browse and /portal pages. */}
           <Link
             href="/"
-            className={`font-serif text-2xl lg:text-3xl tracking-tight transition-colors duration-300 ${
+            className={`font-serif text-2xl lg:text-3xl tracking-tight transition-colors duration-300 -ml-0.5 lg:-ml-1 ${
               isPortal || !showSolid ? "text-white" : "text-foreground"
             }`}
           >
@@ -445,8 +448,12 @@ export default function Header() {
                     aria-label="Messages"
                     aria-expanded={msgDropdownOpen}
                   >
+                    {/* Envelope icon (#35) — replaces the chat-bubble.
+                        Reads as "messages" universally + matches the
+                        nav style of Saatchi/Vinted-class marketplaces. */}
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      <rect x="2" y="4" width="20" height="16" rx="2" />
+                      <path d="m22 6-10 7L2 6" />
                     </svg>
                     {unreadCount > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center px-1 text-[10px] font-bold text-white bg-accent rounded-full leading-none">
