@@ -316,9 +316,7 @@ export default function VenuesPage() {
             </div>
             <p className="text-muted leading-relaxed">
               Revenue share is optional and agreed directly with the artist when
-              you arrange a placement. The QR is fully off by default — turn it
-              on per work if you want it; leave it off and the artwork is just
-              part of the room.
+              you arrange a placement.
             </p>
           </div>
           </AnimateIn>

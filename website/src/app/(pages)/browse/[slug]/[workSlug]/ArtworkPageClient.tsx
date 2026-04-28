@@ -19,14 +19,16 @@ import {
 } from "@/lib/visualizer/dimensions";
 import { resolveShippingCost, tierLabel, SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
-import { getSocialProof } from "@/lib/social-proof";
-
 interface ArtworkPageClientProps {
   work: ArtistWork;
   artistName: string;
   artistSlug: string;
   shipsInternationally?: boolean;
   internationalShippingPrice?: number | null;
+  /** Live count of `artwork_view` events for this work in the last 7
+   *  days, computed in the parent server component. Hidden when 0
+   *  so brand-new works don't show "0 views this week". */
+  viewsThisWeek?: number;
 }
 
 export default function ArtworkPageClient({
@@ -35,6 +37,7 @@ export default function ArtworkPageClient({
   artistSlug,
   shipsInternationally,
   internationalShippingPrice,
+  viewsThisWeek,
 }: ArtworkPageClientProps) {
   const router = useRouter();
   const { addItem } = useCart();
@@ -212,31 +215,23 @@ export default function ArtworkPageClient({
         <SaveButton type="work" itemId={work.id} size="sm" />
       </div>
 
-      {/* Social-proof / demand signals (#6). Lightly seeded for now —
-          driven by lib/social-proof so each work shows stable numbers
-          until we wire real analytics into the response. */}
-      {(() => {
-        const sp = getSocialProof(work.id);
-        return (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6 text-[11px] text-muted">
-            <span className="inline-flex items-center gap-1.5">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-              {sp.viewsThisWeek} views this week
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 21h18" />
-                <path d="M5 21V7l8-4v18" />
-                <path d="M19 21V11l-6-4" />
-              </svg>
-              {sp.venuesLookingForSimilar} venue{sp.venuesLookingForSimilar === 1 ? "" : "s"} currently looking for similar work
-            </span>
-          </div>
-        );
-      })()}
+      {/* Views this week (#6). Real analytics_events count, computed
+          in the parent server component from `artwork_view` events
+          over the last 7 days. Hidden for brand-new works with no
+          views yet so we don't show "0 views this week". The
+          venues-looking-for-similar chip was removed in favour of
+          this single live signal. */}
+      {typeof viewsThisWeek === "number" && viewsThisWeek > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6 text-[11px] text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            {viewsThisWeek} {viewsThisWeek === 1 ? "view" : "views"} this week
+          </span>
+        </div>
+      )}
 
       {/* About this piece — the artist's own description. Was being
           stored but never rendered, so it looked like saving the

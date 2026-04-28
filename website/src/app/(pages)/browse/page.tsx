@@ -19,27 +19,37 @@ import ArtworkThumb from "@/components/ArtworkThumb";
 import SearchBar from "@/components/SearchBar";
 import PostcodeInput from "@/components/PostcodeInput";
 
-/** Classify a work into a size band based on its largest dimension
- *  in centimetres. Falls back to checking the per-size pricing labels
- *  if the work-level dimensions aren't parseable, then "medium" as a
- *  generous default so filters never silently hide unparseable works. */
-function classifyWorkSize(work: { dimensions: string; pricing: { label: string }[] }): "small" | "medium" | "large" | "xl" {
+/** Map the largest dimension in cm to a size band id. */
+function bandForCm(largestCm: number): "small" | "medium" | "large" | "xl" {
+  if (largestCm <= 30) return "small";
+  if (largestCm <= 60) return "medium";
+  if (largestCm <= 100) return "large";
+  return "xl";
+}
+
+/** Return the set of size bands a work matches across ALL of its
+ *  pricing options + the work-level dimensions. A work that ships in
+ *  A4, A2, A0 should match Small, Medium AND Extra-large filters,
+ *  not just whichever size happens to be biggest. Work-level
+ *  dimensions are also added so legacy single-size works still
+ *  classify correctly. Empty result = unparseable, falls back to
+ *  "medium" (matches just the medium filter — generous default).
+ */
+function bandsForWork(work: { dimensions: string; pricing: { label: string }[] }): Set<"small" | "medium" | "large" | "xl"> {
+  const bands = new Set<"small" | "medium" | "large" | "xl">();
   const candidates: string[] = [];
   if (work.dimensions) candidates.push(work.dimensions);
   for (const p of work.pricing || []) {
     if (p?.label) candidates.push(p.label);
   }
-  let largestCm = 0;
   for (const c of candidates) {
     const d = parseDimensions(c);
     if (!d) continue;
-    largestCm = Math.max(largestCm, d.widthCm, d.heightCm);
+    const largest = Math.max(d.widthCm, d.heightCm);
+    bands.add(bandForCm(largest));
   }
-  if (largestCm === 0) return "medium";
-  if (largestCm <= 30) return "small";
-  if (largestCm <= 60) return "medium";
-  if (largestCm <= 100) return "large";
-  return "xl";
+  if (bands.size === 0) bands.add("medium");
+  return bands;
 }
 
 /** Haversine great-circle distance in miles */
@@ -309,7 +319,10 @@ function BrowsePortfoliosPageInner() {
 
   // Collections view location filter — independent of artists/gallery so the
   // filter state doesn't bleed across views.
-  const [collectionsLocationMode, setCollectionsLocationMode] = useState<"global" | "local">("global");
+  // Mirror of #9 — pin to "local" so the slider applies whenever a
+  // postcode is set; toggle UI removed in favour of the slider +
+  // PostcodeInput pattern used by the other views.
+  const [collectionsLocationMode, setCollectionsLocationMode] = useState<"global" | "local">("local");
 
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -539,11 +552,17 @@ function BrowsePortfoliosPageInner() {
       if (galleryOriginals && !work.offersOriginals) return false;
       if (galleryPrints && !work.offersPrints) return false;
       if (galleryFraming && !work.offersFramed) return false;
-      // Size band (#7) — multi-select; work passes if its band is
-      // selected. No selection = no filter.
+      // Size band (#7) — multi-select; work passes if ANY of the
+      // sizes it offers fits a selected band. Previously we only
+      // looked at the largest size, so a work shipping in A4 → A0
+      // wouldn't show under the Small filter.
       if (gallerySizes.size > 0) {
-        const band = classifyWorkSize(work);
-        if (!gallerySizes.has(band)) return false;
+        const bands = bandsForWork(work);
+        let matches = false;
+        for (const b of bands) {
+          if (gallerySizes.has(b)) { matches = true; break; }
+        }
+        if (!matches) return false;
       }
       // Commercial terms
       if (galleryFreeLoan && !work.openToFreeLoan) return false;
@@ -1626,46 +1645,29 @@ function BrowsePortfoliosPageInner() {
                       <span className="text-sm font-medium">Filters</span>
                       <button type="button" onClick={() => setSidebarOpen(false)} className="text-xs text-muted hover:text-foreground cursor-pointer">Close</button>
                     </div>
-                    {/* Location Mode — mirror the desktop sidebar so mobile users
-                        can scope to local + adjust distance from the drawer. */}
+                    {/* Location — toggle removed (#9). Distance slider when
+                        a location is set, postcode input + Use-my-location
+                        when not. */}
                     <div>
                       <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Location</p>
-                      <div className="flex gap-2">
-                        {(["global", "local"] as const).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => { setGalleryLocationMode(mode); if (mode === "local" && !userCoords) handleModeChange("local"); }}
-                            className={`flex-1 py-2 text-sm rounded-sm border transition-colors cursor-pointer capitalize ${
-                              galleryLocationMode === mode
-                                ? "bg-foreground text-background border-foreground"
-                                : "border-border bg-[#F8F6F2] text-muted hover:border-foreground/30"
-                            }`}
-                          >
-                            {mode}
-                          </button>
-                        ))}
-                      </div>
-                      {galleryLocationMode === "local" && geoRequesting && (
-                        <p className="text-xs text-muted animate-pulse mt-3">Detecting your location…</p>
+                      {geoRequesting && (
+                        <p className="text-xs text-muted animate-pulse">Detecting your location…</p>
                       )}
-                      {galleryLocationMode === "local" && !geoRequesting && userCoords && (
-                        <p className="text-xs text-accent flex items-center gap-1.5 mt-3">
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                          </svg>
-                          Location set
-                          <button
-                            type="button"
-                            onClick={() => { setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
-                            className="ml-1 text-[10px] text-muted underline cursor-pointer"
-                          >
-                            change
-                          </button>
-                        </p>
-                      )}
-                      {galleryLocationMode === "local" && userCoords && (
-                        <div className="mt-3">
+                      {!geoRequesting && userCoords && (
+                        <>
+                          <p className="text-xs text-accent flex items-center gap-1.5 mb-3">
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="1.5 5 4 7.5 8.5 2.5" />
+                            </svg>
+                            Location set
+                            <button
+                              type="button"
+                              onClick={() => { setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
+                              className="ml-1 text-[10px] text-muted underline cursor-pointer"
+                            >
+                              change
+                            </button>
+                          </p>
                           <p className="text-[10px] text-muted mb-1.5">
                             Within {filters.maxDistance >= 9999 ? "any distance" : `${filters.maxDistance} mi`}
                           </p>
@@ -1681,22 +1683,20 @@ function BrowsePortfoliosPageInner() {
                             }}
                             className="w-full accent-accent h-1.5 cursor-pointer"
                           />
-                        </div>
+                        </>
                       )}
-                      {galleryLocationMode === "local" && !userCoords && !geoRequesting && (
-                        <div className="mt-3">
-                          <p className="text-[10px] text-muted mb-1.5">Enter your postcode</p>
-                          <div className="flex gap-1.5">
-                            <input
-                              type="text"
-                              value={postcodeInput}
-                              onChange={(e) => { setPostcodeInput(e.target.value.toUpperCase()); setPostcodeError(false); }}
-                              onKeyDown={(e) => { if (e.key === "Enter") handlePostcodeSubmit(); }}
-                              placeholder="EC1A 1BB"
-                              className="flex-1 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50 uppercase"
-                            />
-                            <button type="button" onClick={handlePostcodeSubmit} className="px-3 py-1.5 bg-accent text-white text-xs rounded-sm hover:bg-accent-hover transition-colors cursor-pointer">Go</button>
-                          </div>
+                      {!userCoords && !geoRequesting && (
+                        <div>
+                          <p className="text-[10px] text-muted mb-1.5">Enter your postcode to filter by distance</p>
+                          <PostcodeInput
+                            initial={postcodeInput}
+                            onGeocoded={(coords, pc) => {
+                              setUserCoords(coords);
+                              setPostcodeInput(pc);
+                              setPostcodeError(false);
+                            }}
+                            onError={(failed) => setPostcodeError(failed)}
+                          />
                           {postcodeError && <p className="text-[10px] text-red-400 mt-1">Postcode not found</p>}
                         </div>
                       )}
@@ -2024,27 +2024,15 @@ function BrowsePortfoliosPageInner() {
                     <polyline points="2 4 6 8 10 4" />
                   </svg>
                 </div>
-                <div className="flex gap-1.5">
-                  {(["global", "local"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => { setCollectionsLocationMode(mode); if (mode === "local" && !userCoords) handleModeChange("local"); }}
-                      className={`px-3 py-1.5 text-[11px] rounded-full border transition-colors cursor-pointer capitalize ${
-                        collectionsLocationMode === mode
-                          ? "bg-foreground text-white border-foreground"
-                          : "border-border bg-white text-muted hover:border-foreground/30"
-                      }`}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                </div>
               </div>
-              {collectionsLocationMode === "local" && geoRequesting && (
+              {/* Location handling matches the gallery + portfolio
+                  views: toggle removed (#9), slider when a location
+                  is set, dynamic PostcodeInput + use-my-location
+                  fallback when not. */}
+              {geoRequesting && (
                 <p className="text-xs text-muted animate-pulse">Detecting your location…</p>
               )}
-              {collectionsLocationMode === "local" && !geoRequesting && userCoords && (
+              {!geoRequesting && userCoords && (
                 <>
                   <p className="text-xs text-accent flex items-center gap-1.5">
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2078,20 +2066,18 @@ function BrowsePortfoliosPageInner() {
                   </div>
                 </>
               )}
-              {collectionsLocationMode === "local" && !userCoords && !geoRequesting && (
+              {!userCoords && !geoRequesting && (
                 <div>
                   <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">Postcode</p>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={postcodeInput}
-                      onChange={(e) => { setPostcodeInput(e.target.value.toUpperCase()); setPostcodeError(false); }}
-                      onKeyDown={(e) => { if (e.key === "Enter") handlePostcodeSubmit(); }}
-                      placeholder="EC1A 1BB"
-                      className="flex-1 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50 uppercase"
-                    />
-                    <button type="button" onClick={handlePostcodeSubmit} className="px-3 py-1.5 bg-accent text-white text-xs rounded-sm hover:bg-accent-hover transition-colors cursor-pointer">Go</button>
-                  </div>
+                  <PostcodeInput
+                    initial={postcodeInput}
+                    onGeocoded={(coords, pc) => {
+                      setUserCoords(coords);
+                      setPostcodeInput(pc);
+                      setPostcodeError(false);
+                    }}
+                    onError={(failed) => setPostcodeError(failed)}
+                  />
                   {postcodeError && <p className="text-[10px] text-red-400 mt-1">Postcode not found</p>}
                 </div>
               )}
@@ -2116,27 +2102,10 @@ function BrowsePortfoliosPageInner() {
                 <p className="text-sm text-muted">Themed bundles of artwork at a set price. Ready to transform your space.</p>
               </div>
               <div className="flex flex-wrap items-end gap-4">
-                {/* Desktop location toggle — keep the side-by-side button pair */}
-                <div className="hidden lg:block">
-                  <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">Location</p>
-                  <div className="flex gap-2">
-                    {(["global", "local"] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => { setCollectionsLocationMode(mode); if (mode === "local" && !userCoords) handleModeChange("local"); }}
-                        className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer capitalize ${
-                          collectionsLocationMode === mode
-                            ? "bg-foreground text-background border-foreground"
-                            : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
-                        }`}
-                      >
-                        {mode}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {collectionsLocationMode === "local" && userCoords && (
+                {/* Desktop location — toggle removed (#9). Slider when
+                    a postcode is set, dynamic PostcodeInput +
+                    use-my-location otherwise. */}
+                {userCoords && (
                   <div className="hidden lg:block min-w-[180px]">
                     <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">
                       Within {filters.maxDistance >= 9999 ? "any" : `${filters.maxDistance} mi`}
@@ -2155,20 +2124,18 @@ function BrowsePortfoliosPageInner() {
                     />
                   </div>
                 )}
-                {collectionsLocationMode === "local" && !userCoords && !geoRequesting && (
-                  <div className="hidden lg:block">
+                {!userCoords && !geoRequesting && (
+                  <div className="hidden lg:block min-w-[200px]">
                     <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">Postcode</p>
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={postcodeInput}
-                        onChange={(e) => { setPostcodeInput(e.target.value.toUpperCase()); setPostcodeError(false); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") handlePostcodeSubmit(); }}
-                        placeholder="EC1A 1BB"
-                        className="w-28 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50 uppercase"
-                      />
-                      <button type="button" onClick={handlePostcodeSubmit} className="px-3 py-1.5 bg-accent text-white text-xs rounded-sm hover:bg-accent-hover transition-colors cursor-pointer">Go</button>
-                    </div>
+                    <PostcodeInput
+                      initial={postcodeInput}
+                      onGeocoded={(coords, pc) => {
+                        setUserCoords(coords);
+                        setPostcodeInput(pc);
+                        setPostcodeError(false);
+                      }}
+                      onError={(failed) => setPostcodeError(failed)}
+                    />
                     {postcodeError && <p className="text-[10px] text-red-400 mt-1">Postcode not found</p>}
                   </div>
                 )}

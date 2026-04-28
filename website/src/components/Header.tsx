@@ -10,9 +10,13 @@ import { authFetch } from "@/lib/api-client";
 
 // When the user is inside the marketplace area (/browse or /spaces-looking-for-art)
 // the top-level "Marketplace" link is replaced by these inline tabs.
+// Galleries is the default landing view (#4) — order in the nav now
+// reflects that, with Galleries first and the default empty view
+// param matching Galleries (not Portfolios) so the active tab stays
+// consistent with what /browse actually renders on first load.
 const marketplaceTabs = [
-  { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v !== "gallery" && v !== "collections" },
-  { label: "Galleries",  href: "/browse?view=gallery",    match: (p: string, v: string) => p === "/browse" && v === "gallery" },
+  { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
+  { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
   { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
 ];
@@ -21,8 +25,8 @@ const marketplaceTabs = [
 // marketplace so discovery links stay reachable without needing the
 // More dropdown.
 const publicMarketplaceTabs = [
-  { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v !== "gallery" && v !== "collections" },
-  { label: "Galleries",  href: "/browse?view=gallery",    match: (p: string, v: string) => p === "/browse" && v === "gallery" },
+  { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
+  { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
   { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
   { label: "How It Works", href: "/how-it-works", match: (p: string) => p === "/how-it-works" },
@@ -33,8 +37,8 @@ const publicMarketplaceTabs = [
 // venue browsing) and adds Wallplace Curated + Blog so the venue's own
 // nav shape stays consistent with the non-marketplace pages.
 const venueMarketplaceTabs = [
-  { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v !== "gallery" && v !== "collections" },
-  { label: "Galleries",  href: "/browse?view=gallery",    match: (p: string, v: string) => p === "/browse" && v === "gallery" },
+  { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
+  { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
   { label: "Wallplace Curated", href: "/curated", match: (p: string) => p === "/curated" },
   { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
@@ -717,34 +721,46 @@ export default function Header() {
                     </svg>
                   </button>
                   {portalDropdownOpen && (() => {
+                    // Mirror the actual portal sidebar nav in
+                    // VenuePortalLayout / ArtistPortalLayout /
+                    // CustomerPortalLayout (the user complaint was
+                    // that this dropdown was a curated subset; now
+                    // it's parity). Settings stays at the end so the
+                    // visual order matches the sidebar's secondary
+                    // section.
                     const links = userType === "venue"
                       ? [
                           { label: "Dashboard", href: "/venue-portal" },
-                          { label: "Placements", href: "/venue-portal/placements" },
+                          { label: "Venue Profile", href: "/venue-portal/profile" },
                           { label: "Messages", href: "/venue-portal/messages" },
+                          { label: "Placements", href: "/venue-portal/placements" },
+                          { label: "My Walls", href: "/venue-portal/walls" },
                           { label: "Saved", href: "/venue-portal/saved" },
-                          { label: "Walls / Showroom", href: "/venue-portal/walls" },
-                          { label: "Orders", href: "/venue-portal/orders" },
-                          { label: "Profile", href: "/venue-portal/profile" },
+                          { label: "QR Labels", href: "/venue-portal/labels" },
+                          { label: "My Orders", href: "/venue-portal/orders" },
                           { label: "Settings", href: "/venue-portal/settings" },
                         ]
                       : userType === "customer"
                         ? [
-                            { label: "Dashboard", href: "/customer-portal" },
-                            { label: "My orders", href: "/customer-portal/orders" },
-                            { label: "Messages", href: "/customer-portal/messages" },
+                            { label: "My Orders", href: "/customer-portal" },
                             { label: "Saved", href: "/customer-portal/saved" },
-                            { label: "Profile", href: "/customer-portal/profile" },
+                            { label: "Messages", href: "/customer-portal/messages" },
+                            { label: "Settings", href: "/customer-portal/settings" },
                           ]
                         : [
                             { label: "Dashboard", href: "/artist-portal" },
-                            { label: "Profile", href: "/artist-portal/profile" },
-                            { label: "Portfolio", href: "/artist-portal/portfolio" },
-                            { label: "Placements", href: "/artist-portal/placements" },
+                            { label: "Edit Profile", href: "/artist-portal/profile" },
+                            { label: "My Portfolio", href: "/artist-portal/portfolio" },
+                            { label: "Showroom", href: "/artist-portal/showroom" },
                             { label: "Messages", href: "/artist-portal/messages" },
+                            { label: "Placements", href: "/artist-portal/placements" },
+                            { label: "Collections", href: "/artist-portal/collections" },
                             { label: "Saved", href: "/artist-portal/saved" },
+                            { label: "Orders", href: "/artist-portal/orders" },
+                            { label: "QR Labels", href: "/artist-portal/labels" },
                             { label: "Analytics", href: "/artist-portal/analytics" },
                             { label: "Billing", href: "/artist-portal/billing" },
+                            { label: "Settings", href: "/artist-portal/settings" },
                           ];
                     return (
                       <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-border rounded-sm shadow-lg overflow-hidden z-[110]">

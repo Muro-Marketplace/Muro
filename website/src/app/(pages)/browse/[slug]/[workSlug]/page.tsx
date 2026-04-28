@@ -113,6 +113,26 @@ export default async function ArtworkPage({
     }).catch(() => {});
   } catch { /* ignore analytics errors */ }
 
+  // Real "views this week" count — drives the social-proof chip on
+  // ArtworkPageClient. Counts every `artwork_view` row for this work
+  // in the last 7 days; we deliberately don't dedupe by visitor_id so
+  // refreshes still register (matches what most marketplaces show).
+  // Fire-and-forget on errors — the chip just hides if the count
+  // can't be loaded.
+  let viewsThisWeek = 0;
+  try {
+    const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
+    const db = getSupabaseAdmin();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { count } = await db
+      .from("analytics_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", "artwork_view")
+      .eq("work_id", work.id)
+      .gte("created_at", sevenDaysAgo);
+    viewsThisWeek = count || 0;
+  } catch { /* ignore — chip hides */ }
+
   const otherWorks = artist.works.filter((w) => w.id !== work.id);
   const hasDescription = !!(work.description && work.description.trim());
   const aspectRatio =
@@ -155,6 +175,7 @@ export default async function ArtworkPage({
                 artistSlug={artist.slug}
                 shipsInternationally={artist.shipsInternationally}
                 internationalShippingPrice={artist.internationalShippingPrice}
+                viewsThisWeek={viewsThisWeek}
               />
             </div>
           </div>

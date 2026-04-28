@@ -268,43 +268,48 @@ export default function CollectionDetailPage() {
                     Buy Collection – {collection.bundlePriceBand}
                   </button>
                 )}
-                {/* Request placement (#41) — venue or logged-out shopper
-                    can request the entire collection as a placement
-                    (revenue-share or paid-loan). Reuses the existing
-                    /venue-portal/placements form by passing the
-                    collection's work IDs in the `works` query param. */}
+                {/* Request placement (#41). Always shown when the
+                    collection has resolvable works — routing depends
+                    on who's looking:
+                      - venue: straight into /venue-portal/placements
+                        with artist + work IDs prefilled
+                      - logged-out: bounce through /signup?next=…
+                      - artist viewing their own work: send to their
+                        portal placements page with venue context
+                        cleared so they understand it's the venue
+                        side that triggers
+                      - customer: prompt sign-up as venue
+                    The button stays visible so the affordance is
+                    always discoverable. */}
                 {(() => {
                   if (!collection.available) return null;
                   const workIdsParam = works.map((w) => w.id).filter(Boolean).join(",");
                   if (!workIdsParam) return null;
-                  const venueParams = new URLSearchParams({
+                  const params = new URLSearchParams({
                     artist: collection.artistSlug,
                     artistName: collection.artistName,
                     works: workIdsParam,
                     prefillMessage: `Hi — we'd love to host the "${collection.name}" collection in our venue. Open to revenue share or paid loan, happy to discuss.`,
                   });
-                  const venueHref = `/venue-portal/placements?${venueParams.toString()}`;
-                  // Customers + logged-out: bounce through customer
-                  // signup with the placement URL preserved as `next`,
-                  // then route them through to the venue portal flow
-                  // if they later switch type. Keeps the surface
-                  // consistent with #2.
+                  const venueHref = `/venue-portal/placements?${params.toString()}`;
                   let href = venueHref;
+                  let label = "Request placement";
                   if (!user) {
-                    const next = `/venue-portal/placements?${venueParams.toString()}`;
-                    href = `/signup?next=${encodeURIComponent(next)}`;
-                  } else if (userType !== "venue") {
-                    // Artists viewing their own collection don't need
-                    // this CTA — they'd be initiating from the venue
-                    // side. Hide it for non-venue accounts.
-                    return null;
+                    href = `/signup?next=${encodeURIComponent(venueHref)}`;
+                    label = "Sign up to request placement";
+                  } else if (userType === "artist") {
+                    href = "/artist-portal/placements";
+                    label = "View your placements";
+                  } else if (userType === "customer") {
+                    href = `/signup?next=${encodeURIComponent(venueHref)}`;
+                    label = "Switch to a venue account to request";
                   }
                   return (
                     <Link
                       href={href}
                       className="block w-full px-5 py-3 text-sm font-medium text-foreground border border-foreground hover:bg-foreground hover:text-white rounded-sm transition-colors text-center"
                     >
-                      Request placement
+                      {label}
                     </Link>
                   );
                 })()}

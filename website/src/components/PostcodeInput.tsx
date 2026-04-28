@@ -4,6 +4,10 @@
 // "Go" button stays as an explicit fallback for users who don't want
 // to wait for the debounce.
 //
+// Adds a "Use my location" button that calls the browser geolocation
+// API, and remembers the last successful postcode in localStorage so
+// switching between marketplace views doesn't ask twice.
+//
 // The component is purposefully presentational — geocoding is owned
 // by the caller via `onGeocoded`. Keeps it reusable across the
 // browse, spaces, and any future location-aware filter surfaces.
@@ -17,22 +21,27 @@ interface PostcodeInputProps {
   /** Initial value — a previously-entered postcode if any. */
   initial?: string;
   placeholder?: string;
-  /** Fired when the postcode resolves to coordinates. */
+  /** Fired when the postcode (or geolocation) resolves to coordinates. */
   onGeocoded: (coords: { lat: number; lng: number }, postcode: string) => void;
   /** Fired with `true` when the postcode looked valid but the geocoder
    *  rejected it; `false` when the user is typing again or the value
    *  resolves cleanly. The caller can use this to display an inline
    *  error message in their preferred style. */
   onError?: (failed: boolean) => void;
-  /** Optional className for the wrapping flex row. */
+  /** Optional className for the wrapping container. */
   className?: string;
   /** Visual size — "sm" matches the filter sidebar; "md" matches the
    *  marketplace hero. Defaults to "sm". */
   size?: "sm" | "md";
+  /** Hide the "Use my location" button (e.g. when the parent already
+   *  has its own geolocation control). */
+  hideMyLocation?: boolean;
 }
 
 /** Strict UK postcode pattern (after formatting). */
 const UK_POSTCODE = /^[A-Z]{1,2}\d[A-Z\d]?\s\d[A-Z]{2}$/;
+
+const STORAGE_KEY = "wallplace-postcode";
 
 /** Format raw input → uppercase, single-spaced UK postcode form. */
 function formatPostcode(raw: string): string {
@@ -48,10 +57,24 @@ export default function PostcodeInput({
   onError,
   className = "",
   size = "sm",
+  hideMyLocation = false,
 }: PostcodeInputProps) {
-  const [value, setValue] = useState(formatPostcode(initial));
+  // Hydrate from localStorage so users only enter a postcode once
+  // per browser. Falls back to the `initial` prop if storage is empty
+  // or unreadable (Safari private mode).
+  const [value, setValue] = useState(() => {
+    if (initial) return formatPostcode(initial);
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage.getItem(STORAGE_KEY);
+        if (stored) return formatPostcode(stored);
+      } catch { /* ignore */ }
+    }
+    return "";
+  });
   const [busy, setBusy] = useState(false);
   const [touched, setTouched] = useState(false);
+  const [geoBusy, setGeoBusy] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounced auto-lookup once the value matches the full UK postcode
@@ -64,6 +87,9 @@ export default function PostcodeInput({
       const coords = await geocodePostcode(value);
       setBusy(false);
       if (coords) {
+        try {
+          window.localStorage.setItem(STORAGE_KEY, value);
+        } catch { /* ignore */ }
         onError?.(false);
         onGeocoded(coords, value);
       } else if (touched) {
@@ -81,6 +107,9 @@ export default function PostcodeInput({
     const coords = await geocodePostcode(value);
     setBusy(false);
     if (coords) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, value);
+      } catch { /* ignore */ }
       onError?.(false);
       onGeocoded(coords, value);
     } else {
@@ -88,45 +117,86 @@ export default function PostcodeInput({
     }
   }
 
+  function useMyLocation() {
+    if (!navigator.geolocation) return;
+    setGeoBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeoBusy(false);
+        onError?.(false);
+        onGeocoded(
+          { lat: pos.coords.latitude, lng: pos.coords.longitude },
+          "Current location",
+        );
+      },
+      () => {
+        setGeoBusy(false);
+        // Geo permission denied or unavailable. Don't surface as an
+        // error — the postcode field is the fallback path.
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+    );
+  }
+
   const inputClass =
     size === "sm"
-      ? "flex-1 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50 uppercase tracking-wide"
-      : "flex-1 px-3 py-2.5 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 uppercase tracking-wide";
+      ? "flex-1 min-w-0 px-2 py-1.5 bg-surface border border-border rounded-sm text-xs text-foreground focus:outline-none focus:border-accent/50 uppercase tracking-wide"
+      : "flex-1 min-w-0 px-3 py-2.5 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 uppercase tracking-wide";
   const buttonClass =
     size === "sm"
       ? "px-3 py-1.5 bg-accent text-white text-xs rounded-sm hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50"
       : "px-4 py-2.5 bg-accent text-white text-sm rounded-sm hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50";
+  const linkClass =
+    size === "sm"
+      ? "text-[10px] text-muted hover:text-accent transition-colors flex items-center gap-1 mt-1.5"
+      : "text-xs text-muted hover:text-accent transition-colors flex items-center gap-1 mt-2";
 
   return (
-    <div className={`flex gap-1.5 ${className}`}>
-      <input
-        type="text"
-        autoComplete="postal-code"
-        inputMode="text"
-        value={value}
-        onChange={(e) => {
-          setValue(formatPostcode(e.target.value));
-          setTouched(true);
-          onError?.(false);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            submit();
-          }
-        }}
-        placeholder={placeholder}
-        className={inputClass}
-        aria-label="Postcode"
-      />
-      <button
-        type="button"
-        onClick={submit}
-        disabled={busy || !UK_POSTCODE.test(value)}
-        className={buttonClass}
-      >
-        {busy ? "…" : "Go"}
-      </button>
+    <div className={className}>
+      <div className="flex gap-1.5">
+        <input
+          type="text"
+          autoComplete="postal-code"
+          inputMode="text"
+          value={value}
+          onChange={(e) => {
+            setValue(formatPostcode(e.target.value));
+            setTouched(true);
+            onError?.(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder={placeholder}
+          className={inputClass}
+          aria-label="Postcode"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy || !UK_POSTCODE.test(value)}
+          className={buttonClass}
+        >
+          {busy ? "…" : "Go"}
+        </button>
+      </div>
+      {!hideMyLocation && (
+        <button
+          type="button"
+          onClick={useMyLocation}
+          disabled={geoBusy}
+          className={linkClass}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+          </svg>
+          {geoBusy ? "Locating…" : "Use my current location"}
+        </button>
+      )}
     </div>
   );
 }
