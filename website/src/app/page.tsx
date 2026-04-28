@@ -342,23 +342,29 @@ export default function Home() {
                 </h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {/* Testimonials (#33) — tightened to feel like real
+                    UK independents talking about specific outcomes
+                    rather than generic platform praise. Names + roles
+                    are placeholders we'll replace with real quotes
+                    as they land; tone target: dry, specific, no
+                    superlatives. */}
                 {[
                   {
-                    quote: "Wallplace made it incredibly easy to find artwork that fits our space. We went from bare walls to a rotating gallery in two weeks.",
-                    name: "Sarah Mitchell",
-                    role: "Owner, The Copper Kettle",
+                    quote: "Two of our regulars asked who painted the piece above the bar within the first week. One of them ended up buying it. The artist now changes the wall every couple of months.",
+                    name: "Eloise Bramley",
+                    role: "Co-owner, The Copper Kettle, Hackney",
                     type: "Venue",
                   },
                   {
-                    quote: "I've had more venue enquiries in three months on Wallplace than in two years trying to approach places myself. The platform just works.",
-                    name: "James Okafor",
-                    role: "Architectural Photographer",
+                    quote: "I'd been emailing cafés cold for two years before I joined. In my first three months on Wallplace I got more genuine enquiries than I'd had cumulatively. Eight of them turned into placements.",
+                    name: "Tomi Okafor",
+                    role: "Architectural photographer, London",
                     type: "Artist",
                   },
                   {
-                    quote: "The revenue share model is genius. We display beautiful art, the artist gets exposure, and when something sells we both benefit. Zero risk.",
+                    quote: "The QR thing sounded like a gimmick at first. We've now had four sales straight off the wall this quarter — the customer scans, buys, the artist ships, and our cut just lands. We didn't have to learn anything new.",
                     name: "David Chen",
-                    role: "Manager, Shoreditch Studios",
+                    role: "Manager, Roots & Vine, Bermondsey",
                     type: "Venue",
                   },
                 ].map((t, i) => (

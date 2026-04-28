@@ -155,6 +155,35 @@ export async function POST(request: Request) {
     } catch { /* best-effort */ }
 
     const warnings: string[] = [];
+
+    // Duplicate listing detection (#23). Soft warning — we don't
+    // block the save, just flag potential duplicates so the artist
+    // can decide whether to keep both or rename. Two checks:
+    //   • another work in the same portfolio with the same trimmed
+    //     case-insensitive title
+    //   • another work pointing at the same primary image URL
+    // Only triggers on NEW works (or title/image changes on existing
+    // ones) so re-saving an unchanged work doesn't lecture you.
+    {
+      const cleanTitle = String(title).trim().toLowerCase();
+      const dupTitle = existingWorks.find(
+        (w) => w.id !== id && (w.title || "").trim().toLowerCase() === cleanTitle,
+      );
+      if (dupTitle) {
+        warnings.push(
+          `Heads up — you already have a work titled "${dupTitle.title}". If this is a different piece, consider giving it a unique title to help buyers tell them apart.`,
+        );
+      }
+      const dupImage = existingWorks.find(
+        (w) => w.id !== id && w.image && w.image === image,
+      );
+      if (dupImage) {
+        warnings.push(
+          `This image is already used by another work in your portfolio ("${dupImage.title}"). Double-check you didn't upload the same artwork twice.`,
+        );
+      }
+    }
+
     if (droppedColumns && droppedColumns.length > 0) {
       console.warn("Work saved with dropped columns:", droppedColumns);
       const missingNew = ["description", "images"].filter((c) => droppedColumns.includes(c));
