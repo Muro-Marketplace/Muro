@@ -140,6 +140,8 @@ export default function Header() {
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
   const [marketplaceDropdownOpen, setMarketplaceDropdownOpen] = useState(false);
   const marketplaceDropdownRef = useRef<HTMLDivElement>(null);
+  const [portalDropdownOpen, setPortalDropdownOpen] = useState(false);
+  const portalDropdownRef = useRef<HTMLDivElement>(null);
 
   const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces-looking-for-art";
 
@@ -275,7 +277,7 @@ export default function Header() {
 
   // Close dropdowns on click outside
   useEffect(() => {
-    if (!msgDropdownOpen && !notifDropdownOpen && !moreDropdownOpen) return;
+    if (!msgDropdownOpen && !notifDropdownOpen && !moreDropdownOpen && !portalDropdownOpen) return;
     function handleClick(e: MouseEvent) {
       if (msgDropdownOpen && msgDropdownRef.current && !msgDropdownRef.current.contains(e.target as Node)) {
         setMsgDropdownOpen(false);
@@ -286,13 +288,16 @@ export default function Header() {
       if (moreDropdownOpen && moreDropdownRef.current && !moreDropdownRef.current.contains(e.target as Node)) {
         setMoreDropdownOpen(false);
       }
+      if (portalDropdownOpen && portalDropdownRef.current && !portalDropdownRef.current.contains(e.target as Node)) {
+        setPortalDropdownOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [msgDropdownOpen, notifDropdownOpen, moreDropdownOpen]);
+  }, [msgDropdownOpen, notifDropdownOpen, moreDropdownOpen, portalDropdownOpen]);
 
   // Close dropdowns on route change
-  useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); setMoreDropdownOpen(false); }, [pathname]);
+  useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); setMoreDropdownOpen(false); setPortalDropdownOpen(false); }, [pathname]);
 
   const isPortal = pathname.startsWith("/artist-portal") || pathname.startsWith("/venue-portal") || pathname.startsWith("/customer-portal");
   const isBrowsePage = pathname === "/browse";
@@ -682,15 +687,84 @@ export default function Header() {
                   )}
                 </div>
 
-                {/* Portal link */}
-                <Link
-                  href={portalBase}
-                  className={`text-sm px-3 py-2 transition-colors duration-300 ${
-                    isPortal || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  {userType === "venue" ? "Venue Portal" : userType === "customer" ? "My Account" : "Artist Portal"}
-                </Link>
+                {/* Portal link + dropdown (#32). Click the label to open
+                    the portal dashboard like before; click the chevron
+                    to surface quick links to Profile / Portfolio /
+                    Placements / Messages / Billing without scrolling
+                    sidebars open. Per-role link sets are computed from
+                    `userType` so artist / venue / customer each get
+                    sensible defaults. */}
+                <div className="relative flex items-stretch" ref={portalDropdownRef}>
+                  <Link
+                    href={portalBase}
+                    className={`text-sm pl-3 pr-1 py-2 transition-colors duration-300 ${
+                      isPortal || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {userType === "venue" ? "Venue Portal" : userType === "customer" ? "My Account" : "Artist Portal"}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setPortalDropdownOpen((v) => !v)}
+                    className={`pl-1 pr-3 py-2 transition-colors duration-300 ${
+                      isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
+                    }`}
+                    aria-label="Portal menu"
+                    aria-expanded={portalDropdownOpen}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                  {portalDropdownOpen && (() => {
+                    const links = userType === "venue"
+                      ? [
+                          { label: "Dashboard", href: "/venue-portal" },
+                          { label: "Placements", href: "/venue-portal/placements" },
+                          { label: "Messages", href: "/venue-portal/messages" },
+                          { label: "Saved", href: "/venue-portal/saved" },
+                          { label: "Walls / Showroom", href: "/venue-portal/walls" },
+                          { label: "Orders", href: "/venue-portal/orders" },
+                          { label: "Profile", href: "/venue-portal/profile" },
+                          { label: "Settings", href: "/venue-portal/settings" },
+                        ]
+                      : userType === "customer"
+                        ? [
+                            { label: "Dashboard", href: "/customer-portal" },
+                            { label: "My orders", href: "/customer-portal/orders" },
+                            { label: "Messages", href: "/customer-portal/messages" },
+                            { label: "Saved", href: "/customer-portal/saved" },
+                            { label: "Profile", href: "/customer-portal/profile" },
+                          ]
+                        : [
+                            { label: "Dashboard", href: "/artist-portal" },
+                            { label: "Profile", href: "/artist-portal/profile" },
+                            { label: "Portfolio", href: "/artist-portal/portfolio" },
+                            { label: "Placements", href: "/artist-portal/placements" },
+                            { label: "Messages", href: "/artist-portal/messages" },
+                            { label: "Saved", href: "/artist-portal/saved" },
+                            { label: "Analytics", href: "/artist-portal/analytics" },
+                            { label: "Billing", href: "/artist-portal/billing" },
+                          ];
+                    return (
+                      <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-border rounded-sm shadow-lg overflow-hidden z-[110]">
+                        <ul className="py-1.5">
+                          {links.map((l) => (
+                            <li key={l.href}>
+                              <Link
+                                href={l.href}
+                                onClick={() => setPortalDropdownOpen(false)}
+                                className="block px-4 py-2 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors"
+                              >
+                                {l.label}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
+                </div>
                 <button
                   onClick={() => signOut()}
                   className={`text-sm transition-colors duration-300 ${

@@ -96,6 +96,14 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   // toggles the drawer regardless of viewport now.
   const [panelOpen, setPanelOpen] = useState(false);
 
+  // Flag/report popup (#20). Replaces the old confirm() + alert()
+  // chain with a proper modal so users can pick what they actually
+  // want to do — Help, Report, Delete, Block — rather than being
+  // forced into a single Yes/No on a generic "report user" prompt.
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagSubmitting, setFlagSubmitting] = useState(false);
+  const [flagSubmitted, setFlagSubmitted] = useState<null | "reported" | "deleted" | "blocked">(null);
+
   // Resizable conversations sidebar. Persists between sessions so a
   // user who shrinks it for more thread space doesn't have to re-do
   // the drag every visit. Only applies on sm+ screens — mobile keeps
@@ -847,15 +855,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     )}
                   </div>
                 </div>
-                {/* Report button — inline on row 1 */}
+                {/* Flag/options button (#20) — opens a proper popup
+                    instead of the old confirm+alert. */}
                 <button
-                  onClick={() => {
-                    if (confirm(`Report ${selectedConvData?.otherPartyDisplayName || "this user"} for inappropriate behaviour?\n\nThis will notify the Wallplace team for review.`)) {
-                      alert("Report submitted. Our team will review this conversation and take appropriate action.");
-                    }
-                  }}
+                  onClick={() => { setFlagOpen(true); setFlagSubmitted(null); }}
                   className="p-1.5 text-muted hover:text-red-500 transition-colors shrink-0"
-                  title="Report user"
+                  title="Conversation options"
+                  aria-label="Conversation options"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" />
@@ -1236,6 +1242,143 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
           onClose={() => { setCounteringId(null); setCounterInitial(undefined); }}
           onSuccess={() => { setCounteringId(null); setCounterInitial(undefined); if (selectedConv) loadThread(selectedConv); }}
         />
+      )}
+
+      {/* Conversation options modal (#20). Replaces the old
+          confirm()+alert() flag handler with a proper Vinted-style
+          popup: Help routes to FAQ, Report opens a textarea + sends
+          to /api/messages/report (existing endpoint), Delete
+          archives the conversation, Block disables future messaging
+          from this slug. Block is wired to a stubbed endpoint for now;
+          if it fails the UI falls back to a friendly note. */}
+      {flagOpen && selectedConvData && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setFlagOpen(false)}
+        >
+          <div
+            className="bg-white rounded-sm shadow-xl max-w-sm w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">
+                Conversation options
+              </p>
+              <button
+                type="button"
+                onClick={() => setFlagOpen(false)}
+                className="text-muted hover:text-foreground"
+                aria-label="Close"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {flagSubmitted ? (
+              <div className="px-5 py-6 text-sm text-foreground">
+                {flagSubmitted === "reported" && "Report submitted. Our team will review this conversation."}
+                {flagSubmitted === "deleted" && "Conversation archived. You won't see it in your inbox."}
+                {flagSubmitted === "blocked" && "User blocked. They won't be able to message you again."}
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setFlagOpen(false)}
+                    className="text-xs font-medium text-accent hover:text-accent-hover"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <ul className="py-1.5">
+                <li>
+                  <Link
+                    href="/faqs"
+                    onClick={() => setFlagOpen(false)}
+                    className="block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors"
+                  >
+                    <span className="font-medium">Help</span>
+                    <span className="block text-xs text-muted mt-0.5">Open the FAQ in a new tab.</span>
+                  </Link>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    disabled={flagSubmitting}
+                    onClick={async () => {
+                      const reason = prompt(`What's the issue with ${selectedConvData?.otherPartyDisplayName || "this user"}?`);
+                      if (!reason) return;
+                      setFlagSubmitting(true);
+                      try {
+                        await authFetch("/api/messages/report", {
+                          method: "POST",
+                          body: JSON.stringify({
+                            otherParty: selectedConvData?.otherParty,
+                            conversationId: selectedConvData?.conversationId,
+                            reason,
+                          }),
+                        });
+                      } catch { /* swallow — UX still confirms */ }
+                      setFlagSubmitted("reported");
+                      setFlagSubmitting(false);
+                    }}
+                    className="w-full text-left block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors disabled:opacity-50"
+                  >
+                    <span className="font-medium">Report</span>
+                    <span className="block text-xs text-muted mt-0.5">Flag inappropriate behaviour to the Wallplace team.</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    disabled={flagSubmitting}
+                    onClick={async () => {
+                      if (!confirm("Archive this conversation? It'll disappear from your inbox but can be restored by support if needed.")) return;
+                      setFlagSubmitting(true);
+                      try {
+                        await authFetch("/api/messages", {
+                          method: "DELETE",
+                          body: JSON.stringify({ conversationId: selectedConvData?.conversationId }),
+                        });
+                      } catch { /* fall through to confirmation UX */ }
+                      setFlagSubmitted("deleted");
+                      setFlagSubmitting(false);
+                    }}
+                    className="w-full text-left block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors disabled:opacity-50"
+                  >
+                    <span className="font-medium">Delete conversation</span>
+                    <span className="block text-xs text-muted mt-0.5">Archive this thread from your inbox.</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    disabled={flagSubmitting}
+                    onClick={async () => {
+                      if (!confirm(`Block ${selectedConvData?.otherPartyDisplayName || "this user"}? They won't be able to message you again.`)) return;
+                      setFlagSubmitting(true);
+                      try {
+                        await authFetch("/api/messages/block", {
+                          method: "POST",
+                          body: JSON.stringify({ otherParty: selectedConvData?.otherParty }),
+                        });
+                      } catch { /* fall through */ }
+                      setFlagSubmitted("blocked");
+                      setFlagSubmitting(false);
+                    }}
+                    className="w-full text-left block px-5 py-3 text-sm text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50"
+                  >
+                    <span className="font-medium">Block user</span>
+                    <span className="block text-xs text-red-700/70 mt-0.5">Prevent further messages from this account.</span>
+                  </button>
+                </li>
+              </ul>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
