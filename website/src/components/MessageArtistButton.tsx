@@ -35,7 +35,14 @@ export default function MessageArtistButton({ artistSlug, artistName, variant = 
     } else if (user && userType === "customer") {
       router.push(`/customer-portal/messages?artist=${artistSlug}${nameParam}`);
     } else {
-      router.push(`/contact?artist=${artistSlug}`);
+      // Logged-out path (#2). Was sending shoppers to /contact —
+      // a one-shot enquiry form with no continuation, so an artist
+      // who replied had nowhere to send the reply *to*. Now we send
+      // them through customer signup and bounce them straight into
+      // /customer-portal/messages with the same artist preselected,
+      // so the conversation has somewhere to live.
+      const next = `/customer-portal/messages?artist=${artistSlug}${nameParam}`;
+      router.push(`/signup/customer?next=${encodeURIComponent(next)}`);
     }
   }
 

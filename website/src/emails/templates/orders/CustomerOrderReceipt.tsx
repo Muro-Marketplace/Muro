@@ -33,6 +33,17 @@ export function CustomerOrderReceipt(p: CustomerOrderReceiptProps) {
       </div>
       <Button href={p.orderUrl} persona="customer">View order</Button>
       <Small>Ordered {p.orderDate}.</Small>
+      {/* Guest buyers (#3) — they can re-look up the order any time
+          with this order ID + the email this receipt came to. The
+          View order button above only works for buyers signed in
+          with a Wallplace account. */}
+      <Small>
+        Don&rsquo;t have a Wallplace account? Track this order any time at{" "}
+        <a href="https://wallplace.co.uk/orders/track" style={{ color: "#9b6b3f" }}>
+          wallplace.co.uk/orders/track
+        </a>
+        {" "}using order ID <strong>{p.orderNumber}</strong>.
+      </Small>
       <SupportBlock supportUrl={p.supportUrl} />
     </EmailShell>
   );

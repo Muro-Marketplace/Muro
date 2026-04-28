@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 interface ArtistCarouselCardProps {
   name: string;
@@ -35,6 +37,26 @@ export default function ArtistCarousel({
   openToOutrightPurchase,
 }: ArtistCarouselCardProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const { user, userType } = useAuth();
+  const router = useRouter();
+
+  // Logged-out users used to land on /contact?artist=… — a one-shot
+  // form with no continuation. Now we route through customer signup
+  // (#2) so the conversation has a portal home; signed-in users go
+  // straight to whichever portal Messages they belong to.
+  const messageHref = (() => {
+    if (user && userType === "venue") {
+      return `/venue-portal/messages?artist=${slug}&artistName=${encodeURIComponent(name)}`;
+    }
+    if (user && userType === "artist") {
+      return `/artist-portal/messages?artist=${slug}&artistName=${encodeURIComponent(name)}`;
+    }
+    if (user && userType === "customer") {
+      return `/customer-portal/messages?artist=${slug}&artistName=${encodeURIComponent(name)}`;
+    }
+    const next = `/customer-portal/messages?artist=${slug}&artistName=${encodeURIComponent(name)}`;
+    return `/signup/customer?next=${encodeURIComponent(next)}`;
+  })();
 
   const goToPrev = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -163,11 +185,11 @@ export default function ArtistCarousel({
           {/* Action buttons */}
           <div className="flex items-center gap-2 mt-3">
             <a
-              href={`/contact?artist=${slug}`}
+              href={messageHref}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                window.location.href = `/contact?artist=${slug}`;
+                router.push(messageHref);
               }}
               className="px-3 py-1.5 text-xs font-medium border border-border rounded-sm text-foreground hover:border-accent hover:text-accent transition-colors"
             >
