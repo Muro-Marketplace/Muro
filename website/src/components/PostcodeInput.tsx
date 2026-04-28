@@ -114,6 +114,13 @@ export default function PostcodeInput({
   const [busy, setBusy] = useState(false);
   const [touched, setTouched] = useState(false);
   const [geoBusy, setGeoBusy] = useState(false);
+  // Surface specific geolocation failures back to the user — silent
+  // failure on mobile was the bug that prompted this rework. We
+  // distinguish the three meaningful PositionError codes so the UI
+  // can give actionable copy ("turn on location services" vs
+  // "permission denied" vs "took too long"). Cleared on the next
+  // successful resolve.
+  const [geoError, setGeoError] = useState<null | "denied" | "unavailable" | "timeout">(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounced auto-lookup once the value matches the full UK postcode
@@ -153,26 +160,39 @@ export default function PostcodeInput({
   }
 
   function useMyLocation() {
-    if (!navigator.geolocation) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGeoError("unavailable");
+      return;
+    }
     setGeoBusy(true);
+    setGeoError(null);
+    // Mobile-tuned options:
+    //  • enableHighAccuracy: true — phones often refuse to return
+    //    coarse fixes when the user has high-accuracy locked off; the
+    //    fallback path was silently failing on iOS Safari.
+    //  • timeout: 30s — coarse outdoor fixes can take ages on a cold
+    //    GPS lock, especially indoors. 10s was hitting the limit.
+    //  • maximumAge: 10 min — accept a recent cached fix instantly so
+    //    repeat clicks don't all re-prompt.
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeoBusy(false);
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        // Persist so the location survives navigation away and
-        // back. Without this, the user had to re-share their
-        // location every page load — exactly the complaint that
-        // triggered this fix.
         persistLocation(coords, "Current location");
         onError?.(false);
         onGeocoded(coords, "Current location");
       },
-      () => {
+      (err) => {
         setGeoBusy(false);
-        // Geo permission denied or unavailable. Don't surface as an
-        // error — the postcode field is the fallback path.
+        // Map the W3C PositionError codes → user-facing buckets so
+        // we can show actionable copy. 1 = PERMISSION_DENIED,
+        // 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT. Silent failure was
+        // the bug — now we surface it.
+        if (err.code === 1) setGeoError("denied");
+        else if (err.code === 3) setGeoError("timeout");
+        else setGeoError("unavailable");
       },
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+      { enableHighAccuracy: true, timeout: 30_000, maximumAge: 10 * 60_000 },
     );
   }
 
@@ -222,18 +242,30 @@ export default function PostcodeInput({
         </button>
       </div>
       {!hideMyLocation && (
-        <button
-          type="button"
-          onClick={useMyLocation}
-          disabled={geoBusy}
-          className={linkClass}
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-          </svg>
-          {geoBusy ? "Locating…" : "Use my current location"}
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={useMyLocation}
+            disabled={geoBusy}
+            className={linkClass}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+            </svg>
+            {geoBusy ? "Locating…" : "Use my current location"}
+          </button>
+          {geoError && (
+            <p className="text-[10px] text-red-600 mt-1 leading-snug">
+              {geoError === "denied" &&
+                "Location permission was denied. Allow location in your browser/site settings, or enter your postcode below."}
+              {geoError === "timeout" &&
+                "Couldn't get a location fix in time. Try again outdoors or enter your postcode."}
+              {geoError === "unavailable" &&
+                "Location isn't available on this device. Enter your postcode instead."}
+            </p>
+          )}
+        </>
       )}
     </div>
   );

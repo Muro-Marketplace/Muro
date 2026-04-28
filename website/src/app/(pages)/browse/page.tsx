@@ -432,7 +432,10 @@ function BrowsePortfoliosPageInner() {
   }
 
   const hasActiveFilters =
-    filters.mode === "local" ||
+    // mode is permanently "local" now (toggle removed); the actual
+    // signal of "user has applied a location filter" is whether
+    // their coords are set.
+    !!userCoords ||
     filters.themes.length > 0 ||
     filters.originals ||
     filters.prints ||
@@ -484,8 +487,14 @@ function BrowsePortfoliosPageInner() {
       // Sub-style filter — artist must have at least one of the active sub-styles
       if (activeSubStyles.size > 0 && !artist.subStyles?.some((s) => activeSubStyles.has(s))) return false;
 
-      if (filters.mode === "local") {
-        if (!userCoords || !artist.coordinates) return false;
+      // Distance filter — only applies when the user has set a
+      // location AND the artist has known coordinates. Without a
+      // user location we used to return false here, which hid every
+      // artist on first load (the bug behind "portfolios still
+      // doesn't show any artists when it should show them all").
+      // Now no-location means no filter; an artist without coords
+      // is also kept (we don't penalise missing data).
+      if (filters.mode === "local" && userCoords && artist.coordinates) {
         const dist = calcDistance(
           userCoords.lat,
           userCoords.lng,
@@ -669,7 +678,7 @@ function BrowsePortfoliosPageInner() {
   }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, gallerySizes, galleryLocationMode, userCoords, filters.maxDistance, activeDisciplineObj, activeSubStyles, gallerySort]);
 
   const hasGalleryFilters =
-    !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || galleryLocationMode === "local" || gallerySizes.size > 0;
+    !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || !!userCoords || gallerySizes.size > 0;
 
   // Collections filter pipeline. Distance + bundle-price + the
   // artist's arrangement preferences (#42 — the user complaint was
