@@ -47,7 +47,9 @@ const publicNavLinks: NavLink[] = [
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
   { label: "Spaces", href: "/spaces-looking-for-art" },
-  { label: "Waitlist", href: "/waitlist" },
+  // Waitlist (#18) — page kept live for warm prospects we already
+  // sent the link to, but unsurfaced from the nav. Also gated from
+  // search via robots metadata in the page itself.
 ];
 
 const loggedInNavLinks: NavLink[] = [

@@ -6,22 +6,26 @@ export const metadata: Metadata = {
     "Wallplace Cookie Policy. Learn about the cookies we use and how to control them.",
 };
 
+// Cookie list (#38) — vendor-neutral phrasing. The Supabase cookies
+// are still ours functionally; using "Wallplace" as the provider and
+// describing the purpose in plain English keeps this readable to a
+// non-technical visitor while remaining accurate.
 const cookies = [
   {
     name: "sb-access-token",
     category: "Strictly Necessary",
     purpose:
-      "Supabase authentication cookie. Keeps you signed in to your Wallplace account and authorises requests to our database. Without this, secure features (account, checkout, orders) will not work.",
+      "Sign-in cookie. Keeps you signed in to your Wallplace account and authorises requests when you visit secure pages (account, checkout, orders). Without it, those features won't work.",
     duration: "1 hour (refreshed automatically while you are active)",
-    provider: "Wallplace / Supabase",
+    provider: "Wallplace",
   },
   {
     name: "sb-refresh-token",
     category: "Strictly Necessary",
     purpose:
-      "Supabase authentication cookie. Allows your session to be renewed without you having to sign in again on every visit.",
+      "Session-renewal cookie. Lets your sign-in be refreshed in the background so you don't have to log in again every visit.",
     duration: "30 days",
-    provider: "Wallplace / Supabase",
+    provider: "Wallplace",
   },
   {
     name: "wallplace_cookie_consent",

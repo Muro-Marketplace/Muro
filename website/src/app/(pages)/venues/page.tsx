@@ -77,7 +77,7 @@ const freeBenefits = [
     ),
     title: "Free, always",
     description:
-      "Browsing and enquiring is free for venues. Funded by artist memberships.",
+      "Browsing and enquiring is free for venues. No platform fee for venues — ever.",
   },
 ];
 
@@ -123,7 +123,7 @@ const faqItems = [
   {
     question: "Is it really free?",
     answer:
-      "Yes. Browsing portfolios, filtering artists, posting your space, and submitting enquiries are all free. Wallplace is funded by artist memberships.",
+      "Yes. Browsing portfolios, filtering artists, posting your space, and submitting enquiries are all free. Wallplace doesn't charge venues a platform fee.",
   },
   {
     question: "Do you handle installation?",
@@ -254,13 +254,46 @@ export default function VenuesPage() {
         </div>
       </section>
 
-      {/* Revenue Share */}
+      {/* Walls that work for you. Reframed (#17) — revenue share is
+          one part of a broader pitch: bare walls cost you customer
+          experience, art improves the room, and any sale upside is
+          extra on top. */}
       <section className="py-20 lg:py-28 bg-surface">
         <div className="max-w-[1200px] mx-auto px-6">
           <AnimateIn>
-          <h2 className="text-3xl md:text-4xl mb-10">
-            Earn from your walls
+          <h2 className="text-3xl md:text-4xl mb-4">
+            Walls that work for you
           </h2>
+          <p className="text-muted leading-relaxed mb-10 max-w-2xl">
+            Bare walls earn you nothing today. Real art makes a space feel
+            considered, gives customers something to look at, and quietly
+            improves the experience of being in your venue. Any commercial
+            upside on top is a bonus — not the whole point.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 max-w-3xl">
+            <div className="bg-background border border-border rounded-sm p-5">
+              <p className="text-xs font-medium uppercase tracking-widest text-accent mb-2">Atmosphere</p>
+              <p className="text-sm text-foreground/85 leading-relaxed">
+                Curated work makes your space feel intentional — better photos,
+                longer dwell times, customers who come back.
+              </p>
+            </div>
+            <div className="bg-background border border-border rounded-sm p-5">
+              <p className="text-xs font-medium uppercase tracking-widest text-accent mb-2">Story</p>
+              <p className="text-sm text-foreground/85 leading-relaxed">
+                Local artists give you something to talk about — a reason for
+                regulars to bring friends and for press to cover you.
+              </p>
+            </div>
+            <div className="bg-background border border-border rounded-sm p-5">
+              <p className="text-xs font-medium uppercase tracking-widest text-accent mb-2">Optional upside</p>
+              <p className="text-sm text-foreground/85 leading-relaxed">
+                When a customer scans a QR and buys, you can take an agreed
+                share of the sale. Typical: 10%. Off by default, on if you
+                want it.
+              </p>
+            </div>
+          </div>
           <div className="max-w-3xl">
             {/* Vertical on mobile, horizontal on desktop */}
             <div className="hidden sm:flex items-center gap-2 text-xs md:text-sm mb-8">
@@ -282,9 +315,10 @@ export default function VenuesPage() {
               <span className="bg-accent/10 border border-accent/30 text-accent rounded-sm px-3 py-2 w-full text-center font-medium">You share in the sale</span>
             </div>
             <p className="text-muted leading-relaxed">
-              Revenue share is agreed directly between you and the artist when arranging
-              a placement. A common arrangement is 10% to the venue on any sale made from your space.
-              Your walls are already earning nothing – this is a way to change that.
+              Revenue share is optional and agreed directly with the artist when
+              you arrange a placement. The QR is fully off by default — turn it
+              on per work if you want it; leave it off and the artwork is just
+              part of the room.
             </p>
           </div>
           </AnimateIn>

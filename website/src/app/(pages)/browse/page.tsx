@@ -11,11 +11,35 @@ import { collections as staticCollections, type ArtistCollection } from "@/data/
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, resolveDiscipline, disciplineLabel } from "@/data/categories";
 import { slugify } from "@/lib/slugify";
 import { geocodePostcode } from "@/lib/geocode";
+import { parseDimensions } from "@/lib/shipping-calculator";
 import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
 import ArtworkThumb from "@/components/ArtworkThumb";
 import SearchBar from "@/components/SearchBar";
+
+/** Classify a work into a size band based on its largest dimension
+ *  in centimetres. Falls back to checking the per-size pricing labels
+ *  if the work-level dimensions aren't parseable, then "medium" as a
+ *  generous default so filters never silently hide unparseable works. */
+function classifyWorkSize(work: { dimensions: string; pricing: { label: string }[] }): "small" | "medium" | "large" | "xl" {
+  const candidates: string[] = [];
+  if (work.dimensions) candidates.push(work.dimensions);
+  for (const p of work.pricing || []) {
+    if (p?.label) candidates.push(p.label);
+  }
+  let largestCm = 0;
+  for (const c of candidates) {
+    const d = parseDimensions(c);
+    if (!d) continue;
+    largestCm = Math.max(largestCm, d.widthCm, d.heightCm);
+  }
+  if (largestCm === 0) return "medium";
+  if (largestCm <= 30) return "small";
+  if (largestCm <= 60) return "medium";
+  if (largestCm <= 100) return "large";
+  return "xl";
+}
 
 /** Haversine great-circle distance in miles */
 function calcDistance(
@@ -264,6 +288,15 @@ function BrowsePortfoliosPageInner() {
   const [galleryRevenueShare, setGalleryRevenueShare] = useState(false);
   const [galleryRevenueShareMin, setGalleryRevenueShareMin] = useState(0);
   const [galleryPurchase, setGalleryPurchase] = useState(false);
+  // Size filter (#7) — multi-select bands keyed off the largest
+  // dimension of each work in cm. Empty set = no filter (default).
+  // Bands cover the practical wall-art range:
+  //   small  ≤ 30cm   (A4 / postcard / desk pieces)
+  //   medium 30–60cm  (A2 / mid-sized prints + originals)
+  //   large  60–100cm (statement pieces, sofa-width works)
+  //   xl     >100cm   (gallery-scale, oversized commissions)
+  type SizeBand = "small" | "medium" | "large" | "xl";
+  const [gallerySizes, setGallerySizes] = useState<Set<SizeBand>>(new Set());
 
   // Collections view location filter — independent of artists/gallery so the
   // filter state doesn't bleed across views.
@@ -497,6 +530,12 @@ function BrowsePortfoliosPageInner() {
       if (galleryOriginals && !work.offersOriginals) return false;
       if (galleryPrints && !work.offersPrints) return false;
       if (galleryFraming && !work.offersFramed) return false;
+      // Size band (#7) — multi-select; work passes if its band is
+      // selected. No selection = no filter.
+      if (gallerySizes.size > 0) {
+        const band = classifyWorkSize(work);
+        if (!gallerySizes.has(band)) return false;
+      }
       // Commercial terms
       if (galleryFreeLoan && !work.openToFreeLoan) return false;
       if (galleryRevenueShare && !work.openToRevenueShare) return false;
@@ -551,10 +590,10 @@ function BrowsePortfoliosPageInner() {
       if (!a.artistIsFounding && b.artistIsFounding) return 1;
       return 0;
     });
-  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, galleryLocationMode, userCoords, filters.maxDistance, activeDisciplineObj, activeSubStyles, gallerySort]);
+  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, gallerySizes, galleryLocationMode, userCoords, filters.maxDistance, activeDisciplineObj, activeSubStyles, gallerySort]);
 
   const hasGalleryFilters =
-    !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || galleryLocationMode === "local";
+    !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || galleryLocationMode === "local" || gallerySizes.size > 0;
 
   // Collections filtered by distance when user has enabled local mode.
   // Artist coordinates are looked up via artistSlug.
@@ -574,7 +613,24 @@ function BrowsePortfoliosPageInner() {
     setGalleryPriceMin(0); setGalleryPriceMax(1000); setGalleryOriginals(false); setGalleryPrints(false); setGalleryFraming(false);
     setGalleryFreeLoan(false); setGalleryRevenueShare(false); setGalleryRevenueShareMin(0); setGalleryPurchase(false);
     setGalleryLocationMode("global");
+    setGallerySizes(new Set());
   }
+
+  /** Toggle a size band in/out of the active gallerySizes set. */
+  function toggleSize(b: SizeBand) {
+    setGallerySizes((prev) => {
+      const next = new Set(prev);
+      if (next.has(b)) next.delete(b);
+      else next.add(b);
+      return next;
+    });
+  }
+  const SIZE_BANDS: { id: SizeBand; label: string; sub: string }[] = [
+    { id: "small", label: "Small", sub: "≤30cm" },
+    { id: "medium", label: "Medium", sub: "30–60cm" },
+    { id: "large", label: "Large", sub: "60–100cm" },
+    { id: "xl", label: "Extra-large", sub: "100cm+" },
+  ];
 
   const filterPanel = (
     <div className="space-y-7">
@@ -1479,6 +1535,29 @@ function BrowsePortfoliosPageInner() {
                     </div>
                   </div>
 
+                  {/* Size band (#7) */}
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Size</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {SIZE_BANDS.map((b) => {
+                        const active = gallerySizes.has(b.id);
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => toggleSize(b.id)}
+                            className={`px-3 py-2 rounded-sm border text-left transition-colors ${
+                              active ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                            }`}
+                          >
+                            <p className="text-sm font-medium">{b.label}</p>
+                            <p className="text-[10px] text-muted">{b.sub}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Price Range */}
                   <div>
                     <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
@@ -1692,6 +1771,28 @@ function BrowsePortfoliosPageInner() {
                         <CheckPill checked={galleryOriginals} onChange={setGalleryOriginals} label="Originals" />
                         <CheckPill checked={galleryPrints} onChange={setGalleryPrints} label="Prints" />
                         <CheckPill checked={galleryFraming} onChange={setGalleryFraming} label="Framing" />
+                      </div>
+                    </div>
+                    {/* Size band (#7) — desktop filter panel copy. */}
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Size</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {SIZE_BANDS.map((b) => {
+                          const active = gallerySizes.has(b.id);
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => toggleSize(b.id)}
+                              className={`px-2.5 py-1.5 rounded-sm border text-left transition-colors ${
+                                active ? "border-accent bg-accent/5 text-foreground" : "border-border bg-white text-muted hover:border-foreground/30"
+                              }`}
+                            >
+                              <p className="text-xs font-medium">{b.label}</p>
+                              <p className="text-[10px] text-muted">{b.sub}</p>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                     <div>

@@ -27,6 +27,8 @@ const footerColumns = [
       { label: "About", href: "/about" },
       { label: "Blog", href: "/blog" },
       { label: "How It Works", href: "/how-it-works" },
+      { label: "Sustainability", href: "/sustainability" },
+      { label: "Partner with us", href: "/partners" },
       { label: "Contact", href: "/contact" },
       { label: "Terms", href: "/terms" },
       { label: "Artist Agreement", href: "/artist-agreement" },

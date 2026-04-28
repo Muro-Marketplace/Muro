@@ -78,7 +78,7 @@ const venueFaqs = [
   {
     question: "How much does it cost for a venue to display art?",
     answer:
-      "Nothing. There is no cost to venues for browsing, enquiring, or displaying artwork through Wallplace. Delivery and installation are arranged directly between you and the artist. Wallplace is funded by artist memberships, not by charges to venues.",
+      "Nothing. There is no cost to venues for browsing, enquiring, or displaying artwork through Wallplace. Delivery and installation are arranged directly between you and the artist. Venues never pay a platform fee — Wallplace's revenue comes from sales commissions and optional artist tools, not from charges to venues.",
   },
   {
     question: "Do we need to sign a contract?",
