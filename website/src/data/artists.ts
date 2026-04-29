@@ -54,6 +54,11 @@ export interface ArtistWork {
    *  marketplace can offer a "Recently listed" sort (#5). Optional
    *  because static seed data and legacy rows pre-date the column. */
   createdAt?: string;
+  /** Denormalised display name of the venue currently hosting this
+   *  work, kept in sync by the placements PATCH handler. Migration 038. */
+  placed_at_venue?: string | null;
+  /** Soft FK to placements.id for the active placement on this work. */
+  current_placement_id?: string | null;
 }
 
 export interface Artist {

@@ -203,9 +203,19 @@ export default function ArtworkPageClient({
       </p>
 
       {/* Title */}
-      <h1 className="text-3xl lg:text-[2.5rem] leading-[1.15] font-serif text-foreground mb-5">
+      <h1 className="text-3xl lg:text-[2.5rem] leading-[1.15] font-serif text-foreground mb-3">
         {work.title}
       </h1>
+
+      {/* Currently-placed chip — only when the work is on display at a
+          venue right now. Sourced from artist_works.placed_at_venue,
+          kept in sync by the placements PATCH handler. */}
+      {work.placed_at_venue && (
+        <p className="mb-5 inline-flex items-center gap-1.5 text-xs text-muted bg-foreground/5 rounded-full px-2.5 py-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden />
+          Currently placed at {work.placed_at_venue}
+        </p>
+      )}
 
       {/* Availability + Save */}
       <div className="flex items-center justify-between pb-5 mb-5 border-b border-border">

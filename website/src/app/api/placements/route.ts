@@ -1138,6 +1138,88 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Failed to update placement" }, { status: 500 });
     }
 
+    // ─── Inventory + venue attribution on placement transitions ───
+    // First-time pending → active: decrement finite stock on the linked
+    // work and stamp placed_at_venue + current_placement_id so the
+    // artwork detail page and portfolio overlay can show "Placed at X".
+    // Active → collected (set elsewhere via stage="collected"): restore
+    // stock and clear the stamps. Idempotent: gated on the pre-update
+    // existing.status snapshot so a no-op PATCH doesn't double-fire.
+    //
+    // Best-effort: failures here are logged but don't fail the API call,
+    // since the placement state transition itself succeeded above. If
+    // the artist_works columns aren't migrated yet (pre-038), the
+    // updates silently no-op via the IF NOT EXISTS guard in the
+    // migration; here the update will return an error which we swallow.
+    try {
+      const becameActive = existing.status === "pending" && status === "active";
+      const becameCollected = existing.status === "active" && stage === "collected";
+      if (becameActive || becameCollected) {
+        // Pull the linked work_id (single-work placements). Multi-work
+        // placements use work_ids JSONB; we walk that too when present.
+        const { data: pl } = await db
+          .from("placements")
+          .select("work_id, work_ids")
+          .eq("id", id)
+          .maybeSingle();
+        const primary = pl?.work_id ? [pl.work_id as string] : [];
+        const extras = Array.isArray(pl?.work_ids)
+          ? (pl.work_ids as unknown[]).filter((v): v is string => typeof v === "string")
+          : [];
+        const workIds = Array.from(new Set([...primary, ...extras]));
+
+        if (workIds.length > 0) {
+          if (becameActive) {
+            const { data: venueP } = await db
+              .from("venue_profiles")
+              .select("name")
+              .eq("user_id", existing.venue_user_id)
+              .maybeSingle();
+            const venueDisplay = venueP?.name ?? existing.venue ?? null;
+            for (const wid of workIds) {
+              const { data: w } = await db
+                .from("artist_works")
+                .select("quantity_available")
+                .eq("id", wid)
+                .maybeSingle();
+              const updates: Record<string, unknown> = {
+                placed_at_venue: venueDisplay,
+                current_placement_id: id,
+              };
+              if (typeof w?.quantity_available === "number" && w.quantity_available > 0) {
+                const next = w.quantity_available - 1;
+                updates.quantity_available = next;
+                updates.available = next > 0;
+              }
+              await db.from("artist_works").update(updates).eq("id", wid);
+            }
+          } else if (becameCollected) {
+            for (const wid of workIds) {
+              const { data: w } = await db
+                .from("artist_works")
+                .select("quantity_available, current_placement_id")
+                .eq("id", wid)
+                .maybeSingle();
+              // Only restore if THIS placement still owns the work.
+              if (w?.current_placement_id === id) {
+                const restoreUpdates: Record<string, unknown> = {
+                  placed_at_venue: null,
+                  current_placement_id: null,
+                };
+                if (typeof w.quantity_available === "number") {
+                  restoreUpdates.quantity_available = w.quantity_available + 1;
+                  restoreUpdates.available = true;
+                }
+                await db.from("artist_works").update(restoreUpdates).eq("id", wid);
+              }
+            }
+          }
+        }
+      }
+    } catch (invErr) {
+      console.error("[placements] inventory attribution failed (non-fatal):", invErr);
+    }
+
     // ─── Stage transition emails ───
     // Once the DB update is committed, fan out an email to both parties
     // for the stages users actually want reminders of. Idempotency keyed

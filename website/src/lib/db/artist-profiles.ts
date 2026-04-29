@@ -75,6 +75,10 @@ export interface DbArtistWork {
   /** Postgres `timestamptz`, ISO string from PostgREST. Powers the
    *  marketplace "Recently listed" sort (#5). */
   created_at?: string;
+  /** Migration 038: denormalised venue display name and active placement
+   *  pointer. Kept in sync by the placements PATCH handler. */
+  placed_at_venue?: string | null;
+  current_placement_id?: string | null;
 }
 
 /** Convert a DB profile row + works to the Artist shape used everywhere in the app */
@@ -144,6 +148,8 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
       quantityAvailable: w.quantity_available ?? undefined,
       frameOptions: Array.isArray(w.frame_options) ? w.frame_options : [],
       createdAt: w.created_at ?? undefined,
+      placed_at_venue: w.placed_at_venue ?? null,
+      current_placement_id: w.current_placement_id ?? null,
     })),
   };
 }

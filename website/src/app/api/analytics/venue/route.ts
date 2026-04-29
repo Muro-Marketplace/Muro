@@ -133,11 +133,33 @@ export async function GET(request: NextRequest) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, scans]) => ({ date, scans }));
 
+  // Placement-attributed revenue. The placements.revenue column is kept
+  // in sync by the orders PATCH handler when an order transitions to
+  // delivered (see migration 038's increment_placement_revenue). Adds
+  // the row-level breakdown here so a venue dashboard can show "X£
+  // earned from placement Y" alongside the QR scan stats.
+  const { data: placementRows } = await db
+    .from("placements")
+    .select("id, artist_slug, work_id, work_title, status, delivery_count, revenue")
+    .eq("venue_user_id", profile.user_id);
+  const placement_revenue = (placementRows || []).map((p) => ({
+    placementId: p.id,
+    artistSlug: p.artist_slug,
+    workId: p.work_id,
+    workTitle: p.work_title,
+    status: p.status,
+    deliveryCount: (p as { delivery_count?: number }).delivery_count ?? 0,
+    revenue: Number(p.revenue ?? 0),
+  }));
+  const placement_revenue_total = placement_revenue.reduce((sum, r) => sum + r.revenue, 0);
+
   return NextResponse.json({
     totals,
     scans_over_time,
     top_works,
     top_artists,
+    placement_revenue,
+    placement_revenue_total,
     range,
   });
 }
