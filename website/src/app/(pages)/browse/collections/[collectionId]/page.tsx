@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -10,6 +10,8 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import SaveButton from "@/components/SaveButton";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
+import { SIZE_BANDS, bandForCm, type SizeBandKey } from "@/components/browse/SizeBands";
+import { parseDimensions } from "@/lib/shipping-calculator";
 
 type CollectionWork = ArtistWork & {
   selectedSize?: string;
@@ -32,6 +34,25 @@ export default function CollectionDetailPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  // Size filter — same band aesthetic as /browse + portfolio surfaces
+  // so the collection detail behaves as a first-class browsing surface.
+  const [activeSizes, setActiveSizes] = useState<Set<SizeBandKey>>(new Set());
+  // Per-card tap reveal on touch devices. Desktop uses :hover; mobile
+  // taps reveal the action overlay before navigating.
+  const [revealedWorkIndex, setRevealedWorkIndex] = useState<number | null>(null);
+  const revealClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armRevealAutoHide = useCallback(() => {
+    if (revealClearTimer.current) clearTimeout(revealClearTimer.current);
+    revealClearTimer.current = setTimeout(() => setRevealedWorkIndex(null), 6000);
+  }, []);
+  function toggleSize(b: SizeBandKey) {
+    setActiveSizes((prev) => {
+      const next = new Set(prev);
+      if (next.has(b)) next.delete(b);
+      else next.add(b);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!collectionId) return;
@@ -149,13 +170,82 @@ export default function CollectionDetailPage() {
             {collection.description && (
               <p className="text-muted leading-relaxed mb-8">{collection.description}</p>
             )}
+            {/* Size filter — same shape and bands as the /browse and
+                portfolio surfaces so collection detail reads as a
+                first-class browsing surface, not a stripped-down
+                lookup page. Renders nothing if the collection only
+                contains a handful of works (filtering one or two
+                items is noise). */}
+            {works.length > 3 && (
+              <div className="mb-6 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] uppercase tracking-widest text-muted mr-1">Size</span>
+                {SIZE_BANDS.map((b) => {
+                  const active = activeSizes.has(b.key);
+                  return (
+                    <button
+                      key={b.key}
+                      type="button"
+                      onClick={() => toggleSize(b.key)}
+                      className={`px-2.5 py-1 rounded-sm border text-left transition-colors flex items-center gap-2 ${
+                        active ? "border-accent bg-accent/5 text-foreground" : "border-border bg-white text-muted hover:border-foreground/30"
+                      }`}
+                    >
+                      <span className="text-[11px] font-medium leading-tight">{b.label}</span>
+                      <span className="text-[9px] text-muted leading-tight tabular-nums">{b.dimensionHint}</span>
+                    </button>
+                  );
+                })}
+                {activeSizes.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveSizes(new Set())}
+                    className="text-[11px] text-muted hover:text-foreground transition-colors ml-1"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {works.map((work) => (
+              {(() => {
+                const visible = activeSizes.size === 0
+                  ? works
+                  : works.filter((w) => {
+                      const dims = parseDimensions(w.dimensions);
+                      if (!dims) return false;
+                      return activeSizes.has(bandForCm(Math.max(dims.widthCm, dims.heightCm)));
+                    });
+                if (visible.length === 0) {
+                  return (
+                    <p className="text-sm text-muted col-span-2">
+                      {activeSizes.size > 0
+                        ? "No works match the selected size filter."
+                        : "This collection has no works to display yet."}
+                    </p>
+                  );
+                }
+                return visible.map((work) => {
+                  const index = works.indexOf(work);
+                  return (
                 <div
                   key={work.id}
-                  className="group relative rounded-sm overflow-hidden bg-border/20"
+                  data-revealed={revealedWorkIndex === index ? "true" : undefined}
+                  className="group relative rounded-sm overflow-hidden bg-border/20 cursor-pointer"
+                  onClick={() => {
+                    const isTouch = typeof window !== "undefined" && !window.matchMedia("(hover: hover)").matches;
+                    if (isTouch && revealedWorkIndex !== index) {
+                      setRevealedWorkIndex(index);
+                      armRevealAutoHide();
+                      return;
+                    }
+                    router.push(`/browse/${collection.artistSlug}/${work.id}`);
+                  }}
                 >
-                  <div className="relative select-none" onContextMenu={(e) => e.preventDefault()}>
+                  <div
+                    className="relative select-none"
+                    onContextMenu={(e) => e.preventDefault()}
+                    data-protected="artwork"
+                  >
                     <Image
                       src={work.image}
                       alt={work.title}
@@ -167,8 +257,56 @@ export default function CollectionDetailPage() {
                       unoptimized
                     />
                     <div className="absolute inset-0" />
-                    <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 group-data-[revealed=true]:opacity-100 transition-opacity">
                       <SaveButton type="work" itemId={work.id} />
+                    </div>
+                    {/* Hover / tap-reveal action row */}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent text-white p-3 opacity-0 group-hover:opacity-100 group-data-[revealed=true]:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-medium truncate">{work.title}</p>
+                          <p className="text-[10px] text-white/75 truncate">
+                            {work.medium}
+                            {work.selectedSizePrice != null ? ` · £${work.selectedSizePrice}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Link
+                            href={`/browse/${collection.artistSlug}/${work.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="px-2 py-1 text-[10px] text-white/90 border border-white/30 hover:border-white hover:bg-white/10 rounded-sm transition-colors"
+                          >
+                            Open
+                          </Link>
+                          {work.available && work.selectedSize && work.selectedSizePrice != null && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addItem({
+                                  type: "work",
+                                  workId: work.id,
+                                  artistSlug: collection.artistSlug,
+                                  artistName: collection.artistName,
+                                  title: work.title,
+                                  image: work.image,
+                                  size: work.selectedSize!,
+                                  price: work.selectedSizePrice!,
+                                  quantity: 1,
+                                  quantityAvailable: typeof work.quantityAvailable === "number" ? work.quantityAvailable : null,
+                                  shippingPrice: typeof work.shippingPrice === "number" ? work.shippingPrice : undefined,
+                                  dimensions: work.selectedSize || work.dimensions,
+                                  framed: false,
+                                });
+                                router.push("/checkout");
+                              }}
+                              className="px-2 py-1 text-[10px] bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
+                            >
+                              Buy now
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="p-3">
@@ -177,6 +315,12 @@ export default function CollectionDetailPage() {
                       {work.medium}
                       {work.dimensions ? ` · ${formatDimensionsForDisplay(work.dimensions)}` : ""}
                     </p>
+                    {work.placed_at_venue && (
+                      <p className="text-[10px] text-muted mt-1 inline-flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden />
+                        Placed at {work.placed_at_venue}
+                      </p>
+                    )}
                     {work.selectedSize && (
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-[11px] text-muted uppercase tracking-wider">
@@ -192,12 +336,9 @@ export default function CollectionDetailPage() {
                     )}
                   </div>
                 </div>
-              ))}
-              {works.length === 0 && (
-                <p className="text-sm text-muted col-span-2">
-                  This collection has no works to display yet.
-                </p>
-              )}
+                  );
+                });
+              })()}
             </div>
           </div>
 

@@ -94,6 +94,17 @@ export default function ArtistProfileClient({
     }
   }
   const [enquirySent, setEnquirySent] = useState(false);
+  // Per-card tap reveal on touch devices. Desktop uses :hover via the
+  // existing group-hover overlay; mobile keeps a single revealed-index
+  // so a first tap shows the action overlay and a second tap on the
+  // card itself navigates. Auto-clears after a short window so cards
+  // don't stay "revealed" indefinitely.
+  const [revealedWorkIndex, setRevealedWorkIndex] = useState<number | null>(null);
+  const revealClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armRevealAutoHide = useCallback(() => {
+    if (revealClearTimer.current) clearTimeout(revealClearTimer.current);
+    revealClearTimer.current = setTimeout(() => setRevealedWorkIndex(null), 6000);
+  }, []);
   const searchParams = useSearchParams();
 
   const qrSize = searchParams.get("size") || null;
@@ -288,13 +299,19 @@ export default function ArtistProfileClient({
               <div
                 key={work.id}
                 id={`work-${slugify(work.title)}`}
+                data-revealed={revealedWorkIndex === index ? "true" : undefined}
                 className="group relative overflow-hidden rounded-sm scroll-mt-24 cursor-pointer"
                 onClick={() => {
-                  // Click on the card opens the full artwork page in a
-                  // new tab. The hover "Quick look" icon still opens the
-                  // lightbox on the same tab, that's the only trigger
-                  // that should open it.
                   const href = `/browse/${artistSlug}/${slugify(work.title)}`;
+                  // Touch devices (no :hover): first tap reveals the
+                  // overlay, second tap opens the work. Desktop keeps
+                  // the original "click anywhere on card → open" behaviour.
+                  const isTouch = typeof window !== "undefined" && !window.matchMedia("(hover: hover)").matches;
+                  if (isTouch && revealedWorkIndex !== index) {
+                    setRevealedWorkIndex(index);
+                    armRevealAutoHide();
+                    return;
+                  }
                   if (typeof window !== "undefined") window.open(href, "_blank", "noopener,noreferrer");
                 }}
               >
@@ -319,15 +336,18 @@ export default function ArtistProfileClient({
                   {/* Transparent overlay to block save-as */}
                   <div className="absolute inset-0" />
 
-                  {/* Hover overlay. Subtitle reads off sizes from
+                  {/* Hover overlay (desktop) + tap-reveal overlay
+                      (mobile, gated by data-revealed). Surfaces title,
+                      medium, sizes summary, price, the placed-at-venue
+                      chip when applicable, and a row of three actions:
+                      Quick view (opens the lightbox in this tab), Open
+                      (full artwork page), Buy now (adds to cart and
+                      routes to checkout). Subtitle reads off sizes from
                       pricing rather than the raw `dimensions` field,
-                      `dimensions` often holds a "1920 × 1080 px" string
-                      auto-set during upload, which means nothing to a
-                      buyer. Single size renders as the label
-                      ("12×16\""); multiple sizes shows the count
-                      ("3 sizes available"). */}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/55 transition-colors duration-300 flex items-end pointer-events-none group-hover:pointer-events-auto">
-                    <div className="p-5 w-full opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                      which often holds a "1920 × 1080 px" string from
+                      upload that means nothing to a buyer. */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/55 group-data-[revealed=true]:bg-black/55 transition-colors duration-300 flex items-end pointer-events-none group-hover:pointer-events-auto group-data-[revealed=true]:pointer-events-auto">
+                    <div className="p-5 w-full opacity-0 group-hover:opacity-100 group-data-[revealed=true]:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 group-data-[revealed=true]:translate-y-0">
                       <h3 className="text-white font-sans font-medium text-sm leading-snug mb-1">
                         {work.title}
                       </h3>
@@ -348,20 +368,65 @@ export default function ArtistProfileClient({
                           </p>
                         );
                       })()}
-                      <div className="flex items-center justify-between">
-                        <p className="text-white text-sm font-medium">
+                      {work.placed_at_venue && (
+                        <p className="text-[10px] text-white/85 mb-2 inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden />
+                          Placed at {work.placed_at_venue}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-white text-sm font-medium shrink-0">
                           {work.priceBand}
                         </p>
-                        <Link
-                          href={`/browse/${artistSlug}/${slugify(work.title)}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-[11px] text-white/80 hover:text-white transition-colors"
-                        >
-                          Full details
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
-                          </svg>
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLightboxIndex(index);
+                            }}
+                            className="px-2 py-1 text-[10px] text-white/90 border border-white/30 hover:border-white hover:bg-white/10 rounded-sm transition-colors"
+                          >
+                            Quick view
+                          </button>
+                          <Link
+                            href={`/browse/${artistSlug}/${slugify(work.title)}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="px-2 py-1 text-[10px] text-white/90 border border-white/30 hover:border-white hover:bg-white/10 rounded-sm transition-colors"
+                          >
+                            Open
+                          </Link>
+                          {work.available && work.pricing.length > 0 && (() => {
+                            const sp = work.pricing[0];
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  addItem({
+                                    type: "work",
+                                    workId: work.id,
+                                    artistSlug,
+                                    artistName,
+                                    title: work.title,
+                                    image: work.image,
+                                    size: sp.label,
+                                    price: sp.price,
+                                    quantity: 1,
+                                    quantityAvailable: typeof work.quantityAvailable === "number" ? work.quantityAvailable : null,
+                                    shippingPrice: typeof work.shippingPrice === "number" ? work.shippingPrice : undefined,
+                                    dimensions: sp.label || work.dimensions,
+                                    framed: false,
+                                  });
+                                  router.push("/checkout");
+                                }}
+                                className="px-2 py-1 text-[10px] bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
+                              >
+                                Buy now
+                              </button>
+                            );
+                          })()}
+                        </div>
                       </div>
                     </div>
                   </div>

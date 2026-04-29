@@ -1647,8 +1647,10 @@ function BrowsePortfoliosPageInner() {
                               active ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                             }`}
                           >
-                            <p className="text-[11px] font-medium leading-tight">{b.label}</p>
-                            <p className="text-[9px] text-muted leading-tight">{b.sub}</p>
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-medium leading-tight">{b.label}</span>
+                              <span className="text-[9px] text-muted leading-tight tabular-nums">{b.sub}</span>
+                            </span>
                           </button>
                         );
                       })}
