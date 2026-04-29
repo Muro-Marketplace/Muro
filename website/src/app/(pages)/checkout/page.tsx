@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 import type { ShippingInfo } from "@/lib/types";
-import { resolveShippingCost, tierLabel, SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
+import { SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
+import { calculateOrderShipping } from "@/lib/shipping-checkout";
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { items, removeItem, updateQuantity, subtotal, ready } = useCart();
   const [shipping, setShipping] = useState<ShippingInfo>({
     fullName: "",
@@ -24,76 +26,68 @@ export default function CheckoutPage() {
   });
   const [errors, setErrors] = useState<Record<string, boolean>>({});
 
-  const isInternational = shipping.country !== "United Kingdom" && shipping.country !== "";
-  const region = isInternational ? "international" : "uk";
+  // Pre-fill the email from a QR-scan ref so the buyer doesn't have to
+  // re-type it. ?ref=qr&email=foo@bar.com is the canonical form; we
+  // accept ?email= alone too in case someone passes it directly.
+  useEffect(() => {
+    const presetEmail = searchParams?.get("email");
+    if (presetEmail) {
+      setShipping((prev) => (prev.email ? prev : { ...prev, email: presetEmail }));
+    }
+  }, [searchParams]);
 
-  // Group items by artist. Each artist ships separately, so shipping is
-  // calculated per-group: take the largest piece's cost in full, add 50%
-  // of each additional piece (consolidated tube / shared box).
-  const artistGroups = items.reduce<Record<string, {
-    artistName: string;
-    items: typeof items;
-    shipping: number;
-    needsSignature: boolean;
-    longestTierLabel: string | null;
-    estimatedDays: string | null;
-    anyEstimated: boolean;
-  }>>((acc, item) => {
-    if (!acc[item.artistSlug]) {
-      acc[item.artistSlug] = {
-        artistName: item.artistName,
-        items: [],
-        shipping: 0,
-        needsSignature: false,
-        longestTierLabel: null,
-        estimatedDays: null,
-        anyEstimated: false,
+  const region: "uk" | "international" =
+    shipping.country !== "United Kingdom" && shipping.country !== "" ? "international" : "uk";
+
+  // Single source of truth for cart-level shipping — same helper the
+  // /api/checkout route uses, so the displayed total can never drift
+  // from what Stripe charges.
+  const { artistGroups: artistGroupsArr, totalShipping } = useMemo(
+    () => calculateOrderShipping(
+      items.map((it) => ({
+        artistSlug: it.artistSlug || "",
+        artistName: it.artistName,
+        shippingPrice: it.shippingPrice ?? null,
+        internationalShippingPrice: it.internationalShippingPrice ?? null,
+        dimensions: it.dimensions || null,
+        framed: it.framed,
+        price: it.price,
+        quantity: it.quantity,
+      })),
+      region,
+    ),
+    [items, region],
+  );
+
+  // Re-shape into a slug-keyed object so the existing render block
+  // (which iterates Object.values) keeps working without changes. We
+  // also need each group's items array for the order-summary display
+  // bits — that's fed back from the original cart, grouped by slug.
+  const artistGroups = useMemo(() => {
+    const out: Record<string, {
+      artistName: string;
+      items: typeof items;
+      shipping: number;
+      needsSignature: boolean;
+      longestTierLabel: string | null;
+      estimatedDays: string | null;
+      anyEstimated: boolean;
+    }> = {};
+    for (const g of artistGroupsArr) {
+      out[g.artistSlug] = {
+        artistName: g.artistName,
+        items: items.filter((it) => (it.artistSlug || "") === g.artistSlug),
+        shipping: g.shipping,
+        needsSignature: g.needsSignature,
+        longestTierLabel: g.longestTierLabel,
+        estimatedDays: g.estimatedDays,
+        anyEstimated: g.anyEstimated,
       };
     }
-    acc[item.artistSlug].items.push(item);
-    return acc;
-  }, {});
+    return out;
+  }, [artistGroupsArr, items]);
 
-  // Resolve per-item shipping cost, honouring:
-  //   1. Artist-set manualPrice (shippingPrice / internationalShippingPrice)
-  //   2. Otherwise the calculator based on dimensions + framed + region + price
-  //   3. Finally fall back to a conservative £14.50 medium-parcel rate
-  const FALLBACK_MEDIUM_UK = 14.50;
-  const FALLBACK_MEDIUM_INT = 38.00;
-  for (const group of Object.values(artistGroups)) {
-    const perItem = group.items.flatMap((item) => {
-      const manualPrice = isInternational && item.internationalShippingPrice != null
-        ? item.internationalShippingPrice
-        : item.shippingPrice;
-      const resolved = resolveShippingCost({
-        manualPrice: typeof manualPrice === "number" ? manualPrice : null,
-        dimensions: item.dimensions || null,
-        framed: item.framed,
-        priceGbp: item.price,
-        region,
-      });
-      let rate = resolved.cost;
-      if (rate == null) rate = isInternational ? FALLBACK_MEDIUM_INT : FALLBACK_MEDIUM_UK;
-      if (resolved.estimate?.requiresSignature || item.price >= SIGNATURE_THRESHOLD_GBP) {
-        group.needsSignature = true;
-      }
-      if (resolved.source === "estimate" && resolved.estimate) {
-        group.anyEstimated = true;
-        // Biggest parcel drives the tier / days display.
-        if (!group.longestTierLabel || (resolved.estimate.longestEdgeCm > 60 && group.longestTierLabel !== "Oversized — specialist courier")) {
-          group.longestTierLabel = tierLabel(resolved.estimate.tier);
-          group.estimatedDays = resolved.estimate.estimatedDays;
-        }
-      }
-      return Array(item.quantity).fill(rate as number);
-    }).sort((a, b) => b - a);
-
-    if (perItem.length === 0) continue;
-    // Largest piece full price + 50% of each extra piece.
-    group.shipping = Math.round((perItem[0] + perItem.slice(1).reduce((s, r) => s + r * 0.5, 0)) * 100) / 100;
-  }
-
-  const shippingCost = Object.values(artistGroups).reduce((sum, g) => sum + g.shipping, 0);
+  const shippingCost = totalShipping;
   const total = subtotal + shippingCost;
 
   function updateField(field: keyof ShippingInfo, value: string) {
@@ -127,6 +121,11 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           items,
           shipping,
+          // Defensive parity check — the API recomputes via the same
+          // helper. If the two diverge by > 1p, the API logs a warning
+          // (and trusts its own number).
+          expectedShippingCost: shippingCost,
+          expectedSubtotal: subtotal,
           source: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ref") || "direct" : "direct",
           venueSlug: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("venue") || "" : "",
         }),

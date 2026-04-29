@@ -168,6 +168,13 @@ export const checkoutSchema = z.object({
     quantity: z.number().int().positive().max(10),
     image: optionalString(2000),
     shippingPrice: z.number().min(0).max(1000).optional(),
+    // Surfaced through to the API so the shared shipping helper can
+    // do per-item dimension-based estimation, regional override, and
+    // framed-uplift — same inputs the display page uses, so the cart
+    // total and the Stripe charge can never drift.
+    internationalShippingPrice: z.number().min(0).max(1000).optional(),
+    dimensions: optionalString(200),
+    framed: z.boolean().optional(),
   })).min(1).max(50),
   shipping: z.object({
     fullName: safeString(100),

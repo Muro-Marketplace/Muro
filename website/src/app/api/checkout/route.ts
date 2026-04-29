@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { checkoutSchema } from "@/lib/validations";
+import { calculateOrderShipping } from "@/lib/shipping-checkout";
 
 export async function POST(request: Request) {
   try {
@@ -29,19 +30,41 @@ export async function POST(request: Request) {
       quantity: item.quantity,
     }));
 
-    // Calculate per-item shipping
-    const DEFAULT_SHIPPING = 9.95;
-    const subtotal = items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-    const shippingCost = items.reduce(
-      (sum, item) => sum + (item.shippingPrice ?? DEFAULT_SHIPPING) * item.quantity,
-      0
+    // Cart-level shipping via the shared helper. Uses the same per-artist
+    // consolidation rule (largest piece full + 50% per additional) as the
+    // checkout display page, so the £ shown to the buyer matches what
+    // Stripe charges to the card. Before this, the API used a flat
+    // (item.shippingPrice ?? 9.95) * quantity calc and could produce a
+    // different total — the £80.49 vs £79.94 mismatch.
+    const region: "uk" | "international" =
+      shipping.country && shipping.country !== "United Kingdom" ? "international" : "uk";
+    const { totalShipping } = calculateOrderShipping(
+      items.map((it) => ({
+        artistSlug: it.artistSlug || "",
+        artistName: it.artistName || "Artist",
+        shippingPrice: it.shippingPrice ?? null,
+        internationalShippingPrice: it.internationalShippingPrice ?? null,
+        dimensions: it.dimensions || null,
+        framed: it.framed ?? false,
+        price: it.price,
+        quantity: it.quantity,
+      })),
+      region,
     );
 
-    // Add shipping as a line item if applicable
-    if (shippingCost > 0) {
+    // Defensive divergence check — the frontend passes the figure it
+    // computed; if the API computes something different, we trust the
+    // API's number (it's the one Stripe sees) but log a warning so we
+    // can chase any data drift.
+    if (typeof body.expectedShippingCost === "number" &&
+        Math.abs(body.expectedShippingCost - totalShipping) > 0.01) {
+      console.warn("[checkout] shipping divergence", {
+        expected: body.expectedShippingCost,
+        computed: totalShipping,
+      });
+    }
+
+    if (totalShipping > 0) {
       lineItems.push({
         price_data: {
           currency: "gbp",
@@ -49,7 +72,7 @@ export async function POST(request: Request) {
             name: "Shipping",
             description: "Delivery costs set by artist",
           },
-          unit_amount: Math.round(shippingCost * 100),
+          unit_amount: Math.round(totalShipping * 100),
         },
         quantity: 1,
       });
