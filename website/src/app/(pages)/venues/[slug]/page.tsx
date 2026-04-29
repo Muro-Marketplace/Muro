@@ -52,7 +52,7 @@ async function loadPublicWalls(venueUserId: string): Promise<PublicWall[]> {
       .order("updated_at", { ascending: false });
     if (error || !data) return [];
     // Mint signed URLs for uploaded walls so the public page can show
-    // the actual photo. 1h expiry — the page is regenerated often
+    // the actual photo. 1h expiry, the page is regenerated often
     // enough that visitors won't see expired signatures in practice.
     const out: PublicWall[] = [];
     for (const w of data as Array<{
@@ -152,7 +152,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
   const gallery = (venue.images || []).filter(Boolean);
   const hero = gallery[0] || venue.image || null;
   // Public walls (My Walls saved + Show on public profile ticked).
-  // Pulled in parallel with the gallery render — empty array
+  // Pulled in parallel with the gallery render, empty array
   // gracefully hides the section.
   const publicWalls = userId ? await loadPublicWalls(userId) : [];
   const arrangements = [

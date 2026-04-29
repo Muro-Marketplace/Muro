@@ -1,4 +1,4 @@
-// Quota route — covers the auth-optional behaviour (guest path returns
+// Quota route, covers the auth-optional behaviour (guest path returns
 // guest tier, missing flag returns 404, hint params are passed through).
 //
 // We mock the quota service directly rather than the DB; the quota service

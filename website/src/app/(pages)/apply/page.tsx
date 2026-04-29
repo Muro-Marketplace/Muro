@@ -108,7 +108,7 @@ export default function ApplyPage() {
               </p>
             </div>
 
-            {/* Form — gated by auth. Anonymous visitors are pushed
+            {/* Form, gated by auth. Anonymous visitors are pushed
                 through /signup/artist first so the application
                 always belongs to a real Supabase account. */}
             <div>

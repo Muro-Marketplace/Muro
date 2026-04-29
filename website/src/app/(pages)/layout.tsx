@@ -22,7 +22,7 @@ export default function PagesLayout({
         Skip to content
       </a>
       <Header />
-      {/* Demo-account banner — only renders when the signed-in user
+      {/* Demo-account banner, only renders when the signed-in user
           matches NEXT_PUBLIC_DEMO_ARTIST_USER_ID / _VENUE_USER_ID.
           Self-hides when those env vars aren't set, so this is safe
           to leave mounted before Phase 2 demo accounts are wired. */}

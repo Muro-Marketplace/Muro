@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ItemToolbar — floating toolbar for the currently selected item.
+ * ItemToolbar, floating toolbar for the currently selected item.
  *
  * Rendered as an HTML overlay (not Konva) so we get crisp text + native
  * focus management. Anchored to the top-centre of the canvas region to
@@ -37,7 +37,7 @@ interface Props {
   onDelete: () => void;
   /** Available size variants for the work this item references. */
   sizes?: SizeVariant[];
-  /** Work's intended orientation — when a chosen size variant disagrees
+  /** Work's intended orientation, when a chosen size variant disagrees
    *  (e.g. label parses as portrait but the work is a landscape image)
    *  we swap width/height before committing. Same logic as
    *  `pickDefaultSize` for initial drops. */
@@ -70,7 +70,7 @@ export default function ItemToolbar({
       aria-label="Selected artwork"
       className="flex items-center gap-2 px-2 py-1.5 rounded-full bg-white/95 backdrop-blur border border-black/10 shadow-md text-stone-700"
     >
-      {/* Size dropdown — only when the work has multiple listed sizes */}
+      {/* Size dropdown, only when the work has multiple listed sizes */}
       {sizes && sizes.length > 1 && (
         <>
           <SizeDropdown
@@ -104,7 +104,7 @@ export default function ItemToolbar({
         </>
       )}
 
-      {/* Frame style — segmented buttons */}
+      {/* Frame style, segmented buttons */}
       <div className="flex items-center gap-0.5">
         {FRAME_STYLES.map((s) => {
           const active = s.id === item.frame.style;
@@ -126,7 +126,7 @@ export default function ItemToolbar({
         })}
       </div>
 
-      {/* Finish — only when style has finishes */}
+      {/* Finish, only when style has finishes */}
       {styleDef.finishes.length > 0 && (
         <>
           <span className="h-4 w-px bg-black/10" />
@@ -330,7 +330,7 @@ function SizeDropdown({
 
 /**
  * Drop the parenthesised hint from a size label and trim any leftover
- * whitespace. '12×16" (A3)' → '12×16"'. Pure display formatting —
+ * whitespace. '12×16" (A3)' → '12×16"'. Pure display formatting,
  * persistence still uses the original label so we can match against
  * pricing variants reliably.
  */

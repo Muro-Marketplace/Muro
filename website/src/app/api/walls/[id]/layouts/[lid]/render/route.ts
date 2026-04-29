@@ -22,7 +22,7 @@
  *
  * Rate limit:
  *   The visualizer burst limit (30/h per user, see quota.ts) is layered
- *   on the consume call automatically — no separate guard needed here.
+ *   on the consume call automatically, no separate guard needed here.
  */
 
 import { NextResponse } from "next/server";
@@ -48,7 +48,7 @@ import type {
 } from "@/lib/visualizer/types";
 
 export const dynamic = "force-dynamic";
-// Render can take up to ~10s for a 5-item layout — bump the function budget.
+// Render can take up to ~10s for a 5-item layout, bump the function budget.
 export const maxDuration = 30;
 
 interface RouteContext {
@@ -80,7 +80,7 @@ export async function POST(request: Request, ctx: RouteContext) {
   try {
     body = await request.json();
   } catch {
-    // Empty body is fine — defaults to standard render of saved items.
+    // Empty body is fine, defaults to standard render of saved items.
     body = {};
   }
   const parsed = renderRequestSchema.safeParse(body);
@@ -143,7 +143,7 @@ export async function POST(request: Request, ctx: RouteContext) {
   const consumed = await consumeQuota({
     userId,
     action,
-    // No `units` passed — consumeQuota will auto-calculate based on
+    // No `units` passed, consumeQuota will auto-calculate based on
     // how many of `work_ids` are new today.
     ownerTypeHint: wall.owner_type,
     referenceId: layout.id,
@@ -186,7 +186,7 @@ export async function POST(request: Request, ctx: RouteContext) {
     const workIds = Array.from(new Set(items.map((i) => i.work_id)));
     const workById = await fetchWorkImageUrls(workIds);
 
-    // Hard fail if NONE of the items can be resolved — the user has no
+    // Hard fail if NONE of the items can be resolved, the user has no
     // signal that the render contained anything if we let it through.
     if (items.length > 0 && Object.keys(workById).length === 0) {
       return await failAndRefund(424, {
@@ -229,7 +229,7 @@ export async function POST(request: Request, ctx: RouteContext) {
       layout_hash: layoutHash,
     });
 
-    // Success — don't refund.
+    // Success, don't refund.
     refundOnFail = false;
 
     return NextResponse.json({
@@ -243,7 +243,7 @@ export async function POST(request: Request, ctx: RouteContext) {
     // Log the full error server-side AND surface the message back to
     // the client. The artist needs to know whether the failure was
     // "image fetch timed out" vs "your work image is gone" vs
-    // "sharp choked on the input" — opaque "Render failed" leaves
+    // "sharp choked on the input", opaque "Render failed" leaves
     // them stuck. Stack trace is logged, message is sent back.
     const message =
       err instanceof Error ? err.message : "Unknown render error";

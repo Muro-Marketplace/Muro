@@ -218,7 +218,7 @@ export default function VenueSettingsPage() {
         {/* Notification preferences */}
         <SectionCard title="Notification Preferences">
           <div className="space-y-4">
-            {/* Message notifications — persisted to DB */}
+            {/* Message notifications, persisted to DB */}
             <label className="flex items-start gap-3 cursor-pointer group">
               <span
                 className={`mt-0.5 w-4 h-4 rounded-sm border flex items-center justify-center shrink-0 transition-colors duration-150 ${

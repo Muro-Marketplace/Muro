@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * RenderPreview — fullscreen modal that shows the freshly-rendered webp,
+ * RenderPreview, fullscreen modal that shows the freshly-rendered webp,
  * with quick actions (Download / Open in new tab / Close).
  *
  * Shown after a successful POST /render. Holds the publicUrl + meta from
@@ -9,7 +9,7 @@
  * close it when the user starts a new edit).
  *
  * `cached` flag in the footer lets us be honest about whether quota was
- * used — important transparency point per the brief.
+ * used, important transparency point per the brief.
  *
  * `saveToArtwork` is the artist-specific "promote this render to a
  * mockup on one of my artworks" affordance. When provided, we render a
@@ -26,7 +26,7 @@ export interface SaveToArtworkProps {
   preferredWorkId?: string | null;
   /** Returns when the save is fully complete or has errored. */
   onSave: (workId: string) => Promise<void>;
-  /** UI state — owned by the parent so it can persist between opens. */
+  /** UI state, owned by the parent so it can persist between opens. */
   saving: boolean;
   savedWorkId: string | null;
   error: string | null;
@@ -49,7 +49,7 @@ interface Props {
   /** When true, hide the Download CTA + apply anti-save attributes
       to the rendered image (right-click block, drag prevention,
       pointer-events:none). Used in the venue context where the
-      composite is the artist's IP — venues shouldn't be able to
+      composite is the artist's IP, venues shouldn't be able to
       one-click save it off the platform. Determined users can
       still screenshot, this just removes the casual save paths. */
   venueViewer?: boolean;
@@ -112,7 +112,7 @@ export default function RenderPreview({
             context menu nor drag-to-desktop succeed, and we add a
             second transparent overlay so even "save image as" via
             keyboard shortcut hits an opaque-looking element first.
-            None of this stops a screenshot — this is a friction
+            None of this stops a screenshot, this is a friction
             layer, not DRM. */}
         <div
           className="rounded-xl overflow-hidden bg-stone-900 shadow-2xl relative select-none"
@@ -203,7 +203,7 @@ export default function RenderPreview({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Open-in-new-tab + Download are hidden for venues —
+            {/* Open-in-new-tab + Download are hidden for venues,
                 they shouldn't be one-clicking the artist's render
                 off the platform. Artists keep these for sharing
                 + mockup workflows. */}

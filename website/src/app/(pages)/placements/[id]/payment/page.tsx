@@ -7,7 +7,7 @@ import { authFetch } from "@/lib/api-client";
 import PaymentClient from "./PaymentClient";
 
 /**
- * /placements/[id]/payment — monthly payment setup for a paid-loan placement.
+ * /placements/[id]/payment, monthly payment setup for a paid-loan placement.
  *
  * Product state: the page surfaces the agreed monthly fee, who it's paid to,
  * and a button to start a Stripe-hosted subscription. The actual subscription

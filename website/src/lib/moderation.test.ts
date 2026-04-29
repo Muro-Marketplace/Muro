@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { moderateMessage } from "./moderation";
 
-describe("moderateMessage() — length guards", () => {
+describe("moderateMessage(), length guards", () => {
   it("rejects messages under 2 chars", () => {
     expect(moderateMessage("a")).toEqual({ allowed: false, flagged: false, reason: expect.stringMatching(/too short/i) });
   });
@@ -31,14 +31,14 @@ describe("moderateMessage() — length guards", () => {
   });
 });
 
-describe("moderateMessage() — blocked content", () => {
+describe("moderateMessage(), blocked content", () => {
   const blocked = [
-    "Buy now — limited time offer!",
+    "Buy now, limited time offer!",
     "Congratulations you won a prize",
     "click here to claim your money",
     "act now to get free money",
     "Visit https://bit.ly/a and https://bit.ly/b and https://bit.ly/c for deals",
-    "call me on 07700 900123 — I'll sort you out",
+    "call me on 07700 900123, I'll sort you out",
     "email me at steve@gmail.com please",
   ];
 
@@ -52,7 +52,7 @@ describe("moderateMessage() — blocked content", () => {
   }
 });
 
-describe("moderateMessage() — flagged but allowed", () => {
+describe("moderateMessage(), flagged but allowed", () => {
   const flagged = [
     "Happy to accept paypal if it's easier",
     "Pay me directly and we can skip the platform fee",
@@ -70,9 +70,9 @@ describe("moderateMessage() — flagged but allowed", () => {
   }
 });
 
-describe("moderateMessage() — clean messages pass through", () => {
+describe("moderateMessage(), clean messages pass through", () => {
   const clean = [
-    "Hello — would love to show some work at your venue",
+    "Hello, would love to show some work at your venue",
     "What's your wall size? I've got 3 pieces that could suit",
     "I'm free Tuesday 2pm for an install. Does that work?",
     "Thanks for the chat today!",
@@ -84,7 +84,7 @@ describe("moderateMessage() — clean messages pass through", () => {
   }
 });
 
-describe("moderateMessage() — regression checks", () => {
+describe("moderateMessage(), regression checks", () => {
   it("doesn't flag 'paypa' partial match (word boundary enforced)", () => {
     expect(moderateMessage("my colour palette is papay-ish").allowed).toBe(true);
   });

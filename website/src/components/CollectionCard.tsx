@@ -4,7 +4,7 @@
 // the <Image> are event-handler props, and Next.js 16 / React Server
 // Components forbid passing those from a server component down to a
 // child. This card is rendered server-side from <CollectionsSection>
-// inside /browse/[slug]/page.tsx — without "use client" the whole
+// inside /browse/[slug]/page.tsx, without "use client" the whole
 // profile route 500s with "Event handlers cannot be passed to Client
 // Component props" the moment the artist has at least one renderable
 // collection. (The digest seen in prod was 1299673914.)
@@ -30,7 +30,7 @@ export default function CollectionCard({ collection, distance }: CollectionCardP
       >
         {/* Picsum fallback so a collection without any image source
             still renders rather than crashing the page. Next.js
-            Image throws on src="" — and the artist_collections
+            Image throws on src="", and the artist_collections
             schema doesn't guarantee any of thumbnail / bannerImage /
             coverImage are populated. */}
         <Image

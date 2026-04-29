@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /artist-portal/showroom/[id] — full-bleed editor for a single scene.
+ * /artist-portal/showroom/[id], full-bleed editor for a single scene.
  *
  * Mirror of /venue-portal/walls/[id], retargeted to artist mode:
  *   - Auth gate requires `artist` role.

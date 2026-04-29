@@ -4,23 +4,23 @@
  * Slim chip surfaced on a paid-loan placement card whenever the
  * monthly Stripe subscription isn't active yet. Two intensities:
  *
- * - "Set up payment" (muted) — placement is accepted but billing
+ * - "Set up payment" (muted), placement is accepted but billing
  *   hasn't been wired yet. Action chip for venues from the moment
  *   the placement is active so they can find the payment flow.
  *   Artist sees an info-only "Awaiting venue's payment setup" chip.
  *
- * - "Payment past due" (amber, urgent) — used to be the only
+ * - "Payment past due" (amber, urgent), used to be the only
  *   variant; now reserved for billing failures (past_due, unpaid).
  *
- * - "Live without payment" (amber) — the work is on the wall AND
+ * - "Live without payment" (amber), the work is on the wall AND
  *   billing still isn't set up. The artist is currently going
- *   unpaid for an installed piece — the most urgent state.
+ *   unpaid for an installed piece, the most urgent state.
  *
  * Visibility:
  *   Renders when ALL of:
  *     - arrangement is paid loan (free_loan with a positive monthly fee)
  *     - subscriptionStatus is missing or not "active" / "trialing"
- *   (Used to also gate on liveFrom — that gate moved into the visual
+ *   (Used to also gate on liveFrom, that gate moved into the visual
  *    intensity instead, so venues can find the CTA pre-install too.)
  */
 
@@ -59,10 +59,10 @@ export default function PaidLoanPaymentChip({
   if (!isPaidLoan || isHealthy) return null;
 
   // Visual intensity:
-  //   warn    — past-due / unpaid (real billing failure) OR live on
+  //   warn   , past-due / unpaid (real billing failure) OR live on
   //             wall without payment (artist going unpaid for an
-  //             installed piece — needs urgent attention)
-  //   muted   — accepted but not yet live; venue has time to set
+  //             installed piece, needs urgent attention)
+  //   muted  , accepted but not yet live; venue has time to set
   //             billing up before install
   const variant: "warn" | "muted" = isProblem || isLive ? "warn" : "muted";
 
@@ -74,7 +74,7 @@ export default function PaidLoanPaymentChip({
           : "Monthly payment needs attention";
       }
       return isLive
-        ? "Work is live — set up monthly billing now"
+        ? "Work is live, set up monthly billing now"
         : "Set up monthly billing for this placement";
     }
     // Artist
@@ -84,7 +84,7 @@ export default function PaidLoanPaymentChip({
         : "Venue's monthly payment needs attention";
     }
     return isLive
-      ? "Work is live — venue hasn't paid yet"
+      ? "Work is live, venue hasn't paid yet"
       : "Awaiting venue's monthly payment setup";
   })();
 
@@ -95,7 +95,7 @@ export default function PaidLoanPaymentChip({
       }
       const fee = monthlyFeeGbp ? ` (£${monthlyFeeGbp}/mo)` : "";
       return isLive
-        ? `Pay the artist their monthly fee${fee} — they're already displaying the work.`
+        ? `Pay the artist their monthly fee${fee}, they're already displaying the work.`
         : `Get billing set up before the work is installed${fee}.`;
     }
     // Artist
@@ -103,7 +103,7 @@ export default function PaidLoanPaymentChip({
       return "We've nudged the venue. Stripe will retry the charge automatically.";
     }
     return isLive
-      ? "The artwork is on the wall but the venue hasn't started billing yet — we've nudged them."
+      ? "The artwork is on the wall but the venue hasn't started billing yet, we've nudged them."
       : "The venue hasn't set up the monthly card yet. They can do this from their placements list.";
   })();
 
@@ -133,7 +133,7 @@ export default function PaidLoanPaymentChip({
             ? "bg-amber-50 text-amber-800 border border-amber-200"
             : "bg-stone-100 text-stone-700 border border-stone-200"
         }`}
-        title={`${headline} — ${sub}`}
+        title={`${headline}, ${sub}`}
       >
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <circle cx="12" cy="12" r="10" />

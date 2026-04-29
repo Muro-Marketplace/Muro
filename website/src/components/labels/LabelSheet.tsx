@@ -10,7 +10,7 @@ export interface LabelData {
   artistName: string;
   artistSlug: string;
   workTitle?: string;
-  /** Real artist_works.id — used to set analytics_events.work_id
+  /** Real artist_works.id, used to set analytics_events.work_id
    *  correctly when the QR is scanned. Without this, work_id was
    *  being stored as the URL-encoded title and the analytics
    *  top_works lookup couldn't join back to the work row. */
@@ -19,7 +19,7 @@ export interface LabelData {
   workDimensions?: string;
   workPrice?: string;
   venueName?: string;
-  /** Real venue_profiles.slug — used by the QR redirect to look up
+  /** Real venue_profiles.slug, used by the QR redirect to look up
    *  venue_user_id and link the scan back to the venue cleanly.
    *  Falls back to venueName when not present. */
   venueSlug?: string;
@@ -64,9 +64,9 @@ export default function LabelSheet({ labels, labelVisibility, pageIndex }: Label
     async function generate() {
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
       // QR URL params (compact keys to keep the encoded string short):
-      //   w  = work id (preferred — sets analytics_events.work_id)
+      //   w  = work id (preferred, sets analytics_events.work_id)
       //   t  = work title (compat / display fallback)
-      //   vs = venue slug (preferred — used to resolve venue_user_id)
+      //   vs = venue slug (preferred, used to resolve venue_user_id)
       //   v  = venue name (compat / display fallback)
       //   size = displayed size
       const uniqueUrls = await Promise.all(

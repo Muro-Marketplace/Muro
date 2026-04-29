@@ -7,7 +7,7 @@
  * throws so the user gets an artist-context page (with a back link
  * to the marketplace) instead of the generic global "Something went
  * wrong" full-page error. Also surfaces the digest reference more
- * prominently — that's what we'd grep Vercel function logs for to
+ * prominently, that's what we'd grep Vercel function logs for to
  * diagnose what actually broke.
  */
 
@@ -36,12 +36,12 @@ export default function BrowseSlugError({
         </h1>
         <p className="text-sm text-muted leading-relaxed mb-6">
           Something went wrong while rendering the page. The artist&apos;s
-          data may be in an unexpected shape — refreshing usually helps,
+          data may be in an unexpected shape, refreshing usually helps,
           and the rest of the marketplace is fine.
         </p>
 
         {/* Reference digest is the only thing that survives prod
-            error masking — pasted into Vercel logs it leads straight
+            error masking, pasted into Vercel logs it leads straight
             to the actual stack trace. Worth showing prominently. */}
         {error.digest && (
           <div className="bg-stone-50 border border-border rounded-sm px-4 py-3 mb-6 inline-block">

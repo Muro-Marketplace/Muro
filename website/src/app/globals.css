@@ -65,7 +65,7 @@ img {
   box-sizing: border-box;
 }
 
-/* Scroll-reveal animations — GPU-accelerated, opacity + transform only */
+/* Scroll-reveal animations, GPU-accelerated, opacity + transform only */
 .animate-on-scroll {
   opacity: 0;
   will-change: opacity, transform;
@@ -150,7 +150,7 @@ img {
   }
 }
 
-/* Shared select styling — drops the native browser chevron and adds a
+/* Shared select styling, drops the native browser chevron and adds a
    muted brand-tinted one so the dropdowns visually match the rest of
    the form fields (text inputs, textareas) instead of rendering as a
    different control on every OS. Apply alongside the existing input

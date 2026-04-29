@@ -40,7 +40,7 @@ export default function ArtistCarousel({
   const { user, userType } = useAuth();
   const router = useRouter();
 
-  // Logged-out users used to land on /contact?artist=… — a one-shot
+  // Logged-out users used to land on /contact?artist=…, a one-shot
   // form with no continuation. Now we route through customer signup
   // (#2) so the conversation has a portal home; signed-in users go
   // straight to whichever portal Messages they belong to.

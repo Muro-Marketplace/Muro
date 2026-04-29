@@ -6,7 +6,7 @@ export const revalidate = 300; // Cache for 5 minutes
 
 /**
  * GET /api/stats/public
- * Unauthenticated — returns aggregate platform stats for the homepage trust bar.
+ * Unauthenticated, returns aggregate platform stats for the homepage trust bar.
  */
 export async function GET(request: Request) {
   const limited = await checkRateLimit(request, 60, 60000);

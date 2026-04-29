@@ -29,7 +29,7 @@ export default function SavedPage() {
   }, [savedItems]);
 
   // Only artists explicitly saved (type === "artist"). Previously
-  // this was derived from savedWorks — saving a work was being
+  // this was derived from savedWorks, saving a work was being
   // treated as saving the artist, so the count and grid filled
   // up with artists the venue had never actually saved (heart on
   // any work bumped the saved-artists count). Counts on the
@@ -53,7 +53,7 @@ export default function SavedPage() {
         </p>
       </div>
 
-      {/* Tabs — horizontal scroll on narrow mobile to avoid wrapping */}
+      {/* Tabs, horizontal scroll on narrow mobile to avoid wrapping */}
       <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto scrollbar-none -mx-1 px-1">
         {(["works", "artists", "collections"] as Tab[]).map((tab) => (
           <button

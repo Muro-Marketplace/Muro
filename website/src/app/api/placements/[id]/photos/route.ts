@@ -9,7 +9,7 @@ const addSchema = z.object({
   caption: z.string().max(500).optional(),
 });
 
-// POST /api/placements/[id]/photos — record an uploaded photo against a placement.
+// POST /api/placements/[id]/photos, record an uploaded photo against a placement.
 // Caller is expected to upload the image via uploadImage() first and pass the URL.
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedUser(request);
@@ -50,7 +50,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "Failed to save" }, { status: 500 });
   }
 
-  // Bell notification to the other party — the uploader knows they
+  // Bell notification to the other party, the uploader knows they
   // just added a photo, but the counterparty wants to see the new
   // documentation land in their inbox.
   const otherUserId =
@@ -70,7 +70,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   return NextResponse.json({ photo: data });
 }
 
-// DELETE /api/placements/[id]/photos?photoId=... — delete a photo the caller uploaded
+// DELETE /api/placements/[id]/photos?photoId=..., delete a photo the caller uploaded
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;

@@ -10,7 +10,7 @@ import { authFetch } from "@/lib/api-client";
 
 // When the user is inside the marketplace area (/browse or /spaces-looking-for-art)
 // the top-level "Marketplace" link is replaced by these inline tabs.
-// Galleries is the default landing view (#4) — order in the nav now
+// Galleries is the default landing view (#4), order in the nav now
 // reflects that, with Galleries first and the default empty view
 // param matching Galleries (not Portfolios) so the active tab stays
 // consistent with what /browse actually renders on first load.
@@ -51,7 +51,7 @@ const publicNavLinks: NavLink[] = [
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
   { label: "Spaces", href: "/spaces-looking-for-art" },
-  // Waitlist (#18) — page kept live for warm prospects we already
+  // Waitlist (#18), page kept live for warm prospects we already
   // sent the link to, but unsurfaced from the nav. Also gated from
   // search via robots metadata in the page itself.
 ];
@@ -61,7 +61,7 @@ const loggedInNavLinks: NavLink[] = [
   { label: "Spaces", href: "/spaces-looking-for-art" },
 ];
 
-// Venues don't need the "Spaces" (venues browsing venues) link — they
+// Venues don't need the "Spaces" (venues browsing venues) link, they
 // already know what they've got. Surface Wallplace Curated and Blog
 // instead so the top nav matches how venues actually use the site.
 const venueNavLinks: NavLink[] = [
@@ -161,7 +161,7 @@ export default function Header() {
       .catch(() => {});
   }, [user]);
 
-  // Fetch unread notification count (mirror messages pattern — on mount + poll)
+  // Fetch unread notification count (mirror messages pattern, on mount + poll)
   const fetchUnreadNotifs = useCallback(() => {
     if (!user) return;
     authFetch("/api/notifications")
@@ -250,19 +250,19 @@ export default function Header() {
         const placementsData = await placementsRes.json();
         for (const p of (placementsData.placements || []).slice(0, 10)) {
           // Suppress notifications for placement requests *this user sent*
-          // — they already know they sent it. Same applies to accept /
+          //, they already know they sent it. Same applies to accept /
           // decline actions they performed themselves.
           const iAmRequester = p.requester_user_id && p.requester_user_id === user?.id;
           // Deep-link each placement-related notification to the full
           // placement page so clicking it lands on the specific deal.
           const placementLink = `/placements/${encodeURIComponent(p.id)}`;
           if (p.status === "pending" && !iAmRequester) {
-            notifs.push({ id: p.id, type: "placement", title: "Placement Request", description: `${p.work_title || "Artwork"} — ${p.venue || p.artist_slug || ""}`, time: p.created_at, link: placementLink });
+            notifs.push({ id: p.id, type: "placement", title: "Placement Request", description: `${p.work_title || "Artwork"}, ${p.venue || p.artist_slug || ""}`, time: p.created_at, link: placementLink });
           } else if (p.status === "active" && p.responded_at && iAmRequester) {
             // Requester hears back on their request being accepted.
-            notifs.push({ id: p.id + "-a", type: "placement_accepted", title: "Placement Accepted", description: `${p.work_title || "Artwork"} — ${p.venue || p.artist_slug || ""}`, time: p.responded_at, link: placementLink });
+            notifs.push({ id: p.id + "-a", type: "placement_accepted", title: "Placement Accepted", description: `${p.work_title || "Artwork"}, ${p.venue || p.artist_slug || ""}`, time: p.responded_at, link: placementLink });
           } else if (p.status === "declined" && p.responded_at && iAmRequester) {
-            notifs.push({ id: p.id + "-d", type: "placement_declined", title: "Placement Declined", description: `${p.work_title || "Artwork"} — ${p.venue || p.artist_slug || ""}`, time: p.responded_at, link: placementLink });
+            notifs.push({ id: p.id + "-d", type: "placement_declined", title: "Placement Declined", description: `${p.work_title || "Artwork"}, ${p.venue || p.artist_slug || ""}`, time: p.responded_at, link: placementLink });
           }
         }
         const msgsRes = await authFetch(`/api/messages?slug=${resolvedSlug}`);
@@ -333,10 +333,10 @@ export default function Header() {
             Wallplace
           </Link>
 
-          {/* Desktop Navigation — centered on page */}
+          {/* Desktop Navigation, centered on page */}
           <nav className="hidden lg:flex items-center gap-7 absolute left-1/2 -translate-x-1/2" role="navigation" aria-label="Main navigation">
             {isMarketplaceArea ? (
-              // F47 — marketplace tabs replace the normal nav while inside /browse or /spaces-looking-for-art
+              // F47, marketplace tabs replace the normal nav while inside /browse or /spaces-looking-for-art
               <Suspense fallback={null}>
                 <MarketplaceTabsNav
                   pathname={pathname}
@@ -408,7 +408,7 @@ export default function Header() {
               );
             })
             )}
-            {/* More dropdown — always visible when logged in, including
+            {/* More dropdown, always visible when logged in, including
                 when inside the marketplace area, so nav structure stays
                 consistent as the user moves between pages. */}
             {user && (
@@ -448,9 +448,9 @@ export default function Header() {
           <div className="hidden lg:flex items-center gap-2.5">
             {user ? (
               <>
-                {/* Saved (#21) — heart icon next to messages /
+                {/* Saved (#21), heart icon next to messages /
                     notifications, opens the saved-items page in
-                    whatever portal the user is in. No badge — saves
+                    whatever portal the user is in. No badge, saves
                     aren't time-sensitive the way unread messages are. */}
                 <Link
                   href={`${portalBase}/saved`}
@@ -475,7 +475,7 @@ export default function Header() {
                     aria-label="Messages"
                     aria-expanded={msgDropdownOpen}
                   >
-                    {/* Envelope icon (#35) — replaces the chat-bubble.
+                    {/* Envelope icon (#35), replaces the chat-bubble.
                         Reads as "messages" universally + matches the
                         nav style of Saatchi/Vinted-class marketplaces. */}
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -593,7 +593,7 @@ export default function Header() {
                               e.preventDefault();
                               // Optimistic: flip all to read now, then
                               // ask the server. Reverting on failure is
-                              // not worth the code — next poll will
+                              // not worth the code, next poll will
                               // reconcile.
                               setNotifications((prev) => prev.map((x) => ({ ...x, readAt: x.readAt || new Date().toISOString() })));
                               setUnreadNotifCount(0);
@@ -858,7 +858,7 @@ export default function Header() {
         <div className="lg:hidden fixed inset-0 bg-black/20 z-40" onClick={() => setMobileMenuOpen(false)} />
         <div className="lg:hidden border-t border-border bg-white relative z-50">
           <div className="mx-auto max-w-[1400px] px-6 py-6 space-y-6">
-            {/* Primary nav links — when inside the marketplace area, swap in
+            {/* Primary nav links, when inside the marketplace area, swap in
                 the marketplace tabs (Portfolios/Galleries/Collections/Spaces)
                 so the mobile nav matches the desktop top-nav. */}
             <nav className="flex flex-col gap-4">
@@ -886,7 +886,7 @@ export default function Header() {
                 ))
               )}
             </nav>
-            {/* Portal link — right after nav, before everything else */}
+            {/* Portal link, right after nav, before everything else */}
             {user && (
               <Link
                 href={userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal"}
@@ -896,7 +896,7 @@ export default function Header() {
                 {userType === "venue" ? "Venue Portal" : userType === "customer" ? "My Account" : "Artist Portal"}
               </Link>
             )}
-            {/* More pages — logged in only */}
+            {/* More pages, logged in only */}
             {user && (
               <div className="pt-2 border-t border-border">
                 <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">More</p>

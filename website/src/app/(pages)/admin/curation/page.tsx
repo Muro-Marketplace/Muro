@@ -172,7 +172,7 @@ export default function AdminCurationPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-medium text-foreground">
-                      {r.amount_paid_gbp != null ? `£${r.amount_paid_gbp}` : "—"}
+                      {r.amount_paid_gbp != null ? `£${r.amount_paid_gbp}` : "–"}
                     </p>
                     <p className="text-[11px] text-muted">
                       {new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}

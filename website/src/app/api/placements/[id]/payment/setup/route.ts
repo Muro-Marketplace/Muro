@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  * placement with stripe_subscription_id.
  *
  * The billing model (platform fee split, application fee rate, VAT) is a
- * product decision — scaffolded here with a 10% application fee placeholder.
+ * product decision, scaffolded here with a 10% application fee placeholder.
  * Revise once the commercial policy is locked.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -48,7 +48,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .eq("user_id", placement.artist_user_id)
     .maybeSingle();
 
-  // Application fee mirrors the artist's existing platform-fee tier — the
+  // Application fee mirrors the artist's existing platform-fee tier, the
   // same 5% / 8% / 15% that applies to their sales. Founding / trialling
   // artists (free_until in the future) pay 0% on recurring loan payments.
   const feePct = platformFeePercentForArtist(artistProfile);
@@ -65,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           price_data: {
             currency: "gbp",
             product_data: {
-              name: `Monthly loan — ${placement.work_title || "Artwork"}`,
+              name: `Monthly loan, ${placement.work_title || "Artwork"}`,
             },
             unit_amount: Math.round(placement.monthly_fee_gbp * 100),
             recurring: { interval: "month" },
@@ -98,7 +98,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch (err) {
     console.error("Paid-loan subscription setup error:", err);
     return NextResponse.json(
-      { error: "Stripe error — please try again or contact support." },
+      { error: "Stripe error, please try again or contact support." },
       { status: 500 },
     );
   }

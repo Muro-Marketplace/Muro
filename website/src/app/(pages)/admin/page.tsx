@@ -85,7 +85,7 @@ export default function AdminDashboard() {
         <p className="text-muted text-sm">Failed to load stats. Make sure the database is set up.</p>
       ) : (
         <>
-          {/* Stat cards — applications + accounts headline */}
+          {/* Stat cards, applications + accounts headline */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[
               { label: "Pending Applications", value: stats.applications.pending, accent: true },
@@ -102,7 +102,7 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          {/* Marketplace activity — placements / QR scans / payouts. Added in
+          {/* Marketplace activity, placements / QR scans / payouts. Added in
               the admin expansion (#23) so the dashboard reflects what the
               platform is doing day-to-day, not just sign-ups. */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
@@ -225,7 +225,7 @@ export default function AdminDashboard() {
                           <p className="font-medium text-foreground">{app.name}</p>
                           <p className="text-xs text-muted">{app.email}</p>
                         </td>
-                        <td className="py-3 px-4 text-muted">{app.primary_medium || "—"}</td>
+                        <td className="py-3 px-4 text-muted">{app.primary_medium || "–"}</td>
                         <td className="py-3 px-4 text-muted">
                           {new Date(app.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                         </td>

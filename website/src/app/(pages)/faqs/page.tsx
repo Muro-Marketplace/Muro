@@ -19,7 +19,7 @@ const generalFaqs: FaqEntry[] = [
   {
     question: "What is Wallplace?",
     answer:
-      "Wallplace is a curated marketplace connecting emerging and established artists with independent venues — cafes, restaurants, coworking spaces, offices, and more — that want original artwork on their walls. We handle the curation and provide the platform for discovery, communication, and sales. Artists manage their own fulfilment and delivery.",
+      "Wallplace is a curated marketplace connecting emerging and established artists with independent venues, cafes, restaurants, coworking spaces, offices, and more, that want original artwork on their walls. We handle the curation and provide the platform for discovery, communication, and sales. Artists manage their own fulfilment and delivery.",
   },
   {
     question: "How does Wallplace make money?",
@@ -79,7 +79,7 @@ const artistFaqs: FaqEntry[] = [
           and help you set up your first works.
         </p>
         <p>
-          Once your portfolio is live, venues can start enquiring immediately —
+          Once your portfolio is live, venues can start enquiring immediately,
           most artists see their first venue interest in the first 2–3 weeks.
           You can read more about{" "}
           <Link href="/how-it-works">how the platform works end-to-end</Link>{" "}
@@ -96,8 +96,8 @@ const artistFaqs: FaqEntry[] = [
           Payouts run via Stripe Connect. When a buyer pays, the funds are
           held until the artwork has been confirmed delivered (or 14 days
           have passed without a buyer dispute, whichever comes first). At
-          that point we transfer your share — sale price minus our platform
-          fee (5–15% depending on plan) and any agreed venue revenue share —
+          that point we transfer your share, sale price minus our platform
+          fee (5–15% depending on plan) and any agreed venue revenue share,
           straight to your linked bank account. You&rsquo;ll see every
           payout itemised in <Link href="/artist-portal/billing">your billing page</Link>.
         </p>
@@ -115,12 +115,12 @@ const artistFaqs: FaqEntry[] = [
         <p>
           You do. Each artist sets their own shipping price (or free
           shipping) per work. When a sale comes in we email you with the
-          buyer&rsquo;s address, packing checklist, and a ship-by date —
+          buyer&rsquo;s address, packing checklist, and a ship-by date,
           you pack and dispatch within the agreed window (default: 5 working
           days). Tracking number goes back to the buyer through the platform.
         </p>
         <p>
-          Couriers, packing materials and delivery methods are your call —
+          Couriers, packing materials and delivery methods are your call,
           most of our artists use Parcelforce, DHL, or specialist art
           couriers like Mailboxes Etc. for larger pieces. We&rsquo;ll add
           recommended courier partners in the artist portal soon.
@@ -172,7 +172,7 @@ const artistFaqs: FaqEntry[] = [
   {
     question: "Is my artwork protected from theft?",
     answer:
-      "Every image on Wallplace is served at reduced resolution with compressed quality — good enough for browsing, not enough for reproduction. Right-click saving is disabled, and images cannot be dragged or selected. The original high-resolution file never leaves your hands — we only display a web-optimised version. Our Terms of Service prohibit unauthorised reproduction, and every sale is tracked and attributed to you as the creator.",
+      "Every image on Wallplace is served at reduced resolution with compressed quality, good enough for browsing, not enough for reproduction. Right-click saving is disabled, and images cannot be dragged or selected. The original high-resolution file never leaves your hands, we only display a web-optimised version. Our Terms of Service prohibit unauthorised reproduction, and every sale is tracked and attributed to you as the creator.",
   },
 ];
 
@@ -185,7 +185,7 @@ const venueFaqs: FaqEntry[] = [
           Nothing. There is no cost to venues for browsing, enquiring, or
           displaying artwork through Wallplace. Delivery and installation
           are arranged directly between you and the artist. Venues never pay
-          a platform fee — Wallplace&rsquo;s revenue comes from sales
+          a platform fee, Wallplace&rsquo;s revenue comes from sales
           commissions and optional artist tools, not from charges to venues.
         </p>
         <p>
@@ -203,7 +203,7 @@ const venueFaqs: FaqEntry[] = [
           Most artists reply within 48 hours. From there you agree the
           arrangement (display loan, paid loan, or outright purchase),
           confirm dates and conditions, and the artist confirms the
-          placement on the platform — that creates the loan record both
+          placement on the platform, that creates the loan record both
           parties countersign before the work is dispatched. You can track
           everything from your <Link href="/venue-portal/placements">placements page</Link>.
         </p>
@@ -218,7 +218,7 @@ const venueFaqs: FaqEntry[] = [
           For an off-the-shelf placement (i.e. the work already exists),
           most arrangements go from first message to installed in 2–3 weeks.
           Roughly 3–5 days of conversation + agreement, then 5–10 days for
-          dispatch + install scheduling. Bespoke commissions take longer —
+          dispatch + install scheduling. Bespoke commissions take longer,
           weeks to months depending on the artist.
         </p>
         <p>
@@ -229,20 +229,20 @@ const venueFaqs: FaqEntry[] = [
     ),
   },
   {
-    question: "Who installs the artwork — us or the artist?",
+    question: "Who installs the artwork, us or the artist?",
     answer: (
       <>
         <p>
           By default, you and the artist arrange installation directly. For
           local placements (artist within ~30 miles), most artists prefer to
-          install themselves — they know how the piece is meant to hang and
+          install themselves, they know how the piece is meant to hang and
           it gives them a chance to see the space. For shipped placements,
           the artist sends with hanging hardware + instructions and your
           team installs.
         </p>
         <p>
           Wallplace can introduce an art-handling partner for larger /
-          heavier pieces or fragile works on request — message{" "}
+          heavier pieces or fragile works on request, message{" "}
           <a href="mailto:hello@wallplace.co.uk">hello@wallplace.co.uk</a>{" "}
           and we&rsquo;ll set it up.
         </p>
@@ -254,7 +254,7 @@ const venueFaqs: FaqEntry[] = [
     answer: (
       <>
         <p>
-          Yes — a simple partnership agreement covers care of artwork,
+          Yes, a simple partnership agreement covers care of artwork,
           display period, sales, and damage. Plain English. Cancellable on
           30 days&rsquo; notice. You can{" "}
           <Link href="/venue-agreement">read the full venue agreement here</Link>.
@@ -290,7 +290,7 @@ const venueFaqs: FaqEntry[] = [
         <p>
           Absolutely. Browse{" "}
           <Link href="/browse">artist portfolios</Link> and enquire directly
-          with artists whose work interests you — you have the final say on
+          with artists whose work interests you, you have the final say on
           what goes on your walls. You can also arrange rotations directly
           with artists to keep things fresh.
         </p>
@@ -315,7 +315,7 @@ const venueFaqs: FaqEntry[] = [
   {
     question: "Can we buy the artwork ourselves?",
     answer:
-      "Yes. You can purchase any artwork at the listed price through the QR code or directly on the platform. Some artists also offer special pricing for venue purchases — discuss this with the artist directly.",
+      "Yes. You can purchase any artwork at the listed price through the QR code or directly on the platform. Some artists also offer special pricing for venue purchases, discuss this with the artist directly.",
   },
 ];
 
@@ -335,7 +335,7 @@ export default function FaqsPage() {
             </p>
           </div>
 
-          {/* Role quick-nav — jump to the right FAQ section. Anchor links
+          {/* Role quick-nav, jump to the right FAQ section. Anchor links
               are plain <a>s so deep-links work (#artists, #venues, #buyers). */}
           <div className="mt-8 flex flex-wrap gap-2">
             <a href="#artists" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full border border-border bg-surface text-foreground hover:border-foreground/40 transition-colors">
@@ -384,7 +384,7 @@ export default function FaqsPage() {
         </div>
       </section>
 
-      {/* For Buyers — point at external pages for full policy answers */}
+      {/* For Buyers, point at external pages for full policy answers */}
       <section className="pb-16 lg:pb-20 scroll-mt-24" id="buyers">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-3xl">
@@ -405,7 +405,7 @@ export default function FaqsPage() {
                 using the order ID + email from your receipt.
               </p>
               <p>
-                Every piece on Wallplace is sold by the artist directly — we process the payment
+                Every piece on Wallplace is sold by the artist directly, we process the payment
                 and coordinate the transaction. If anything goes wrong, email{" "}
                 <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a>{" "}
                 and we&rsquo;ll sort it.

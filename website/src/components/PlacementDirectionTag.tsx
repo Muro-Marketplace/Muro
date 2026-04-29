@@ -6,7 +6,7 @@
  * Used to make the direction of a placement request obvious at a glance
  * so the user doesn't have to guess whether they're waiting on the
  * other party or being waited on. Accept / Counter / Decline controls
- * are gated off "Received" placements — you can't action a request you
+ * are gated off "Received" placements, you can't action a request you
  * sent yourself.
  *
  * Visual: a small pill with a directional arrow + label. "Sent" uses a
@@ -55,7 +55,7 @@ export default function PlacementDirectionTag({ direction, size = "default", cla
 }
 
 /**
- * Helper — tells you what direction chip to show from the placement
+ * Helper, tells you what direction chip to show from the placement
  * row + the viewing user's id. Relies on requester_user_id being
  * populated (the /api/placements GET handler now backfills it from the
  * original placement_request message when it's missing).

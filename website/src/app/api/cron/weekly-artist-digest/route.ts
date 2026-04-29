@@ -1,4 +1,4 @@
-// Vercel Cron — Tuesday 09:00 UTC. Walks active artists, computes their
+// Vercel Cron, Tuesday 09:00 UTC. Walks active artists, computes their
 // week's activity, and sends the polished weekly digest.
 // Skips any artist with <3 notable events (no "you had a quiet week" emails).
 
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   // Artists with an active subscription (or free tier) and a user_id so
   // we have somewhere to email. New signups within the last 14 days skip
-  // the digest — they're still in onboarding.
+  // the digest, they're still in onboarding.
   const { data: artists } = await db
     .from("artist_profiles")
     .select("user_id, name, slug, created_at")
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     ]);
 
     const totalEvents = (viewCount ?? 0) + (scanCount ?? 0) + (messageCount ?? 0) + (placementCount ?? 0);
-    if (totalEvents < 3) return; // empty week — skip
+    if (totalEvents < 3) return; // empty week, skip
 
     const { data: { user } } = await db.auth.admin.getUserById(artist.user_id);
     if (!user?.email) return;
@@ -68,8 +68,8 @@ export async function GET(request: Request) {
         placementRequests: placementCount ?? 0,
         topWorks: [],
         recommendedActions: [
-          (messageCount ?? 0) > 0 ? `Reply to ${messageCount} unread message${messageCount === 1 ? "" : "s"}` : "Add one new piece — artists with 5+ works rank higher",
-          "Refresh your profile photo — venues scan profiles in seconds",
+          (messageCount ?? 0) > 0 ? `Reply to ${messageCount} unread message${messageCount === 1 ? "" : "s"}` : "Add one new piece, artists with 5+ works rank higher",
+          "Refresh your profile photo, venues scan profiles in seconds",
         ],
         dashboardUrl: `${SITE}/artist-portal`,
       }),

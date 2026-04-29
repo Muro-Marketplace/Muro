@@ -3,7 +3,7 @@ import type { ArtistCollection } from "@/data/collections";
 
 /**
  * Public endpoint: returns all available collections from the database.
- * No static seed data — collections are created by artists only.
+ * No static seed data, collections are created by artists only.
  */
 export async function GET() {
   const allCollections: ArtistCollection[] = [];
@@ -62,7 +62,7 @@ export async function GET() {
       }
     }
   } catch {
-    // DB not available — return empty
+    // DB not available, return empty
   }
 
   return NextResponse.json({ collections: allCollections });

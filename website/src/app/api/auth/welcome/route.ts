@@ -1,6 +1,6 @@
 // POST /api/auth/welcome
 //
-// Idempotent welcome-email trigger. Safe to call on every login — the
+// Idempotent welcome-email trigger. Safe to call on every login, the
 // underlying triggerWelcomeIfNeeded() short-circuits after the first
 // successful send (artist/venue: welcomed_at column; customer:
 // sendEmail's idempotency_key on `welcome:${userId}`).

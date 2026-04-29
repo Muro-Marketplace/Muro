@@ -1,5 +1,5 @@
 /**
- * Wall Visualizer — canonical TypeScript types.
+ * Wall Visualizer, canonical TypeScript types.
  *
  * These types are the single source of truth for everything the editor
  * canvas, the layout JSON, the API routes, and the render service exchange.
@@ -52,7 +52,7 @@ export interface Wall {
   /** Server-minted short-lived signed URL for `source_image_path`. Only
       populated by GET /api/walls so list cards can show the actual
       photo as a thumbnail without each client minting URLs themselves.
-      Not stored — recomputed on each list call (1h expiry). */
+      Not stored, recomputed on each list call (1h expiry). */
   source_image_url?: string;
   width_cm: number;
   height_cm: number;
@@ -61,7 +61,7 @@ export interface Wall {
   perspective_homography: Homography | null;
   segmentation_mask_path: string | null;
   notes: string | null;
-  /** Venue-controlled — when true the wall renders on the venue's
+  /** Venue-controlled, when true the wall renders on the venue's
       public /venues/[slug] page so artists can see it before
       requesting placements. Defaults to false (private). Migration
       037. */
@@ -84,7 +84,7 @@ export type FrameStyle =
   | "floater";
 
 /**
- * Per-style finishes. Different styles support different finishes — UI
+ * Per-style finishes. Different styles support different finishes, UI
  * surfaces them based on a static map (see src/lib/visualizer/frames.ts in
  * a later PR). Stored as a free string here so we can extend without a
  * migration.
@@ -94,7 +94,7 @@ export type FrameFinish = string;
 export interface FrameConfig {
   style: FrameStyle;
   finish: FrameFinish;
-  /** Frame depth in mm. V2+ — defaults to 0 in MVP (flat overlay). */
+  /** Frame depth in mm. V2+, defaults to 0 in MVP (flat overlay). */
   depth_mm: number;
 }
 
@@ -106,7 +106,7 @@ export interface FrameConfig {
  * convention).
  */
 export interface WallItem {
-  /** Stable client-generated UUID — survives saves so React keys stay valid. */
+  /** Stable client-generated UUID, survives saves so React keys stay valid. */
   id: string;
   /** FK to artist_works.id. Used at render time to fetch the source image. */
   work_id: string;
@@ -129,7 +129,7 @@ export interface WallItem {
   frame: FrameConfig;
 
   /**
-   * The size variant the user picked, e.g. "16×24\" (A2)". Optional —
+   * The size variant the user picked, e.g. "16×24\" (A2)". Optional,
    * absent for items that were dragged in at "natural" size or sized
    * by hand. When present, the toolbar shows it next to the size cycle
    * button. Persisted in the layout JSON so reloading reflects intent.
@@ -174,7 +174,7 @@ export interface WallLayout {
 
 /**
  * The shape persisted into wall_layouts.items (JSONB array). Equivalent to
- * `WallItem[]` — separate alias so the API contract is explicit at the
+ * `WallItem[]`, separate alias so the API contract is explicit at the
  * boundary even when types collapse.
  */
 export type WallLayoutItems = WallItem[];
@@ -249,7 +249,7 @@ export type VisualizerAction =
 export interface TierLimits {
   /** Max paid units consumable per UTC day. */
   daily: number;
-  /** Max paid units consumable per UTC month — secondary safety cap. */
+  /** Max paid units consumable per UTC month, secondary safety cap. */
   monthly: number;
   /** Max wall photo uploads per UTC day (counts toward daily too). */
   wall_uploads_daily: number;

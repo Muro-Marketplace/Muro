@@ -1,4 +1,4 @@
-// Dimension parser — covers every format we've seen in the seed data
+// Dimension parser, covers every format we've seen in the seed data
 // (artists.ts) plus edge cases for confused/unusual artist input.
 
 import { describe, expect, it } from "vitest";
@@ -10,7 +10,7 @@ import {
   type SizeVariant,
 } from "./dimensions";
 
-describe("parseDimensions — explicit cm", () => {
+describe("parseDimensions, explicit cm", () => {
   it("70 x 50 cm", () => {
     expect(parseDimensions("70 x 50 cm")).toEqual({ widthCm: 70, heightCm: 50 });
   });
@@ -31,7 +31,7 @@ describe("parseDimensions — explicit cm", () => {
   });
 });
 
-describe("parseDimensions — mm and m", () => {
+describe("parseDimensions, mm and m", () => {
   it("500x700 mm", () => {
     expect(parseDimensions("500x700 mm")).toEqual({ widthCm: 50, heightCm: 70 });
   });
@@ -43,7 +43,7 @@ describe("parseDimensions — mm and m", () => {
   });
 });
 
-describe("parseDimensions — inches", () => {
+describe("parseDimensions, inches", () => {
   it('8×10"', () => {
     const r = parseDimensions('8×10"');
     expect(r).not.toBeNull();
@@ -62,7 +62,7 @@ describe("parseDimensions — inches", () => {
   });
 });
 
-describe("parseDimensions — paper sizes", () => {
+describe("parseDimensions, paper sizes", () => {
   it("A4", () => {
     expect(parseDimensions("A4")).toEqual({ widthCm: 21, heightCm: 29.7 });
   });
@@ -79,7 +79,7 @@ describe("parseDimensions — paper sizes", () => {
   });
 });
 
-describe("parseDimensions — parenthesised hints (the seed data shape)", () => {
+describe("parseDimensions, parenthesised hints (the seed data shape)", () => {
   it('8×10" (A4) prefers A4', () => {
     // 8×10" is 20.32×25.4 cm; A4 is 21×29.7 cm. Different! We pick A4
     // because the artist explicitly noted it as the "true" size.
@@ -99,7 +99,7 @@ describe("parseDimensions — parenthesised hints (the seed data shape)", () => 
   });
 });
 
-describe("parseDimensions — magnitude-based unit guess", () => {
+describe("parseDimensions, magnitude-based unit guess", () => {
   it("small bare numbers default to inches", () => {
     // 8×10 with no unit reads as inches (a stamp-sized 8×10cm would be unusual)
     const r = parseDimensions("8×10");
@@ -116,7 +116,7 @@ describe("parseDimensions — magnitude-based unit guess", () => {
   });
 });
 
-describe("parseDimensions — invalid input", () => {
+describe("parseDimensions, invalid input", () => {
   it("null", () => expect(parseDimensions(null)).toBeNull());
   it("undefined", () => expect(parseDimensions(undefined)).toBeNull());
   it("empty", () => expect(parseDimensions("")).toBeNull());
@@ -216,7 +216,7 @@ describe("pickDefaultSize", () => {
   });
 
   it("swaps dims when the variant disagrees with work orientation", () => {
-    // Variant is portrait (50<70) but the work is a landscape image —
+    // Variant is portrait (50<70) but the work is a landscape image,
     // swap so the artwork doesn't get squashed into a portrait box.
     const r = pickDefaultSize({
       dimensions: "70 x 50 cm",

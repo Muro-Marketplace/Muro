@@ -1,5 +1,5 @@
 // Size-band ranges, labels, and the dimension hint shown on the right
-// side of each filter row. Single source of truth — bandForCm() and
+// side of each filter row. Single source of truth, bandForCm() and
 // the FilterPanel render must agree on the same numbers.
 
 export type SizeBandKey = "small" | "medium" | "large" | "xl";

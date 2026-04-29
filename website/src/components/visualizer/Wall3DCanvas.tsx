@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Wall3DCanvas — three.js scene mode for the visualizer.
+ * Wall3DCanvas, three.js scene mode for the visualizer.
  *
  * Scene composition:
  *   - Back wall (the wall the user is decorating).
  *   - Floor.
- *   - One side wall (a corner room — gives "different walls in
+ *   - One side wall (a corner room, gives "different walls in
  *     different directions" the user can rotate around).
  *   - Subtle ambient + directional lighting from the front-top-left to
  *     produce realistic soft shadows under each item.
@@ -106,7 +106,7 @@ export default function Wall3DCanvas({
   const wallColor =
     background.kind === "preset" ? `#${background.color_hex}` : "#FFFFFF";
 
-  // HTML drop handler — converts mouse coords to a wall-plane intersection.
+  // HTML drop handler, converts mouse coords to a wall-plane intersection.
   // Three.js's `useThree` is only available inside a Canvas child, so we
   // grab the camera + raycaster via a ref-bridge component below.
   const dropHandlerRef = useRef<{
@@ -153,14 +153,14 @@ export default function Wall3DCanvas({
           // preserveDrawingBuffer needed for canvas-to-blob if we ever
           // export the 3D view as a render output.
           preserveDrawingBuffer: true,
-          // ACES filmic tonemapping with a slightly lifted exposure —
+          // ACES filmic tonemapping with a slightly lifted exposure,
           // gets the room out of the "video game" gamut into something
           // that reads as a softly-photographed interior.
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.05,
         }}
         // r3f fires this when a pointer-down doesn't hit any mesh with
-        // a handler — e.g. clicking the wall, floor, or a chair (none of
+        // a handler, e.g. clicking the wall, floor, or a chair (none of
         // which have onPointerDown). Use it to deselect, replacing the
         // old invisible DropPlane click which couldn't fire because
         // `visible={false}` opts the mesh out of raycasting.
@@ -169,7 +169,7 @@ export default function Wall3DCanvas({
         <Suspense fallback={null}>
           {/* Three-point lighting for an interior photo feel. */}
           <ambientLight intensity={0.35} />
-          {/* Key — warm, top-left (sunlight from a window). */}
+          {/* Key, warm, top-left (sunlight from a window). */}
           <directionalLight
             position={[2.5, wallH + 1.5, 2]}
             intensity={1.4}
@@ -186,13 +186,13 @@ export default function Wall3DCanvas({
             shadow-bias={-0.0002}
             shadow-radius={4}
           />
-          {/* Fill — cooler, lower right (bounced ambient from the floor). */}
+          {/* Fill, cooler, lower right (bounced ambient from the floor). */}
           <directionalLight
             position={[-1.5, 1.2, 3]}
             intensity={0.35}
             color="#D8E4FF"
           />
-          {/* Rim — a hint of contour on the right edge of pieces. */}
+          {/* Rim, a hint of contour on the right edge of pieces. */}
           <directionalLight
             position={[3, wallH * 0.6, -1]}
             intensity={0.25}
@@ -211,7 +211,7 @@ export default function Wall3DCanvas({
             kind={background.kind}
           />
 
-          {/* Venue dressing — café/gallery furniture so the scene reads
+          {/* Venue dressing, café/gallery furniture so the scene reads
               as somewhere a customer might actually see the artwork. */}
           <VenueDressing wallW={wallW} wallH={wallH} />
 
@@ -261,7 +261,7 @@ export default function Wall3DCanvas({
             maxDistance={wallW * 2.2}
             minPolarAngle={Math.PI / 6}
             maxPolarAngle={Math.PI / 2 - 0.05}
-            // Don't let the user spin all the way around — the back of
+            // Don't let the user spin all the way around, the back of
             // the wall is a black plane.
             minAzimuthAngle={-Math.PI / 2.3}
             maxAzimuthAngle={Math.PI / 2.3}
@@ -293,7 +293,7 @@ function Room({
 
   return (
     <group>
-      {/* Back wall — z=0 plane. Either solid colour or an uploaded photo
+      {/* Back wall, z=0 plane. Either solid colour or an uploaded photo
           texture (loaded via Suspense + drei's useTexture). */}
       {showWallPhoto ? (
         <Suspense
@@ -313,7 +313,7 @@ function Room({
         </mesh>
       )}
 
-      {/* Floor — procedural wood plank texture for warmth + grain. */}
+      {/* Floor, procedural wood plank texture for warmth + grain. */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0, FLOOR_DEPTH_M / 2]}
@@ -330,7 +330,7 @@ function Room({
         )}
       </mesh>
 
-      {/* Right side wall — perpendicular to back wall, recedes into z. */}
+      {/* Right side wall, perpendicular to back wall, recedes into z. */}
       <mesh
         position={[wallW / 2, wallH / 2, SIDE_WALL_DEPTH_M / 2]}
         rotation={[0, -Math.PI / 2, 0]}
@@ -343,7 +343,7 @@ function Room({
         />
       </mesh>
 
-      {/* Subtle ceiling — lighter than walls, just visible at the top
+      {/* Subtle ceiling, lighter than walls, just visible at the top
           when camera tilts up. */}
       <mesh
         position={[0, wallH, SIDE_WALL_DEPTH_M / 2]}
@@ -354,7 +354,7 @@ function Room({
         <meshStandardMaterial color="#F4F0EA" roughness={0.95} />
       </mesh>
 
-      {/* Skirting board — small dark strip where wall meets floor.
+      {/* Skirting board, small dark strip where wall meets floor.
           Reads as architecture and stops the wall/floor from looking
           like two flat planes butted together. */}
       <mesh position={[0, 0.04, 0.005]} receiveShadow>
@@ -410,7 +410,7 @@ function ArtworkMesh({
     cmToMeters(item.x_cm) + itemW / 2 - wallW / 2;
   const yCenterM = wallH - (cmToMeters(item.y_cm) + itemH / 2);
 
-  // Frame geometry shared with the 2D code — gives us inner artwork
+  // Frame geometry shared with the 2D code, gives us inner artwork
   // rect + border thickness in pixels. Rebase into metres at the same
   // unit ratio (100 px → 1 m): borderPx / 100 ≈ borderMeters.
   const SCRATCH_PX_PER_CM = 100;
@@ -430,7 +430,7 @@ function ArtworkMesh({
   const frameColor = finishDef?.borderColor ?? "#222222";
 
   // Texture loading is handled by drei's useTexture (Suspense-based)
-  // inside <ArtworkPlane> — the imperative useOptionalTexture path
+  // inside <ArtworkPlane>, the imperative useOptionalTexture path
   // wasn't reliably triggering r3f re-renders on this React/r3f combo.
 
   // ── Drag handling ──────────────────────────────────────────────────
@@ -476,7 +476,7 @@ function ArtworkMesh({
       e.ray.intersectPlane(wallPlane, intersect);
       const dxM = intersect.x - dragRef.current.initialX;
       const dyM = intersect.y - dragRef.current.initialY;
-      // y grows up in 3D, but layout y grows down — invert.
+      // y grows up in 3D, but layout y grows down, invert.
       const newXCm = dragRef.current.grabXCm + dxM * 100;
       const newYCm = dragRef.current.grabYCm - dyM * 100;
       onMove(newXCm, newYCm);
@@ -498,7 +498,7 @@ function ArtworkMesh({
   // ── Resize via corner handle ──────────────────────────────────────
   // Drag any corner sphere to scale the artwork. We lock the aspect
   // ratio at item.width_cm / item.height_cm so true dimensions persist.
-  // The opposite corner is the anchor — drag distance from there
+  // The opposite corner is the anchor, drag distance from there
   // becomes the new diagonal.
   const resizeRef = useRef<null | {
     pointerId: number;
@@ -578,7 +578,7 @@ function ArtworkMesh({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {/* Frame — only when style != "none" */}
+      {/* Frame, only when style != "none" */}
       {item.frame.style !== "none" && borderM > 0.001 && (
         <FrameMoulding
           itemW={itemW}
@@ -588,10 +588,10 @@ function ArtworkMesh({
         />
       )}
 
-      {/* Artwork plane — castShadow off (a coplanar plane casting onto
+      {/* Artwork plane, castShadow off (a coplanar plane casting onto
           its own wall causes z-fighting; the contact shadow below
           handles the visual cue). The plane uses drei's useTexture
-          inside Suspense — fallback is a grey placeholder while the
+          inside Suspense, fallback is a grey placeholder while the
           image loads. */}
       <Suspense
         fallback={
@@ -638,7 +638,7 @@ function ArtworkMesh({
         </>
       )}
 
-      {/* Soft contact shadow under the item — a darker plane behind
+      {/* Soft contact shadow under the item, a darker plane behind
           the artwork plane, slightly larger, slightly transparent. */}
       <mesh
         position={[
@@ -671,7 +671,7 @@ function FrameMoulding({
   borderM: number;
   color: string;
 }) {
-  // Render 4 boxes — top/bottom span full width, left/right take only
+  // Render 4 boxes, top/bottom span full width, left/right take only
   // the inner height so the corners aren't double-stacked.
   const topY = itemH / 2 - borderM / 2;
   const bottomY = -itemH / 2 + borderM / 2;
@@ -778,7 +778,7 @@ function DropBridge({
 
 /**
  * Thin black outline rendered just in front of the artwork, sized to the
- * outer item bounds — replaces the previous ring-geometry which only
+ * outer item bounds, replaces the previous ring-geometry which only
  * worked for square items.
  */
 function SelectionOutline({
@@ -818,7 +818,7 @@ function SelectionOutline({
 
 /**
  * Small white-edged sphere at one corner of a selected artwork. Drag it
- * to resize — the parent ArtworkMesh handles the actual maths via the
+ * to resize, the parent ArtworkMesh handles the actual maths via the
  * onCornerPointer* callbacks. cornerX/cornerY are -1 or +1 indicating
  * which corner this handle sits at.
  */
@@ -841,7 +841,7 @@ function ResizeHandle({
   onPointerUp: (e: ThreeEvent<PointerEvent>) => void;
   onPointerCancel: (e: ThreeEvent<PointerEvent>) => void;
 }) {
-  // Size handle relative to the item — visible on small + huge works.
+  // Size handle relative to the item, visible on small + huge works.
   const r = Math.max(0.012, Math.min(itemW, itemH) * 0.04);
 
   return (
@@ -869,14 +869,14 @@ function ResizeHandle({
 // ── Venue dressing ──────────────────────────────────────────────────────
 
 /**
- * Simple café/gallery props that fill the floor in front of the wall —
+ * Simple café/gallery props that fill the floor in front of the wall,
  * a small round bistro table with two chairs, a pendant ceiling light
  * with a visible cone of light, and a tall houseplant in the corner.
  *
  * All built from primitive geometries (no model files) so they ship in
  * the existing bundle and scale with the wall dimensions. They're set
  * to `pointerEvents={false}` style behaviour by giving them no event
- * handlers — the artwork drag/drop logic is unaffected.
+ * handlers, the artwork drag/drop logic is unaffected.
  */
 function VenueDressing({ wallW, wallH }: { wallW: number; wallH: number }) {
   // Anchor everything to the LEFT side of the wall so the right side
@@ -909,7 +909,7 @@ function VenueDressing({ wallW, wallH }: { wallW: number; wallH: number }) {
           <cylinderGeometry args={[tableRadius, tableRadius, 0.03, 32]} />
           <meshStandardMaterial color="#3A2C1F" roughness={0.45} />
         </mesh>
-        {/* Coffee cup — small detail */}
+        {/* Coffee cup, small detail */}
         <mesh
           position={[0.08, tableTopY + 0.06, 0.05]}
           receiveShadow
@@ -927,7 +927,7 @@ function VenueDressing({ wallW, wallH }: { wallW: number; wallH: number }) {
         </mesh>
       </group>
 
-      {/* Two chairs — simple wooden bistro silhouettes */}
+      {/* Two chairs, simple wooden bistro silhouettes */}
       <BistroChair position={[tableX - 0.55, 0, tableZ + 0.25]} rotationY={0.6} />
       <BistroChair
         position={[tableX + 0.55, 0, tableZ + 0.25]}
@@ -1000,7 +1000,7 @@ function Houseplant({
         <cylinderGeometry args={[0.17, 0.17, 0.01, 24]} />
         <meshStandardMaterial color="#1A1308" roughness={0.95} />
       </mesh>
-      {/* Foliage — stack of slightly translucent green spheres for a
+      {/* Foliage, stack of slightly translucent green spheres for a
           loose plant silhouette without modelling individual leaves. */}
       <mesh position={[0, 0.7, 0]} castShadow>
         <sphereGeometry args={[0.32, 16, 16]} />
@@ -1035,7 +1035,7 @@ function PendantLight({
   const cordLength = cordTop - cordBottom;
   return (
     <group>
-      {/* Cord — thin black cylinder from ceiling to lampshade */}
+      {/* Cord, thin black cylinder from ceiling to lampshade */}
       <mesh
         position={[px, (cordTop + cordBottom) / 2, pz]}
       >
@@ -1047,7 +1047,7 @@ function PendantLight({
         <cylinderGeometry args={[0.06, 0.06, 0.01, 16]} />
         <meshStandardMaterial color="#C9A064" roughness={0.3} metalness={0.7} />
       </mesh>
-      {/* Lampshade — inverted cone */}
+      {/* Lampshade, inverted cone */}
       <mesh position={[px, py, pz]} castShadow>
         <coneGeometry args={[0.18, 0.24, 24, 1, true]} />
         <meshStandardMaterial
@@ -1057,12 +1057,12 @@ function PendantLight({
           side={THREE.DoubleSide}
         />
       </mesh>
-      {/* Bulb glow — small emissive sphere visible from below */}
+      {/* Bulb glow, small emissive sphere visible from below */}
       <mesh position={[px, py - 0.05, pz]}>
         <sphereGeometry args={[0.05, 16, 16]} />
         <meshBasicMaterial color="#FFE3A6" />
       </mesh>
-      {/* Spot light cone aimed straight down — adds a warm puddle of
+      {/* Spot light cone aimed straight down, adds a warm puddle of
           light on the table below. */}
       <spotLight
         position={[px, py - 0.04, pz]}
@@ -1083,7 +1083,7 @@ function PendantLight({
 
 /**
  * Renders a textured plane using drei's useTexture. Goes through r3f's
- * loader cache + Suspense — the imperative `new Image()` →
+ * loader cache + Suspense, the imperative `new Image()` →
  * `THREE.Texture` path we previously used didn't reliably trigger
  * re-renders, so the parent meshes stayed in the loading-grey state
  * even after the image had successfully fetched.
@@ -1105,7 +1105,7 @@ function ArtworkPlane({
   // meshBasicMaterial + toneMapped:false renders the image at its
   // true colour values regardless of room lighting. Standard PBR
   // material got washed out by the bright key light + Environment
-  // IBL — artwork plates would lose contrast and look milky. The
+  // IBL, artwork plates would lose contrast and look milky. The
   // frame around the plane keeps using meshStandardMaterial so it
   // still reads as a 3D object catching shadows; only the printed
   // surface ignores light, same way a real print's pigment doesn't
@@ -1156,7 +1156,7 @@ function useProceduralWoodTexture(): THREE.Texture | null {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Plank parameters — 4 stacked planks across the canvas height.
+    // Plank parameters, 4 stacked planks across the canvas height.
     const plankCount = 4;
     const plankH = canvas.height / plankCount;
     const baseTones = ["#7A5A3C", "#6B4D32", "#8C6B47", "#5C4029"];
@@ -1205,7 +1205,7 @@ function useProceduralWoodTexture(): THREE.Texture | null {
         ctx.fill();
       }
 
-      // Plank seam — thin dark line at the bottom edge of each plank.
+      // Plank seam, thin dark line at the bottom edge of each plank.
       ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
       ctx.fillRect(0, y0 + plankH - 1, canvas.width, 1.5);
     }

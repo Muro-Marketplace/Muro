@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * useAutoSave — generic debounced auto-save hook.
+ * useAutoSave, generic debounced auto-save hook.
  *
  * Why not just `useDebounce(value) → useEffect(save)`? Because layout JSON
  * is bigger than typical debounce targets and we want to avoid:
@@ -23,7 +23,7 @@
  * waits debounceMs, then awaits `save(value)`. If a newer value arrives
  * mid-flight, the in-flight result is discarded (stale-while-saving).
  *
- * Does NOT save on first mount — only when the value diverges from the
+ * Does NOT save on first mount, only when the value diverges from the
  * initial value. Pass `forceSaveOnMount: true` to override.
  */
 
@@ -37,7 +37,7 @@ export type AutoSaveStatus =
   | "error";
 
 export interface UseAutoSaveOptions<T> {
-  /** Toggle the hook off entirely — useful while loading initial state. */
+  /** Toggle the hook off entirely, useful while loading initial state. */
   enabled?: boolean;
   /** Debounce window. Default 800ms. */
   debounceMs?: number;
@@ -86,11 +86,11 @@ export function useAutoSave<T>(
   saveRef.current = save;
   equalsRef.current = equals;
 
-  // Core save runner — flushes whatever's in pendingValueRef, then checks
+  // Core save runner, flushes whatever's in pendingValueRef, then checks
   // whether it became stale during the await and re-runs once if so.
   const flush = useCallback(async (): Promise<AutoSaveStatus> => {
     if (inFlightRef.current) {
-      // Already saving — flag as dirty and let the in-flight handler loop.
+      // Already saving, flag as dirty and let the in-flight handler loop.
       setStatus("dirty");
       return "dirty";
     }
@@ -132,7 +132,7 @@ export function useAutoSave<T>(
     );
 
     if (isInitial && !forceSaveOnMount && unchanged) {
-      // First render and identical to baseline — nothing to do.
+      // First render and identical to baseline, nothing to do.
       return;
     }
     if (unchanged && status === "saved") {
@@ -154,7 +154,7 @@ export function useAutoSave<T>(
         timerRef.current = null;
       }
     };
-    // We deliberately don't include `status` / `lastSavedAt` — they're
+    // We deliberately don't include `status` / `lastSavedAt`, they're
     // derived from the same chain and would cause re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, enabled, debounceMs, flush, forceSaveOnMount]);

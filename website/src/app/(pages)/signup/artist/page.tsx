@@ -5,8 +5,8 @@
  *
  * Step 1 of the artist join flow. Creates the Supabase account
  * (email + password OR Google/Apple SSO) so the artist exists as a
- * real user before the application form. Step 2 — the actual
- * application — lives at /apply and gates on this auth state, so an
+ * real user before the application form. Step 2, the actual
+ * application, lives at /apply and gates on this auth state, so an
  * unauthenticated visitor lands here first.
  *
  * Why split into two steps:
@@ -16,7 +16,7 @@
  *     exists by the time they hit accept and login works straight
  *     away.
  *   - Lets us prefill the application form's email + name from the
- *     verified auth context — one fewer place to mistype.
+ *     verified auth context, one fewer place to mistype.
  *   - Means the application API can authenticate the request and
  *     reject impersonation, instead of trusting whatever email the
  *     form sent.
@@ -30,7 +30,7 @@
  *     Email verification is still enforced by Supabase config; until
  *     verified the artist can read /apply but other portal areas
  *     stay restricted.
- *   - router.push("/apply") — so they continue straight into Step 2
+ *   - router.push("/apply"), so they continue straight into Step 2
  *     instead of seeing a "thanks" page.
  */
 
@@ -78,7 +78,7 @@ export default function ArtistSignUpPage() {
       }
 
       // Sign in immediately so the application form has access to
-      // the authed user — saves a round-trip through the verify
+      // the authed user, saves a round-trip through the verify
       // email link before they can apply.
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
@@ -131,7 +131,7 @@ export default function ArtistSignUpPage() {
             Apply to join as an artist
           </h1>
           <p className="text-white/50 text-sm">
-            Create your account first — we&rsquo;ll take you straight to the
+            Create your account first, we&rsquo;ll take you straight to the
             application
           </p>
         </div>
@@ -181,7 +181,7 @@ export default function ArtistSignUpPage() {
 
             {error && <p className="text-red-500 text-sm">{error}</p>}
 
-            {/* OAuth (Google / Apple) — hidden until providers are enabled in
+            {/* OAuth (Google / Apple), hidden until providers are enabled in
                 Supabase. Flip NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE=1 in
                 Vercel once both providers are configured. */}
             {isFlagOn("OAUTH_GOOGLE_APPLE") && (
@@ -248,7 +248,7 @@ export default function ArtistSignUpPage() {
             </button>
             <p className="text-[11px] text-muted text-center leading-relaxed">
               You&rsquo;ll go straight to the application form after this.
-              Approval emails take you back to login — your account is
+              Approval emails take you back to login, your account is
               already set up.
             </p>
           </form>

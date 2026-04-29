@@ -13,7 +13,7 @@ import { SNAP_THRESHOLD_PX, snapAndGuide, type PxRect } from "./alignment";
 
 const wall: PxRect = { x: 100, y: 100, width: 600, height: 400 };
 
-describe("snapAndGuide — no snap", () => {
+describe("snapAndGuide, no snap", () => {
   it("returns the input when nothing is in range", () => {
     const dragged: PxRect = { x: 250, y: 280, width: 80, height: 60 };
     const r = snapAndGuide(dragged, wall, []);
@@ -24,7 +24,7 @@ describe("snapAndGuide — no snap", () => {
   });
 });
 
-describe("snapAndGuide — wall edges", () => {
+describe("snapAndGuide, wall edges", () => {
   it("snaps left edge of dragged to wall left edge", () => {
     // Wall left = 100. Drag at 102 → within 5px threshold → snap to 100.
     const dragged: PxRect = { x: 102, y: 200, width: 80, height: 60 };
@@ -48,7 +48,7 @@ describe("snapAndGuide — wall edges", () => {
   });
 });
 
-describe("snapAndGuide — wall centre + thirds", () => {
+describe("snapAndGuide, wall centre + thirds", () => {
   it("snaps centre to wall horizontal centre", () => {
     // Wall centre x = 100 + 600/2 = 400.
     // For the dragged centre to land on 400, x = 400 - 40 = 360.
@@ -66,7 +66,7 @@ describe("snapAndGuide — wall centre + thirds", () => {
   });
 });
 
-describe("snapAndGuide — other items", () => {
+describe("snapAndGuide, other items", () => {
   it("snaps left edge to another item's left edge", () => {
     const other: PxRect = { x: 400, y: 250, width: 100, height: 80 };
     const dragged: PxRect = { x: 403, y: 350, width: 80, height: 60 };
@@ -83,7 +83,7 @@ describe("snapAndGuide — other items", () => {
   });
 });
 
-describe("snapAndGuide — threshold boundaries", () => {
+describe("snapAndGuide, threshold boundaries", () => {
   it("snaps when distance equals threshold", () => {
     const dragged: PxRect = {
       x: 100 + SNAP_THRESHOLD_PX,
@@ -108,25 +108,25 @@ describe("snapAndGuide — threshold boundaries", () => {
   });
 });
 
-describe("snapAndGuide — independent axes", () => {
+describe("snapAndGuide, independent axes", () => {
   it("can snap on X without snapping on Y", () => {
     // X: drag right edge to wall right (700). Y: middle of wall, no snap.
     const dragged: PxRect = { x: 618, y: 235, width: 80, height: 60 }; // y=235 → not near any line
     const r = snapAndGuide(dragged, wall, []);
     expect(r.x + 80).toBe(700);
     // y was 235; closest wall line is centre 300 (Δ65) and one-third 233 (Δ2)
-    // — actually 233 IS within threshold 5px, so y snaps to 233.
+    //, actually 233 IS within threshold 5px, so y snaps to 233.
     // Adjust: pick a clearly out-of-range y.
     const dragged2: PxRect = { x: 618, y: 220, width: 80, height: 60 }; // y=220, edges 220/250/280
-    // wall y lines: 100, 233, 300, 367, 500. Nearest to 220 is 233 (Δ13) — out.
-    // Nearest to centre 250 is 233 (Δ17) — out. Nearest to 280 is 300 (Δ20) — out.
+    // wall y lines: 100, 233, 300, 367, 500. Nearest to 220 is 233 (Δ13), out.
+    // Nearest to centre 250 is 233 (Δ17), out. Nearest to 280 is 300 (Δ20), out.
     const r2 = snapAndGuide(dragged2, wall, []);
     expect(r2.y).toBe(220); // unchanged
     expect(r2.x + 80).toBe(700); // x snapped
   });
 });
 
-describe("snapAndGuide — multiple guides at once", () => {
+describe("snapAndGuide, multiple guides at once", () => {
   it("reports every line the snapped edges land on", () => {
     // If we snap so that left edge = wall left AND another item's left
     // also = wall left, both guides appear.

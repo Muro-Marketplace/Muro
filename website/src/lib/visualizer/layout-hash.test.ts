@@ -1,4 +1,4 @@
-// Layout hash — used as the render cache key. Properties under test:
+// Layout hash, used as the render cache key. Properties under test:
 //   - identical inputs → identical hash
 //   - reordered items → identical hash (sort by id)
 //   - tiny float jitter < 0.001cm → identical hash (rounding)
@@ -42,7 +42,7 @@ const presetBg: LayoutBackground = {
   color_hex: "F5F1EB",
 };
 
-describe("computeLayoutHash — determinism", () => {
+describe("computeLayoutHash, determinism", () => {
   it("returns the same hash for the same input", () => {
     const a = computeLayoutHash({
       items: [itemA, itemB],
@@ -109,7 +109,7 @@ describe("computeLayoutHash — determinism", () => {
   });
 });
 
-describe("computeLayoutHash — sensitivity", () => {
+describe("computeLayoutHash, sensitivity", () => {
   it("changes when an item moves >0.001cm", () => {
     const a = computeLayoutHash({
       items: [itemA],
@@ -191,7 +191,7 @@ describe("computeLayoutHash — sensitivity", () => {
   });
 });
 
-describe("computeLayoutHash — output shape", () => {
+describe("computeLayoutHash, output shape", () => {
   it("returns a 64-char hex string (sha256)", () => {
     const h = computeLayoutHash({
       items: [],
@@ -203,7 +203,7 @@ describe("computeLayoutHash — output shape", () => {
   });
 });
 
-describe("canonicalise — sanity", () => {
+describe("canonicalise, sanity", () => {
   it("sorts items by id", () => {
     const out = _canonicaliseForTests({
       items: [itemB, itemA],

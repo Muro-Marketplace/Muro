@@ -8,7 +8,7 @@ import ArtworkPageClient from "./ArtworkPageClient";
 import ArtworkImageViewer from "@/components/ArtworkImageViewer";
 import type { Metadata } from "next";
 
-// Static params for seed artists — database artists use dynamic fallback
+// Static params for seed artists, database artists use dynamic fallback
 export async function generateStaticParams() {
   return artists.flatMap((artist) =>
     artist.works.map((work) => ({
@@ -47,7 +47,7 @@ export async function generateMetadata({
 
   const description = work.description && work.description.trim()
     ? work.description.slice(0, 160)
-    : `${work.title} — ${work.medium}, ${work.dimensions}. ${work.available ? "Available" : "Sold"}. By ${artist.name} on Wallplace.`;
+    : `${work.title}, ${work.medium}, ${work.dimensions}. ${work.available ? "Available" : "Sold"}. By ${artist.name} on Wallplace.`;
 
   return {
     title: `${work.title} by ${artist.name} – Wallplace`,
@@ -113,11 +113,11 @@ export default async function ArtworkPage({
     }).catch(() => {});
   } catch { /* ignore analytics errors */ }
 
-  // Real "views this week" count — drives the social-proof chip on
+  // Real "views this week" count, drives the social-proof chip on
   // ArtworkPageClient. Counts every `artwork_view` row for this work
   // in the last 7 days; we deliberately don't dedupe by visitor_id so
   // refreshes still register (matches what most marketplaces show).
-  // Fire-and-forget on errors — the chip just hides if the count
+  // Fire-and-forget on errors, the chip just hides if the count
   // can't be loaded.
   let viewsThisWeek = 0;
   try {
@@ -131,7 +131,7 @@ export default async function ArtworkPage({
       .eq("work_id", work.id)
       .gte("created_at", sevenDaysAgo);
     viewsThisWeek = count || 0;
-  } catch { /* ignore — chip hides */ }
+  } catch { /* ignore, chip hides */ }
 
   const otherWorks = artist.works.filter((w) => w.id !== work.id);
   const hasDescription = !!(work.description && work.description.trim());
@@ -163,7 +163,7 @@ export default async function ArtworkPage({
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-10 lg:gap-14 items-start">
             <ArtworkImageViewer
               src={work.image}
-              alt={`${work.title} — ${work.medium}`}
+              alt={`${work.title}, ${work.medium}`}
               aspectRatio={aspectRatio}
               images={work.images}
             />
@@ -255,7 +255,7 @@ export default async function ArtworkPage({
         </section>
       )}
 
-      {/* Seller information (CCR 2013 pre-contract disclosure) — below "More by" as a quiet footer */}
+      {/* Seller information (CCR 2013 pre-contract disclosure), below "More by" as a quiet footer */}
       <section className="py-10 border-t border-border/70 bg-surface/40">
         <div className="max-w-[1240px] mx-auto px-6">
           <div className="max-w-3xl">

@@ -6,11 +6,11 @@ import { useEffect } from "react";
  * Two layers of protection (Next.js router handles client-side
  * navigation differently from browser-level events, so we need both):
  *
- *   1. `beforeunload` — closing the tab, hard refresh, typing a new
+ *   1. `beforeunload`, closing the tab, hard refresh, typing a new
  *      URL, or browser back/forward. Browser shows its own dialog;
  *      we just need to opt-in.
  *
- *   2. Capture-phase click listener on anchor tags — Next.js client
+ *   2. Capture-phase click listener on anchor tags, Next.js client
  *      navigation goes through `<Link>`, which renders a real `<a>`
  *      that the framework intercepts on click. We hook the click
  *      first (capture phase) and pop a confirm() if the destination
@@ -39,7 +39,7 @@ export function useUnsavedWarning(dirty: boolean): void {
 
     const onClick = (e: MouseEvent) => {
       if (e.defaultPrevented) return;
-      // Modifier clicks open in new tab — let those through.
+      // Modifier clicks open in new tab, let those through.
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       if (e.button !== 0) return;
       const target = e.target as HTMLElement | null;
@@ -53,10 +53,10 @@ export function useUnsavedWarning(dirty: boolean): void {
       }
       try {
         const url = new URL(anchor.href, window.location.origin);
-        // External links — the browser's beforeunload listener will
+        // External links, the browser's beforeunload listener will
         // catch those independently.
         if (url.origin !== window.location.origin) return;
-        // Same path / hash-only navigation — not a real move.
+        // Same path / hash-only navigation, not a real move.
         if (
           url.pathname === window.location.pathname &&
           url.search === window.location.search

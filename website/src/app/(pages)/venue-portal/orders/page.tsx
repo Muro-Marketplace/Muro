@@ -82,7 +82,7 @@ function VenueOrdersContent() {
         <p className="text-sm text-muted mt-1">Sales from your venue and your purchases</p>
       </div>
 
-      {/* Stats — split into venue sales (revenue share from placements)
+      {/* Stats, split into venue sales (revenue share from placements)
           vs the venue's own purchases so venues can see both sides of
           their ledger at a glance. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

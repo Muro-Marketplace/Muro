@@ -26,7 +26,7 @@ export const CONTRACT_REF_PREFIX = "contract:";
 /**
  * Upload a contract / document file (PDF, Word, or scanned image) and
  * return an opaque reference, not a public URL. The `contracts` bucket
- * MUST be private (set in the Supabase dashboard) — if it's public,
+ * MUST be private (set in the Supabase dashboard), if it's public,
  * the returned reference is still safe but the fallback URL would be
  * readable by anyone. See docs/security/AUDIT.md §G.
  */
@@ -45,7 +45,7 @@ export async function uploadContract(file: File): Promise<string> {
   const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName || `contract.${ext}`}`;
 
   // Prefer the private `contracts` bucket. Fall back to `collections`
-  // (legacy) only if `contracts` doesn't exist — which would mean the
+  // (legacy) only if `contracts` doesn't exist, which would mean the
   // deployment hasn't been set up yet and the caller should paste a link
   // instead.
   for (const bucket of ["contracts", "collections"] as const) {
@@ -58,7 +58,7 @@ export async function uploadContract(file: File): Promise<string> {
       // permissions. Never return a raw public URL here.
       return `${CONTRACT_REF_PREFIX}${bucket}/${path}`;
     }
-    // Only fall through on missing-bucket — propagate other errors.
+    // Only fall through on missing-bucket, propagate other errors.
     if (!String(error.message || "").toLowerCase().includes("not found")) {
       console.error("Contract upload error:", error);
       throw new Error("Contract upload failed. Please try again.");
@@ -84,7 +84,7 @@ export function parseContractRef(ref: string): { bucket: string; path: string } 
 /**
  * Upload an image to Supabase Storage and return the public URL.
  * Validates file size and MIME type, resizes large images before uploading.
- * Throws on failure — callers should handle errors.
+ * Throws on failure, callers should handle errors.
  */
 export async function uploadImage(
   file: File,

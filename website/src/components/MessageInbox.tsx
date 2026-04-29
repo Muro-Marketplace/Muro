@@ -90,7 +90,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const [searchQuery, setSearchQuery] = useState("");
 
   // Mobile: right-side panel toggle
-  // Used to be `panelOpenMobile` — desktop kept the placement-status
+  // Used to be `panelOpenMobile`, desktop kept the placement-status
   // sidebar always-visible. We've collapsed it to a drawer at every
   // size so the thread itself gets more breathing room; this state
   // toggles the drawer regardless of viewport now.
@@ -98,7 +98,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
 
   // Flag/report popup (#20). Replaces the old confirm() + alert()
   // chain with a proper modal so users can pick what they actually
-  // want to do — Help, Report, Delete, Block — rather than being
+  // want to do, Help, Report, Delete, Block, rather than being
   // forced into a single Yes/No on a generic "report user" prompt.
   const [flagOpen, setFlagOpen] = useState(false);
   const [flagSubmitting, setFlagSubmitting] = useState(false);
@@ -106,7 +106,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
 
   // Resizable conversations sidebar. Persists between sessions so a
   // user who shrinks it for more thread space doesn't have to re-do
-  // the drag every visit. Only applies on sm+ screens — mobile keeps
+  // the drag every visit. Only applies on sm+ screens, mobile keeps
   // its full-width single-column layout.
   const [sidebarWidth, setSidebarWidth] = useState<number>(320);
   const sidebarMin = 240;
@@ -116,7 +116,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const dragStartWidthRef = useRef(0);
 
   // Track viewport so we can apply inline `width: sidebarWidth` only at
-  // sm+ where the sidebar is actually a sidebar — not the full screen.
+  // sm+ where the sidebar is actually a sidebar, not the full screen.
   const [isDesktop, setIsDesktop] = useState<boolean>(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -138,7 +138,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         }
       }
     } catch {
-      /* localStorage unavailable — keep default */
+      /* localStorage unavailable, keep default */
     }
   }, []);
 
@@ -184,7 +184,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   }
   // Placement id currently being countered via the inline dialog,
   // plus the latest known terms for the placement so the counter form
-  // opens pre-filled with whatever the other party offered — the user
+  // opens pre-filled with whatever the other party offered, the user
   // should be editing an offer, not retyping it from scratch.
   const [counteringId, setCounteringId] = useState<string | null>(null);
   const [counterInitial, setCounterInitial] = useState<{
@@ -233,7 +233,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     return () => { if (convPollRef.current) clearInterval(convPollRef.current); };
   }, [loadConversations]);
 
-  // Handle initialArtistSlug — runs ONCE per slug arrival.
+  // Handle initialArtistSlug, runs ONCE per slug arrival.
   //
   // Bug we're fixing (#15): the effect previously had `conversations`
   // in its dep array, so every 15-second poll re-fired the selection
@@ -259,7 +259,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       setComposeRecipient(initialArtistSlug);
       setComposeRecipientName(initialArtistName || initialArtistSlug);
     }
-    // Don't depend on `conversations` — it polls and would re-fire the
+    // Don't depend on `conversations`, it polls and would re-fire the
     // selection. We use the ref above to enforce one-shot behaviour;
     // when conversations finishes loading we still get one chance to
     // act because `loading` flips false at that moment, not on polls.
@@ -273,7 +273,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       const res = await authFetch(`/api/messages/${convId}`);
       const data = await res.json();
       if (data.messages) {
-        // Replace the full array even when the length matches — content
+        // Replace the full array even when the length matches, content
         // may have changed (pinned, deleted, edited) and the scroll-to-
         // bottom effect only refires when the messages reference changes.
         // The tiny cost of occasional re-renders beats showing stale
@@ -295,7 +295,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   useEffect(() => {
     // Always clear the previous thread's messages when switching, so
     // the scroll-to-bottom effect runs against the NEW thread once it
-    // loads — and we don't briefly flash messages from the last thread
+    // loads, and we don't briefly flash messages from the last thread
     // we had open. (Before this, opening another thread could leave the
     // scroll position landed on the previous thread's content.)
     setMessages([]);
@@ -309,7 +309,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   // React immediately when a placement changes elsewhere (e.g. the user
   // accepts / declines / counters from My Placements or the full
   // placement page). Without this the inbox only caught up on its 8s
-  // thread poll — the request card stayed stuck showing Accept/Decline
+  // thread poll, the request card stayed stuck showing Accept/Decline
   // long after the user had acted from another surface.
   useEffect(() => {
     const handler = () => {
@@ -348,7 +348,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   // new messages arrive. Multiple staggered attempts because images +
   // long content can shift layout well after first paint, and an early
   // scroll lands above the actual bottom. We bail when messages are
-  // empty (the placeholder state between thread switches) — the next
+  // empty (the placeholder state between thread switches), the next
   // pass after the array fills runs the real scroll.
   useEffect(() => {
     if (messages.length === 0) return;
@@ -571,7 +571,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         metadata: { placementId, status: accept ? "active" : "declined" },
       }]);
       // Reflect the new active placement in the conversation sidebar
-      // immediately — the poll that would otherwise sync it runs every
+      // immediately, the poll that would otherwise sync it runs every
       // 15s which is too slow for the "I just clicked accept" moment.
       if (accept) {
         setConversations((prev) => prev.map((c) =>
@@ -605,7 +605,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   }
 
   // Apply search + separate placed from the rest.
-  // MUST be declared before any early return — hooks order has to be stable
+  // MUST be declared before any early return, hooks order has to be stable
   // across renders or React will throw "Rendered more hooks than previous render".
   const { placedConvs, otherConvs } = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -701,14 +701,14 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
 
   return (
     <div className="flex h-[calc(100vh-13rem)] border border-border rounded-2xl overflow-hidden bg-surface shadow-sm">
-      {/* Conversation list — full-width on mobile, drag-resizable on sm+
+      {/* Conversation list, full-width on mobile, drag-resizable on sm+
           (persisted to localStorage). A 6px handle on the right edge
           captures mousedown for the drag. */}
       <div
         className={`relative ${selectedConv || composing ? "hidden sm:flex" : "flex"} shrink-0 border-r border-border flex-col`}
         style={isDesktop ? { width: sidebarWidth } : { width: "100%" }}
       >
-        {/* Drag handle — only on sm+ where the column is actually a
+        {/* Drag handle, only on sm+ where the column is actually a
             sidebar. Sits on top of the right border, 1px wide visually
             (transparent on top of the border) but with a 6px hit-area
             so it's easy to grab without being a heavy visual element. */}
@@ -855,7 +855,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     )}
                   </div>
                 </div>
-                {/* Flag/options button (#20) — opens a proper popup
+                {/* Flag/options button (#20), opens a proper popup
                     instead of the old confirm+alert. */}
                 <button
                   onClick={() => { setFlagOpen(true); setFlagSubmitted(null); }}
@@ -892,7 +892,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
               )}
             </div>
 
-            {/* Pinned bar — shows the most recent pinned message at the top of
+            {/* Pinned bar, shows the most recent pinned message at the top of
                 the thread for quick reference. Click to scroll. */}
             {(() => {
               const pins = messages.filter((m) => m.pinned_at && !m.deleted_at);
@@ -1019,7 +1019,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           // happened AFTER this request message, it applies.
                           // If a newer counter-request has since been sent on
                           // the same placement, this check correctly treats
-                          // the latest counter as outstanding — the old card
+                          // the latest counter as outstanding, the old card
                           // no longer blocks Accept/Counter/Decline on the
                           // newer offer.
                           const placementId = meta.placementId;
@@ -1056,7 +1056,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                                   )}
                                 </div>
                                 {!accepted && !iAmOfferer && (
-                                  <p className="text-[11px] text-muted mt-1">You declined — the other party can come back with revised terms.</p>
+                                  <p className="text-[11px] text-muted mt-1">You declined, the other party can come back with revised terms.</p>
                                 )}
                               </div>
                             );
@@ -1118,7 +1118,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                   );
                 }
 
-                // Regular text message — with hover affordance for pin /
+                // Regular text message, with hover affordance for pin /
                 // delete. Pin is available to either party (it's a shared
                 // bookmark on the thread); delete only on own messages.
                 const isPinned = !!msg.pinned_at;
@@ -1204,7 +1204,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         )}
       </div>
 
-      {/* Placement context panel — drawer at every viewport size now.
+      {/* Placement context panel, drawer at every viewport size now.
           Used to be always-visible at lg+ which ate horizontal space the
           thread itself benefitted from. The "Placement Status" toggle
           in the thread header opens this on demand. Sits BELOW the
@@ -1321,7 +1321,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                             reason,
                           }),
                         });
-                      } catch { /* swallow — UX still confirms */ }
+                      } catch { /* swallow, UX still confirms */ }
                       setFlagSubmitted("reported");
                       setFlagSubmitting(false);
                     }}

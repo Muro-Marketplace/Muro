@@ -11,7 +11,7 @@ interface CarrierInfo {
 export function detectCarrier(trackingNumber: string): CarrierInfo | null {
   const num = trackingNumber.trim().toUpperCase();
 
-  // Royal Mail — 2 letters, 9 digits, 2 letters (e.g. RM123456789GB)
+  // Royal Mail, 2 letters, 9 digits, 2 letters (e.g. RM123456789GB)
   if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(num)) {
     return {
       carrier: "Royal Mail",
@@ -19,7 +19,7 @@ export function detectCarrier(trackingNumber: string): CarrierInfo | null {
     };
   }
 
-  // DPD — 14 digits
+  // DPD, 14 digits
   if (/^\d{14}$/.test(num)) {
     return {
       carrier: "DPD",
@@ -27,7 +27,7 @@ export function detectCarrier(trackingNumber: string): CarrierInfo | null {
     };
   }
 
-  // Evri (Hermes) — starts with H + 15 digits, or 16 digits
+  // Evri (Hermes), starts with H + 15 digits, or 16 digits
   if (/^H?\d{15,16}$/.test(num)) {
     return {
       carrier: "Evri",
@@ -35,7 +35,7 @@ export function detectCarrier(trackingNumber: string): CarrierInfo | null {
     };
   }
 
-  // DHL — 10 or 12 digits, or starts with JD/JJD
+  // DHL, 10 or 12 digits, or starts with JD/JJD
   if (/^\d{10,12}$/.test(num) || /^J{1,2}D\d{18,20}$/.test(num)) {
     return {
       carrier: "DHL",
@@ -43,7 +43,7 @@ export function detectCarrier(trackingNumber: string): CarrierInfo | null {
     };
   }
 
-  // UPS — 1Z + 16 alphanumeric
+  // UPS, 1Z + 16 alphanumeric
   if (/^1Z[A-Z0-9]{16}$/.test(num)) {
     return {
       carrier: "UPS",
@@ -51,7 +51,7 @@ export function detectCarrier(trackingNumber: string): CarrierInfo | null {
     };
   }
 
-  // FedEx — 12 or 15 digits
+  // FedEx, 12 or 15 digits
   if (/^\d{12}$/.test(num) || /^\d{15}$/.test(num)) {
     return {
       carrier: "FedEx",
@@ -59,7 +59,7 @@ export function detectCarrier(trackingNumber: string): CarrierInfo | null {
     };
   }
 
-  // Parcelforce — 2 letters + 7 digits + 2 letters
+  // Parcelforce, 2 letters + 7 digits + 2 letters
   if (/^[A-Z]{2}\d{7}[A-Z]{2}$/.test(num)) {
     return {
       carrier: "Parcelforce",

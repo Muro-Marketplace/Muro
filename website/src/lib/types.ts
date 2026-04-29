@@ -12,7 +12,7 @@ export interface CartItem {
   size: string;
   price: number;
   quantity: number;
-  /** Live stock cap for the selected size. Optional — undefined means unlimited
+  /** Live stock cap for the selected size. Optional, undefined means unlimited
       (e.g. collections / bundles where stock is implicit). */
   quantityAvailable?: number | null;
   shippingPrice?: number;
@@ -21,7 +21,7 @@ export interface CartItem {
       Used by the shipping calculator when the artist hasn't set a
       manual shippingPrice. */
   dimensions?: string;
-  /** True when this is the framed variant — affects weight + tier. */
+  /** True when this is the framed variant, affects weight + tier. */
   framed?: boolean;
 }
 

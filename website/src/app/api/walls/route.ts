@@ -7,7 +7,7 @@
  * Tier caps:
  *   POST checks `getTierLimits(tier).saved_walls` against the current
  *   wall count. -1 = unlimited; 0 = no saving permitted; otherwise the
- *   creation is rejected with a 402 (Payment Required — i.e. upgrade)
+ *   creation is rejected with a 402 (Payment Required, i.e. upgrade)
  *   when the cap is hit.
  */
 

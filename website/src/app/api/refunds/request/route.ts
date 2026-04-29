@@ -123,7 +123,7 @@ export async function POST(request: Request) {
         type,
       }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
     } else {
-      // No artist — still notify admin
+      // No artist, still notify admin
       notifyRefundRequested({
         requesterName: userEmail,
         requesterType,

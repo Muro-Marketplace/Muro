@@ -2,7 +2,7 @@
  * /api/walls/[id]/layouts/[lid]
  *
  * GET     fetch a single layout (owner only)
- * PATCH   partial update — name and/or items
+ * PATCH   partial update, name and/or items
  *         When items change, the layout_hash is recomputed so the
  *         render cache key stays consistent.
  * DELETE  remove

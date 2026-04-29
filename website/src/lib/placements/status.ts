@@ -28,7 +28,7 @@ export function normaliseStatus(raw: string | null | undefined): DisplayStatus {
   }
 }
 
-// Tailwind classes — matches the existing tone (amber/green/red/blue/grey)
+// Tailwind classes, matches the existing tone (amber/green/red/blue/grey)
 // but slightly softened so they sit well on the cream surface.
 export function statusBadgeClass(status: DisplayStatus): string {
   switch (status) {
@@ -52,8 +52,8 @@ export interface PlacementLifecycle {
 }
 
 /**
- * Combined arrangement label. Derives from actual data — monthly fee,
- * qr_enabled — rather than trusting arrangement_type alone. Used by the
+ * Combined arrangement label. Derives from actual data, monthly fee,
+ * qr_enabled, rather than trusting arrangement_type alone. Used by the
  * placements list, messages placement card, and the placement panel so
  * "Paid loan + QR" shows consistently everywhere.
  */
@@ -115,7 +115,7 @@ export interface NextAction {
 }
 
 // Produces the "Next action" card content shown in the placement panel.
-// Deliberately opinionated — one clear primary ask, with optional secondary.
+// Deliberately opinionated, one clear primary ask, with optional secondary.
 export function nextAction(p: PlacementLifecycle, role: ViewerRole): NextAction {
   const status = normaliseStatus(p.status);
 

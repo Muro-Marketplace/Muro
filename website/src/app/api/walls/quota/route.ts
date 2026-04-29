@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   const ownerTypeHint = parseHint(url.searchParams.get("as"));
 
   // Auth is optional here. The shared helper returns a 401 NextResponse
-  // in `error` when the bearer token is missing — for the quota route we
+  // in `error` when the bearer token is missing, for the quota route we
   // treat that as "guest" instead of bouncing the call.
   let userId: string | null = null;
   const authHeader = request.headers.get("authorization");

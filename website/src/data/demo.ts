@@ -7,7 +7,7 @@
  * different slugs (or wire env vars).
  *
  * Phase 1 (now): demo links land on the public artist / venue profile
- *   page — this is the same view a venue (or artist) sees when
+ *   page, this is the same view a venue (or artist) sees when
  *   shopping the marketplace, so it's already the most-aspirational
  *   surface we have. No auth required, nothing can break.
  *
@@ -26,7 +26,7 @@ export const DEMO_VENUE_SLUG =
 
 /**
  * IDs of the future sandboxed demo Supabase users. Empty until Phase 2
- * is wired — the helper below short-circuits to `false` so no mutation
+ * is wired, the helper below short-circuits to `false` so no mutation
  * routes are accidentally blocked.
  */
 export const DEMO_USER_IDS: readonly string[] = [

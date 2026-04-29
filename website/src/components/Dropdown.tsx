@@ -14,7 +14,7 @@ interface DropdownProps<V extends string = string> {
   onChange: (value: V) => void;
   options: DropdownOption<V>[];
   placeholder?: string;
-  /** Forwarded to the trigger button — useful for label-for / form errors. */
+  /** Forwarded to the trigger button, useful for label-for / form errors. */
   id?: string;
   /** Adds a red border + a11y attr when set. */
   invalid?: boolean;
@@ -31,7 +31,7 @@ interface DropdownProps<V extends string = string> {
  *   - Shows a description line per option when supplied (richer than native).
  *   - Keyboard friendly: Enter/Space to open, Up/Down/Enter/Escape to navigate.
  *   - Closes on outside click and on route change.
- * Doesn't try to be a full combobox — for searchable lists, build something more.
+ * Doesn't try to be a full combobox, for searchable lists, build something more.
  */
 export default function Dropdown<V extends string = string>({
   value,

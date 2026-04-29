@@ -346,7 +346,7 @@ export default function CollectionsPage() {
                 rows={2}
                 className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50"
               />
-              {/* Bundle price — show £ prefix, and once we have sizes picked
+              {/* Bundle price, show £ prefix, and once we have sizes picked
                   for each work, calculate the sum-of-individual vs bundle so
                   the artist can see the saving (or, critically, if they've
                   UNDER-priced the bundle relative to individuals). */}
@@ -383,9 +383,9 @@ export default function CollectionsPage() {
                         {saving > 0 ? (
                           <span>Buyers save <span className="text-green-700 font-medium">&pound;{saving.toFixed(0)} ({savingPct}%)</span></span>
                         ) : saving === 0 ? (
-                          <span>No saving vs buying individually — consider dropping the bundle price</span>
+                          <span>No saving vs buying individually, consider dropping the bundle price</span>
                         ) : (
-                          <span>Bundle is <span className="font-semibold">&pound;{Math.abs(saving).toFixed(0)} more</span> than buying individually — double-check this</span>
+                          <span>Bundle is <span className="font-semibold">&pound;{Math.abs(saving).toFixed(0)} more</span> than buying individually, double-check this</span>
                         )}
                       </div>
                     )}

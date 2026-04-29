@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Server-only Supabase client with service role key.
- * Bypasses RLS — use only in API routes, never in client components.
+ * Bypasses RLS, use only in API routes, never in client components.
  * Lazily initialized to avoid build errors when env var is missing.
  */
 let _client: SupabaseClient | null = null;

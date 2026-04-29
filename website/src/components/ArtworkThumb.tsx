@@ -23,7 +23,7 @@ const PADDING_CLASSES = {
 // uploaded artwork on a warm off-white square so portrait, landscape,
 // and panoramic works all sit in a uniform grid without cropping. The
 // image keeps its real aspect ratio via object-contain. Wall visualiser
-// surfaces (canvas, 3D scene, room mockups) must NOT use this — they
+// surfaces (canvas, 3D scene, room mockups) must NOT use this, they
 // need the artwork rendered at its true proportions.
 export default function ArtworkThumb({
   src,

@@ -20,13 +20,13 @@ export interface CounterResult {
   qrEnabled: boolean;
   revenueSharePercent: number | null;
   arrangementType: "free_loan" | "revenue_share" | "purchase";
-  /** Current user's id — lets the caller optimistically flip requester_user_id. */
+  /** Current user's id, lets the caller optimistically flip requester_user_id. */
   senderUserId: string | null;
 }
 
 interface Props {
   placementId: string;
-  /** Current user's id — echoed back to onSuccess so callers can
+  /** Current user's id, echoed back to onSuccess so callers can
       optimistically flip requester_user_id on the placement without a
       round-trip. Optional for backward compat. */
   currentUserId?: string | null;
@@ -53,7 +53,7 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
   // revenue-share field in its editable state.
   const [qr, setQr] = useState<boolean>(initial?.qr_enabled ?? true);
   // Allow "" so the user can fully clear the number and retype. Number
-  // state only — stuck-at-zero happened because the state was `number`
+  // state only, stuck-at-zero happened because the state was `number`
   // and `Number("") || 0` coerced backspace back to 0 every keystroke.
   const [revShare, setRevShare] = useState<number | "">(seedRev > 0 ? seedRev : "");
   const [note, setNote] = useState("");
@@ -206,7 +206,7 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
           )}
 
           {!paidLoan && !qr && (
-            <p className="text-[11px] text-muted italic">Neither option selected — sending as a free display.</p>
+            <p className="text-[11px] text-muted italic">Neither option selected, sending as a free display.</p>
           )}
 
           <textarea

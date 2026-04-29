@@ -19,7 +19,7 @@ import { z } from "zod";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
-// Every handler on this route must read live DB state — not a cached Route
+// Every handler on this route must read live DB state, not a cached Route
 // Handler response. Without this, Next.js was serving a stale GET response
 // after a DELETE so the deleted placement reappeared on refresh.
 export const dynamic = "force-dynamic";
@@ -29,8 +29,8 @@ export const revalidate = 0;
 // placement flow created its own `placement-…` thread, which meant an
 // artist and venue could end up with TWO chats (a regular DM thread
 // and the placement thread) and never realise the other existed. We
-// now unify everything into the `dm-…` thread so every message — DMs,
-// placement requests, counters, responses — lives in one place.
+// now unify everything into the `dm-…` thread so every message, DMs,
+// placement requests, counters, responses, lives in one place.
 function deterministicConversationId(slugA: string, slugB: string): string {
   const [a, b] = [slugA, slugB].sort();
   return `dm-${a}__${b}`;
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
     //   2. A fallback `placement_archives` table keyed by
     //      (placement_id, user_id) that the DELETE endpoint writes to
     //      when those columns don't exist yet. Either path means the
-    //      row is archived for *this* user — the counterparty is
+    //      row is archived for *this* user, the counterparty is
     //      unaffected.
     const hiddenFlag = role.type === "artist" ? "hidden_for_artist" : "hidden_for_venue";
     const archivedMode = new URL(request.url).searchParams.get("archived") || "";
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
       for (const r of (archRows || []) as Array<{ placement_id: string }>) {
         if (r.placement_id) fallbackArchivedIds.add(r.placement_id);
       }
-    } catch { /* table may not exist — treat as empty */ }
+    } catch { /* table may not exist, treat as empty */ }
 
     const placements = (data || []).filter((p) => {
       const columnHidden = (p as Record<string, unknown>)[hiddenFlag] === true;
@@ -171,7 +171,7 @@ export async function GET(request: Request) {
           if (!p.id || !p.artist_slug) continue;
           const count = (events || []).filter((e: { artist_slug?: string; venue_name?: string; work_id?: string }) => {
             if (e.artist_slug !== p.artist_slug) return false;
-            // Venue attribution is best-effort — some older events may
+            // Venue attribution is best-effort, some older events may
             // not carry venue_name. We count anything matching the artist
             // if venue_slug isn't set, otherwise require venue match.
             if (p.venue_slug && venueSlugs.length > 0 && e.venue_name && e.venue_name !== p.venue_slug) return false;
@@ -185,13 +185,13 @@ export async function GET(request: Request) {
     } catch { /* leave counts empty if analytics table missing */ }
 
     // Scan placement_request messages once and derive two things:
-    //   1. inferredRequesters — the FIRST sender per placement, used
+    //   1. inferredRequesters, the FIRST sender per placement, used
     //      to backfill legacy rows where requester_user_id is NULL.
-    //   2. latestCountererByPlacement — the sender of the MOST RECENT
+    //   2. latestCountererByPlacement, the sender of the MOST RECENT
     //      counter message, which is the authoritative current
     //      requester even if the placements.requester_user_id column
     //      never got flipped. This is what prevents a counter-sender
-    //      from accepting their own counter offer — the DB column can
+    //      from accepting their own counter offer, the DB column can
     //      lag behind the message trail, but the messages are the
     //      source of truth for the negotiation.
     const inferredRequesters: Record<string, string> = {};
@@ -236,7 +236,7 @@ export async function GET(request: Request) {
     const enriched = placements.map((p) => {
       const pid = p.id as string;
       // Precedence for the "who currently holds the request" field:
-      //   1. The latest counter message (source of truth — even if the
+      //   1. The latest counter message (source of truth, even if the
       //      DB column didn't flip, the counter sender should not be
       //      able to accept / decline their own counter).
       //   2. The placements.requester_user_id column.
@@ -290,7 +290,7 @@ export async function POST(request: Request) {
       // Venue-initiated request: look up artist from body.
       //
       // If the artist isn't in artist_profiles (seed-data-only or hasn't
-      // signed up yet), we still accept the placement — it's stored with
+      // signed up yet), we still accept the placement, it's stored with
       // artist_user_id = NULL and just the slug. When the artist later
       // signs up we can claim it by slug. A venue should be able to
       // request a placement from any artist.
@@ -304,7 +304,7 @@ export async function POST(request: Request) {
       const { data: ap } = await db.from("artist_profiles").select("user_id, slug, name").eq("slug", targetArtistSlug).single();
 
       // Fallback: synthesize a minimal "artist profile" so the rest of
-      // the flow can work. `user_id` stays empty — downstream code
+      // the flow can work. `user_id` stays empty, downstream code
       // checks for it before trying to email / notify.
       artistProfile = ap || {
         user_id: "",
@@ -314,7 +314,7 @@ export async function POST(request: Request) {
       venueProfile = vp;
     } else {
       // Artist-initiated request: look up venue from venueSlug.
-      // Pending applicants can't send placement requests — admin
+      // Pending applicants can't send placement requests, admin
       // has to approve their profile first. Mirrors the venue list
       // gate in /api/placements/venues + the accept-gate in PATCH.
       const { data: ap } = await db
@@ -335,7 +335,7 @@ export async function POST(request: Request) {
       }
 
       // Anti-spam outreach cap (#39). Caps NEW placement requests per
-      // calendar day per tier — Core 2, Premium 5, Pro 10. Counts
+      // calendar day per tier, Core 2, Premium 5, Pro 10. Counts
       // unique placements created today by this artist; counter-offers
       // / status changes on existing placements aren't affected. Pro
       // Wallplace staff (`subscription_plan = 'pro'`) and any future
@@ -395,7 +395,7 @@ export async function POST(request: Request) {
     // the fallback silently stripped venue_user_id and the placement
     // became invisible on reload.
     // Full row with every column the app understands. The fallback chain
-    // below only drops columns the DB specifically complains about — it
+    // below only drops columns the DB specifically complains about, it
     // does not blanket-strip monthly_fee_gbp / qr_enabled / message, which
     // used to cause paid-loan placements to be saved without their £ value.
     const fullRows = parsed.data.map((p) => ({
@@ -485,7 +485,7 @@ export async function POST(request: Request) {
           ? `${SITE}/placements/${encodeURIComponent(placementIdForLink)}`
           : `${SITE}/${fromVenue ? "artist-portal" : "venue-portal"}/placements`;
 
-        // If the artist initiated the request, the venue is the recipient —
+        // If the artist initiated the request, the venue is the recipient,
         // send the polished VenueNewPlacementRequest template. For
         // venue-initiated (artist receives), we don't yet have a matching
         // polished template, so fall back to the legacy helper.
@@ -530,7 +530,7 @@ export async function POST(request: Request) {
         }
       }
 
-      // Receipt to the requester themselves — closes the "did it go
+      // Receipt to the requester themselves, closes the "did it go
       // through?" loop. Only wired for artist-initiated requests today;
       // the venue-initiated flow falls back to the legacy notify and we
       // can wire VenuePlacementRequestSent if/when one's added. Sent
@@ -635,7 +635,7 @@ export async function POST(request: Request) {
       // Link the message back to the placement so the UI can render inline
       // Accept/Decline buttons in the messages thread (F25).
       const placementIds = parsed.data.map((p) => p.id);
-      // recipient_user_id is nullable — when the artist hasn't signed up
+      // recipient_user_id is nullable, when the artist hasn't signed up
       // yet, we carry the message by slug alone and claim it later.
       const recipientUserId = fromVenue ? artistProfile!.user_id : venueProfile!.user_id;
       const baseMsg = {
@@ -758,13 +758,13 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // F39 — approval logic
+    // F39, approval logic
     // Rules (simple, no legacy fallback pitfall):
     //   1. Block only the requester from accepting their own request.
     //   2. Block a true self-placement (both parties are the same user).
     //   3. Any authenticated party that is NOT the requester may accept/decline.
     // If requester_user_id is unknown (legacy row or missing column), we still
-    // allow either party to accept — the previous "only venue accepts" fallback
+    // allow either party to accept, the previous "only venue accepts" fallback
     // was wrong for venue-initiated placements.
     const requesterId = existing.requester_user_id || null;
     let isRequester = requesterId !== null && requesterId === auth.user!.id;
@@ -784,7 +784,7 @@ export async function PATCH(request: Request) {
     // Earlier versions of this block conflated the two lookups and,
     // after a counter from the OTHER party, erroneously promoted the
     // original offerer back into "current requester" via the fallback
-    // — which blocked them from responding to the counter. Keep the
+    //, which blocked them from responding to the counter. Keep the
     // two resolutions separate.
     if (!isRequester) {
       const { data: reqMsgs } = await db
@@ -834,7 +834,7 @@ export async function PATCH(request: Request) {
 
     // Counter offer: revise terms and hand the "needs to respond" role
     // back to the other party. Allowed when the row is pending OR was
-    // recently declined — a decline is now treated as "I'm not into
+    // recently declined, a decline is now treated as "I'm not into
     // these terms; bring me a better offer", not the end of the deal.
     if (counter) {
       if (existing.status === "active") {
@@ -850,14 +850,14 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "You cannot counter your own placement" }, { status: 400 });
       }
       // On a pending row the requester can't counter their own outstanding offer.
-      // On a declined row the OPPOSITE applies — the decliner is the non-requester
+      // On a declined row the OPPOSITE applies, the decliner is the non-requester
       // and must wait for the other party to come back with better terms.
       if (existing.status === "pending" && isRequester) {
         return NextResponse.json({ error: "You cannot counter your own request" }, { status: 400 });
       }
       if (existing.status === "declined" && !isRequester) {
         return NextResponse.json(
-          { error: "You declined this offer — wait for the other party to come back with new terms." },
+          { error: "You declined this offer, wait for the other party to come back with new terms." },
           { status: 400 },
         );
       }
@@ -889,7 +889,7 @@ export async function PATCH(request: Request) {
         } else if (termsErr) {
           // Retry by progressively stripping columns that the DB doesn't
           // know about. We only drop columns mentioned in the error
-          // message — everything else we want to keep trying.
+          // message, everything else we want to keep trying.
           const msg = String(termsErr.message || "").toLowerCase();
           const safe = { ...termsUpdates };
           if (msg.includes("qr_enabled")) delete safe.qr_enabled;
@@ -903,14 +903,14 @@ export async function PATCH(request: Request) {
       }
 
       if (!termsSaved) {
-        // We didn't update a single term — reject the counter. Returning
+        // We didn't update a single term, reject the counter. Returning
         // success here would leave the user thinking the new offer was
         // sent when the DB actually still holds the old terms.
         console.error("Counter terms update failed for placement", id);
         return NextResponse.json({ error: "Failed to save counter offer" }, { status: 500 });
       }
 
-      // Role flip — write separately so a missing requester_user_id column
+      // Role flip, write separately so a missing requester_user_id column
       // on older environments doesn't roll back the terms update we just
       // confirmed. Fire-and-forget the retry; the terms are the critical
       // part of the counter.
@@ -989,7 +989,7 @@ export async function PATCH(request: Request) {
               revenueSharePercent: counter.revenueSharePercent ?? null,
               qrEnabled: counter.qrEnabled ?? null,
               monthlyFeeGbp: counter.monthlyFeeGbp ?? null,
-              // Counter flips roles — the counter-er now awaits response.
+              // Counter flips roles, the counter-er now awaits response.
               requesterUserId: auth.user!.id,
             },
           });
@@ -1025,7 +1025,7 @@ export async function PATCH(request: Request) {
                     firstName: counterpartyUser.user_metadata?.first_name || theirs.name.split(" ")[0] || "there",
                     counterpartyName: mine.name,
                     placementUrl: `${SITE}/placements/${encodeURIComponent(id)}`,
-                    changedTerms: changedTerms.length ? changedTerms : ["Revised terms — open the placement to review"],
+                    changedTerms: changedTerms.length ? changedTerms : ["Revised terms, open the placement to review"],
                   }),
                   metadata: { placementId: id },
                 });
@@ -1043,8 +1043,8 @@ export async function PATCH(request: Request) {
     }
 
     // Accept / decline: only block the no-op cases (already in that
-    // terminal state). Anything else in flight — pending, countered,
-    // mid-update — is fine to respond to. A counter doesn't change
+    // terminal state). Anything else in flight, pending, countered,
+    // mid-update, is fine to respond to. A counter doesn't change
     // status, but this also covers any odd intermediate state we
     // might land in (e.g. a stale row briefly flagged something else).
     if (status === "active" && existing.status === "active") {
@@ -1068,7 +1068,7 @@ export async function PATCH(request: Request) {
       if (status === "active") updates.accepted_at = now;
     }
 
-    // Stage transitions — once the placement is active, either party can
+    // Stage transitions, once the placement is active, either party can
     // advance any stage in one click. The earlier bilateral-confirmation
     // flow (propose → other side confirms) was more friction than value
     // for the pilot, so it's been removed and the stepper writes the
@@ -1099,7 +1099,7 @@ export async function PATCH(request: Request) {
 
     // Undo a previously-stamped stage. Either party can pull a stage back
     // if they advanced too eagerly. We don't enforce "most recent" on the
-    // server — the UI only ever surfaces undo for the latest reached
+    // server, the UI only ever surfaces undo for the latest reached
     // stage, and forcing the rule in two places risked rejecting valid
     // attempts when the columns were missing.
     if (unsetStage) {
@@ -1337,7 +1337,7 @@ export async function PATCH(request: Request) {
         console.error("Stage email error:", err);
       }
 
-      // Bell notifications for stage transitions — fire alongside the
+      // Bell notifications for stage transitions, fire alongside the
       // emails so users see the change in-app even if email is filtered
       // / spam-foldered. Both parties get notified for stages that
       // genuinely matter to either side: scheduled, installed, live,
@@ -1351,10 +1351,10 @@ export async function PATCH(request: Request) {
           collected: "Placement collected",
         };
         const stageBodies: Record<string, (venue: string) => string> = {
-          scheduled: (v) => `${v} — install scheduled`,
-          installed: (v) => `${v} — work is up`,
-          live: (v) => `${v} — now publicly live`,
-          collected: (v) => `${v} — placement complete`,
+          scheduled: (v) => `${v}, install scheduled`,
+          installed: (v) => `${v}, work is up`,
+          live: (v) => `${v}, now publicly live`,
+          collected: (v) => `${v}, placement complete`,
         };
         const headline = stageHeadlines[stage as string];
         if (headline) {
@@ -1376,7 +1376,7 @@ export async function PATCH(request: Request) {
     }
 
     // On pending → active/declined, notify the requester. If the column
-    // was NULL we try to infer from the first placement_request message —
+    // was NULL we try to infer from the first placement_request message,
     // otherwise the decliner's decision never reaches the other party's
     // bell icon, which was the "I didn't get notified when placement was
     // declined" gap.
@@ -1395,7 +1395,7 @@ export async function PATCH(request: Request) {
         }
       }
     }
-    // Final fallback — if we still don't know the requester (legacy
+    // Final fallback, if we still don't know the requester (legacy
     // row, no message trail, etc.), use whichever party isn't us. The
     // assumption: the responder is by definition not the requester, so
     // the other side of the deal is the right notification target.
@@ -1411,7 +1411,7 @@ export async function PATCH(request: Request) {
     // Notify + post thread message on any pending → active/declined
     // transition. The notification half is gated on knowing who the
     // requester is (so we have someone to email/bell). The in-thread
-    // placement_response message is NOT gated on that — it only needs
+    // placement_response message is NOT gated on that, it only needs
     // to know the two slugs, and it's essential for the messages view
     // to reflect the latest decision. (Previously both were inside the
     // same `if (notifyRequesterId && …)`, so any placement with a
@@ -1422,7 +1422,7 @@ export async function PATCH(request: Request) {
       existing.status === "pending" &&
       (status === "active" || status === "declined")
     ) {
-      // Always fire the in-app bell notification first — independent of
+      // Always fire the in-app bell notification first, independent of
       // email so a flaky email service / suppression / preferences gate
       // can't take down the bell alert too. Previously this lived at
       // the bottom of the try block below, meaning any pre-email
@@ -1483,7 +1483,7 @@ export async function PATCH(request: Request) {
                 metadata: { placementId: id },
               });
             } else {
-              // Venue was the requester — send their polished receipt
+              // Venue was the requester, send their polished receipt
               // confirming the artist accepted, with next-step nudges.
               await sendEmail({
                 idempotencyKey: `placement_response:${id}:accepted`,
@@ -1498,7 +1498,7 @@ export async function PATCH(request: Request) {
                   placementUrl,
                   nextSteps: [
                     `Confirm install date with ${artistProfile.name}`,
-                    "Share venue logistics — opening hours, lighting, install timing",
+                    "Share venue logistics, opening hours, lighting, install timing",
                     "Review the consignment record together",
                   ],
                 }),
@@ -1540,7 +1540,7 @@ export async function PATCH(request: Request) {
           }
         }
 
-        // (Bell notification was already fired above — moved out of
+        // (Bell notification was already fired above, moved out of
         // this try so an email-side exception can't take it down.)
       } catch (err) {
         console.warn("Response email skipped:", err);
@@ -1607,7 +1607,7 @@ export async function PATCH(request: Request) {
             // `placement_declined` in-app notification AND a polished
             // email; counting this message as unread on top causes
             // the messages bell to bump in addition to the
-            // notifications bell — what users reported as "double
+            // notifications bell, what users reported as "double
             // notifications". The message still renders inline in
             // the thread for context when the user actually opens
             // the conversation.
@@ -1654,7 +1654,7 @@ export async function DELETE(request: Request) {
     }
 
     const db = getSupabaseAdmin();
-    // Fetch only the two ownership columns — these are the only ones we
+    // Fetch only the two ownership columns, these are the only ones we
     // need to authorise the archive action, and every env has them.
     // requester_user_id was previously also requested here but some
     // Supabase instances predate migration 008 and don't have that
@@ -1727,7 +1727,7 @@ export async function DELETE(request: Request) {
         if (archDelErr) {
           console.error("Fallback unarchive failed:", archDelErr);
           return NextResponse.json(
-            { error: "Archive requires migration 026 — apply 026_placement_soft_delete.sql (or create a placement_archives(placement_id, user_id) table)." },
+            { error: "Archive requires migration 026, apply 026_placement_soft_delete.sql (or create a placement_archives(placement_id, user_id) table)." },
             { status: 500 },
           );
         }
@@ -1742,7 +1742,7 @@ export async function DELETE(request: Request) {
       if (archInsErr) {
         console.error("Fallback archive insert failed:", archInsErr);
         return NextResponse.json(
-          { error: "Archive requires migration 026 — apply 026_placement_soft_delete.sql (or create a placement_archives(placement_id, user_id) table)." },
+          { error: "Archive requires migration 026, apply 026_placement_soft_delete.sql (or create a placement_archives(placement_id, user_id) table)." },
           { status: 500 },
         );
       }

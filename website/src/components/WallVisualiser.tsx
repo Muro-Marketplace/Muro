@@ -4,11 +4,11 @@ import { useState } from "react";
 import Image from "next/image";
 
 /**
- * Wall visualiser — lets a buyer upload a photo of their wall and see the
+ * Wall visualiser, lets a buyer upload a photo of their wall and see the
  * selected artwork overlaid on it at scale. Phase 1 is a CSS-only overlay
  * (opacity + drag / scale) that works without any model inference. Phase 2
  * will swap to a real "view in room" service (Replicate SDXL inpaint or
- * similar) behind /api/visualise — the component's public API stays the same.
+ * similar) behind /api/visualise, the component's public API stays the same.
  *
  * Product decision needed: whether to bake in a full AI inpaint call
  * (higher fidelity, pennies per render, needs Replicate account + a spend
@@ -71,7 +71,7 @@ export default function WallVisualiser({ artworkImage, artworkTitle, artworkWidt
             {/* User's wall */}
             <img src={wallPhoto} alt="Your wall" className="absolute inset-0 w-full h-full object-cover" />
 
-            {/* Artwork overlay — positioned by percentage + scaled. Drag by
+            {/* Artwork overlay, positioned by percentage + scaled. Drag by
                 clicking anywhere on the preview; for v1 we just re-centre
                 on click rather than implement free drag. */}
             <button

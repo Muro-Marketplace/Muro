@@ -1,9 +1,9 @@
-// Vercel Cron — daily 10:00 UTC. Finds users inactive for 14 / 30 / 90 days
+// Vercel Cron, daily 10:00 UTC. Finds users inactive for 14 / 30 / 90 days
 // across all three personas and sends the matching re-engagement email.
 //
 // "Inactive" = no sign-in activity in the window. We read `last_sign_in_at`
 // from Supabase auth.users for each profile. Users who have been emailed
-// via this job in the last 14 days (any inactive_* template) are skipped —
+// via this job in the last 14 days (any inactive_* template) are skipped,
 // avoids cascading re-engagement waves.
 
 import { NextResponse } from "next/server";
@@ -92,7 +92,7 @@ export async function GET(request: Request) {
           template: "artist_inactive_14d",
           category: "tips",
           to: user.email,
-          subject: `We missed you — a look at your quiet fortnight`,
+          subject: `We missed you, a look at your quiet fortnight`,
           userId: user.id,
           react: ArtistInactive14d({ firstName, profileViews: 0, nearbyVenues: [], dashboardUrl: `${SITE}/artist-portal` }),
           metadata: { tier, days },
@@ -103,12 +103,12 @@ export async function GET(request: Request) {
           template: "artist_inactive_30d",
           category: "tips",
           to: user.email,
-          subject: `A month in — your portfolio snapshot`,
+          subject: `A month in, your portfolio snapshot`,
           userId: user.id,
           react: ArtistInactive30d({
             firstName,
             portfolioStats: [{ label: "Profile views", value: 0 }, { label: "QR scans", value: 0 }],
-            suggestedAction: "Add one new piece — artists with 5+ works appear higher in venue searches.",
+            suggestedAction: "Add one new piece, artists with 5+ works appear higher in venue searches.",
             dashboardUrl: `${SITE}/artist-portal`,
           }),
           metadata: { tier, days },
@@ -172,7 +172,7 @@ export async function GET(request: Request) {
       return;
     }
 
-    // Customer fallback — user exists, no profile.
+    // Customer fallback, user exists, no profile.
     if (await sentRecentlyForUser(db, user.id, "customer")) return;
     const key = `customer_inactive_${tier}d:${user.id}:${new Date().toISOString().slice(0, 10)}`;
     if (tier === 30) {

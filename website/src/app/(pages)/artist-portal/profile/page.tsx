@@ -17,12 +17,12 @@ import { slugify } from "@/lib/slugify";
 import { useSearchParams } from "next/navigation";
 
 // Catalogue of common artwork mediums for the per-work Combobox. The
-// list is intentionally permissive — artists almost always have edge
+// list is intentionally permissive, artists almost always have edge
 // cases ("oil + gold leaf", "cyanotype on cotton") so the combobox
 // allows custom entries while still suggesting the standards.
 // Canonical list lives in /src/data so the portfolio editor can also
 // import it without cross-importing this page module (cross-importing
-// route page.tsx files breaks rendering in some Next.js versions —
+// route page.tsx files breaks rendering in some Next.js versions,
 // don't do it). Re-exported for any legacy callers.
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
 export { WORK_MEDIUM_OPTIONS };
@@ -41,7 +41,7 @@ export { WORK_MEDIUM_OPTIONS };
  *
  * Picker copy nudges users towards the broader file selection (#9):
  * macOS Safari/Chrome show the "Photos" folder by default unless the
- * user explicitly browses elsewhere — surfacing "Browse all files" in
+ * user explicitly browses elsewhere, surfacing "Browse all files" in
  * the hint helps them find their iPhotos / Pictures folders. We can't
  * change the OS picker chrome itself.
  */
@@ -292,26 +292,26 @@ interface ProfileState {
   /**
    * `primaryMedium` is retained on the state so the saved API payload
    * doesn't break older rows, but it's not surfaced in the UI any
-   * more — Discipline is the canonical taxonomy field. New profiles
+   * more, Discipline is the canonical taxonomy field. New profiles
    * leave it as "".
    */
   primaryMedium: string;
   discipline: DisciplineId | "";
   /**
-   * Short bio — the elevator pitch that shows on cards, search hits,
+   * Short bio, the elevator pitch that shows on cards, search hits,
    * and the top of the artist's public profile. Hard-capped at 300
    * characters at save time.
    */
   bio: string;
   /**
-   * Extended bio — optional long-form story shown at the bottom of the
+   * Extended bio, optional long-form story shown at the bottom of the
    * artist's public profile. Up to 1000 characters. Empty for artists
    * who don't want to write a second blob.
    */
   extendedBio: string;
   instagram: string;
   /**
-   * Unified tags array — replaces the previous trio of `subStyles`,
+   * Unified tags array, replaces the previous trio of `subStyles`,
    * `styleTags`, and `themes` which were three near-identical chip
    * lists in the UI. At save time we split this list back into the
    * three DB columns so older readers (search filters, browse pages)
@@ -341,7 +341,7 @@ interface ProfileState {
   canProvideFraming: boolean;
   /**
    * Available sizes used to be a profile-level chip set. Removed from
-   * the UI per #6 — sizes belong on individual works, not the profile.
+   * the UI per #6, sizes belong on individual works, not the profile.
    * State retained so the API payload doesn't drop the column on
    * existing rows; we just leave whatever was there alone.
    */
@@ -351,7 +351,7 @@ interface ProfileState {
 }
 
 /** Empty profile state for a brand-new artist who has just completed
- *  the claim flow but doesn't yet have a saved artist_profiles row —
+ *  the claim flow but doesn't yet have a saved artist_profiles row,
  *  so the editor can render the full form instead of a dead-end.
  *  First Save PUTs this to the API, which upserts a new row. */
 function emptyProfile(nameSeed: string): ProfileState {
@@ -384,13 +384,13 @@ function emptyProfile(nameSeed: string): ProfileState {
 
 function initProfile(a: Artist): ProfileState {
   // Merge the legacy short/extended bios into a single field. Prefer
-  // Bio is now two separate fields again — short (≤300 for cards) and
+  // Bio is now two separate fields again, short (≤300 for cards) and
   // optional extended (≤1000 for the bottom of the public page).
   // Legacy rows that only filled the extended field flow into short.
   const shortBio = (a.shortBio?.trim() || a.extendedBio?.trim() || "").slice(0, 300);
   const longBio = (a.extendedBio?.trim() || "").slice(0, 1000);
   // Merge the legacy trio (sub-styles, style tags, themes) into a
-  // single de-duped tags array — that's what the new UI works with.
+  // single de-duped tags array, that's what the new UI works with.
   const mergedTags = Array.from(
     new Set<string>([
       ...(a.subStyles || []),
@@ -420,7 +420,7 @@ function initProfile(a: Artist): ProfileState {
     openToRevenueShare: a.openToRevenueShare,
     revenueSharePercent: a.revenueSharePercent || 10,
     openToOutrightPurchase: a.openToOutrightPurchase,
-    // Treat the legacy pair as "either provides framing" — collapse to
+    // Treat the legacy pair as "either provides framing", collapse to
     // the new single flag.
     canProvideFraming: a.canProvideFrames || a.canArrangeFraming,
     availableSizes: [...a.availableSizes],
@@ -495,7 +495,7 @@ export default function ProfileEditorPage() {
     );
   }
 
-  // Core upload — accepts a raw File so it can be called from the
+  // Core upload, accepts a raw File so it can be called from the
   // file-input change event AND a drag-drop handler. Anything image
   // typed gets accepted; non-images are silently rejected since the
   // browser already filters most cases at the OS picker.
@@ -543,7 +543,7 @@ export default function ProfileEditorPage() {
     setUploading(true);
     const url = await uploadImage(file, "artworks");
 
-    // Read the image's natural dimensions in parallel — used to set
+    // Read the image's natural dimensions in parallel, used to set
     // orientation automatically + suggest a dimensions string the user
     // can refine. Without this, replacing an image left the form's
     // orientation pointing at the *previous* image's aspect ratio.
@@ -570,7 +570,7 @@ export default function ProfileEditorPage() {
       image: url,
       // Replace orientation based on the new image. If the user typed a
       // dimensions string already, keep it (they may know better than
-      // pixel aspect — a print can crop differently). Otherwise leave
+      // pixel aspect, a print can crop differently). Otherwise leave
       // dimensions blank so they can fill it in fresh.
       orientation: detected?.orientation ?? p.orientation,
     }));
@@ -724,14 +724,14 @@ export default function ProfileEditorPage() {
           </div>
         </div>
 
-        {/* First-time welcome — surfaced when the user arrives from the
+        {/* First-time welcome, surfaced when the user arrives from the
             claim flow. Keeps the "you're approved once admin reviews
             you" expectation visible while the user fills everything in. */}
         {isWelcome && (
           <div className="mb-6 bg-accent/5 border border-accent/20 rounded-sm p-4">
             <p className="text-sm font-medium text-foreground">Build your full profile</p>
             <p className="text-xs text-muted mt-1 leading-relaxed">
-              You can fill everything out now — photos, statement, works, pricing.
+              You can fill everything out now, photos, statement, works, pricing.
               Your profile only goes live on the marketplace once our team has
               approved your application, so there&rsquo;s no rush, but the more
               complete it is the faster the review.
@@ -747,14 +747,14 @@ export default function ProfileEditorPage() {
           </div>
         )}
 
-        {/* 1. Profile Photo — banner removed since the public profile
+        {/* 1. Profile Photo, banner removed since the public profile
             no longer surfaces a hero image (Variant A layout). The
             bannerImage field stays in state so the API payload doesn't
             wipe existing values, but no UI to set it. */}
         <div className={sectionClass}>
           <h2 className="text-lg font-medium mb-5">Profile Photo</h2>
 
-          {/* Profile pic — click or drag-drop */}
+          {/* Profile pic, click or drag-drop */}
           <div>
             <label className={labelClass}>Profile Photo</label>
             <div className="flex items-center gap-4">
@@ -826,7 +826,7 @@ export default function ProfileEditorPage() {
             </div>
             {/*
              * Bio is now two fields again. The short bio (≤300) is the
-             * elevator pitch — appears on cards, search hits, and the
+             * elevator pitch, appears on cards, search hits, and the
              * top of the public profile. The extended bio (≤1000,
              * optional) sits at the bottom of the public profile so
              * artists who want to write longer can.
@@ -843,7 +843,7 @@ export default function ProfileEditorPage() {
                 onChange={(e) => update("bio", e.target.value.slice(0, 300))}
                 rows={4}
                 maxLength={300}
-                placeholder="A two- or three-sentence opener — who you are, what you make, what to look out for."
+                placeholder="A two- or three-sentence opener, who you are, what you make, what to look out for."
                 className={`${inputClass} resize-none`}
               />
               <p className={`text-[10px] mt-1 text-right ${profile.bio.length >= 280 ? "text-amber-600" : "text-muted"}`}>
@@ -862,7 +862,7 @@ export default function ProfileEditorPage() {
                 onChange={(e) => update("extendedBio", e.target.value.slice(0, 1000))}
                 rows={6}
                 maxLength={1000}
-                placeholder="Background, practice, exhibitions, influences — the longer story for buyers who scroll all the way down."
+                placeholder="Background, practice, exhibitions, influences, the longer story for buyers who scroll all the way down."
                 className={`${inputClass} resize-none`}
               />
               <p className={`text-[10px] mt-1 text-right ${profile.extendedBio.length >= 980 ? "text-amber-600" : "text-muted"}`}>
@@ -872,7 +872,7 @@ export default function ProfileEditorPage() {
           </div>
         </div>
 
-        {/* 3. Instagram (Website removed — wasn't surfaced publicly) */}
+        {/* 3. Instagram (Website removed, wasn't surfaced publicly) */}
         <div className={sectionClass}>
           <h2 className="text-lg font-medium mb-5">Social</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -891,7 +891,7 @@ export default function ProfileEditorPage() {
           <p className="text-xs text-muted mb-5">
             Pick the discipline your work sits in, then add tags that
             describe it. Venues browse by these. Suggestions are based on
-            your discipline — search to narrow down or type any custom tag.
+            your discipline, search to narrow down or type any custom tag.
           </p>
 
           {/* Discipline radio group */}
@@ -932,7 +932,7 @@ export default function ProfileEditorPage() {
             </div>
           </div>
 
-          {/* Unified Tags — replaces the previous trio of Sub-styles +
+          {/* Unified Tags, replaces the previous trio of Sub-styles +
               Style Tags + Themes. Suggestions = discipline sub-styles +
               all themes (de-duped). The search box filters suggestions
               and lets users add anything custom via Enter or the
@@ -964,7 +964,7 @@ export default function ProfileEditorPage() {
                 { key: "offersPrints" as const, label: "Prints & reproductions" },
                 { key: "offersFramed" as const, label: "Framed works" },
                 { key: "openToCommissions" as const, label: "Commissions" },
-                // Single "framing" affirmative — replaces the previous
+                // Single "framing" affirmative, replaces the previous
                 // "can provide frames" + "can arrange framing" pair,
                 // which were saying nearly the same thing in two ways.
                 { key: "canProvideFraming" as const, label: "Can provide framing" },
@@ -1027,7 +1027,7 @@ export default function ProfileEditorPage() {
             </div>
           )}
 
-          {/* Available sizes section removed — sizes belong on
+          {/* Available sizes section removed, sizes belong on
               individual works (Sizes & Prices on each work form), not
               the profile. Profile-level sizes were never surfaced
               meaningfully and forced artists to duplicate information. */}
@@ -1084,7 +1084,7 @@ export default function ProfileEditorPage() {
             <div className="bg-background border border-border rounded-sm p-5 mb-5 space-y-4">
               <h3 className="text-sm font-medium">{editingWorkIndex !== null ? "Edit Work" : "Add New Work"}</h3>
 
-              {/* Image upload — clickable + drag-drop target. Drop a
+              {/* Image upload, clickable + drag-drop target. Drop a
                   file from Finder / Explorer / iPhotos and it uploads
                   the same way as the file-picker path. The whole zone
                   is the drop target so users don't have to aim at a
@@ -1109,7 +1109,7 @@ export default function ProfileEditorPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <input type="text" value={workForm.title} onChange={(e) => setWorkForm((p) => ({ ...p, title: e.target.value }))} placeholder="Title *" className={inputClass} />
-                {/* Medium — searchable + mandatory combobox. Suggests
+                {/* Medium, searchable + mandatory combobox. Suggests
                     standard mediums (oil, acrylic, watercolour…) but
                     accepts free text via "Use 'foo'" for one-off
                     techniques. Required to submit. */}
@@ -1210,7 +1210,7 @@ export default function ProfileEditorPage() {
         </div>
 
         {/*
-         * Bottom Save Changes — duplicates the top button so users on
+         * Bottom Save Changes, duplicates the top button so users on
          * a long edit page don't have to scroll back up after filling
          * everything out. Same handler; same disabled-when-clean
          * affordance via hasUnsavedChanges.

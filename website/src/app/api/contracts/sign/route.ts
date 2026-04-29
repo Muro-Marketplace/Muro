@@ -8,13 +8,13 @@
 //          `ref` comes from `placement_records.contract_attachment_url` and
 //          uses the `contract:<bucket>/<path>` prefix (see src/lib/upload.ts).
 //          Legacy public-URL values are accepted and passed through unchanged
-//          — they pre-date this route and are already world-readable, so the
+//         , they pre-date this route and are already world-readable, so the
 //          signed-URL step adds nothing.
 //
 // Security:
 //   - Auth required.
 //   - User must be a party (artist or venue) on the placement.
-//   - Signed URL expires in 10 minutes — enough for a download, short
+//   - Signed URL expires in 10 minutes, enough for a download, short
 //     enough that a leaked link is low value.
 
 import { NextResponse } from "next/server";
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
   const db = getSupabaseAdmin();
 
-  // Party check — only artist or venue on the placement may sign.
+  // Party check, only artist or venue on the placement may sign.
   const { data: placement } = await db
     .from("placements")
     .select("artist_user_id, venue_user_id")
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authorised" }, { status: 403 });
   }
 
-  // Legacy row — the value is already a public URL. Return it as-is so the
+  // Legacy row, the value is already a public URL. Return it as-is so the
   // caller can link to it. Nothing to sign.
   if (!isContractRef(ref)) {
     if (/^https?:\/\//.test(ref)) {

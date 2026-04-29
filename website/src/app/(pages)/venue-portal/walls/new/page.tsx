@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * /venue-portal/walls/new — wall creation flow.
+ * /venue-portal/walls/new, wall creation flow.
  *
  * Two top-level tabs:
- *   1. Preset — pick a stock wall colour + dimensions
- *   2. Upload photo — upload a real photograph of your wall, then set
+ *   1. Preset, pick a stock wall colour + dimensions
+ *   2. Upload photo, upload a real photograph of your wall, then set
  *      dimensions
  *
  * Either path:
@@ -91,7 +91,7 @@ export default function NewVenueWallPage() {
     setUploadError(null);
     setUploading(true);
     try {
-      // Compress + resize before upload — iPhone photos at full size
+      // Compress + resize before upload, iPhone photos at full size
       // typically run 4-12MB which trips Vercel's serverless body
       // limit (≈4.5MB) and surfaces as a 413. 2400px max / 0.88 keeps
       // the photo sharp enough to use as a wall reference while
@@ -100,7 +100,7 @@ export default function NewVenueWallPage() {
       try {
         uploadBlob = await resizeImage(file, 2400, 0.88);
       } catch {
-        // Resize unsupported (e.g. browser can't decode HEIC) — fall
+        // Resize unsupported (e.g. browser can't decode HEIC), fall
         // back to the original. The route's MAX_BYTES will still
         // surface an error that's clearer than a Vercel 413.
       }
@@ -455,7 +455,7 @@ export default function NewVenueWallPage() {
 
               <p className="text-[11px] text-muted mt-2 leading-relaxed">
                 Take or pick a straight-on photo of the wall, lit evenly.
-                You&apos;ll see artworks composited on top — measurements
+                You&apos;ll see artworks composited on top, measurements
                 are based on the dimensions you enter below, not the
                 photo&apos;s pixels.
               </p>

@@ -193,7 +193,7 @@ export async function POST(
   }
 
   // Mark the render as kept so the GC sweep doesn't delete the file.
-  // Best-effort — failure here doesn't unsave the mockup.
+  // Best-effort, failure here doesn't unsave the mockup.
   await db
     .from("wall_renders")
     .update({ kept: true })
@@ -203,7 +203,7 @@ export async function POST(
 }
 
 /**
- * DELETE — remove a mockup by render_id.
+ * DELETE, remove a mockup by render_id.
  * Body: { render_id }
  */
 export async function DELETE(

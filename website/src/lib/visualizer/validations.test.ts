@@ -141,7 +141,7 @@ describe("updateWallSchema", () => {
   });
 
   it("does not allow changing kind", () => {
-    // kind is intentionally absent from the schema — extra props are ignored
+    // kind is intentionally absent from the schema, extra props are ignored
     // but width_cm bounds still apply.
     expect(updateWallSchema.safeParse({ width_cm: 49 }).success).toBe(false);
   });

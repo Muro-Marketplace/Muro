@@ -15,7 +15,7 @@
  * lightbox state + read the current user's role from AuthContext.
  *
  * The full "drag artwork onto this wall and send the rendered
- * composite to the venue" flow is the next step — wires in the
+ * composite to the venue" flow is the next step, wires in the
  * existing WallVisualizer in a new artist-side mode. Tracked
  * separately; this card is the unblocker.
  */
@@ -64,12 +64,12 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
   // the venue + wall info encoded so the form can prefill a sensible
   // opening message.
   const wallDims = `${wall.width_cm} × ${wall.height_cm} cm`;
-  const prefillMessage = `Hi ${venue.name} — I'd love to place work on your "${wall.name}" wall (${wallDims}).`;
+  const prefillMessage = `Hi ${venue.name}, I'd love to place work on your "${wall.name}" wall (${wallDims}).`;
   const requestHref = `/artist-portal/placements?venue=${encodeURIComponent(venue.slug)}&wallName=${encodeURIComponent(wall.name)}&wallDims=${encodeURIComponent(wallDims)}&prefillMessage=${encodeURIComponent(prefillMessage)}`;
 
   return (
     <>
-      {/* Card — button-styled so it's obviously interactive. Same
+      {/* Card, button-styled so it's obviously interactive. Same
           visual layout as the previous static card. */}
       <button
         type="button"
@@ -127,7 +127,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={`${wall.name} — wall details`}
+          aria-label={`${wall.name}, wall details`}
           onClick={() => setOpen(false)}
           className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm grid place-items-center p-4 sm:p-8"
         >

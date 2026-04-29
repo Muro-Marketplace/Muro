@@ -36,7 +36,7 @@ export async function getAdminUser(request: Request) {
 
   const allowed = adminEmails();
   if (allowed.length === 0) {
-    console.error("ADMIN_EMAILS/ADMIN_EMAIL is not configured — admin access is disabled");
+    console.error("ADMIN_EMAILS/ADMIN_EMAIL is not configured, admin access is disabled");
     return {
       user: null,
       error: NextResponse.json({ error: "Admin access not configured" }, { status: 503 }),

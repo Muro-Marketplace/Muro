@@ -88,8 +88,8 @@ export async function POST(request: Request) {
               single_wall: "Single wall",
               full_space: "Full space",
               bespoke: "Bespoke project",
-              managed_monthly: "Managed — monthly rotation",
-              managed_quarterly: "Managed — quarterly refresh",
+              managed_monthly: "Managed, monthly rotation",
+              managed_quarterly: "Managed, quarterly refresh",
             };
             notifyCurationCustomerPaid({
               email: existing.contact_email,
@@ -157,7 +157,7 @@ export async function POST(request: Request) {
         }
 
         // Calculate splits. Platform fee and venue revenue are computed on
-        // the subtotal (artwork value only) — shipping is not subject to
+        // the subtotal (artwork value only), shipping is not subject to
         // the cut and flows straight through to the artist, who pays the
         // courier out of pocket.
         venueRevenue = Math.round(subtotal * (venueRevSharePct / 100) * 100) / 100;
@@ -202,7 +202,7 @@ export async function POST(request: Request) {
           created_at: new Date().toISOString(),
         };
 
-        // F30 — idempotency: skip if we've already processed this payment intent.
+        // F30, idempotency: skip if we've already processed this payment intent.
         if (paymentIntentId) {
           const { data: existingOrder } = await db
             .from("orders")
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
         }
 
         if (error) {
-          // F31 — return non-200 so Stripe retries instead of silently dropping.
+          // F31, return non-200 so Stripe retries instead of silently dropping.
           console.error("Supabase order save error:", error);
           return NextResponse.json({ error: "DB save failed" }, { status: 500 });
         } else {
@@ -273,7 +273,7 @@ export async function POST(request: Request) {
           }
 
           const cartItemsForNotify = session.metadata?.cart_items ? JSON.parse(session.metadata.cart_items) : [];
-          // Parallel image array — populated by /api/checkout. Truncation
+          // Parallel image array, populated by /api/checkout. Truncation
           // at the Stripe-metadata 500-char cap is possible for big carts;
           // unrecovered slots fall back to the placeholder.
           let cartImagesForNotify: string[] = [];
@@ -323,7 +323,7 @@ export async function POST(request: Request) {
             // Persist the enriched items (with display names + images) on
             // the orders row so subsequent shipping/delivery emails can
             // read them deterministically without re-running the lookup.
-            // Best-effort — failure here is non-fatal; the receipt email
+            // Best-effort, failure here is non-fatal; the receipt email
             // already has what it needs in scope.
             try {
               await db.from("orders").update({ items: orderItems }).eq("id", orderId);
@@ -367,21 +367,21 @@ export async function POST(request: Request) {
             });
           }
 
-          // Notify artist — email + in-app bell notification.
+          // Notify artist, email + in-app bell notification.
           if (artistUserId) {
             const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistUserId);
             const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", artistUserId).single();
             if (artistUser?.email && artistProfile) {
               // Two emails to the artist: the celebration ("you made a sale")
               // and the operational receipt (order confirmation). They serve
-              // different purposes — the first is emotional, the second
+              // different purposes, the first is emotional, the second
               // itemised and record-worthy. Idempotency keys are distinct.
               await sendEmail({
                 idempotencyKey: `artist_work_sold:${paymentIntentId || orderId}`,
                 template: "artist_work_sold",
                 category: "orders_and_payouts",
                 to: artistUser.email,
-                subject: `You made a sale — ${firstItemTitle}`,
+                subject: `You made a sale, ${firstItemTitle}`,
                 userId: artistUserId,
                 react: ArtistWorkSold({
                   firstName: (artistProfile.name || "there").split(" ")[0],
@@ -403,7 +403,7 @@ export async function POST(request: Request) {
                 template: "artist_order_confirmation",
                 category: "orders_and_payouts",
                 to: artistUser.email,
-                subject: `Order ${orderId} — ${firstItemTitle}`,
+                subject: `Order ${orderId}, ${firstItemTitle}`,
                 userId: artistUserId,
                 react: ArtistOrderConfirmation({
                   firstName: (artistProfile.name || "there").split(" ")[0],
@@ -419,7 +419,7 @@ export async function POST(request: Request) {
                 }),
                 metadata: { orderId, paymentIntentId },
               });
-              // Legacy helper is a no-op now — the new pipeline covers it.
+              // Legacy helper is a no-op now, the new pipeline covers it.
               void notifyArtistNewOrder;
             }
             // In-app sale notification, deep-linked to the artist orders
@@ -428,11 +428,11 @@ export async function POST(request: Request) {
               userId: artistUserId,
               kind: "sale",
               title: "Your artwork sold",
-              body: `${firstItemTitle} — £${artistRevenue.toFixed(2)} to you (${orderId})`,
+              body: `${firstItemTitle}, £${artistRevenue.toFixed(2)} to you (${orderId})`,
               link: "/artist-portal/orders",
             }).catch(() => {});
           }
-          // Notify venue if revenue share exists — email + in-app bell.
+          // Notify venue if revenue share exists, email + in-app bell.
           if (venueSlug && venueRevenue > 0) {
             const { data: vp } = await db.from("venue_profiles").select("user_id, name").eq("slug", venueSlug).single();
             if (vp?.user_id) {
@@ -445,7 +445,7 @@ export async function POST(request: Request) {
                 userId: vp.user_id,
                 kind: "sale",
                 title: "Placement sale",
-                body: `${firstItemTitle} sold — £${venueRevenue.toFixed(2)} to your venue (${orderId})`,
+                body: `${firstItemTitle} sold, £${venueRevenue.toFixed(2)} to your venue (${orderId})`,
                 link: "/venue-portal/orders",
               }).catch(() => {});
             }
@@ -612,7 +612,7 @@ export async function POST(request: Request) {
           }
         }
       } catch (referralErr) {
-        // Non-fatal — Stripe subscription is already recorded.
+        // Non-fatal, Stripe subscription is already recorded.
         console.error("Referral credit error:", referralErr);
       }
     }
@@ -621,7 +621,7 @@ export async function POST(request: Request) {
   // ─── Trial ending soon ───
   // Stripe fires `customer.subscription.trial_will_end` 3 days before trial
   // end. The template is also fired on invoice.upcoming if the customer
-  // has 1 day left — we rely on Stripe's single event and make one send.
+  // has 1 day left, we rely on Stripe's single event and make one send.
   if (event.type === "customer.subscription.trial_will_end") {
     const subscription = event.data.object as Stripe.Subscription;
     const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
@@ -729,7 +729,7 @@ export async function POST(request: Request) {
 
       if (error) console.error("Payment failed update error:", error);
 
-      // Dunning email — keyed on attempt so each retry sends one reminder.
+      // Dunning email, keyed on attempt so each retry sends one reminder.
       try {
         const { data: profile } = await db
           .from("artist_profiles")
@@ -770,7 +770,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // ─── Invoice paid — renewal receipt + past_due recovery ───
+  // ─── Invoice paid, renewal receipt + past_due recovery ───
   if (event.type === "invoice.paid") {
     const invoice = event.data.object as Stripe.Invoice;
     const customerId = typeof invoice.customer === "string" ? invoice.customer : (invoice.customer as Stripe.Customer)?.id;
@@ -791,7 +791,7 @@ export async function POST(request: Request) {
         if (error) console.error("Invoice paid recovery error:", error);
       }
 
-      // Renewal receipt — only for recurring charges, not the initial
+      // Renewal receipt, only for recurring charges, not the initial
       // signup invoice (which is covered by subscription_created or the
       // checkout receipt). `billing_reason` is the source of truth.
       // Skip trial-ending invoices with zero amount.
@@ -830,7 +830,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // ─── Payout failed — notify artist so they can fix bank details ───
+  // ─── Payout failed, notify artist so they can fix bank details ───
   if (event.type === "payout.failed") {
     const payout = event.data.object as Stripe.Payout;
     const connectAccountId = (event as Stripe.Event & { account?: string }).account;
@@ -864,7 +864,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // ─── Payout paid — notify the artist ───
+  // ─── Payout paid, notify the artist ───
   // Fires when Stripe sends money from the artist's Connect account to
   // their bank. We look the artist up via `destination` (the Connect
   // account id) and send the polished `artist_payout_sent` template.
@@ -887,7 +887,7 @@ export async function POST(request: Request) {
             : "shortly";
           const amountLabel = `£${(payout.amount / 100).toFixed(2)}`;
 
-          // Bell notification — fires alongside the email so the
+          // Bell notification, fires alongside the email so the
           // artist sees the payout in-app immediately, not just via
           // their inbox. Idempotency on payout_id at the email layer
           // protects against double-notifying on retried webhooks.
@@ -921,7 +921,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // ─── Transfer reversed — mark payout as failed ───
+  // ─── Transfer reversed, mark payout as failed ───
   if (event.type === "transfer.reversed") {
     const transfer = event.data.object as Stripe.Transfer;
 

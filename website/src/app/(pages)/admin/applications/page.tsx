@@ -215,7 +215,7 @@ export default function AdminApplicationsPage() {
                         </p>
                       </div>
 
-                      {/* Trader status — important for which UK consumer
+                      {/* Trader status, important for which UK consumer
                           rules apply to the membership subscription. */}
                       <div>
                         <p className="text-xs text-muted uppercase tracking-wider mb-1">Trader Status</p>
@@ -277,7 +277,7 @@ export default function AdminApplicationsPage() {
                         </div>
                       )}
 
-                      {/* Discipline + sub-styles — primary taxonomy used
+                      {/* Discipline + sub-styles, primary taxonomy used
                           by venues to filter and the team to triage. */}
                       {app.discipline && (
                         <div>

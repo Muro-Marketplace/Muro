@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     // checkout display page, so the £ shown to the buyer matches what
     // Stripe charges to the card. Before this, the API used a flat
     // (item.shippingPrice ?? 9.95) * quantity calc and could produce a
-    // different total — the £80.49 vs £79.94 mismatch.
+    // different total, the £80.49 vs £79.94 mismatch.
     const region: "uk" | "international" =
       shipping.country && shipping.country !== "United Kingdom" ? "international" : "uk";
     const { totalShipping } = calculateOrderShipping(
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       region,
     );
 
-    // Defensive divergence check — the frontend passes the figure it
+    // Defensive divergence check, the frontend passes the figure it
     // computed; if the API computes something different, we trust the
     // API's number (it's the one Stripe sees) but log a warning so we
     // can chase any data drift.

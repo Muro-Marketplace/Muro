@@ -1,8 +1,8 @@
 /**
  * Alignment guides for the editor.
  *
- * As the user drags an item, we look for nearby snap targets — the wall's
- * edges/centre/thirds and other items' edges/centres — and snap the
+ * As the user drags an item, we look for nearby snap targets, the wall's
+ * edges/centre/thirds and other items' edges/centres, and snap the
  * dragged item to the closest one within a pixel threshold. The same
  * function returns the lines to render as visual guides.
  *
@@ -85,7 +85,7 @@ function snapAxis(
   }
 
   // After picking the best snap delta, walk the lines once more and mark
-  // every target the dragged edges land on after snapping — that's what
+  // every target the dragged edges land on after snapping, that's what
   // we draw as guides (multiple guides can light up at once).
   if (bestDistance <= threshold) {
     const adjustedEdges = {

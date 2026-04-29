@@ -27,7 +27,7 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
 
   // On mount or when user changes: load items from the right source.
   //
-  // Important — the previous version auto-merged localStorage entries
+  // Important, the previous version auto-merged localStorage entries
   // into the authenticated user's DB on login. That meant a logged-out
   // shopper saving a few works, then signing in as a *venue*, would
   // see those works appear "saved" on the venue account even though
@@ -65,7 +65,7 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
         })
         .catch(() => {});
     } else {
-      // Guest session — restore from localStorage (their own saves).
+      // Guest session, restore from localStorage (their own saves).
       hasSynced.current = false;
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {

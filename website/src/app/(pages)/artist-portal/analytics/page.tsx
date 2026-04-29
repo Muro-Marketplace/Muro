@@ -408,7 +408,7 @@ export default function AnalyticsPage() {
                         "bg-gray-100 text-gray-600"
                       }`}>{p.status}</span>
                     </td>
-                    <td className="px-6 py-3.5 text-right font-medium text-foreground">{p.revenue ?? "—"}</td>
+                    <td className="px-6 py-3.5 text-right font-medium text-foreground">{p.revenue ?? "–"}</td>
                   </tr>
                 ))}
               </tbody>

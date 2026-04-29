@@ -1,5 +1,5 @@
 /**
- * Render persistence — insert into wall_renders + upload to Storage.
+ * Render persistence, insert into wall_renders + upload to Storage.
  *
  * Storage layout:
  *   wall-renders/{user_id}/{render_id}.webp
@@ -39,7 +39,7 @@ export interface PersistRenderResult {
 /**
  * Upload the render bytes to Supabase Storage, then insert a wall_renders
  * row. Returns the persisted record + its public URL. On any failure,
- * the inserted Storage object is left in place — that's cheap to rewrite
+ * the inserted Storage object is left in place, that's cheap to rewrite
  * (next call replaces) and avoids leaving orphan DB rows.
  */
 export async function persistRender(
@@ -110,7 +110,7 @@ export async function persistRender(
 
 /**
  * Resolve a render path (as stored in `wall_renders.output_path`) to its
- * publicly-fetchable URL. Useful for cache hits — we re-derive the URL
+ * publicly-fetchable URL. Useful for cache hits, we re-derive the URL
  * from the cached row's `output_path` rather than persisting URLs.
  */
 export function getPublicRenderUrl(

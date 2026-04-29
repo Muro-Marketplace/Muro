@@ -1,5 +1,5 @@
 /**
- * Wall Visualizer — tier resolver.
+ * Wall Visualizer, tier resolver.
  *
  * Maps a Supabase auth user (and a hint about which portal they're acting
  * in) to the `VisualizerTier` we use throughout the visualizer code.
@@ -10,7 +10,7 @@
  *
  *   The venue subscription system isn't built yet, so the resolver tolerates
  *   the column being absent and defaults all venues to 'venue_standard'.
- *   Adding 'premium' later is a no-code change — just populate the column.
+ *   Adding 'premium' later is a no-code change, just populate the column.
  *
  * Owner-type hint:
  *   A single auth user can be both an artist and a venue contact. We need
@@ -41,14 +41,14 @@ interface ArtistProfileRow {
 
 interface VenueProfileRow {
   user_id: string;
-  /** Future column — graceful fallback if absent. */
+  /** Future column, graceful fallback if absent. */
   subscription_plan?: string | null;
 }
 
 /**
  * Resolve the visualizer tier for the given user.
  *
- * Returns 'guest' when userId is null. Never throws — DB errors fall
+ * Returns 'guest' when userId is null. Never throws, DB errors fall
  * through to the safest tier ('customer' or 'guest') and log a warning.
  */
 export async function resolveTier(
@@ -118,7 +118,7 @@ async function readVenueTier(
       .eq("user_id", userId)
       .maybeSingle<VenueProfileRow>();
     if (error) {
-      // The venue subscription column doesn't exist yet — Postgres returns
+      // The venue subscription column doesn't exist yet, Postgres returns
       // a column-not-found error. Fall back to a column-less lookup so we
       // can still tell whether the user IS a venue.
       const lacksColumn = /column.*subscription_plan.*does not exist/i.test(
@@ -149,7 +149,7 @@ async function readVenueTier(
 /**
  * Map artist subscription_plan to a VisualizerTier. Mirrors the
  * platform-fee mapping (core/premium/pro). Note we don't downgrade based
- * on free_until — a Premium artist on a founding-artist 0% period still
+ * on free_until, a Premium artist on a founding-artist 0% period still
  * gets Premium visualizer access, which matches the user's expectation.
  */
 export function artistPlanToTier(plan: string | null | undefined): VisualizerTier {

@@ -33,7 +33,7 @@ function bandForCm(largestCm: number): "small" | "medium" | "large" | "xl" {
  *  not just whichever size happens to be biggest. Work-level
  *  dimensions are also added so legacy single-size works still
  *  classify correctly. Empty result = unparseable, falls back to
- *  "medium" (matches just the medium filter — generous default).
+ *  "medium" (matches just the medium filter, generous default).
  */
 function bandsForWork(work: { dimensions: string; pricing: { label: string }[] }): Set<"small" | "medium" | "large" | "xl"> {
   const bands = new Set<"small" | "medium" | "large" | "xl">();
@@ -96,7 +96,7 @@ interface Filters {
   originals: boolean;
   prints: boolean;
   framing: boolean;
-  // Three arrangement filters — independent toggles. Revenue share applies a
+  // Three arrangement filters, independent toggles. Revenue share applies a
   // minimum % via the slider below.
   revenueShare: boolean;
   paidLoan: boolean;
@@ -115,7 +115,7 @@ const DEFAULT_FILTERS: Filters = {
   // a location; without a location, the filter logic bails out so
   // results are still global until a postcode/geo lands.
   //
-  // Default distance is 25 miles — once a buyer's set their
+  // Default distance is 25 miles, once a buyer's set their
   // location they almost always want a near-only first result set,
   // and the slider goes up to "Anywhere" if they want more.
   mode: "local",
@@ -193,23 +193,23 @@ function BrowsePortfoliosPageInner() {
   // activeDiscipline stores either:
   //   - a discipline id (e.g. "photography")
   //   - "" for All
-  //   - "collections" — sentinel for the Collections view (kept for back-compat
+  //   - "collections", sentinel for the Collections view (kept for back-compat
   //     with the existing view-switcher buttons and ?view=collections param).
   const [activeDiscipline, setActiveDiscipline] = useState<string>("");
   const [activeSubStyles, setActiveSubStyles] = useState<Set<string>>(new Set());
-  // Default to Gallery (works) on first load (#4) — there are
+  // Default to Gallery (works) on first load (#4), there are
   // 5–10× more works than artists, so the marketplace looks fuller
   // and more compelling on initial visit. Users can flip to
   // Portfolios via the toggle or `?view=portfolios`.
   const [viewAs, setViewAs] = useState<"artists" | "works">("works");
-  // Pagination — "Show 20 more" pattern per view.
+  // Pagination, "Show 20 more" pattern per view.
   const [loadedArtists, setLoadedArtists] = useState(PAGE_SIZE);
   const [loadedWorks, setLoadedWorks] = useState(PAGE_SIZE);
   const [loadedCollections, setLoadedCollections] = useState(PAGE_SIZE);
 
   // Drive view from ?view= query param (F47). We use searchParams rather than
   // window.location.hash because Next.js Link same-page hash changes use
-  // pushState, which doesn't fire hashchange — so the page wouldn't react.
+  // pushState, which doesn't fire hashchange, so the page wouldn't react.
   const searchParams = useSearchParams();
   const router = useRouter();
   const viewParam = searchParams?.get("view") || "";
@@ -303,7 +303,7 @@ function BrowsePortfoliosPageInner() {
   // Fetch merged artists (static + database) on mount.
   //
   // Both endpoints are awaited via Promise.allSettled so `dataReady`
-  // only flips once we know neither call is in flight — that's what
+  // only flips once we know neither call is in flight, that's what
   // un-suppresses the result counts in the header. If a call fails
   // we still flip to ready (we'd rather show stale-seed counts than
   // a permanent dash on a network blip).
@@ -333,7 +333,7 @@ function BrowsePortfoliosPageInner() {
   const [galleryAvailableOnly, setGalleryAvailableOnly] = useState(false);
   const [galleryPriceMin, setGalleryPriceMin] = useState(0);
   const [galleryPriceMax, setGalleryPriceMax] = useState(1000);
-  // Mirror of `filters.mode` for the gallery view — kept so existing
+  // Mirror of `filters.mode` for the gallery view, kept so existing
   // distance-filter call sites keep working, but the toggle UI was
   // removed (#9) so this is effectively pinned to "local". A future
   // refactor can drop this state entirely.
@@ -346,7 +346,7 @@ function BrowsePortfoliosPageInner() {
   const [galleryRevenueShare, setGalleryRevenueShare] = useState(false);
   const [galleryRevenueShareMin, setGalleryRevenueShareMin] = useState(0);
   const [galleryPurchase, setGalleryPurchase] = useState(false);
-  // Size filter (#7) — multi-select bands keyed off the largest
+  // Size filter (#7), multi-select bands keyed off the largest
   // dimension of each work in cm. Empty set = no filter (default).
   // Bands cover the practical wall-art range:
   //   small  ≤ 30cm   (A4 / postcard / desk pieces)
@@ -356,13 +356,13 @@ function BrowsePortfoliosPageInner() {
   type SizeBand = "small" | "medium" | "large" | "xl";
   const [gallerySizes, setGallerySizes] = useState<Set<SizeBand>>(new Set());
 
-  // Collections view location filter — independent of artists/gallery so the
+  // Collections view location filter, independent of artists/gallery so the
   // filter state doesn't bleed across views.
-  // Mirror of #9 — pin to "local" so the slider applies whenever a
+  // Mirror of #9, pin to "local" so the slider applies whenever a
   // postcode is set; toggle UI removed in favour of the slider +
   // PostcodeInput pattern used by the other views.
   const [collectionsLocationMode, setCollectionsLocationMode] = useState<"global" | "local">("local");
-  // Collection-list filters (#42 parity pass) — bundle price + which
+  // Collection-list filters (#42 parity pass), bundle price + which
   // arrangements the underlying artist is open to. Kept separate
   // from the gallery filter state so toggling between views doesn't
   // bleed filter values across.
@@ -477,17 +477,17 @@ function BrowsePortfoliosPageInner() {
     return artists.filter((artist) => {
       // Must have at least one artwork to appear in marketplace
       if (!artist.works || artist.works.length === 0) return false;
-      // Discipline filter — fall back to inferring from primary medium
+      // Discipline filter, fall back to inferring from primary medium
       // so seed artists (without an explicit discipline field) and older
       // DB rows that missed the backfill still match the right category.
       if (activeDisciplineObj) {
         const effective = resolveDiscipline(artist.primaryMedium, artist.discipline);
         if (effective !== activeDisciplineObj.id) return false;
       }
-      // Sub-style filter — artist must have at least one of the active sub-styles
+      // Sub-style filter, artist must have at least one of the active sub-styles
       if (activeSubStyles.size > 0 && !artist.subStyles?.some((s) => activeSubStyles.has(s))) return false;
 
-      // Distance filter — only applies when the user has set a
+      // Distance filter, only applies when the user has set a
       // location AND the artist has known coordinates. Without a
       // user location we used to return false here, which hid every
       // artist on first load (the bug behind "portfolios still
@@ -511,12 +511,12 @@ function BrowsePortfoliosPageInner() {
       if (filters.originals && !artist.offersOriginals) return false;
       if (filters.prints && !artist.offersPrints) return false;
       if (filters.framing && !artist.offersFramed) return false;
-      // Independent arrangement filters — any combination can be active.
+      // Independent arrangement filters, any combination can be active.
       if (filters.revenueShare && !artist.openToRevenueShare) return false;
       if (filters.paidLoan && !artist.openToFreeLoan) return false;
       if (filters.outrightPurchase && !artist.openToOutrightPurchase) return false;
       // Min rev share threshold only applies when Revenue Share is the
-      // active arrangement — ignored otherwise.
+      // active arrangement, ignored otherwise.
       if (
         filters.revenueShare &&
         filters.revenueShareMin > 0 &&
@@ -524,7 +524,7 @@ function BrowsePortfoliosPageInner() {
       ) {
         return false;
       }
-      // Legacy freeLoan URL param still works — matches either Revenue Share
+      // Legacy freeLoan URL param still works, matches either Revenue Share
       // or Paid Loan capability.
       if (filters.freeLoan && !artist.openToFreeLoan && !artist.openToRevenueShare) return false;
       if (
@@ -586,7 +586,7 @@ function BrowsePortfoliosPageInner() {
     return allGalleryWorks.filter((work) => {
       // Discipline filter
       if (activeDisciplineObj && work.artistDiscipline !== activeDisciplineObj.id) return false;
-      // Sub-style filter — work's artist must have at least one matching sub-style
+      // Sub-style filter, work's artist must have at least one matching sub-style
       if (activeSubStyles.size > 0 && !work.artistSubStyles?.some((s) => activeSubStyles.has(s))) return false;
       // Theme
       if (galleryTheme && !work.themes.includes(galleryTheme)) return false;
@@ -609,7 +609,7 @@ function BrowsePortfoliosPageInner() {
       if (galleryOriginals && !work.offersOriginals) return false;
       if (galleryPrints && !work.offersPrints) return false;
       if (galleryFraming && !work.offersFramed) return false;
-      // Size band (#7) — multi-select; work passes if ANY of the
+      // Size band (#7), multi-select; work passes if ANY of the
       // sizes it offers fits a selected band. Previously we only
       // looked at the largest size, so a work shipping in A4 → A0
       // wouldn't show under the Small filter.
@@ -660,7 +660,7 @@ function BrowsePortfoliosPageInner() {
       // "featured": Pro-tier artists' works first, then Premium, then
       // everyone else, with founding-artist status as the tiebreaker.
       // Previously fell through to `return 0` which left the works in
-      // whatever order the underlying flatMap produced — i.e. no actual
+      // whatever order the underlying flatMap produced, i.e. no actual
       // sort happened.
       const tierWeight = (plan?: string | null) => {
         const p = (plan || "").toLowerCase();
@@ -681,13 +681,13 @@ function BrowsePortfoliosPageInner() {
     !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || !!userCoords || gallerySizes.size > 0;
 
   // Collections filter pipeline. Distance + bundle-price + the
-  // artist's arrangement preferences (#42 — the user complaint was
+  // artist's arrangement preferences (#42, the user complaint was
   // that collections only had location filtering vs portfolios/galleries
   // which had the full set).
   const filteredCollections = useMemo(() => {
     return collections.filter((c) => {
       if (!c.available) return false;
-      // Distance — only when the user has set a location.
+      // Distance, only when the user has set a location.
       if (collectionsLocationMode === "local" && userCoords) {
         const artist = artists.find((a) => a.slug === c.artistSlug);
         if (!artist?.coordinates) return false;
@@ -697,7 +697,7 @@ function BrowsePortfoliosPageInner() {
       // Bundle price.
       if (collectionsPriceMin > 0 && (c.bundlePrice || 0) < collectionsPriceMin) return false;
       if (collectionsPriceMax < 2000 && (c.bundlePrice || 0) > collectionsPriceMax) return false;
-      // Arrangement chips — use the underlying artist's openTo* flags
+      // Arrangement chips, use the underlying artist's openTo* flags
       // (collections inherit terms from the artist, the same way the
       // detail page surfaces them as chips).
       if (collectionsFreeLoan || collectionsRevShare || collectionsPurchase) {
@@ -752,7 +752,7 @@ function BrowsePortfoliosPageInner() {
 
   const filterPanel = (
     <div className="space-y-7">
-      {/* Location (#9) — the Local/Global toggle was removed; the
+      {/* Location (#9), the Local/Global toggle was removed; the
           slider is the only location control now. Default 25mi when
           a location is set. Drag to the right edge to switch back to
           "Anywhere". */}
@@ -761,7 +761,7 @@ function BrowsePortfoliosPageInner() {
           Location
         </p>
         {(() => {
-          // Render the postcode + slider unconditionally — kept
+          // Render the postcode + slider unconditionally, kept
           // inside an IIFE so we can keep the existing layout without
           // duplicating it under the old `filters.mode === "local"`
           // gate.
@@ -803,7 +803,7 @@ function BrowsePortfoliosPageInner() {
                 )}
               </div>
             )}
-            {/* Distance — max only, once we have a location (F48) */}
+            {/* Distance, max only, once we have a location (F48) */}
             {userCoords && (
               <div>
                 <p className="text-xs text-muted mb-2">
@@ -846,7 +846,7 @@ function BrowsePortfoliosPageInner() {
         })()}
       </div>
 
-      {/* Arrangement — three independent toggles for the core Wallplace
+      {/* Arrangement, three independent toggles for the core Wallplace
           models: Revenue Share, Paid Loan, Direct Purchase. Rev share min
           % shows as a slider beneath the Revenue Share tile when active. */}
       <div>
@@ -862,7 +862,7 @@ function BrowsePortfoliosPageInner() {
               filters.revenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
-            {/* Handshake — Lucide "handshake" glyph, stroked so it sits on
+            {/* Handshake, Lucide "handshake" glyph, stroked so it sits on
                 the cream surface like the other filter icons. */}
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={filters.revenueShare ? "text-accent" : "text-muted"}>
               <path d="m11 17 2 2a1 1 0 1 0 3-3" />
@@ -983,7 +983,7 @@ function BrowsePortfoliosPageInner() {
         </div>
       </div>
 
-      {/* Style + Theme moved to the bottom of the panel — they're
+      {/* Style + Theme moved to the bottom of the panel, they're
           less actionable than the commercial filters above (location,
           arrangement, availability, venue type) so the high-priority
           options stay above the fold. */}
@@ -1075,7 +1075,7 @@ function BrowsePortfoliosPageInner() {
         </div>
       </div>
 
-      {/* Sub-style pills — only when a discipline is selected */}
+      {/* Sub-style pills, only when a discipline is selected */}
       {activeDisciplineObj && activeDiscipline !== "collections" && (
         <div className="border-b border-border bg-white">
           <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center gap-2 overflow-x-auto scrollbar-none">
@@ -1093,7 +1093,7 @@ function BrowsePortfoliosPageInner() {
             {/* Render the full discipline sub-style list so the pill row is
                 stable even when no artists currently match a particular
                 sub-style. Pills for sub-styles with no artists are rendered
-                but muted — they still let a user clear any active filter. */}
+                but muted, they still let a user clear any active filter. */}
             {activeDisciplineObj.subStyles.map((sub) => {
               const hasArtists = availableSubStyles.includes(sub);
               const active = activeSubStyles.has(sub);
@@ -1174,7 +1174,7 @@ function BrowsePortfoliosPageInner() {
                     )}
                   </p>
                   <div className="flex items-center gap-2">
-                    {/* View dropdown (mobile — pill-shaped native select) */}
+                    {/* View dropdown (mobile, pill-shaped native select) */}
                     <div className="relative">
                       <select
                         value={activeDiscipline === "collections" ? "collections" : ((viewAs as string) === "works" ? "gallery" : "portfolios")}
@@ -1258,7 +1258,7 @@ function BrowsePortfoliosPageInner() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* View toggle — Galleries first since that's the
+                    {/* View toggle, Galleries first since that's the
                         default landing view (#4) and matches the new
                         nav order. */}
                     <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5 mr-1">
@@ -1432,7 +1432,7 @@ function BrowsePortfoliosPageInner() {
                     ))}
                   </div>
                 )}
-                {/* Load more — only render when there's more than the
+                {/* Load more, only render when there's more than the
                     currently-loaded slice to show. */}
                 {filteredArtists.length > loadedArtists && (
                   <div className="mt-10 text-center">
@@ -1470,7 +1470,7 @@ function BrowsePortfoliosPageInner() {
                   )}
                 </div>
                 <div className="space-y-7">
-                  {/* Location (#9) — toggle removed; the slider is the
+                  {/* Location (#9), toggle removed; the slider is the
                       only control. Postcode entry shows when no location
                       is set; slider shows once it is. */}
                   <div>
@@ -1535,7 +1535,7 @@ function BrowsePortfoliosPageInner() {
                     )}
                   </div>
 
-                  {/* Arrangement — three independent toggles matching the
+                  {/* Arrangement, three independent toggles matching the
                       portfolio filter bar (Revenue Share / Paid Loan /
                       Direct Purchase). Rev share slider appears under the
                       Revenue Share tile when active. */}
@@ -1630,7 +1630,7 @@ function BrowsePortfoliosPageInner() {
                     </div>
                   </div>
 
-                  {/* Size band (#7) — tighter pills than before per UX
+                  {/* Size band (#7), tighter pills than before per UX
                       pass: smaller padding, smaller label so the row
                       doesn't dominate the panel. */}
                   <div>
@@ -1672,7 +1672,7 @@ function BrowsePortfoliosPageInner() {
                     </div>
                   </div>
 
-                  {/* Style + Theme moved to the bottom — less
+                  {/* Style + Theme moved to the bottom, less
                       actionable than location / arrangement /
                       availability / size / price for buyers, so
                       they sit below the high-priority filters. */}
@@ -1704,7 +1704,7 @@ function BrowsePortfoliosPageInner() {
                       : "…"}
                   </p>
                   <div className="flex items-center gap-2">
-                    {/* View dropdown (mobile — pill-shaped native select) */}
+                    {/* View dropdown (mobile, pill-shaped native select) */}
                     <div className="relative">
                       <select
                         value={activeDiscipline === "collections" ? "collections" : ((viewAs as string) === "works" ? "gallery" : "portfolios")}
@@ -1743,7 +1743,7 @@ function BrowsePortfoliosPageInner() {
                       <span className="text-sm font-medium">Filters</span>
                       <button type="button" onClick={() => setSidebarOpen(false)} className="text-xs text-muted hover:text-foreground cursor-pointer">Close</button>
                     </div>
-                    {/* Location — toggle removed (#9). Distance slider when
+                    {/* Location, toggle removed (#9). Distance slider when
                         a location is set, postcode input + Use-my-location
                         when not. */}
                     <div>
@@ -1857,7 +1857,7 @@ function BrowsePortfoliosPageInner() {
                         <CheckPill checked={galleryFraming} onChange={setGalleryFraming} label="Framing" />
                       </div>
                     </div>
-                    {/* Size band — tight pills (smaller than the
+                    {/* Size band, tight pills (smaller than the
                         original mobile copy). */}
                     <div>
                       <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Size</p>
@@ -1960,7 +1960,7 @@ function BrowsePortfoliosPageInner() {
                 ) : (() => {
                   // Distribute row-major into N columns so the visual reading
                   // order matches the sort. Each column is a flex stack with
-                  // no fixed row height — shorter cards don't leave whitespace.
+                  // no fixed row height, shorter cards don't leave whitespace.
                   const visibleWorks = filteredGalleryWorks.slice(0, loadedWorks);
                   const masonryCols: typeof visibleWorks[] = Array.from({ length: galleryColCount }, () => []);
                   visibleWorks.forEach((w, i) => masonryCols[i % galleryColCount].push(w));
@@ -2044,7 +2044,7 @@ function BrowsePortfoliosPageInner() {
                               )}
                             </div>
                             <p className="text-xs text-muted mt-0.5">
-                              {/* Clickable artist name (#40) — sends users
+                              {/* Clickable artist name (#40), sends users
                                   straight to the artist's portfolio page.
                                   stopPropagation keeps the surrounding
                                   card click handlers (eye icon / lightbox)
@@ -2103,7 +2103,7 @@ function BrowsePortfoliosPageInner() {
       {activeDiscipline === "collections" && (
         <section className="py-10 lg:py-14">
           <div className="max-w-[1400px] mx-auto px-6">
-            {/* Mobile toolbar — view pill-dropdown + Global/Local pills + slider */}
+            {/* Mobile toolbar, view pill-dropdown + Global/Local pills + slider */}
             <div className="lg:hidden mb-6 space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative">
@@ -2182,7 +2182,7 @@ function BrowsePortfoliosPageInner() {
                 </div>
               )}
             </div>
-            {/* Desktop view toggle — 3-way pill group, right-aligned.
+            {/* Desktop view toggle, 3-way pill group, right-aligned.
                 Order matches the rest of the marketplace: Galleries
                 first, then Portfolios, then Collections. */}
             <div className="hidden lg:flex mb-6 items-center justify-end">
@@ -2204,7 +2204,7 @@ function BrowsePortfoliosPageInner() {
                 <p className="text-sm text-muted">Themed bundles of artwork at a set price. Ready to transform your space.</p>
               </div>
               <div className="flex flex-wrap items-end gap-4">
-                {/* Desktop location — toggle removed (#9). Slider when
+                {/* Desktop location, toggle removed (#9). Slider when
                     a postcode is set, dynamic PostcodeInput +
                     use-my-location otherwise. */}
                 {userCoords && (
@@ -2243,7 +2243,7 @@ function BrowsePortfoliosPageInner() {
                 )}
               </div>
             </div>
-            {/* Collections filter row (#42) — bundle price + arrangement
+            {/* Collections filter row (#42), bundle price + arrangement
                 chips, in parity with the gallery / portfolio filter
                 pattern but trimmed to filters that actually apply at
                 the collection level. */}

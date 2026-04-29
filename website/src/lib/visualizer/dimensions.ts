@@ -20,7 +20,7 @@
  *   - "8x10\""           inches via trailing quote
  *   - "{w}\"x{h}\""      mixed
  *   - "Aₙ"               paper sizes A0..A6 (B-series + Letter/Legal too)
- *   - Anything in parens — preferred when the outer reading is in
+ *   - Anything in parens, preferred when the outer reading is in
  *     inches (e.g. "8×10\" (A4)" → A4 reading wins because it's more
  *     precise than the rounded inch label).
  *
@@ -148,7 +148,7 @@ function detectUnit(s: string): Unit {
   if (/(?:^|[^a-z])m(?:[^a-z]|$)/i.test(lower)) return "m";
   // No explicit unit: small numbers (<25) are likely inches, otherwise cm.
   // Single-digit "8x10" without unit reads more naturally as inches than
-  // "8 cm × 10 cm" — that'd be a postage stamp.
+  // "8 cm × 10 cm", that'd be a postage stamp.
   return null as unknown as Unit; // signal "guess from magnitude" below
 }
 
@@ -217,7 +217,7 @@ export function buildSizeVariants(
  * from `ArtistWork.orientation` in the static seed; database-backed
  * works can populate it the same way. When supplied, pickDefaultSize
  * swaps dims so the chosen size matches the work's intended
- * orientation — fixes the "every portrait shows landscape" bug where
+ * orientation, fixes the "every portrait shows landscape" bug where
  * the listed pricing label is in the rotated form.
  */
 export type WorkOrientation = "portrait" | "landscape" | "square";
@@ -226,17 +226,17 @@ export type WorkOrientation = "portrait" | "landscape" | "square";
  * Pick the best default size when a work is dragged onto a wall.
  *
  * Order of preference:
- *   1. The LARGEST listed pricing variant — this is what the venue is
+ *   1. The LARGEST listed pricing variant, this is what the venue is
  *      likely to actually buy and hang. Visually accurate to the item
  *      they're previewing.
  *   2. The natural `dimensions` field (the original artwork size) if it
- *      parses — works as a fallback when no print sizes are listed.
- *   3. null — caller falls back to its own default.
+ *      parses, works as a fallback when no print sizes are listed.
+ *   3. null, caller falls back to its own default.
  *
  * After picking, dims are swapped if the result disagrees with the
  * work's orientation hint. Listed prices like '20×28" (50×70cm)' parse
  * as 50×70 (portrait) but the underlying artwork might be a landscape
- * — without the swap, the image gets squashed into the wrong-shape box.
+ *, without the swap, the image gets squashed into the wrong-shape box.
  */
 export function pickDefaultSize(input: {
   dimensions: string | null | undefined;

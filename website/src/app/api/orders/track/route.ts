@@ -1,6 +1,6 @@
 // Public order-tracking endpoint (#3). Lets a guest buyer look up
 // their order using just the order ID + the email they used at
-// checkout — no login required. We deliberately scope responses to
+// checkout, no login required. We deliberately scope responses to
 // the safe-to-show fields (status, line items, fulfilment dates) and
 // omit anything that could be used to scrape PII (artist payouts,
 // internal IDs, buyer phone, etc.). Email-match is the auth check.
@@ -30,7 +30,7 @@ interface DbOrder {
 }
 
 export async function POST(request: Request) {
-  // Rate-limit harder than the authenticated /orders endpoint —
+  // Rate-limit harder than the authenticated /orders endpoint,
   // unauthenticated lookup is a tempting enumeration target.
   const limited = await checkRateLimit(request, 12, 60_000);
   if (limited) return limited;

@@ -1,23 +1,23 @@
 // Partner with us (#26). Pitched at hospitality groups, property
 // developers, build-to-rent operators, and similar B2B prospects who
 // want art curated across multiple sites at once. Funnels into a
-// contact form (mailto for now — switch to a real lead-capture endpoint
+// contact form (mailto for now, switch to a real lead-capture endpoint
 // when the partnerships pipeline lands).
 
 import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Partner with us — Wallplace",
+  title: "Partner with us, Wallplace",
   description:
-    "Hospitality groups, build-to-rent operators, property developers and other multi-site partners — bring local artists into your spaces with one Wallplace account.",
+    "Hospitality groups, build-to-rent operators, property developers and other multi-site partners, bring local artists into your spaces with one Wallplace account.",
 };
 
 const partnerProfiles = [
   {
     title: "Hospitality groups",
     blurb:
-      "Restaurants, hotels, members' clubs, gyms — give every site a curated wall identity without flying art around the country. Local artists for local rooms.",
+      "Restaurants, hotels, members' clubs, gyms, give every site a curated wall identity without flying art around the country. Local artists for local rooms.",
   },
   {
     title: "Build-to-rent & co-living",
@@ -27,7 +27,7 @@ const partnerProfiles = [
   {
     title: "Property developers",
     blurb:
-      "Show units with real, photogenic art on the walls — not Pinterest stock. We can match work to demographics, scheme aesthetics, and budget per phase.",
+      "Show units with real, photogenic art on the walls, not Pinterest stock. We can match work to demographics, scheme aesthetics, and budget per phase.",
   },
   {
     title: "Workspaces & members' clubs",
@@ -49,7 +49,7 @@ export default function PartnersPage() {
           </h1>
           <p className="text-lg text-muted leading-relaxed max-w-2xl mb-12">
             Wallplace works the same way for a single café and for a fifty-site
-            hospitality group — only the scale changes. If you operate
+            hospitality group, only the scale changes. If you operate
             multiple venues and want a consistent art programme without the
             overhead of hiring a curator per location, we want to talk.
           </p>
@@ -75,7 +75,7 @@ export default function PartnersPage() {
               </h2>
               <ul className="list-disc pl-6 text-muted leading-relaxed space-y-2 marker:text-accent">
                 <li>
-                  One Wallplace account with multi-venue rollup — all your
+                  One Wallplace account with multi-venue rollup, all your
                   sites, all your placements, one inbox.
                 </li>
                 <li>
@@ -83,7 +83,7 @@ export default function PartnersPage() {
                   demographic, neighbourhood.
                 </li>
                 <li>
-                  Rotation programmes — swap work seasonally without
+                  Rotation programmes, swap work seasonally without
                   re-procuring it. Artists keep ownership.
                 </li>
                 <li>
@@ -111,7 +111,7 @@ export default function PartnersPage() {
                   with mockups on the actual walls where useful.
                 </li>
                 <li>
-                  You pick the works and arrangements — placement loans,
+                  You pick the works and arrangements, placement loans,
                   outright purchase, mix of both. We handle the artist side.
                 </li>
                 <li>

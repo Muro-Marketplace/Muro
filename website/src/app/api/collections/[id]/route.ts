@@ -127,7 +127,7 @@ export async function GET(
     // Surface the artist's arrangement preferences alongside the
     // collection so the detail page can render the same Display /
     // Rev share / Purchase chips that gallery work cards do (#42).
-    // Defaults match the artist profile defaults — null/undefined =
+    // Defaults match the artist profile defaults, null/undefined =
     // open, so existing artists who pre-date these columns aren't
     // accidentally hidden from placement requests.
     const artistArrangements = {

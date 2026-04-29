@@ -14,7 +14,7 @@ export default function CurationSuccessPage() {
         </svg>
       </div>
       <h1 className="font-serif text-3xl lg:text-4xl text-foreground mb-4">
-        Thanks — your curation is underway.
+        Thanks, your curation is underway.
       </h1>
       <p className="text-base text-muted leading-relaxed mb-8">
         Payment received. Our curators will review your brief and email you a tailored shortlist within 5 business days. Keep an eye on your inbox.

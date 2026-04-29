@@ -27,11 +27,11 @@ export interface GalleryWork {
   openToRevenueShare: boolean;
   revenueSharePercent?: number;
   openToOutrightPurchase: boolean;
-  /** Artist's subscription plan — used to put Pro / Premium works
+  /** Artist's subscription plan, used to put Pro / Premium works
    *  first in the marketplace's "Featured" sort. Mirrors the Featured
    *  chip on the artist card. */
   artistSubscriptionPlan?: string;
-  /** Founding-artist flag — secondary tiebreaker for Featured sort. */
+  /** Founding-artist flag, secondary tiebreaker for Featured sort. */
   artistIsFounding?: boolean;
   /** ISO timestamp from `artist_works.created_at`. Powers the
    *  "Recently listed" sort on the marketplace (#5). */

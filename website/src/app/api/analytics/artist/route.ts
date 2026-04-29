@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
       case "qr_scan":
         totals.qr_scans++;
         viewsByDate[date].qr_scans++;
-        // Count QR scans against the work too — without this the
+        // Count QR scans against the work too, without this the
         // top-works ranking only reflects artwork_view events from
         // /browse/[slug]/[workSlug], so a piece doing well on
         // physical labels would never surface here.
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, counts]) => ({ date, ...counts }));
 
-  // Top works by views — enrich with titles
+  // Top works by views, enrich with titles
   const topWorkIds = Object.entries(workViewCounts)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10);

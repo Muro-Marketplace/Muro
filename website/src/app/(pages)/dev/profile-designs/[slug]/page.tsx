@@ -7,13 +7,13 @@
  * touching the live /browse/[slug] page.
  *
  * Variants:
- *   A. No banner — gallery-website feel, profile photo big, bio
+ *   A. No banner, gallery-website feel, profile photo big, bio
  *      gets full width.
- *   B. Slim banner with overlap — short banner, profile photo
+ *   B. Slim banner with overlap, short banner, profile photo
  *      breaks the banner edge, identity in two columns.
- *   C. Glass card over banner — banner stays full-bleed but a
+ *   C. Glass card over banner, banner stays full-bleed but a
  *      blurred translucent card sits over it carrying the identity.
- *   D. Magazine split — banner image takes left half, identity
+ *   D. Magazine split, banner image takes left half, identity
  *      block takes right half, very editorial.
  *
  * Pick the one you like and tell Claude to apply it to /browse/[slug].
@@ -94,26 +94,26 @@ export default async function ProfileDesignsPage({
       <div className="bg-white border-b border-border">
         <div className="max-w-[1200px] mx-auto px-6 py-3 flex items-center gap-5 text-xs">
           <span className="text-muted">Jump to:</span>
-          <a href="#variant-a" className="text-foreground hover:text-accent">A — No banner</a>
-          <a href="#variant-b" className="text-foreground hover:text-accent">B — Slim banner</a>
-          <a href="#variant-c" className="text-foreground hover:text-accent">C — Glass card</a>
-          <a href="#variant-d" className="text-foreground hover:text-accent">D — Magazine split</a>
+          <a href="#variant-a" className="text-foreground hover:text-accent">A, No banner</a>
+          <a href="#variant-b" className="text-foreground hover:text-accent">B, Slim banner</a>
+          <a href="#variant-c" className="text-foreground hover:text-accent">C, Glass card</a>
+          <a href="#variant-d" className="text-foreground hover:text-accent">D, Magazine split</a>
         </div>
       </div>
 
-      <VariantSection id="variant-a" label="A — No banner" notes="Gallery-website feel: no hero image at all. The artist's first work hits the page first when they scroll. Profile photo is the centrepiece. Cleanest, most timeless option.">
+      <VariantSection id="variant-a" label="A, No banner" notes="Gallery-website feel: no hero image at all. The artist's first work hits the page first when they scroll. Profile photo is the centrepiece. Cleanest, most timeless option.">
         <VariantA artist={artist} />
       </VariantSection>
 
-      <VariantSection id="variant-b" label="B — Slim banner with overlap" notes="A short, tasteful banner strip that the profile circle breaks across — banner is wallpaper, not the centrepiece. Identity stays the focus.">
+      <VariantSection id="variant-b" label="B, Slim banner with overlap" notes="A short, tasteful banner strip that the profile circle breaks across, banner is wallpaper, not the centrepiece. Identity stays the focus.">
         <VariantB artist={artist} />
       </VariantSection>
 
-      <VariantSection id="variant-c" label="C — Glass card over banner" notes="Banner stays full-bleed but a blurred translucent card sits over it carrying the identity block. Modern, hotel-website feel.">
+      <VariantSection id="variant-c" label="C, Glass card over banner" notes="Banner stays full-bleed but a blurred translucent card sits over it carrying the identity block. Modern, hotel-website feel.">
         <VariantC artist={artist} />
       </VariantSection>
 
-      <VariantSection id="variant-d" label="D — Magazine split" notes="Banner image and identity sit side-by-side on desktop (banner left, identity right). Very editorial; reads like a magazine spread.">
+      <VariantSection id="variant-d" label="D, Magazine split" notes="Banner image and identity sit side-by-side on desktop (banner left, identity right). Very editorial; reads like a magazine spread.">
         <VariantD artist={artist} />
       </VariantSection>
     </div>
@@ -164,7 +164,7 @@ function VariantA({ artist }: { artist: Artist }) {
         </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-10 lg:gap-14 items-start">
-          {/* LEFT — square photo */}
+          {/* LEFT, square photo */}
           <div>
             <div className="relative aspect-square w-full max-w-[280px] rounded-sm overflow-hidden bg-stone-100 border border-border">
               <Image
@@ -188,7 +188,7 @@ function VariantA({ artist }: { artist: Artist }) {
             )}
           </div>
 
-          {/* RIGHT — identity */}
+          {/* RIGHT, identity */}
           <div>
             <p className="text-[11px] text-muted uppercase tracking-[0.18em] mb-3">
               {disciplineLabel(artist.primaryMedium, artist.discipline)}
@@ -257,7 +257,7 @@ function VariantB({ artist }: { artist: Artist }) {
   const { offerings, terms, bannerSrc } = getMeta(artist);
   return (
     <div>
-      {/* Banner — short strip */}
+      {/* Banner, short strip */}
       <div className="relative h-44 lg:h-56 overflow-hidden">
         <Image
           src={bannerSrc}
@@ -331,7 +331,7 @@ function VariantB({ artist }: { artist: Artist }) {
             </div>
           </div>
 
-          {/* Right rail — no card chrome, just data with hairlines */}
+          {/* Right rail, no card chrome, just data with hairlines */}
           <div className="lg:mt-32">
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
               <Fact label="Location" value={artist.location} />
@@ -440,7 +440,7 @@ function VariantC({ artist }: { artist: Artist }) {
           <Fact label="Suited for" value={artist.venueTypesSuitedFor.slice(0, 2).join(", ") || "Any venue"} />
           <div>
             <p className="text-[10px] text-muted uppercase tracking-wider mb-1.5">Instagram</p>
-            <p className="text-sm font-medium text-foreground">{artist.instagram || "—"}</p>
+            <p className="text-sm font-medium text-foreground">{artist.instagram || "–"}</p>
           </div>
         </div>
         {(offerings.length > 0 || terms.length > 0) && (
@@ -571,7 +571,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-[10px] text-muted uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-sm font-medium text-foreground">{value || "—"}</p>
+      <p className="text-sm font-medium text-foreground">{value || "–"}</p>
     </div>
   );
 }

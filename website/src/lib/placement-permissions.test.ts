@@ -18,7 +18,7 @@ describe("canRespond()", () => {
     requester_user_id: null,
   };
 
-  describe("core rule — only pending can be responded to", () => {
+  describe("core rule, only pending can be responded to", () => {
     for (const bad of ["active", "declined", "completed", "cancelled", "sold", "", null] as const) {
       it(`rejects status=${String(bad)}`, () => {
         const p = { ...basePending, status: bad, requester_user_id: VENUE };

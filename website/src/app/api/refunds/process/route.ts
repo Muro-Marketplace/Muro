@@ -117,20 +117,20 @@ export async function POST(request: Request) {
       .in("status", ["pending", "paid"]);
 
     // 1. Cancel or reverse transfers
-    // F32 — if a transfer reversal fails we must NOT proceed to refund the
+    // F32, if a transfer reversal fails we must NOT proceed to refund the
     // buyer, because then the platform eats the difference. Abort with 502
     // so the admin can investigate manually.
     const failedReversals: string[] = [];
     if (transfers && transfers.length > 0) {
       for (const transfer of transfers) {
         if (transfer.status === "pending") {
-          // Transfer hasn't been sent yet — cancel it
+          // Transfer hasn't been sent yet, cancel it
           await db
             .from("stripe_transfers")
             .update({ status: "cancelled" })
             .eq("id", transfer.id);
         } else if (transfer.status === "paid" && transfer.stripe_transfer_id) {
-          // Transfer was already sent to Connect account — reverse it
+          // Transfer was already sent to Connect account, reverse it
           try {
             const reverseAmount = isFullRefund
               ? transfer.amount_cents
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
     } catch (stripeErr) {
       console.error("Stripe refund error:", stripeErr);
       return NextResponse.json(
-        { error: "Stripe refund failed. The transfers may have been cancelled/reversed — check manually." },
+        { error: "Stripe refund failed. The transfers may have been cancelled/reversed, check manually." },
         { status: 502 },
       );
     }
@@ -209,7 +209,7 @@ export async function POST(request: Request) {
       })
       .eq("id", refundRequestId);
 
-    // 5. Notify the buyer (legacy helper — retained as safety net) + send
+    // 5. Notify the buyer (legacy helper, retained as safety net) + send
     // the polished CustomerRefundConfirmation via the new pipeline so the
     // email lands in email_events and respects preferences.
     if (refundReq.requester_email || order.buyer_email) {
@@ -240,7 +240,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // Artist-side refund notification — so they can track what's owed back.
+    // Artist-side refund notification, so they can track what's owed back.
     if (order.artist_user_id) {
       try {
         const { data: { user: artistUser } } = await db.auth.admin.getUserById(order.artist_user_id);

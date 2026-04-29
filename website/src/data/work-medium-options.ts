@@ -3,14 +3,14 @@
  * surfaced in the artist profile editor and the portfolio "Edit work"
  * form, both via the searchable Combobox component.
  *
- * It's a guidance list, not an enum — the Combobox runs in
+ * It's a guidance list, not an enum, the Combobox runs in
  * `allowCustom` mode so artists can type free-form values like
  * "Oil + gold leaf on linen" when their work doesn't slot neatly
  * into one of the canonical entries.
  *
  * Lives in /src/data so client pages can import it without pulling
  * in another page module (Next.js page files shouldn't be cross-
- * imported — doing so can drag the whole route's runtime into the
+ * imported, doing so can drag the whole route's runtime into the
  * importer and break rendering).
  */
 export const WORK_MEDIUM_OPTIONS = [

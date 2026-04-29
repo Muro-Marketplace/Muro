@@ -47,7 +47,7 @@ const FLAGS: Record<FeatureFlag, FlagDef> = {
     description:
       "Phase 1 wall visualizer (preset walls, customer + venue flows, " +
       "non-AI render, plus artist showroom + mockup-attach). On in " +
-      "prod by default — set NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1=0 in " +
+      "prod by default, set NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1=0 in " +
       "Vercel to kill-switch if it misbehaves.",
   },
   OAUTH_GOOGLE_APPLE: {
@@ -87,14 +87,14 @@ export function isFlagOn(flag: FeatureFlag): boolean {
   return isProd ? def.prodDefault : def.devDefault;
 }
 
-/** Throw if the flag is off — handy for API routes that must short-circuit. */
+/** Throw if the flag is off, handy for API routes that must short-circuit. */
 export function requireFlag(flag: FeatureFlag): void {
   if (!isFlagOn(flag)) {
     throw new Error(`Feature flag ${flag} is disabled`);
   }
 }
 
-/** All flags + their resolved state — for /api/_internal/flags or dev pages. */
+/** All flags + their resolved state, for /api/_internal/flags or dev pages. */
 export function listFlags(): Array<{
   flag: FeatureFlag;
   on: boolean;

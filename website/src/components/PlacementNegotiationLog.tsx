@@ -57,7 +57,7 @@ function describeTerms(meta: LogEntry["metadata"]): string | null {
 /**
  * Chronological log of the offers, counters, and responses that led to
  * the current terms. Reads placement_request + placement_response
- * messages carrying this placement id. Collapsed by default — most
+ * messages carrying this placement id. Collapsed by default, most
  * placements have one exchange; the log is here for the hairy
  * back-and-forth cases where "what did we agree?" matters.
  */
@@ -74,7 +74,7 @@ export default function PlacementNegotiationLog({ placementId }: Props) {
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         setEntries(Array.isArray(data.entries) ? data.entries : []);
-      } catch { /* ignore — log is optional */ }
+      } catch { /* ignore, log is optional */ }
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };

@@ -19,7 +19,7 @@ interface SizeEntry {
   price: number;
 }
 
-/** One row in the bulk-price spreadsheet — flattened (work × size). */
+/** One row in the bulk-price spreadsheet, flattened (work × size). */
 interface BulkPriceRow {
   workId: string;
   workTitle: string;
@@ -33,19 +33,19 @@ interface BulkPriceRow {
 }
 
 /**
- * One draft in the bulk-add flow — a candidate ArtistWork the artist
+ * One draft in the bulk-add flow, a candidate ArtistWork the artist
  * has dragged in but not yet saved. Mirrors the shape of WorkFormState
  * but trimmed to just the fields the bulk UI surfaces; the rest get
  * sensible defaults at save time.
  *
  * Per-size arrays (shipping, inStore) are kept parallel to `sizes`
- * by index — same convention as the single-work edit form. Empty
+ * by index, same convention as the single-work edit form. Empty
  * string means "no override at this size".
  */
 interface BulkAddDraft {
   /** Local-only key. Discarded on save. */
   draftId: string;
-  /** Uploaded image URL — empty until upload settles. */
+  /** Uploaded image URL, empty until upload settles. */
   imageUrl: string;
   /** Object URL for instant preview while the upload is in flight. */
   imagePreview: string;
@@ -61,7 +61,7 @@ interface BulkAddDraft {
   /** Frame options offered for this work. priceUplift is the default
    *  (auto-scaled by perimeter for sizes not in pricesBySize).
    *  pricesBySize lets the artist override the uplift per-size with
-   *  explicit values — handy when the perimeter ramp doesn't match
+   *  explicit values, handy when the perimeter ramp doesn't match
    *  real-world frame moulding costs. Stored as strings so the
    *  controlled inputs can be empty while typing. */
   frameOptions: {
@@ -112,7 +112,7 @@ interface WorkFormState {
   }[];
 }
 
-// Standard print sizes in inches [width, height] — always width <= height
+// Standard print sizes in inches [width, height], always width <= height
 const STANDARD_SIZES: [number, number, string][] = [
   [6, 4, 'A6'],
   [7, 5, '7×5"'],
@@ -132,12 +132,12 @@ const STANDARD_SIZES: [number, number, string][] = [
 /**
  * Given an aspect ratio (w/h), return standard sizes that closely match.
  *
- * Label format: `{w}×{h}" ({wCm}×{hCm} cm)` — inch measurement up
+ * Label format: `{w}×{h}" ({wCm}×{hCm} cm)`, inch measurement up
  * front (matches the "STANDARD_SIZES" naming most artists shop in)
  * with the cm equivalent in brackets so venues sourcing in metric
  * see the actual dimensions at a glance. The third element of
  * STANDARD_SIZES (paper-size code) is kept for future use but no
- * longer surfaces in the label — repeating it as `(8×6")` was
+ * longer surfaces in the label, repeating it as `(8×6")` was
  * redundant and `(A4)` alone hid the cm value users actually need.
  */
 function getSuggestedSizes(ratio: number): SizeEntry[] {
@@ -232,7 +232,7 @@ export default function PortfolioPage() {
   // pattern: (1) pick a kind ("sizes" or "prices") + a source work,
   // then (2) tick exactly which works in the selection to apply to
   // and click Apply. Replaces the older one-shot dropdown that
-  // immediately overwrote every selected work — that gave artists
+  // immediately overwrote every selected work, that gave artists
   // no chance to exclude works that were intentionally different.
   const [bulkEditApplyKind, setBulkEditApplyKind] = useState<
     "sizes" | "prices" | null
@@ -260,7 +260,7 @@ export default function PortfolioPage() {
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [bulkAddDrafts, setBulkAddDrafts] = useState<BulkAddDraft[]>([]);
   const [bulkAddDragOver, setBulkAddDragOver] = useState(false);
-  // Two pickers — one for "Copy sizes from", one for "Copy prices
+  // Two pickers, one for "Copy sizes from", one for "Copy prices
   // from". They're separated because an artist often wants to clone
   // size labels (the size table stays the same across a series) but
   // set different prices per piece, or vice versa.
@@ -273,7 +273,7 @@ export default function PortfolioPage() {
   // numbers (or null where the source had none), so when the artist
   // applies "prices" the per-size shipping comes along too. The
   // source can be a draft (BulkAddDraft.shippingPrices: string[]) or
-  // an existing work (pricing[i].shippingPrice) — both are
+  // an existing work (pricing[i].shippingPrice), both are
   // normalised to the same shape here.
   const [bulkAddPendingSource, setBulkAddPendingSource] = useState<{
     label: string;
@@ -341,7 +341,7 @@ export default function PortfolioPage() {
 
   // ──────────────────────────────────────────────────────────────────
   // ALL HOOKS MUST LIVE ABOVE THE `if (!artist) return ...` EARLY-RETURN
-  // BELOW. React enforces a stable hook count between renders — adding
+  // BELOW. React enforces a stable hook count between renders, adding
   // a hook after a conditional return triggers
   //   "Rendered more hooks than during the previous render"
   // which the Next.js error boundary surfaces as
@@ -361,7 +361,7 @@ export default function PortfolioPage() {
   }, [bulkPricesOpen]);
 
   // Cmd/Ctrl + C / V keyboard shortcuts when the bulk-prices modal is
-  // open. Only fires when the focused element isn't a real input —
+  // open. Only fires when the focused element isn't a real input,
   // otherwise the user copying inside an input field would get hijacked.
   useEffect(() => {
     if (!bulkPricesOpen) return;
@@ -553,7 +553,7 @@ export default function PortfolioPage() {
   /**
    * Open the bulk-price editor on every work, regardless of whether the
    * user has entered select-mode. Most artists hit "Bulk edit prices"
-   * because they want to scan _everything_ — making them tick boxes
+   * because they want to scan _everything_, making them tick boxes
    * first is friction.
    */
 
@@ -618,7 +618,7 @@ export default function PortfolioPage() {
       await navigator.clipboard.writeText(text);
     } catch {
       // Clipboard permissions can fail in tests / older browsers.
-      // Falling back is fine — the user can use the fill input.
+      // Falling back is fine, the user can use the fill input.
     }
   }
 
@@ -768,7 +768,7 @@ export default function PortfolioPage() {
 
   /**
    * Two-step copy flow. Step 1: artist picks a source (existing work
-   * or another draft) from the toolbar dropdown — that fires
+   * or another draft) from the toolbar dropdown, that fires
    * `bulkAddPickSource`. Step 2: a target picker opens with checkboxes
    * for which drafts to apply to (defaults to all). On confirm,
    * `bulkAddApplyToTargets` does the merge.
@@ -781,7 +781,7 @@ export default function PortfolioPage() {
     if (sizes.length === 0) return;
     setBulkAddPendingSource({ label, sizes, shipping });
     // Default-target every draft except the source itself when the
-    // source is a draft — applying to yourself is a no-op.
+    // source is a draft, applying to yourself is a no-op.
     const allIds = bulkAddDrafts
       .filter((d) => d.title !== label)
       .map((d) => d.draftId);
@@ -800,7 +800,7 @@ export default function PortfolioPage() {
           // Copy LABELS only. Existing prices for matching labels
           // (case-insensitive) are kept so an artist who priced
           // first then aligned the table to a reference work doesn't
-          // lose their numbers. Shipping arrays reset to empty —
+          // lose their numbers. Shipping arrays reset to empty,
           // sizes flow doesn't carry shipping. The artist runs Copy
           // Prices next if they want the source's numbers.
           const nextSizes = sourceSizes.map((s) => {
@@ -819,7 +819,7 @@ export default function PortfolioPage() {
             inStorePrices: nextSizes.map(() => ""),
           };
         }
-        // kind === "prices" — row-by-row (index aligned). Source
+        // kind === "prices", row-by-row (index aligned). Source
         // row i's price → target row i's price; same for shipping.
         // Target rows beyond the source's length keep their existing
         // values so we never blank out work the artist did.
@@ -899,7 +899,7 @@ export default function PortfolioPage() {
       // shippingPrice field added to the data model. We still collapse
       // to a single work-level `shippingPrice` (using the lowest of
       // the entered values) as a fallback for legacy code paths that
-      // read the work-level field — the cart prefers per-size when
+      // read the work-level field, the cart prefers per-size when
       // present. Empty rows are skipped.
       const perSizeShipping = d.shippingPrices.map((s) => {
         if (!s || !s.trim()) return undefined;
@@ -920,7 +920,7 @@ export default function PortfolioPage() {
           return { label: size.label, price: Number.isFinite(num) ? num : 0 };
         })
         .filter((p) => p.price > 0);
-      // Frame options — work-level today; per-size frames isn't in
+      // Frame options, work-level today; per-size frames isn't in
       // the data model yet. Numeric coerce + drop blanks to match the
       // single-add validation.
       const frameOptions = d.frameOptions
@@ -1057,7 +1057,7 @@ export default function PortfolioPage() {
         }));
       if (newPricing.length === 0) {
         // Don't accidentally wipe a work's only sizes if the artist
-        // emptied them all — leave the original pricing intact.
+        // emptied them all, leave the original pricing intact.
         return w;
       }
       const lowest = Math.min(...newPricing.map((p) => p.price));
@@ -1078,11 +1078,11 @@ export default function PortfolioPage() {
    * Two-step Copy-from flow for the bulk-edit toolbar (mirrors the
    * bulk-add modal pattern).
    *
-   * Step 1 — `bulkEditPickSource`: artist picks which work to copy
+   * Step 1, `bulkEditPickSource`: artist picks which work to copy
    * from. The target set defaults to every work currently selected
    * EXCEPT the source itself (applying to the source is a no-op).
    *
-   * Step 2 — `bulkEditApplyToTargets`: artist ticks which targets to
+   * Step 2, `bulkEditApplyToTargets`: artist ticks which targets to
    * keep, hits Apply. Behaviour depends on `bulkEditApplyKind`:
    *
    *   - "sizes": copy size LABELS only. For matching labels keep the
@@ -1093,7 +1093,7 @@ export default function PortfolioPage() {
    *   - "prices": fill in £ values for size labels the target already
    *     has. Labels not present in the source stay untouched. Also
    *     propagates the source's `shippingPrice`, `inStorePrice` and
-   *     `inStorePricing` IF the source has them set — this matches
+   *     `inStorePricing` IF the source has them set, this matches
    *     how artists actually price: shipping & in-store are usually
    *     consistent across a series, so when copying prices from a
    *     "reference" piece we want to clone those too. We only
@@ -1120,7 +1120,7 @@ export default function PortfolioPage() {
   /**
    * Apply a source work's sizes OR prices into the currently-open
    * Add/Edit form. Used by the picker that lives next to the size
-   * table header. The two operations are strictly independent —
+   * table header. The two operations are strictly independent,
    * "Copy sizes" must NOT seed prices, "Copy prices" must NOT touch
    * size labels. Lumping them together led to artists clicking
    * "Copy sizes" expecting just the labels and finding the prices
@@ -1128,13 +1128,13 @@ export default function PortfolioPage() {
    * "autofill sizes from another work… also autofills prices,
    * should just be sizes".
    *
-   * "sizes" — replace the form's size labels with the source's.
+   * "sizes", replace the form's size labels with the source's.
    * For matching labels keep the form's existing prices; for new
    * labels seed price=0 so the artist explicitly fills them in.
    * Shipping arrays reset to empty (prices flow brings shipping;
    * sizes flow doesn't).
    *
-   * "prices" — index-aligned. Source row i's price ↔ form row i's
+   * "prices", index-aligned. Source row i's price ↔ form row i's
    * price. Per-size shipping comes along where set on the source.
    * Work-level shipping / in-store prices also propagate IF the
    * source has them. Size LABELS are never touched.
@@ -1160,7 +1160,7 @@ export default function PortfolioPage() {
           ...p,
           sizes: newSizes,
           // Reset parallel arrays so they line up with the new
-          // labels — but keep them empty (no shipping/in-store
+          // labels, but keep them empty (no shipping/in-store
           // copied through the sizes flow).
           shippingPerSize: false,
           sizeShipping: newSizes.map(() => ""),
@@ -1169,7 +1169,7 @@ export default function PortfolioPage() {
           inStorePricing: newSizes.map(() => ""),
         };
       }
-      // kind === "prices" — index-aligned per-row copy. Labels are
+      // kind === "prices", index-aligned per-row copy. Labels are
       // left as-is; only the price (and optionally per-size
       // shipping) is filled in.
       const nextSizes = p.sizes.map((s, i) => ({
@@ -1242,7 +1242,7 @@ export default function PortfolioPage() {
           priceBand: lowest > 0 ? `From £${lowest}` : w.priceBand,
         };
       }
-      // kind === "prices" — copy row-by-row (index-aligned), not by
+      // kind === "prices", copy row-by-row (index-aligned), not by
       // matching size labels. Artists asked for this: their size
       // tables don't always use identical labels (e.g. "A4 print"
       // vs "A4 / 30×21cm") but the row order is consistent across
@@ -1253,7 +1253,7 @@ export default function PortfolioPage() {
       // Per-size shipping is brought along the same way: if the
       // source set a row-i shipping price, that lands on the
       // target's row i. We don't blank out an existing target
-      // shipping just because the source didn't set one — preserve
+      // shipping just because the source didn't set one, preserve
       // it explicitly.
       const nextPricing: SizePricing[] = w.pricing.map((s, i) => {
         const sourceRow = source.pricing[i];
@@ -1273,7 +1273,7 @@ export default function PortfolioPage() {
         priceBand: lowest > 0 ? `From £${lowest}` : w.priceBand,
       };
       // Only overwrite work-level shipping / in-store fields when the
-      // source has them set — matches the user's ask: "if the one I'm
+      // source has them set, matches the user's ask: "if the one I'm
       // copying from has those prices available too".
       if (source.shippingPrice != null) {
         result.shippingPrice = source.shippingPrice;
@@ -1285,7 +1285,7 @@ export default function PortfolioPage() {
         Array.isArray(source.inStorePricing) &&
         source.inStorePricing.length > 0
       ) {
-        // Per-size in-store pricing — index-aligned, same as the
+        // Per-size in-store pricing, index-aligned, same as the
         // main pricing copy above. Source row i's in-store price
         // lands on target row i. Drops rows where source had no
         // in-store entry so we don't seed zeros into the target.
@@ -1312,7 +1312,7 @@ export default function PortfolioPage() {
 
   function openAdd(seed?: Partial<WorkFormState>) {
     // `seed` lets the Duplicate flow preload everything except the
-    // title + image — those should be unique per work so the artist
+    // title + image, those should be unique per work so the artist
     // doesn't accidentally publish two artworks with the same headline.
     const fresh: WorkFormState = {
       ...emptyWork,
@@ -1329,7 +1329,7 @@ export default function PortfolioPage() {
   }
 
   /**
-   * "Duplicate from this work" — opens the new-work form with sizes,
+   * "Duplicate from this work", opens the new-work form with sizes,
    * prices, medium, dimensions, orientation, shipping, frames, etc.
    * pre-populated from the source work. Title and images stay blank
    * so the artist replaces them. Implements user ask:
@@ -1449,7 +1449,7 @@ export default function PortfolioPage() {
     // the edit panel instead of the work grid they just clicked
     // from. Without this, clicking Edit on a work three rows down
     // mounts the form above and leaves the viewport at the row's
-    // y-position — the artist sees no visible change. Defer to the
+    // y-position, the artist sees no visible change. Defer to the
     // next frame so React has finished the showForm=true layout
     // pass before we scroll.
     requestAnimationFrame(() => {
@@ -1467,7 +1467,7 @@ export default function PortfolioPage() {
     }
   }
 
-  // Core upload routine — accepts a raw File so it can be called from
+  // Core upload routine, accepts a raw File so it can be called from
   // both the file-input change event and the drag-and-drop handler.
   async function handleImageFile(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -1697,14 +1697,14 @@ export default function PortfolioPage() {
       orientation: form.orientation,
       ...(shippingVal != null && !isNaN(shippingVal) ? { shippingPrice: shippingVal } : {}),
       ...(inStoreVal != null && !isNaN(inStoreVal) ? { inStorePrice: inStoreVal } : {}),
-      // In-store pricing — walk form.sizes (NOT validSizes) so we
+      // In-store pricing, walk form.sizes (NOT validSizes) so we
       // line up with the parallel `form.inStorePricing[]` array. The
       // previous code used `validSizes.map((s, i) => form.inStorePricing[i])`
       // which silently mismatched whenever the artist had any
       // empty-priced rows above a priced one: validSizes filtered
       // those rows out so its index 0 was form.sizes[1], but the
       // in-store array still held the form.sizes[0] value at index 0
-      // — the saved in-store price ended up bound to the wrong size.
+      //, the saved in-store price ended up bound to the wrong size.
       // We also drop entries where the *online* price is 0 (matches
       // the validSizes filter applied to `pricing` above) so the
       // shapes stay aligned, and we gate on `inStoreEnabled` so a
@@ -1778,7 +1778,7 @@ export default function PortfolioPage() {
         </div>
       </div>
 
-      {/* Shipping Settings — rendered only when the edit form is closed,
+      {/* Shipping Settings, rendered only when the edit form is closed,
           so clicking "Edit work" doesn't push the form below a tall
           settings panel. When the form opens it slots in here at the
           top of the page. */}
@@ -1871,7 +1871,7 @@ export default function PortfolioPage() {
       {/* Add/Edit Form */}
       {showForm && (
         <div className="bg-surface border border-border rounded-sm p-6 mb-6">
-          {/* Sticky form header — title on the left, Cancel + primary
+          {/* Sticky form header, title on the left, Cancel + primary
               save on the right. The save button used to live only at
               the very bottom of a long form; on mobile + on works
               with lots of size rows the artist had to scroll past
@@ -1900,7 +1900,7 @@ export default function PortfolioPage() {
           </div>
 
           <div className="space-y-5">
-            {/* Image upload — supports drag-drop. Both the empty state
+            {/* Image upload, supports drag-drop. Both the empty state
                 and the populated state listen for drops so artists can
                 replace by dragging without having to click "Replace". */}
             <div>
@@ -1966,8 +1966,8 @@ export default function PortfolioPage() {
                     >
                       {uploading ? "Uploading..." : "Replace Image"}
                     </button>
-                    <p className="text-[10px] text-muted">JPG, PNG, or WebP — drag-and-drop supported. Recommended minimum 1200px wide.</p>
-                    <p className="text-[10px] text-muted/80 italic">Public versions are capped to a smaller resolution to discourage image theft — your full-resolution original is kept on file for fulfilment.</p>
+                    <p className="text-[10px] text-muted">JPG, PNG, or WebP, drag-and-drop supported. Recommended minimum 1200px wide.</p>
+                    <p className="text-[10px] text-muted/80 italic">Public versions are capped to a smaller resolution to discourage image theft, your full-resolution original is kept on file for fulfilment.</p>
                   </div>
                 </div>
               ) : (
@@ -1998,7 +1998,7 @@ export default function PortfolioPage() {
                     {uploading ? "Uploading..." : dragMain ? "Drop to upload" : "Click or drag an image here"}
                   </span>
                   <span className="text-[10px] text-muted">JPG, PNG, or WebP. Recommended minimum 1200px wide.</span>
-                  <span className="text-[10px] text-muted/80 italic">Public images are downsized to discourage theft — the original is kept for fulfilment.</span>
+                  <span className="text-[10px] text-muted/80 italic">Public images are downsized to discourage theft, the original is kept for fulfilment.</span>
                 </button>
               )}
             </div>
@@ -2152,7 +2152,7 @@ export default function PortfolioPage() {
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((p) => ({ ...p, description: e.target.value.slice(0, 2000) }))}
-                placeholder="Tell the story behind this piece — inspiration, process, what you were thinking when you made it. This appears on the artwork page under 'About this work'."
+                placeholder="Tell the story behind this piece, inspiration, process, what you were thinking when you made it. This appears on the artwork page under 'About this work'."
                 rows={5}
                 maxLength={2000}
                 className={`${inputClass} resize-y font-serif leading-relaxed`}
@@ -2188,7 +2188,7 @@ export default function PortfolioPage() {
               </div>
             </div>
 
-            {/* Sizes, shipping and in-store — one unified table so the
+            {/* Sizes, shipping and in-store, one unified table so the
                 artist sets everything about a size in one row. Shipping
                 and in-store columns only appear when their respective
                 toggles are on; frame add-ons stay below as they apply
@@ -2197,7 +2197,7 @@ export default function PortfolioPage() {
               <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
                 <label className="text-sm font-medium">Available Sizes & Prices <span className="text-accent">*</span></label>
                 <div className="flex items-center gap-3 flex-wrap">
-                  {/* Copy-from picker — opens a small dropdown of the
+                  {/* Copy-from picker, opens a small dropdown of the
                       artist's existing works (excluding the one being
                       edited). Picking a source seeds either size
                       labels or row-aligned prices into the form. */}
@@ -2312,7 +2312,7 @@ export default function PortfolioPage() {
                 </div>
               )}
 
-              {/* Desktop grid — explicit column template so Size takes
+              {/* Desktop grid, explicit column template so Size takes
                   the space it needs and the price columns hug to the
                   right. Avoids the "Price floating 1000px from Size"
                   look that plain <table width=100%> was giving when
@@ -2324,7 +2324,7 @@ export default function PortfolioPage() {
                 // the remove icon.
                 const cols = [
                   "minmax(140px, 360px)",   // Size
-                  "1fr",                    // Spacer — pushes price columns to the right edge
+                  "1fr",                    // Spacer, pushes price columns to the right edge
                   "110px",                  // Price (£ + input)
                   form.shippingPerSize ? "140px" : null,
                   form.inStoreEnabled   ? "110px" : null,
@@ -2422,7 +2422,7 @@ export default function PortfolioPage() {
                                     updated[i] = e.target.value;
                                     return { ...p, inStorePricing: updated };
                                   })}
-                                  placeholder="—"
+                                  placeholder="–"
                                   className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                                 />
                               </div>
@@ -2465,7 +2465,7 @@ export default function PortfolioPage() {
                 );
               })()}
 
-              {/* Mobile — stacked cards per size. The table doesn't fit
+              {/* Mobile, stacked cards per size. The table doesn't fit
                   well on small viewports when multiple columns are on. */}
               <div className="sm:hidden space-y-3">
                 {form.sizes.map((size, i) => {
@@ -2558,7 +2558,7 @@ export default function PortfolioPage() {
                                   updated[i] = e.target.value;
                                   return { ...p, inStorePricing: updated };
                                 })}
-                                placeholder="—"
+                                placeholder="–"
                                 className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
                               />
                             </div>
@@ -2574,7 +2574,7 @@ export default function PortfolioPage() {
                 Set a price for each size. Enable the toggles above to add per-size shipping or in-store prices as extra columns.
               </p>
 
-              {/* Single-price shipping fallback — only visible when the
+              {/* Single-price shipping fallback, only visible when the
                   per-size toggle is off. Keeps one shipping number for
                   the whole artwork. */}
               {!form.shippingPerSize && (
@@ -2599,7 +2599,7 @@ export default function PortfolioPage() {
                     // Suggest work-level shipping based on the SMALLEST
                     // priced size label, not form.dimensions. The
                     // dimensions field is auto-filled from the image's
-                    // pixel size on upload ("1920 × 1080 px") — those
+                    // pixel size on upload ("1920 × 1080 px"), those
                     // numbers are large enough that the calculator's
                     // mm-fallback kicks in (any number > 300 → divide
                     // by 10), spitting out 192cm → oversized → £35.
@@ -2642,7 +2642,7 @@ export default function PortfolioPage() {
                         </svg>
                         <div className="flex-1">
                           <p className="text-foreground">
-                            Suggested: <span className="font-semibold">£{est.cost.toFixed(2)}</span> — {tierLabel(est.tier)}, {est.estimatedDays}
+                            Suggested: <span className="font-semibold">£{est.cost.toFixed(2)}</span>, {tierLabel(est.tier)}, {est.estimatedDays}
                           </p>
                           {!form.shippingPrice && (
                             <button
@@ -2695,7 +2695,7 @@ export default function PortfolioPage() {
             {/* Frame options */}
             <div>
               <label className="block text-sm font-medium mb-1">Frame options (optional)</label>
-              <p className="text-xs text-muted mb-3">Offer framed variants. The default uplift is added on top of the size price; below each frame, optionally set per-size £ overrides — leave a size blank to use the auto-scaled default.</p>
+              <p className="text-xs text-muted mb-3">Offer framed variants. The default uplift is added on top of the size price; below each frame, optionally set per-size £ overrides, leave a size blank to use the auto-scaled default.</p>
               <div className="space-y-3">
                 {form.frameOptions.map((f, i) => (
                   <div key={i} className="space-y-1.5">
@@ -2750,7 +2750,7 @@ export default function PortfolioPage() {
                         </button>
                       )}
                     </div>
-                    {/* Label + price + delete — single row on one line */}
+                    {/* Label + price + delete, single row on one line */}
                     <input
                       type="text"
                       value={f.label}
@@ -2788,7 +2788,7 @@ export default function PortfolioPage() {
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
                     </button>
                   </div>
-                  {/* Per-size £ overrides — only show when at least
+                  {/* Per-size £ overrides, only show when at least
                       two sizes are defined for this work. Leaving a
                       cell blank uses the default uplift (auto-scaled
                       by perimeter). */}
@@ -2883,7 +2883,7 @@ export default function PortfolioPage() {
         <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
           <h2 className="text-base font-medium">Works ({works.length})</h2>
           {/* Select-mode toggle + select-all when active. The Bulk-edit
-              prices button skips select-mode entirely — clicking opens
+              prices button skips select-mode entirely, clicking opens
               the spreadsheet table with every work pre-loaded. */}
           {works.length > 0 && (
             <div className="flex items-center gap-2">
@@ -3044,7 +3044,7 @@ export default function PortfolioPage() {
                       </div>
                     )}
 
-                    {/* Hover actions hidden in select mode — the click
+                    {/* Hover actions hidden in select mode, the click
                         target there belongs entirely to the checkbox. */}
                     {!selectMode &&
                       hoveredWork === index &&
@@ -3107,12 +3107,12 @@ export default function PortfolioPage() {
       </div>
 
       {/*
-       * Sticky bulk-action bar — Shopify-style. Appears at the bottom
+       * Sticky bulk-action bar, Shopify-style. Appears at the bottom
        * of the viewport whenever ≥1 work is selected in select mode.
        * Stays out of the way otherwise, and the X dismisses without
        * clearing other selection state.
        */}
-      {/* Target picker — sits just above the dark bulk-action toolbar
+      {/* Target picker, sits just above the dark bulk-action toolbar
           and shows after the artist picks a source. Defaults targets
           to "everything currently selected, minus the source" so the
           common case (clone across the lot) is one click; deselecting
@@ -3262,7 +3262,7 @@ export default function PortfolioPage() {
             >
               Edit sizes &amp; prices
             </button>
-            {/* Two separate buttons — sizes and prices are independent
+            {/* Two separate buttons, sizes and prices are independent
                 operations. Picking a source kicks open the target
                 picker (rendered as a panel above this toolbar) so the
                 artist can deselect any work that's intentionally
@@ -3271,7 +3271,7 @@ export default function PortfolioPage() {
               label="Copy sizes from…"
               kind="sizes"
               // Treat the kind buttons as inactive while a source is
-              // pending — the target picker panel takes over the
+              // pending, the target picker panel takes over the
               // visual ownership at that point, and leaving the
               // dropdown open hid the Apply confirm button under it.
               activeKind={bulkEditPendingSource ? null : bulkEditApplyKind}
@@ -3293,7 +3293,7 @@ export default function PortfolioPage() {
               label="Copy prices from…"
               kind="prices"
               // Treat the kind buttons as inactive while a source is
-              // pending — the target picker panel takes over the
+              // pending, the target picker panel takes over the
               // visual ownership at that point, and leaving the
               // dropdown open hid the Apply confirm button under it.
               activeKind={bulkEditPendingSource ? null : bulkEditApplyKind}
@@ -3374,7 +3374,7 @@ export default function PortfolioPage() {
               </button>
             </div>
 
-            {/* Selection toolbar — only shown when rows are highlighted.
+            {/* Selection toolbar, only shown when rows are highlighted.
                 Lets the artist set a flat price for the selection or
                 copy/paste prices to/from a spreadsheet (also Cmd+C/V).
                 Sits above the table so it's always discoverable. */}
@@ -3497,7 +3497,7 @@ export default function PortfolioPage() {
                             }}
                             onClick={(e) => {
                               // Shift-click on the checkbox extends the
-                              // range from the anchor — same behaviour
+                              // range from the anchor, same behaviour
                               // as clicking the row body.
                               if (e.shiftKey) {
                                 e.preventDefault();
@@ -3585,7 +3585,7 @@ export default function PortfolioPage() {
                 </tbody>
               </table>
 
-              {/* "Add size" buttons grouped by work — one per selected
+              {/* "Add size" buttons grouped by work, one per selected
                   work, placed below the table so the artist can extend
                   any work's size list inline. */}
               <div className="px-4 py-3 border-t border-border bg-stone-50/60 space-y-1.5">
@@ -3644,7 +3644,7 @@ export default function PortfolioPage() {
       )}
 
       {/*
-       * Bulk-add modal — drop multiple images, edit each draft side
+       * Bulk-add modal, drop multiple images, edit each draft side
        * by side, optionally clone sizes/prices across the lot, then
        * Save All to push them to the works table in one go.
        */}
@@ -3658,7 +3658,7 @@ export default function PortfolioPage() {
           // image dropzone aren't hidden behind it. Without the
           // explicit top inset the modal centred to viewport-mid
           // and on shorter screens the upper edge sat under the
-          // bar — clicking the dropzone still worked but the artist
+          // bar, clicking the dropzone still worked but the artist
           // couldn't actually see what they were dropping into.
           className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm pt-20 sm:pt-24 pb-4 px-4 overflow-y-auto"
           onClick={() => !bulkAddSaving && setBulkAddOpen(false)}
@@ -3702,7 +3702,7 @@ export default function PortfolioPage() {
                 {/*
                  * Two pickers: Copy SIZES from / Copy PRICES from.
                  * Both share the same source list (other drafts +
-                 * existing works) but apply differently — sizes
+                 * existing works) but apply differently, sizes
                  * overwrites the size labels, prices fills in £
                  * values for matching size labels. Whichever button
                  * the artist clicks sets `bulkAddApplyKind`, then
@@ -3711,7 +3711,7 @@ export default function PortfolioPage() {
                 <CopyFromButton
                   label="Copy sizes from…"
                   // Hide the source list once a source has been
-                  // picked — the target picker that appears below
+                  // picked, the target picker that appears below
                   // covers the same screen real estate, and leaving
                   // the dropdown open hid the "Apply to N drafts"
                   // confirm button under it.
@@ -3754,7 +3754,7 @@ export default function PortfolioPage() {
               </div>
             )}
 
-            {/* Target picker — appears once a source is chosen, asks
+            {/* Target picker, appears once a source is chosen, asks
                 the artist which drafts to apply to. Defaults to all
                 drafts (excluding the source if it's a draft). */}
             {bulkAddPendingSource && bulkAddApplyKind && (
@@ -3890,7 +3890,7 @@ export default function PortfolioPage() {
                     {bulkAddDragOver ? "Drop to upload" : "Drop multiple images here"}
                   </p>
                   <p className="text-xs text-muted">
-                    or click to choose. JPG, PNG, or WebP — each becomes a draft you can edit before saving.
+                    or click to choose. JPG, PNG, or WebP, each becomes a draft you can edit before saving.
                   </p>
                 </button>
               ) : (
@@ -3962,7 +3962,7 @@ export default function PortfolioPage() {
 
 /**
  * Side-by-side editor card for a single bulk-add draft. The card is
- * intentionally lean — title + sizes table + available toggle. Anything
+ * intentionally lean, title + sizes table + available toggle. Anything
  * the artist wants to fine-tune (medium, description, framing options,
  * shipping override) can be set after saving via the regular Edit Work
  * flow.
@@ -4232,7 +4232,7 @@ function BulkAddDraftCard({
             </div>
           </CollapsibleRow>
 
-          {/* Frame options (work-level — applies to all sizes). */}
+          {/* Frame options (work-level, applies to all sizes). */}
           <CollapsibleRow
             label="Frame options"
             open={draft.showFrames}
@@ -4297,7 +4297,7 @@ function BulkAddDraftCard({
                 + Add frame option
               </button>
               <p className="text-[10px] text-muted leading-snug">
-                Frames apply across all sizes — true per-size frames
+                Frames apply across all sizes, true per-size frames
                 aren&apos;t in the data model yet.
               </p>
             </div>
@@ -4322,7 +4322,7 @@ function BulkAddDraftCard({
 
 /**
  * Disclosure-style row for the bulk-add card. Header is the label +
- * a chevron; click toggles. Keeps the card lean by default — most
+ * a chevron; click toggles. Keeps the card lean by default, most
  * artists won't bother setting per-size shipping or frames in bulk
  * add, so collapsing them keeps the form scannable.
  */
@@ -4365,7 +4365,7 @@ function CollapsibleRow({
 /**
  * "Copy <kind> from…" picker button used in the bulk-add toolbar.
  * Lists in-flight drafts (above the divider) and existing saved
- * works (below). Clicking an entry sets it as the pending source —
+ * works (below). Clicking an entry sets it as the pending source,
  * the parent then opens the target-selector to pick which drafts
  * to apply to.
  */
@@ -4491,7 +4491,7 @@ function CopyFromButton({
 
 /**
  * Source-picker button for the bulk-edit toolbar. Two of these
- * render side-by-side in the dark sticky toolbar — one for "Copy
+ * render side-by-side in the dark sticky toolbar, one for "Copy
  * sizes from…" and one for "Copy prices from…". Picking a source
  * here calls `onPick(source)` which kicks open the target picker
  * panel above the toolbar (rendered separately, not by this
@@ -4523,7 +4523,7 @@ function CopyFromSourceButton({
   onPick: (source: ArtistWork) => void;
 }) {
   const isOpen = activeKind === kind;
-  // Only show works that have at least one priced size — copying from
+  // Only show works that have at least one priced size, copying from
   // a work with empty pricing leaves the target with zeros, which
   // confuses the artist far more than just hiding empty sources.
   const candidates = works.filter(

@@ -42,9 +42,9 @@ export interface MockSupabaseOptions {
 
 interface ChainNode {
   eq: (col: string, val: unknown) => ChainNode;
-  /** Inclusive lower bound — for created_at >= cutoff. */
+  /** Inclusive lower bound, for created_at >= cutoff. */
   gte: (col: string, val: unknown) => ChainNode;
-  /** Inclusive upper bound — for created_at <= cutoff. */
+  /** Inclusive upper bound, for created_at <= cutoff. */
   lte: (col: string, val: unknown) => ChainNode;
   /** IN (...) filter. */
   in: (col: string, vals: unknown[]) => ChainNode;
@@ -66,7 +66,7 @@ export function buildMockSupabase(opts: MockSupabaseOptions): SupabaseClient {
 
   function makeChain(handler: TableHandler | undefined): ChainNode {
     // Every refining method (eq / gte / lte / in / order / limit) returns
-    // a fresh chain pointing at the same handler — handlers are responsible
+    // a fresh chain pointing at the same handler, handlers are responsible
     // for returning the right data regardless of refinement (tests that
     // need filter-aware behaviour can swap a stateful handler in).
     const node: ChainNode = {

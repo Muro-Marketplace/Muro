@@ -1,7 +1,7 @@
 /**
  * /api/walls/my-works
  *
- * GET — works currently on display at the calling user's venue.
+ * GET, works currently on display at the calling user's venue.
  *
  * Source of truth: `placements` rows where the venue is `me` and the
  * placement is in an "on the wall" state. We pull the matching
@@ -14,7 +14,7 @@
  * Empty list (status 200) when:
  *   - User has no placements yet
  *   - User isn't a venue
- *   - Feature flag is off (silently empty rather than 404 — keeps the
+ *   - Feature flag is off (silently empty rather than 404, keeps the
  *     editor UX predictable; the page-level flag check has already
  *     gated visit).
  */
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
 
   // 1. Pull the venue's "currently on the wall" placements.
   //    `status === 'active'` covers accepted-but-not-yet-installed AND
-  //    installed/live — venues planning the install want both.
+  //    installed/live, venues planning the install want both.
   const { data: placements, error: pErr } = await db
     .from("placements")
     .select(
@@ -85,7 +85,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ works: [] });
   }
 
-  // 2. Resolve work data — prefer artist_works rows when work_id matches.
+  // 2. Resolve work data, prefer artist_works rows when work_id matches.
   const workIds = Array.from(
     new Set(rows.map((r) => r.work_id).filter((x): x is string => !!x)),
   );
@@ -100,7 +100,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // 3. Build artist-name lookup so the panel can show "Title — by Artist"
+  // 3. Build artist-name lookup so the panel can show "Title, by Artist"
   //    if the venue has many artists displayed.
   const artistIds = Array.from(
     new Set(

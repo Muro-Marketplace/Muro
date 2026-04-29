@@ -5,7 +5,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// GET /api/placements/[id]/history — chronological list of
+// GET /api/placements/[id]/history, chronological list of
 // placement_request and placement_response messages that reference
 // this placement, used by the negotiation log.
 export async function GET(
@@ -33,7 +33,7 @@ export async function GET(
     return NextResponse.json({ error: "Not authorised" }, { status: 403 });
   }
 
-  // Postgres JSON contains — metadata->>placementId = id. Supabase's
+  // Postgres JSON contains, metadata->>placementId = id. Supabase's
   // .contains() drives the query server-side without pulling every
   // placement_request/response message back.
   const { data: msgs, error } = await db

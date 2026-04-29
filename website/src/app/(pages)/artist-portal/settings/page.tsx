@@ -163,7 +163,7 @@ export default function SettingsPage() {
           <h2 className="text-base font-medium">Notification Preferences</h2>
         </div>
         <div className="space-y-4">
-          {/* Message notifications — persisted to DB */}
+          {/* Message notifications, persisted to DB */}
           <div className="flex items-start justify-between gap-4 py-1">
             <div>
               <p className="text-sm font-medium text-foreground leading-snug">Message notifications</p>

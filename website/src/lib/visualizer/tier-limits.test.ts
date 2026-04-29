@@ -15,7 +15,7 @@ import {
 } from "./tier-limits";
 import type { VisualizerTier } from "./types";
 
-describe("getTierLimits — approved values", () => {
+describe("getTierLimits, approved values", () => {
   it("guest = zero everything", () => {
     expect(getTierLimits("guest")).toEqual({
       daily: 0,
@@ -51,7 +51,7 @@ describe("getTierLimits — approved values", () => {
 
   it("artist_pro = unlimited daily/monthly + walls + showroom", () => {
     const l = getTierLimits("artist_pro");
-    // Switched to per-artwork in 5334417 — Pro now bypasses the daily/
+    // Switched to per-artwork in 5334417, Pro now bypasses the daily/
     // monthly cap entirely (sentinel -1).
     expect(l.daily).toBe(-1);
     expect(l.monthly).toBe(-1);
@@ -69,7 +69,7 @@ describe("getTierLimits — approved values", () => {
 
   it("venue_premium = unlimited daily/monthly + walls (no showroom)", () => {
     const l = getTierLimits("venue_premium");
-    // Switched to per-artwork in 5334417 — Venue Premium now bypasses
+    // Switched to per-artwork in 5334417, Venue Premium now bypasses
     // the daily/monthly cap entirely (sentinel -1).
     expect(l.daily).toBe(-1);
     expect(l.monthly).toBe(-1);
@@ -78,7 +78,7 @@ describe("getTierLimits — approved values", () => {
   });
 });
 
-describe("getTierLimits — env overrides", () => {
+describe("getTierLimits, env overrides", () => {
   const ORIGINAL = { ...process.env };
   afterEach(() => {
     process.env = { ...ORIGINAL };
@@ -112,7 +112,7 @@ describe("getTierLimits — env overrides", () => {
 
 describe("unknown tier handling", () => {
   it("falls back to guest limits", () => {
-    // Cast — runtime can hand us anything if a stale token survives a deploy.
+    // Cast, runtime can hand us anything if a stale token survives a deploy.
     const limits = getTierLimits("ghost" as unknown as VisualizerTier);
     expect(limits.daily).toBe(0);
     expect(limits.can_publish_showroom).toBe(false);

@@ -2,13 +2,13 @@
  * Wall + layout DB helpers.
  *
  * Service-role accessors used by the /api/walls/* routes. These mirror
- * the conventions in src/lib/db/* — lightweight typed wrappers around
+ * the conventions in src/lib/db/*, lightweight typed wrappers around
  * Supabase calls, with a single ownership check helper exposed.
  *
  * RLS:
  *   The visualizer tables (walls, wall_layouts, wall_renders) only have
  *   SELECT policies for the owner. All mutations happen through these
- *   helpers, which use the service-role client — RLS is bypassed by
+ *   helpers, which use the service-role client, RLS is bypassed by
  *   that key. The ownership checks below are the application-layer gate
  *   that takes the place of an RLS write policy.
  */
@@ -190,7 +190,7 @@ export interface UpdateWallInput {
   height_cm?: number;
   wall_color_hex?: string;
   notes?: string | null;
-  /** Venue-only toggle (migration 037) — publish on /venues/[slug]. */
+  /** Venue-only toggle (migration 037), publish on /venues/[slug]. */
   is_public_on_profile?: boolean;
 }
 

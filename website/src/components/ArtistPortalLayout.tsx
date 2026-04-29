@@ -8,7 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
 // Nav order: Dashboard → Profile / Portfolio → Messages → Placements → rest.
-// (See plan item #8 — Profile first, then Messages, then Placements.)
+// (See plan item #8, Profile first, then Messages, then Placements.)
 //
 // Settings used to live alongside the rest in the primary list with
 // "Browse Site" relegated to a secondary section. Browse-Site was
@@ -16,7 +16,7 @@ import { authFetch } from "@/lib/api-client";
 // the portal, so a duplicate sidebar entry served no purpose. We
 // dropped it and moved Settings into the secondary slot so it sits
 // under a divider, visually separated from the main workflow links
-// — matches the pattern used in venue-portal.
+//, matches the pattern used in venue-portal.
 const navItems = [
   { label: "Dashboard", href: "/artist-portal" },
   { label: "Edit Profile", href: "/artist-portal/profile" },

@@ -78,7 +78,7 @@ export function calculateOrderShipping(
         anyEstimated = true;
         if (
           !longestTierLabel ||
-          (resolved.estimate.longestEdgeCm > 60 && longestTierLabel !== "Oversized — specialist courier")
+          (resolved.estimate.longestEdgeCm > 60 && longestTierLabel !== "Oversized, specialist courier")
         ) {
           longestTierLabel = tierLabel(resolved.estimate.tier);
           estimatedDays = resolved.estimate.estimatedDays;

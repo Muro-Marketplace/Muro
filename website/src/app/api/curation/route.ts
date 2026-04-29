@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyAdminCurationRequest, notifyCurationCustomerEnquiry } from "@/lib/email";
 
 // Keep pricing server-side so a client can't submit a lower tier amount.
-// Bespoke is a quote-first enquiry — no upfront charge, the admin follows up
+// Bespoke is a quote-first enquiry, no upfront charge, the admin follows up
 // with a tailored quote and manual Stripe link.
 // Managed tiers are recurring subscriptions charged through Stripe.
 type OneOffTier = { kind: "one_off"; label: string; priceGbp: number; payFirst: boolean };
@@ -15,8 +15,8 @@ const TIERS: Record<string, OneOffTier | ManagedTier> = {
   single_wall: { kind: "one_off", label: "Single wall", priceGbp: 49, payFirst: true },
   full_space: { kind: "one_off", label: "Full space", priceGbp: 149, payFirst: true },
   bespoke: { kind: "one_off", label: "Bespoke project", priceGbp: 299, payFirst: false },
-  managed_monthly: { kind: "managed", label: "Managed — monthly rotation", priceGbp: 79.99, interval: "month", priceEnvVar: "STRIPE_PRICE_CURATION_MONTHLY" },
-  managed_quarterly: { kind: "managed", label: "Managed — quarterly refresh", priceGbp: 199.99, interval: "quarter", priceEnvVar: "STRIPE_PRICE_CURATION_QUARTERLY" },
+  managed_monthly: { kind: "managed", label: "Managed, monthly rotation", priceGbp: 79.99, interval: "month", priceEnvVar: "STRIPE_PRICE_CURATION_MONTHLY" },
+  managed_quarterly: { kind: "managed", label: "Managed, quarterly refresh", priceGbp: 199.99, interval: "quarter", priceEnvVar: "STRIPE_PRICE_CURATION_QUARTERLY" },
 };
 
 type TierKey = keyof typeof TIERS;
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     try {
       const { data } = await getSupabaseAdmin().auth.getUser(token);
       requesterUserId = data.user?.id || null;
-    } catch { /* ignore — fall through as anonymous */ }
+    } catch { /* ignore, fall through as anonymous */ }
   }
 
   const db = getSupabaseAdmin();
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not create request" }, { status: 500 });
   }
 
-  // Fire-and-forget notification to admin — useful for all flows
+  // Fire-and-forget notification to admin, useful for all flows
   notifyAdminCurationRequest({
     requestId: row.id,
     tier: tier.label,
@@ -154,7 +154,7 @@ export async function POST(request: Request) {
     if (!priceId) {
       console.error(`Curation managed tier ${d.tier} missing env ${tier.priceEnvVar}`);
       await db.from("curation_requests").delete().eq("id", row.id);
-      return NextResponse.json({ error: "Managed curation is not yet available — please try a one-off tier." }, { status: 503 });
+      return NextResponse.json({ error: "Managed curation is not yet available, please try a one-off tier." }, { status: 503 });
     }
 
     try {
@@ -203,7 +203,7 @@ export async function POST(request: Request) {
           price_data: {
             currency: "gbp",
             product_data: {
-              name: `Wallplace Curation — ${tier.label}`,
+              name: `Wallplace Curation, ${tier.label}`,
               description: d.venueName,
             },
             unit_amount: tier.priceGbp * 100,

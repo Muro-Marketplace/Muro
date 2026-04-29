@@ -8,7 +8,7 @@ describe("SIZE_BANDS", () => {
 
   it("uses en dash, not em dash, in dimension hints", () => {
     for (const b of SIZE_BANDS) {
-      expect(b.dimensionHint).not.toContain("—");
+      expect(b.dimensionHint).not.toContain("–");
     }
   });
 

@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const db = getSupabaseAdmin();
 
     // Get artist slug + review status. Pending applicants shouldn't
-    // see venues yet — sending placement requests before admin
+    // see venues yet, sending placement requests before admin
     // approval would let any signed-up account spam venues. We
     // return a structured `pending: true` flag rather than just an
     // empty list so the UI can show a "your application is being
@@ -51,10 +51,10 @@ export async function GET(request: Request) {
     if (messages) {
       for (const msg of messages) {
         if (msg.recipient_slug === artistSlug && msg.sender_type === "venue") {
-          // Venue sent to artist — sender_name is the venue slug
+          // Venue sent to artist, sender_name is the venue slug
           venueSlugs.add(msg.sender_name);
         } else if (msg.sender_name === artistSlug) {
-          // Artist sent to someone — check if recipient is a venue
+          // Artist sent to someone, check if recipient is a venue
           venueSlugs.add(msg.recipient_slug);
         }
       }

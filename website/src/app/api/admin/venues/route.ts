@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const db = getSupabaseAdmin();
     // Pull every field that's potentially useful in the admin CRM. The
     // optional gallery / display columns might be missing on older
-    // schemas — fall back to the lean select if so.
+    // schemas, fall back to the lean select if so.
     let data: Array<Record<string, unknown>> | null = null;
     let dbError: { message?: string } | null = null;
     {

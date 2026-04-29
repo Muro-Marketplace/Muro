@@ -46,7 +46,7 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
       <p className="text-muted leading-relaxed mb-8">
         You agreed a paid loan for <span className="text-foreground font-medium">{workTitle}</span>.
         Your card is charged <span className="text-foreground font-semibold">&pound;{monthlyFeeGbp}</span> at
-        the start of each month. Cancel any time from your portal — you stay charged
+        the start of each month. Cancel any time from your portal, you stay charged
         for the current month only.
       </p>
 
@@ -54,7 +54,7 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
         <Row label="Work" value={workTitle} />
         <Row label="Artist" value={artistName} />
         <Row label="Monthly fee" value={`£${monthlyFeeGbp}`} />
-        <Row label="QR sales" value={qrEnabled ? "On — a share of QR sales goes to your venue" : "Off"} />
+        <Row label="QR sales" value={qrEnabled ? "On, a share of QR sales goes to your venue" : "Off"} />
         <Row label="Billing" value="Monthly, starting today. Cancels when you end the placement." />
       </div>
 
@@ -76,7 +76,7 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
           disabled={busy}
           className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-accent text-white text-sm font-semibold rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-60"
         >
-          {busy ? "Redirecting…" : `Start monthly payment — £${monthlyFeeGbp}/mo`}
+          {busy ? "Redirecting…" : `Start monthly payment, £${monthlyFeeGbp}/mo`}
         </button>
         <Link
           href="/venue-portal/placements"

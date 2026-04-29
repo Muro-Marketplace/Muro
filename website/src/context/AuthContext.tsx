@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Restore session on mount — set user immediately, don't wait for subscription
+    // Restore session on mount, set user immediately, don't wait for subscription
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Listen for auth state changes. Supabase fires TOKEN_REFRESHED on tab
-    // focus when the session is nearing expiry — if we update user/session
+    // focus when the session is nearing expiry, if we update user/session
     // state every time, every consumer hook re-runs and it looks like the
     // whole page is reloading on tab switch. Compare IDs and only update
     // when it's actually a different user (sign-in / sign-out), not a
@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const nextId = s?.user?.id || null;
           if (prevId === nextId) return prev;
           fetchSubscription(s?.user ?? null);
-          // Fire welcome (idempotent) on every fresh sign-in — covers email
+          // Fire welcome (idempotent) on every fresh sign-in, covers email
           // verification + password signins. OAuth signups also hit this,
           // but they've already had welcome fired by oauth-finalize, so the
           // call here is a no-op (welcomed_at + idempotency_key).

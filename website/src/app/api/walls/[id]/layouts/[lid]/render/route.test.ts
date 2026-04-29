@@ -1,4 +1,4 @@
-// Render route — covers the high-value boundaries:
+// Render route, covers the high-value boundaries:
 //   - feature flag off → 404
 //   - non-owner → 404
 //   - cache hit short-circuits (no quota consumed)
@@ -7,7 +7,7 @@
 //   - persistence failure → 500 + refund called
 //   - happy path: persistRender called, layout.last_render_id updated
 //
-// We don't run sharp here — render-service is mocked. Sharp's behaviour
+// We don't run sharp here, render-service is mocked. Sharp's behaviour
 // is dependency-tested by the npm package itself, and we cover the
 // composition math via frames.test.ts and alignment.test.ts.
 
@@ -157,7 +157,7 @@ const POST_REQ = (body: object | null = {}) =>
     body: body === null ? undefined : JSON.stringify(body),
   });
 
-describe("POST render — gating", () => {
+describe("POST render, gating", () => {
   it("404s when feature flag off", async () => {
     process.env.NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1 = "0";
     const { POST } = await import("./route");
@@ -194,7 +194,7 @@ describe("POST render — gating", () => {
   });
 });
 
-describe("POST render — cache hit", () => {
+describe("POST render, cache hit", () => {
   it("returns cached URL without consuming quota", async () => {
     findCachedRenderMock.mockResolvedValue({
       id: "cached-1",
@@ -223,7 +223,7 @@ describe("POST render — cache hit", () => {
   });
 });
 
-describe("POST render — quota gate", () => {
+describe("POST render, quota gate", () => {
   it("429s when quota exceeded, no render attempted", async () => {
     consumeQuotaMock.mockResolvedValue({
       ok: false,
@@ -242,7 +242,7 @@ describe("POST render — quota gate", () => {
 
   it("HD render passes action=render_hd and work_ids to the quota gate", async () => {
     // Per-artwork model (5334417): the route no longer passes a flat
-    // `units` value — consumeQuota auto-calculates per new work_id.
+    // `units` value, consumeQuota auto-calculates per new work_id.
     // What we can still assert is the action label flows through and
     // the layout's work_ids reach the quota service in metadata.
     const { POST } = await import("./route");
@@ -256,7 +256,7 @@ describe("POST render — quota gate", () => {
   });
 });
 
-describe("POST render — failure paths refund", () => {
+describe("POST render, failure paths refund", () => {
   it("refunds when render-service throws", async () => {
     renderLayoutMock.mockRejectedValue(new Error("sharp blew up"));
     const { POST } = await import("./route");
@@ -287,7 +287,7 @@ describe("POST render — failure paths refund", () => {
   });
 });
 
-describe("POST render — happy path", () => {
+describe("POST render, happy path", () => {
   it("renders, persists, updates layout, and returns the URL", async () => {
     const { POST } = await import("./route");
     const res = await POST(POST_REQ(), ctx("wall-1", "lay-1"));
@@ -305,7 +305,7 @@ describe("POST render — happy path", () => {
     );
   });
 
-  it("validates the body — rejects invalid items", async () => {
+  it("validates the body, rejects invalid items", async () => {
     const { POST } = await import("./route");
     const res = await POST(
       POST_REQ({
@@ -315,7 +315,7 @@ describe("POST render — happy path", () => {
             work_id: "w1",
             x_cm: 0,
             y_cm: 0,
-            width_cm: 1, // < 5cm — invalid
+            width_cm: 1, // < 5cm, invalid
             height_cm: 80,
             rotation_deg: 0,
             z_index: 0,

@@ -220,7 +220,7 @@ export default function CollectionDetailPage() {
                 All {collection.workIds.length} works at the sizes selected by the artist, one price.
               </p>
 
-              {/* Arrangement chips (#42) — same shape as gallery cards
+              {/* Arrangement chips (#42), same shape as gallery cards
                   so the collection page reads the same way. Surfaces
                   what the underlying artist is open to. */}
               {arrangements && (
@@ -252,7 +252,7 @@ export default function CollectionDetailPage() {
                     >
                       <span className="truncate pr-2">{w.title}</span>
                       <span className="shrink-0">
-                        {w.selectedSize || "—"}
+                        {w.selectedSize || "–"}
                         {w.selectedSizePrice != null ? ` · £${w.selectedSizePrice}` : ""}
                       </span>
                     </div>
@@ -270,7 +270,7 @@ export default function CollectionDetailPage() {
                   </button>
                 )}
                 {/* Request placement (#41). Always shown when the
-                    collection has resolvable works — routing depends
+                    collection has resolvable works, routing depends
                     on who's looking:
                       - venue: straight into /venue-portal/placements
                         with artist + work IDs prefilled
@@ -295,7 +295,7 @@ export default function CollectionDetailPage() {
                     artist: collection.artistSlug,
                     artistName: collection.artistName,
                     works: workTitlesParam,
-                    prefillMessage: `Hi — we'd love to host the "${collection.name}" collection in our venue. Open to revenue share or paid loan, happy to discuss.`,
+                    prefillMessage: `Hi, we'd love to host the "${collection.name}" collection in our venue. Open to revenue share or paid loan, happy to discuss.`,
                   });
                   const venueHref = `/venue-portal/placements?${params.toString()}`;
                   let href = venueHref;

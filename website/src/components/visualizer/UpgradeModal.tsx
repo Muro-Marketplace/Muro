@@ -1,18 +1,18 @@
 "use client";
 
 /**
- * UpgradeModal — shown when:
+ * UpgradeModal, shown when:
  *   - the user clicks "Upgrade" on a depleted QuotaChip
  *   - a render request returns 429 (quota exceeded)
  *
  * Static, link-out-to-/pricing for now. The MVP doesn't need an in-modal
- * Stripe upgrade flow — the existing /pricing page is the canonical
+ * Stripe upgrade flow, the existing /pricing page is the canonical
  * conversion surface, and this modal is the bridge.
  *
  * Two variants based on `reason`:
  *   - "daily"     → "back tomorrow OR upgrade for more headroom"
  *   - "monthly"   → harder push: "you've hit your monthly cap"
- *   - "burst"     → softest: "slow down — try again in a minute"
+ *   - "burst"     → softest: "slow down, try again in a minute"
  *   - undefined   → generic
  */
 
@@ -63,7 +63,7 @@ function suggestUpgrade(tier: VisualizerTier | null | undefined): {
   if (tier === "venue_standard") {
     return { label: "Talk to us", href: "/contact" };
   }
-  // artist_pro / venue_premium — already top of the stack
+  // artist_pro / venue_premium, already top of the stack
   return { label: "Contact support", href: "/contact" };
 }
 
@@ -84,14 +84,14 @@ export default function UpgradeModal({
     if (reason === "burst") {
       return {
         title: "Slow down a little",
-        body: "You've kicked off a lot of renders in the last minute. Wait 30 seconds and try again — no quota was used.",
+        body: "You've kicked off a lot of renders in the last minute. Wait 30 seconds and try again, no quota was used.",
         showUpgrade: false,
       };
     }
     if (reason === "monthly") {
       return {
         title: "Monthly render cap reached",
-        body: `You're on the ${tierLabel} plan. To keep rendering this month, upgrade — your daily limits also go up.`,
+        body: `You're on the ${tierLabel} plan. To keep rendering this month, upgrade, your daily limits also go up.`,
         showUpgrade: true,
       };
     }
@@ -101,7 +101,7 @@ export default function UpgradeModal({
       : "";
     return {
       title: "Daily artwork limit hit",
-      body: `You've placed your daily artwork count on the ${tierLabel} plan — re-renders of works you've already used today are still free.${resetCopy} Upgrade for more daily artworks (or unlimited on Pro / Venue Premium).`,
+      body: `You've placed your daily artwork count on the ${tierLabel} plan, re-renders of works you've already used today are still free.${resetCopy} Upgrade for more daily artworks (or unlimited on Pro / Venue Premium).`,
       showUpgrade: true,
     };
   })();

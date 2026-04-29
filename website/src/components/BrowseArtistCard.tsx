@@ -34,7 +34,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
   return (
     <Link href={`/browse/${artist.slug}`} className="group block">
       <div className="bg-surface border border-border/50 rounded-lg overflow-hidden flex flex-col h-full">
-        {/* Image — square off-white "matting" frame so portrait,
+        {/* Image, square off-white "matting" frame so portrait,
             landscape, square, and panoramic carousel slides all sit
             uniformly without cropping the artist's work. The image
             itself uses object-contain so true aspect ratio is
@@ -77,7 +77,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
           {/* Transparent overlay to block save-as */}
           <div className="absolute inset-0 pointer-events-none" />
 
-          {/* Save-artist heart (#27) — top-right, paired with the
+          {/* Save-artist heart (#27), top-right, paired with the
               Featured chip on the left. SaveButton handles the auth
               gate (signup) and stops the click from propagating to
               the parent <Link>. */}
@@ -88,7 +88,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
           {/* Featured chip for Pro-tier artists. Subtle accent pill
               in the top-left so it's visible at a glance in the
               marketplace grid without competing with the heart at
-              top-right. Pro tier earns this automatically — there's
+              top-right. Pro tier earns this automatically, there's
               no manual curation step, the chip is purely a
               subscription-tier signal. */}
           {artist.subscriptionPlan === "pro" && (
@@ -102,7 +102,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             </div>
           )}
 
-          {/* Nav arrows — desktop hover only. Darker fill so they
+          {/* Nav arrows, desktop hover only. Darker fill so they
               read against the off-white matting (the previous
               white/80 disappeared on the new background). */}
           {images.length > 1 && (
@@ -122,7 +122,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             </>
           )}
 
-          {/* Dot indicators — minimal, dark on the off-white frame */}
+          {/* Dot indicators, minimal, dark on the off-white frame */}
           {images.length > 1 && (
             <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1 z-20">
               {images.map((_, i) => (

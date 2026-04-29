@@ -313,7 +313,7 @@ export default function ArtistsPage() {
             </p>
           </div>
 
-          {/* Pricing Cards — shared component with annual toggle */}
+          {/* Pricing Cards, shared component with annual toggle */}
           <ArtistPricingCards ctaLabel="APPLY TO JOIN" />
         </div>
         </AnimateIn>

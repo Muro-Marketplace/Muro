@@ -26,7 +26,7 @@ export default function Home() {
 
   return (
     <div className="relative">
-      {/* Shared site Header — immersive mode on "/" keeps it transparent
+      {/* Shared site Header, immersive mode on "/" keeps it transparent
           over the hero and fades to solid on scroll, matching the rest
           of the site so the logged-in nav (Marketplace / Spaces / More)
           and message / notification indicators are always available. */}
@@ -54,7 +54,7 @@ export default function Home() {
 
         {/* Hero content. On mobile we use top padding instead of
             bottom padding so the centered logo + CTAs sit at the true
-            vertical centre of the viewport — the previous pb-28 was
+            vertical centre of the viewport, the previous pb-28 was
             visibly pulling them up into the top third because the
             trust-bar wrapper already takes ~10vh + scroll button at
             the bottom of the section. Desktop unchanged. */}
@@ -86,13 +86,13 @@ export default function Home() {
                 </Link>
               </div>
 
-              {/* Demo-account funnel — secondary, low-pressure invitation
+              {/* Demo-account funnel, secondary, low-pressure invitation
                   for visitors who'd rather see the platform first. On
                   desktop the line is absolutely positioned below the
                   centered hero group so it never pushes the WALLPLACE
                   logo + CTAs upward; on mobile it stays in normal flow
                   where the user has dialled in the spacing already.
-                  Hidden once a user is logged in (#31) — they're past
+                  Hidden once a user is logged in (#31), they're past
                   the "just looking" stage and the banner just adds
                   noise. */}
               {!user && (
@@ -111,7 +111,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Scroll indicator + trust bar — pulled up on mobile so the
+        {/* Scroll indicator + trust bar, pulled up on mobile so the
             scroll-down chevron stays above the fold while the section
             continues to 110vh and the background photo extends below.
             On sm+ the trust bar sits at the natural bottom of the
@@ -129,7 +129,7 @@ export default function Home() {
               </svg>
             </div>
           </button>
-          {/* Dark trust bar — hidden on mobile */}
+          {/* Dark trust bar, hidden on mobile */}
           <div className="hidden sm:block border-t border-white/10 bg-black/50 backdrop-blur-sm">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-4 text-sm">
@@ -172,7 +172,7 @@ export default function Home() {
 
                   {/* Three core ways venues can get art. Single warm-
                       tinted container with hairline dividers between
-                      rows — gives the items a card presence so they're
+                      rows, gives the items a card presence so they're
                       visually distinct from the white section, but
                       lighter than three individually bordered boxes
                       (which read as the loudest thing on the section). */}
@@ -274,7 +274,7 @@ export default function Home() {
 
                   <ul className="space-y-3 mb-10">
                     <BulletPoint text="Get displayed in cafés, restaurants, hotels, and offices" />
-                    <BulletPoint text="Sell directly online — every QR scan leads to your store" />
+                    <BulletPoint text="Sell directly online, every QR scan leads to your store" />
                     <BulletPoint text="5–15% platform fee. No gallery taking 50%." />
                   </ul>
 
@@ -342,7 +342,7 @@ export default function Home() {
                 </h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* Testimonials (#33) — tightened to feel like real
+                {/* Testimonials (#33), tightened to feel like real
                     UK independents talking about specific outcomes
                     rather than generic platform praise. Names + roles
                     are placeholders we'll replace with real quotes
@@ -362,7 +362,7 @@ export default function Home() {
                     type: "Artist",
                   },
                   {
-                    quote: "The QR thing sounded like a gimmick at first. We've now had four sales straight off the wall this quarter — the customer scans, buys, the artist ships, and our cut just lands. We didn't have to learn anything new.",
+                    quote: "The QR thing sounded like a gimmick at first. We've now had four sales straight off the wall this quarter, the customer scans, buys, the artist ships, and our cut just lands. We didn't have to learn anything new.",
                     name: "David Chen",
                     role: "Manager, Roots & Vine, Bermondsey",
                     type: "Venue",

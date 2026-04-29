@@ -1,4 +1,4 @@
-// Buyer-facing dimensions formatter — inches first, cm in brackets.
+// Buyer-facing dimensions formatter, inches first, cm in brackets.
 //
 // Wallplace stores artists' work dimensions as freeform strings
 // (`"60 × 90 cm"`, `"24 x 36 inches"`, `"A4"`, etc.). For display we
@@ -10,11 +10,11 @@
 //   "A4"           →  "8 × 12 in (21 × 30 cm)"
 //   "Multiple sizes" (unparseable)  →  "Multiple sizes" (passthrough)
 //
-// Display-only — never mutate stored data. Applied at every site
+// Display-only, never mutate stored data. Applied at every site
 // that shows the work-level `dimensions` string to a customer
 // (browse cards, lightbox, artwork detail, collection detail, basket,
 // receipt-page summaries). Email templates intentionally not piped
-// through this yet — handled separately when we re-render templates.
+// through this yet, handled separately when we re-render templates.
 //
 // `formatSizeLabelForDisplay` in lib/format-size-label.ts handles the
 // `pricing[].label` field (the per-size selector); they share the

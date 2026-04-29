@@ -3,7 +3,7 @@
 //
 // For MVP you can point all three at the same verified domain. As volume grows,
 // verify `tx.wallplace.co.uk`, `notify.wallplace.co.uk`, `news.wallplace.co.uk`
-// separately in Resend and flip the env vars — nothing else has to change.
+// separately in Resend and flip the env vars, nothing else has to change.
 
 export type EmailStream = "tx" | "notify" | "news";
 

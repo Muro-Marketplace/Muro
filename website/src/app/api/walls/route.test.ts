@@ -1,4 +1,4 @@
-// /api/walls — GET list, POST create.
+// /api/walls, GET list, POST create.
 //
 // Coverage focuses on the interesting boundaries:
 //   - feature flag off → 404
@@ -108,7 +108,7 @@ describe("GET /api/walls", () => {
   });
 });
 
-describe("POST /api/walls — validation + create", () => {
+describe("POST /api/walls, validation + create", () => {
   it("400s on invalid JSON", async () => {
     const { POST } = await import("./route");
     const res = await POST(
@@ -156,7 +156,7 @@ describe("POST /api/walls — validation + create", () => {
   });
 });
 
-describe("POST /api/walls — tier caps", () => {
+describe("POST /api/walls, tier caps", () => {
   it("402s with reason='saved_walls_not_allowed' when cap is 0", async () => {
     getTierLimitsMock.mockReturnValue({
       daily: 0,

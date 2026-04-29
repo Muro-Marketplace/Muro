@@ -94,7 +94,7 @@ export default function WaitlistPage() {
                   onSubmit={handleSubmit}
                   className="bg-black/30 backdrop-blur-md border border-white/10 rounded-sm p-4 sm:p-6 lg:p-8 space-y-3 sm:space-y-4 text-left"
                 >
-                  {/* Type toggle — first */}
+                  {/* Type toggle, first */}
                   <div>
                     <label className="block text-xs font-medium text-white/50 tracking-wider uppercase mb-2">
                       I am a
@@ -140,7 +140,7 @@ export default function WaitlistPage() {
                     />
                   </div>
 
-                  {/* Venue Name — only for venues */}
+                  {/* Venue Name, only for venues */}
                   {userType === "venue" && (
                     <div>
                       <label className="block text-xs font-medium text-white/50 tracking-wider uppercase mb-2">
@@ -156,7 +156,7 @@ export default function WaitlistPage() {
                     </div>
                   )}
 
-                  {/* Venue Location — only for venues */}
+                  {/* Venue Location, only for venues */}
                   {userType === "venue" && (
                     <div>
                       <label className="block text-xs font-medium text-white/50 tracking-wider uppercase mb-2">

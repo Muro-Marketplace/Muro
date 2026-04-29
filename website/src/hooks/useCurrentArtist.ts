@@ -84,7 +84,7 @@ export function useCurrentArtist(): {
           }
         }
       } catch {
-        // API unavailable — fall through to static
+        // API unavailable, fall through to static
       }
 
       if (cancelled) return;

@@ -6,11 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 /**
- * /apply/claim — lightweight follow-up to the artist application.
+ * /apply/claim, lightweight follow-up to the artist application.
  *
  * Once an artist has submitted the application, we nudge them here to
  * claim their Wallplace space: create an account with a password and
- * (optionally) one or two profile basics — a short bio and a link. Nothing
+ * (optionally) one or two profile basics, a short bio and a link. Nothing
  * else is compulsory. The whole point is low-friction early investment
  * while the application is under review, so they feel committed before
  * the acceptance email lands.
@@ -75,14 +75,14 @@ function ClaimForm() {
       // 2. Sign in
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) {
-        setError("Account created — please sign in from the login page.");
+        setError("Account created, please sign in from the login page.");
         setSubmitting(false);
         return;
       }
 
       // 3. Create the artist profile. This used to be fire-and-forget,
       // which meant a failed insert silently dropped the user into the
-      // portal with no profile — where the editor rendered "No artist
+      // portal with no profile, where the editor rendered "No artist
       // profile found." Now we await and surface the error so the user
       // doesn't land on a dead end.
       const { data: { session } } = await supabase.auth.getSession();

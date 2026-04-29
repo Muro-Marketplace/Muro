@@ -1,6 +1,6 @@
-// Layout detail route — interesting boundaries:
+// Layout detail route, interesting boundaries:
 //   - feature flag off → 404
-//   - non-owner gets 404 (not 403 — don't leak existence)
+//   - non-owner gets 404 (not 403, don't leak existence)
 //   - layout under a different wall → 404
 //   - PATCH recomputes hash when items change
 //   - PATCH leaves hash alone when only name changes
@@ -126,7 +126,7 @@ describe("GET /api/walls/[id]/layouts/[lid]", () => {
   });
 });
 
-describe("PATCH /api/walls/[id]/layouts/[lid] — hash recompute", () => {
+describe("PATCH /api/walls/[id]/layouts/[lid], hash recompute", () => {
   it("recomputes layout_hash when items change", async () => {
     getWallByIdMock.mockResolvedValue(wallOwn);
     getLayoutByIdMock.mockResolvedValue(layoutOwn);

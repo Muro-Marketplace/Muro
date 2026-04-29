@@ -16,7 +16,7 @@ export async function scheduleTransfer(params: {
 }) {
   const db = getSupabaseAdmin();
 
-  // Calculate payout date — 14 days from now
+  // Calculate payout date, 14 days from now
   const payoutAfter = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
   await db.from("stripe_transfers").insert({

@@ -31,12 +31,12 @@ interface Placement {
     image?: string | null;
     size?: string | null;
   }> | null;
-  /** Computed locally — true for every entry that came from
+  /** Computed locally, true for every entry that came from
       extra_works, false for the primary work. Lets the UI show a
       "+ extra" hint and group entries by placement if needed. */
   _is_extra?: boolean;
-  /** Stable composite key for the React list — placement id + work
-      index — so flattening doesn't collide on placement.id. */
+  /** Stable composite key for the React list, placement id + work
+      index, so flattening doesn't collide on placement.id. */
   _key?: string;
 }
 
@@ -53,7 +53,7 @@ export default function VenueLabelsPage() {
   const [artistsBySlug, setArtistsBySlug] = useState<Record<string, ArtistLookup>>({});
   const [venueName, setVenueName] = useState("");
   // Slug captured from the venue profile so QR codes carry it as
-  // `?vs=` — analytics_events.venue_user_id then resolves cleanly
+  // `?vs=`, analytics_events.venue_user_id then resolves cleanly
   // via venue_profiles instead of leaning on the display name.
   const [venueSlug, setVenueSlug] = useState("");
   const [loading, setLoading] = useState(true);
@@ -84,7 +84,7 @@ export default function VenueLabelsPage() {
         // / work_image fields; extras come from the array. Each
         // entry inherits the original placement.id so deep-link
         // preselection still works for every work that belongs to
-        // that placement (which is what the user actually wants —
+        // that placement (which is what the user actually wants,
         // "QR labels for placement X" should tick every work in X).
         const expanded: Placement[] = [];
         for (const p of active) {
@@ -104,7 +104,7 @@ export default function VenueLabelsPage() {
         }
         setPlacements(expanded);
 
-        // Deep-link preselection — match by placement id so EVERY
+        // Deep-link preselection, match by placement id so EVERY
         // work belonging to that placement (primary + extras) lands
         // ticked. Without ?placement we still preselect everything
         // because the user almost always wants labels for the lot.
@@ -210,12 +210,12 @@ export default function VenueLabelsPage() {
       const p = placements[i];
       // Match the placement back to the artist's listed work so we can
       // show medium / dimensions / price when the venue ticks those
-      // options. Fallbacks are safe — missing fields just render blank
+      // options. Fallbacks are safe, missing fields just render blank
       // on the label.
       const artist = artistsBySlug[p.artist_slug];
       const work = artist?.works?.find((w) => w.title === p.work_title);
       // Prefer the size the venue / artist agreed on in the placement
-      // itself — that's what's actually on the wall — over the artist's
+      // itself, that's what's actually on the wall, over the artist's
       // generic published dimensions. Falls back cleanly if no specific
       // size was picked.
       const effectiveDimensions = p.work_size || work?.dimensions;
@@ -362,7 +362,7 @@ export default function VenueLabelsPage() {
                 const artistName = formatArtistName(p.artist_slug);
                 return (
                   <div
-                    // Composite key — multiple expanded entries share
+                    // Composite key, multiple expanded entries share
                     // p.id, so we use the per-entry _key to keep
                     // React's reconciliation stable when flattened
                     // multi-work placements re-render.

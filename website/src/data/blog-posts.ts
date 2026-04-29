@@ -15,7 +15,7 @@ export const blogPosts: BlogPost[] = [
     slug: "why-art-in-commercial-spaces-matters",
     title: "Why Art in Commercial Spaces Matters More Than You Think",
     excerpt: "From cafes to coworking spaces, the right artwork transforms a room from functional to memorable. Here's the business case for investing in your walls.",
-    content: `Art in commercial spaces isn't just decoration — it's a strategic choice that affects how customers feel, how long they stay, and whether they come back.
+    content: `Art in commercial spaces isn't just decoration, it's a strategic choice that affects how customers feel, how long they stay, and whether they come back.
 
 Studies consistently show that environments with curated artwork increase dwell time by up to 30%. For a cafe, that means more coffee sold. For a coworking space, higher retention. For a hotel lobby, better first impressions that translate to reviews.
 
@@ -32,7 +32,7 @@ Whether you run a neighbourhood coffee shop or a boutique hotel, the art on your
     slug: "how-to-price-your-art-for-venues",
     title: "How to Price Your Art for Venue Placements",
     excerpt: "Pricing for galleries is one thing. Pricing for cafes, restaurants, and offices is another. Here's how to find the sweet spot.",
-    content: `When a venue wants to display your work, the pricing conversation is different from a gallery sale. You're not just selling a piece — you're entering a partnership.
+    content: `When a venue wants to display your work, the pricing conversation is different from a gallery sale. You're not just selling a piece, you're entering a partnership.
 
 There are three main models: paid loan (your art is displayed for an agreed loan fee), revenue share (you split sale proceeds with the venue), and direct purchase. Each has its place.
 
@@ -40,7 +40,7 @@ Paid loan works well when you want guaranteed income regardless of sales. Revenu
 
 The key is understanding what each venue needs and matching your pricing to their model. A cafe rotating art monthly has different needs than a hotel buying for their lobby.
 
-Start with revenue share at 5-15% to the venue — it's the most flexible and aligns incentives for both sides.`,
+Start with revenue share at 5-15% to the venue, it's the most flexible and aligns incentives for both sides.`,
     image: "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=800&h=500&fit=crop",
     date: "2026-04-03",
     readTime: "5 min read",
@@ -50,12 +50,12 @@ Start with revenue share at 5-15% to the venue — it's the most flexible and al
   {
     slug: "the-rise-of-art-in-hospitality",
     title: "The Rise of Art in Hospitality: A Trend That's Here to Stay",
-    excerpt: "Hotels, restaurants, and bars are investing more in original artwork than ever. We explore why — and how independent artists are benefiting.",
+    excerpt: "Hotels, restaurants, and bars are investing more in original artwork than ever. We explore why, and how independent artists are benefiting.",
     content: `The hospitality industry is in the middle of an art renaissance. From boutique hotels commissioning local photographers to restaurants curating rotating exhibitions, original artwork has become a core part of the guest experience.
 
 This isn't just about aesthetics. Instagram culture means every corner of a venue is a potential photo opportunity. Original, eye-catching artwork drives social sharing, which drives footfall.
 
-For independent artists, this shift is transformative. Where once you needed a gallery to reach buyers, now a well-placed piece in a busy restaurant can generate more visibility — and more sales — than a month-long exhibition.
+For independent artists, this shift is transformative. Where once you needed a gallery to reach buyers, now a well-placed piece in a busy restaurant can generate more visibility, and more sales, than a month-long exhibition.
 
 The key is accessibility. Venues don't want to navigate the traditional art world. They want a simple way to find, trial, and display artwork. That's exactly what Wallplace was built to do.`,
     image: "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?w=800&h=500&fit=crop",
@@ -74,7 +74,7 @@ The key is accessibility. Venues don't want to navigate the traditional art worl
 
 2. Be professional about delivery and installation. Arrive on time, bring proper hanging hardware, and leave the wall exactly as you found it when the placement ends.
 
-3. Set clear terms upfront. Whether it's paid loan, revenue share, or purchase — get it in writing. Wallplace handles this automatically, but if you're arranging independently, don't skip this step.
+3. Set clear terms upfront. Whether it's paid loan, revenue share, or purchase, get it in writing. Wallplace handles this automatically, but if you're arranging independently, don't skip this step.
 
 4. Promote the placement. Tag the venue on social media, mention it in your newsletter. The venue will appreciate the exposure, and it strengthens the relationship.
 
@@ -91,11 +91,11 @@ The key is accessibility. Venues don't want to navigate the traditional art worl
     excerpt: "The revenue share model is transforming how art gets displayed in commercial spaces. Here's how it works and why it benefits everyone involved.",
     content: `Revenue share is one of the simplest and most powerful ideas in the art-for-venues space: a venue displays an artist's work for free, and when a customer buys a piece, the venue earns a percentage of the sale.
 
-For venues, it's genuinely zero risk. You get beautiful, rotating artwork on your walls without paying a penny upfront. If nothing sells, you've lost nothing. If something does sell, you earn a commission — typically between 5% and 20%.
+For venues, it's genuinely zero risk. You get beautiful, rotating artwork on your walls without paying a penny upfront. If nothing sells, you've lost nothing. If something does sell, you earn a commission, typically between 5% and 20%.
 
 For artists, it's exposure that actually converts. Instead of paying for advertising or hoping someone stumbles across your website, your work is physically in front of hundreds of people every week. And when someone scans a QR code and makes a purchase, you know exactly which venue drove the sale.
 
-The key to making revenue share work is transparency. Both sides need to know the terms upfront, see the same data, and trust the process. That's why Wallplace tracks everything: QR scans, sales, commissions — all visible in real time to both the artist and the venue.
+The key to making revenue share work is transparency. Both sides need to know the terms upfront, see the same data, and trust the process. That's why Wallplace tracks everything: QR scans, sales, commissions, all visible in real time to both the artist and the venue.
 
 If you're a venue owner who's been thinking about art for your space but didn't want the commitment of buying pieces outright, revenue share is your answer. And if you're an artist looking for commercial exposure without gallery fees, this model was built for you.`,
     image: "https://images.unsplash.com/photo-1556761175-b413da4baf72?w=800&h=500&fit=crop",

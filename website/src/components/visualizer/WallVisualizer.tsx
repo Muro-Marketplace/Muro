@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * WallVisualizer — top-level editor.
+ * WallVisualizer, top-level editor.
  *
  * Owns:
  *   - layout state (background, dimensions, items, selection)
@@ -25,7 +25,7 @@
  *
  * Persistence model:
  *   - Pass `wall` + `initialLayout` to enable auto-save + render. Without
- *     them, the editor runs in "preview only" mode (no persistence — fine
+ *     them, the editor runs in "preview only" mode (no persistence, fine
  *     for the customer artwork-page sheet, etc.)
  *   - Auto-save PATCHes the layout 800ms after the last edit. The hook
  *     handles stale-while-saving so a fast typist can't outrun it.
@@ -91,20 +91,20 @@ interface ExtendedProps extends VisualizerEditorProps {
   authToken?: string | null;
   /** Pre-supplied work to lock onto (artwork-page entry). */
   lockedWork?: PanelWork | null;
-  /** Loaded wall — required for auto-save + render. */
+  /** Loaded wall, required for auto-save + render. */
   wall?: Wall | null;
-  /** Loaded initial layout — required for auto-save + render. */
+  /** Loaded initial layout, required for auto-save + render. */
   initialLayout?: WallLayout | null;
   /**
    * Display URL for the wall photo (uploaded walls only). Resolved by
-   * the parent page from the GET /api/walls/[id] response — the
+   * the parent page from the GET /api/walls/[id] response, the
    * Storage bucket is private so we can't use the path directly.
    */
   bgImageUrl?: string | null;
 }
 
 interface LastRender {
-  /** wall_renders.id — needed when promoting this render to an artwork
+  /** wall_renders.id, needed when promoting this render to an artwork
    *  mockup. Optional because legacy server responses didn't include it. */
   renderId?: string;
   publicUrl: string;
@@ -129,7 +129,7 @@ export default function WallVisualizer(props: ExtendedProps) {
 function WallVisualizerInner(props: ExtendedProps) {
   const fallbackPreset = getPresetWall(DEFAULT_PRESET_ID) ?? PRESET_WALLS[0];
 
-  // ── Layout state — hydrated from `wall` + `initialLayout` if present
+  // ── Layout state, hydrated from `wall` + `initialLayout` if present
   const [background, setBackground] = useState<LayoutBackground>(() =>
     seedBackground(props.wall, fallbackPreset),
   );
@@ -156,7 +156,7 @@ function WallVisualizerInner(props: ExtendedProps) {
   const [upgradeTier, setUpgradeTier] = useState<VisualizerTier | null>(null);
   const [upgradeResetsAt, setUpgradeResetsAt] = useState<string | null>(null);
 
-  // Mockup-save state — only relevant in artist modes. Tracked here
+  // Mockup-save state, only relevant in artist modes. Tracked here
   // (rather than inside RenderPreview) so it survives previews opening
   // and closing, and so we can reset it on a fresh render.
   const [mockupSaving, setMockupSaving] = useState(false);
@@ -169,7 +169,7 @@ function WallVisualizerInner(props: ExtendedProps) {
 
   // ── Auto-save ─────────────────────────────────────────────────────
   // The value we save is the items array + dimensions. Background isn't
-  // editable when persisting (the wall is fixed) — but if we ever expose
+  // editable when persisting (the wall is fixed), but if we ever expose
   // colour edits on a saved wall we'll wire it through here.
   const layoutSnapshot = useMemo(
     () => ({ items, width_cm: widthCm, height_cm: heightCm }),
@@ -179,7 +179,7 @@ function WallVisualizerInner(props: ExtendedProps) {
   // Track the last successfully-saved wall dimensions so the
   // wall-PATCH gate stays accurate across multiple autosave cycles.
   // `props.wall` comes from the parent and only refreshes if the
-  // parent re-fetches after save — without this ref we'd compare
+  // parent re-fetches after save, without this ref we'd compare
   // against the stale prop and fire a wall PATCH on every save once
   // dimensions have changed even once. Initialised lazily from the
   // first wall snapshot so a freshly-mounted editor starts in sync.
@@ -204,7 +204,7 @@ function WallVisualizerInner(props: ExtendedProps) {
       };
 
       // Wall dimensions live on the WALL row (width_cm / height_cm),
-      // not the layout — the layout owns items + per-item geometry,
+      // not the layout, the layout owns items + per-item geometry,
       // the wall owns the physical canvas size. Previously this
       // callback only PATCHed the layout, so resizing the wall was
       // silently a no-op: items snapshot updated in autosave state,
@@ -283,7 +283,7 @@ function WallVisualizerInner(props: ExtendedProps) {
     }
 
     if (props.mode === "venue_my_walls") {
-      // Three parallel fetches — fail soft if any individual one breaks.
+      // Three parallel fetches, fail soft if any individual one breaks.
       let cancelled = false;
       setWorksLoading(true);
       setWorksError(null);
@@ -405,7 +405,7 @@ function WallVisualizerInner(props: ExtendedProps) {
   // Runs once when in `customer_artwork_page` mode with a lockedWork
   // that hasn't been placed yet. The work is dropped at the wall's
   // centre at its natural listed dimensions (or a sensible default).
-  // Without this, customers see an empty wall — they shouldn't have to
+  // Without this, customers see an empty wall, they shouldn't have to
   // drag the artwork they already chose.
   const autoSpawnedRef = useRef(false);
   useEffect(() => {
@@ -587,7 +587,7 @@ function WallVisualizerInner(props: ExtendedProps) {
   // ── Render flow ───────────────────────────────────────────────────
   // Two paths:
   //   1. Saved-wall path: POST to /api/walls/[id]/layouts/[lid]/render
-  //      with the items array — auto-saves the layout in the same
+  //      with the items array, auto-saves the layout in the same
   //      pipeline.
   //   2. Quick path (customer artwork-page sheet): POST to
   //      /api/walls/render-quick with preset_id + dims + work_id +
@@ -608,7 +608,7 @@ function WallVisualizerInner(props: ExtendedProps) {
       let payload: Record<string, unknown>;
 
       if (useQuick) {
-        // Customer / unsaved flow — single artwork to a preset wall.
+        // Customer / unsaved flow, single artwork to a preset wall.
         const firstItem = items[0];
         if (background.kind !== "preset") {
           // Quick endpoint requires preset background (uploaded photos
@@ -648,7 +648,7 @@ function WallVisualizerInner(props: ExtendedProps) {
         body: JSON.stringify(payload),
       });
 
-      // Always bump the chip — we may have spent units even on failure
+      // Always bump the chip, we may have spent units even on failure
       // (only some failures refund), and a chip showing stale "10 left"
       // after a 429 would be confusing.
       setRefreshNonce((n) => n + 1);
@@ -730,7 +730,7 @@ function WallVisualizerInner(props: ExtendedProps) {
   const saveAsMockup = useCallback(
     async (workId: string) => {
       if (!lastRender?.renderId) {
-        setMockupError("Nothing to save — render the scene first.");
+        setMockupError("Nothing to save, render the scene first.");
         return;
       }
       setMockupSaving(true);
@@ -747,7 +747,7 @@ function WallVisualizerInner(props: ExtendedProps) {
           body: JSON.stringify({ render_id: lastRender.renderId }),
         });
         if (res.status === 401) {
-          // Expired session — bounce out so AuthContext picks up the
+          // Expired session, bounce out so AuthContext picks up the
           // logout and re-redirects on the next render.
           setMockupError("Session expired. Please sign in again.");
           return;
@@ -813,7 +813,7 @@ function WallVisualizerInner(props: ExtendedProps) {
           />
         )}
 
-        {/* Top-right — quota chip + save status. The 2D/3D toggle
+        {/* Top-right, quota chip + save status. The 2D/3D toggle
             used to live here too but the centred ItemToolbar (top
             centre) gets wide enough to overlap, so the toggle moved
             to its own bottom-left perch. */}
@@ -840,14 +840,14 @@ function WallVisualizerInner(props: ExtendedProps) {
           />
         </div>
 
-        {/* Bottom-left — 2D / 3D toggle. Clear of the centred wall
+        {/* Bottom-left, 2D / 3D toggle. Clear of the centred wall
             config bar (bottom-centre) and the centred item toolbar
             (top-centre). */}
         <div className="absolute bottom-3 left-3 z-10">
           <ViewModeToggle value={viewMode} onChange={setViewMode} />
         </div>
 
-        {/* Per-item toolbar — top centre when an item is selected */}
+        {/* Per-item toolbar, top centre when an item is selected */}
         {selectedItem && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-auto">
             <ItemToolbar
@@ -883,7 +883,7 @@ function WallVisualizerInner(props: ExtendedProps) {
         </div>
 
         {/* Bottom-right floating render button.
-            Visible whenever there's something to render — either a
+            Visible whenever there's something to render, either a
             saved wall+layout (venue/artist editor) OR a customer-flow
             sheet with a locked work auto-placed. */}
         {(canPersist ||
@@ -934,7 +934,7 @@ function WallVisualizerInner(props: ExtendedProps) {
         costUnits={lastRender?.costUnits ?? 0}
         meta={lastRender?.meta}
         // Hide the Download button + apply anti-save attributes when
-        // the viewer is a venue. Realistic save-prevention only —
+        // the viewer is a venue. Realistic save-prevention only,
         // determined users can still screenshot, but right-click,
         // drag-to-desktop, and the explicit Download CTA are gone.
         // Artists keep download access because they want to share
@@ -983,7 +983,7 @@ function ViewModeToggle({
         type="button"
         role="tab"
         aria-selected={value === "2d"}
-        title="Flat 2D editor — fast, precise alignment"
+        title="Flat 2D editor, fast, precise alignment"
         onClick={() => onChange("2d")}
         className={`px-2.5 py-1 rounded-full transition ${
           value === "2d"
@@ -997,7 +997,7 @@ function ViewModeToggle({
         type="button"
         role="tab"
         aria-selected={value === "3d"}
-        title="3D room — orbit-rotate to see how it'd look in person"
+        title="3D room, orbit-rotate to see how it'd look in person"
         onClick={() => onChange("3d")}
         className={`px-2.5 py-1 rounded-full transition ${
           value === "3d"
@@ -1044,7 +1044,7 @@ function SaveStatus({
     textColour = "text-red-700";
   }
 
-  // Show an explicit "Save" button when there's something to save —
+  // Show an explicit "Save" button when there's something to save,
   // either the user has unsaved edits, or the last save failed and
   // they want to retry. While saving (debounced auto-save in flight)
   // we hide the button so users can't double-fire.
@@ -1223,7 +1223,7 @@ function normaliseWork(raw: Record<string, unknown>): PanelWork | null {
     : null;
   const sizes = pricingArr ? buildSizeVariants(pricingArr) : [];
 
-  // Additional aliases — the venue panel feed annotates each work with
+  // Additional aliases, the venue panel feed annotates each work with
   // its parent artist's name; pick that up.
   const artistName =
     typeof raw.artistName === "string"
@@ -1233,7 +1233,7 @@ function normaliseWork(raw: Record<string, unknown>): PanelWork | null {
         : undefined;
 
   // Pull orientation if the API surfaced it. Some sources won't (the
-  // placement-derived endpoint stores work_image only) — that's fine,
+  // placement-derived endpoint stores work_image only), that's fine,
   // pickDefaultSize tolerates it being absent.
   const rawOrientation =
     typeof raw.orientation === "string" ? raw.orientation : undefined;
@@ -1266,7 +1266,7 @@ function ownerTypeFromMode(mode: VisualizerEditorProps["mode"]) {
   if (mode === "venue_my_walls") return "venue" as const;
   if (mode === "artist_mockup" || mode === "artist_showroom") return "artist" as const;
   // customer_artwork_page is reachable from /browse/[slug]/[work] for any
-  // signed-in user — including artists and venues. Returning a literal
+  // signed-in user, including artists and venues. Returning a literal
   // "customer" hint forces the resolver to short-circuit to customer
   // (2/day) even when the actual user is an artist_premium (10/day) or
   // venue_standard (5/day). Undefined lets the resolver fall through

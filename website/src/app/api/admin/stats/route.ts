@@ -6,7 +6,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
  * GET /api/admin/stats
  *
  * Returns the rolled-up counters the admin dashboard tiles render.
- * Each section degrades independently — a missing analytics_events
+ * Each section degrades independently, a missing analytics_events
  * or orders table doesn't take the whole response down.
  */
 export async function GET(request: Request) {
@@ -24,9 +24,9 @@ export async function GET(request: Request) {
         db.from("artist_applications").select("status"),
         db.from("artist_profiles").select("id"),
         db.from("venue_profiles").select("id"),
-        // Placements — pull `status` for the breakdown.
+        // Placements, pull `status` for the breakdown.
         db.from("placements").select("status"),
-        // QR scan totals — count rows; head:true means no row data, just count.
+        // QR scan totals, count rows; head:true means no row data, just count.
         db
           .from("analytics_events")
           .select("id", { count: "exact", head: true })
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
           .select("id", { count: "exact", head: true })
           .eq("event_type", "qr_scan")
           .gte("created_at", thirtyDaysAgo),
-        // Orders — pull amount + status for the gross-revenue computation.
+        // Orders, pull amount + status for the gross-revenue computation.
         // We restrict to paid statuses so refunded/abandoned orders don't
         // inflate the headline number on the dashboard.
         db.from("orders").select("amount_cents, status, created_at"),
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     const accepted = applications.filter((a) => a.status === "accepted").length;
     const rejected = applications.filter((a) => a.status === "rejected").length;
 
-    // Placement status breakdown — handle both legacy ("Active") and
+    // Placement status breakdown, handle both legacy ("Active") and
     // newer lower-case values defensively.
     const placementsRows = (placements.data || []) as Array<{ status?: string }>;
     function countPlacement(...statuses: string[]): number {
@@ -113,7 +113,7 @@ export async function GET(request: Request) {
         last30d: qr30d.count ?? 0,
       },
       payouts: {
-        // Cents — the UI formats these to £ before rendering.
+        // Cents, the UI formats these to £ before rendering.
         grossCents: allTime.gross,
         count: allTime.count,
         last30dCents: last30.gross,

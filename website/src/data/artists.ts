@@ -12,7 +12,7 @@ export interface SizePricing {
   /** Optional per-size domestic shipping price. When set on at least
       one size of a work, the cart uses these instead of the
       work-level `shippingPrice`. Stored alongside `price` in the
-      `artist_works.pricing` JSON column — no migration needed. */
+      `artist_works.pricing` JSON column, no migration needed. */
   shippingPrice?: number | null;
 }
 
@@ -70,7 +70,7 @@ export interface Artist {
   location: string;
   primaryMedium: string;
   styleTags: string[];
-  /** Phase 3 taxonomy — discipline + flat sub-styles. Optional while data migrates. */
+  /** Phase 3 taxonomy, discipline + flat sub-styles. Optional while data migrates. */
   discipline?: DisciplineId;
   subStyles?: string[];
   instagram: string;

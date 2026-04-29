@@ -23,7 +23,7 @@ export default function LabelPreview({
   const [labels, setLabels] = useState<LabelData[]>(initialLabels);
   const [showControls, setShowControls] = useState(true);
   // Per-label visibility flags, decoupled from the data fields. Toggle
-  // handlers below flip these flags only — the underlying workMedium /
+  // handlers below flip these flags only, the underlying workMedium /
   // workDimensions / workPrice strings stay populated from the upstream
   // construction so a flag flipped off and on again restores correctly.
   // Without this decoupling, the second-label deselect bug appeared
@@ -188,7 +188,7 @@ export default function LabelPreview({
                         </div>
                       </div>
 
-                      {/* Toggle fields — flips visibility flags only,
+                      {/* Toggle fields, flips visibility flags only,
                           leaves workMedium / workDimensions / workPrice
                           intact so re-enabling restores the data. */}
                       <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -217,7 +217,7 @@ export default function LabelPreview({
                       </div>
                     </>
                   )}
-                  {/* Tagline — only for large/xlarge */}
+                  {/* Tagline, only for large/xlarge */}
                   {(currentSize === "large" || currentSize === "xlarge") && (
                     <div>
                       <span className="text-[10px] text-muted uppercase tracking-wider block mb-1">Tagline</span>
@@ -239,7 +239,7 @@ export default function LabelPreview({
             </div>
           )}
 
-          {/* A4 paper preview — scales to fit on mobile */}
+          {/* A4 paper preview, scales to fit on mobile */}
           <div className="flex-1 overflow-auto">
             <div className="py-4 sm:py-8 flex flex-col items-center gap-4 sm:gap-8">
               {Array.from({ length: pageCount }, (_, pageIdx) => (

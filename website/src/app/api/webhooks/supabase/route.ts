@@ -7,12 +7,12 @@
 // the same suppression / preference / throttle pipeline as everything else.
 //
 // Currently handles:
-//   - "auth.suspicious_login" — fire AccountSuspiciousLogin
+//   - "auth.suspicious_login", fire AccountSuspiciousLogin
 //
 // Welcome emails are NOT fired from here. They need richer data than the
 // webhook payload provides (featured works for customers, profile-state
 // driven checklist for artists). We trigger those from the API endpoint
-// that has the data on hand — e.g. /api/auth/oauth-finalize after profile
+// that has the data on hand, e.g. /api/auth/oauth-finalize after profile
 // creation, or a dedicated welcome cron.
 //
 // Anything else is logged and 200'd so unknown events don't make the
@@ -45,7 +45,7 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 
 function verifySignature(rawBody: string, signature: string | null): boolean {
   const secret = process.env.SUPABASE_WEBHOOK_SECRET;
-  // No secret configured — refuse all requests rather than silently accept.
+  // No secret configured, refuse all requests rather than silently accept.
   // Set SUPABASE_WEBHOOK_SECRET in env (and paste the same value into the
   // Supabase dashboard) to enable this route.
   if (!secret) return false;
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     if (event === "auth.suspicious_login" || event === "user.suspicious_login") {
       await handleSuspiciousLogin(payload);
     }
-    // Unknown events ignored on purpose — don't 5xx and force retries.
+    // Unknown events ignored on purpose, don't 5xx and force retries.
   } catch (err) {
     console.error("[webhooks/supabase] handler error:", err);
     // Still 200; we've logged. Returning 5xx makes Supabase retry forever.

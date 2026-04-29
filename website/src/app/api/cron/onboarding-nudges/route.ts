@@ -1,11 +1,11 @@
-// Vercel Cron — daily 10:00 UTC. Walks recently-created profiles and sends
+// Vercel Cron, daily 10:00 UTC. Walks recently-created profiles and sends
 // the day-2/4/7/10/14 onboarding nudge if the user hasn't completed that
 // step. Idempotency keyed by (userId + template) so every step sends once.
 //
 // Assumptions (adjust to match your schema):
 // - artist_profiles.created_at is present
 // - profile-completion fields are direct columns (artist_statement,
-//   profile_photo, instagram, etc.) — if you move to a completeness flag,
+//   profile_photo, instagram, etc.), if you move to a completeness flag,
 //   update the predicates below
 // - venue_profiles has a similar shape
 
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
   const db = getSupabaseAdmin();
 
-  // Artists created in the last 15 days — anyone older is past the cohort.
+  // Artists created in the last 15 days, anyone older is past the cohort.
   const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
   const { data: artists } = await db
     .from("artist_profiles")
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
 
     const firstName = (artist.name || "there").split(" ")[0];
 
-    // Day 2 — profile completion
+    // Day 2, profile completion
     if (inDayWindow(days, 2)) {
       const missing: string[] = [];
       if (!artist.artist_statement) missing.push("Artist statement");
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
         template: "artist_profile_completion_nudge",
         category: "recommendations",
         to: user.email,
-        subject: `Your profile is ${completionPct}% done — a few minutes finishes it`,
+        subject: `Your profile is ${completionPct}% done, a few minutes finishes it`,
         userId: artist.user_id,
         react: ArtistProfileCompletionNudge({
           firstName,
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
       return;
     }
 
-    // Day 4 — first artwork upload
+    // Day 4, first artwork upload
     if (inDayWindow(days, 4)) {
       const { count: worksCount } = await db
         .from("artist_works")
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
         template: "artist_first_artwork_upload_nudge",
         category: "recommendations",
         to: user.email,
-        subject: "The first artwork is the hardest — here's how to add yours",
+        subject: "The first artwork is the hardest, here's how to add yours",
         userId: artist.user_id,
         react: ArtistFirstArtworkUploadNudge({
           firstName,
@@ -111,7 +111,7 @@ export async function GET(request: Request) {
       return;
     }
 
-    // Day 7 — Stripe Connect
+    // Day 7, Stripe Connect
     if (inDayWindow(days, 7)) {
       if (artist.stripe_connect_account_id) return;
       await sendEmail({
@@ -130,7 +130,7 @@ export async function GET(request: Request) {
       return;
     }
 
-    // Day 10 — placement preferences
+    // Day 10, placement preferences
     if (inDayWindow(days, 10)) {
       const hasPrefs = (artist.venue_types_suited_for?.length ?? 0) > 0 || (artist.themes?.length ?? 0) > 0;
       if (hasPrefs) return;
@@ -150,7 +150,7 @@ export async function GET(request: Request) {
       return;
     }
 
-    // Day 14 — graduation vs recap
+    // Day 14, graduation vs recap
     if (inDayWindow(days, 14)) {
       const { count: worksCount } = await db
         .from("artist_works")
@@ -211,7 +211,7 @@ export async function GET(request: Request) {
     }
   });
 
-  // Venue onboarding — shorter sequence (day 2, 4, 7, 10).
+  // Venue onboarding, shorter sequence (day 2, 4, 7, 10).
   const { data: venues } = await db
     .from("venue_profiles")
     .select("user_id, name, slug, created_at, description, images, preferred_styles, approximate_footfall")
@@ -261,7 +261,7 @@ export async function GET(request: Request) {
           venueName: venue.name || "your venue",
           uploadPhotosUrl: `${SITE}/venue-portal/profile#photos`,
           photoTips: [
-            "Shoot in daylight — avoid mixed warm/cool lighting",
+            "Shoot in daylight, avoid mixed warm/cool lighting",
             "Show the wall as it would be lived in",
             "Include at least one wide shot for context",
           ],

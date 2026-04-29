@@ -4,16 +4,16 @@
 //   3. how aggressively it's throttled
 
 export type EmailCategory =
-  | "security"            // verify, password reset — always sends, never throttled
-  | "legal"               // ToS/privacy updates, tax docs — always sends
-  | "orders_and_payouts"  // receipts, shipping, payouts, refunds — always sends
-  | "placements"          // placement requests + responses — relational, user-toggleable
-  | "messages"            // new conversation message — relational, toggleable
+  | "security"            // verify, password reset, always sends, never throttled
+  | "legal"               // ToS/privacy updates, tax docs, always sends
+  | "orders_and_payouts"  // receipts, shipping, payouts, refunds, always sends
+  | "placements"          // placement requests + responses, relational, user-toggleable
+  | "messages"            // new conversation message, relational, toggleable
   | "digests"             // weekly performance / matches
   | "recommendations"     // artist/venue matches, new works from followed
   | "tips"                // educational, product updates
-  | "newsletter"          // editorial — double opt-in
-  | "promotions";         // offers, sales — explicit opt-in
+  | "newsletter"          // editorial, double opt-in
+  | "promotions";         // offers, sales, explicit opt-in
 
 export interface CategoryRules {
   stream: "tx" | "notify" | "news";

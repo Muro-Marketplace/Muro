@@ -1,4 +1,4 @@
-// Vercel Cron — Wednesday 09:00 UTC.
+// Vercel Cron, Wednesday 09:00 UTC.
 
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";

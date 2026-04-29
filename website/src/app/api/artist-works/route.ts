@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     }
 
     // Posting limit per tier (#24). Core 8, Premium 20, Pro 50.
-    // Updates to an existing work don't count against the cap —
+    // Updates to an existing work don't count against the cap,
     // only new IDs do.
     const POST_LIMITS: Record<string, number> = { core: 8, premium: 20, pro: 50 };
     const postPlan = (result.profile.subscription_plan || "core").toLowerCase();
@@ -156,7 +156,7 @@ export async function POST(request: Request) {
 
     const warnings: string[] = [];
 
-    // Duplicate listing detection (#23). Soft warning — we don't
+    // Duplicate listing detection (#23). Soft warning, we don't
     // block the save, just flag potential duplicates so the artist
     // can decide whether to keep both or rename. Two checks:
     //   • another work in the same portfolio with the same trimmed
@@ -171,7 +171,7 @@ export async function POST(request: Request) {
       );
       if (dupTitle) {
         warnings.push(
-          `Heads up — you already have a work titled "${dupTitle.title}". If this is a different piece, consider giving it a unique title to help buyers tell them apart.`,
+          `Heads up, you already have a work titled "${dupTitle.title}". If this is a different piece, consider giving it a unique title to help buyers tell them apart.`,
         );
       }
       const dupImage = existingWorks.find(
@@ -189,13 +189,13 @@ export async function POST(request: Request) {
       const missingNew = ["description", "images"].filter((c) => droppedColumns.includes(c));
       if (missingNew.length > 0) {
         warnings.push(
-          `${missingNew.join(" and ")} could not be saved — your database is missing these columns. Run Supabase migration 015_artwork_description_and_images.sql.`
+          `${missingNew.join(" and ")} could not be saved, your database is missing these columns. Run Supabase migration 015_artwork_description_and_images.sql.`
         );
       }
       const missingOlder = ["frame_options", "quantity_available", "shipping_price"].filter((c) => droppedColumns.includes(c));
       if (missingOlder.length > 0) {
         warnings.push(
-          `${missingOlder.join(", ")} could not be saved — run the pending migrations (012–014).`
+          `${missingOlder.join(", ")} could not be saved, run the pending migrations (012–014).`
         );
       }
     }
@@ -208,7 +208,7 @@ export async function POST(request: Request) {
         ? ` Errors encountered: ${fallbackErrors.join(" | ")}.`
         : "";
       warnings.push(
-        `Description didn't save. ${cause} Fix: in Supabase SQL editor, run: NOTIFY pgrst, 'reload schema'; — then save again. If that doesn't work, contact support with the error above.`
+        `Description didn't save. ${cause} Fix: in Supabase SQL editor, run: NOTIFY pgrst, 'reload schema';, then save again. If that doesn't work, contact support with the error above.`
       );
       console.error("Description drop detected", {
         workId: id,
@@ -220,7 +220,7 @@ export async function POST(request: Request) {
     }
     if (sanitizedImages.length > 0 && savedRow && (!Array.isArray(savedRow.images) || savedRow.images.length === 0)) {
       warnings.push(
-        "Extra images were sent but did not persist — the DB returned an empty images column."
+        "Extra images were sent but did not persist, the DB returned an empty images column."
       );
     }
 

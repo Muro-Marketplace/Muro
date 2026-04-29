@@ -3,7 +3,7 @@
  *
  * If the user already rendered the same layout-hash within the cache TTL,
  * return that render's public URL instead of running compositing again.
- * The user is NOT charged a quota unit for cache hits — that's the whole
+ * The user is NOT charged a quota unit for cache hits, that's the whole
  * point of the optimisation.
  *
  * Cache window:
@@ -13,7 +13,7 @@
  *
  * Per-user keying:
  *   The cache is scoped to (user_id, layout_hash). Two different users
- *   rendering the same layout each get their own render — we don't cross-
+ *   rendering the same layout each get their own render, we don't cross-
  *   share, both for privacy and because each user owns their own copy of
  *   the output asset.
  */

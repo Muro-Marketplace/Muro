@@ -6,7 +6,7 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || "")
 
 /**
  * POST /api/admin/refresh-stats
- * Admin-only — recomputes all cached artist stats from analytics, placements, and enquiries.
+ * Admin-only, recomputes all cached artist stats from analytics, placements, and enquiries.
  */
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);

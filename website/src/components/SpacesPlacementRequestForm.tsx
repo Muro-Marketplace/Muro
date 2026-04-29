@@ -5,10 +5,10 @@
  *
  * The artist can pick a work from their own portfolio, propose
  * arrangement terms (revenue share / paid loan / purchase, gated by
- * what the venue's open to), add a personal message, and submit —
+ * what the venue's open to), add a personal message, and submit,
  * which posts straight to /api/placements as if the artist had used
  * the existing "request a placement" flow elsewhere. No redirect, no
- * modal — the card expands in place, success state inlines, the
+ * modal, the card expands in place, success state inlines, the
  * artist can immediately request another venue without leaving the
  * page.
  *
@@ -70,7 +70,7 @@ export default function SpacesPlacementRequestForm({
 
   // Multi-work selection. A single placement row carries the primary
   // work in workTitle/Image and any extras in extra_works (migration
-  // 027). Order matters — first selected becomes the primary so we
+  // 027). Order matters, first selected becomes the primary so we
   // track an ordered array, not a Set.
   const [selectedWorkIds, setSelectedWorkIds] = useState<string[]>(
     works[0]?.id ? [works[0].id] : [],
@@ -108,8 +108,8 @@ export default function SpacesPlacementRequestForm({
   }
 
   // Submit is allowed once the artist has picked a work and an
-  // arrangement type. The message field is a soft nudge — venues
-  // respond better to a real pitch — but we don't gate the submit
+  // arrangement type. The message field is a soft nudge, venues
+  // respond better to a real pitch, but we don't gate the submit
   // on it, otherwise the button looks broken when the artist is
   // ready to send. The send button stays disabled only while
   // we're actually mid-submit.
@@ -128,7 +128,7 @@ export default function SpacesPlacementRequestForm({
       }));
       // Build the placement payload. The API's zod schema uses
       // `.optional()` (not `.nullable()`) for revenueSharePercent /
-      // monthlyFeeGbp / requestedDimensions / extraWorks — passing
+      // monthlyFeeGbp / requestedDimensions / extraWorks, passing
       // null fails validation with the unhelpful "Invalid placement
       // data" error. Use `undefined` (= field omitted) for fields
       // that don't apply to the chosen arrangement.
@@ -188,7 +188,7 @@ export default function SpacesPlacementRequestForm({
           reason?: string;
         };
         // The API uses `reason: "application_pending"` for un-approved
-        // artists — surface the exact human message it returns.
+        // artists, surface the exact human message it returns.
         throw new Error(data.error || `Request failed (${res.status})`);
       }
       onSuccess(placementId);
@@ -227,7 +227,7 @@ export default function SpacesPlacementRequestForm({
     );
   }
 
-  // Venue open to nothing — shouldn't happen given filters, but guard.
+  // Venue open to nothing, shouldn't happen given filters, but guard.
   if (supported.length === 0) {
     return (
       <div className="mt-3 pt-3 border-t border-border">
@@ -259,7 +259,7 @@ export default function SpacesPlacementRequestForm({
         </button>
       </div>
 
-      {/* Work picker — multi-select. Tap a thumbnail to add or remove
+      {/* Work picker, multi-select. Tap a thumbnail to add or remove
           it; the first selected becomes the primary, the rest go on
           the same placement as `extra_works`. The order chip helps the
           artist see which is the headline. */}
@@ -299,7 +299,7 @@ export default function SpacesPlacementRequestForm({
                   }`}
                   title={
                     active
-                      ? `${order === 0 ? "Primary work" : `Extra work #${order}`} — ${w.title}`
+                      ? `${order === 0 ? "Primary work" : `Extra work #${order}`}, ${w.title}`
                       : `Add ${w.title}`
                   }
                   type="button"
@@ -387,7 +387,7 @@ export default function SpacesPlacementRequestForm({
         </div>
       </div>
 
-      {/* Terms — depend on arrangement */}
+      {/* Terms, depend on arrangement */}
       {arrangement === "revenue_share" && (
         <div>
           <p className="text-[10px] text-muted uppercase tracking-wider mb-2">
@@ -416,7 +416,7 @@ export default function SpacesPlacementRequestForm({
           </p>
           <p className="text-[11px] text-muted/80 mb-2 leading-relaxed">
             The venue pays you this amount each month for displaying the
-            work — billed automatically by Stripe once they set up payment.
+            work, billed automatically by Stripe once they set up payment.
           </p>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted">£</span>
@@ -434,7 +434,7 @@ export default function SpacesPlacementRequestForm({
           </div>
 
           {/* Optional QR-driven rev share on top of the monthly fee.
-              The split goes the OTHER way from the monthly fee — money
+              The split goes the OTHER way from the monthly fee, money
               flows artist → venue when a QR scan converts to a sale.
               Off by default; paid loans are usually pure display
               deals. */}
@@ -478,7 +478,7 @@ export default function SpacesPlacementRequestForm({
       )}
       {arrangement === "purchase" && (
         <p className="text-[11px] text-muted leading-relaxed">
-          Direct purchase — the venue buys the work outright. You can negotiate
+          Direct purchase, the venue buys the work outright. You can negotiate
           the exact figure in messages once they accept.
         </p>
       )}
@@ -500,7 +500,7 @@ export default function SpacesPlacementRequestForm({
         />
         {message.trim().length > 0 && message.trim().length < 20 && (
           <p className="text-[10px] text-muted/80 mt-1">
-            A few sentences works best — venues respond better to a real pitch.
+            A few sentences works best, venues respond better to a real pitch.
           </p>
         )}
       </div>
@@ -544,7 +544,7 @@ export default function SpacesPlacementRequestForm({
         </button>
       </div>
 
-      {/* Optional handoff to the bigger form in the artist portal —
+      {/* Optional handoff to the bigger form in the artist portal,
           handy when the artist wants more options (work-level sizes,
           notes, custom QR settings) than this inline form exposes. */}
       <div className="text-center pt-1">

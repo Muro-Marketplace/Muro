@@ -11,7 +11,7 @@
  *     PR #5 will drop 9-slice frame PNGs into /public/frames/<style>/<finish>.png
  *     and the canvas will composite those instead of the solid border. The
  *     `WallItem.frame.style` and `WallItem.frame.finish` strings are
- *     forward-compatible — same data, different draw routine.
+ *     forward-compatible, same data, different draw routine.
  *
  * Naming:
  *   "style" = the shape/profile of the frame.
@@ -50,7 +50,7 @@ export const FRAME_STYLES: readonly FrameStyleDef[] = [
   {
     id: "none",
     label: "No frame",
-    description: "Edge-only — best for prints and modern photography.",
+    description: "Edge-only, best for prints and modern photography.",
     defaultFinish: "",
     finishes: [],
     borderRatio: 0,
@@ -72,7 +72,7 @@ export const FRAME_STYLES: readonly FrameStyleDef[] = [
   {
     id: "classic_wood",
     label: "Classic wood",
-    description: "Traditional moulding — flatters paintings and prints.",
+    description: "Traditional moulding, flatters paintings and prints.",
     defaultFinish: "natural",
     finishes: [
       { id: "natural", label: "Natural oak", borderColor: "#9C7A4F" },
@@ -85,7 +85,7 @@ export const FRAME_STYLES: readonly FrameStyleDef[] = [
   {
     id: "ornate_gold",
     label: "Ornate gold",
-    description: "Statement frame — turns a piece into a centrepiece.",
+    description: "Statement frame, turns a piece into a centrepiece.",
     defaultFinish: "antique",
     finishes: [
       { id: "antique", label: "Antique gold", borderColor: "#B08A3E" },
@@ -98,7 +98,7 @@ export const FRAME_STYLES: readonly FrameStyleDef[] = [
   {
     id: "floater",
     label: "Floater",
-    description: "Gallery-style float — a thin gap around the canvas edge.",
+    description: "Gallery-style float, a thin gap around the canvas edge.",
     defaultFinish: "natural",
     finishes: [
       { id: "natural", label: "Natural", borderColor: "#A1856A" },
@@ -106,7 +106,7 @@ export const FRAME_STYLES: readonly FrameStyleDef[] = [
       { id: "black", label: "Black", borderColor: "#1A1A1A" },
     ],
     borderRatio: 0.018,
-    hasShadow: false, // floater visually "floats" — shadow looks wrong
+    hasShadow: false, // floater visually "floats", shadow looks wrong
   },
 ] as const;
 
@@ -127,7 +127,7 @@ export function getFrameFinish(
 }
 
 /**
- * Default config when the user picks a new style — populates a reasonable
+ * Default config when the user picks a new style, populates a reasonable
  * starting finish so the work doesn't render with `finish: ""` mid-edit.
  */
 export function defaultFrameConfig(style: FrameStyle): FrameConfig {
@@ -250,7 +250,7 @@ export function computeFrameGeometry(
 ): FrameGeometry {
   const styleDef = getFrameStyle(frame.style);
   const finishDef = getFrameFinish(frame.style, frame.finish);
-  // Don't let the border eat the artwork on small items — cap so the
+  // Don't let the border eat the artwork on small items, cap so the
   // artwork stays at least 30% of the outer dimension.
   const minOuter = Math.min(outerWidthPx, outerHeightPx);
   const maxBorder = minOuter * 0.35;

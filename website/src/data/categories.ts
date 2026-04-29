@@ -3,7 +3,7 @@
  *
  * Top-level disciplines + flat sub-styles per discipline. Digital illustration
  * lives as a sub-style under Drawing & Illustration rather than as its own
- * top-level — Wallplace's curated focus is original physical artwork, so a
+ * top-level, Wallplace's curated focus is original physical artwork, so a
  * standalone "Digital Art" bucket confused the marketplace.
  */
 export const DISCIPLINES = [
@@ -109,7 +109,7 @@ export function formatSubStyleLabel(slug: string): string {
 /**
  * Top-level discipline label for a raw medium string + optional explicit
  * discipline id. Used in artist profile headers so the card reads as the
- * broad category ("Photography") — specific styles / themes ("Landscape
+ * broad category ("Photography"), specific styles / themes ("Landscape
  * photography") live under the chips below.
  */
 export function disciplineLabel(

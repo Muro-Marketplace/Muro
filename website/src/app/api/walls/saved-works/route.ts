@@ -1,12 +1,12 @@
 /**
  * /api/walls/saved-works
  *
- * GET — works the calling user has bookmarked (`saved_items` with
+ * GET, works the calling user has bookmarked (`saved_items` with
  * `item_type === 'work'`), resolved to full artwork rows so the wall
  * visualizer panel can show titles, images, dimensions and pricing.
  *
  * Empty list (status 200) when the user has no saved works yet, or
- * when the feature flag is off — keeps the editor's loading state
+ * when the feature flag is off, keeps the editor's loading state
  * predictable.
  */
 

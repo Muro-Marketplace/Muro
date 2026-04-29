@@ -81,7 +81,7 @@ export default function ArtistOrdersPage() {
       if (!res.ok) {
         // Surface the real reason. The most common failure here is the
         // order not having artist_user_id set (legacy rows predating
-        // migration 0XX) — without it the 403 check can't authorise
+        // migration 0XX), without it the 403 check can't authorise
         // the artist. Now the user at least sees *why* it silently
         // failed previously.
         setStatusError(data.error || `Could not update order (HTTP ${res.status}). Contact support if this keeps happening.`);

@@ -1,4 +1,4 @@
-// Vercel Cron — daily 09:00 UTC. Aggregates yesterday's qr_scan
+// Vercel Cron, daily 09:00 UTC. Aggregates yesterday's qr_scan
 // analytics_events by artist_slug and sends each artist who actually
 // got scans a digest. Quiet days produce no email.
 //
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
     Map<string, { workTitle: string; venueName: string | null; scans: number; image?: string | null }>
   >();
   // We also need work titles + images, which the events table doesn't
-  // carry — pull artist_works once we have the unique IDs.
+  // carry, pull artist_works once we have the unique IDs.
   const allWorkIds = new Set<string>();
   for (const r of rows) {
     if (!r.artist_slug) continue;

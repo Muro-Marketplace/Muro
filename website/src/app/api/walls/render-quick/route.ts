@@ -1,28 +1,28 @@
 /**
  * /api/walls/render-quick
  *
- * POST — render a single artwork on a wall WITHOUT requiring a saved
+ * POST, render a single artwork on a wall WITHOUT requiring a saved
  * wall + layout row first. This powers the customer "View on a wall"
  * flow on the artwork detail page: a customer browsing finds a piece
  * they like, clicks Render, and gets back a high-quality composite
- * within seconds — no account-creation required to drag, only to
+ * within seconds, no account-creation required to drag, only to
  * generate the polished image.
  *
  * Request shape (validated by `quickRenderRequestSchema`):
  *   - Either `wall_id` (use the user's saved wall) OR
  *     `preset_id` + `width_cm` + `height_cm` + `wall_color_hex` (built
  *     on the fly, no DB row).
- *   - `work_id` — the artwork to place.
- *   - Optional `placement` — explicit position/size/frame; otherwise
+ *   - `work_id`, the artwork to place.
+ *   - Optional `placement`, explicit position/size/frame; otherwise
  *     centred at a sensible default.
- *   - `kind` — "standard" | "hd" | "showroom" (default: standard).
+ *   - `kind`, "standard" | "hd" | "showroom" (default: standard).
  *
  * Response: same shape as the saved-layout render endpoint:
  *   { render, publicUrl, cached, cost_units, meta? }
  *
  * Quota:
  *   Routes through the same consumeQuota / refundQuota guarantees as
- *   the saved-layout path — failure refunds. Layout_id is persisted as
+ *   the saved-layout path, failure refunds. Layout_id is persisted as
  *   null on the wall_renders row (the column is nullable in the
  *   migration), so cache hits via (user_id, layout_hash, kind) still
  *   work cleanly.
@@ -62,7 +62,7 @@ function defaultPlacement(
   width_cm: number;
   height_cm: number;
 } {
-  // Half the smaller wall dimension, capped at 80cm — feels right on
+  // Half the smaller wall dimension, capped at 80cm, feels right on
   // most preset walls (300×240) and won't overflow tighter ones.
   const cap = Math.min(wallWidthCm, wallHeightCm) * 0.5;
   const w = Math.min(80, cap);
@@ -102,12 +102,12 @@ export async function POST(request: Request) {
   let background: LayoutBackground;
   let wallWidthCm: number;
   let wallHeightCm: number;
-  // Undefined by default — the tier resolver will fall through artist →
+  // Undefined by default, the tier resolver will fall through artist →
   // venue → customer using the user's actual profile. Hard-coding
   // "customer" here meant a logged-in artist_premium (10/day) or
   // venue_standard (5/day) using the quick-render flow without a
   // saved wall (the customer artwork-page entry point) was capped at
-  // the customer 2/day tier — which is what produced the "5 vs 2"
+  // the customer 2/day tier, which is what produced the "5 vs 2"
   // mismatch between My Walls and the artwork page. Real customers
   // still resolve to customer tier via the fallthrough.
   let ownerTypeHint: WallOwnerType | undefined = undefined;
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
   if (parsed.data.wall_id) {
     const wall = await getWallById(parsed.data.wall_id);
     if (!wall || wall.user_id !== userId) {
-      // 404 not 403 — don't leak existence to non-owners.
+      // 404 not 403, don't leak existence to non-owners.
       return NextResponse.json({ error: "Wall not found" }, { status: 404 });
     }
     background =
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     wallHeightCm = wall.height_cm;
     ownerTypeHint = wall.owner_type;
   } else {
-    // Preset path — caller supplied preset_id + dims (zod refine guarantees both).
+    // Preset path, caller supplied preset_id + dims (zod refine guarantees both).
     const preset = getPresetWall(parsed.data.preset_id!);
     if (!preset) {
       return NextResponse.json(
@@ -164,7 +164,7 @@ export async function POST(request: Request) {
 
   const items: WallItem[] = [
     {
-      // Stable id derived from work — keeps cache hash deterministic.
+      // Stable id derived from work, keeps cache hash deterministic.
       id: `quick-${parsed.data.work_id}`,
       work_id: parsed.data.work_id,
       x_cm: placement.x_cm,
@@ -267,7 +267,7 @@ export async function POST(request: Request) {
       workById,
     });
 
-    // Persist (layout_id null — this is an unsaved customer render).
+    // Persist (layout_id null, this is an unsaved customer render).
     const persisted = await persistRender({
       userId,
       layoutId: null,

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /venue-portal/walls/[id] — full-bleed editor for a single saved wall.
+ * /venue-portal/walls/[id], full-bleed editor for a single saved wall.
  *
  * Responsibilities:
  *   - Auth gate (PortalGuard via VenuePortalLayout would also work but
@@ -28,7 +28,7 @@ import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
 import type { Wall, WallLayout } from "@/lib/visualizer/types";
 
-// Visualizer is client-only and pulls in Konva — dynamic-load.
+// Visualizer is client-only and pulls in Konva, dynamic-load.
 const WallVisualizer = dynamic(
   () => import("@/components/visualizer/WallVisualizer"),
   { ssr: false },
@@ -124,7 +124,7 @@ export default function VenueWallEditorPage({
         }
 
         if (!activeLayout) {
-          // No layout on this wall yet — create one inline.
+          // No layout on this wall yet, create one inline.
           const createRes = await fetch(
             `/api/walls/${wallId}/layouts`,
             {
@@ -262,7 +262,7 @@ export default function VenueWallEditorPage({
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          {/* Show on public profile — venue-side only. Optimistic
+          {/* Show on public profile, venue-side only. Optimistic
               toggle: flip locally, fire PATCH, revert on failure.
               Off by default per migration 037 so a venue's wall
               stays private until they explicitly publish it. */}

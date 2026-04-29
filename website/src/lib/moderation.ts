@@ -72,7 +72,7 @@ export function moderateMessage(content: string): ModerationResult {
         allowed: true,
         flagged: true,
         reason:
-          "Message flagged for review — may contain off-platform payment references",
+          "Message flagged for review, may contain off-platform payment references",
       };
     }
   }

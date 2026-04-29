@@ -1,4 +1,4 @@
-// Waitlist (#18) — kept live for warm prospects who already have the
+// Waitlist (#18), kept live for warm prospects who already have the
 // link, but unsurfaced from the nav and excluded from search. Layout
 // owns the metadata because page.tsx is a client component and can't
 // export `metadata` directly.

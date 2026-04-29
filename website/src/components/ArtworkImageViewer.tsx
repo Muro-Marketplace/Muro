@@ -76,7 +76,7 @@ export default function ArtworkImageViewer({ src, alt, aspectRatio, images }: Pr
 
           </div>
         </div>
-        {/* View on your wall — sits directly under the image, aligned
+        {/* View on your wall, sits directly under the image, aligned
             to the bottom-left, so it reads as an action on this piece
             without sitting on top of the artwork. Uses a custom event
             so the modal state can live in ArtworkPageClient without
@@ -113,7 +113,7 @@ export default function ArtworkImageViewer({ src, alt, aspectRatio, images }: Pr
               >
                 <Image
                   src={img}
-                  alt={`${alt} — view ${idx + 1}`}
+                  alt={`${alt}, view ${idx + 1}`}
                   fill
                   className="object-cover"
                   sizes="80px"

@@ -6,7 +6,7 @@
  * DELETE  remove (cascades to layouts via FK)
  *
  * Ownership:
- *   walls table has a SELECT-own RLS policy — anonymous reads can't
+ *   walls table has a SELECT-own RLS policy, anonymous reads can't
  *   leak rows. Mutations go through the service-role client here, which
  *   bypasses RLS, so we re-check `wall.user_id === auth.user.id` before
  *   touching the row.
@@ -33,7 +33,7 @@ const PHOTOS_BUCKET = "wall-photos";
  * null when the wall isn't of `kind === 'uploaded'` or when signing
  * fails (the editor will gracefully degrade to the solid colour).
  *
- * 1 hour TTL — long enough for an editor session, short enough that a
+ * 1 hour TTL, long enough for an editor session, short enough that a
  * leaked URL self-expires.
  */
 async function signWallPhotoUrl(wall: Wall): Promise<string | null> {
@@ -71,7 +71,7 @@ async function resolveAndAuthorize(request: Request, ctx: RouteContext) {
     };
   }
   if (wall.user_id !== auth.user!.id) {
-    // 404 not 403 — don't leak existence to non-owners.
+    // 404 not 403, don't leak existence to non-owners.
     return {
       errResponse: NextResponse.json({ error: "Wall not found" }, { status: 404 }),
     };

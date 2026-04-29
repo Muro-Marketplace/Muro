@@ -1,4 +1,4 @@
-// Render cache — small surface, easy to cover.
+// Render cache, small surface, easy to cover.
 //   - returns null on miss
 //   - returns the row on hit
 //   - filters by user, hash, AND kind (HD doesn't reuse Standard)

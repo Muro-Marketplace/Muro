@@ -488,8 +488,8 @@ export async function notifyAdminCurationRequest(params: {
   if (!resend) return;
   try {
     const flow = params.payFirst
-      ? `Pay-first checkout (£${params.priceGbp}) — awaiting completion`
-      : `Bespoke enquiry (from £${params.priceGbp}) — please send a quote`;
+      ? `Pay-first checkout (£${params.priceGbp}), awaiting completion`
+      : `Bespoke enquiry (from £${params.priceGbp}), please send a quote`;
     await resend.emails.send({
       from: FROM,
       to: ADMIN_EMAIL,
@@ -558,7 +558,7 @@ export async function notifyCurationCustomerPaid(params: {
       to: params.email,
       subject: "Your Wallplace curation is underway",
       html: `
-        <h2>Payment received — thanks, ${params.contactName}</h2>
+        <h2>Payment received, thanks, ${params.contactName}</h2>
         <p>We've received your payment of <strong>£${params.amountGbp}</strong> for <strong>${params.tierLabel}</strong> curation for <strong>${params.venueName}</strong>.</p>
         <p>Our curators will review your brief and email you a shortlist within 5 business days. If we need anything else we'll reach out.</p>
         <br/>

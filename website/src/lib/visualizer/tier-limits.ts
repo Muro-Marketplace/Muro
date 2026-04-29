@@ -1,5 +1,5 @@
 /**
- * Wall Visualizer — entitlement table.
+ * Wall Visualizer, entitlement table.
  *
  * This file is the single source of truth for "what can a tier do". The
  * quota service (PR #2) reads these limits to allow / deny render calls;
@@ -56,7 +56,7 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     wall_uploads_daily: 1,
     saved_walls: 2,
     // Bumped 0 → 1 so the showroom is actually usable on the free
-    // tier — saving the layout is a basic expectation when you've
+    // tier, saving the layout is a basic expectation when you've
     // composed a scene. Multiple competing layouts per wall is the
     // upsell that pushes artists to artist_premium (10) / pro (∞).
     saved_layouts_per_wall: 1,
@@ -71,7 +71,7 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     can_publish_showroom: false,
   },
   artist_pro: {
-    // Pro tier — unlimited artworks rendered per day. -1 here is the
+    // Pro tier, unlimited artworks rendered per day. -1 here is the
     // sentinel quota.ts uses to skip the cap check entirely.
     daily: -1,
     monthly: -1,
@@ -89,7 +89,7 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     can_publish_showroom: false,
   },
   venue_premium: {
-    // Venue Premium — unlimited artworks rendered per day.
+    // Venue Premium, unlimited artworks rendered per day.
     daily: -1,
     monthly: -1,
     wall_uploads_daily: 5,
@@ -129,14 +129,14 @@ function applyEnvOverrides(
 
 /**
  * Resolve the limits for a given tier. Reads env overrides on every call
- * (cheap — no I/O) so we can update limits without a server restart by
+ * (cheap, no I/O) so we can update limits without a server restart by
  * just changing env vars (and reloading any process where applicable).
  */
 export function getTierLimits(tier: VisualizerTier): TierLimits {
   const base = DEFAULTS[tier];
   if (!base) {
-    // Unknown tier — fail closed (zero limits). Logged so we notice.
-    console.warn(`[visualizer] Unknown tier "${tier}" — applying guest limits`);
+    // Unknown tier, fail closed (zero limits). Logged so we notice.
+    console.warn(`[visualizer] Unknown tier "${tier}", applying guest limits`);
     return DEFAULTS.guest;
   }
   return applyEnvOverrides(tier, base);
@@ -150,7 +150,7 @@ export function getDefaultTierLimits(tier: VisualizerTier): TierLimits {
   return DEFAULTS[tier] ?? DEFAULTS.guest;
 }
 
-/** All tiers, in display order — used by upgrade UX. */
+/** All tiers, in display order, used by upgrade UX. */
 export const TIER_DISPLAY_ORDER: readonly VisualizerTier[] = [
   "guest",
   "customer",
@@ -183,7 +183,7 @@ export const ACTION_COSTS = {
   render_hd: 2,
   wall_upload: 1,
   showroom_publish: 1,
-  /** Refund is the inverse — set per-call by the consumer. */
+  /** Refund is the inverse, set per-call by the consumer. */
   refund: 0,
 } as const;
 

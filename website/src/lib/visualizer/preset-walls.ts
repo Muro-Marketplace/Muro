@@ -7,11 +7,11 @@
  *   - name            short human label shown in the picker
  *   - description     longer line below the name
  *   - default colour  starting wall colour swatch (hex without '#')
- *   - default width / height — the user can override these per-wall
+ *   - default width / height, the user can override these per-wall
  *   - imagePath       optional /public path; null for solid-colour presets
  *   - vibe            tag used for filtering/grouping the picker UI
  *
- * Image assets land in PR #5 — until then, presets render as a solid
+ * Image assets land in PR #5, until then, presets render as a solid
  * colour backdrop. The editor code already supports `imagePath = null`,
  * so the same data flow works with or without imagery.
  */
@@ -33,7 +33,7 @@ export const PRESET_WALLS: readonly PresetWall[] = [
   {
     id: "minimal_white",
     name: "Minimal white",
-    description: "A clean off-white wall — works for most pieces.",
+    description: "A clean off-white wall, works for most pieces.",
     defaultColorHex: "F5F1EB",
     defaultWidthCm: 300,
     defaultHeightCm: 240,
@@ -43,7 +43,7 @@ export const PRESET_WALLS: readonly PresetWall[] = [
   {
     id: "warm_plaster",
     name: "Warm plaster",
-    description: "Soft beige — flatters earthy palettes and photography.",
+    description: "Soft beige, flatters earthy palettes and photography.",
     defaultColorHex: "E8DECF",
     defaultWidthCm: 320,
     defaultHeightCm: 240,
@@ -53,7 +53,7 @@ export const PRESET_WALLS: readonly PresetWall[] = [
   {
     id: "industrial_concrete",
     name: "Industrial concrete",
-    description: "Cool grey concrete — great for bold, graphic work.",
+    description: "Cool grey concrete, great for bold, graphic work.",
     defaultColorHex: "BCBAB6",
     defaultWidthCm: 360,
     defaultHeightCm: 260,
@@ -63,7 +63,7 @@ export const PRESET_WALLS: readonly PresetWall[] = [
   {
     id: "gallery_charcoal",
     name: "Gallery charcoal",
-    description: "Dark gallery wall — pulls light works forward.",
+    description: "Dark gallery wall, pulls light works forward.",
     defaultColorHex: "2A2A2A",
     defaultWidthCm: 400,
     defaultHeightCm: 260,

@@ -205,7 +205,7 @@ export async function getAllDatabaseArtists(): Promise<Artist[]> {
       .eq("review_status", "approved")
       .order("created_at", { ascending: false });
     if (res.error && /review_status/.test(res.error.message)) {
-      // Column not yet migrated — fall back to the old behaviour.
+      // Column not yet migrated, fall back to the old behaviour.
       const all = await supabase
         .from("artist_profiles")
         .select("*")

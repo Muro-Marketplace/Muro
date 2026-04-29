@@ -39,7 +39,7 @@ function round3(n: number): number {
 /**
  * Produce a canonical string for the input. Important: every shape we
  * embed here must produce the SAME output for inputs that are
- * semantically equal — that's the whole point.
+ * semantically equal, that's the whole point.
  */
 function canonicalise(input: HashInput): string {
   const sortedItems = [...input.items]
@@ -100,5 +100,5 @@ export function computeLayoutHash(input: HashInput): string {
   return createHash("sha256").update(canonical).digest("hex");
 }
 
-/** Exposed for tests — useful for asserting determinism without cracking sha256. */
+/** Exposed for tests, useful for asserting determinism without cracking sha256. */
 export const _canonicaliseForTests = canonicalise;

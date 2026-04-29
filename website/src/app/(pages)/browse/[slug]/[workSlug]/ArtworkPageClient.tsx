@@ -46,7 +46,7 @@ export default function ArtworkPageClient({
   const { showToast } = useToast();
   const [selectedSizeIdx, setSelectedSizeIdx] = useState(0);
   const frameOptions = work.frameOptions && work.frameOptions.length > 0 ? work.frameOptions : [];
-  // -1 means "no frame" — the buyer wants the bare canvas. Default is no
+  // -1 means "no frame", the buyer wants the bare canvas. Default is no
   // frame so the price quoted above is exactly what they pay until they
   // explicitly opt in to a frame.
   const [selectedFrameIdx, setSelectedFrameIdx] = useState(-1);
@@ -176,7 +176,7 @@ export default function ArtworkPageClient({
 
   // The number we surface here is the SELECTED size's stock cap when
   // the artist set a per-size quantity. Saying just "2 available"
-  // misleads buyers — they read it as "2 of this artwork in total"
+  // misleads buyers, they read it as "2 of this artwork in total"
   // when it's actually "2 of this size". When the cap is per-size,
   // tag it explicitly. Falls back to the work-level unqualified
   // label for legacy artworks tracking stock at the work level.
@@ -194,7 +194,7 @@ export default function ArtworkPageClient({
 
   return (
     <div className="flex flex-col">
-      {/* Artist (#40) — clickable so visitors can hop straight to the
+      {/* Artist (#40), clickable so visitors can hop straight to the
           artist's portfolio without backing out to /browse first. */}
       <p className="text-[10px] text-muted uppercase tracking-[0.18em] mb-3">
         <Link href={`/browse/${artistSlug}`} className="hover:text-accent hover:underline transition-colors">
@@ -207,7 +207,7 @@ export default function ArtworkPageClient({
         {work.title}
       </h1>
 
-      {/* Currently-placed chip — only when the work is on display at a
+      {/* Currently-placed chip, only when the work is on display at a
           venue right now. Sourced from artist_works.placed_at_venue,
           kept in sync by the placements PATCH handler. */}
       {work.placed_at_venue && (
@@ -244,7 +244,7 @@ export default function ArtworkPageClient({
         </div>
       )}
 
-      {/* About this piece — the artist's own description. Was being
+      {/* About this piece, the artist's own description. Was being
           stored but never rendered, so it looked like saving the
           description on portfolio did nothing. */}
       {work.description && work.description.trim() && (
@@ -290,7 +290,7 @@ export default function ArtworkPageClient({
                   const stock = sp.quantityAvailable;
                   return {
                     value: String(i),
-                    label: `${formatSizeLabelForDisplay(sp.label)} — £${sp.price}`,
+                    label: `${formatSizeLabelForDisplay(sp.label)}, £${sp.price}`,
                     description: typeof stock === "number"
                       ? (stock <= 0 ? "Sold out" : `${stock} available`)
                       : undefined,
@@ -299,7 +299,7 @@ export default function ArtworkPageClient({
                 })}
                 ariaLabel="Choose size"
               />
-              {/* Per-size availability list — only shown when the
+              {/* Per-size availability list, only shown when the
                   artist has split stock by size, so the default
                   "one number fits all" flow stays uncluttered. */}
               {work.pricing.some((sp) => typeof sp.quantityAvailable === "number") && (
@@ -307,7 +307,7 @@ export default function ArtworkPageClient({
                   {work.pricing.map((sp) => {
                     const stock = sp.quantityAvailable;
                     const label = typeof stock !== "number"
-                      ? "—"
+                      ? "–"
                       : stock <= 0
                         ? "Sold out"
                         : `${stock} available`;
@@ -402,7 +402,7 @@ export default function ArtworkPageClient({
         </div>
       )}
 
-      {/* Shipping info — uses the calculator when the artist hasn't set
+      {/* Shipping info, uses the calculator when the artist hasn't set
           a manual shippingPrice. Shows tier + delivery window + signature
           line so buyers know what they're getting. */}
       {(() => {
@@ -509,7 +509,7 @@ export default function ArtworkPageClient({
                 }}
                 className="w-full px-5 py-3.5 text-[13px] font-medium tracking-wider uppercase text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
               >
-                Buy Now — £{totalPrice}
+                Buy Now, £{totalPrice}
               </button>
               <button
                 onClick={() => {
@@ -549,10 +549,10 @@ export default function ArtworkPageClient({
             (per-size `inStorePricing[]`), or for the legacy
             work-level `inStorePrice` if that's all that's set. The
             label distinguishes the two so buyers know what they're
-            buying — for per-size in-store the label includes the
+            buying, for per-size in-store the label includes the
             size; for the legacy original-only flow it stays
             "Original". Shipping is £0 because the buyer collects in
-            person — that's the entire point of the pickup option. */}
+            person, that's the entire point of the pickup option. */}
         {work.available && selectedInStorePrice != null && (
           <button
             onClick={() => {
@@ -570,7 +570,7 @@ export default function ArtworkPageClient({
                 artistName,
                 title:
                   isPerSize && selectedPricing
-                    ? `${work.title} (Collect — ${selectedPricing.label})`
+                    ? `${work.title} (Collect, ${selectedPricing.label})`
                     : `${work.title} (Original)`,
                 image: work.image,
                 size: isPerSize && selectedPricing ? selectedPricing.label : "Original",
@@ -588,8 +588,8 @@ export default function ArtworkPageClient({
                 p.label.toLowerCase() ===
                 (selectedPricing?.label.toLowerCase() ?? ""),
             )
-              ? `Collect from venue — £${selectedInStorePrice}`
-              : `Buy Original — £${selectedInStorePrice}`}
+              ? `Collect from venue, £${selectedInStorePrice}`
+              : `Buy Original, £${selectedInStorePrice}`}
           </button>
         )}
         <button
@@ -612,7 +612,7 @@ export default function ArtworkPageClient({
         </button>
       </div>
 
-      {/* Wall visualiser — opens as a modal from the "View on your wall"
+      {/* Wall visualiser, opens as a modal from the "View on your wall"
           CTA. The new react-konva visualizer takes over when the
           WALL_VISUALIZER_V1 flag is on; otherwise the legacy CSS-overlay
           fallback ships unchanged. */}

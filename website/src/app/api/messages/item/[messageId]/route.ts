@@ -35,7 +35,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ messageId
     const msg = await loadMessage(db, messageId);
     if (!msg) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // Either party in the conversation can pin / unpin — pins are a
+    // Either party in the conversation can pin / unpin, pins are a
     // shared bookmark on the thread, not a personal label.
     const slug = await userSlug(db, auth.user!.id);
     if (!slug || (msg.sender_name !== slug && msg.recipient_slug !== slug)) {
@@ -81,7 +81,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ messageI
       .eq("id", messageId);
 
     if (error) {
-      // pinned_at / deleted_at columns may not exist in older envs — fall
+      // pinned_at / deleted_at columns may not exist in older envs, fall
       // back to a hard delete so the user's intent is honoured.
       const fallback = await db.from("messages").delete().eq("id", messageId);
       if (fallback.error) {

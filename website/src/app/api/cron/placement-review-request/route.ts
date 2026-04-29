@@ -1,4 +1,4 @@
-// Vercel Cron — daily 11:00 UTC. Asks each party for a review ~7 days after
+// Vercel Cron, daily 11:00 UTC. Asks each party for a review ~7 days after
 // their placement ended (status=completed, collected_at in a 24h window).
 
 import { NextResponse } from "next/server";

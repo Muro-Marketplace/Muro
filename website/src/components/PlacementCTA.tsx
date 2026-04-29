@@ -29,7 +29,7 @@ export function PlacementButton({
       // styling so the two stacked buttons read as the same height.
       // The `!` is required because Button's md sizeClass already
       // applies py-2.5, and Tailwind sorts py-2.5 AFTER py-2 in the
-      // generated stylesheet — same specificity, later wins, so a
+      // generated stylesheet, same specificity, later wins, so a
       // plain "py-2" override loses. Important wins.
       className={fullWidth ? "w-full justify-center !py-2" : undefined}
     >

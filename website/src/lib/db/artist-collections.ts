@@ -59,7 +59,7 @@ function rowToCollection(
 /**
  * Fetch every published, available collection for the given artist
  * slug. Returns an empty array on missing artist, no collections, or
- * any DB error (errors logged) — the consumer renders nothing in that
+ * any DB error (errors logged), the consumer renders nothing in that
  * case, which matches the seed-data behaviour.
  */
 export async function getCollectionsByArtistSlug(
@@ -73,7 +73,7 @@ export async function getCollectionsByArtistSlug(
   try {
     const db = getSupabaseAdmin();
 
-    // Resolve the profile id from the slug — collections store
+    // Resolve the profile id from the slug, collections store
     // artist_id, not slug, as their owner pointer.
     const { data: profile, error: profileErr } = await db
       .from("artist_profiles")

@@ -128,7 +128,7 @@ export default function ArtistPortalPage() {
       const hasStyleTag = Array.isArray(profile.style_tags) && profile.style_tags.length > 0;
       const profileComplete = hasBio && hasLocation && hasStyleTag;
 
-      // "Set your shipping price" was removed — shipping is per-work
+      // "Set your shipping price" was removed, shipping is per-work
       // (and per-size), not a single profile-level number, so a
       // standalone onboarding step never matched how artists
       // actually configure it. The shipping fields on the work form
@@ -167,7 +167,7 @@ export default function ArtistPortalPage() {
           // Artist hears back when their request was accepted.
           activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
         } else if (p.status === "active" && !iAmRequester) {
-          // Artist accepted an incoming venue request — surface the success quietly.
+          // Artist accepted an incoming venue request, surface the success quietly.
           activityItems.push({ id: "pa-" + p.id, text: `Placement live: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
         } else if (p.status === "declined" && iAmRequester) {
           activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${p.work_title || "Artwork"}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
@@ -175,7 +175,7 @@ export default function ArtistPortalPage() {
       }
 
       for (const c of conversations) {
-        // Only surface inbound messages — things the artist needs to
+        // Only surface inbound messages, things the artist needs to
         // react to. If the latest message was sent by them, skip it.
         const isInbound = c.latestSender && c.latestSender !== mySlug;
         if (!isInbound) continue;

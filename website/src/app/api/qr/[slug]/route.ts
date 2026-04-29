@@ -34,7 +34,7 @@ export async function GET(
   const size = request.nextUrl.searchParams.get("size");
 
   // Best-effort venue user_id resolution + analytics insert.
-  // Fire-and-forget — the redirect should never block on telemetry.
+  // Fire-and-forget, the redirect should never block on telemetry.
   try {
     const [{ trackEvent, extractTrackingContext, generateVisitorId }, { getSupabaseAdmin }] = await Promise.all([
       import("@/lib/analytics"),
@@ -57,7 +57,7 @@ export async function GET(
         // their venue's display name doesn't have to reprint labels.
         if (vp?.name) venueName = vp.name;
       } catch {
-        /* ignore — fall through to whatever was on the URL */
+        /* ignore, fall through to whatever was on the URL */
       }
     }
 
@@ -65,7 +65,7 @@ export async function GET(
       event_type: "qr_scan",
       artist_slug: slug,
       // Pass the real work id when we have it. Falls back to the
-      // legacy title-as-id behaviour only if no `w=` was sent — keeps
+      // legacy title-as-id behaviour only if no `w=` was sent, keeps
       // very-old printed QRs working without tagging them as broken.
       work_id: workId || undefined,
       venue_user_id: venueUserId,

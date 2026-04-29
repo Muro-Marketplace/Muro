@@ -55,7 +55,7 @@ export async function PUT(
         return NextResponse.json({ error: "Failed to reject application" }, { status: 500 });
       }
 
-      // Rejection email — graceful decline with optional feedback.
+      // Rejection email, graceful decline with optional feedback.
       if (app.email) {
         await sendEmail({
           idempotencyKey: `application_rejected:${id}`,
@@ -98,7 +98,7 @@ export async function PUT(
         },
       });
     } else {
-      // New user — send invite email
+      // New user, send invite email
       const { data: inviteData, error: inviteError } =
         await db.auth.admin.inviteUserByEmail(app.email, {
           data: {
@@ -168,7 +168,7 @@ export async function PUT(
 
     if (profileError) {
       console.error("Profile creation error:", profileError);
-      // Don't fail the whole operation — user is created, profile can be fixed
+      // Don't fail the whole operation, user is created, profile can be fixed
     }
 
     // Mark application as accepted
@@ -178,14 +178,14 @@ export async function PUT(
       .eq("id", id);
 
     // Approved email. For new invited users, Supabase's invite email
-    // already landed — this is the brand-polished follow-up.
+    // already landed, this is the brand-polished follow-up.
     if (app.email) {
       await sendEmail({
         idempotencyKey: `application_approved:${id}`,
         template: "artist_application_approved",
         category: "placements",
         to: app.email,
-        subject: "You're in — welcome to Wallplace",
+        subject: "You're in, welcome to Wallplace",
         userId,
         react: ArtistApplicationApproved({
           firstName: (app.name || "there").split(" ")[0],
@@ -201,7 +201,7 @@ export async function PUT(
       status: "accepted",
       message: invited
         ? `Invite email sent to ${app.email}`
-        : `${app.email} already had an account — profile created, they can log in now`,
+        : `${app.email} already had an account, profile created, they can log in now`,
     });
   } catch (err) {
     console.error("Accept/reject error:", err);

@@ -13,7 +13,7 @@ const options = [
     description: "Showcase your work to venues and buyers across the UK. Get discovered, get placed, get paid.",
     // Routes to /signup/artist (account first), which then forwards
     // into /apply once the user is signed in. The application page
-    // itself is auth-gated — anyone hitting /apply directly while
+    // itself is auth-gated, anyone hitting /apply directly while
     // logged out is redirected here.
     href: "/signup/artist",
     icon: (
@@ -52,7 +52,7 @@ const options = [
 export default function SignUpPage() {
   return (
     <div className="relative min-h-[calc(110vh-3.5rem)] sm:min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex items-center justify-center">
-      {/* Background — same as login */}
+      {/* Background, same as login */}
       <div className="absolute inset-0 -z-10">
         <Image
           src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop&crop=center"

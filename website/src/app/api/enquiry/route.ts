@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       sender_name: senderEmail.split("@")[0],
       sender_type: "anonymous",
       recipient_slug: artistSlug,
-      content: `${workTitle ? `Re: ${workTitle}\n\n` : ""}${message}\n\n— ${senderName} (${senderEmail})`,
+      content: `${workTitle ? `Re: ${workTitle}\n\n` : ""}${message}\n\n– ${senderName} (${senderEmail})`,
       message_type: "text",
       metadata: {},
       is_read: false,

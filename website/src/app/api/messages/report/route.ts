@@ -4,7 +4,7 @@
 // Stores in `conversation_reports` if the table exists, falls back to
 // console.warn so a missing migration doesn't break the user-facing
 // modal. The frontend already swallows 4xx/5xx and shows the
-// "submitted" confirmation either way — the goal here is durability,
+// "submitted" confirmation either way, the goal here is durability,
 // not blocking the UI.
 
 import { NextResponse } from "next/server";
@@ -13,7 +13,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
-  // Reports are not free either — limit to 6/min so a malicious
+  // Reports are not free either, limit to 6/min so a malicious
   // signed-in user can't fill up the support queue.
   const limited = await checkRateLimit(request, 6, 60_000);
   if (limited) return limited;

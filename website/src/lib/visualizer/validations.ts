@@ -1,14 +1,14 @@
 /**
- * Wall Visualizer — zod schemas.
+ * Wall Visualizer, zod schemas.
  *
  * The runtime contract for everything the editor and API exchange. Used:
  *   - On API routes (server-side input validation)
- *   - On the editor (before persisting to /api/walls/* — catches dev mistakes early)
+ *   - On the editor (before persisting to /api/walls/*, catches dev mistakes early)
  *   - On the render service (defensive parse before composing)
  *
  * Layered with src/lib/visualizer/types.ts: the TS interfaces are the
  * canonical structural types; the zod schemas validate runtime payloads.
- * They MUST stay in sync — the test in validations.test.ts asserts
+ * They MUST stay in sync, the test in validations.test.ts asserts
  * structural compatibility for the key shapes.
  */
 
@@ -31,7 +31,7 @@ const itemDimensionCm = z.number().min(5).max(1000);
 /** Item position in cm. Negative allowed (item partially off-canvas during drag). */
 const itemPositionCm = z.number().min(-1000).max(2000);
 
-/** Stable client-generated UUID-ish — accepts any non-empty short string so
+/** Stable client-generated UUID-ish, accepts any non-empty short string so
  *  the editor can assign keys without needing crypto.randomUUID server-side. */
 const itemId = z.string().min(1).max(64);
 
@@ -70,7 +70,7 @@ export const wallItemSchema = z.object({
 
 // ── Wall (create) ───────────────────────────────────────────────────────
 
-/** Shared base — fields every wall has regardless of kind. */
+/** Shared base, fields every wall has regardless of kind. */
 const wallBaseFields = {
   name: z.string().trim().min(1).max(120),
   width_cm: wallDimensionCm,
@@ -92,7 +92,7 @@ export const createUploadedWallSchema = z.object({
   source_image_path: z.string().min(1).max(500),
 });
 
-/** Discriminated union — pick the right shape based on `kind`. */
+/** Discriminated union, pick the right shape based on `kind`. */
 export const createWallSchema = z.discriminatedUnion("kind", [
   createPresetWallSchema,
   createUploadedWallSchema,
@@ -101,7 +101,7 @@ export const createWallSchema = z.discriminatedUnion("kind", [
 // ── Wall (update) ───────────────────────────────────────────────────────
 
 /**
- * Updates are partial. `kind` cannot change after creation — switching
+ * Updates are partial. `kind` cannot change after creation, switching
  * between preset and uploaded would require resetting layouts.
  */
 export const updateWallSchema = z.object({
@@ -110,7 +110,7 @@ export const updateWallSchema = z.object({
   height_cm: wallDimensionCm.optional(),
   wall_color_hex: hexColor6.optional(),
   notes: z.string().trim().max(1000).nullable().optional(),
-  // Migration 037 — venue-controlled toggle that publishes the wall
+  // Migration 037, venue-controlled toggle that publishes the wall
   // on the venue's public profile page so artists can see it before
   // requesting placements.
   is_public_on_profile: z.boolean().optional(),
@@ -163,7 +163,7 @@ export const quickRenderRequestSchema = z.object({
   width_cm: wallDimensionCm.optional(),
   height_cm: wallDimensionCm.optional(),
   wall_color_hex: hexColor6.optional(),
-  /** The single artwork to place — quick preview is one work at a time. */
+  /** The single artwork to place, quick preview is one work at a time. */
   work_id: z.string().min(1).max(64),
   /** Optional placement override; otherwise we centre at default size. */
   placement: z
@@ -190,7 +190,7 @@ export const quickRenderRequestSchema = z.object({
 // ── Mockup save ─────────────────────────────────────────────────────────
 
 /**
- * Body for POST /api/works/[id]/mockups — promotes a render to an artwork
+ * Body for POST /api/works/[id]/mockups, promotes a render to an artwork
  * mockup on the listing.
  */
 export const saveMockupSchema = z.object({

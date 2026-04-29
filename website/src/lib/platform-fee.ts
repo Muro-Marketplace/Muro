@@ -4,7 +4,7 @@
  * route (for application_fee_percent).
  *
  * Founding artists and trialling artists pay 0% while free_until is in
- * the future — they still keep the full artist share, Wallplace forgoes
+ * the future, they still keep the full artist share, Wallplace forgoes
  * the fee for the free window.
  */
 
@@ -23,7 +23,7 @@ interface ArtistPlanState {
 
 /**
  * Return the platform fee percent we should charge for a given artist.
- * Respects free_until — returns 0 for founding / trial artists while the
+ * Respects free_until, returns 0 for founding / trial artists while the
  * free window is still live.
  */
 export function platformFeePercentForArtist(profile: ArtistPlanState | null | undefined): number {

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /artist-portal/showroom/new — scene creation flow.
+ * /artist-portal/showroom/new, scene creation flow.
  *
  * Mirrors /venue-portal/walls/new but creates artist-owned walls
  * (owner_type: "artist") and lands the artist back in the artist
@@ -41,7 +41,7 @@ export default function NewArtistShowroomPage() {
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  // Drag-and-drop hover state — used to swap the dashed border to the
+  // Drag-and-drop hover state, used to swap the dashed border to the
   // accent ring while a file is being dragged over the drop zone.
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -78,7 +78,7 @@ export default function NewArtistShowroomPage() {
   }
 
   // Drag-and-drop handlers. dragOver fires repeatedly while the cursor
-  // is inside the zone — we only flip state once. preventDefault on
+  // is inside the zone, we only flip state once. preventDefault on
   // dragOver is mandatory: without it the browser cancels the drop and
   // navigates to the file (the default behaviour for a dropped image).
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
@@ -87,7 +87,7 @@ export default function NewArtistShowroomPage() {
     if (!isDragOver) setIsDragOver(true);
   }
   function handleDragLeave(e: React.DragEvent<HTMLDivElement>) {
-    // dragleave fires when the cursor enters a child — guard against
+    // dragleave fires when the cursor enters a child, guard against
     // flicker by checking that we actually left the wrapper element.
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
     setIsDragOver(false);
@@ -109,7 +109,7 @@ export default function NewArtistShowroomPage() {
     setUploadError(null);
     setUploading(true);
     try {
-      // Compress + resize before upload — iPhone photos at full size
+      // Compress + resize before upload, iPhone photos at full size
       // typically run 4-12MB which trips Vercel's serverless body
       // limit (≈4.5MB) and surfaces as a 413. 2400px max / 0.88 keeps
       // the photo sharp enough to use as a wall reference while
@@ -118,7 +118,7 @@ export default function NewArtistShowroomPage() {
       try {
         uploadBlob = await resizeImage(file, 2400, 0.88);
       } catch {
-        // Resize unsupported (e.g. browser can't decode HEIC) — fall
+        // Resize unsupported (e.g. browser can't decode HEIC), fall
         // back to the original. The route's MAX_BYTES will still
         // surface an error that's clearer than a Vercel 413.
       }
@@ -234,7 +234,7 @@ export default function NewArtistShowroomPage() {
       );
       if (!layoutRes.ok) {
         // Surface the actual server error rather than silently
-        // bailing — a 402 plan-cap response used to redirect away
+        // bailing, a 402 plan-cap response used to redirect away
         // and the user just saw "something went wrong". Show the
         // message inline so they know to upgrade or what to try.
         const body = (await layoutRes.json().catch(() => ({}))) as {
@@ -500,7 +500,7 @@ export default function NewArtistShowroomPage() {
 
               <p className="text-[11px] text-muted mt-2 leading-relaxed">
                 Take a straight-on photo of the wall, lit evenly. Your
-                works composite on top — measurements come from the
+                works composite on top, measurements come from the
                 dimensions you set below, not the photo&apos;s pixels.
               </p>
             </div>

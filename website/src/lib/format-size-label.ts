@@ -8,12 +8,12 @@
  *   - "8×10\" (8×10\")"       duplicated inches (the bug we're fixing)
  *   - "8×10\""                no brackets at all
  *   - "8×10\" (20×25 cm)"     already correct → returned untouched
- *   - "50 × 70 cm"            pure cm — no brackets, leave as-is
+ *   - "50 × 70 cm"            pure cm, no brackets, leave as-is
  *
- * The orientation is preserved — "16×12\"" stays "16×12\" (41×30 cm)"
+ * The orientation is preserved, "16×12\"" stays "16×12\" (41×30 cm)"
  * (landscape), "12×16\"" stays "12×16\" (30×41 cm)" (portrait).
  *
- * Display-only — does NOT mutate stored data. Apply at every site
+ * Display-only, does NOT mutate stored data. Apply at every site
  * that shows a size label to a customer; leave the editor inputs
  * alone so artists can keep typing whatever they want.
  */
@@ -27,8 +27,8 @@ export function formatSizeLabelForDisplay(label: string | null | undefined): str
   // there before doesn't matter.
   const withoutParens = original.replace(/\s*\([^)]*\)/g, "").trim();
 
-  // Match the inch part — "<num>×<num>" with an inch marker (" or in
-  // or inch). Width × height — order preserved.
+  // Match the inch part, "<num>×<num>" with an inch marker (" or in
+  // or inch). Width × height, order preserved.
   const inchRe =
     /(\d+(?:\.\d+)?)\s*[×x×Xx]\s*(\d+(?:\.\d+)?)\s*(?:["″]|\bin(?:ch(?:es)?)?\b)/;
   const inchMatch = withoutParens.match(inchRe);
@@ -45,7 +45,7 @@ export function formatSizeLabelForDisplay(label: string | null | undefined): str
     }
   }
 
-  // No inch marker — leave whatever the artist typed. Pure cm,
+  // No inch marker, leave whatever the artist typed. Pure cm,
   // paper-size codes (A4, A3), or freeform descriptions all flow
   // through unchanged.
   return original;

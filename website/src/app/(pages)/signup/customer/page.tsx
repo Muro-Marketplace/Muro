@@ -128,7 +128,7 @@ export default function CustomerSignUpPage() {
 
             {error && <p className="text-red-500 text-sm">{error}</p>}
 
-            {/* OAuth (Google / Apple) — hidden until providers are enabled in
+            {/* OAuth (Google / Apple), hidden until providers are enabled in
                 Supabase. Flip NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE=1 in
                 Vercel once both providers are configured. */}
             {isFlagOn("OAUTH_GOOGLE_APPLE") && (

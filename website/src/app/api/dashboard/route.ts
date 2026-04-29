@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       : { data: null };
 
     if (artistProfile) {
-      // Artist dashboard — fetch placements, orders, messages, works count in parallel
+      // Artist dashboard, fetch placements, orders, messages, works count in parallel
       const slug = artistProfile.slug;
       const [placementsRes, ordersRes, messagesRes, worksCountRes] = await Promise.all([
         db.from("placements").select("*").eq("artist_user_id", userId).order("created_at", { ascending: false }),

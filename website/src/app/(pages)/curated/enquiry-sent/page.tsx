@@ -14,7 +14,7 @@ export default function CurationEnquirySentPage() {
         </svg>
       </div>
       <h1 className="font-serif text-3xl lg:text-4xl text-foreground mb-4">
-        Thanks — we&rsquo;ve got your brief.
+        Thanks, we&rsquo;ve got your brief.
       </h1>
       <p className="text-base text-muted leading-relaxed mb-8">
         A member of the Wallplace team will review your bespoke brief and email you a tailored quote within 2 business days. No payment has been taken.

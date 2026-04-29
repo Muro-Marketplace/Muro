@@ -64,7 +64,7 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
 
         const status = profile.subscription_status || "none";
 
-        // Pending artists haven't finished review yet — don't force them
+        // Pending artists haven't finished review yet, don't force them
         // to subscribe. Billing flow opens once they're approved.
         if (rs === "pending") {
           setSubscriptionOk(true);
@@ -72,13 +72,13 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
         }
 
         if (status === "active" || status === "trialing") {
-          // Paid or trialing — full access
+          // Paid or trialing, full access
           setSubscriptionOk(true);
         } else if (status === "none") {
-          // No subscription yet — redirect to billing to pick a plan
+          // No subscription yet, redirect to billing to pick a plan
           setSubscriptionOk(false);
         } else {
-          // past_due, canceled — blocked
+          // past_due, canceled, blocked
           setSubscriptionOk(false);
         }
       })
@@ -130,7 +130,7 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
   }
 
   // Under-review banner for artists whose application is still pending.
-  // We don't block the portal — they can build out their profile — but
+  // We don't block the portal, they can build out their profile, but
   // we make it clear their work isn't live yet. Pages that should be
   // gated (accepting placement requests, collecting payment) check the
   // same review_status on their own.

@@ -38,7 +38,7 @@ export default function ArtistProfileClient({
   const [bioExpanded, setBioExpanded] = useState(false);
   // Column count for the row-major masonry. CSS `columns` gave us a
   // pretty layout but filled column-1 top-to-bottom before starting
-  // column-2 — visual reading order didn't match the works array.
+  // column-2, visual reading order didn't match the works array.
   // Same pattern the marketplace gallery uses: distribute by
   // i % colCount so item order reads left-to-right, top-to-bottom.
   const [colCount, setColCount] = useState(3);
@@ -76,7 +76,7 @@ export default function ArtistProfileClient({
     const firstWork = filteredWorks[Array.from(selectedForPlacement)[0]];
     if (userType === "venue") {
       // Pass ALL ticked works through so every one of them is
-      // preselected on the request form — not just the first. The
+      // preselected on the request form, not just the first. The
       // legacy `work` / `workImage` params stay for compat; the new
       // `works` param is the full comma-joined list that drives the
       // multi-artwork preselection.
@@ -223,7 +223,7 @@ export default function ArtistProfileClient({
   // QR code at a venue, the redirect carries `?ref=qr&venue=…`. We
   // show a small "Seen in [venue name]" line at the top of the
   // portfolio so the visitor has the context the physical scan
-  // gives them — and the venue gets a soft brand mention on the
+  // gives them, and the venue gets a soft brand mention on the
   // page that landed them here.
   const qrVenueName = isQrScan ? searchParams.get("venue") : null;
 
@@ -263,7 +263,7 @@ export default function ArtistProfileClient({
             )}
           </div>
 
-          {/* Masonry grid — row-major distribution so the artwork
+          {/* Masonry grid, row-major distribution so the artwork
               order matches reading order (left-to-right,
               top-to-bottom). The previous CSS `columns` layout filled
               column 1 fully before starting column 2, which was
@@ -292,7 +292,7 @@ export default function ArtistProfileClient({
                 onClick={() => {
                   // Click on the card opens the full artwork page in a
                   // new tab. The hover "Quick look" icon still opens the
-                  // lightbox on the same tab — that's the only trigger
+                  // lightbox on the same tab, that's the only trigger
                   // that should open it.
                   const href = `/browse/${artistSlug}/${slugify(work.title)}`;
                   if (typeof window !== "undefined") window.open(href, "_blank", "noopener,noreferrer");
@@ -320,7 +320,7 @@ export default function ArtistProfileClient({
                   <div className="absolute inset-0" />
 
                   {/* Hover overlay. Subtitle reads off sizes from
-                      pricing rather than the raw `dimensions` field —
+                      pricing rather than the raw `dimensions` field,
                       `dimensions` often holds a "1920 × 1080 px" string
                       auto-set during upload, which means nothing to a
                       buyer. Single size renders as the label
@@ -367,7 +367,7 @@ export default function ArtistProfileClient({
                   </div>
                   {/* Top-left cluster: selection tick (venue only) then
                       the heart (Save) to its right. Same checkmark in
-                      both states — transparent-ish when unselected,
+                      both states, transparent-ish when unselected,
                       filled accent circle with white tick once ticked. */}
                   {user && userType === "venue" && (
                     <button
@@ -387,7 +387,7 @@ export default function ArtistProfileClient({
                   <div className={`absolute top-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${user && userType === "venue" ? "left-12" : "left-3"}`}>
                     <SaveButton type="work" itemId={work.id} />
                   </div>
-                  {/* Availability — hidden on hover, replaced by action buttons */}
+                  {/* Availability, hidden on hover, replaced by action buttons */}
                   <div className="absolute top-3 right-3 transition-opacity duration-200 group-hover:opacity-0 pointer-events-none">
                     {work.available ? (
                       <span className="inline-block px-2 py-0.5 bg-accent/90 text-white text-[10px] rounded-sm backdrop-blur-sm">
@@ -490,7 +490,7 @@ export default function ArtistProfileClient({
             }
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Image side — swipeable on mobile */}
+            {/* Image side, swipeable on mobile */}
             <div
               className={
                 isFullscreen
@@ -514,7 +514,7 @@ export default function ArtistProfileClient({
             >
               <Image
                 src={currentWork.image}
-                alt={`${currentWork.title} — ${currentWork.medium}`}
+                alt={`${currentWork.title}, ${currentWork.medium}`}
                 fill
                 className={`object-contain select-none touch-pinch-zoom ${isFullscreen ? "p-0" : "p-4"}`}
                 style={{ touchAction: "pinch-zoom" }}
@@ -524,7 +524,7 @@ export default function ArtistProfileClient({
                 priority
                 onContextMenu={(e) => e.preventDefault()}
               />
-              {/* Overlay to block right-click save — allows touch through on mobile */}
+              {/* Overlay to block right-click save, allows touch through on mobile */}
               <div className="absolute inset-0 sm:pointer-events-auto pointer-events-none" onContextMenu={(e) => e.preventDefault()} />
 
               {/* Fullscreen toggle */}
@@ -637,7 +637,7 @@ export default function ArtistProfileClient({
                   >
                     {currentWork.pricing.map((sp, i) => (
                       <option key={sp.label} value={i}>
-                        {sp.label} — £{sp.price}
+                        {sp.label}, £{sp.price}
                       </option>
                     ))}
                   </select>
@@ -655,7 +655,7 @@ export default function ArtistProfileClient({
                   >
                     {currentWork.frameOptions.map((f, i) => (
                       <option key={f.label} value={i}>
-                        {f.label}{f.priceUplift > 0 ? ` — +\u00a3${f.priceUplift}` : ""}
+                        {f.label}{f.priceUplift > 0 ? `, +\u00a3${f.priceUplift}` : ""}
                       </option>
                     ))}
                   </select>
@@ -697,7 +697,7 @@ export default function ArtistProfileClient({
                   const totalPrice = Math.round((selected.price + frameUplift) * 100) / 100;
                   // Per-size stock cap with fallback to work-level
                   // quantity for legacy works. Without this the lightbox
-                  // happily over-adds and the toast lies — the original
+                  // happily over-adds and the toast lies, the original
                   // bug behind item #10.
                   const sizeStock: number | null = (() => {
                     const perSize = selected?.quantityAvailable;
@@ -775,7 +775,7 @@ export default function ArtistProfileClient({
                 })()}
               </div>
 
-              {/* Secondary link — just the "full page" link now; the
+              {/* Secondary link, just the "full page" link now; the
                   Message CTA moved up next to the artist name. */}
               <div className="mt-4 text-xs">
                 <Link

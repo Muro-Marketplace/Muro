@@ -8,7 +8,7 @@
 // API, and remembers the last successful postcode in localStorage so
 // switching between marketplace views doesn't ask twice.
 //
-// The component is purposefully presentational — geocoding is owned
+// The component is purposefully presentational, geocoding is owned
 // by the caller via `onGeocoded`. Keeps it reusable across the
 // browse, spaces, and any future location-aware filter surfaces.
 
@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import { geocodePostcode } from "@/lib/geocode";
 
 interface PostcodeInputProps {
-  /** Initial value — a previously-entered postcode if any. */
+  /** Initial value, a previously-entered postcode if any. */
   initial?: string;
   placeholder?: string;
   /** Fired when the postcode (or geolocation) resolves to coordinates. */
@@ -30,7 +30,7 @@ interface PostcodeInputProps {
   onError?: (failed: boolean) => void;
   /** Optional className for the wrapping container. */
   className?: string;
-  /** Visual size — "sm" matches the filter sidebar; "md" matches the
+  /** Visual size, "sm" matches the filter sidebar; "md" matches the
    *  marketplace hero. Defaults to "sm". */
   size?: "sm" | "md";
   /** Hide the "Use my location" button (e.g. when the parent already
@@ -73,7 +73,7 @@ export function readPersistedCoords(): { coords: { lat: number; lng: number }; l
   }
 }
 
-/** Drop persisted location — called when the user clicks "change". */
+/** Drop persisted location, called when the user clicks "change". */
 export function clearPersistedLocation(): void {
   if (typeof window === "undefined") return;
   try {
@@ -114,7 +114,7 @@ export default function PostcodeInput({
   const [busy, setBusy] = useState(false);
   const [touched, setTouched] = useState(false);
   const [geoBusy, setGeoBusy] = useState(false);
-  // Surface specific geolocation failures back to the user — silent
+  // Surface specific geolocation failures back to the user, silent
   // failure on mobile was the bug that prompted this rework. We
   // distinguish the three meaningful PositionError codes so the UI
   // can give actionable copy ("turn on location services" vs
@@ -124,7 +124,7 @@ export default function PostcodeInput({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounced auto-lookup once the value matches the full UK postcode
-  // pattern. The user doesn't have to click Go — they just type.
+  // pattern. The user doesn't have to click Go, they just type.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!UK_POSTCODE.test(value)) return;
@@ -167,12 +167,12 @@ export default function PostcodeInput({
     setGeoBusy(true);
     setGeoError(null);
     // Mobile-tuned options:
-    //  • enableHighAccuracy: true — phones often refuse to return
+    //  • enableHighAccuracy: true, phones often refuse to return
     //    coarse fixes when the user has high-accuracy locked off; the
     //    fallback path was silently failing on iOS Safari.
-    //  • timeout: 30s — coarse outdoor fixes can take ages on a cold
+    //  • timeout: 30s, coarse outdoor fixes can take ages on a cold
     //    GPS lock, especially indoors. 10s was hitting the limit.
-    //  • maximumAge: 10 min — accept a recent cached fix instantly so
+    //  • maximumAge: 10 min, accept a recent cached fix instantly so
     //    repeat clicks don't all re-prompt.
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -187,7 +187,7 @@ export default function PostcodeInput({
         // Map the W3C PositionError codes → user-facing buckets so
         // we can show actionable copy. 1 = PERMISSION_DENIED,
         // 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT. Silent failure was
-        // the bug — now we surface it.
+        // the bug, now we surface it.
         if (err.code === 1) setGeoError("denied");
         else if (err.code === 3) setGeoError("timeout");
         else setGeoError("unavailable");

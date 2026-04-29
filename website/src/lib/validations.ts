@@ -41,27 +41,27 @@ export const applySchema = z.object({
   location: safeString(200),
   instagram: optionalString(200),
   website: optionalString(500),
-  // Consumer / business distinction — drives which UK consumer-protection
+  // Consumer / business distinction, drives which UK consumer-protection
   // rules apply to the membership subscription.
   traderStatus: z.enum(["consumer", "business"]).optional().or(z.literal("")),
   businessName: optionalString(200),
   vatNumber: optionalString(40),
-  // Optional — discipline + sub-styles cover most categorisation
+  // Optional, discipline + sub-styles cover most categorisation
   // needs and forcing a single primary medium felt restrictive
   // for mixed-media artists. UI now labels this "(optional)".
   primaryMedium: optionalString(100),
   // Phase 3 taxonomy. Optional to keep back-compat with any in-flight forms.
-  // "digital" accepted for legacy payloads — it maps onto drawing on read.
+  // "digital" accepted for legacy payloads, it maps onto drawing on read.
   discipline: z
     .enum(["photography", "painting", "digital", "drawing", "sketching", "sculpture", "mixed"])
     .optional(),
   subStyles: z.array(z.string().max(50)).max(20).optional(),
-  // Portfolio link and statement are flagged as optional in the UI — must
+  // Portfolio link and statement are flagged as optional in the UI, must
   // match here. Users were previously bouncing off the API silently because
   // these were required server-side.
   portfolioLink: optionalString(500),
   // Up to 3 sample-work URLs from artists who have no website /
-  // socials to link. Stored alongside portfolioLink in the DB —
+  // socials to link. Stored alongside portfolioLink in the DB,
   // see /api/apply for the merge.
   sampleWorkUrls: z.array(z.string().max(500)).max(3).optional(),
   artistStatement: optionalString(2000),
@@ -144,7 +144,7 @@ export const placementUpdateSchema = z.object({
   // progress bar's Schedule action.
   stageDate: z.string().datetime().optional(),
   // Reverse a previously-stamped stage. Powers the Undo button on the
-  // progress bar — clears the timestamp on that stage (and only the
+  // progress bar, clears the timestamp on that stage (and only the
   // most recently reached stage is allowed, see API for the gate).
   unsetStage: z.enum(["scheduled", "installed", "live", "collected"]).optional(),
   // A counter offer keeps the row pending but revises the terms and hands the
@@ -170,7 +170,7 @@ export const checkoutSchema = z.object({
     shippingPrice: z.number().min(0).max(1000).optional(),
     // Surfaced through to the API so the shared shipping helper can
     // do per-item dimension-based estimation, regional override, and
-    // framed-uplift — same inputs the display page uses, so the cart
+    // framed-uplift, same inputs the display page uses, so the cart
     // total and the Stripe charge can never drift.
     internationalShippingPrice: z.number().min(0).max(1000).optional(),
     dimensions: optionalString(200),

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 
-// GET /api/notifications — list the current user's notifications (newest first)
+// GET /api/notifications, list the current user's notifications (newest first)
 // Returns [] gracefully if the notifications table does not yet exist.
 export async function GET(request: Request) {
   const auth = await getAuthenticatedUser(request);
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     .limit(30);
 
   if (error) {
-    // Table may not exist yet in this environment — return empty list so the
+    // Table may not exist yet in this environment, return empty list so the
     // UI keeps working without blowing up.
     return NextResponse.json({ notifications: [], unreadCount: 0 });
   }
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ notifications, unreadCount });
 }
 
-// PATCH /api/notifications — mark one or all notifications as read
+// PATCH /api/notifications, mark one or all notifications as read
 // Body: { id: string }  OR  { all: true }
 export async function PATCH(request: Request) {
   const auth = await getAuthenticatedUser(request);

@@ -8,7 +8,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Sustainability — Wallplace",
+  title: "Sustainability, Wallplace",
   description:
     "How Wallplace makes the way the UK consumes wall art more sustainable: real artists, real spaces, no shipping-once-displayed-once cycle, and an alternative to landfill prints.",
 };
@@ -26,7 +26,7 @@ export default function SustainabilityPage() {
           </h1>
           <p className="text-lg text-muted leading-relaxed max-w-2xl mb-12">
             The mass market for wall art is built on cheap prints, fast
-            shipping, and short ownership. Wallplace is the alternative —
+            shipping, and short ownership. Wallplace is the alternative,
             a slower, more durable model where original work moves between
             real spaces and stays out of landfill.
           </p>
@@ -37,7 +37,7 @@ export default function SustainabilityPage() {
                 Artists, not factories
               </p>
               <p className="text-sm text-foreground/85 leading-relaxed">
-                Every work on Wallplace is made by a named, living artist —
+                Every work on Wallplace is made by a named, living artist,
                 no anonymous mass-printing, no warehouse stock, no algorithmic
                 "trending decor". Originals and small editions, with
                 provenance.
@@ -77,7 +77,7 @@ export default function SustainabilityPage() {
                 pieces seasonally, and buyers end up with a real artwork from
                 a real person rather than a print that depreciates the moment
                 it ships. When a placement ends, the work goes back into the
-                marketplace — not the bin.
+                marketplace, not the bin.
               </p>
             </div>
 
@@ -101,7 +101,7 @@ export default function SustainabilityPage() {
               <ul className="list-disc pl-6 text-muted leading-relaxed space-y-2 marker:text-accent">
                 <li>We don't drop-ship anonymous mass-print decor.</li>
                 <li>
-                  We don't run a print-on-demand warehouse — every original
+                  We don't run a print-on-demand warehouse, every original
                   comes from the artist's studio.
                 </li>
                 <li>
@@ -122,7 +122,7 @@ export default function SustainabilityPage() {
               <p className="text-muted leading-relaxed">
                 We're working toward giving every artist + venue a
                 placement-history record so the lifetime journey of a work
-                — first studio, first wall, first buyer, future loans — is
+               , first studio, first wall, first buyer, future loans, is
                 tracked. The longer a piece stays in circulation, the better
                 it is for the planet and for the artist's residual income.
               </p>

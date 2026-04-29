@@ -7,7 +7,7 @@
 //     `welcome:${userId}` is the only dedupe.
 //
 // triggerWelcomeIfNeeded() is the only entry point. It's safe to call
-// every login — short-circuits on the first sent send.
+// every login, short-circuits on the first sent send.
 //
 // Why split out from /api/auth/oauth-finalize: we want this to fire for
 // both OAuth and email/password signups (the latter via a separate hook),
@@ -106,7 +106,7 @@ async function sendArtistWelcome(
     template: "welcome_artist",
     category: "tips",
     to: email,
-    subject: "Welcome to Wallplace — let's get your first placement",
+    subject: "Welcome to Wallplace, let's get your first placement",
     react: ArtistWelcomeChecklist({
       firstName,
       profileUrl,
@@ -209,7 +209,7 @@ async function sendVenueWelcome(
 
   const firstName = (profile.name?.trim().split(" ")[0]) || firstNameFallback || email.split("@")[0];
 
-  // VenueWelcomeChecklist's actual prop signature varies — keep this simple
+  // VenueWelcomeChecklist's actual prop signature varies, keep this simple
   // and pass the bare minimum it expects. If that template wants richer
   // data later, expand here without touching callers.
   const result = await sendEmail({
@@ -217,7 +217,7 @@ async function sendVenueWelcome(
     template: "welcome_venue",
     category: "tips",
     to: email,
-    subject: "Welcome to Wallplace — find your first artwork",
+    subject: "Welcome to Wallplace, find your first artwork",
     react: VenueWelcomeChecklist({
       firstName,
       venueName: profile.name || "your venue",

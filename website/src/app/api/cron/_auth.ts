@@ -1,5 +1,5 @@
 // Shared auth check for cron routes. Vercel Cron hits these with a bearer
-// token equal to CRON_SECRET — anything else gets a 401 so random public
+// token equal to CRON_SECRET, anything else gets a 401 so random public
 // callers can't trigger email blasts.
 //
 // In local dev, set CRON_SECRET in .env.local and curl with:
@@ -12,10 +12,10 @@ export function requireCronAuth(request: Request): NextResponse | null {
   if (!expected) {
     // Fail-closed in production. In dev, warn once and let it through.
     if (process.env.NODE_ENV === "production") {
-      console.error("CRON_SECRET not set — refusing cron request");
+      console.error("CRON_SECRET not set, refusing cron request");
       return NextResponse.json({ error: "Cron not configured" }, { status: 500 });
     }
-    console.warn("CRON_SECRET not set — allowing cron in dev only");
+    console.warn("CRON_SECRET not set, allowing cron in dev only");
     return null;
   }
   const header = request.headers.get("authorization") || "";
@@ -28,7 +28,7 @@ export function requireCronAuth(request: Request): NextResponse | null {
 
 /**
  * Runs a batched loop with graceful per-item error handling. Used by cron
- * routes that walk a large user set — one bad row shouldn't abort the job.
+ * routes that walk a large user set, one bad row shouldn't abort the job.
  */
 export async function runBatch<T>(
   items: T[],

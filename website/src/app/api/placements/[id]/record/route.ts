@@ -39,7 +39,7 @@ const recordSchema = z.object({
   availableForSale: z.boolean().optional(),
 
   logisticsNotes: z.string().max(4000).optional(),
-  // Accept blank or any reasonable URL/string — pasted Drive/Dropbox
+  // Accept blank or any reasonable URL/string, pasted Drive/Dropbox
   // links don't always parse with strict z.url() and the user just sees
   // an opaque "invalid URL" error. We do a lightweight client-side
   // check on save instead.
@@ -66,7 +66,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   const parsed = recordSchema.safeParse(body);
   if (!parsed.success) {
     // Surface the offending fields and reasons. Generic "Invalid record
-    // data" left users staring at a form with no clue what to fix —
+    // data" left users staring at a form with no clue what to fix,
     // most often it was an empty contract URL parsed as URL, or an
     // out-of-range percentage from a paste.
     const fieldErrors: Record<string, string> = {};
@@ -188,7 +188,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
   // If real content changed, snapshot the current row and reset both
   // approval ticks. The two parties have to re-approve the revised
-  // terms — this is what gives each side confidence the other isn't
+  // terms, this is what gives each side confidence the other isn't
   // editing behind their back.
   if (existing && contentChanged) {
     const changedByRole = placement.artist_user_id === auth.user!.id ? "artist" : "venue";
@@ -205,7 +205,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       // the edit rather than blocking the user.
       console.warn("placement_record_versions insert skipped:", versionInsert.error.message);
     }
-    // Reset approvals — force a re-sign by both parties.
+    // Reset approvals, force a re-sign by both parties.
     row.venue_approved = false;
     row.venue_approved_at = null;
     row.artist_approved = false;
@@ -272,7 +272,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       const recordOpenUrl = `${placementUrl}?record=open`;
 
       if (wasNewRecord) {
-        // Bell notifications — fire alongside the emails so users see
+        // Bell notifications, fire alongside the emails so users see
         // the new record in-app even if email is filtered.
         for (const uid of [placement.artist_user_id, placement.venue_user_id]) {
           if (!uid) continue;
@@ -322,7 +322,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             userId: partyMeta.uid,
             kind: "placement_record_countersigned",
             title: "Contract countersigned",
-            body: `Both parties have signed — ${partyMeta.counter}`,
+            body: `Both parties have signed, ${partyMeta.counter}`,
             link: `${placementUrl}?record=open`,
           }).catch((err) => console.warn("[record] countersigned notification failed:", err));
         }

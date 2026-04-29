@@ -13,7 +13,7 @@
 //   8. Log:          write the attempt + outcome to email_events.
 //
 // Always returns a result object so callers can react (e.g. show a toast).
-// Never throws — email is best-effort, API routes should not 500 because mail bounced.
+// Never throws, email is best-effort, API routes should not 500 because mail bounced.
 
 import { Resend } from "resend";
 import { render } from "@react-email/components";
@@ -67,7 +67,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   const db = getSupabaseAdmin();
   const to = input.to.trim().toLowerCase();
 
-  // 1. Idempotency — short-circuit if we've already sent this.
+  // 1. Idempotency, short-circuit if we've already sent this.
   {
     const { data: existing } = await db
       .from("email_events")
@@ -79,7 +79,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     }
   }
 
-  // 2. Suppressions — unless we're sending security (password reset must always go).
+  // 2. Suppressions, unless we're sending security (password reset must always go).
   if (!rules.criticalAlwaysSend) {
     const { data: supp } = await db
       .from("email_suppressions")
@@ -99,7 +99,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     }
   }
 
-  // 3. User preferences — opt-out + vacation mode + category toggle.
+  // 3. User preferences, opt-out + vacation mode + category toggle.
   if (!rules.criticalAlwaysSend && input.userId) {
     const { data: prefs } = await db
       .from("email_preferences")
@@ -119,7 +119,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     }
   }
 
-  // 4. Throttle — per-user, per-category cap.
+  // 4. Throttle, per-user, per-category cap.
   if (rules.throttleCount > 0 && input.userId) {
     const since = new Date(Date.now() - rules.throttleHours * 3_600_000).toISOString();
     const { count } = await db
@@ -183,7 +183,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       html,
       text,
       headers: {
-        // RFC 8058 one-click unsub — required by Gmail/Yahoo bulk-sender rules.
+        // RFC 8058 one-click unsub, required by Gmail/Yahoo bulk-sender rules.
         // For tx emails we still include the mailto so mailbox providers have a signal.
         "List-Unsubscribe": `<mailto:unsubscribe@wallplace.co.uk?subject=unsubscribe-${input.category}>, <${process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk"}/account/email/unsubscribe?c=${input.category}&u=${input.userId ?? ""}>`,
         ...(rules.criticalAlwaysSend ? {} : { "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }),

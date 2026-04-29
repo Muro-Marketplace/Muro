@@ -6,13 +6,13 @@ import { venues } from "@/data/venues";
 import { DEMO_ARTIST_SLUG, DEMO_VENUE_SLUG } from "@/data/demo";
 
 export const metadata: Metadata = {
-  title: "Tour Wallplace — Demo Artist & Venue Accounts",
+  title: "Tour Wallplace, Demo Artist & Venue Accounts",
   description:
     "See Wallplace from the inside. Explore a fully built demo artist account and a fully built demo venue account before you sign up.",
 };
 
 /**
- * /demo — secondary funnel for visitors who want to see the platform
+ * /demo, secondary funnel for visitors who want to see the platform
  * before committing. Two cards, each pointing into the relevant
  * experience for the demo account.
  *
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
  *      endpoint returns 503 in that mode so even a misconfigured
  *      browser can't get stuck.
  *
- * Both buttons render the Phase 2 URL — the login endpoint
+ * Both buttons render the Phase 2 URL, the login endpoint
  * gracefully degrades to the public profile if creds aren't set, via
  * server-side guard. We can't conditionally render server-only logic
  * here (this is an RSC), so the URL stays consistent.
@@ -60,7 +60,7 @@ export default function DemoLandingPage() {
             Tour Wallplace before you sign up.
           </h1>
           <p className="text-base sm:text-lg text-muted leading-relaxed max-w-2xl mx-auto">
-            Two fully-built sample accounts — one artist, one venue — that show
+            Two fully-built sample accounts, one artist, one venue, that show
             what a successful Wallplace presence looks like. Real portfolios,
             real terms, real venue pages. No account needed.
           </p>
@@ -180,7 +180,7 @@ export default function DemoLandingPage() {
               </p>
               <ul className="space-y-3">
                 <DemoBullet text="A complete portfolio with multiple bodies of work" />
-                <DemoBullet text="Commercial terms — revenue share, paid loan, direct purchase" />
+                <DemoBullet text="Commercial terms, revenue share, paid loan, direct purchase" />
                 <DemoBullet text="Real pricing across formats (originals, prints, framed)" />
                 <DemoBullet text="The artist statement and bio that wins venue trust" />
                 <DemoBullet text="The exact view venues see when shopping the marketplace" />

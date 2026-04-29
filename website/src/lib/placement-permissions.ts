@@ -1,4 +1,4 @@
-// F45/F7/F8/F31 — single source of truth for who can act on a placement.
+// F45/F7/F8/F31, single source of truth for who can act on a placement.
 //
 // The requester should never see Accept / Decline on their own request. Only
 // the recipient can respond while the placement is still Pending. Legacy rows
@@ -9,7 +9,7 @@
 export type PlacementRole = "venue" | "artist" | "unknown";
 
 export interface PlacementPermissionInput {
-  /** Placement status — case-insensitive. Only "pending" allows responses. */
+  /** Placement status, case-insensitive. Only "pending" allows responses. */
   status?: string | null;
   /** user_id of whoever created the placement (added in migration 008). */
   requester_user_id?: string | null;

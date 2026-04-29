@@ -12,7 +12,7 @@ import { venues as staticVenues } from "@/data/venues";
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 // Helper: send a message_unread notification via the new pipeline. Fires
-// immediately for MVP — once Inngest is wired, this becomes a delayed
+// immediately for MVP, once Inngest is wired, this becomes a delayed
 // event that cancels if the recipient reads the message in-app first.
 async function sendMessageUnreadEmail(args: {
   recipientEmail: string;
@@ -42,7 +42,7 @@ async function sendMessageUnreadEmail(args: {
 }
 
 // Slug → Human Readable (last-resort fallback used when we have no
-// artist/venue profile match — turns "fin-coles" into "Fin Coles").
+// artist/venue profile match, turns "fin-coles" into "Fin Coles").
 function formatSlugToName(slug: string): string {
   if (!slug) return "";
   return slug
@@ -233,7 +233,7 @@ export async function POST(request: Request) {
     // Deterministic conversation ID between two slugs so the thread always
     // resolves to the same row regardless of who sent first. Without this,
     // artist-to-venue messages could land in a brand-new random cid while
-    // the UI was still keyed on a stale prior conversation — the thread
+    // the UI was still keyed on a stale prior conversation, the thread
     // appeared to "jump" to the wrong venue.
     function deterministicCid(slugA: string, slugB: string): string {
       const [a, b] = [slugA, slugB].sort();
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
     const db = getSupabaseAdmin();
 
     // Resolve the authenticated user's actual slug from their profile.
-    // Never trust the client-provided `senderName` — the old fallback
+    // Never trust the client-provided `senderName`, the old fallback
     // (`|| parsed.data.senderName`) let an authenticated user without a
     // profile impersonate anyone by passing that slug in the body. If the
     // user has no artist/venue profile, reject outright rather than
@@ -255,18 +255,18 @@ export async function POST(request: Request) {
     const resolvedSenderSlug = senderArtist?.slug || senderVenue?.slug || null;
     if (!resolvedSenderSlug) {
       return NextResponse.json(
-        { error: "Your account is not set up to send messages yet — complete your artist or venue profile first." },
+        { error: "Your account is not set up to send messages yet, complete your artist or venue profile first." },
         { status: 403 },
       );
     }
-    // Derive sender type from the profile we found, not the client input —
+    // Derive sender type from the profile we found, not the client input,
     // another impersonation vector otherwise.
     const resolvedSenderType: "artist" | "venue" = senderArtist ? "artist" : "venue";
 
     // Resolve the recipient user_id from their slug so RLS can scope reads to
     // both parties. Try artist first, then venue. If the slug matches nothing,
     // reject the send with a clear error rather than quietly delivering a
-    // message that nobody will ever see — that was the source of the "tried
+    // message that nobody will ever see, that was the source of the "tried
     // to message a venue and got silently redirected" issue (#18).
     const { data: recipArtist } = await db.from("artist_profiles").select("user_id").eq("slug", recipientSlug).maybeSingle();
     const { data: recipVenue } = !recipArtist
@@ -300,7 +300,7 @@ export async function POST(request: Request) {
 
     // Anti-spam first-contact cap (#39). Counts NEW conversations
     // an artist starts each day, capped per tier (Core 2, Premium 5,
-    // Pro 10). Replies inside an existing thread are exempt — those
+    // Pro 10). Replies inside an existing thread are exempt, those
     // are answered conversations, not outreach. Only applies when an
     // ARTIST messages a VENUE; venue→artist messaging isn't capped
     // here (venues already have to act on their own enquiries).
@@ -329,7 +329,7 @@ export async function POST(request: Request) {
         for (const r of (rows || []) as Array<{ conversation_id: string }>) {
           if (r.conversation_id) startedToday.add(r.conversation_id);
         }
-        // Already known cid means we're replying — exempt.
+        // Already known cid means we're replying, exempt.
         if (!startedToday.has(cidLocal) && startedToday.size >= cap) {
           return NextResponse.json(
             {
@@ -384,12 +384,12 @@ export async function POST(request: Request) {
       console.warn(`[moderation] Message flagged: sender=${resolvedSenderSlug} reason="${moderation.reason}"`);
     }
 
-    // Handle placement request — create a pending placement
+    // Handle placement request, create a pending placement
     if (messageType === "placement_request" && metadata) {
       const m = metadata as Record<string, unknown>;
       const placementId = `p-msg-${Date.now()}`;
 
-      // Determine who is artist and who is venue — use the server-resolved
+      // Determine who is artist and who is venue, use the server-resolved
       // role, not the client-provided `senderType`, to close the same
       // impersonation vector that `resolvedSenderSlug` fixes above.
       const senderIsArtist = resolvedSenderType === "artist";
@@ -451,7 +451,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Handle placement response — update placement status
+    // Handle placement response, update placement status
     if (messageType === "placement_response" && metadata) {
       const m = metadata as Record<string, unknown>;
       const placementId = m.placementId as string;
@@ -480,7 +480,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Notify recipient by email (for text messages) — respects opt-out
+    // Notify recipient by email (for text messages), respects opt-out
     if (!messageType || messageType === "text") {
       const { data: recipientArtist } = await db
         .from("artist_profiles")
@@ -499,7 +499,7 @@ export async function POST(request: Request) {
               senderName: resolvedSenderSlug,
               messagePreview: content,
               conversationId: cid || "",
-              // Sending immediately for MVP — once Inngest is wired, queue
+              // Sending immediately for MVP, once Inngest is wired, queue
               // with a 10-minute delay and cancel-if-read.
               messageId: Date.now(),
             });
@@ -535,14 +535,14 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH /api/messages — bulk-mark read.
+// PATCH /api/messages, bulk-mark read.
 // Body: { all: true }   marks every unread message addressed to the
 //                       current user as read.
 //
 // The per-conversation PATCH at /api/messages/[conversationId] still
 // exists for the in-thread "I'm reading this thread" path. This
 // endpoint is for the "Mark all as read" affordance in the header
-// inbox dropdown — one click clears the unread badge across every
+// inbox dropdown, one click clears the unread badge across every
 // thread without having to open each one.
 export async function PATCH(request: Request) {
   const auth = await getAuthenticatedUser(request);
@@ -564,7 +564,7 @@ export async function PATCH(request: Request) {
 
   const db = getSupabaseAdmin();
 
-  // Resolve the current user's slug — messages.recipient_slug is
+  // Resolve the current user's slug, messages.recipient_slug is
   // either an artist or venue slug. We mark by slug so a single
   // user with both a venue and an artist account doesn't accidentally
   // wipe the wrong inbox; in practice users have only one role, but
@@ -578,7 +578,7 @@ export async function PATCH(request: Request) {
     (s): s is string => typeof s === "string" && s.length > 0,
   );
   if (slugs.length === 0) {
-    // No profile yet — nothing to mark. Treat as no-op success.
+    // No profile yet, nothing to mark. Treat as no-op success.
     return NextResponse.json({ success: true, updated: 0 });
   }
 

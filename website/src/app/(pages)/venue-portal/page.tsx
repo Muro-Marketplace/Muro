@@ -126,7 +126,7 @@ export default function VenueDashboardPage() {
       const hasPreferences = (Array.isArray(profile.preferred_styles) && profile.preferred_styles.length > 0)
         || (Array.isArray(profile.preferred_themes) && profile.preferred_themes.length > 0);
 
-      // "Browse artist portfolios" — track via localStorage
+      // "Browse artist portfolios", track via localStorage
       const hasBrowsed = typeof window !== "undefined" && localStorage.getItem("wallplace-venue-has-browsed") === "true";
 
       const items: OnboardingItem[] = [
@@ -146,7 +146,7 @@ export default function VenueDashboardPage() {
         }, 3000);
       }
 
-      // Build Recent Activity — mirror of artist portal
+      // Build Recent Activity, mirror of artist portal
       const activityItems: ActivityItem[] = [];
 
       const myUserId = profile.user_id || "";
@@ -155,17 +155,17 @@ export default function VenueDashboardPage() {
         if (!time) continue;
         const artistName = formatName(p.artist_slug || "");
         const workTitle = p.work_title || "Artwork";
-        // Only surface placement activity that requires attention — skip
+        // Only surface placement activity that requires attention, skip
         // pending requests the venue sent (they already know) and
         // accepted/declined responses to inbound requests the venue
         // didn't send.
         const iAmRequester = p.requester_user_id && p.requester_user_id === myUserId;
         if (p.status === "pending" && !iAmRequester) {
-          activityItems.push({ id: "p-" + p.id, text: `Placement request: ${workTitle}${artistName ? ` — ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: `/placements/${encodeURIComponent(p.id as string)}` });
+          activityItems.push({ id: "p-" + p.id, text: `Placement request: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: `/placements/${encodeURIComponent(p.id as string)}` });
         } else if (p.status === "active" && iAmRequester) {
-          activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${workTitle}${artistName ? ` — ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_accepted", link: `/placements/${encodeURIComponent(p.id as string)}` });
+          activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_accepted", link: `/placements/${encodeURIComponent(p.id as string)}` });
         } else if (p.status === "declined" && iAmRequester) {
-          activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${workTitle}${artistName ? ` — ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_declined", link: `/placements/${encodeURIComponent(p.id as string)}` });
+          activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_declined", link: `/placements/${encodeURIComponent(p.id as string)}` });
         }
       }
 
@@ -174,7 +174,7 @@ export default function VenueDashboardPage() {
         const artistName = formatName(o.artist_slug || "");
         activityItems.push({
           id: "o-" + (o.id || o.created_at),
-          text: `Order placed${o.total ? ` for \u00a3${o.total}` : ""}${artistName ? ` — ${artistName}` : ""}`,
+          text: `Order placed${o.total ? ` for \u00a3${o.total}` : ""}${artistName ? `, ${artistName}` : ""}`,
           time: formatRelativeTime(o.created_at),
           sortTime: new Date(o.created_at).getTime(),
           type: "order",
@@ -213,10 +213,10 @@ export default function VenueDashboardPage() {
       </div>
 
       {/* Dashboard order:
-          1. Getting Started (onboarding) — surfaces setup tasks first so
+          1. Getting Started (onboarding), surfaces setup tasks first so
              a new venue lands on the steps to complete.
-          2. Stats row — at-a-glance numbers for returning users.
-          3. Placement Action Items — outstanding to-dos against live
+          2. Stats row, at-a-glance numbers for returning users.
+          3. Placement Action Items, outstanding to-dos against live
              placements. Renders nothing when the queue is empty. */}
 
       {/* Onboarding checklist (Getting Started) */}
@@ -342,14 +342,14 @@ export default function VenueDashboardPage() {
       {/* Placement Action Items */}
       <PlacementActionItems userId={user?.id} role="venue" />
 
-      {/* Wallplace Curated promo — a tasteful, single-row card giving
+      {/* Wallplace Curated promo, a tasteful, single-row card giving
           the curated service a consistent presence in the venue dashboard
           without becoming noise. */}
       <div className="mb-8 bg-gradient-to-br from-accent/10 via-accent/5 to-transparent border border-accent/30 rounded-sm p-5 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-1.5">Wallplace Curated</p>
           <p className="text-sm font-medium text-foreground">Want a shortlist picked for you?</p>
-          <p className="text-xs text-muted mt-0.5">Our curators hand-pick works that fit your space — from &pound;49.</p>
+          <p className="text-xs text-muted mt-0.5">Our curators hand-pick works that fit your space, from &pound;49.</p>
         </div>
         <Link
           href="/curated"

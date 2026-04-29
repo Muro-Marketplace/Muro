@@ -13,7 +13,7 @@ interface Props {
   /** Auto-fill source: take the agreed terms from the parent placement so
    *  the user doesn't re-type revenue share, monthly fee, QR enabled, or
    *  record type. Each field only seeds when the record itself has no
-   *  value for it — manual edits always win. */
+   *  value for it, manual edits always win. */
   placementSeed?: {
     arrangementType?: string;
     revenueSharePercent?: number | null;
@@ -80,13 +80,13 @@ function VersionLog({ versions, approvalsPending }: { versions: RecordVersion[];
             <p className="text-[11px] text-muted">
               {latestWhen}
               {latestFields.length > 0 && (
-                <> — {latestFields.slice(0, 4).map(fieldLabel).join(", ")}{latestFields.length > 4 ? ` + ${latestFields.length - 4} more` : ""}</>
+                <>, {latestFields.slice(0, 4).map(fieldLabel).join(", ")}{latestFields.length > 4 ? ` + ${latestFields.length - 4} more` : ""}</>
               )}
             </p>
           )}
           {approvalsPending && latest && (
             <p className="text-[11px] text-amber-800 mt-1">
-              Approvals were cleared — both parties need to tick the record again.
+              Approvals were cleared, both parties need to tick the record again.
             </p>
           )}
         </div>
@@ -105,7 +105,7 @@ function VersionLog({ versions, approvalsPending }: { versions: RecordVersion[];
                 {v.changed_by_role === "artist" ? "Artist" : v.changed_by_role === "venue" ? "Venue" : "Someone"}
               </span>
               {v.changed_fields && v.changed_fields.length > 0 && (
-                <span className="text-muted ml-1">— {v.changed_fields.map(fieldLabel).join(", ")}</span>
+                <span className="text-muted ml-1">– {v.changed_fields.map(fieldLabel).join(", ")}</span>
               )}
             </li>
           ))}
@@ -180,7 +180,7 @@ function numOrNull(s: string): number | null {
 export default function PlacementLoanForm({ placementId, record, viewerRole, placementSeed, versions, onSaved }: Props) {
   // Map the placement's arrangement_type to the loan record's recordType.
   // Both "free_loan" (paid loan with monthly fee) and "purchase" map to
-  // "loan" — the artwork is going on the wall, money flows differently.
+  // "loan", the artwork is going on the wall, money flows differently.
   // "revenue_share" maps to "consignment" since the artist still owns
   // it and gets a share of QR sales.
   const seedRecordType = placementSeed?.arrangementType === "revenue_share" ? "consignment" : "loan";
@@ -237,7 +237,7 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
     setSaving(true);
     setError(null);
     setFieldErrors({});
-    // Light client-side check on the contract URL — the API now accepts
+    // Light client-side check on the contract URL, the API now accepts
     // any string so we keep the friendly "looks like a URL?" check here.
     if (form.contractAttachmentUrl && !/^https?:\/\//i.test(form.contractAttachmentUrl.trim())) {
       setFieldErrors({ contractAttachmentUrl: "Add http:// or https:// at the start of the link." });
@@ -348,7 +348,7 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
     <div className="bg-surface border border-border rounded-sm p-4 sm:p-6 space-y-6">
       {/* Audit trail: the most recent edit banner + a click-to-expand
           version log. This is what gives each party confidence the
-          other isn't editing behind their back — every save is here. */}
+          other isn't editing behind their back, every save is here. */}
       {(latestVersion || approvalsPending) && (
         <VersionLog versions={versions || []} approvalsPending={approvalsPending} />
       )}
@@ -382,7 +382,7 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
         </div>
       </div>
 
-      {/* Bilateral approval — both parties have to sign off. Each row
+      {/* Bilateral approval, both parties have to sign off. Each row
           is editable only for the matching role; the other party sees a
           read-only status. A fully approved record shows a green summary
           line; an unapproved record calls out who still owes a tick. */}
@@ -572,7 +572,7 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
               // signed URL for the new ones. Legacy URLs are returned as-is.
               const ref = form.contractAttachmentUrl.trim();
               if (/^https?:\/\//.test(ref) && !ref.startsWith("contract:")) {
-                // A pasted external link (Drive, Dropbox, etc.) — open directly.
+                // A pasted external link (Drive, Dropbox, etc.), open directly.
                 window.open(ref, "_blank", "noopener,noreferrer");
                 return;
               }

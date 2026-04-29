@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /artist-portal/showroom — list of the artist's saved walls.
+ * /artist-portal/showroom, list of the artist's saved walls.
  *
  * The showroom is the artist-side mirror of /venue-portal/walls, but framed
  * as a sales tool: rather than visualising "what artwork goes on my wall",
@@ -13,7 +13,7 @@
  *   - Every artist tier can save at least one wall (saved_walls cap from
  *     tier-limits). If the cap is 0 we still render the page so they can
  *     see the upsell.
- *   - artist_pro additionally has `can_publish_showroom` — that flag is
+ *   - artist_pro additionally has `can_publish_showroom`, that flag is
  *     consumed elsewhere (publish-public-showroom is a future feature);
  *     this page is open to all artist tiers.
  */
@@ -48,7 +48,7 @@ export default function ArtistShowroomPage() {
       })
       .then((data: { walls?: Wall[] }) => {
         if (cancelled) return;
-        // Filter to artist-owned walls only — the API returns everything
+        // Filter to artist-owned walls only, the API returns everything
         // owned by the user, but a person could in theory have walls
         // from when they were on the venue side.
         const onlyArtist = (data.walls ?? []).filter(
@@ -90,7 +90,7 @@ export default function ArtistShowroomPage() {
           </h1>
           <p className="text-sm text-muted max-w-2xl">
             Compose room scenes that show buyers how your work hangs at
-            scale — perfect for posting on Instagram or attaching as
+            scale, perfect for posting on Instagram or attaching as
             mockups to specific artworks.
           </p>
         </div>
@@ -133,7 +133,7 @@ function WallCard({ wall }: { wall: Wall }) {
   const cardWidth = cardHeight * aspect;
   // Uploaded walls: show the actual photo as the thumbnail (signed
   // URL minted server-side by GET /api/walls). Preset walls: show
-  // the colour swatch — there's no image asset for a preset, the
+  // the colour swatch, there's no image asset for a preset, the
   // wall is just a colour.
   const photoUrl = wall.kind === "uploaded" ? wall.source_image_url : null;
 

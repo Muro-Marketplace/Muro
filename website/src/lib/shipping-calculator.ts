@@ -1,7 +1,7 @@
 /**
  * UK shipping calculator for artwork.
  *
- * Inputs: the listed dimensions string (freeform — "A3", "50 x 70 cm",
+ * Inputs: the listed dimensions string (freeform, "A3", "50 x 70 cm",
  * "70x100cm", etc.), plus whether the piece is framed. We don't have
  * per-work weight on file today, so weight is derived from size + framed
  * flag using sensible density assumptions (canvas ~0.6 kg/m² unframed,
@@ -9,7 +9,7 @@
  *
  * Pricing is modelled on Royal Mail + Parcelforce tracked rates with
  * a small margin for packaging materials (cardboard, corner protectors,
- * tissue), recalibrated 2026-04 against current courier prices — the
+ * tissue), recalibrated 2026-04 against current courier prices, the
  * old table was running ~25-30% above real costs and pricing artists
  * out of orders unnecessarily:
  *
@@ -22,7 +22,7 @@
  *   Oversized | > 120cm      | > 15kg | £35.00      | £95
  *
  * £100+ orders automatically add the signature-on-delivery uplift (£2)
- * — this mirrors the terms policy.
+ *, this mirrors the terms policy.
  */
 
 export type ShippingTier = "flat" | "small" | "medium" | "large" | "oversized";
@@ -34,7 +34,7 @@ export interface ShippingEstimate {
   baseCost: number;
   /** Signature-on-delivery uplift, if any. */
   signatureUplift: number;
-  /** Computed tier — useful for UI copy. */
+  /** Computed tier, useful for UI copy. */
   tier: ShippingTier;
   /** Human-readable delivery window. */
   estimatedDays: string;
@@ -52,7 +52,7 @@ export interface ShippingEstimate {
  * Parse a freeform dimensions string into cm × cm. Handles:
  *   "A4" / "A3" / "A2" / "A1" / "A0"
  *   "50 x 70 cm" / "50x70cm" / "50 × 70 cm"
- *   "3 x 20x30 cm"  (multi-piece — largest dimension wins)
+ *   "3 x 20x30 cm"  (multi-piece, largest dimension wins)
  *   "100 x 120 cm"
  * Returns null when unparseable.
  */
@@ -70,7 +70,7 @@ export function parseDimensions(raw: string | null | undefined): { widthCm: numb
   };
   if (A_SIZES[s]) return A_SIZES[s];
 
-  // A-size anywhere in the string wins — labels like "8×10\" (A4)" should
+  // A-size anywhere in the string wins, labels like "8×10\" (A4)" should
   // resolve to A4, not the inch numbers.
   const aMatch = s.match(/\ba([0-5])\b/);
   if (aMatch) {
@@ -87,7 +87,7 @@ export function parseDimensions(raw: string | null | undefined): { widthCm: numb
   const hasInch = /["″]|\b(in|inch|inches)\b/.test(s);
 
   // If the string mixes units (e.g. "8×10\" (A4)" or "20×28\" (50×70cm)"),
-  // the authoritative cm block wins — extract numbers from the cm half.
+  // the authoritative cm block wins, extract numbers from the cm half.
   if (hasCm) {
     const cmChunk = s.split(/cm/)[0] + "cm";
     const cmNums = (cmChunk.match(/\d+(?:\.\d+)?/g) || []).map(parseFloat).filter((n) => n > 0);
@@ -191,13 +191,13 @@ interface EstimateInput {
   priceGbp?: number;
   region?: "uk" | "international";
   /** Medium string from the work ("Oil on canvas", "Giclée print", …).
-      Drives weight estimation — canvas ≠ paper ≠ ceramic. */
+      Drives weight estimation, canvas ≠ paper ≠ ceramic. */
   medium?: string | null;
 }
 
 /**
  * Calculate a shipping estimate. Returns null when dimensions are
- * unparseable — caller can fall back to "shipping calculated at checkout"
+ * unparseable, caller can fall back to "shipping calculated at checkout"
  * or an artist-set manual price.
  */
 export function estimateShipping(input: EstimateInput): ShippingEstimate | null {
@@ -266,6 +266,6 @@ export function tierLabel(tier: ShippingTier): string {
     small: "Small parcel",
     medium: "Medium parcel",
     large: "Large parcel",
-    oversized: "Oversized — specialist courier",
+    oversized: "Oversized, specialist courier",
   }[tier];
 }

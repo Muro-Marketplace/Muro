@@ -39,7 +39,7 @@ const SIZE_OPTIONS = [
 ];
 
 // Small stand-in card that mirrors the public venue preview on /venues/[slug]
-// — every field flips in real time as the user edits. Goal: make the
+//, every field flips in real time as the user edits. Goal: make the
 // editor feel like you're building the public page, not filling out a
 // form in isolation.
 function LivePreview({
@@ -222,14 +222,14 @@ export default function VenueProfilePage() {
   const [detailWallSpace, setDetailWallSpace] = useState("");
   const [detailFootfall, setDetailFootfall] = useState("");
 
-  // Display needs — driven by the saved venue record. No fake placeholder
+  // Display needs, driven by the saved venue record. No fake placeholder
   // values; new venues see "Not set" until they fill these in themselves.
   const [displayWallSpace, setDisplayWallSpace] = useState("");
   const [displayLighting, setDisplayLighting] = useState("");
   const [displayInstall, setDisplayInstall] = useState("");
   const [displayRotation, setDisplayRotation] = useState("");
 
-  // Venue photos — gallery of the actual space.
+  // Venue photos, gallery of the actual space.
   const [venueImages, setVenueImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   // Lights up the venue-photo gallery when files are being dragged
@@ -443,7 +443,7 @@ export default function VenueProfilePage() {
           </div>
         </div>
 
-        {/* Venue Photos — gallery of the actual space so artists and the
+        {/* Venue Photos, gallery of the actual space so artists and the
             Wallplace Curated team can see what they'll be hanging in. */}
         <div className="bg-white border border-border rounded-sm">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -463,7 +463,7 @@ export default function VenueProfilePage() {
               />
             </label>
           </div>
-          {/* Drag-drop zone wrapping the gallery — drop one or more
+          {/* Drag-drop zone wrapping the gallery, drop one or more
               photos anywhere inside the panel to upload (subject to the
               10-photo cap). */}
           <div
@@ -657,7 +657,7 @@ export default function VenueProfilePage() {
           </div>
         </div>
 
-        {/* Bottom Save — mirrors the top Save action so users on long
+        {/* Bottom Save, mirrors the top Save action so users on long
             forms (lots of style tags + arrangement details + display
             specs) don't have to scroll back up to commit changes.
             Same handler as the top button. saveError lives in the
@@ -677,7 +677,7 @@ export default function VenueProfilePage() {
         </div>
         </div>
 
-        {/* Live preview — mirrors the public /venues/[slug] card so the
+        {/* Live preview, mirrors the public /venues/[slug] card so the
             venue can see exactly how artists will see them as they edit.
             Sticky on desktop, in-line on mobile. */}
         <aside className="lg:sticky lg:top-24 lg:self-start">
@@ -711,7 +711,7 @@ export default function VenueProfilePage() {
             />
           </div>
           <p className="mt-3 text-[11px] text-muted leading-relaxed">
-            This is exactly what artists see on Spaces and on your public venue page. Changes show here live — don&rsquo;t forget to hit <strong className="text-foreground">Save</strong>.
+            This is exactly what artists see on Spaces and on your public venue page. Changes show here live, don&rsquo;t forget to hit <strong className="text-foreground">Save</strong>.
           </p>
         </aside>
       </div>

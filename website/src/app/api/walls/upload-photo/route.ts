@@ -1,7 +1,7 @@
 /**
  * /api/walls/upload-photo
  *
- * POST — accept an image file (multipart/form-data), validate, store
+ * POST, accept an image file (multipart/form-data), validate, store
  * it in the private `wall-photos` Supabase Storage bucket, and return
  * the storage path + a short-lived signed URL the client can preview.
  *
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       "[upload-photo] createSignedUrl failed:",
       signErr?.message,
     );
-    // Don't fail the whole request — caller can still create the wall
+    // Don't fail the whole request, caller can still create the wall
     // and re-fetch the URL on the editor page.
     return NextResponse.json({ path, signedUrl: null }, { status: 200 });
   }

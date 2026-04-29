@@ -1,4 +1,4 @@
-// Vercel Cron — daily 10:00 UTC. Finds placements whose `end_date` is ~14 days
+// Vercel Cron, daily 10:00 UTC. Finds placements whose `end_date` is ~14 days
 // out and emails both parties once.
 
 import { NextResponse } from "next/server";
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const lower = new Date(nowMs + 13.5 * 24 * 60 * 60 * 1000).toISOString();
   const upper = new Date(nowMs + 14.5 * 24 * 60 * 60 * 1000).toISOString();
 
-  // `end_date` is the column we document publicly — map from whichever DB
+  // `end_date` is the column we document publicly, map from whichever DB
   // column holds it. Common options: `end_date`, `ends_at`, `collected_at`.
   // Adjust the column name if your schema differs.
   const { data: placements } = await db

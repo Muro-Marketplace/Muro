@@ -20,7 +20,7 @@
  *     between /apply and /signup/artist.
  *   - Signed in but the wrong user_type (a customer signed in to a
  *     customer account, then opened /apply): show a small notice
- *     with a sign-out + switch CTA. Don't auto-redirect — they may
+ *     with a sign-out + switch CTA. Don't auto-redirect, they may
  *     legitimately want to read the page first.
  *   - Signed in as artist (or no user_type metadata, which is the
  *     case for legacy accounts): render the form.
@@ -61,7 +61,7 @@ export default function ApplicationGate() {
     );
   }
 
-  // Known wrong user type — the artist application doesn't make
+  // Known wrong user type, the artist application doesn't make
   // sense for a venue or customer account. Don't auto-redirect; let
   // them choose to sign out + come back, since some users juggle
   // multiple accounts.

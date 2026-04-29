@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 
-// GET /api/placements/[id] — fetch a single placement with linked record, photos,
+// GET /api/placements/[id], fetch a single placement with linked record, photos,
 // venue + artist profile info. RLS-gated: only the artist or venue party can read.
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedUser(request);
@@ -63,7 +63,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       : Promise.resolve({ data: null }),
   ]);
 
-  // Resolve who currently "owns" the request — i.e. who made the latest
+  // Resolve who currently "owns" the request, i.e. who made the latest
   // offer and is therefore awaiting a response. Precedence:
   //   1. Latest counter message sender (most recent acts).
   //   2. The placements.requester_user_id column.
@@ -72,7 +72,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   //      writing requester_user_id, or because the column doesn't exist
   //      in the env). Without this fallback, a brand-new pending row
   //      with NULL requester_user_id reads as `null !== userId` true
-  //      for everyone — and the original sender sees their own
+  //      for everyone, and the original sender sees their own
   //      Accept/Decline buttons. That was the "first request you can
   //      accept your own" bug.
   let effectiveRequesterId: string | null = placement.requester_user_id || null;
@@ -115,7 +115,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       .order("created_at", { ascending: false })
       .limit(30);
     recordVersions = (versionRows as Array<Record<string, unknown>>) || [];
-  } catch { /* table doesn't exist yet — ignore */ }
+  } catch { /* table doesn't exist yet, ignore */ }
 
   return NextResponse.json({
     placement: {

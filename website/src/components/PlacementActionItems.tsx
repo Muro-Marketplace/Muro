@@ -37,7 +37,7 @@ function nameFrom(slug: string | undefined): string {
 }
 
 /**
- * Placement Action Items — unified next-action list for both venues and
+ * Placement Action Items, unified next-action list for both venues and
  * artists. Shows what needs a response, a scheduled date, an install
  * confirmation, or a collection. The component fetches /api/placements
  * itself and filters against the given user role so it can be dropped
@@ -56,7 +56,7 @@ export default function PlacementActionItems({
   role: "artist" | "venue";
   heading?: string;
   /** How many items to show in the collapsed state. "View all" toggles
-      to the full list — there's no hard cap on how many the component
+      to the full list, there's no hard cap on how many the component
       will surface in total. */
   maxItems?: number;
 }) {
@@ -76,7 +76,7 @@ export default function PlacementActionItems({
           const href = `/placements/${encodeURIComponent(p.id)}`;
           const status = (p.status || "").toLowerCase();
 
-          // Pending — only surface if the current viewer can actually
+          // Pending, only surface if the current viewer can actually
           // respond. canRespond() checks requester_user_id and falls back
           // to the legacy venue-creates-artist-accepts model for rows
           // created before migration 008, so users don't see "Respond"
@@ -124,19 +124,19 @@ export default function PlacementActionItems({
               });
             }
             // If all four timestamps are set, placement is in "live" steady
-            // state — no action needed until collection.
+            // state, no action needed until collection.
           }
         }
 
-        // Keep the full list in state — the render phase decides how
+        // Keep the full list in state, the render phase decides how
         // many to show based on the expanded toggle.
         setItems(out);
       })
       .catch(() => setItems([]));
   }, [userId, role]);
 
-  if (items === null) return null; // loading — don't flicker
-  if (items.length === 0) return null; // nothing to do — quiet dashboard
+  if (items === null) return null; // loading, don't flicker
+  if (items.length === 0) return null; // nothing to do, quiet dashboard
 
   const visibleItems = expanded ? items : items.slice(0, maxItems);
   const hiddenCount = items.length - visibleItems.length;

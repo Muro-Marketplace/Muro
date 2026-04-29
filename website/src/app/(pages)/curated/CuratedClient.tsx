@@ -54,7 +54,7 @@ const ONE_OFF_TIERS: Tier[] = [
       "Full curation plan tailored to your brand and space",
       "Artist shortlist + commissioned work if needed",
       "Rotation schedule and installation guidance",
-      "Quote based on scope — just tell us what you need",
+      "Quote based on scope, just tell us what you need",
     ],
     cta: "Request a quote",
     group: "one_off",
@@ -73,7 +73,7 @@ const MANAGED_TIERS: Tier[] = [
       "Priority support and swap coordination",
       "Cancel anytime",
     ],
-    cta: "Start monthly — £79.99/mo",
+    cta: "Start monthly, £79.99/mo",
     group: "managed",
   },
   {
@@ -87,7 +87,7 @@ const MANAGED_TIERS: Tier[] = [
       "Seasonal mood guidance included",
       "Cancel anytime",
     ],
-    cta: "Start quarterly — £199.99/qtr",
+    cta: "Start quarterly, £199.99/qtr",
     group: "managed",
   },
 ];
@@ -128,7 +128,7 @@ export default function CuratedClient() {
     audienceNotes: "",
     moodNotes: "",
     referencesNotes: "",
-    // Placement method interest — maps to the three core Wallplace commercial
+    // Placement method interest, maps to the three core Wallplace commercial
     // models. Multi-select because venues commonly consider two.
     wantsQrLoan: false,
     wantsPaidLoan: false,
@@ -136,7 +136,7 @@ export default function CuratedClient() {
   });
 
   // Budget is only meaningful for arrangements where the venue actually
-  // spends money — paid loan (monthly fee) or direct purchase (outright
+  // spends money, paid loan (monthly fee) or direct purchase (outright
   // buy). For a QR-enabled loan the artwork is free on the wall and the
   // venue only pays if a QR scan results in a sale.
   const budgetRelevant = form.wantsPaidLoan || form.wantsDirectPurchase;
@@ -216,7 +216,7 @@ export default function CuratedClient() {
 
   return (
     <div>
-      {/* Hero — same banner image as the homepage */}
+      {/* Hero, same banner image as the homepage */}
       <section className="relative -mt-14 lg:-mt-16 min-h-[70vh] lg:min-h-[80vh] flex items-center overflow-hidden bg-[#1A1A1A]">
         <div className="absolute inset-0 z-0">
           <Image
@@ -237,7 +237,7 @@ export default function CuratedClient() {
             Art on your walls, chosen by experts.
           </h1>
           <p className="text-lg text-white/75 max-w-2xl mx-auto leading-relaxed">
-            Tell us about your space — the style, the audience, the mood you want. Our curators hand-pick a shortlist of works from Wallplace artists that fit. You decide what goes on the wall.
+            Tell us about your space, the style, the audience, the mood you want. Our curators hand-pick a shortlist of works from Wallplace artists that fit. You decide what goes on the wall.
           </p>
         </div>
       </section>
@@ -245,12 +245,12 @@ export default function CuratedClient() {
       {cancelled && (
         <div className="max-w-[1000px] mx-auto px-6 mb-8">
           <div className="bg-amber-50 border border-amber-200 rounded-sm px-4 py-3 text-sm text-amber-900">
-            Checkout cancelled. Nothing has been charged — pick a tier below to try again.
+            Checkout cancelled. Nothing has been charged, pick a tier below to try again.
           </div>
         </div>
       )}
 
-      {/* One-off tiers — items-start keeps each card at its natural height
+      {/* One-off tiers, items-start keeps each card at its natural height
           with content aligned to the top, rather than stretching shorter
           cards and vertically centring the copy. */}
       <section className="pt-20 lg:pt-28 pb-10">
@@ -289,7 +289,7 @@ export default function CuratedClient() {
             <h2 className="font-serif text-2xl text-foreground mb-1">Tell us about your space</h2>
             <p className="text-sm text-muted mb-6">
               {!selectedTier
-                ? "Pick a tier above first — then fill in the brief here."
+                ? "Pick a tier above first, then fill in the brief here."
                 : selectedTier === "bespoke"
                   ? "We'll review your brief and email a tailored quote within 2 business days."
                   : selectedTier === "managed_monthly" || selectedTier === "managed_quarterly"
@@ -387,7 +387,7 @@ export default function CuratedClient() {
 
               <div>
                 <label className={labelCls}>Audience / guests</label>
-                <textarea rows={2} value={form.audienceNotes} onChange={(e) => update("audienceNotes", e.target.value)} className={inputCls} placeholder="Who's in your space — their taste, demographic, time of day" />
+                <textarea rows={2} value={form.audienceNotes} onChange={(e) => update("audienceNotes", e.target.value)} className={inputCls} placeholder="Who's in your space, their taste, demographic, time of day" />
               </div>
 
               <div>
@@ -407,7 +407,7 @@ export default function CuratedClient() {
                   {!selectedTier
                     ? "Select a tier above to continue."
                     : selectedTier === "bespoke"
-                      ? "No charge yet — we'll email a tailored quote."
+                      ? "No charge yet, we'll email a tailored quote."
                       : selectedTier === "managed_monthly" || selectedTier === "managed_quarterly"
                         ? `You'll be sent to secure Stripe checkout. Subscription: ${ALL_TIERS.find((t) => t.key === selectedTier)?.priceLabel}. Cancel anytime.`
                         : `You'll be sent to secure Stripe checkout to pay ${ALL_TIERS.find((t) => t.key === selectedTier)?.priceLabel}.`}
@@ -424,9 +424,9 @@ export default function CuratedClient() {
                       : selectedTier === "bespoke"
                         ? "Request quote"
                         : selectedTier === "managed_monthly"
-                          ? "Subscribe — £79.99/mo"
+                          ? "Subscribe, £79.99/mo"
                           : selectedTier === "managed_quarterly"
-                            ? "Subscribe — £199.99/qtr"
+                            ? "Subscribe, £199.99/qtr"
                             : `Pay ${ALL_TIERS.find((t) => t.key === selectedTier)?.priceLabel}`}
                 </button>
               </div>

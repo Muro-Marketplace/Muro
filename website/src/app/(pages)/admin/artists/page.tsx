@@ -59,8 +59,8 @@ export default function AdminArtistsPage() {
               {artists.map((artist) => (
                 <tr key={artist.id} className="border-b border-border last:border-b-0 hover:bg-surface/30">
                   <td className="py-3 px-4 font-medium text-foreground">{artist.name}</td>
-                  <td className="py-3 px-4 text-muted hidden sm:table-cell">{artist.primary_medium || "—"}</td>
-                  <td className="py-3 px-4 text-muted hidden md:table-cell">{artist.location || "—"}</td>
+                  <td className="py-3 px-4 text-muted hidden sm:table-cell">{artist.primary_medium || "–"}</td>
+                  <td className="py-3 px-4 text-muted hidden md:table-cell">{artist.location || "–"}</td>
                   <td className="py-3 px-4 text-muted hidden lg:table-cell">
                     {new Date(artist.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                   </td>

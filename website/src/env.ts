@@ -12,7 +12,7 @@
  *
  * Called-at-use pattern instead of eagerly parsing at module load: email
  * sending is optional, Stripe price IDs might be unset in dev, etc. The
- * server schema only throws when a REQUIRED var is missing — each callsite
+ * server schema only throws when a REQUIRED var is missing, each callsite
  * gets a clear error rather than a mysterious crash.
  */
 
@@ -21,7 +21,7 @@ import { z } from "zod";
 // ─── Schemas ─────────────────────────────────────────────────────────
 
 const serverSchema = z.object({
-  // Supabase — required everywhere we touch the DB
+  // Supabase, required everywhere we touch the DB
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(20),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
@@ -29,17 +29,17 @@ const serverSchema = z.object({
   // Site URL used in emails, redirects, etc.
   NEXT_PUBLIC_SITE_URL: z.string().url().default("https://wallplace.co.uk"),
 
-  // Admin access — fails closed if unset in admin-auth.ts, but we declare
+  // Admin access, fails closed if unset in admin-auth.ts, but we declare
   // it optional here so ordinary routes don't trip. Either ADMIN_EMAILS or
-  // ADMIN_EMAIL is accepted — the admin-auth helper reads both.
+  // ADMIN_EMAIL is accepted, the admin-auth helper reads both.
   ADMIN_EMAILS: z.string().optional(),
   ADMIN_EMAIL: z.string().optional(),
 
-  // Cron — required for scheduled routes + payout processing. Checked at
+  // Cron, required for scheduled routes + payout processing. Checked at
   // the individual route level with a clear 503 if missing.
   CRON_SECRET: z.string().min(16).optional(),
 
-  // Stripe — required for checkout + webhooks. Only validated when actually used.
+  // Stripe, required for checkout + webhooks. Only validated when actually used.
   STRIPE_SECRET_KEY: z.string().startsWith("sk_").optional(),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional(),
   STRIPE_PRICE_CORE: z.string().optional(),
@@ -49,7 +49,7 @@ const serverSchema = z.object({
   STRIPE_PRICE_PRO: z.string().optional(),
   STRIPE_PRICE_PRO_ANNUAL: z.string().optional(),
 
-  // Resend + email — optional. sendEmail() short-circuits if missing.
+  // Resend + email, optional. sendEmail() short-circuits if missing.
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM_TX: z.string().optional(),
   EMAIL_FROM_NOTIFY: z.string().optional(),
@@ -77,7 +77,7 @@ let _server: z.infer<typeof serverSchema> | null = null;
  * Server-side env accessor. Call inside API routes / server components /
  * server actions. Throws a clear error listing every missing required var.
  *
- * Safe to call many times — result is cached after first parse.
+ * Safe to call many times, result is cached after first parse.
  */
 export function serverEnv(): z.infer<typeof serverSchema> {
   if (_server) return _server;
@@ -95,7 +95,7 @@ export function serverEnv(): z.infer<typeof serverSchema> {
 }
 
 /**
- * Public env accessor. Only exposes NEXT_PUBLIC_* keys — safe to call from
+ * Public env accessor. Only exposes NEXT_PUBLIC_* keys, safe to call from
  * client components.
  */
 export function publicEnv(): z.infer<typeof publicSchema> {

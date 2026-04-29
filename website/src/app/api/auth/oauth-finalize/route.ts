@@ -5,14 +5,14 @@
 //
 //   1. Stamp `user_metadata.user_type` so the rest of the app can tell which
 //      portal the user belongs in. The role is taken from the URL on the
-//      signup page — we trust it the first time only. If the user already
+//      signup page, we trust it the first time only. If the user already
 //      has a role set, we never overwrite it (so a returning artist who
 //      signs in via the customer flow doesn't get demoted).
 //
 //   2. For new artists, create an `artist_profiles` stub with a unique slug
 //      and `review_status = "pending"`. Without this, an artist who signs
 //      up via Google but bounces from /apply would have an auth user with
-//      no profile — invisible to the rest of the app.
+//      no profile, invisible to the rest of the app.
 //
 // Customers don't need a profile row.
 // Venues don't sign up via this OAuth flow yet (they use /register-venue).
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // Step 3: fire welcome email (idempotent — safe to retry).
+  // Step 3: fire welcome email (idempotent, safe to retry).
   // We do this here rather than the client because we need server-side
   // access to artist/venue profile state to compute the checklist, and
   // we already have an authenticated admin client in scope.

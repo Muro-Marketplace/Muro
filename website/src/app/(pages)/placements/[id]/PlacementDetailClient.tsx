@@ -174,7 +174,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
   }, [user, authLoading, load, router]);
 
   // Keep the detail page in sync if the user accepts / counters / advances
-  // elsewhere (Messages, the placements list, etc.) — but do the refresh
+  // elsewhere (Messages, the placements list, etc.), but do the refresh
   // SILENTLY so switching to another tab and back doesn't blank the page
   // out with a loading state (which used to read as a full reload). Scroll
   // position and expanded sections stay put.
@@ -369,7 +369,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
     if (record) return;
     setCreatingRecord(true);
     try {
-      // F41 — auto-populate with details already agreed on the placement.
+      // F41, auto-populate with details already agreed on the placement.
       const body: Record<string, unknown> = {
         recordType: "loan",
         qrEnabled: placement.qr_enabled ?? true,
@@ -444,7 +444,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
             }`}>
               {placement.status.charAt(0).toUpperCase() + placement.status.slice(1)}
             </span>
-            {/* QR label — deep-link into the Labels page with this
+            {/* QR label, deep-link into the Labels page with this
                 placement's work (and venue, on the artist side) already
                 preselected. Visible for both portals so artists and
                 venues land on the full designer / printer, not just a
@@ -473,7 +473,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
         </div>
       </div>
 
-      {/* Progress — single combined block. Shows the 6-step lifecycle and
+      {/* Progress, single combined block. Shows the 6-step lifecycle and
           exposes the "Mark <next stage>" action directly below the bar
           when the viewer is allowed to advance it. Previously this page
           had a duplicate "Lifecycle actions" box; merging them means
@@ -485,7 +485,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
             <span className="text-[11px] text-muted">Awaiting response</span>
           )}
           {placement.status === "declined" && (
-            <span className="text-[11px] text-red-600">Declined — counter with new terms to keep negotiating</span>
+            <span className="text-[11px] text-red-600">Declined, counter with new terms to keep negotiating</span>
           )}
         </div>
         {(() => {
@@ -499,7 +499,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
           ] as const;
           const reachedIdx = lifecycle.reduce((acc, s, i) => (s.reached ? i : acc), -1);
           const isDeclined = placement.status === "declined";
-          // Next advanceable stage — "requested" and "accepted" aren't
+          // Next advanceable stage, "requested" and "accepted" aren't
           // manually advanced (request is implicit; accepted fires off
           // the Accept button). Everything else can be marked here
           // once the placement is active.
@@ -545,7 +545,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                   );
                 })}
               </ol>
-              {/* Advance + Undo actions — kept side-by-side so the user
+              {/* Advance + Undo actions, kept side-by-side so the user
                   has both the "what's next" and "I overshot" controls
                   in one place. Undo targets the most recent reached
                   advanceable stage; if there isn't one, the button
@@ -617,7 +617,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                       </div>
                     )}
 
-                    {/* Picker — same shape as PlacementStepper so the
+                    {/* Picker, same shape as PlacementStepper so the
                         full placement page and the list rows feel
                         consistent. */}
                     {schedulePickerOpen && (
@@ -660,13 +660,13 @@ export default function PlacementDetailClient({ placementId }: Props) {
         })()}
       </div>
 
-      {/* Accept / Counter / Decline — shown on the detail page for any
+      {/* Accept / Counter / Decline, shown on the detail page for any
           pending placement the viewer can respond to. Mirrors the
           controls on the list rows so the venue/artist can act from the
           full page without going back.
           Safety rule: only show when we KNOW the requester and it is
           someone other than the viewer. If requester_user_id is unknown
-          we keep the controls hidden — better to ask the user to refresh
+          we keep the controls hidden, better to ask the user to refresh
           than risk letting the original sender accept their own request. */}
       {placement.status === "pending" && viewerRole && !!placement.requester_user_id && placement.requester_user_id !== user?.id && (
         <div className="bg-surface border border-border rounded-sm p-4 sm:p-5 mb-6">
@@ -704,13 +704,13 @@ export default function PlacementDetailClient({ placementId }: Props) {
           </span>
           <p className="text-xs text-muted">
             {placement.requester_user_id === user?.id
-              ? "You sent this request — the other party will accept, counter, or decline."
+              ? "You sent this request, the other party will accept, counter, or decline."
               : "Waiting on the other party. You can't act on this until they respond."}
           </p>
         </div>
       )}
 
-      {/* Decline state — instead of dead-ending the deal, give the
+      {/* Decline state, instead of dead-ending the deal, give the
           original offerer a way back in. The decliner is the
           non-requester at decline time, so requester_user_id still
           points at whoever made the offer that was knocked back; that's
@@ -735,10 +735,10 @@ export default function PlacementDetailClient({ placementId }: Props) {
         </div>
       )}
 
-      {/* Lifecycle actions block removed — Progress block above now
+      {/* Lifecycle actions block removed, Progress block above now
           owns both the 6-step bar AND the Mark-next-stage button. */}
 
-      {/* Counter dialog on the detail page — used by the Respond panel
+      {/* Counter dialog on the detail page, used by the Respond panel
           above. Bound to this placement directly. */}
       {counterOpen && (
         <CounterPlacementDialog
@@ -753,7 +753,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
           onSuccess={(result) => {
             // Optimistic update so the terms + role flip show instantly,
             // even before the follow-up load() resolves. Counter on a
-            // declined row reopens it back to pending — surface that too.
+            // declined row reopens it back to pending, surface that too.
             setPlacement((prev) => prev ? {
               ...prev,
               monthly_fee_gbp: result.monthlyFeeGbp,
@@ -769,7 +769,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
         />
       )}
 
-      {/* Summary grid — the first box is the headline commercial term so it
+      {/* Summary grid, the first box is the headline commercial term so it
           reads clearly at a glance: revenue share %, monthly paid-loan fee,
           or purchase price. The other two boxes add supporting context. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
@@ -814,7 +814,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                       {isPaidLoan
                         ? (hasStored
                             ? "Venue pays artist to display the work"
-                            : "Parsed from request message — re-confirm with the other party before payout")
+                            : "Parsed from request message, re-confirm with the other party before payout")
                         : "No rental fee agreed"}
                     </p>
                   </>
@@ -892,7 +892,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
         </div>
       )}
 
-      {/* Negotiation log — every offer / counter / response that led
+      {/* Negotiation log, every offer / counter / response that led
           to the current terms. Only rendered when there's something to
           show. */}
       <PlacementNegotiationLog placementId={placementId} />
@@ -915,7 +915,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
         </div>
       )}
 
-      {/* Loan / consignment record — collapsible so it doesn't dominate
+      {/* Loan / consignment record, collapsible so it doesn't dominate
           the page. Defaults open if a record exists, closed if not.
           Pre-fills new records with the agreed terms from the placement
           itself (revenue share %, monthly fee, QR enabled, type) so the
@@ -1019,7 +1019,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                   sizes="300px"
                   draggable={false}
                 />
-                {/* Quick-view chip — visible on hover so the action is
+                {/* Quick-view chip, visible on hover so the action is
                     discoverable. The whole tile is clickable too. */}
                 <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                   <span className="text-[11px] font-medium text-white inline-flex items-center gap-1.5">
@@ -1052,7 +1052,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
       {/* Quick-view lightbox. Click outside or hit Esc to close.
           Image is `pointer-events-none` + draggable=false so a
           right-click "save as" or drag-to-desktop both fail
-          quietly. Realistic version of the anti-save story —
+          quietly. Realistic version of the anti-save story,
           determined users can still screenshot, but the casual
           "drag the image off the page" path is gone. */}
       {quickViewIdx !== null && photos[quickViewIdx] && (

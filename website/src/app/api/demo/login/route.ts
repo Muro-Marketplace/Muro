@@ -16,7 +16,7 @@
  *   We sign in with email + password against Supabase Auth, then set
  *   the resulting access/refresh tokens as `sb-*` cookies the client
  *   already reads via @supabase/ssr. No service-role token leaves the
- *   server — the only thing that crosses to the browser is the
+ *   server, the only thing that crosses to the browser is the
  *   demo user's own short-lived session JWT.
  *
  * Write protection:
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
 
   const creds = readCreds(role);
   if (!creds) {
-    // Demo account not configured yet — return a JSON 503 the /demo
+    // Demo account not configured yet, return a JSON 503 the /demo
     // page can soft-handle (fall back to /browse/<demo slug>).
     return NextResponse.json(
       {

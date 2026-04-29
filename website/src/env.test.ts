@@ -4,10 +4,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-describe("env — server", () => {
+describe("env, server", () => {
   beforeEach(() => {
     // Each test gets a fresh module so the internal `_server` cache starts
-    // empty — otherwise the first successful parse sticks and later tests
+    // empty, otherwise the first successful parse sticks and later tests
     // with different process.env shapes see stale values.
     vi.resetModules();
   });

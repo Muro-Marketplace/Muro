@@ -30,7 +30,7 @@ export interface DbVenueProfile {
   preferred_styles: string[];
   preferred_themes: string[];
   message_notifications_enabled?: boolean;
-  /** Display Needs — added in migration 028. All optional, nullable. */
+  /** Display Needs, added in migration 028. All optional, nullable. */
   display_wall_space?: string | null;
   display_lighting?: string | null;
   display_install_notes?: string | null;

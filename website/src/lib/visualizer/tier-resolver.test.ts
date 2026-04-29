@@ -46,7 +46,7 @@ describe("venuePlanToTier", () => {
   });
 });
 
-describe("resolveTier — guest", () => {
+describe("resolveTier, guest", () => {
   it("returns guest when userId is null", async () => {
     const db = buildMockSupabase({ tables: {} });
     expect(await resolveTier({ userId: null }, db)).toBe("guest");
@@ -58,7 +58,7 @@ describe("resolveTier — guest", () => {
   });
 });
 
-describe("resolveTier — artist hint", () => {
+describe("resolveTier, artist hint", () => {
   it("artist_pro for subscription_plan='pro'", async () => {
     const db = buildMockSupabase({
       tables: {
@@ -128,7 +128,7 @@ describe("resolveTier — artist hint", () => {
   });
 });
 
-describe("resolveTier — venue hint", () => {
+describe("resolveTier, venue hint", () => {
   it("venue_premium for premium plan", async () => {
     const db = buildMockSupabase({
       tables: {
@@ -146,7 +146,7 @@ describe("resolveTier — venue hint", () => {
   });
 
   it("venue_standard when subscription_plan column is missing entirely", async () => {
-    // The venue subscription column doesn't exist yet in production — the
+    // The venue subscription column doesn't exist yet in production, the
     // resolver must tolerate it and fall back to standard.
     let callCount = 0;
     const db = buildMockSupabase({
@@ -163,7 +163,7 @@ describe("resolveTier — venue hint", () => {
                 },
               };
             }
-            // Fallback bare lookup — the venue exists.
+            // Fallback bare lookup, the venue exists.
             return { data: { user_id: "u1" }, error: null };
           },
         },
@@ -182,7 +182,7 @@ describe("resolveTier — venue hint", () => {
   });
 });
 
-describe("resolveTier — customer hint", () => {
+describe("resolveTier, customer hint", () => {
   it("returns customer immediately, no DB lookup", async () => {
     const db = buildMockSupabase({ tables: {} });
     expect(
@@ -191,7 +191,7 @@ describe("resolveTier — customer hint", () => {
   });
 });
 
-describe("resolveTier — unhinted fall-through", () => {
+describe("resolveTier, unhinted fall-through", () => {
   it("artist takes priority over venue", async () => {
     const db = buildMockSupabase({
       tables: {

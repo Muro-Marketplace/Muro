@@ -3,7 +3,7 @@
 //
 // These tests exercise the in-memory fallback path (UPSTASH_* unset).
 // Production uses the Redis-backed path, which is the library's
-// responsibility to correctly implement — worth integration-testing
+// responsibility to correctly implement, worth integration-testing
 // once we have Upstash credentials wired in CI.
 
 import { beforeEach, describe, expect, it } from "vitest";
@@ -29,7 +29,7 @@ describe("getIP()", () => {
   });
 });
 
-describe("checkRateLimit() — in-memory fallback", () => {
+describe("checkRateLimit(), in-memory fallback", () => {
   beforeEach(() => _resetInMemoryStore());
 
   it("allows requests up to the limit", async () => {
@@ -66,7 +66,7 @@ describe("checkRateLimit() — in-memory fallback", () => {
   });
 });
 
-describe("withRateLimit() — named rules", () => {
+describe("withRateLimit(), named rules", () => {
   beforeEach(() => _resetInMemoryStore());
 
   it("blocks after `limit` calls with the same key", async () => {

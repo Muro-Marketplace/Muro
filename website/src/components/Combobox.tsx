@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Combobox — a typeable + searchable dropdown.
+ * Combobox, a typeable + searchable dropdown.
  *
  * Behaves like a `<select>` for the common case but also lets users
  * type to filter the option list and (when `allowCustom` is on)
  * commit a free-text value not in the list. Used for the artwork
- * Medium picker — there are dozens of standard mediums but artists
+ * Medium picker, there are dozens of standard mediums but artists
  * always have edge cases ("oil + gold leaf", "spray + linocut"), so
  * a rigid select frustrates and a plain text input loses the
  * suggestions.
@@ -32,7 +32,7 @@ interface Props {
   allowCustom?: boolean;
   /** Required affordance (asterisk + aria-required). */
   required?: boolean;
-  /** Forwarded to the input — disables editing entirely. */
+  /** Forwarded to the input, disables editing entirely. */
   disabled?: boolean;
   /** Forwarded to the input className. Keep it consistent with form
    *  inputs around it. */
@@ -64,7 +64,7 @@ export default function Combobox({
     setQuery(value);
   }, [value]);
 
-  // Filtered list — case-insensitive prefix-then-substring ordering so
+  // Filtered list, case-insensitive prefix-then-substring ordering so
   // typing "oil" surfaces "Oil paint" before "Charcoal & oil pastel".
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -144,7 +144,7 @@ export default function Combobox({
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        // Visual cue that this is a dropdown — the chevron is purely
+        // Visual cue that this is a dropdown, the chevron is purely
         // decorative; the whole input is interactive.
         className={`${className} pr-8`}
       />

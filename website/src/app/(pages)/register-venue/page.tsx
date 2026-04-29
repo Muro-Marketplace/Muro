@@ -156,7 +156,7 @@ export default function RegisterVenuePage() {
 
       if (signInError) {
         console.error("Auto sign-in error:", signInError);
-        // Account created but auto-login failed — send to login page
+        // Account created but auto-login failed, send to login page
         setError("Account created! Please sign in with your credentials.");
         setSubmitting(false);
         return;
@@ -255,7 +255,7 @@ export default function RegisterVenuePage() {
               <a href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
                 Wallplace Curated
               </a>{" "}
-              — paid shortlists from £49.
+             , paid shortlists from £49.
             </p>
           </div>
         </div>

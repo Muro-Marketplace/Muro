@@ -101,7 +101,7 @@ function nextActionText(p: {
   if (p.status === "Pending") return null;
   if (p.status === "Declined") return null;
   if (p.status === "Completed" || p.status === "Sold") return null;
-  // Active — walk lifecycle
+  // Active, walk lifecycle
   if (!p.scheduledFor) return "Next: schedule installation with the artist";
   if (!p.installedAt) return "Next: confirm the artwork is installed";
   if (!p.liveFrom) return "Next: mark live on wall";
@@ -186,15 +186,15 @@ function ArtistPickerDropdown({ onPick }: { onPick: (slug: string, name: string)
         return slug.split("-").map((w) => (w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
       };
 
-      // Saved artists — ONLY entries the venue explicitly hearted at
+      // Saved artists, ONLY entries the venue explicitly hearted at
       // the artist level (saved_items with type='artist'). The
       // earlier "saving a work counts as saving the artist" logic
       // bled every artist whose work was hearted into the picker
       // and the saved-artist count, which surprised venues
       // (saving "this artwork I like" ≠ "I want to follow this
-      // artist"). Both signals are still useful — works saved
+      // artist"). Both signals are still useful, works saved
       // surface as a separate "Saved works → these artists" hint
-      // elsewhere if needed — but they don't merge into the
+      // elsewhere if needed, but they don't merge into the
       // saved-artist count any more.
       try {
         const savedRes = await authFetch("/api/saved");
@@ -209,7 +209,7 @@ function ArtistPickerDropdown({ onPick }: { onPick: (slug: string, name: string)
         );
       } catch { /* ignore */ }
 
-      // Messaged artists — conversations endpoint
+      // Messaged artists, conversations endpoint
       try {
         const msgRes = await authFetch("/api/messages");
         const msgData = await msgRes.json();
@@ -229,7 +229,7 @@ function ArtistPickerDropdown({ onPick }: { onPick: (slug: string, name: string)
         setMessagedArtists(picks);
       } catch { /* ignore */ }
 
-      // Previously placed — placements history
+      // Previously placed, placements history
       try {
         const placeRes = await authFetch("/api/placements");
         const placeData = await placeRes.json();
@@ -273,7 +273,7 @@ function ArtistPickerDropdown({ onPick }: { onPick: (slug: string, name: string)
         className="w-full px-3 py-2 text-sm bg-background border border-border rounded-sm focus:outline-none focus:border-accent/60 mb-3"
       />
       {groups.length === 0 ? (
-        <p className="text-xs text-muted">Browse the marketplace, save an artist, or message one — they&rsquo;ll appear here.</p>
+        <p className="text-xs text-muted">Browse the marketplace, save an artist, or message one, they&rsquo;ll appear here.</p>
       ) : (
         <div className="space-y-3 max-h-64 overflow-y-auto">
           {groups.map((g) => (
@@ -311,7 +311,7 @@ export default function VenuePlacementsPage() {
   // Updated on mount + after every archive / unarchive action so the
   // number stays fresh regardless of which tab the user is on.
   const [archivedCount, setArchivedCount] = useState(0);
-  // The Archived filter tab controls what we fetch — ?archived=1
+  // The Archived filter tab controls what we fetch, ?archived=1
   // returns the user's archive rather than their live list.
   const showArchived = activeTab === "Archived";
   const [dateFilter, setDateFilter] = useState<"all" | "7d" | "30d" | "90d" | "year">("all");
@@ -415,7 +415,7 @@ export default function VenuePlacementsPage() {
     setWorksLoading(false);
   }
 
-  // Fire-and-forget archived count — keeps the Archived tab badge in
+  // Fire-and-forget archived count, keeps the Archived tab badge in
   // sync regardless of which tab is active. Runs alongside the main
   // placements load and on every mutation that could change it.
   const loadArchivedCount = React.useCallback(async () => {
@@ -483,7 +483,7 @@ export default function VenuePlacementsPage() {
         artistUserId: (p.artist_user_id as string | null) ?? null,
         venueUserId: (p.venue_user_id as string | null) ?? null,
         createdAtTs: p.created_at ? new Date(p.created_at as string).getTime() : 0,
-        // Most-recent timestamp on the row — powers "last updated"
+        // Most-recent timestamp on the row, powers "last updated"
         // ordering so a just-accepted or just-declined placement stays
         // at the top instead of dropping back to its created_at slot.
         updatedAtTs: Math.max(
@@ -499,7 +499,7 @@ export default function VenuePlacementsPage() {
       }));
       // Sort purely by last-updated, newest first. We used to put
       // Pending above everything else so new requests jumped the queue
-      // — but that fought with the user's mental model when they'd
+      //, but that fought with the user's mental model when they'd
       // just acted on a placement and it dropped back down the list.
       mapped.sort((a, b) => (b.updatedAtTs || 0) - (a.updatedAtTs || 0));
       setPlacements(mapped);
@@ -532,7 +532,7 @@ export default function VenuePlacementsPage() {
     setSizePickerFor(null);
   }
   // Clicking a card toggles selection with "Any size" as the default.
-  // The picker no longer opens automatically — picking a size is an
+  // The picker no longer opens automatically, picking a size is an
   // opt-in action, so a quick single click selects the work without
   // forcing the user to also pick a size. Clicking again deselects.
   function handleCardClick(title: string) {
@@ -621,7 +621,7 @@ export default function VenuePlacementsPage() {
         body: JSON.stringify({
           placements: newPlacements.map((p) => ({
             ...p,
-            venueSlug: "self", // Placeholder — API resolves venue from auth for fromVenue requests
+            venueSlug: "self", // Placeholder, API resolves venue from auth for fromVenue requests
           })),
           fromVenue: true,
           artistSlug,
@@ -659,7 +659,7 @@ export default function VenuePlacementsPage() {
       setRevenuePercent(0);
     } catch (err) {
       console.error("Placement request error:", err);
-      setSubmitError("Network error — please try again.");
+      setSubmitError("Network error, please try again.");
     }
     setSubmitting(false);
   }
@@ -716,7 +716,7 @@ export default function VenuePlacementsPage() {
       .catch((err) => console.error("Status update error:", err));
   }
 
-  // Bulk archive — fires one DELETE per selected id, then reloads.
+  // Bulk archive, fires one DELETE per selected id, then reloads.
   // Uses the same endpoint the single-row bin icon uses so there's
   // no new code path to keep in sync.
   async function bulkArchiveSelected() {
@@ -757,7 +757,7 @@ export default function VenuePlacementsPage() {
     });
   }
 
-  // Archive or unarchive — the bin icon on the list. Hides the row
+  // Archive or unarchive, the bin icon on the list. Hides the row
   // from the caller's own view only (the counterparty is untouched).
   // Reversible via the "Show archived" toggle.
   async function archivePlacement(id: string, unarchive: boolean) {
@@ -780,11 +780,11 @@ export default function VenuePlacementsPage() {
     } catch (err) {
       setPlacements(snapshot);
       console.error("Placement archive error:", err);
-      alert("Network error — placement not archived. Please try again.");
+      alert("Network error, placement not archived. Please try again.");
     }
   }
 
-  // Cancel — status transition for an active or pending placement.
+  // Cancel, status transition for an active or pending placement.
   // Keeps the row visible to both parties (the counterparty sees
   // "Cancelled"). Separate from archive: archive is personal; cancel
   // is shared and changes the deal.
@@ -809,7 +809,7 @@ export default function VenuePlacementsPage() {
     } catch (err) {
       setPlacements(snapshot);
       console.error("Placement cancel error:", err);
-      alert("Network error — placement not cancelled. Please try again.");
+      alert("Network error, placement not cancelled. Please try again.");
     }
   }
 
@@ -824,7 +824,7 @@ export default function VenuePlacementsPage() {
   })();
   const search = searchTerm.trim().toLowerCase();
   const filtered = placements.filter((p) => {
-    // 'Archived' is its own tab — the placements state already holds
+    // 'Archived' is its own tab, the placements state already holds
     // only archived rows when that tab is active, so no extra filter.
     if (activeTab !== "All" && activeTab !== "Archived") {
       if (activeTab === "Completed") {
@@ -863,7 +863,7 @@ export default function VenuePlacementsPage() {
         </div>
       </div>
 
-      {/* Request Placement Form — above the Action Items so venues
+      {/* Request Placement Form, above the Action Items so venues
           aren't hunting past a long to-do list to send a new request */}
       {/* Request Placement Form */}
       {showForm && (
@@ -890,7 +890,7 @@ export default function VenuePlacementsPage() {
               <ArtistPickerDropdown onPick={(slug, name) => { setArtistSlug(slug); setArtistName(name); loadArtistWorks(slug); }} />
             )}
 
-            {/* Arrangement — QR and Paid loan are independent toggles so
+            {/* Arrangement, QR and Paid loan are independent toggles so
                 a placement can be paid-loan-with-QR (venue pays a monthly
                 fee and also splits QR sales). Rev share input below stays
                 live whenever QR is enabled. */}
@@ -919,7 +919,7 @@ export default function VenuePlacementsPage() {
                       // Seed a sensible default the first time the user
                       // turns paid loan on. Don't overwrite an existing
                       // value; don't zero them out when turning it off
-                      // either — keeps the field state predictable while
+                      // either, keeps the field state predictable while
                       // they toggle back and forth.
                       if (on && (monthlyFee === "" || monthlyFee === 0)) {
                         setMonthlyFee(50);
@@ -954,7 +954,7 @@ export default function VenuePlacementsPage() {
                     />
                     <span className="text-sm text-muted">per month</span>
                   </div>
-                  <p className="text-xs text-muted mt-2">Billing is handled manually for now — use this to record the agreed amount.</p>
+                  <p className="text-xs text-muted mt-2">Billing is handled manually for now, use this to record the agreed amount.</p>
                 </div>
               )}
             </div>
@@ -1031,7 +1031,7 @@ export default function VenuePlacementsPage() {
                             </div>
                           )}
                         </button>
-                        {/* "Change size" affordance — visible only when
+                        {/* "Change size" affordance, visible only when
                             the work is selected, so the card-click keeps
                             its simple toggle behaviour and size selection
                             is an explicit opt-in. */}
@@ -1079,7 +1079,7 @@ export default function VenuePlacementsPage() {
                                     selected && !chosenSize ? "bg-accent/5 text-accent font-medium" : "text-muted"
                                   }`}
                                 >
-                                  Any size — let the artist suggest
+                                  Any size, let the artist suggest
                                 </button>
                               </li>
                               {selected && (
@@ -1152,11 +1152,11 @@ export default function VenuePlacementsPage() {
         </div>
       )}
 
-      {/* Outstanding placement actions — shown BELOW the request form
+      {/* Outstanding placement actions, shown BELOW the request form
           so new-request flow isn't hidden behind a long to-do list */}
       <PlacementActionItems userId={user?.id} role="venue" heading="Needs your attention" />
 
-      {/* Filter tabs — horizontal scroll on mobile so narrow screens
+      {/* Filter tabs, horizontal scroll on mobile so narrow screens
           don't break 'Completed' / 'Archived' onto a second row. */}
       <div className="flex gap-1 mb-4 border-b border-border overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex-nowrap">
         {tabs.map((tab) => {
@@ -1199,7 +1199,7 @@ export default function VenuePlacementsPage() {
         })}
       </div>
 
-      {/* Search + date filter — narrow the list by artist / work / type
+      {/* Search + date filter, narrow the list by artist / work / type
           and a quick time window. Together with the status tabs above
           these cover the 80% of "I'm looking for X" cases. */}
       <div className="flex flex-col sm:flex-row gap-2 mb-5">
@@ -1230,7 +1230,7 @@ export default function VenuePlacementsPage() {
         <p className="text-muted text-sm py-12 text-center">Loading placements...</p>
       ) : (
         <>
-          {/* Bulk-select action bar — appears only when at least one
+          {/* Bulk-select action bar, appears only when at least one
               row is ticked so the normal view isn't cluttered with
               an empty toolbar. */}
           {selectedIds.size > 0 && (
@@ -1384,7 +1384,7 @@ export default function VenuePlacementsPage() {
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         {(() => {
                           const dir = directionFor({ requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id);
-                          return dir ? <PlacementDirectionTag direction={dir} /> : <span className="text-[11px] text-muted">—</span>;
+                          return dir ? <PlacementDirectionTag direction={dir} /> : <span className="text-[11px] text-muted">–</span>;
                         })()}
                       </td>
                       <td className="px-6 py-3.5 text-right">
@@ -1497,7 +1497,7 @@ export default function VenuePlacementsPage() {
                             } : x))}
                           />
 
-                          {/* Actions — divided from the details block by a
+                          {/* Actions, divided from the details block by a
                               hairline border, primary response buttons on
                               the left, secondary links (Message / Add Loan
                               / Open) on the right. */}
@@ -1558,7 +1558,7 @@ export default function VenuePlacementsPage() {
                               >
                                 Message artist
                               </Link>
-                              {/* QR labels — deep-link to the labels page
+                              {/* QR labels, deep-link to the labels page
                                   with this placement preselected. The
                                   labels page reads ?placement=<id> and
                                   ticks every work in the placement at
@@ -1687,7 +1687,7 @@ export default function VenuePlacementsPage() {
                       </span>
                     )}
                   </div>
-                  {/* Mini status bar + next action — visible without expanding */}
+                  {/* Mini status bar + next action, visible without expanding */}
                   {(p.status === "Active" || p.status === "Completed" || p.status === "Sold") && (
                     <div className="mt-2.5 flex items-center justify-between gap-2">
                       <MiniStatusBar p={p} />
@@ -1777,7 +1777,7 @@ export default function VenuePlacementsPage() {
                         collectedAt: next.collectedAt ?? x.collectedAt,
                       } : x))}
                     />
-                    {/* Paid-loan payment status — only shown once the
+                    {/* Paid-loan payment status, only shown once the
                         work is actually live on the wall. Venues get
                         an action chip linking to /placements/[id]/payment;
                         artists see the info-only variant. */}
@@ -1790,7 +1790,7 @@ export default function VenuePlacementsPage() {
                       role="venue"
                     />
 
-                    {/* Mobile actions — outline-only buttons, primary on
+                    {/* Mobile actions, outline-only buttons, primary on
                         top row, secondary on bottom. Hairline separator
                         from the details block above. */}
                     <div className="mt-3 pt-3 border-t border-border space-y-2">
@@ -1847,7 +1847,7 @@ export default function VenuePlacementsPage() {
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                           Loan record
                         </Link>
-                        {/* QR labels — same deep-link as the desktop
+                        {/* QR labels, same deep-link as the desktop
                             expanded action. Mobile flex-wrap means it
                             falls to its own row below the primary
                             actions on narrow screens. */}
@@ -1889,7 +1889,7 @@ export default function VenuePlacementsPage() {
         </>
       )}
 
-      {/* Inline counter dialog — lives at the portal root so opening a
+      {/* Inline counter dialog, lives at the portal root so opening a
           counter from any row simply toggles counteringId. On success we
           bust the placements state so the updated terms reload. */}
       {counteringId && (() => {

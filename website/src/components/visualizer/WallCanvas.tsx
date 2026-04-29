@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * WallCanvas — react-konva stage with full interactivity.
+ * WallCanvas, react-konva stage with full interactivity.
  *
  * Capabilities:
  *   - Drop a work from WorksPanel onto the wall to spawn a new item at
  *     the drop coordinates.
  *   - Drag existing items.
  *   - Resize via Konva Transformer with proportional-only constraints
- *     (no stretch — a Wallplace decision; users hate distorted artworks).
+ *     (no stretch, a Wallplace decision; users hate distorted artworks).
  *   - Alignment guides: dotted lines snap to wall thirds/halves/edges
  *     and other items' edges/centres while dragging.
  *   - Frame overlays: each item is a Group of (image + coloured border).
@@ -56,7 +56,7 @@ import type { PanelWork } from "./WorksPanel";
 // ── Constants ───────────────────────────────────────────────────────────
 
 const PADDING_PX = 24;
-/** Minimum and maximum sizes (cm) — matches the zod validation. */
+/** Minimum and maximum sizes (cm), matches the zod validation. */
 const MIN_ITEM_CM = 5;
 const MAX_ITEM_CM = 1000;
 
@@ -71,7 +71,7 @@ interface Props {
   workById: Record<string, PanelWork>;
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
-  /** Called when an item moves or resizes — partial WallItem update. */
+  /** Called when an item moves or resizes, partial WallItem update. */
   onItemChange: (id: string, partial: Partial<WallItem>) => void;
   /** Called when a work is dropped onto the canvas. Coords are wall-cm. */
   onAddItem: (workId: string, xCm: number, yCm: number) => void;
@@ -103,7 +103,7 @@ export default function WallCanvas({
     vx: [],
     hy: [],
   });
-  // Hover state — drives a "preview" Transformer so users can grab a
+  // Hover state, drives a "preview" Transformer so users can grab a
   // resize handle without first having to click. Selection takes
   // priority: if anything is clicked-selected, hover does nothing.
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
@@ -195,7 +195,7 @@ export default function WallCanvas({
           height={size.h}
           onMouseDown={(e) => {
             // Deselect when the click hits anything that isn't part
-            // of an artwork item — bare stage, the wall background
+            // of an artwork item, bare stage, the wall background
             // Rect, lighting overlays, the photo image, etc. Items
             // sit inside Groups with their own onMouseDown handlers
             // (which stopPropagation), so this only fires for
@@ -220,7 +220,7 @@ export default function WallCanvas({
           }}
         >
           <Layer>
-            {/* Wall — preset walls get a directional-light + vignette
+            {/* Wall, preset walls get a directional-light + vignette
                 gradient stack to read as 3D-feeling. Uploaded photos
                 already carry their own lighting and just sit on a
                 neutral underlay. */}
@@ -339,7 +339,7 @@ export default function WallCanvas({
                 />
               ))}
 
-            {/* Alignment guides — drawn last so they sit above items. */}
+            {/* Alignment guides, drawn last so they sit above items. */}
             {guides.vx.map((x, i) => (
               <Line
                 key={`vx-${i}`}
@@ -417,7 +417,7 @@ function CanvasItem({
   // `keepRatio` was producing portrait output for landscape inputs on
   // some setups (likely an aspect-detection edge case with Group
   // children), so we explicitly enforce the original aspect ourselves
-  // in boundBoxFunc — the most reliable way to keep proportions.
+  // in boundBoxFunc, the most reliable way to keep proportions.
   const transformAspectRef = useRef<number>(1);
 
   // Pixel position + size derived from cm.
@@ -429,7 +429,7 @@ function CanvasItem({
   // Attach the transformer when the item is selected OR hovered (when
   // nothing else is selected). Re-attach whenever the item's
   // dimensions change so the outline stays glued to the visible
-  // content — without this, picking a new size from the toolbar
+  // content, without this, picking a new size from the toolbar
   // dropdown would leave the Transformer outline at the previous size
   // until the user clicked away and back.
   useEffect(() => {
@@ -443,7 +443,7 @@ function CanvasItem({
   // Frame geometry (artwork inset + border colour).
   const frameGeo = computeFrameGeometry(pxW, pxH, item.frame);
 
-  // Image hook — useImage handles empty src by returning undefined.
+  // Image hook, useImage handles empty src by returning undefined.
   const [img] = useImage(work?.imageUrl ?? "", "anonymous");
 
   const wallRect: PxRect = {
@@ -511,7 +511,7 @@ function CanvasItem({
 
   // ── Resize handling ─────────────────────────────────────────────────
   // Read the new dimensions from `width × scaleX` and the captured
-  // aspect ratio. boundBoxFunc has already enforced the aspect lock —
+  // aspect ratio. boundBoxFunc has already enforced the aspect lock,
   // we re-derive height from width to guarantee no drift creeps in.
   const handleTransformEnd = useCallback(() => {
     const node = groupRef.current;
@@ -578,7 +578,7 @@ function CanvasItem({
          * of children's clientRects (including their shadow extents),
          * which is why the outline used to drift past the visible image
          * during resize. This invisible Rect anchors the bounding box
-         * to the item's true outer dimensions — and since shadows on
+         * to the item's true outer dimensions, and since shadows on
          * other children only matter when this Rect doesn't dominate,
          * we also disable shadows on every visible child while
          * selected.
@@ -590,7 +590,7 @@ function CanvasItem({
           listening={false}
         />
 
-        {/* Frame border — gradient rectangle behind artwork (preview;
+        {/* Frame border, gradient rectangle behind artwork (preview;
             the Render output uses the much richer SVG-generated frame). */}
         {item.frame.style !== "none" && (
           <Rect
@@ -604,7 +604,7 @@ function CanvasItem({
             shadowOffsetY={6}
           />
         )}
-        {/* Artwork — inset by border thickness */}
+        {/* Artwork, inset by border thickness */}
         {img ? (
           <KonvaImage
             image={img}
@@ -644,7 +644,7 @@ function CanvasItem({
           keepRatio={true}
           // Bigger anchors for touch.
           anchorSize={12}
-          // Visual style — slightly muted on hover-only to differentiate
+          // Visual style, slightly muted on hover-only to differentiate
           // from a clicked selection.
           borderStroke="#0F0F0F"
           borderStrokeWidth={1}

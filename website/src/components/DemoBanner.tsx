@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * DemoBanner — slim sticky banner shown across portal pages when the
+ * DemoBanner, slim sticky banner shown across portal pages when the
  * signed-in user is one of the configured demo accounts.
  *
  * Reads `NEXT_PUBLIC_DEMO_ARTIST_USER_ID` / `NEXT_PUBLIC_DEMO_VENUE_USER_ID`
@@ -14,7 +14,7 @@
  *   - "Sign up" button funnels into /signup with a `next=` param so
  *     the user lands on the same area after creating their account.
  *   - "Exit demo" calls `signOut()` from AuthContext and redirects to /.
- *   - Dismissable for the session via a small × — user can hide it
+ *   - Dismissable for the session via a small ×, user can hide it
  *     while exploring; resets on next page load.
  */
 
@@ -55,7 +55,7 @@ export default function DemoBanner() {
           Demo
         </span>
         <p className="text-xs sm:text-sm flex-1 min-w-0 leading-snug">
-          You&rsquo;re touring a demo account — changes aren&rsquo;t saved. Sign
+          You&rsquo;re touring a demo account, changes aren&rsquo;t saved. Sign
           up to make it real.
         </p>
         <div className="flex items-center gap-2 shrink-0">

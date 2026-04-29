@@ -104,7 +104,7 @@ const noBlock = async () => null;
 
 // ── consumeQuota ────────────────────────────────────────────────────────
 
-describe("consumeQuota — happy path", () => {
+describe("consumeQuota, happy path", () => {
   it("permits a render under tier limit and inserts a ledger row", async () => {
     const inserted = new Map<string, Array<Record<string, unknown>>>();
     const db = buildMockSupabase({
@@ -167,7 +167,7 @@ describe("consumeQuota — happy path", () => {
   });
 });
 
-describe("consumeQuota — limit blocks", () => {
+describe("consumeQuota, limit blocks", () => {
   it("blocks at the daily cap", async () => {
     const db = buildMockSupabase({
       tables: premiumArtistTables([{ cost_units: 10 }]), // 10 of 10 already used
@@ -189,14 +189,14 @@ describe("consumeQuota — limit blocks", () => {
     const db = buildMockSupabase({
       tables: {
         ...premiumArtistTables([]),
-        // override the list — but our mock is keyed by table; we need
+        // override the list, but our mock is keyed by table; we need
         // different responses per filter combination. Simpler: return one
         // value per call shape via custom table handler.
         visualizer_usage: {
           list: () => ({
             // sumUsage doesn't differentiate buckets, it just sums what
             // the list returns. To simulate "monthly is full but daily is
-            // empty", we'd need to make list bucket-aware. Skip — covered
+            // empty", we'd need to make list bucket-aware. Skip, covered
             // separately below with dedicated test that controls returns.
             data: [{ cost_units: 200 }],
             error: null,
@@ -214,7 +214,7 @@ describe("consumeQuota — limit blocks", () => {
   });
 });
 
-describe("consumeQuota — monthly cap (bucket-aware mock)", () => {
+describe("consumeQuota, monthly cap (bucket-aware mock)", () => {
   it("blocks with reason='monthly' when daily has room but month is full", async () => {
     // Make the visualizer_usage list response depend on which bucket field
     // was filtered. We achieve this by giving the table handler a state
@@ -250,7 +250,7 @@ describe("consumeQuota — monthly cap (bucket-aware mock)", () => {
 
 // ── Burst limit ─────────────────────────────────────────────────────────
 
-describe("consumeQuota — burst limit", () => {
+describe("consumeQuota, burst limit", () => {
   it("blocks with reason='burst' when burstCheck returns a Response", async () => {
     const db = buildMockSupabase({ tables: premiumArtistTables([]) });
     const blockingBurst = async () =>
@@ -286,7 +286,7 @@ describe("consumeQuota — burst limit", () => {
 
 // ── Override stacking ───────────────────────────────────────────────────
 
-describe("consumeQuota — overrides", () => {
+describe("consumeQuota, overrides", () => {
   it("active override extends both daily and monthly", async () => {
     const db = buildMockSupabase({
       tables: {
@@ -342,7 +342,7 @@ describe("consumeQuota — overrides", () => {
 
 // ── Bad inputs ──────────────────────────────────────────────────────────
 
-describe("consumeQuota — input validation", () => {
+describe("consumeQuota, input validation", () => {
   it("throws if called with negative units", async () => {
     const db = buildMockSupabase({ tables: premiumArtistTables([]) });
     await expect(

@@ -30,15 +30,15 @@ export default function NewsletterForm({ source = "footer", className = "" }: Ne
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setStatus("error");
-        setMessage(body?.error || "Could not subscribe — please try again.");
+        setMessage(body?.error || "Could not subscribe, please try again.");
         return;
       }
       setStatus("success");
-      setMessage(body?.alreadySubscribed ? "You're already subscribed." : "Thanks — you're on the list.");
+      setMessage(body?.alreadySubscribed ? "You're already subscribed." : "Thanks, you're on the list.");
       setEmail("");
     } catch {
       setStatus("error");
-      setMessage("Network error — please try again.");
+      setMessage("Network error, please try again.");
     }
   }
 

@@ -6,7 +6,7 @@ import { authFetch } from "@/lib/api-client";
 export interface PlacementStepperData {
   id: string;
   status: string;
-  /** Timestamp the placement row was created — powers the first
+  /** Timestamp the placement row was created, powers the first
       "Requested" step in the progress bar. */
   createdAt?: string | null;
   acceptedAt?: string | null;
@@ -14,7 +14,7 @@ export interface PlacementStepperData {
   installedAt?: string | null;
   liveFrom?: string | null;
   collectedAt?: string | null;
-  /** Kept for backwards-compat with callers that still pass them —
+  /** Kept for backwards-compat with callers that still pass them,
       bilateral confirmation is no longer used. */
   proposedStage?: "installed" | "collected" | null;
   proposedByUserId?: string | null;
@@ -131,7 +131,7 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
 
   // Most-recent advanceable stage that has a timestamp = what Undo
   // should pull back. Requested + Accepted aren't advanceable so they're
-  // never undo targets — those are decisions, not stage marks.
+  // never undo targets, those are decisions, not stage marks.
   const lastReached = [...steps].reverse().find((s) => s.advanceable && !!s.timestamp);
   const lastReachedStage = lastReached ? (lastReached.key as Stage) : null;
   const showUndo = canAdvance && !!lastReachedStage && (placement.status === "active" || placement.status === "completed");
@@ -250,7 +250,7 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
           </div>
         );
       })()}
-      {/* Undo also surfaces when there's no further stage to advance — e.g.
+      {/* Undo also surfaces when there's no further stage to advance, e.g.
           after marking Collected, the user might realise it was premature
           and want to roll back. */}
       {!showAdvance && showUndo && lastReachedStage && (

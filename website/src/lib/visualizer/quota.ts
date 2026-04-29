@@ -1,5 +1,5 @@
 /**
- * Wall Visualizer — quota service.
+ * Wall Visualizer, quota service.
  *
  * The single chokepoint that decides whether an expensive visualizer
  * action (render, wall upload, showroom publish) is allowed for a user.
@@ -16,12 +16,12 @@
  *     row; refund is a negative row referencing the original. Computing
  *     "remaining" is `tier_limit - SUM(cost_units WHERE today)`.
  *   - Per-user override row in `visualizer_quota_overrides` adds extra
- *     capacity (support tool — comp accounts, demo grants).
+ *     capacity (support tool, comp accounts, demo grants).
  *
  * Race-condition pragmatics:
  *   Read-then-insert is not atomic. Two concurrent calls both passing the
  *   limit check could both insert and exceed the cap by 1. We intentionally
- *   accept that small leak — quota is a soft cap, the burst limiter catches
+ *   accept that small leak, quota is a soft cap, the burst limiter catches
  *   abuse, and the alternative (advisory locks per user) is much heavier.
  *   The audit trail makes after-the-fact reconciliation trivial.
  *
@@ -126,7 +126,7 @@ async function sumUsage(
     if (error || !data) return 0;
     let total = 0;
     for (const row of data as Array<{ cost_units: number }>) total += row.cost_units;
-    // Clamp to >= 0 — if refunds outpace charges (shouldn't happen) we
+    // Clamp to >= 0, if refunds outpace charges (shouldn't happen) we
     // don't want to gift extra quota.
     return Math.max(0, total);
   } catch {
@@ -143,7 +143,7 @@ export interface ConsumeQuotaInput {
   units?: number;
   /** Hint for tier resolution (which portal is the user on). */
   ownerTypeHint?: WallOwnerType;
-  /** Optional reference (e.g. layout_id) — recorded on the ledger row. */
+  /** Optional reference (e.g. layout_id), recorded on the ledger row. */
   referenceId?: string;
   /** Optional metadata blob for the ledger row. */
   metadata?: Record<string, unknown>;
@@ -178,7 +178,7 @@ async function defaultBurstCheck(userId: string): Promise<Response | null> {
 }
 
 /**
- * Atomically (within a small leak — see header) check tier + override +
+ * Atomically (within a small leak, see header) check tier + override +
  * burst limits for `userId` performing `action`. If allowed, insert a
  * ledger row and return ok with remaining counts. If blocked, return the
  * reason without recording usage.
@@ -186,14 +186,14 @@ async function defaultBurstCheck(userId: string): Promise<Response | null> {
  * Quota model:
  *   - For render actions, the daily limit means "distinct artworks
  *     rendered today". When metadata carries `work_id` (single) or
- *     `work_ids` (array), we charge 1 unit per *new* artwork — repeat
+ *     `work_ids` (array), we charge 1 unit per *new* artwork, repeat
  *     renders of an already-rendered-today work cost 0. This lets
  *     artists iterate freely on the same piece (different walls,
  *     frames, sizes) without burning quota; only different artworks
  *     consume the daily allowance.
  *   - When metadata carries no work ids (legacy callers), or for non-
  *     render actions, we fall back to the flat `ACTION_COSTS[action]`
- *     value as before — preserves backward compatibility.
+ *     value as before, preserves backward compatibility.
  *   - A tier limit of `-1` means unlimited: we skip the cap entirely.
  *     (artist_pro and venue_premium use this.)
  */
@@ -210,7 +210,7 @@ export async function consumeQuota(
   );
   const limits = getTierLimits(tier);
 
-  // Burst limit applies to expensive actions only — wall_upload + render*.
+  // Burst limit applies to expensive actions only, wall_upload + render*.
   // showroom_publish is rare enough that we skip burst on it.
   const burstApplicable =
     input.action === "render_standard" ||
@@ -223,7 +223,7 @@ export async function consumeQuota(
       return {
         ok: false,
         reason: "burst",
-        // Burst window is 1 hour — soft retry guidance.
+        // Burst window is 1 hour, soft retry guidance.
         resets_at: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
         tier,
       };
@@ -263,13 +263,13 @@ export async function consumeQuota(
 
   if (units < 0) {
     throw new Error(
-      "Use refundQuota() for negative units — consumeQuota only accepts positive costs.",
+      "Use refundQuota() for negative units, consumeQuota only accepts positive costs.",
     );
   }
 
   // ── Limit checks ────────────────────────────────────────────────────
   // 0-unit charges (e.g. re-render of an already-used artwork today)
-  // skip the cap check — they're effectively free.
+  // skip the cap check, they're effectively free.
   const [override, dailyUsed, monthlyUsed] = await Promise.all([
     readOverride(db, input.userId, now),
     sumUsage(db, input.userId, "day_bucket", dayBucket),
@@ -298,7 +298,7 @@ export async function consumeQuota(
     };
   }
 
-  // All clear — record consumption (always, even when units === 0 so
+  // All clear, record consumption (always, even when units === 0 so
   // the audit trail captures the action).
   const { error } = await db.from("visualizer_usage").insert({
     user_id: input.userId,
@@ -311,7 +311,7 @@ export async function consumeQuota(
   });
 
   if (error) {
-    // Insert failed (DB hiccup, RLS misconfig). Fail closed — surface as a
+    // Insert failed (DB hiccup, RLS misconfig). Fail closed, surface as a
     // generic block. Never silently let the action through without a ledger
     // row, otherwise the user gets a free render.
     console.error("[visualizer] failed to record usage:", error.message);
@@ -354,7 +354,7 @@ function collectWorkIds(meta: Record<string, unknown>): string[] {
 /**
  * Returns the set of work ids the user has already rendered today.
  * Reads metadata.work_id and metadata.work_ids out of every positive
- * usage row and unions them. Soft-fails on errors — we'd rather risk
+ * usage row and unions them. Soft-fails on errors, we'd rather risk
  * a free re-render than block a legitimate one.
  */
 async function getWorkIdsRenderedToday(
@@ -385,7 +385,7 @@ async function getWorkIdsRenderedToday(
 
 export interface RefundQuotaInput {
   userId: string;
-  /** What the original action was — drives the negative cost amount. */
+  /** What the original action was, drives the negative cost amount. */
   originalAction: VisualizerAction;
   /** The reference of the row being refunded (e.g. failed render id). */
   referenceId?: string;
@@ -401,7 +401,7 @@ export interface RefundQuotaDeps {
 
 /**
  * Insert a negative ledger row to refund a previously-consumed quota unit.
- * Idempotency is the caller's responsibility — pass the original
+ * Idempotency is the caller's responsibility, pass the original
  * `referenceId` so duplicate refunds can be detected in support audits.
  */
 export async function refundQuota(
@@ -465,7 +465,7 @@ export async function getQuotaStatus(
   const limits: TierLimits = getTierLimits(tier);
 
   if (!userId) {
-    // Guest user — return a synthetic empty-status with zero everything.
+    // Guest user, return a synthetic empty-status with zero everything.
     return {
       tier,
       limits,
@@ -486,7 +486,7 @@ export async function getQuotaStatus(
   ]);
 
   // -1 sentinel = unlimited tier (artist_pro / venue_premium). Skip
-  // override addition — unlimited stays unlimited.
+  // override addition, unlimited stays unlimited.
   const effectiveDaily = limits.daily === -1 ? -1 : limits.daily + override.daily_extra;
   const effectiveMonthly = limits.monthly === -1 ? -1 : limits.monthly + override.monthly_extra;
 

@@ -96,7 +96,7 @@ export default function PlacementContextPanel({
   const [loading, setLoading] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Schedule install — open a date picker before stamping `scheduled`
+  // Schedule install, open a date picker before stamping `scheduled`
   // so the artist or venue can pick a real install date instead of
   // "now". Mirrors the PlacementStepper / detail-page flow.
   const [schedulePickerOpen, setSchedulePickerOpen] = useState(false);
@@ -579,7 +579,7 @@ export default function PlacementContextPanel({
 
   return (
     <aside className="w-full h-full bg-[#FAF8F5] border-l border-border flex flex-col overflow-y-auto">
-      {/* Placement header — work title + status chip on one row,
+      {/* Placement header, work title + status chip on one row,
           arrangement as a small subtitle. Tight padding on mobile, the
           original comfortable padding restored on desktop via lg: */}
       <div className="px-4 py-3 lg:px-5 lg:py-5 border-b border-border">
@@ -641,7 +641,7 @@ export default function PlacementContextPanel({
         <p className="text-[11px] lg:text-xs text-muted">{arrangementLabel}</p>
       </div>
 
-      {/* Progress — mobile keeps the tighter rhythm; desktop restores the
+      {/* Progress, mobile keeps the tighter rhythm; desktop restores the
           original relaxed spacing. */}
       <div className="px-4 py-3 lg:px-5 lg:py-4 border-b border-border bg-surface">
         <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted">Progress</p>
@@ -707,7 +707,7 @@ export default function PlacementContextPanel({
           })()}
         </ol>
 
-        {/* Inline action row — Accept / Counter / Decline when Pending,
+        {/* Inline action row, Accept / Counter / Decline when Pending,
             Mark next stage when Active. */}
         {displayStatus === "Pending" && canViewerRespond && !counterOpen && (
           <div className="mt-3 flex gap-2">
@@ -732,7 +732,7 @@ export default function PlacementContextPanel({
           </div>
         )}
 
-        {/* Declined state: a decline doesn't end the deal — whoever
+        {/* Declined state: a decline doesn't end the deal, whoever
             made the last offer (the requester) can revise it with new
             terms. The decliner sees a passive "waiting on them" note. */}
         {displayStatus === "Declined" && !counterOpen && (() => {
@@ -759,7 +759,7 @@ export default function PlacementContextPanel({
             );
           }
           return (
-            <p className="mt-3 text-[11px] text-muted">You declined — the other party can come back with revised terms.</p>
+            <p className="mt-3 text-[11px] text-muted">You declined, the other party can come back with revised terms.</p>
           );
         })()}
 
@@ -787,14 +787,14 @@ export default function PlacementContextPanel({
         {error && <p className="text-[11px] text-red-600 mt-2">{error}</p>}
       </div>
 
-      {/* Counter form — mirrors the new-request shape so the full range of
+      {/* Counter form, mirrors the new-request shape so the full range of
           arrangements is expressible: Paid loan (+ optional QR + rev share),
           Revenue share only, or a pure free display. */}
       {counterOpen && (
         <div className="px-5 py-4 border-b border-border bg-surface">
           <Header title="Counter offer" subtitle="Adjust the terms before sending back." />
           <div className="mt-3 space-y-3">
-            {/* Paid loan toggle — checkbox because you can combine with QR. */}
+            {/* Paid loan toggle, checkbox because you can combine with QR. */}
             <label className="flex items-center justify-between gap-2 cursor-pointer">
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-foreground">Paid loan</p>
@@ -817,7 +817,7 @@ export default function PlacementContextPanel({
               </div>
             )}
 
-            {/* QR toggle — independent so you can have Paid loan + QR, or
+            {/* QR toggle, independent so you can have Paid loan + QR, or
                 QR-only revenue share. */}
             <label className="flex items-center justify-between gap-2 cursor-pointer">
               <div className="flex-1 min-w-0">
@@ -841,7 +841,7 @@ export default function PlacementContextPanel({
               </div>
             )}
             {!counterPaidLoan && !counterQr && (
-              <p className="text-[10px] text-muted italic">Neither option selected — sending as a free display.</p>
+              <p className="text-[10px] text-muted italic">Neither option selected, sending as a free display.</p>
             )}
 
             <textarea value={counterNote} onChange={(e) => setCounterNote(e.target.value)} placeholder="Add a note (optional)" rows={2} className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:border-accent/50 resize-none" />
@@ -855,17 +855,17 @@ export default function PlacementContextPanel({
         </div>
       )}
 
-      {/* Terms — two-column key/value rows, denser than the previous
+      {/* Terms, two-column key/value rows, denser than the previous
           stack-of-full-width rows. QR-code row dropped for revenue share
           arrangements because rev share is always QR-enabled by design,
           so the row was redundant. */}
-      {/* Terms — rows driven by actual data, not the raw arrangement_type
+      {/* Terms, rows driven by actual data, not the raw arrangement_type
           string. Monthly fee shows when there's a fee, revenue share shows
           when QR is enabled with a non-zero share. */}
       <div className="px-4 py-3 lg:px-5 lg:py-4 border-b border-border">
         <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted mb-2.5 lg:mb-2">Terms</p>
         {/* Rows breathe a bit more on mobile (1.5/6px) vs desktop
-            (1.5/6px) — previously mobile was at 0.5/2px, which crammed
+            (1.5/6px), previously mobile was at 0.5/2px, which crammed
             the labels uncomfortably together. */}
         <div className="space-y-1.5 lg:space-y-1.5 text-xs">
           <div className="flex gap-3 py-0.5">
@@ -884,7 +884,7 @@ export default function PlacementContextPanel({
               <span className="text-foreground font-medium">{p.revenue_share_percent}% on QR sales</span>
             </div>
           )}
-          {/* QR indicator only matters on paid-loan rows — on revenue share
+          {/* QR indicator only matters on paid-loan rows, on revenue share
               it's always on by definition, on paid loan the venue might be
               paying without QR, which is useful to surface. */}
           {hasFee && p.qr_enabled != null && (
@@ -906,7 +906,7 @@ export default function PlacementContextPanel({
         </div>
       </div>
 
-      {/* Revenue — inline single row on mobile (tight). Desktop gets the
+      {/* Revenue, inline single row on mobile (tight). Desktop gets the
           original block layout with a proper header. */}
       {(displayStatus === "Active" || displayStatus === "Completed" || displayStatus === "Sold") ? (
         <div className="px-4 py-2.5 lg:px-5 lg:py-4 border-b border-border">
@@ -934,14 +934,14 @@ export default function PlacementContextPanel({
         </div>
       ) : null}
 
-      {/* Bottom CTAs — on mobile sit directly after the last section
+      {/* Bottom CTAs, on mobile sit directly after the last section
           (no mt-auto, so no big empty gap before the buttons). On desktop
           mt-auto pushes them to the bottom of the side-rail. */}
       <div className="px-4 py-3 lg:px-5 lg:py-4 lg:mt-auto space-y-1.5 lg:space-y-2">
         {(() => {
           const nextStageKey = nextAct?.cta?.kind === "advance" ? nextAct.cta.stage : null;
           const nextLabel = nextStageKey ? `Mark ${nextStageKey === "live" ? "live on wall" : nextStageKey}` : null;
-          // Find the most recent reached advanceable stage — that's what
+          // Find the most recent reached advanceable stage, that's what
           // Undo should target. Only surface Undo when there's actually
           // a stage to roll back; skips Requested / Accepted which aren't
           // user-advanceable.
@@ -984,7 +984,7 @@ export default function PlacementContextPanel({
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
                 </button>
               )}
-              {/* Picker — same shape as the detail page so the two
+              {/* Picker, same shape as the detail page so the two
                   surfaces feel like the same flow. */}
               {schedulePickerOpen && (
                 <div className="flex items-center gap-2 flex-wrap bg-surface border border-border rounded-sm px-3 py-2 w-full">

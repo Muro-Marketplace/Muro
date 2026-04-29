@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Determine trial days — no trial if upgrading or had previous subscription
+    // Determine trial days, no trial if upgrading or had previous subscription
     const hadPreviousSub = hasActiveSubscription || profile.subscription_status === "canceled" || profile.subscription_status === "past_due";
     const trialDays = hadPreviousSub ? 0 : profile.is_founding_artist ? 180 : 30;
 

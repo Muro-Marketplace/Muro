@@ -67,7 +67,7 @@ export async function upsertWork(
     fallbackErrors.push(`full-write: ${error.message}`);
     ({ error } = await attempt(coreRow));
     if (error) {
-      // Core write failed — give up.
+      // Core write failed, give up.
       return { error, droppedColumns: [...extendedColumns], savedRow: null, fallbackErrors };
     }
     // Core succeeded. Now apply each extended column individually so a

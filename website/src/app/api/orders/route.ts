@@ -123,7 +123,7 @@ export async function PATCH(request: Request) {
     }
     if (!authorised) return NextResponse.json({ error: "Not authorised" }, { status: 403 });
 
-    // Append to status history. status_history is JSONB — pass the actual
+    // Append to status history. status_history is JSONB, pass the actual
     // array, never JSON.stringify'd, otherwise the column stores a string
     // and the client crashes when it tries to .find/.map on it. That was
     // the source of the "something went wrong" page on order detail click.

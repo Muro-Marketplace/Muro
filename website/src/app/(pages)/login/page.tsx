@@ -33,7 +33,7 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    // F54 — rate-limit precheck (IP-scoped). Cloudflare edge rules are the
+    // F54, rate-limit precheck (IP-scoped). Cloudflare edge rules are the
     // primary line of defence; this catches attempts that slip past.
     try {
       const precheck = await fetch("/api/auth/precheck", {
@@ -46,7 +46,7 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-    } catch { /* network error — fall through and let Supabase handle */ }
+    } catch { /* network error, fall through and let Supabase handle */ }
 
     const { error: authError } = await signIn(email, password);
 
@@ -133,7 +133,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* OAuth (Google / Apple) — hidden until providers are enabled in
+          {/* OAuth (Google / Apple), hidden until providers are enabled in
               Supabase. Flip NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE=1 in Vercel
               once both providers are configured. */}
           {isFlagOn("OAUTH_GOOGLE_APPLE") && (

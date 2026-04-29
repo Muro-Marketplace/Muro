@@ -12,7 +12,7 @@ const DEFAULT_QUALITY = 0.85;
  *
  * Quality defaults to 0.85 (artwork thumbnails on cards). Pass 0.92+
  * for venue photos + wall reference uploads where the buyer is
- * judging the *space*, not the artwork — softer JPEG/WebP at the
+ * judging the *space*, not the artwork, softer JPEG/WebP at the
  * default rate looks visibly cheap on the public venue profile.
  */
 export async function resizeImage(
@@ -50,7 +50,7 @@ export async function resizeImage(
         return;
       }
 
-      // Opt into higher-quality scaling — default canvas smoothing
+      // Opt into higher-quality scaling, default canvas smoothing
       // is browser-dependent but usually mid-tier and visibly soft on
       // photographs. The "high" preset matches what the upload
       // pipeline used to do via a separate sharp pass.
@@ -95,7 +95,7 @@ export function getOptimizedUrl(
   quality?: number
 ): string {
   // On Supabase Free plan, no transforms available.
-  // Just return the raw URL — Next.js Image component handles optimisation.
+  // Just return the raw URL, Next.js Image component handles optimisation.
   return url;
 }
 

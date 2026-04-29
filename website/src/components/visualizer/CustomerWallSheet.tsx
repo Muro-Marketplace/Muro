@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * CustomerWallSheet — modal wrapper for the customer "View on a wall"
+ * CustomerWallSheet, modal wrapper for the customer "View on a wall"
  * flow on the artwork detail page.
  *
  * Hosts WallVisualizer in `customer_artwork_page` mode with the
@@ -14,7 +14,7 @@
  *
  * Design choices:
  *   - Fullscreen on mobile, tall modal (90vh) on desktop. Konva needs
- *     room to breathe — squeezing it into a small dialog defeats the
+ *     room to breathe, squeezing it into a small dialog defeats the
  *     point of the feature.
  *   - Locks scroll on the body while open so the page underneath can't
  *     scroll behind the sheet.
@@ -31,7 +31,7 @@ import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
 import type { PanelWork } from "./WorksPanel";
 
-// Konva touches `window` at module init — must dynamic-import.
+// Konva touches `window` at module init, must dynamic-import.
 const WallVisualizer = dynamic(
   () => import("./WallVisualizer"),
   { ssr: false },

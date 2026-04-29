@@ -6,7 +6,7 @@ export const metadata: Metadata = {
     "Wallplace Cookie Policy. Learn about the cookies we use and how to control them.",
 };
 
-// Cookie list (#38) — vendor-neutral phrasing. The Supabase cookies
+// Cookie list (#38), vendor-neutral phrasing. The Supabase cookies
 // are still ours functionally; using "Wallplace" as the provider and
 // describing the purpose in plain English keeps this readable to a
 // non-technical visitor while remaining accurate.

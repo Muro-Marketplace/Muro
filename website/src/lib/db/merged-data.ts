@@ -17,7 +17,7 @@ export async function getAllArtists(): Promise<Artist[]> {
 }
 
 /**
- * Get a single artist by slug — database first, then static fallback.
+ * Get a single artist by slug, database first, then static fallback.
  */
 export async function getArtistBySlug(slug: string): Promise<Artist | null> {
   // Try database first

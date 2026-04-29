@@ -15,7 +15,7 @@ import { getArtistBySlug } from "@/lib/db/merged-data";
 import { trackEvent, extractTrackingContext, generateVisitorId } from "@/lib/analytics";
 import type { Metadata } from "next";
 
-// Static params for seed artists — database artists use dynamic fallback
+// Static params for seed artists, database artists use dynamic fallback
 export async function generateStaticParams() {
   return artists.map((artist) => ({
     slug: artist.slug,
@@ -32,11 +32,11 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  // Wrap the entire metadata build in try/catch — a throw here happens
+  // Wrap the entire metadata build in try/catch, a throw here happens
   // BEFORE the page component runs and crashes the entire route to the
   // global error boundary ("Something went wrong"). Causes can be a
   // missing field on the artist row, an invalid OG image URL, a DB
-  // connection blip — none of those should kill the page.
+  // connection blip, none of those should kill the page.
   try {
     const { slug } = await params;
     const artist = await getArtistBySlug(slug);
@@ -45,14 +45,14 @@ export async function generateMetadata({
       return { title: "Artist Not Found – Wallplace" };
     }
 
-    // Defensive coercions — anything missing or malformed flows
+    // Defensive coercions, anything missing or malformed flows
     // through as a sensible fallback rather than throwing.
     const safeName = artist.name?.trim() || "Wallplace artist";
     const safeBio =
       typeof artist.shortBio === "string" && artist.shortBio.trim()
         ? artist.shortBio.trim()
         : `Browse ${safeName}'s work on Wallplace.`;
-    // Only include an OG image when it parses as an absolute URL —
+    // Only include an OG image when it parses as an absolute URL,
     // a relative or malformed string would throw downstream.
     let ogImage: { url: string; width: number; height: number } | null = null;
     if (artist.image) {
@@ -89,7 +89,7 @@ export async function generateMetadata({
 }
 
 /**
- * Pill used for the "Terms" group — accent-tinted with a tick.
+ * Pill used for the "Terms" group, accent-tinted with a tick.
  * Communicates "this is a commitment / an opt-in" in green-light style.
  */
 function TermPill({ label, yes }: { label: string; yes: boolean }) {
@@ -104,13 +104,13 @@ function TermPill({ label, yes }: { label: string; yes: boolean }) {
 }
 
 /**
- * Pill used for the "Sells" group — quieter neutral chip, no tick.
+ * Pill used for the "Sells" group, quieter neutral chip, no tick.
  * Matches the format chips on the marketplace BrowseArtistCard so the
  * card → profile transition feels consistent.
  *
  * Always renders Originals / Prints / Framed (all three) so a venue
  * scanning can see what's missing as well as what's offered. Unsupported
- * formats render with strikethrough + faded styling — clearer than
+ * formats render with strikethrough + faded styling, clearer than
  * just hiding them, since hiding can read as "I forgot to fill this in".
  */
 function SellsPill({ label, yes }: { label: string; yes: boolean }) {
@@ -151,14 +151,14 @@ export default async function ArtistProfilePage({
     source: ctx.referrer?.includes("qr") ? "qr" : "browse",
   }).catch(() => {});
 
-  // Variant A — no banner, so we don't need a bannerSrc fallback. The
+  // Variant A, no banner, so we don't need a bannerSrc fallback. The
   // saved banner_image stays in the DB for future variants and for
   // social-card fallback in generateMetadata.
   //
   // Split offerings (what they sell) from terms (how they let venues
   // host). Offerings always render all three formats so venues can
   // see what the artist DOESN'T do (greyed-out / strikethrough)
-  // alongside what they do — clearer than hiding the missing ones.
+  // alongside what they do, clearer than hiding the missing ones.
   const offerings = [
     { label: "Originals", yes: artist.offersOriginals },
     { label: "Prints", yes: artist.offersPrints },
@@ -182,7 +182,7 @@ export default async function ArtistProfilePage({
 
   return (
     <div className="bg-background">
-      {/* Variant A — no banner. Mobile gets a dedicated compact
+      {/* Variant A, no banner. Mobile gets a dedicated compact
           layout (header pair, full-width CTAs, stacked metadata);
           desktop renders the three-column grid. */}
       <section className="pt-6 lg:pt-12 pb-2">
@@ -199,7 +199,7 @@ export default async function ArtistProfilePage({
 
           {/* ─── MOBILE LAYOUT (< lg) ───────────────────────────── */}
           <div className="lg:hidden">
-            {/* Identity header — bigger photo + bigger type so the
+            {/* Identity header, bigger photo + bigger type so the
                 hero feels like a header rather than a notification
                 row. Photo bumped 96 → 128, name bumped 2xl → 3xl,
                 location/@insta promoted from xs/[11px] to sm/xs. */}
@@ -226,7 +226,7 @@ export default async function ArtistProfilePage({
                   {/* Save artist (#27). Heart pairs with the existing
                       Message / Request placement CTAs further down so
                       followers can stash an artist they like and come
-                      back to them — same affordance as Saatchi /
+                      back to them, same affordance as Saatchi /
                       Vinted. */}
                   <SaveButton type="artist" itemId={artist.slug} size="sm" />
                 </div>
@@ -275,7 +275,7 @@ export default async function ArtistProfilePage({
               </div>
             )}
 
-            {/* Mobile CTAs — side-by-side, half-width each. Both
+            {/* Mobile CTAs, side-by-side, half-width each. Both
                 stretch to fill their column so neither dominates. */}
             <div className="grid grid-cols-2 gap-2 mb-6">
               <MessageArtistButton
@@ -292,14 +292,14 @@ export default async function ArtistProfilePage({
               />
             </div>
 
-            {/* Metadata — compact stacked rows under the CTAs. The
+            {/* Metadata, compact stacked rows under the CTAs. The
                 full sidebar from desktop wouldn't fit cleanly so we
                 use a 2-col grid for the facts and full-width pill
                 rows for Sells / Terms. */}
             <div className="border-t border-border pt-4 grid grid-cols-2 gap-x-4 gap-y-3">
               <div>
                 <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Delivery</p>
-                <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "—"}</p>
+                <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "–"}</p>
               </div>
               <div>
                 <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Suited for</p>
@@ -359,7 +359,7 @@ export default async function ArtistProfilePage({
               identity + bio (centre, flexible) → metadata (right,
               260px). */}
           <div className="hidden lg:grid grid-cols-[220px_minmax(0,1fr)_260px] gap-10 items-start">
-            {/* LEFT — square photo + CTAs + Instagram. CTAs sit
+            {/* LEFT, square photo + CTAs + Instagram. CTAs sit
                 directly under the photo so the buyer's eye flows
                 face → name → action. Both buttons render full-width
                 of the column for visual weight as the primary CTA. */}
@@ -398,7 +398,7 @@ export default async function ArtistProfilePage({
                   stacking too tall. */}
             </div>
 
-            {/* CENTRE — identity + bio + tags + CTAs. */}
+            {/* CENTRE, identity + bio + tags + CTAs. */}
             <div className="min-w-0">
               <p className="text-[11px] text-muted uppercase tracking-[0.18em] mb-3">
                 {disciplineLabel(artist.primaryMedium, artist.discipline)}
@@ -457,7 +457,7 @@ export default async function ArtistProfilePage({
                   primary action sits next to the artist's face. */}
             </div>
 
-            {/* RIGHT — metadata sidebar. Stacks all the venue-relevant
+            {/* RIGHT, metadata sidebar. Stacks all the venue-relevant
                 facts so a buyer scanning for "would this work in my
                 space" can see everything in one column without
                 scrolling past the bio. Hairlines separate each group. */}
@@ -465,11 +465,11 @@ export default async function ArtistProfilePage({
               <div className="grid grid-cols-1 gap-y-3">
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Location</p>
-                  <p className="text-sm font-medium text-foreground">{artist.location || "—"}</p>
+                  <p className="text-sm font-medium text-foreground">{artist.location || "–"}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Delivery</p>
-                  <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "—"}</p>
+                  <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "–"}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Suited for</p>
@@ -508,7 +508,7 @@ export default async function ArtistProfilePage({
                   the same order so the row reads consistently across
                   every artist. Unsupported formats render with
                   strikethrough so the absence is explicit. Terms keeps
-                  the accent-tinted tick pill — Terms are commitments
+                  the accent-tinted tick pill, Terms are commitments
                   the artist opted into, Sells are inventory categories. */}
               <div className="pt-4 border-t border-border">
                 <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Sells</p>
@@ -535,7 +535,7 @@ export default async function ArtistProfilePage({
 
       {/* Portfolio + Extended Bio (client). Coerced to safe defaults
           so a row with NULL extended_bio / themes doesn't crash the
-          client component on first render — the props are typed as
+          client component on first render, the props are typed as
           required strings/arrays. Works with no image are filtered
           out: <Image src=""> throws during the initial server HTML
           render for client components and takes the whole route to
@@ -554,13 +554,13 @@ export default async function ArtistProfilePage({
         }
       />
 
-      {/* Collections — pulled from the DB by artist slug. The seed
+      {/* Collections, pulled from the DB by artist slug. The seed
           getCollectionsByArtist() only filtered an empty seed array,
           so collections created in the artist portal never surfaced
           here; getCollectionsByArtistSlug() goes to Supabase. */}
       <CollectionsSection artistSlug={artist.slug} artistName={artist.name} />
 
-      {/* CTA Block — hidden for artists viewing other artists */}
+      {/* CTA Block, hidden for artists viewing other artists */}
       <PlacementCTASection>
         <section className="py-20 lg:py-24 border-t border-border">
           <div className="max-w-[1200px] mx-auto px-6">
@@ -607,7 +607,7 @@ async function CollectionsSection({
       artistSlug,
       artistName,
     );
-    // Drop collections with no usable image source — Next.js Image
+    // Drop collections with no usable image source, Next.js Image
     // throws on src="" / undefined, and the artist_collections
     // schema doesn't guarantee any of these three columns are set
     // (cover_image isn't even a real column on the table). One

@@ -10,7 +10,7 @@ const QR_MAX = 600;
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** The URL the QR code should resolve to — usually the public artwork page. */
+  /** The URL the QR code should resolve to, usually the public artwork page. */
   targetUrl: string;
   /** Placement id so the Labels page can pre-select this row for bulk printing. */
   placementId: string;

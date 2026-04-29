@@ -6,12 +6,12 @@
  * composites the artwork on top inside the inner cutout area.
  *
  * Why SVG (not PNG textures)?
- *   - Resolution-independent — same source scales from a 200px chip in
+ *   - Resolution-independent, same source scales from a 200px chip in
  *     the editor to a 4K render with no asset duplication.
  *   - librsvg (sharp's renderer) supports gradients + feTurbulence +
  *     pattern fills, which is enough for "looks like wood / gold /
  *     painted metal" without an art pipeline.
- *   - Zero additional network/disk overhead — the SVG is generated on
+ *   - Zero additional network/disk overhead, the SVG is generated on
  *     demand alongside the render.
  *
  * Style coverage:
@@ -23,7 +23,7 @@
  *   - thin_black: 3-stop gradient with subtle top-edge highlight,
  *     matching the "matte / gloss / white" finishes.
  *   - floater: solid finish colour with a thin black gap inset on the
- *     inner edge — the gap is what gives floater frames their distinctive
+ *     inner edge, the gap is what gives floater frames their distinctive
  *     look.
  *
  * Inner cut-out:
@@ -47,7 +47,7 @@ interface FrameSvgInput {
  * Generate an SVG that lights a flat wall colour from one side, adds a
  * subtle vignette around the edges, and lays down a soft floor shadow
  * along the bottom. The result reads more like a real wall than a flat
- * fill — without committing to a 3D engine.
+ * fill, without committing to a 3D engine.
  *
  * Used for preset walls only; uploaded photos already carry their own
  * lighting and don't need (or want) this treatment on top.
@@ -64,7 +64,7 @@ export function generateWallSvg(input: {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
     <defs>
       <!-- Wall colour with a horizontal gradient so the lit side reads
-           brighter than the shadowed side — the cue most readings of
+           brighter than the shadowed side, the cue most readings of
            "wall photographed in a room" implicitly carry. -->
       <linearGradient id="wallLit" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0%"   stop-color="#${clean}" stop-opacity="1" />
@@ -155,7 +155,7 @@ function classicWoodSvg(
   b: number,
   finish: string,
 ): string {
-  // Four-stop palette per finish — light/mid/dark/very-dark gives the
+  // Four-stop palette per finish, light/mid/dark/very-dark gives the
   // depth of a real piece of wood lit from one side. Tuned by eye
   // against reference photos.
   const finishMap: Record<
@@ -197,8 +197,8 @@ function classicWoodSvg(
   const c = finishMap[finish] ?? finishMap.natural;
 
   // Two grain layers:
-  //   Layer A — long horizontal streaks (low X freq, high Y freq).
-  //   Layer B — finer micro-grain for surface texture.
+  //   Layer A, long horizontal streaks (low X freq, high Y freq).
+  //   Layer B, finer micro-grain for surface texture.
   // Frequencies scale subtly with frame size so a tiny chip and a 4K
   // render look proportionally similar.
   const minDim = Math.min(w, h);
@@ -216,7 +216,7 @@ function classicWoodSvg(
         <stop offset="100%" stop-color="${c.c4}" />
       </linearGradient>
 
-      <!-- Long horizontal grain — stretched turbulence. -->
+      <!-- Long horizontal grain, stretched turbulence. -->
       <filter id="longGrain" x="0" y="0" width="100%" height="100%">
         <feTurbulence type="fractalNoise"
                       baseFrequency="${longGrainX} ${longGrainY}"
@@ -254,7 +254,7 @@ function classicWoodSvg(
       </linearGradient>
 
       <!-- Side highlight (left lit, right shadowed) for cylindrical
-           "round profile" feel — most picture frames have a small
+           "round profile" feel, most picture frames have a small
            vertical curvature at the moulding. -->
       <linearGradient id="woodSideShade" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0%"   stop-color="white" stop-opacity="0.10" />
@@ -262,7 +262,7 @@ function classicWoodSvg(
         <stop offset="100%" stop-color="black" stop-opacity="0.20" />
       </linearGradient>
 
-      <!-- Soft inner shadow that hugs the artwork window — gives the
+      <!-- Soft inner shadow that hugs the artwork window, gives the
            rabbet visible depth instead of a flat dark line. -->
       <radialGradient id="rabbetShadow" cx="50%" cy="50%"
                       fx="50%" fy="50%" r="50%">
@@ -286,7 +286,7 @@ function classicWoodSvg(
     <!-- 4. Left → right cylindrical shading. -->
     <path d="${frameRingPath(w, h, b)}"
           fill="url(#woodSideShade)" fill-rule="evenodd" />
-    <!-- 5. Inner rabbet line — slightly darker, thicker, casts depth. -->
+    <!-- 5. Inner rabbet line, slightly darker, thicker, casts depth. -->
     <rect x="${b - 1}" y="${b - 1}"
           width="${w - 2 * (b - 1)}" height="${h - 2 * (b - 1)}"
           fill="none" stroke="${c.rabbet}" stroke-width="2"
@@ -401,7 +401,7 @@ function floaterSvg(
   finish: string,
 ): string {
   // Floater frames are clean, one-tone wood/painted profiles. The
-  // signature is the *gap* — a thin shadow visible between the artwork
+  // signature is the *gap*, a thin shadow visible between the artwork
   // edge and the inner frame face.
   const finishMap: Record<string, { c1: string; c2: string }> = {
     natural: { c1: "#A1856A", c2: "#7C6347" },
@@ -411,7 +411,7 @@ function floaterSvg(
   const c = finishMap[finish] ?? finishMap.natural;
 
   // Floater-gap thickness: ~30% of the border or 4px, whichever larger.
-  // The gap sits *inside* the frame thickness — the artwork window stays
+  // The gap sits *inside* the frame thickness, the artwork window stays
   // at (b, b, w-2b, h-2b), and the gap is a ring of `gap` pixels just
   // outside that window (i.e. the inner b pixels of the frame change
   // from frame-colour to black).

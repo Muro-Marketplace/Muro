@@ -7,7 +7,7 @@ export const revalidate = 300; // Cache 5 minutes
 
 /**
  * GET /api/venues/demand
- * Public — returns all venues with preferences for the demand tracker.
+ * Public, returns all venues with preferences for the demand tracker.
  * Merges static venues with database venue profiles.
  */
 export async function GET(request: Request) {

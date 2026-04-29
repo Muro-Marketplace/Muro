@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /venue-portal/walls — list of the venue's saved walls.
+ * /venue-portal/walls, list of the venue's saved walls.
  *
  * Each wall card shows a swatch (wall_color_hex) sized to the wall's
  * aspect ratio, plus name + dimensions. Clicking a card opens the editor
@@ -116,7 +116,7 @@ export default function VenueWallsPage() {
 // ── Cards ─────────────────────────────────────────────────────────────
 
 function WallCard({ wall }: { wall: Wall }) {
-  // Compute aspect ratio for the swatch — keep it within a card-friendly box.
+  // Compute aspect ratio for the swatch, keep it within a card-friendly box.
   const aspect = wall.width_cm / wall.height_cm;
   const cardHeight = aspect >= 1 ? 140 : 200;
   const cardWidth = cardHeight * aspect;

@@ -39,7 +39,7 @@ export default function CheckoutPage() {
   const region: "uk" | "international" =
     shipping.country !== "United Kingdom" && shipping.country !== "" ? "international" : "uk";
 
-  // Single source of truth for cart-level shipping — same helper the
+  // Single source of truth for cart-level shipping, same helper the
   // /api/checkout route uses, so the displayed total can never drift
   // from what Stripe charges.
   const { artistGroups: artistGroupsArr, totalShipping } = useMemo(
@@ -62,7 +62,7 @@ export default function CheckoutPage() {
   // Re-shape into a slug-keyed object so the existing render block
   // (which iterates Object.values) keeps working without changes. We
   // also need each group's items array for the order-summary display
-  // bits — that's fed back from the original cart, grouped by slug.
+  // bits, that's fed back from the original cart, grouped by slug.
   const artistGroups = useMemo(() => {
     const out: Record<string, {
       artistName: string;
@@ -121,7 +121,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           items,
           shipping,
-          // Defensive parity check — the API recomputes via the same
+          // Defensive parity check, the API recomputes via the same
           // helper. If the two diverge by > 1p, the API logs a warning
           // (and trusts its own number).
           expectedShippingCost: shippingCost,
@@ -383,7 +383,7 @@ export default function CheckoutPage() {
                 <span>Total</span>
                 <span>£{total.toFixed(2)}</span>
               </div>
-              {/* Handling time expectation — artists are expected to dispatch
+              {/* Handling time expectation, artists are expected to dispatch
                   within 7 days. Sets buyer expectation pre-purchase so they
                   don't message at day 3 worrying the order is lost. */}
               <div className="pt-3 mt-2 border-t border-border">

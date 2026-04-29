@@ -1,17 +1,17 @@
 "use client";
 
 /**
- * WorksPanel — left-side rail in the editor showing placeable works.
+ * WorksPanel, left-side rail in the editor showing placeable works.
  *
- * Presentational only — the parent owns the data lifecycle. This makes
+ * Presentational only, the parent owns the data lifecycle. This makes
  * it easy for the parent to keep its own `workById` map for image
  * lookups inside the canvas.
  *
  * Sections (venue_my_walls mode only):
- *   - My Works   — works currently on display at the venue (auto from
+ *   - My Works  , works currently on display at the venue (auto from
  *                  active placements).
- *   - Saved      — works the venue has bookmarked (saved_items).
- *   - All        — gallery feed (everything else).
+ *   - Saved     , works the venue has bookmarked (saved_items).
+ *   - All       , gallery feed (everything else).
  *
  * For non-venue modes (artist_*, customer_artwork_page) the panel
  * shows a single flat list.
@@ -44,7 +44,7 @@ export interface PanelWork {
   heightCm?: number;
   /** All listed size variants (parsed from the work's pricing array). */
   sizes?: SizeVariant[];
-  /** Intended orientation — used to align the picked size to the
+  /** Intended orientation, used to align the picked size to the
    *  artwork's actual rotation when pricing labels disagree. */
   orientation?: WorkOrientation;
 }
@@ -53,10 +53,10 @@ type Tab = "my" | "saved" | "all";
 
 interface Props {
   mode: VisualizerMode;
-  /** For non-venue modes — single flat list. */
+  /** For non-venue modes, single flat list. */
   works?: PanelWork[];
 
-  /** Venue mode — three sections. */
+  /** Venue mode, three sections. */
   myWorks?: PanelWork[];
   savedWorks?: PanelWork[];
   allWorks?: PanelWork[];
@@ -159,7 +159,7 @@ export default function WorksPanel({
         )}
 
         {/* Hide the search box entirely when there's nothing to
-            search through — the customer "view on a wall" mode locks
+            search through, the customer "view on a wall" mode locks
             to a single artwork, so a search field is just dead UI
             (was already disabled, but disabled empty inputs read as
             broken). */}
@@ -225,7 +225,7 @@ export default function WorksPanel({
             </li>
           ))}
         </ul>
-        {/* Show more — incremental reveal at PAGE_SIZE per click. The
+        {/* Show more, incremental reveal at PAGE_SIZE per click. The
             All tab on a venue with hundreds of saved works can still
             scroll forever, but the initial render only pays for 20
             cards. */}
@@ -316,7 +316,7 @@ function EmptyTab({ tab, mode }: { tab: Tab | null; mode: VisualizerMode }) {
           No saved works yet.
         </p>
         <p className="text-[11px] text-stone-500 leading-snug">
-          Tap the heart on any artwork while browsing — it&apos;ll appear here.
+          Tap the heart on any artwork while browsing, it&apos;ll appear here.
         </p>
       </div>
     );
@@ -332,7 +332,7 @@ function EmptyTab({ tab, mode }: { tab: Tab | null; mode: VisualizerMode }) {
 
 function dragHint(w: PanelWork): string {
   if (w.widthCm && w.heightCm) {
-    return `${w.title} — drops at ${Math.round(w.widthCm)}×${Math.round(w.heightCm)} cm`;
+    return `${w.title}, drops at ${Math.round(w.widthCm)}×${Math.round(w.heightCm)} cm`;
   }
   return w.title;
 }

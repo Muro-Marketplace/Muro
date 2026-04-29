@@ -1,5 +1,5 @@
 // Commission calculations touch every sale. Getting these wrong either
-// over-charges the artist or under-charges the platform — both are bad.
+// over-charges the artist or under-charges the platform, both are bad.
 
 import { describe, expect, it } from "vitest";
 import {

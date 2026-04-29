@@ -43,7 +43,7 @@ const PLANS: Plan[] = [
       "Featured artist profile + badge",
       "Priority visibility in venue recommendations",
       "Message venues directly",
-      "Full analytics — views, enquiries, conversion",
+      "Full analytics, views, enquiries, conversion",
       "Priority response from Wallplace team",
     ],
   },

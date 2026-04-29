@@ -20,7 +20,7 @@ interface QRLabelProps {
   tagline?: string;
   /** Per-label visibility flags. Default true so existing call sites
    *  that don't pass them keep their behaviour. The flags gate
-   *  rendering only — the data still flows through. */
+   *  rendering only, the data still flows through. */
   showMedium?: boolean;
   showDimensions?: boolean;
   showPrice?: boolean;

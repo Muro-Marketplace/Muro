@@ -10,7 +10,7 @@ import { processPendingTransfers } from "@/lib/stripe-connect";
  * Protected by a simple secret token to prevent abuse.
  */
 export async function POST(request: Request) {
-  // Fail CLOSED — refuse the request if the cron secret isn't configured,
+  // Fail CLOSED, refuse the request if the cron secret isn't configured,
   // otherwise the route was effectively unauthenticated in any environment
   // that didn't set the env var (the old `if (cronSecret && …)` guard was
   // skipped when cronSecret was falsy, so anyone could trigger a payout
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error("CRON_SECRET not set — refusing process-pending request");
+    console.error("CRON_SECRET not set, refusing process-pending request");
     return NextResponse.json({ error: "Server misconfigured" }, { status: 503 });
   }
   if (authHeader !== `Bearer ${cronSecret}`) {

@@ -1,4 +1,4 @@
-// Venue analytics — QR scan totals + top works/artists pulled
+// Venue analytics, QR scan totals + top works/artists pulled
 // from /api/analytics/venue. Mirrors the artist analytics layout
 // at a smaller scope; the venue side only gets QR-scan signal at
 // the moment because that's all we deterministically know

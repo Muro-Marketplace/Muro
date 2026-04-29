@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * QuotaChip — the always-visible "X of Y daily renders" pill in the
+ * QuotaChip, the always-visible "X of Y daily renders" pill in the
  * editor's top-right corner.
  *
  * Self-contained: fetches /api/walls/quota on mount + when refreshed via
@@ -87,7 +87,7 @@ export default function QuotaChip({
   }
 
   if (error || !status) {
-    // Don't block the editor on a flaky quota fetch — render a muted chip.
+    // Don't block the editor on a flaky quota fetch, render a muted chip.
     return (
       <div
         aria-label="Quota unavailable"
@@ -112,7 +112,7 @@ export default function QuotaChip({
   const limit = status.limits.daily;
   const unlimited = limit === -1;
 
-  // Unlimited tier (artist_pro / venue_premium) — no count, just a
+  // Unlimited tier (artist_pro / venue_premium), no count, just a
   // calm "Unlimited" badge so the chip doesn't shout numbers that
   // don't matter.
   if (unlimited) {

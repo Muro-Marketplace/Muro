@@ -101,7 +101,7 @@ export default function SpacesLookingForArtPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Venues shouldn't browse other venues — this page is for artists.
+  // Venues shouldn't browse other venues, this page is for artists.
   // We fetch the venue's own slug so we can point them at their own
   // public profile rather than exposing the discovery UI to them.
   useEffect(() => {
@@ -144,12 +144,12 @@ export default function SpacesLookingForArtPage() {
   }, [userType, session?.access_token]);
 
   const isSubscribed = subscriptionStatus === "active" || subscriptionStatus === "trialing";
-  // Venues are locked out of viewing other venues — this page is for artists/customers
+  // Venues are locked out of viewing other venues, this page is for artists/customers
   // discovering venue demand. Venues manage their own profile through /venue-portal.
   const canSeeDetails = userType !== "venue" && (isSubscribed || userType === "customer");
   const canMessageVenues = userType !== "venue" && (isSubscribed || userType === "customer");
   // Inline placement requests are artist-only. We don't gate on
-  // subscription here — the underlying API enforces tier rules and
+  // subscription here, the underlying API enforces tier rules and
   // returns a friendly error message which the form surfaces inline.
   // (Previously gated on `isSubscribed` too, which silently hid the
   // button from un-subscribed artists and was reported as a broken
@@ -247,7 +247,7 @@ export default function SpacesLookingForArtPage() {
         </div>
       </section>
 
-      {/* Stats — computed from filtered results */}
+      {/* Stats, computed from filtered results */}
       <section className="border-b border-border">
         <div className="max-w-[1200px] mx-auto px-6 py-4">
           <div className="flex items-center justify-center gap-6 sm:gap-10 text-sm">
@@ -325,7 +325,7 @@ export default function SpacesLookingForArtPage() {
             <div className="max-w-xl mx-auto bg-surface border border-border rounded-sm p-8 text-center">
               <p className="text-sm font-medium text-foreground mb-1">Spaces is for artists</p>
               <p className="text-xs text-muted mb-5">
-                This is where artists discover venues to place their work. To keep browsing fair, venues don&rsquo;t see other venues here — but you can preview how artists see YOUR space.
+                This is where artists discover venues to place their work. To keep browsing fair, venues don&rsquo;t see other venues here, but you can preview how artists see YOUR space.
               </p>
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
                 {ownVenueSlug && (
@@ -392,7 +392,7 @@ export default function SpacesLookingForArtPage() {
                       </div>
                     );
                   })()}
-                  {/* Thumbnail strip — additional uploaded photos shown
+                  {/* Thumbnail strip, additional uploaded photos shown
                       under the hero so artists get a real sense of the
                       space, not just the headline shot. */}
                   {canSeeDetails && (venue.images || []).length > 1 && (
@@ -448,7 +448,7 @@ export default function SpacesLookingForArtPage() {
                       {venue.approximateFootfall && <><span className="w-0.5 h-0.5 rounded-full bg-muted" /><span>{venue.approximateFootfall}</span></>}
                     </div>
 
-                    {/* Description + display needs — only shown to subscribers
+                    {/* Description + display needs, only shown to subscribers
                         so the venue's full pitch isn't leaked to drive-by
                         visitors, but is visible to artists who can act on it. */}
                     {canSeeDetails && (
@@ -483,7 +483,7 @@ export default function SpacesLookingForArtPage() {
                       {canSeeDetails && canMessageVenues ? (
                       <>
                         {sentRequests[venue.slug] ? (
-                          // Just-sent confirmation — flips back to normal CTAs
+                          // Just-sent confirmation, flips back to normal CTAs
                           // once the artist clicks "Send another"; the placement
                           // record itself stays in the artist's portal.
                           <div className="mt-3 pt-3 border-t border-border bg-green-50/40 -mx-5 -mb-5 px-5 py-4 rounded-b-sm">
@@ -520,7 +520,7 @@ export default function SpacesLookingForArtPage() {
                             </div>
                           </div>
                         ) : requestOpenSlug === venue.slug && canRequestPlacement ? (
-                          // Inline form — artist picks a work + arrangement,
+                          // Inline form, artist picks a work + arrangement,
                           // submits straight to /api/placements.
                           <SpacesPlacementRequestForm
                             venue={{
@@ -542,7 +542,7 @@ export default function SpacesLookingForArtPage() {
                         ) : (
                           // Default action row for artists / customers viewing a
                           // venue card. Artists get the primary "Request a
-                          // placement" CTA — sentence-case, sleek, with a
+                          // placement" CTA, sentence-case, sleek, with a
                           // subtle arrow. The handoff to the bigger
                           // /artist-portal/placements form lives inside the
                           // expanded inline form (footer link), not here.
@@ -608,7 +608,7 @@ export default function SpacesLookingForArtPage() {
             </>
           ))}
 
-          {/* CTA — artists only; venues already see the dedicated
+          {/* CTA, artists only; venues already see the dedicated
               "Spaces is for artists" block above. */}
           {userType !== "venue" && (
             <div className="mt-12 text-center">

@@ -77,7 +77,7 @@ const freeBenefits = [
     ),
     title: "Free, always",
     description:
-      "Browsing and enquiring is free for venues. No platform fee for venues — ever.",
+      "Browsing and enquiring is free for venues. No platform fee for venues, ever.",
   },
 ];
 
@@ -211,7 +211,7 @@ export default function VenuesPage() {
                 <a href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
                   Try Wallplace Curated
                 </a>{" "}
-                — from £49.
+               , from £49.
               </p>
             </div>
           </div>
@@ -254,7 +254,7 @@ export default function VenuesPage() {
         </div>
       </section>
 
-      {/* Walls that work for you. Reframed (#17) — revenue share is
+      {/* Walls that work for you. Reframed (#17), revenue share is
           one part of a broader pitch: bare walls cost you customer
           experience, art improves the room, and any sale upside is
           extra on top. */}
@@ -268,20 +268,20 @@ export default function VenuesPage() {
             Bare walls earn you nothing today. Real art makes a space feel
             considered, gives customers something to look at, and quietly
             improves the experience of being in your venue. Any commercial
-            upside on top is a bonus — not the whole point.
+            upside on top is a bonus, not the whole point.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 max-w-3xl">
             <div className="bg-background border border-border rounded-sm p-5">
               <p className="text-xs font-medium uppercase tracking-widest text-accent mb-2">Atmosphere</p>
               <p className="text-sm text-foreground/85 leading-relaxed">
-                Curated work makes your space feel intentional — better photos,
+                Curated work makes your space feel intentional, better photos,
                 longer dwell times, customers who come back.
               </p>
             </div>
             <div className="bg-background border border-border rounded-sm p-5">
               <p className="text-xs font-medium uppercase tracking-widest text-accent mb-2">Story</p>
               <p className="text-sm text-foreground/85 leading-relaxed">
-                Local artists give you something to talk about — a reason for
+                Local artists give you something to talk about, a reason for
                 regulars to bring friends and for press to cover you.
               </p>
             </div>

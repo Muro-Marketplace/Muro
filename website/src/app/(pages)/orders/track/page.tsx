@@ -1,5 +1,5 @@
-// Public order tracking page (#3). Lets guest buyers — who chose to
-// check out without an account — look up their order using just the
+// Public order tracking page (#3). Lets guest buyers, who chose to
+// check out without an account, look up their order using just the
 // email they entered at checkout and the order ID from their receipt.
 // No login required. The API enforces email-match server-side so the
 // orderId alone isn't enough to view someone else's order.
@@ -49,7 +49,7 @@ const STATUS_COPY: Record<string, { label: string; tone: "neutral" | "good" | "w
 };
 
 function fmtMoney(amount: number | null, currency: string): string {
-  if (amount == null) return "—";
+  if (amount == null) return "–";
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: currency.toUpperCase() }).format(amount);
 }
 
@@ -87,7 +87,7 @@ export default function OrderTrackPage() {
       }
       setOrder(data.order);
     } catch {
-      setError("Network error — please try again in a moment.");
+      setError("Network error, please try again in a moment.");
     } finally {
       setLoading(false);
     }
@@ -113,7 +113,7 @@ export default function OrderTrackPage() {
           </h1>
           <p className="text-muted leading-relaxed mb-10">
             Enter the order ID from your receipt email plus the email address
-            you used at checkout. Both have to match — we won't show order
+            you used at checkout. Both have to match, we won't show order
             details with the order ID alone.
           </p>
 

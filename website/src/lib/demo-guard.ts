@@ -20,7 +20,7 @@
  *   need to fail-fast can use `assertNotDemoStrict` which returns 403.
  *
  * Naming:
- *   `assert*` for clarity at the call site — these are intentionally
+ *   `assert*` for clarity at the call site, these are intentionally
  *   short-circuit guards that the caller branches on.
  */
 
@@ -62,7 +62,7 @@ export function assertNotDemo(
       demo: true,
       message:
         opts.message ??
-        "You're touring a demo account — changes aren't saved. Sign up to make it real.",
+        "You're touring a demo account, changes aren't saved. Sign up to make it real.",
     },
     { status: 200 },
   );

@@ -55,7 +55,7 @@ export default function Error({
           We&apos;re sorry, something unexpected happened. Please try again.
         </p>
 
-        {/* Inline error message — visible by default in dev, behind
+        {/* Inline error message, visible by default in dev, behind
             a disclosure in prod. Lets us actually diagnose user
             reports of "something went wrong" without needing a
             screenshot of the browser console. */}

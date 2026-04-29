@@ -1,14 +1,14 @@
 /**
- * Wall Visualizer — server-side render service.
+ * Wall Visualizer, server-side render service.
  *
  * Pipeline (Phase 1, no AI):
  *   1. Build a base canvas (output 1600×1200 webp).
- *   2. Draw the wall — solid colour from `wall_color_hex` (or background
- *      photo when uploaded — Phase 2).
+ *   2. Draw the wall, solid colour from `wall_color_hex` (or background
+ *      photo when uploaded, Phase 2).
  *   3. For each item:
  *        a. Fetch the artwork image (parallel, with timeout).
  *        b. Resize to inner-artwork dimensions (cm × pxPerCm).
- *        c. Wrap in a frame border (solid colour for MVP — same colour
+ *        c. Wrap in a frame border (solid colour for MVP, same colour
  *           the canvas shows, so the render matches the on-screen look).
  *        d. Composite a soft drop-shadow underneath.
  *        e. Apply small rotation if any (capped at ±15° by the schema).
@@ -34,7 +34,7 @@ const PHOTOS_BUCKET = "wall-photos";
 
 // ── Tuning ──────────────────────────────────────────────────────────────
 
-// Render output dims. 2400×1800 (was 1600×1200) — file size grows
+// Render output dims. 2400×1800 (was 1600×1200), file size grows
 // ~2.25× but the on-screen preview at full-bleed lap/desktop sizes
 // no longer looks soft. Wall photos uploaded by venues come in at
 // 3000–5000px; pushing the render canvas up means the source
@@ -107,7 +107,7 @@ export async function renderLayout(input: RenderInput): Promise<RenderResult> {
     const photo = await fetchWallPhoto(input.background.image_path);
     if (photo) {
       // Resize the photo to exactly the wall area. We use `cover` so a
-      // wide photo of a wall fills the area without letterboxing — the
+      // wide photo of a wall fills the area without letterboxing, the
       // user sized the wall in cm; pixel cropping is fine.
       wallBuffer = await sharp(photo)
         .resize({ width: wallW, height: wallH, fit: "cover" })
@@ -130,7 +130,7 @@ export async function renderLayout(input: RenderInput): Promise<RenderResult> {
         .toBuffer();
     }
   } else {
-    // Preset wall — render as an SVG with directional light + vignette
+    // Preset wall, render as an SVG with directional light + vignette
     // so the result reads as a 3D-feeling wall, not a flat fill.
     const colorHex =
       input.background.kind === "preset"
@@ -144,7 +144,7 @@ export async function renderLayout(input: RenderInput): Promise<RenderResult> {
     wallBuffer = await sharp(Buffer.from(wallSvg)).png().toBuffer();
   }
 
-  // 3. Build composite list. Order matters — z-index.
+  // 3. Build composite list. Order matters, z-index.
   const composites: sharp.OverlayOptions[] = [
     {
       input: wallBuffer,
@@ -223,7 +223,7 @@ async function renderItem(
   // exceed OUTPUT_*_PX. sharp's composite then errors with
   //   "Image to composite must have same dimensions or smaller"
   // and we lose the entire render. Clamping caps the framed-item
-  // buffer at the canvas size — the artist sees their work rendered
+  // buffer at the canvas size, the artist sees their work rendered
   // up to the wall edge instead of an opaque failure.
   const itemPxW = Math.max(
     1,
@@ -258,7 +258,7 @@ async function renderItem(
   // Build the framed item itself. Order matters:
   //   1. Start with a transparent canvas at the item size.
   //   2. Lay down the artwork at the inner offset.
-  //   3. Composite the SVG-generated frame ring on top — its even-odd
+  //   3. Composite the SVG-generated frame ring on top, its even-odd
   //      cut-out keeps the artwork visible inside the frame opening.
   // For style='none' we just return the resized artwork.
   let itemImage: Buffer;
@@ -278,7 +278,7 @@ async function renderItem(
       .toBuffer();
 
     // Generate the SVG frame. May return null if the border is too
-    // thin to draw (e.g. a 1px wallpaper border on a tiny item) — fall
+    // thin to draw (e.g. a 1px wallpaper border on a tiny item), fall
     // back to the solid-colour rect for that case.
     const frameSvg = generateFrameSvg({
       outerWidthPx: itemPxW,
@@ -311,7 +311,7 @@ async function renderItem(
           left: Math.round(frameGeo.artwork.x),
           top: Math.round(frameGeo.artwork.y),
         },
-        // Frame ring on top — its inner area is transparent so the
+        // Frame ring on top, its inner area is transparent so the
         // artwork shows through cleanly.
         {
           input: frameLayer,
@@ -334,7 +334,7 @@ async function renderItem(
   }
 
   // Build a soft drop-shadow underneath. Disabled by default for 2D
-  // renders — artists asked to ship the rendered image without
+  // renders, artists asked to ship the rendered image without
   // shadows because the 2D preset walls already render with their
   // own SVG-based lighting + vignette, and the per-item shadow on
   // top read as a duplicate "fake 3D" effect. The 3D preview in the
@@ -357,7 +357,7 @@ async function renderItem(
     // was strictly larger than the base on every non-rotated item and
     // crashed the entire render with "Image to composite must have same
     // dimensions or smaller". The blur still produces a soft falloff at
-    // the silhouette edges within the canvas — the +100 padding was
+    // the silhouette edges within the canvas, the +100 padding was
     // attempting to "give the blur room to spread" but it was on the
     // wrong side of the composite operation.
     const itemMeta = await sharp(itemImage).metadata();
@@ -389,7 +389,7 @@ async function renderItem(
   // content, and the SVG-rendered frame ring can land 1–2px wider than
   // requested when feTurbulence/radialGradient filter regions round up.
   // Either case throws "Image to composite must have same dimensions
-  // or smaller" with no useful stack frame to point at — so we cap
+  // or smaller" with no useful stack frame to point at, so we cap
   // both itemImage and the shadow buffer here once, after all the
   // per-item work is done.
   itemImage = await fitToCanvas(itemImage);
@@ -417,7 +417,7 @@ async function renderItem(
 
 /**
  * Download an uploaded wall photo from the private `wall-photos`
- * bucket using the service-role client. Returns null on any failure —
+ * bucket using the service-role client. Returns null on any failure,
  * the caller falls back to a solid colour wall.
  */
 async function fetchWallPhoto(path: string): Promise<Buffer | null> {

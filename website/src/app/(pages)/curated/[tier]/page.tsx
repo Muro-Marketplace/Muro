@@ -5,7 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 /**
- * /curated/[tier] — deep-dive page per curation tier.
+ * /curated/[tier], deep-dive page per curation tier.
  *
  * Each tier has its own detail page with (a) a prominent CTA at the top
  * that jumps straight into the /curated form with the tier pre-selected,
@@ -31,7 +31,7 @@ const TIER_DETAILS: Record<string, {
       "A curator reviews your photos, brand, and tone",
       "Five artworks shortlisted with curator notes on each",
       "One round of revisions if you'd like alternatives",
-      "Clear next-step options — free loan, revenue share, paid loan, or purchase",
+      "Clear next-step options, free loan, revenue share, paid loan, or purchase",
       "Works included in the shortlist are available to arrange immediately",
     ],
     howItWorks: [
@@ -42,8 +42,8 @@ const TIER_DETAILS: Record<string, {
     ],
     faq: [
       { q: "What if I don't love any of the shortlist?", a: "One free round of revisions is included. In the rare case nothing fits, we'll refund in full." },
-      { q: "Do I pay for the art on top of the £149?", a: "Arrangements vary. Many shortlists include free-loan options (zero ongoing cost) and revenue-share arrangements (earn from sales). Paid-loan and outright purchase options are also shown — you pick what works for the space." },
-      { q: "Who owns the curator&rsquo;s shortlist notes?", a: "You do — take the notes anywhere, even if you pick a different fulfilment route later." },
+      { q: "Do I pay for the art on top of the £149?", a: "Arrangements vary. Many shortlists include free-loan options (zero ongoing cost) and revenue-share arrangements (earn from sales). Paid-loan and outright purchase options are also shown, you pick what works for the space." },
+      { q: "Who owns the curator&rsquo;s shortlist notes?", a: "You do, take the notes anywhere, even if you pick a different fulfilment route later." },
     ],
     cta: "Book for £149",
   },
@@ -52,7 +52,7 @@ const TIER_DETAILS: Record<string, {
     priceLabel: "£399",
     strapline: "Three to five walls curated as one coherent look.",
     highlights: [
-      "Every wall curated with continuity in mind — palette, mood, and scale",
+      "Every wall curated with continuity in mind, palette, mood, and scale",
       "Grouping notes tell you which works belong side-by-side",
       "Up to two revision rounds",
       "Best for venues with adjoining rooms, corridors, or multi-room layouts",
@@ -65,10 +65,10 @@ const TIER_DETAILS: Record<string, {
       { title: "4. Place the whole set in one pass", body: "Once approved we handle the artist outreach, agreements, and installation checklist." },
     ],
     faq: [
-      { q: "Can I split the budget across walls?", a: "Yes — the £399 covers the curation. Each wall can independently use free loan, revenue share, paid loan, or purchase." },
+      { q: "Can I split the budget across walls?", a: "Yes, the £399 covers the curation. Each wall can independently use free loan, revenue share, paid loan, or purchase." },
       { q: "Do you visit in person?", a: "Not at this tier. If you need an on-site walkthrough, choose Bespoke instead." },
     ],
-    cta: "Book multi-wall — £399",
+    cta: "Book multi-wall, £399",
   },
   bespoke: {
     label: "Bespoke project",
@@ -79,7 +79,7 @@ const TIER_DETAILS: Record<string, {
       "Artist shortlist, including commissioned pieces if the brief needs it",
       "Rotation schedule so walls evolve with the seasons",
       "Installation and logistics guidance",
-      "Flat quote based on scope — no hourly surprises",
+      "Flat quote based on scope, no hourly surprises",
     ],
     howItWorks: [
       { title: "1. Scope call", body: "A 30-minute call to understand the estate, brand, and constraints." },
@@ -88,7 +88,7 @@ const TIER_DETAILS: Record<string, {
       { title: "4. Ongoing rotation (optional)", body: "Seasonal refreshes keep walls from going stale. Priced separately." },
     ],
     faq: [
-      { q: "Is this suitable for a hotel chain?", a: "Yes — we've structured Bespoke so it can scale from a single boutique hotel to a multi-site group." },
+      { q: "Is this suitable for a hotel chain?", a: "Yes, we've structured Bespoke so it can scale from a single boutique hotel to a multi-site group." },
       { q: "Can you work to a brand guideline?", a: "Yes. Share your brand guidelines and the curator will build matches within them." },
     ],
     cta: "Request a quote",
@@ -100,7 +100,7 @@ const TIER_DETAILS: Record<string, {
     highlights: [
       "One new shortlist per month with 3–5 fresh options",
       "Rotation suggestions tuned to season, traffic, and what&rsquo;s performing",
-      "Priority artist coordination — we handle swaps end-to-end",
+      "Priority artist coordination, we handle swaps end-to-end",
       "Cancel any time; no notice period",
     ],
     howItWorks: [
@@ -109,10 +109,10 @@ const TIER_DETAILS: Record<string, {
       { title: "Swap + rotate", body: "If you&rsquo;re rotating existing work, we coordinate the collection and return." },
     ],
     faq: [
-      { q: "Do I pay for the art on top of £79.99?", a: "Curation is £79.99. The art itself follows whichever arrangement you pick — free loan, revenue share, paid loan, or outright purchase." },
+      { q: "Do I pay for the art on top of £79.99?", a: "Curation is £79.99. The art itself follows whichever arrangement you pick, free loan, revenue share, paid loan, or outright purchase." },
       { q: "What happens if I cancel?", a: "No fee. You keep the last shortlist and any live placements continue as normal." },
     ],
-    cta: "Start monthly — £79.99/mo",
+    cta: "Start monthly, £79.99/mo",
   },
   managed_quarterly: {
     label: "Quarterly refresh",
@@ -133,7 +133,7 @@ const TIER_DETAILS: Record<string, {
       { q: "Is this better than monthly?", a: "For most venues, yes. Monthly suits high-traffic / hospitality where walls are a brand asset. Quarterly is the norm for cafés, offices, and boutique retail." },
       { q: "Do quarterly works cost extra?", a: "Curation is the £199.99. The art itself follows whichever arrangement you pick." },
     ],
-    cta: "Start quarterly — £199.99/qtr",
+    cta: "Start quarterly, £199.99/qtr",
   },
 };
 

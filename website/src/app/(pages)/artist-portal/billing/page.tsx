@@ -76,7 +76,7 @@ export default function BillingPage() {
   const [connectLoading, setConnectLoading] = useState(true);
   const [connectRedirecting, setConnectRedirecting] = useState(false);
 
-  // Tracks "just came back from Stripe Checkout" — used to poll the
+  // Tracks "just came back from Stripe Checkout", used to poll the
   // profile until the webhook lands and the subscription_status flips
   // from canceled/none → active. Without this poll, the page renders
   // the stale pre-upgrade state and the user sees "Your subscription
@@ -123,7 +123,7 @@ export default function BillingPage() {
     void fetchSub().finally(() => setLoading(false));
   }, [fetchSub]);
 
-  // Poll after a successful Stripe checkout — the webhook usually
+  // Poll after a successful Stripe checkout, the webhook usually
   // lands within 1–3 seconds but can take longer. Poll every 2s for
   // up to 30s, stopping early once the status reads active/trialing.
   useEffect(() => {
@@ -145,7 +145,7 @@ export default function BillingPage() {
         return;
       }
       if (attempts >= maxAttempts) {
-        // Give up gracefully — show the page with the latest state
+        // Give up gracefully, show the page with the latest state
         // we have. The webhook may still arrive after this.
         setConfirmingUpgrade(false);
         return;
@@ -262,14 +262,14 @@ export default function BillingPage() {
       </div>
 
       {/* Just-back-from-Stripe confirming banner. Stripe webhooks
-          usually settle within 1–3s but can lag — without this
+          usually settle within 1–3s but can lag, without this
           banner the page renders the stale pre-upgrade state and
           looks like the upgrade failed. */}
       {confirmingUpgrade && (
         <div className="bg-blue-50 border border-blue-200 rounded-sm px-4 py-3 mb-5 flex items-center gap-3">
           <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
           <p className="text-sm text-blue-700 font-medium">
-            Confirming your subscription with Stripe — this usually takes a few seconds.
+            Confirming your subscription with Stripe, this usually takes a few seconds.
           </p>
         </div>
       )}
@@ -332,7 +332,7 @@ export default function BillingPage() {
           )}
         </div>
       ) : (
-        /* No active subscription — show plan picker */
+        /* No active subscription, show plan picker */
         <div className="mb-5">
           {status === "past_due" && (
             <div className="bg-red-50 border border-red-200 rounded-sm px-4 py-3 mb-5 text-sm text-red-700">
@@ -348,7 +348,7 @@ export default function BillingPage() {
             </div>
           )}
 
-          {/* Referral code — item 25 */}
+          {/* Referral code, item 25 */}
           {sub?.referral_code && (
             <div className="bg-accent/5 border border-accent/20 rounded-sm px-4 py-4 mb-5">
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -413,7 +413,7 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Change Plan — for active subscribers */}
+      {/* Change Plan, for active subscribers */}
       {hasSubscription && (
         <div className="bg-surface border border-border rounded-sm p-6 mb-5">
           <div className="flex items-center justify-between mb-1 gap-3 flex-wrap">

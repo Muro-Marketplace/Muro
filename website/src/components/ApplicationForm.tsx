@@ -130,7 +130,7 @@ interface FormState {
   selectedPlan: string;
   referralCode: string;
   /** Up to 3 publicly-accessible image URLs for artists who don't have
-      a portfolio site or socials to link. Optional — the proper
+      a portfolio site or socials to link. Optional, the proper
       portfolio gets built on the artist profile after the application
       is accepted. Stored as a single comma-separated string in the
       `portfolio_link` DB field for now (alongside the main link)
@@ -236,7 +236,7 @@ export default function ApplicationForm() {
     if (!form.location.trim()) localErrors.location = "Where are you based?";
     if (!form.traderStatus) localErrors.traderStatus = "Pick whether you're applying as an individual or a business.";
     if (!form.discipline) localErrors.discipline = "Pick the discipline that best matches your work.";
-    // Primary medium is now optional — the discipline + sub-styles
+    // Primary medium is now optional, the discipline + sub-styles
     // selection above already gives us enough to categorise the
     // applicant's work, and forcing artists to pick one specific
     // medium (e.g. "Acrylic") felt restrictive for mixed-media
@@ -321,7 +321,7 @@ export default function ApplicationForm() {
           </p>
         </div>
 
-        {/* Profile-start CTA — the whole reason this screen exists now.
+        {/* Profile-start CTA, the whole reason this screen exists now.
             Framed as strengthening the application rather than extra admin. */}
         <div className="bg-accent/5 border-2 border-accent/30 rounded-sm p-6 sm:p-8">
           <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-3">
@@ -333,7 +333,7 @@ export default function ApplicationForm() {
           <p className="text-sm text-muted leading-relaxed mb-5">
             Applications with a finished profile get reviewed faster and
             have a better chance of acceptance. Claim your Wallplace space
-            in under two minutes — add a photo, a sentence about your
+            in under two minutes, add a photo, a sentence about your
             practice, whatever you have to hand. You can finish it any time.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
@@ -461,12 +461,12 @@ export default function ApplicationForm() {
               className={inputClassFor("portfolioLink")}
             />
             <p className="mt-1.5 text-xs text-muted">
-              Any public link that shows your work. Share what you have — you can add more later when you build your profile on Wallplace.
+              Any public link that shows your work. Share what you have, you can add more later when you build your profile on Wallplace.
             </p>
             {fieldError("portfolioLink")}
           </div>
 
-          {/* Sample work URLs — escape hatch for artists who have no
+          {/* Sample work URLs, escape hatch for artists who have no
               website / Insta / portfolio to link. Three optional URL
               slots; we tell them up front they can also do this on
               their profile after applying so they don't feel
@@ -565,7 +565,7 @@ export default function ApplicationForm() {
           Your Practice
         </h3>
         <div className="space-y-5">
-          {/* Discipline comes first — it's the primary taxonomy venues
+          {/* Discipline comes first, it's the primary taxonomy venues
               filter by, and picking it narrows the Primary Medium options
               conceptually. */}
           <div id="discipline">
@@ -677,7 +677,7 @@ export default function ApplicationForm() {
               value={form.artistStatement}
               onChange={handleChange}
               rows={5}
-              placeholder="Optional — a few lines about your practice, what drives your work, and what makes it suited to commercial spaces. You can add this later."
+              placeholder="Optional, a few lines about your practice, what drives your work, and what makes it suited to commercial spaces. You can add this later."
               className={`${inputClass} resize-none`}
             />
             {(() => {

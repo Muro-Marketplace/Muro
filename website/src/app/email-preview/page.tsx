@@ -2,7 +2,7 @@
 // with stream / persona / category filters and a search box. Click a
 // template to preview the rendered HTML in a new tab.
 //
-// Not gated behind auth — add a check here or in middleware if you want
+// Not gated behind auth, add a check here or in middleware if you want
 // to restrict it in production. Search-engine robots are blocked via
 // the robots.txt at the root.
 

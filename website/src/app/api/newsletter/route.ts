@@ -4,7 +4,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 // Simple email-only mailing list endpoint. Distinct from /api/waitlist
-// (pre-launch signup with name + role) — this is "be first to see new works".
+// (pre-launch signup with name + role), this is "be first to see new works".
 
 const schema = z.object({
   email: z.string().email("Please enter a valid email address").max(320),
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   if (limited) return limited;
 
   let body: unknown = {};
-  try { body = await request.json(); } catch { /* fall through — schema will reject */ }
+  try { body = await request.json(); } catch { /* fall through, schema will reject */ }
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, alreadySubscribed: true });
     }
     console.error("Newsletter subscribe error:", error);
-    return NextResponse.json({ error: "Could not subscribe — please try again." }, { status: 500 });
+    return NextResponse.json({ error: "Could not subscribe, please try again." }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

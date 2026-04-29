@@ -1,4 +1,4 @@
-// Frame helpers — pure math, easy to cover comprehensively.
+// Frame helpers, pure math, easy to cover comprehensively.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -38,7 +38,7 @@ describe("getFrameStyle", () => {
   });
 
   it("falls back to 'none' for unknown ids", () => {
-    // @ts-expect-error — feeding bogus ids on purpose
+    // @ts-expect-error, feeding bogus ids on purpose
     expect(getFrameStyle("neon").id).toBe("none");
   });
 });

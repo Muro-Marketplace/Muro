@@ -7,7 +7,7 @@
 //   2. Otherwise fall back to an in-memory Map keyed on (ip, url). Works
 //      for local dev + lets us write tests. Logs a warning once in prod.
 //
-// Old callers use `checkRateLimit(req, limit, windowMs)` — kept as a
+// Old callers use `checkRateLimit(req, limit, windowMs)`, kept as a
 // compatibility shim. New code should use `withRateLimit()` with an
 // explicit rule name.
 
@@ -26,7 +26,7 @@ function redis(): Redis | null {
   if (!url || !token) {
     if (!_warned && process.env.NODE_ENV === "production") {
       console.warn(
-        "[rate-limit] UPSTASH_REDIS_REST_URL/_TOKEN not set — falling back to in-memory limiter. " +
+        "[rate-limit] UPSTASH_REDIS_REST_URL/_TOKEN not set, falling back to in-memory limiter. " +
           "Each serverless instance has its own store, so this provides NO protection in production.",
       );
       _warned = true;
@@ -100,7 +100,7 @@ function tooManyResponse(retryAfter: number): NextResponse {
 }
 
 /**
- * Legacy shim. Existing callers use this — keep the signature stable.
+ * Legacy shim. Existing callers use this, keep the signature stable.
  * New code should use `withRateLimit()` instead.
  */
 export async function checkRateLimit(

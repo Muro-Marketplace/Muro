@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
     if (updateErr) {
       console.error("Failed to store Connect account ID:", updateErr.message);
-      // Column may not exist yet — continue anyway, the account is created in Stripe
+      // Column may not exist yet, continue anyway, the account is created in Stripe
     }
   }
 
