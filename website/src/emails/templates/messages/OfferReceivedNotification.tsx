@@ -10,7 +10,10 @@ import type { TemplateEntry } from "@/emails/registry-types";
 
 export interface OfferReceivedNotificationProps {
   firstName: string;
-  /** Display name of the venue making the offer. */
+  /** Display name of whoever sent this offer/counter. The prop is
+   *  called `venueName` for historical reasons (offers used to be
+   *  venue-only outbound) but it now holds the *sender* — could be a
+   *  venue on the initial offer or an artist countering. */
   venueName: string;
   /** Pre-formatted price like "£1,250.00". */
   formattedAmount: string;

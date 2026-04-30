@@ -264,10 +264,18 @@ export async function POST(request: Request) {
 
   // Counter — server-side check that the parent exists, the caller is a
   // party to it, and it's still pending.
+  let parentRow: {
+    buyer_user_id: string;
+    buyer_type: "customer" | "venue";
+    buyer_email: string | null;
+    artist_user_id: string;
+    artist_slug: string | null;
+    status: string;
+  } | null = null;
   if (parentOfferId) {
     const { data: parent } = await db
       .from("purchase_offers")
-      .select("*")
+      .select("buyer_user_id, buyer_type, buyer_email, artist_user_id, artist_slug, status")
       .eq("id", parentOfferId)
       .maybeSingle();
     if (!parent || (parent.buyer_user_id !== buyerId && parent.artist_user_id !== buyerId)) {
@@ -276,6 +284,7 @@ export async function POST(request: Request) {
     if (parent.status !== "pending" && parent.status !== "countered") {
       return NextResponse.json({ error: "Offer is no longer open" }, { status: 409 });
     }
+    parentRow = parent;
     // Mark the parent as countered. The new row becomes the live one.
     await db.from("purchase_offers")
       .update({ status: "countered", updated_at: new Date().toISOString() })
@@ -283,11 +292,16 @@ export async function POST(request: Request) {
   }
 
   const id = `off_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // For counters, the buyer/artist on the row are inherited from the
+  // parent so a chain of counters always points at the same two
+  // parties. Earlier this stored `buyer_user_id = actor`, which broke
+  // when an artist countered (their counter row stored *them* as the
+  // buyer). created_by_user_id captures who *sent* this row.
   const row = {
     id,
-    buyer_user_id: buyerId,
-    buyer_type: buyerType,
-    buyer_email: auth.user!.email || null,
+    buyer_user_id: parentRow ? parentRow.buyer_user_id : buyerId,
+    buyer_type: parentRow ? parentRow.buyer_type : buyerType,
+    buyer_email: parentRow ? parentRow.buyer_email : auth.user!.email || null,
     artist_user_id: artistProfile.user_id,
     artist_slug: artistSlug,
     work_ids: workIds,
@@ -298,6 +312,7 @@ export async function POST(request: Request) {
     status: "pending",
     expires_at: expiresAt || null,
     parent_offer_id: parentOfferId || null,
+    created_by_user_id: buyerId,
   };
 
   const { error } = await db.from("purchase_offers").insert(row);
@@ -360,10 +375,12 @@ export async function POST(request: Request) {
             recipient_slug: recipientSlug,
             recipient_user_id: recipient,
             content: summary,
-            // Auto-system messages are pre-read for the recipient — the
-            // bell notification carries the unread signal so we don't
-            // double-bump.
-            is_read: true,
+            // Insert as unread so the conversation surfaces in the
+            // recipient's inbox with an unread bump. Earlier we
+            // pre-read it on the assumption the bell carried the
+            // signal — but recipients reported missing the offer in
+            // their conversations entirely.
+            is_read: false,
             created_at: new Date().toISOString(),
             message_type: "text",
             metadata: { offerId: id, offerAmountPence: amountPence },
@@ -376,6 +393,10 @@ export async function POST(request: Request) {
       // Email the recipient with the dedicated offer template.
       // Previously this reused ReviewPostedNotification with a fake
       // 5-star rating, which read as nonsense.
+      //
+      // The sender shown in the email is the *actor*, not always the
+      // venue — when the artist counters, the venue receives an email
+      // saying "Maya sent a counter offer", not "venue sent a counter".
       try {
         const { data: { user: target } } = await db.auth.admin.getUserById(recipient);
         if (target?.email) {
@@ -383,13 +404,23 @@ export async function POST(request: Request) {
             (target.user_metadata?.display_name as string | undefined) ||
             target.email.split("@")[0]
           ).split(" ")[0];
-          const venueName =
-            (await db.from("venue_profiles").select("name").eq("user_id", recipientId.buyer_user_id).maybeSingle<{ name: string | null }>())
-              .data?.name || "A venue";
+          // Resolve the sender's display name based on which side the
+          // actor is on. buyerId here is the actor (auth.user!.id).
+          const actorIsVenue = buyerId === recipientId.buyer_user_id;
+          const senderName = actorIsVenue
+            ? (await db.from("venue_profiles").select("name").eq("user_id", buyerId).maybeSingle<{ name: string | null }>())
+                .data?.name || "A venue"
+            : (await db.from("artist_profiles").select("name").eq("user_id", buyerId).maybeSingle<{ name: string | null }>())
+                .data?.name || "An artist";
           const subjectLine = parentOfferId
-            ? `Counter offer of ${formatted}`
-            : `New offer of ${formatted} from ${venueName}`;
+            ? `Counter offer of ${formatted} from ${senderName}`
+            : `New offer of ${formatted} from ${senderName}`;
           const recipientIsArtist = recipient === artistProfile.user_id;
+          // Email CTA points at the recipient's offers portal with a
+          // ?focus=<offerId> hash so the list can highlight / scroll
+          // to the right row instead of dumping the recipient on a
+          // generic list page.
+          const emailOffersUrl = `${SITE}${link}?focus=${encodeURIComponent(id)}`;
           await sendEmail({
             idempotencyKey: `offer:${id}:${recipient}`,
             template: "offer_received",
@@ -399,11 +430,11 @@ export async function POST(request: Request) {
             userId: recipient,
             react: OfferReceivedNotification({
               firstName,
-              venueName,
+              venueName: senderName,
               formattedAmount: formatted,
               message: message || undefined,
               isCounter: !!parentOfferId,
-              offersUrl: `${SITE}${link}`,
+              offersUrl: emailOffersUrl,
               recipientRole: recipientIsArtist ? "artist" : "venue",
               supportUrl: "https://wallplace.co.uk/support",
             }),

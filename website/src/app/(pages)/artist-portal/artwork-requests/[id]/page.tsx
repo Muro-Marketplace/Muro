@@ -43,6 +43,9 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
   const [responseType, setResponseType] = useState<ResponseType>("message");
   const [message, setMessage] = useState("");
   const [selectedWorks, setSelectedWorks] = useState<Set<string>>(new Set());
+  // Per-work size selection. Keys are work ids, values are the chosen
+  // pricing[*].label. Undefined = "no preference, send as-is".
+  const [workSizeLabels, setWorkSizeLabels] = useState<Record<string, string>>({});
   const [offerAmount, setOfferAmount] = useState("");
   const [commissionAmount, setCommissionAmount] = useState("");
   const [commissionTimeline, setCommissionTimeline] = useState("");
@@ -84,10 +87,17 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
     }
     setSubmitting(true);
     try {
+      const selections = Array.from(selectedWorks).map((id) => ({
+        id,
+        sizeLabel: workSizeLabels[id] || undefined,
+      }));
       const body: Record<string, unknown> = {
         responseType,
         message: message.trim(),
-        workIds: Array.from(selectedWorks),
+        // Send the new selections shape; the server still accepts plain
+        // workIds for back-compat.
+        workSelections: selections,
+        workIds: selections.map((s) => s.id),
       };
       if (responseType === "offer" && offerAmount) {
         body.proposedOfferAmountPence = Math.round(parseFloat(offerAmount) * 100);
@@ -186,6 +196,46 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                     </button>
                   ))}
                 </div>
+
+                {/* Per-work size picker — shown for each work the artist
+                    selected that has more than one pricing tier. Lets
+                    them tell the venue exactly which size they're
+                    suggesting. */}
+                {selectedWorks.size > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {Array.from(selectedWorks).map((wid) => {
+                      const w = works.find((x) => (x.id || x.title) === wid);
+                      if (!w) return null;
+                      const tiers = (w.pricing || []) as { label: string; price: number }[];
+                      if (tiers.length <= 1) return null;
+                      const currentLabel = workSizeLabels[wid] || "";
+                      return (
+                        <div key={wid} className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
+                          <span className="text-foreground/70 font-medium sm:w-40 truncate">{w.title}</span>
+                          <select
+                            value={currentLabel}
+                            onChange={(e) =>
+                              setWorkSizeLabels((prev) => {
+                                const next = { ...prev };
+                                if (e.target.value) next[wid] = e.target.value;
+                                else delete next[wid];
+                                return next;
+                              })
+                            }
+                            className="flex-1 px-2 py-1.5 bg-background border border-border rounded-sm text-xs focus:outline-none focus:border-accent/60"
+                          >
+                            <option value="">Any size</option>
+                            {tiers.map((t) => (
+                              <option key={t.label} value={t.label}>
+                                {t.label} — £{t.price.toFixed(0)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

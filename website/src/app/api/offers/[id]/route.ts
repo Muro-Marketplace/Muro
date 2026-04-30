@@ -76,14 +76,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       notifyTitle = `Offer declined`;
       notifyKind = "offer_declined";
       break;
-    case "withdraw":
-      // Only the buyer can withdraw their own offer.
-      if (!isBuyer) return NextResponse.json({ error: "Only the buyer can withdraw" }, { status: 403 });
+    case "withdraw": {
+      // Either side can withdraw — but only their own offer/counter.
+      // We use created_by_user_id to identify the sender of this row.
+      const senderId = offer.created_by_user_id || offer.buyer_user_id;
+      if (me !== senderId) {
+        return NextResponse.json(
+          { error: "Only the sender of this offer can withdraw it" },
+          { status: 403 },
+        );
+      }
       newStatus = "withdrawn";
-      notifyRecipient = offer.artist_user_id;
+      notifyRecipient = me === offer.buyer_user_id ? offer.artist_user_id : offer.buyer_user_id;
       notifyTitle = `Offer withdrawn`;
       notifyKind = "offer_withdrawn";
       break;
+    }
   }
 
   const { error } = await db.from("purchase_offers")
@@ -101,13 +109,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (notifyRecipient) {
     // Recipient-side portal link. Offers are venue-only on the buy
     // side, so the buyer always lands at /venue-portal/offers; the
-    // artist always at /artist-portal/offers. The previous logic
-    // keyed off the *actor's* role and routed the buyer to the
-    // wrong portal on accept, breaking the "tap to complete
-    // checkout" flow entirely.
-    const recipientLink = notifyRecipient === offer.buyer_user_id
-      ? "/venue-portal/offers"
-      : "/artist-portal/offers";
+    // artist always at /artist-portal/offers.
+    //
+    // On accept specifically, append ?pay=<offerId> so the venue
+    // portal auto-fires the Stripe checkout redirect on mount —
+    // tapping the bell goes straight to the payment page rather than
+    // making the buyer hunt for a "Complete payment" button.
+    const isBuyerRecipient = notifyRecipient === offer.buyer_user_id;
+    const basePath = isBuyerRecipient ? "/venue-portal/offers" : "/artist-portal/offers";
+    const recipientLink = newStatus === "accepted" && isBuyerRecipient
+      ? `${basePath}?pay=${encodeURIComponent(id)}`
+      : basePath;
     createNotification({
       userId: notifyRecipient,
       kind: notifyKind,
@@ -150,7 +162,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           recipient_slug: recipientSlug,
           recipient_user_id: notifyRecipient,
           content: summary,
-          is_read: true,
+          is_read: false,
           created_at: new Date().toISOString(),
           message_type: "text",
           metadata: { offerId: id, offerStatus: newStatus },

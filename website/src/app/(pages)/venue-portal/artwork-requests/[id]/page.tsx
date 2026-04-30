@@ -107,16 +107,16 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
             <Link href="/venue-portal/artwork-requests" className="text-xs text-muted hover:text-accent inline-block mb-4">← All requests</Link>
             <div className="flex items-start justify-between gap-3 mb-2">
               <h1 className="text-2xl font-serif">{req.title}</h1>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border self-start ${
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border self-start capitalize ${
                 req.status === "open" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-foreground/5 text-foreground/40 border-border"
               }`}>{req.status}</span>
             </div>
             <p className="text-sm text-muted mb-4">{req.description}</p>
 
             <div className="flex flex-wrap gap-2 text-[11px] mb-6">
-              {req.intent.map((i) => <span key={i} className="px-2 py-1 bg-accent/5 text-accent rounded-sm">{i}</span>)}
-              {req.styles.map((s) => <span key={s} className="px-2 py-1 bg-foreground/5 text-foreground/70 rounded-sm">{s}</span>)}
-              {req.mediums.map((m) => <span key={m} className="px-2 py-1 bg-foreground/5 text-foreground/70 rounded-sm">{m}</span>)}
+              {req.intent.map((i) => <span key={i} className="px-2 py-1 bg-accent/5 text-accent rounded-sm capitalize">{i}</span>)}
+              {req.styles.map((s) => <span key={s} className="px-2 py-1 bg-foreground/5 text-foreground/70 rounded-sm capitalize">{s}</span>)}
+              {req.mediums.map((m) => <span key={m} className="px-2 py-1 bg-foreground/5 text-foreground/70 rounded-sm capitalize">{m}</span>)}
               {(req.budget_min_pence || req.budget_max_pence) && (
                 <span className="px-2 py-1 bg-foreground/5 text-foreground/70 rounded-sm">
                   £{((req.budget_min_pence || 0) / 100).toFixed(0)}–£{((req.budget_max_pence || 0) / 100).toFixed(0)}
@@ -147,7 +147,7 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                           <Link href={`/browse/${r.artist_slug}`} className="font-medium text-foreground hover:text-accent">
                             {r.artist_slug || "Artist"}
                           </Link>
-                          <span className="text-muted"> · {r.response_type.replace("_", " ")}</span>
+                          <span className="text-muted capitalize"> · {r.response_type.replace("_", " ")}</span>
                         </p>
                         {r.proposed_offer_amount_pence && (
                           <p className="text-sm text-foreground mt-1"><strong>£{(r.proposed_offer_amount_pence / 100).toFixed(2)}</strong> offer</p>
@@ -159,7 +159,7 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                           </p>
                         )}
                       </div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border ${
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border capitalize ${
                         r.status === "accepted" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                         : r.status === "declined" ? "bg-foreground/5 text-foreground/40 border-border"
                         : "bg-amber-50 text-amber-700 border-amber-200"

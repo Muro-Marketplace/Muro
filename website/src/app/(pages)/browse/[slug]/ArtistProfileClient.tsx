@@ -12,6 +12,7 @@ import { authFetch } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
 import ArtworkThumb from "@/components/ArtworkThumb";
+import MakeOfferModal from "@/components/offers/MakeOfferModal";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 
@@ -59,6 +60,9 @@ export default function ArtistProfileClient({
   const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
   const [showEnquiry, setShowEnquiry] = useState(false);
   const [selectedForPlacement, setSelectedForPlacement] = useState<Set<number>>(new Set());
+  // Bulk-action sheet — drives Make Offer modal off the floating bar.
+  // Buy Now is fired inline (cart push + redirect), no extra state.
+  const [bulkOfferOpen, setBulkOfferOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const navigatingAway = useRef(false);
 
@@ -69,6 +73,56 @@ export default function ArtistProfileClient({
       else next.add(index);
       return next;
     });
+  }
+
+  // Selected works as resolved ArtistWork records, in array order. Used
+  // by the bulk Buy Now / Make Offer flows so we don't recompute the
+  // map in three places.
+  const selectedWorks = Array.from(selectedForPlacement)
+    .map((i) => filteredWorks[i])
+    .filter(Boolean) as ArtistWork[];
+
+  // Stable IDs to feed the offers API. Falls back to the slugified
+  // title when no DB id is attached (legacy seed records).
+  const selectedWorkIds = selectedWorks.map((w) => w.id || slugify(w.title));
+
+  // Aggregate asking price = sum of the largest-tier price across the
+  // selected works. Mirrors the server-side default for the 60% offer
+  // floor so the modal's hint matches what the API will enforce.
+  const bulkAskingPrice = selectedWorks.reduce((sum, w) => {
+    const max = Math.max(0, ...((w.pricing || []).map((t) => Number(t.price) || 0)));
+    return sum + max;
+  }, 0);
+
+  function handleBulkBuyNow() {
+    if (selectedWorks.length === 0) return;
+    let okCount = 0;
+    for (const w of selectedWorks) {
+      const tiers = w.pricing || [];
+      if (tiers.length === 0) continue;
+      // Default to the largest tier — venues buying multi typically
+      // want the headline size; they can edit qty/size in the cart.
+      const tier = tiers[tiers.length - 1];
+      const result = addItem({
+        type: "work",
+        workId: w.id,
+        artistSlug,
+        artistName,
+        title: w.title,
+        image: w.image || "",
+        size: tier.label,
+        price: tier.price,
+        quantity: 1,
+        quantityAvailable: tier.quantityAvailable ?? null,
+        dimensions: w.dimensions,
+      });
+      if (result.ok) okCount++;
+    }
+    if (okCount > 0) {
+      router.push("/checkout");
+    } else {
+      showToast("Couldn't add any of these works to the cart.");
+    }
   }
 
   function handleRequestPlacement() {
@@ -864,18 +918,33 @@ export default function ArtistProfileClient({
         </div>
       )}
 
-      {/* Floating placement bar */}
+      {/* Floating venue actions bar — now multi-action. Earlier this
+          only surfaced "Request Placement", but venues told us they
+          regularly want to bulk-buy or open one offer for several
+          works. The buttons all operate over the same selection set. */}
       {user && userType === "venue" && selectedForPlacement.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-foreground/95 backdrop-blur-sm border-t border-white/10 shadow-2xl">
-          <div className="max-w-[1200px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-white text-sm font-medium">{selectedForPlacement.size} work{selectedForPlacement.size !== 1 ? "s" : ""} selected</span>
               <button onClick={() => setSelectedForPlacement(new Set())} className="text-white/50 text-xs hover:text-white transition-colors">Clear</button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleBulkBuyNow}
+                className="px-4 py-2 bg-white text-foreground text-sm font-medium rounded-sm hover:bg-white/90 transition-colors"
+              >
+                Buy Now
+              </button>
+              <button
+                onClick={() => setBulkOfferOpen(true)}
+                className="px-4 py-2 bg-white/10 text-white text-sm font-medium rounded-sm border border-white/20 hover:bg-white/15 transition-colors"
+              >
+                Make Offer
+              </button>
               <button
                 onClick={handleRequestPlacement}
-                className="px-5 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+                className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
               >
                 Request Placement
               </button>
@@ -883,6 +952,25 @@ export default function ArtistProfileClient({
           </div>
         </div>
       )}
+
+      {/* Bulk Make Offer modal. Reuses the per-work component; we
+          just hand it the selected work ids + an aggregate asking
+          price so the 60% floor hint matches what the server will
+          enforce. Empty workIds is filtered out by the API. */}
+      <MakeOfferModal
+        open={bulkOfferOpen}
+        onClose={() => setBulkOfferOpen(false)}
+        artistSlug={artistSlug}
+        artistName={artistName}
+        workIds={selectedWorkIds}
+        workTitle={selectedWorks.length === 1 ? selectedWorks[0].title : `${selectedWorks.length} works`}
+        askingPriceGbp={bulkAskingPrice > 0 ? bulkAskingPrice : null}
+        onSubmitted={() => {
+          setBulkOfferOpen(false);
+          setSelectedForPlacement(new Set());
+        }}
+      />
+
 
       {/* Enquiry modal */}
       {showEnquiry && (

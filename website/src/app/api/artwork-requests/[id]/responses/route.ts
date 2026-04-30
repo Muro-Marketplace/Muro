@@ -15,10 +15,25 @@ import { checkArtistOutreachCap } from "@/lib/outreach-cap";
 
 export const runtime = "nodejs";
 
+// Zod schema. Message min(3) was too aggressive — a "Yes!" was rejected
+// as "invalid response" with no UI breadcrumb. Relaxed to min(1).
+//
+// `workSelections` is the new shape: each entry can pin to a specific
+// size variant on the work. Falls back to plain `workIds` for older
+// callers; the route normalises both.
 const createSchema = z.object({
   responseType: z.enum(["existing_works", "placement", "offer", "commission", "message"]),
-  message: z.string().min(3).max(4000),
+  message: z.string().min(1).max(4000),
   workIds: z.array(z.string()).max(20).optional().default([]),
+  workSelections: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        sizeLabel: z.string().max(120).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
   proposedOfferAmountPence: z.number().int().positive().optional(),
   proposedCommissionAmountPence: z.number().int().positive().optional(),
   proposedCommissionTimeline: z.string().max(160).optional(),
@@ -43,7 +58,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid response" }, { status: 400 });
+  if (!parsed.success) {
+    // Surface the first issue so the artist sees *what* failed, not a
+    // flat "invalid response" wall.
+    const first = parsed.error.issues[0];
+    const fieldPath = first?.path.join(".") || "input";
+    return NextResponse.json(
+      { error: "validation_failed", message: `${fieldPath}: ${first?.message || "invalid"}` },
+      { status: 400 },
+    );
+  }
 
   const db = getSupabaseAdmin();
 
@@ -76,6 +100,19 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!req) return NextResponse.json({ error: "Request not found" }, { status: 404 });
   if (req.status !== "open") return NextResponse.json({ error: "Request is closed" }, { status: 409 });
 
+  // Normalise `workSelections` (new shape) and `workIds` (legacy). When
+  // both are present, workSelections wins. Size labels are stashed in
+  // metadata so the venue side can display "Studio Two – 12×16″".
+  const selections = parsed.data.workSelections && parsed.data.workSelections.length > 0
+    ? parsed.data.workSelections
+    : (parsed.data.workIds || []).map((wid) => ({ id: wid, sizeLabel: undefined as string | undefined }));
+  const workIds = selections.map((s) => s.id);
+  const workSizeLabels = Object.fromEntries(
+    selections
+      .filter((s): s is { id: string; sizeLabel: string } => !!s.sizeLabel)
+      .map((s) => [s.id, s.sizeLabel]),
+  );
+
   const { data: inserted, error } = await db
     .from("artwork_request_responses")
     .insert({
@@ -84,7 +121,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       artist_slug: artist.slug,
       response_type: parsed.data.responseType,
       message: parsed.data.message.trim(),
-      work_ids: parsed.data.workIds,
+      work_ids: workIds,
+      // Size labels live in metadata jsonb to avoid a schema migration
+      // for a v1 nicety. Venue side reads work_size_labels[workId].
+      metadata: { work_size_labels: workSizeLabels },
       proposed_offer_amount_pence: parsed.data.proposedOfferAmountPence ?? null,
       proposed_commission_amount_pence: parsed.data.proposedCommissionAmountPence ?? null,
       proposed_commission_timeline: parsed.data.proposedCommissionTimeline ?? null,

@@ -34,7 +34,11 @@ export default function NewArtworkRequestPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [intent, setIntent] = useState<Set<typeof INTENT_OPTIONS[number]["key"]>>(new Set(["display"]));
+  // No intent is pre-selected — venues should consciously pick what
+  // they're open to. Earlier we defaulted to "display" (QR-enabled),
+  // which made every request implicitly QR-enabled and surfaced the
+  // rev-share box even when the venue hadn't asked for it.
+  const [intent, setIntent] = useState<Set<typeof INTENT_OPTIONS[number]["key"]>>(new Set());
   const [qrRevShare, setQrRevShare] = useState<string>("20");
   const [styles, setStyles] = useState("");
   const [mediums, setMediums] = useState("");

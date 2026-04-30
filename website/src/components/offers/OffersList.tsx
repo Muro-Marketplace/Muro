@@ -41,6 +41,9 @@ interface OfferRow {
   id: string;
   buyer_user_id: string;
   artist_user_id: string;
+  /** Sender of this row — distinguishes "venue offered" from
+   *  "artist countered". Falls back to buyer_user_id for legacy rows. */
+  created_by_user_id: string | null;
   artist_slug: string | null;
   work_ids: string[];
   collection_id: string | null;
@@ -69,6 +72,20 @@ const STATUS_BADGE: Record<string, string> = {
   expired: "bg-foreground/5 text-foreground/40 border-border",
   paid: "bg-emerald-50 text-emerald-800 border-emerald-300",
 };
+
+/**
+ * Pretty status text. Earlier we rendered raw enum values like
+ * "countered" / "accepted" — they read as terse and lower-case. We now
+ * Title-case everything and translate "pending" into something more
+ * human depending on the viewer's vantage:
+ *   - sender of a pending offer: "Awaiting response"
+ *   - recipient of a pending offer: "Pending"  (their action required)
+ */
+function formatStatus(status: string, viewerIsSender: boolean): string {
+  if (status === "pending") return viewerIsSender ? "Awaiting response" : "Pending";
+  if (!status) return "";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
 
 interface Props {
   /** The viewer's user id, so we can decide which side of the offer they are. */
@@ -101,6 +118,45 @@ export default function OffersList({ viewerUserId, filter }: Props) {
   }, [filter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ?pay=<offerId>   — bell deep-link after an artist accepts: fire
+  //                    Stripe checkout immediately so the venue
+  //                    doesn't have to hunt for a "Complete payment"
+  //                    button.
+  // ?focus=<offerId> — email deep-link: scroll the matching offer
+  //                    into view + briefly highlight it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const payId = sp.get("pay");
+    const focusId = sp.get("focus");
+    if (loading) return;
+
+    if (payId) {
+      const target = offers.find((o) => o.id === payId);
+      if (target && target.status === "accepted" && target.buyer_user_id === viewerUserId) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("pay");
+        window.history.replaceState({}, "", url.toString());
+        pay(payId);
+        return;
+      }
+    }
+
+    if (focusId) {
+      const el = document.getElementById(`offer-${focusId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-accent", "ring-offset-2");
+        setTimeout(() => el.classList.remove("ring-2", "ring-accent", "ring-offset-2"), 2400);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("focus");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+    // Intentional: only run once when offers + loading have settled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, offers]);
 
   async function act(id: string, action: "accept" | "decline" | "withdraw") {
     setBusyId(id);
@@ -200,6 +256,11 @@ export default function OffersList({ viewerUserId, filter }: Props) {
       {offers.map((o) => {
         const iAmBuyer = o.buyer_user_id === viewerUserId;
         const iAmArtist = o.artist_user_id === viewerUserId;
+        // Sender = whoever made *this* offer/counter. Falls back to
+        // buyer for legacy rows without created_by_user_id.
+        const senderId = o.created_by_user_id || o.buyer_user_id;
+        const iAmSender = senderId === viewerUserId;
+        const iAmRecipient = !iAmSender && (iAmBuyer || iAmArtist);
         const formatted = `£${(o.amount_pence / 100).toFixed(2)}`;
         const works = o.works || [];
         const primaryWork = works[0];
@@ -221,7 +282,11 @@ export default function OffersList({ viewerUserId, filter }: Props) {
             : undefined;
 
         return (
-          <article key={o.id} className="bg-surface border border-border rounded-sm overflow-hidden">
+          <article
+            key={o.id}
+            id={`offer-${o.id}`}
+            className="bg-surface border border-border rounded-sm overflow-hidden transition-shadow"
+          >
             <div className="flex flex-col sm:flex-row">
               {primaryWork?.image && (
                 <div className="relative w-full sm:w-32 h-32 shrink-0 bg-foreground/5">
@@ -258,7 +323,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                     </p>
                   </div>
                   <span className={`text-[10px] px-2 py-0.5 rounded-sm border ${STATUS_BADGE[o.status] || STATUS_BADGE.pending}`}>
-                    {o.status}
+                    {formatStatus(o.status, iAmSender)}
                   </span>
                 </header>
 
@@ -281,16 +346,28 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                 )}
 
                 <footer className="flex flex-wrap gap-2 pt-2 border-t border-border">
-                  {iAmArtist && (o.status === "pending" || o.status === "countered") && (
+                  {/* Recipient of an open offer: accept, counter, or
+                      decline. "Recipient" is the side that did not
+                      create this row — derived from created_by_user_id.
+                      Earlier we keyed off iAmArtist, which broke once
+                      artists could counter (their own counters showed
+                      Accept/Decline buttons that didn't belong). */}
+                  {iAmRecipient && (o.status === "pending" || o.status === "countered") && (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => act(o.id, "accept")}
-                        disabled={busyId === o.id}
-                        className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-sm transition-colors disabled:opacity-60"
-                      >
-                        Accept
-                      </button>
+                      {/* Only the artist can ultimately accept the
+                          terms (they own the work). Counter + decline
+                          flow through the same accept branch on the
+                          recipient side. */}
+                      {iAmArtist && (
+                        <button
+                          type="button"
+                          onClick={() => act(o.id, "accept")}
+                          disabled={busyId === o.id}
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-sm transition-colors disabled:opacity-60"
+                        >
+                          Accept
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => openCounter(o)}
@@ -299,35 +376,31 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                       >
                         Counter
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => act(o.id, "decline")}
-                        disabled={busyId === o.id}
-                        className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition-colors disabled:opacity-60"
-                      >
-                        Decline
-                      </button>
+                      {iAmArtist && (
+                        <button
+                          type="button"
+                          onClick={() => act(o.id, "decline")}
+                          disabled={busyId === o.id}
+                          className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition-colors disabled:opacity-60"
+                        >
+                          Decline
+                        </button>
+                      )}
                     </>
                   )}
-                  {iAmBuyer && (o.status === "pending" || o.status === "countered") && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => openCounter(o)}
-                        disabled={busyId === o.id}
-                        className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-sm transition-colors disabled:opacity-60"
-                      >
-                        Counter
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => act(o.id, "withdraw")}
-                        disabled={busyId === o.id}
-                        className="px-3 py-1.5 text-xs font-medium text-muted bg-surface hover:bg-foreground/5 border border-border rounded-sm transition-colors disabled:opacity-60"
-                      >
-                        Withdraw
-                      </button>
-                    </>
+                  {/* Sender of an open offer: just withdraw. Lets
+                      either side pull their own offer/counter without
+                      the API rejecting an artist trying to withdraw
+                      their own counter. */}
+                  {iAmSender && (o.status === "pending" || o.status === "countered") && (
+                    <button
+                      type="button"
+                      onClick={() => act(o.id, "withdraw")}
+                      disabled={busyId === o.id}
+                      className="px-3 py-1.5 text-xs font-medium text-muted bg-surface hover:bg-foreground/5 border border-border rounded-sm transition-colors disabled:opacity-60"
+                    >
+                      Withdraw
+                    </button>
                   )}
                   {iAmBuyer && o.status === "accepted" && (
                     <button

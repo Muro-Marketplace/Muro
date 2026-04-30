@@ -75,13 +75,13 @@ export default function VenueArtworkRequestsPage() {
                 >
                   <div className="flex items-start justify-between gap-3 mb-1.5">
                     <h3 className="text-base font-medium">{r.title}</h3>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border ${
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border capitalize ${
                       r.status === "open" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-foreground/5 text-foreground/40 border-border"
                     }`}>{r.status}</span>
                   </div>
                   <p className="text-sm text-muted line-clamp-2 mb-2">{r.description}</p>
                   <div className="flex flex-wrap gap-2 text-[10px] text-muted">
-                    {r.intent.map((i) => <span key={i} className="px-1.5 py-0.5 bg-foreground/5 rounded-sm">{i}</span>)}
+                    {r.intent.map((i) => <span key={i} className="px-1.5 py-0.5 bg-foreground/5 rounded-sm capitalize">{i}</span>)}
                     {(r.budget_min_pence || r.budget_max_pence) && (
                       <span className="px-1.5 py-0.5 bg-foreground/5 rounded-sm">
                         £{((r.budget_min_pence || 0) / 100).toFixed(0)}–£{((r.budget_max_pence || 0) / 100).toFixed(0)}

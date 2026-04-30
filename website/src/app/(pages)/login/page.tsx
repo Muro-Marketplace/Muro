@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -10,23 +10,34 @@ import { isFlagOn } from "@/lib/feature-flags";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn, user, userType, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Honour ?next= so an email CTA can deep-link into a portal page —
+  // the static `/artist-portal` / `/venue-portal` fallback used to
+  // strand users on the dashboard regardless of where the email took
+  // them. We only accept same-origin paths to avoid open-redirect.
+  const rawNext = searchParams.get("next");
+  const safeNext =
+    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
+      ? rawNext
+      : null;
+
   // Redirect if already logged in
   useEffect(() => {
     if (!authLoading && user) {
-      router.replace(
+      const fallback =
         userType === "admin" ? "/admin" :
         userType === "venue" ? "/venue-portal" :
         userType === "customer" ? "/customer-portal" :
-        "/artist-portal"
-      );
+        "/artist-portal";
+      router.replace(safeNext || fallback);
     }
-  }, [authLoading, user, userType, router]);
+  }, [authLoading, user, userType, router, safeNext]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
