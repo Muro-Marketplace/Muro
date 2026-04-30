@@ -3,7 +3,7 @@
 import { useState } from "react";
 import LabelSheet, { type LabelVisibility } from "./LabelSheet";
 import type { LabelData } from "./LabelSheet";
-import { LABEL_SIZES, type LabelSize } from "./QRLabel";
+import { LABEL_SIZES, LABEL_STYLES, type LabelSize } from "./QRLabel";
 
 interface LabelPreviewProps {
   labels: LabelData[];
@@ -42,6 +42,8 @@ export default function LabelPreview({
   // Calculate total including quantities
   const totalCount = labels.reduce((sum, l) => sum + l.quantity, 0);
   const currentSize = labels[0]?.labelSize || "medium";
+  const currentStyle = labels[0]?.labelStyle || "minimal";
+  const styleConfig = LABEL_STYLES.find((s) => s.key === currentStyle);
   const sizeConfig = LABEL_SIZES.find((s) => s.key === currentSize) || LABEL_SIZES[1];
   const pageCount = Math.ceil(totalCount / sizeConfig.perPage);
 
@@ -64,10 +66,20 @@ export default function LabelPreview({
     <div className="fixed inset-0 z-[110] bg-white flex flex-col">
       {/* Toolbar */}
       <div className="label-preview-toolbar no-print border-b border-border bg-surface px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-sm font-medium text-foreground">
             Print Preview – {totalCount} label{totalCount !== 1 ? "s" : ""}
           </h2>
+          {/* Style + size pills so the venue/artist can verify what
+              they're about to send to the printer at a glance. The
+              earlier toolbar only showed the page count, leaving
+              "which style is this?" to a side-panel hunt. */}
+          <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-sm border border-accent/30 bg-accent/5 text-accent">
+            {styleConfig?.name || currentStyle}
+          </span>
+          <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-sm border border-border text-muted">
+            {sizeConfig.label} · {sizeConfig.width} × {sizeConfig.height}
+          </span>
           <span className="text-xs text-muted">
             {pageCount} page{pageCount !== 1 ? "s" : ""}
           </span>

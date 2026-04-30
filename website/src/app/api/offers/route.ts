@@ -329,6 +329,16 @@ export async function POST(request: Request) {
     const recipient = recipientId.buyer_user_id === buyerId ? recipientId.artist_user_id : recipientId.buyer_user_id;
     if (recipient) {
       const formatted = `£${(amountPence / 100).toFixed(2)}`;
+      // Resolve the actor's display name once — used both in the
+      // thread message metadata and the email subject. Looking up
+      // the actor's profile up here means we don't have to query
+      // again inside the email block.
+      const actorIsVenue = buyerId === recipientId.buyer_user_id;
+      const senderName = actorIsVenue
+        ? (await db.from("venue_profiles").select("name").eq("user_id", buyerId).maybeSingle<{ name: string | null }>())
+            .data?.name || "A venue"
+        : (await db.from("artist_profiles").select("name").eq("user_id", buyerId).maybeSingle<{ name: string | null }>())
+            .data?.name || "An artist";
       // Recipient-side portal link. Buyer is always a venue (offers are
       // venue-only), so a venue recipient → /venue-portal/offers, an
       // artist recipient → /artist-portal/offers. The previous
@@ -346,9 +356,11 @@ export async function POST(request: Request) {
       }).catch((err) => console.warn("[offers] bell failed:", err));
 
       // Drop a "you have an offer" message into the artist↔venue
-      // conversation thread. Users were getting only the bell + email
-      // before, which felt detached from the rest of the conversation.
-      // Best-effort — we don't 500 if the message insert fails.
+      // conversation thread as a *purchase_offer* card with rich
+      // metadata. The MessageInbox renders these as a structured card
+      // with image, title, sizes, and inline Accept / Counter /
+      // Decline buttons so the recipient can act without leaving the
+      // thread. Best-effort — we don't 500 if the insert fails.
       try {
         const { data: venueRow } = await db
           .from("venue_profiles")
@@ -357,16 +369,38 @@ export async function POST(request: Request) {
           .maybeSingle<{ slug: string | null; name: string | null }>();
         const buyerSlug = venueRow?.slug;
         if (buyerSlug && artistSlug) {
-          // Deterministic conversation id between the two slugs.
           const [a, b] = [buyerSlug, artistSlug].sort();
           const conversationId = `dm-${a}__${b}`;
-          // Identify sender slug: the user who's posting this offer.
           const senderSlug = buyerId === recipientId.buyer_user_id ? buyerSlug : artistSlug;
           const recipientSlug = buyerId === recipientId.buyer_user_id ? artistSlug : buyerSlug;
           const senderType = buyerId === recipientId.buyer_user_id ? "venue" : "artist";
+
+          // Look up the work / collection details so the message
+          // card can show what's actually being offered on instead of
+          // just an amount line.
+          let workDetails: Array<{ id: string; title: string; image: string | null; medium: string | null; dimensions: string | null }> = [];
+          let collectionTitle: string | null = null;
+          if (workIds.length > 0) {
+            const { data: works } = await db
+              .from("artist_works")
+              .select("id, title, image, medium, dimensions")
+              .in("id", workIds);
+            workDetails = (works || []) as typeof workDetails;
+          }
+          if (collectionId) {
+            const { data: collection } = await db
+              .from("artist_collections")
+              .select("title")
+              .eq("id", collectionId)
+              .maybeSingle<{ title: string | null }>();
+            collectionTitle = collection?.title ?? null;
+          }
+
+          const primary = workDetails[0];
           const summary = parentOfferId
             ? `Sent a counter offer of ${formatted}.`
             : `Made an offer of ${formatted}${message ? ` — "${message.slice(0, 200)}"` : ""}.`;
+
           await db.from("messages").insert({
             conversation_id: conversationId,
             sender_id: buyerId,
@@ -375,15 +409,31 @@ export async function POST(request: Request) {
             recipient_slug: recipientSlug,
             recipient_user_id: recipient,
             content: summary,
-            // Insert as unread so the conversation surfaces in the
-            // recipient's inbox with an unread bump. Earlier we
-            // pre-read it on the assumption the bell carried the
-            // signal — but recipients reported missing the offer in
-            // their conversations entirely.
+            // Unread so the conversation surfaces in the inbox.
             is_read: false,
             created_at: new Date().toISOString(),
-            message_type: "text",
-            metadata: { offerId: id, offerAmountPence: amountPence },
+            message_type: "purchase_offer",
+            metadata: {
+              offerId: id,
+              offerAmountPence: amountPence,
+              formattedAmount: formatted,
+              isCounter: !!parentOfferId,
+              parentOfferId: parentOfferId || null,
+              senderUserId: buyerId,
+              recipientUserId: recipient,
+              senderName,
+              workIds,
+              workTitles: workDetails.map((w) => w.title),
+              workImages: workDetails.map((w) => w.image).filter((x): x is string => !!x),
+              primaryImage: primary?.image || null,
+              primaryTitle: collectionTitle || primary?.title || (workIds.length > 1 ? `${workIds.length} works` : "Artwork"),
+              primaryDimensions: primary?.dimensions || null,
+              primaryMedium: primary?.medium || null,
+              sizeLabel: sizeLabel || null,
+              collectionId: collectionId || null,
+              collectionTitle,
+              note: message || null,
+            },
           });
         }
       } catch (err) {
@@ -404,14 +454,7 @@ export async function POST(request: Request) {
             (target.user_metadata?.display_name as string | undefined) ||
             target.email.split("@")[0]
           ).split(" ")[0];
-          // Resolve the sender's display name based on which side the
-          // actor is on. buyerId here is the actor (auth.user!.id).
-          const actorIsVenue = buyerId === recipientId.buyer_user_id;
-          const senderName = actorIsVenue
-            ? (await db.from("venue_profiles").select("name").eq("user_id", buyerId).maybeSingle<{ name: string | null }>())
-                .data?.name || "A venue"
-            : (await db.from("artist_profiles").select("name").eq("user_id", buyerId).maybeSingle<{ name: string | null }>())
-                .data?.name || "An artist";
+          // senderName resolved once above; reuse it here.
           const subjectLine = parentOfferId
             ? `Counter offer of ${formatted} from ${senderName}`
             : `New offer of ${formatted} from ${senderName}`;

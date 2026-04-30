@@ -22,6 +22,30 @@ export const LABEL_SIZES: { key: LabelSize; label: string; width: string; height
   { key: "xlarge", label: "Extra Large", width: "130mm", height: "80mm", qr: "44mm", perPage: 3 },
 ];
 
+/**
+ * Editorial style is gallery-portrait: artist + title stack at the
+ * top, QR centred, meta + price at the bottom. The default landscape
+ * sizes from LABEL_SIZES don't give enough vertical room — at "medium"
+ * (70 × 50) the price line was being clipped outside the border.
+ *
+ * For editorial we flip the dimensions so the card always renders
+ * portrait, regardless of the size key the user picked. Grid layout
+ * in LabelSheet honours the same swap so the sheet packs tidily.
+ */
+export function getEffectiveLabelDims(
+  size: LabelSize,
+  style: LabelStyle,
+): { width: string; height: string; qr: string; perPage: number } {
+  const cfg = LABEL_SIZES.find((s) => s.key === size) || LABEL_SIZES[2];
+  if (style === "editorial" && size !== "micro") {
+    // Swap width and height for portrait editorial. perPage rebalances
+    // because narrower cards fit more across; we keep the same total
+    // count to avoid surprising the user with a different sheet size.
+    return { width: cfg.height, height: cfg.width, qr: cfg.qr, perPage: cfg.perPage };
+  }
+  return { width: cfg.width, height: cfg.height, qr: cfg.qr, perPage: cfg.perPage };
+}
+
 export const LABEL_STYLES: {
   key: LabelStyle;
   name: string;
@@ -68,7 +92,10 @@ export default function QRLabel({
   showDimensions = true,
   showPrice = true,
 }: QRLabelProps) {
-  const sizeConfig = LABEL_SIZES.find((s) => s.key === labelSize) || LABEL_SIZES[2];
+  // Effective dims swap for editorial → portrait. Keep the underlying
+  // size key for size-bucket logic (small / medium / large) so we
+  // don't accidentally re-style fonts based on the swapped numbers.
+  const sizeConfig = getEffectiveLabelDims(labelSize, labelStyle);
   const isLargeSize = labelSize === "large" || labelSize === "xlarge";
   const isSmallSize = labelSize === "small";
 
@@ -154,11 +181,17 @@ export default function QRLabel({
             <p
               style={{
                 fontFamily: "var(--font-serif)",
-                fontSize: isLargeSize ? "16pt" : isSmallSize ? "10pt" : "13pt",
+                // Editorial portrait at medium gets a narrower card,
+                // so we drop the title from 13pt → 11pt to keep
+                // longer titles like "Vietnamese Village" inside the
+                // border. Large/xlarge stay at 16pt.
+                fontSize: isLargeSize ? "16pt" : isSmallSize ? "10pt" : "11pt",
                 fontWeight: 400,
                 color: "#1A1A1A",
                 margin: "1.5mm 0 0 0",
                 lineHeight: 1.15,
+                wordBreak: "break-word",
+                hyphens: "auto",
               }}
             >
               {workTitle}

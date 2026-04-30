@@ -60,19 +60,38 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   let notifyTitle = "";
   let notifyKind = "";
 
+  // Whoever didn't *send* this row is the recipient — and only the
+  // recipient may accept/decline. Earlier we hard-coded "artist only"
+  // which broke the venue's path on a counter offer (artist countered
+  // → venue is now the recipient, but the API rejected venue's accept).
+  const senderId = offer.created_by_user_id || offer.buyer_user_id;
+  const isRecipient = me !== senderId;
   switch (parsed.data.action) {
     case "accept":
-      // Only the artist can accept (they own the work).
-      if (!isArtist) return NextResponse.json({ error: "Only the artist can accept" }, { status: 403 });
+      if (!isRecipient) {
+        return NextResponse.json(
+          { error: "Only the recipient of this offer can accept it" },
+          { status: 403 },
+        );
+      }
       newStatus = "accepted";
+      // After accept, the venue is the side that pays — notify them
+      // regardless of who accepted (artist accepted venue's price OR
+      // venue accepted artist's counter price → venue still pays).
       notifyRecipient = offer.buyer_user_id;
       notifyTitle = `Offer accepted — £${(offer.amount_pence / 100).toFixed(2)}`;
       notifyKind = "offer_accepted";
       break;
     case "decline":
-      if (!isArtist) return NextResponse.json({ error: "Only the artist can decline" }, { status: 403 });
+      if (!isRecipient) {
+        return NextResponse.json(
+          { error: "Only the recipient of this offer can decline it" },
+          { status: 403 },
+        );
+      }
       newStatus = "declined";
-      notifyRecipient = offer.buyer_user_id;
+      // Notify the *sender* of the row that was declined (other side).
+      notifyRecipient = senderId;
       notifyTitle = `Offer declined`;
       notifyKind = "offer_declined";
       break;
@@ -164,8 +183,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           content: summary,
           is_read: false,
           created_at: new Date().toISOString(),
-          message_type: "text",
-          metadata: { offerId: id, offerStatus: newStatus },
+          message_type: "purchase_offer_status",
+          metadata: {
+            offerId: id,
+            offerStatus: newStatus,
+            formattedAmount: formatted,
+          },
         });
       }
     } catch (err) {

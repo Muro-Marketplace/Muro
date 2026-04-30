@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import QRLabel from "./QRLabel";
-import { LABEL_SIZES, type LabelSize, type LabelStyle } from "./QRLabel";
+import { getEffectiveLabelDims, type LabelSize, type LabelStyle } from "./QRLabel";
 import { generateQRDataURL } from "@/lib/qr";
-import { slugify } from "@/lib/slugify";
 
 export interface LabelData {
   artistName: string;
@@ -99,11 +98,27 @@ export default function LabelSheet({ labels, labelVisibility, pageIndex }: Label
     );
   }
 
-  // Determine size from first label (all labels in a batch share the same size)
+  // Determine size + style from first label. Editorial flips to
+  // portrait dimensions, so the grid template uses effective dims
+  // rather than the raw landscape numbers in LABEL_SIZES.
   const currentSize = labels[0]?.labelSize || "medium";
-  const sizeConfig = LABEL_SIZES.find((s) => s.key === currentSize) || LABEL_SIZES[1];
-  const perPage = sizeConfig.perPage;
-  const cols = currentSize === "micro" ? 8 : currentSize === "xlarge" ? 1 : currentSize === "large" ? 2 : 2;
+  const currentStyle: LabelStyle = labels[0]?.labelStyle || "minimal";
+  const effective = getEffectiveLabelDims(currentSize, currentStyle);
+  const perPage = effective.perPage;
+  // Portrait editorial cards are narrower → fit one extra column on
+  // medium / large. Micro / xlarge keep their original layout because
+  // we don't swap dims for them (micro is square, xlarge editorial
+  // would be too tall for A4).
+  const isEditorialPortrait = currentStyle === "editorial" && currentSize !== "micro";
+  const cols = currentSize === "micro"
+    ? 8
+    : currentSize === "xlarge"
+      ? 1
+      : isEditorialPortrait && (currentSize === "large" || currentSize === "medium")
+        ? 3
+        : currentSize === "large"
+          ? 2
+          : 2;
   const rows = Math.ceil(perPage / cols);
 
   // Split into pages
@@ -123,8 +138,8 @@ export default function LabelSheet({ labels, labelVisibility, pageIndex }: Label
             key={actualPageIndex}
             style={{
               display: "grid",
-              gridTemplateColumns: `repeat(${cols}, ${sizeConfig.width})`,
-              gridTemplateRows: `repeat(${rows}, ${sizeConfig.height})`,
+              gridTemplateColumns: `repeat(${cols}, ${effective.width})`,
+              gridTemplateRows: `repeat(${rows}, ${effective.height})`,
               gap: "0mm",
               justifyContent: "center",
             }}

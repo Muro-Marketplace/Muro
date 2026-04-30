@@ -170,6 +170,17 @@ export default function OffersList({ viewerUserId, filter }: Props) {
       if (!res.ok) {
         setError(data.error || "Could not update offer.");
       } else {
+        // When a venue (buyer) accepts an artist's counter, jump
+        // straight to Stripe rather than making them click a separate
+        // "Complete payment" button. Lookup the offer locally first
+        // so we know whether the actor was the buyer.
+        if (action === "accept") {
+          const accepted = offers.find((o) => o.id === id);
+          if (accepted && accepted.buyer_user_id === viewerUserId) {
+            await pay(id);
+            return;
+          }
+        }
         await load();
       }
     } catch {
@@ -349,25 +360,23 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                   {/* Recipient of an open offer: accept, counter, or
                       decline. "Recipient" is the side that did not
                       create this row — derived from created_by_user_id.
-                      Earlier we keyed off iAmArtist, which broke once
-                      artists could counter (their own counters showed
-                      Accept/Decline buttons that didn't belong). */}
+                      Both venue and artist see the full trio when
+                      they're the recipient: a venue receiving an
+                      artist's counter needs Accept and Decline as
+                      much as the artist does on the original offer.
+                      Earlier we restricted Accept/Decline to the
+                      artist, which broke counter negotiation entirely
+                      from the venue's side. */}
                   {iAmRecipient && (o.status === "pending" || o.status === "countered") && (
                     <>
-                      {/* Only the artist can ultimately accept the
-                          terms (they own the work). Counter + decline
-                          flow through the same accept branch on the
-                          recipient side. */}
-                      {iAmArtist && (
-                        <button
-                          type="button"
-                          onClick={() => act(o.id, "accept")}
-                          disabled={busyId === o.id}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-sm transition-colors disabled:opacity-60"
-                        >
-                          Accept
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => act(o.id, "accept")}
+                        disabled={busyId === o.id}
+                        className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-sm transition-colors disabled:opacity-60"
+                      >
+                        Accept
+                      </button>
                       <button
                         type="button"
                         onClick={() => openCounter(o)}
@@ -376,16 +385,14 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                       >
                         Counter
                       </button>
-                      {iAmArtist && (
-                        <button
-                          type="button"
-                          onClick={() => act(o.id, "decline")}
-                          disabled={busyId === o.id}
-                          className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition-colors disabled:opacity-60"
-                        >
-                          Decline
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => act(o.id, "decline")}
+                        disabled={busyId === o.id}
+                        className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition-colors disabled:opacity-60"
+                      >
+                        Decline
+                      </button>
                     </>
                   )}
                   {/* Sender of an open offer: just withdraw. Lets

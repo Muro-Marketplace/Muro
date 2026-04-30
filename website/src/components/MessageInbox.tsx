@@ -561,6 +561,52 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     }
   }
 
+  /** Inline Accept/Decline on a purchase_offer card. Hits
+   *  /api/offers/[id] PATCH directly; the API drops a status message
+   *  back into the same thread so the conversation stays cohesive.
+   *  When the actor is the buyer (venue) and the action is "accept",
+   *  the API also bell-redirects them to /venue-portal/offers?pay=…
+   *  for the Stripe handoff — we replicate that here by calling the
+   *  checkout endpoint directly so the venue jumps straight to
+   *  Stripe instead of bouncing through the portal.
+   */
+  async function handleOfferResponse(msg: Message, action: "accept" | "decline") {
+    const meta = (msg.metadata || {}) as Record<string, unknown>;
+    const offerId = meta.offerId as string | undefined;
+    if (!offerId) return;
+    try {
+      const res = await authFetch(`/api/offers/${offerId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "Could not update offer.");
+        return;
+      }
+      // If the actor is the venue (buyer) and they accepted, fire
+      // checkout immediately. The recipient flag here is the message
+      // recipient — i.e. whoever the offer was addressed to.
+      const recipientUserId = meta.recipientUserId as string | undefined;
+      if (action === "accept" && recipientUserId === user?.id) {
+        try {
+          const co = await authFetch(`/api/offers/${offerId}/checkout`, { method: "POST" });
+          const cd = await co.json().catch(() => ({}));
+          if (cd.url) {
+            window.location.href = cd.url;
+            return;
+          }
+        } catch { /* fall through to refresh */ }
+      }
+    } catch (err) {
+      console.error("Offer PATCH failed:", err);
+      alert("Network error. Please try again.");
+      return;
+    }
+    if (selectedConv) loadThread(selectedConv, true);
+    loadConversations(true);
+  }
+
   async function handlePlacementResponse(msg: Message, accept: boolean) {
     if (!selectedConvData) return;
     const placementId = (msg.metadata as Record<string, unknown>)?.placementId as string | undefined;
@@ -943,6 +989,153 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                       <div className="text-xs text-muted italic px-3 py-1.5 rounded-full bg-[#FAF8F5] border border-border">
                         Message deleted
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Purchase offer card — venue/artist negotiating a price
+                // on a work or collection. Renders the artwork(s), the
+                // headline price + size, an optional note, and inline
+                // Accept / Counter / Decline buttons for whoever is the
+                // recipient. Once acted on, the conversation gets a
+                // matching purchase_offer_status pill (further down) so
+                // the thread reads as one negotiation timeline.
+                if (msg.message_type === "purchase_offer") {
+                  const offerId = meta.offerId as string | undefined;
+                  const senderUserId = meta.senderUserId as string | undefined;
+                  const recipientUserId = meta.recipientUserId as string | undefined;
+                  const formattedAmount = (meta.formattedAmount as string | undefined) || "";
+                  const isCounter = meta.isCounter === true;
+                  const primaryImage = meta.primaryImage as string | null | undefined;
+                  const primaryTitle = (meta.primaryTitle as string | undefined) || "Artwork";
+                  const primaryDimensions = meta.primaryDimensions as string | null | undefined;
+                  const primaryMedium = meta.primaryMedium as string | null | undefined;
+                  const sizeLabel = meta.sizeLabel as string | null | undefined;
+                  const note = meta.note as string | null | undefined;
+                  const workCount = Array.isArray(meta.workIds) ? (meta.workIds as unknown[]).length : 0;
+
+                  // Has a later status message superseded this offer?
+                  // We look forward in the thread for any
+                  // purchase_offer_status carrying the same offerId.
+                  const statusUpdate = messages.find(
+                    (m) =>
+                      m.message_type === "purchase_offer_status" &&
+                      (m.metadata as Record<string, unknown> | undefined)?.offerId === offerId &&
+                      new Date(m.created_at).getTime() >= new Date(msg.created_at).getTime(),
+                  );
+                  const finalStatus = (statusUpdate?.metadata as Record<string, unknown> | undefined)?.offerStatus as string | undefined;
+
+                  const iAmRecipient = recipientUserId === user?.id;
+                  const iAmSender = senderUserId === user?.id;
+                  const open = !finalStatus || finalStatus === "pending" || finalStatus === "countered";
+
+                  // Where the Counter button should land. Errs to the
+                  // venue portal if we can't resolve it from metadata.
+                  const portalLink = recipientUserId === senderUserId
+                    ? "/venue-portal/offers"
+                    : "/artist-portal/offers";
+
+                  return (
+                    <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[80%] border rounded-lg overflow-hidden bg-white ${isCounter ? "border-amber-400" : "border-accent/30"}`}>
+                        <div className={`px-3.5 py-2 border-b flex items-center gap-1.5 ${isCounter ? "bg-amber-50 border-amber-200" : "bg-accent/5 border-accent/20"}`}>
+                          {isCounter && (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-700">
+                              <polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 014-4h14" /><polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 01-4 4H3" />
+                            </svg>
+                          )}
+                          <p className={`text-[10px] font-medium uppercase tracking-wider ${isCounter ? "text-amber-800" : "text-accent"}`}>
+                            {isCounter ? "Counter offer" : "Purchase offer"}
+                          </p>
+                          <span className="ml-auto text-[10px] text-muted">{formattedAmount}</span>
+                        </div>
+                        <div className="px-3.5 py-3 space-y-1.5">
+                          {primaryImage && (
+                            <div className="w-full h-24 relative rounded-md overflow-hidden mb-2">
+                              <Image src={primaryImage} alt="" fill className="object-cover" sizes="300px" />
+                              {workCount > 1 && (
+                                <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/65 text-white rounded-sm text-[10px]">
+                                  +{workCount - 1}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <p className="text-sm font-medium text-foreground">{primaryTitle}</p>
+                          {(primaryDimensions || primaryMedium || sizeLabel) && (
+                            <p className="text-xs text-muted">
+                              {[sizeLabel, primaryDimensions, primaryMedium].filter(Boolean).join(" · ")}
+                            </p>
+                          )}
+                          {note && <p className="text-xs text-muted whitespace-pre-wrap">&ldquo;{note}&rdquo;</p>}
+                        </div>
+                        {open && iAmRecipient && (
+                          <div className="px-3.5 py-2 border-t border-border flex gap-2 flex-wrap">
+                            <button
+                              onClick={() => handleOfferResponse(msg, "accept")}
+                              className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-full transition-colors"
+                            >
+                              Accept
+                            </button>
+                            <Link
+                              href={portalLink || (recipientUserId === senderUserId ? "/venue-portal/offers" : "/artist-portal/offers")}
+                              className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
+                            >
+                              Counter
+                            </Link>
+                            <button
+                              onClick={() => handleOfferResponse(msg, "decline")}
+                              className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 rounded-full transition-colors"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        )}
+                        {open && iAmSender && (
+                          <div className="px-3.5 py-2 border-t border-border">
+                            <p className="text-[11px] text-muted">Awaiting response…</p>
+                          </div>
+                        )}
+                        {!open && finalStatus && (
+                          <div className={`px-3.5 py-2 border-t ${
+                            finalStatus === "accepted" || finalStatus === "paid"
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                              : "bg-foreground/5 border-border text-muted"
+                          }`}>
+                            <p className="text-xs font-medium capitalize">
+                              {finalStatus === "paid" ? "Paid" : finalStatus}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Purchase offer status pill (accepted/declined/withdrawn).
+                // We only render it standalone if the parent offer card
+                // isn't already in the rendered window (would be unusual
+                // — but safer than dropping it).
+                if (msg.message_type === "purchase_offer_status") {
+                  const offerId = meta.offerId as string | undefined;
+                  const offerStatus = meta.offerStatus as string | undefined;
+                  const formattedAmount = (meta.formattedAmount as string | undefined) || "";
+                  const hasParentCard = messages.some(
+                    (m) =>
+                      m.message_type === "purchase_offer" &&
+                      (m.metadata as Record<string, unknown> | undefined)?.offerId === offerId,
+                  );
+                  if (hasParentCard) return null;
+                  const tone =
+                    offerStatus === "accepted" || offerStatus === "paid"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                      : "bg-foreground/5 border-border text-muted";
+                  return (
+                    <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[80%] px-3.5 py-2 rounded-lg border ${tone}`}>
+                        <p className="text-xs font-medium capitalize">
+                          Offer {offerStatus} {formattedAmount && `· ${formattedAmount}`}
+                        </p>
                       </div>
                     </div>
                   );

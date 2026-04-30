@@ -128,6 +128,12 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
 
             {req.status === "open" && (
               <div className="flex gap-2 mb-8">
+                <Link
+                  href={`/venue-portal/artwork-requests/${id}/edit`}
+                  className="px-3 py-1.5 text-xs font-medium text-foreground bg-surface border border-border hover:border-accent/40 hover:bg-foreground/5 rounded-sm transition-colors"
+                >
+                  Edit
+                </Link>
                 <button type="button" onClick={() => setStatus("fulfilled")} className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-sm transition-colors">Mark fulfilled</button>
                 <button type="button" onClick={() => setStatus("closed")} className="px-3 py-1.5 text-xs text-muted bg-surface border border-border hover:bg-foreground/5 rounded-sm transition-colors">Close</button>
               </div>

@@ -490,11 +490,21 @@ export default function ArtistProfileClient({
                       filled accent circle with white tick once ticked. */}
                   {user && userType === "venue" && (
                     <button
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); togglePlacementSelection(index); }}
-                      className={`absolute top-3 left-3 w-7 h-7 rounded-full flex items-center justify-center transition-all z-10 ${
+                      // pointer-events-auto + z-20: ensure the tick
+                      // sits above the data-revealed overlay (which
+                      // becomes pointer-events-auto on tap) so a
+                      // second tap on the tick toggles selection
+                      // instead of being swallowed by the overlay.
+                      // Also drop the opacity-0 default on touch
+                      // devices — without :hover the tick was
+                      // permanently invisible on mobile, so venues
+                      // couldn't multi-select at all.
+                      className={`absolute top-3 left-3 w-7 h-7 rounded-full flex items-center justify-center transition-all z-20 pointer-events-auto ${
                         selectedForPlacement.has(index)
                           ? "bg-accent text-white shadow-md"
-                          : "bg-white/60 text-accent opacity-0 group-hover:opacity-100 hover:bg-white backdrop-blur-sm"
+                          : "bg-white/85 text-accent shadow-sm sm:bg-white/60 sm:opacity-0 sm:group-hover:opacity-100 sm:group-data-[revealed=true]:opacity-100 hover:bg-white backdrop-blur-sm"
                       }`}
                       title={selectedForPlacement.has(index) ? "Deselect" : "Select for placement"}
                     >
@@ -503,7 +513,7 @@ export default function ArtistProfileClient({
                       </svg>
                     </button>
                   )}
-                  <div className={`absolute top-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${user && userType === "venue" ? "left-12" : "left-3"}`}>
+                  <div className={`absolute top-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-data-[revealed=true]:opacity-100 transition-opacity duration-300 z-20 ${user && userType === "venue" ? "left-12" : "left-3"}`}>
                     <SaveButton type="work" itemId={work.id} />
                   </div>
                   {/* Availability, hidden on hover, replaced by action buttons */}
