@@ -2031,26 +2031,28 @@ function BrowsePortfoliosPageInner() {
                             </div>
                           </div>
 
-                          {/* Info */}
-                          <div className="px-4 py-3.5 flex-1 flex flex-col">
-                            <div className="flex items-baseline justify-between gap-2">
+                          {/* Info — type sized down a notch per design
+                              feedback. Distance from you sits on the
+                              right of the title row on web; on mobile it
+                              wraps below to keep the title readable. */}
+                          <div className="px-4 py-3 flex-1 flex flex-col">
+                            <div className="flex items-baseline justify-between gap-2 flex-wrap">
                               <a href={fullPageHref} target="_blank" rel="noopener noreferrer" className="block group/title min-w-0 flex-1">
-                                <h3 className="text-sm font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate">
+                                <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate">
                                   {work.title}
                                 </h3>
                               </a>
                               {workDistance !== null && (
-                                <span className="text-[10px] text-muted shrink-0">
+                                <span className="text-[10px] text-muted shrink-0 inline-flex items-center gap-0.5 order-3 sm:order-none w-full sm:w-auto mt-0.5 sm:mt-0">
+                                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                    <circle cx="12" cy="10" r="3" />
+                                  </svg>
                                   {workDistance < 0.2 ? "< 0.2 mi" : `${workDistance.toFixed(1)} mi`}
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-muted mt-0.5">
-                              {/* Clickable artist name (#40), sends users
-                                  straight to the artist's portfolio page.
-                                  stopPropagation keeps the surrounding
-                                  card click handlers (eye icon / lightbox)
-                                  from firing when this link is tapped. */}
+                            <p className="text-[11px] text-muted mt-0.5">
                               <Link
                                 href={`/browse/${work.artistSlug}`}
                                 onClick={(e) => e.stopPropagation()}
@@ -2061,7 +2063,7 @@ function BrowsePortfoliosPageInner() {
                               {" · "}
                               {work.medium}
                             </p>
-                            <p className="text-xs text-foreground/80 mt-1 font-medium">
+                            <p className="text-[11px] text-foreground/80 mt-1 font-medium">
                               {work.priceBand}
                             </p>
                             <p className="text-[11px] text-muted/70 mt-1">

@@ -72,14 +72,12 @@ const statusBadge = (status: string) => statusBadgeClass(sharedNormaliseStatus(s
  * surfaced via the "Awaiting response" chip; Declined/Completed/Sold
  * are terminal states).
  */
-function nextActionText(p: Placement): string | null {
-  if (p.status === "Pending") return null;
-  if (p.status === "Declined") return null;
-  if (p.status === "Completed" || p.status === "Sold") return null;
-  if (!p.scheduledFor) return "Next: agree an installation date with the venue";
-  if (!p.installedAt) return "Next: confirm installation once the venue has hung the work";
-  if (!p.liveFrom) return "Next: mark live on wall";
-  if (!p.collectedAt) return "Next: mark collected when the piece comes down";
+// "Next: …" hints used to live alongside the status pill on every
+// placement row. They duplicated information already obvious from the
+// stepper + the action buttons, and felt patronising once you knew
+// the lifecycle. The placement progress bar + status badges carry the
+// signal on their own.
+function nextActionText(_p: Placement): string | null {
   return null;
 }
 

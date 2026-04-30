@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import QRLabel from "./QRLabel";
-import { LABEL_SIZES, type LabelSize } from "./QRLabel";
+import { LABEL_SIZES, type LabelSize, type LabelStyle } from "./QRLabel";
 import { generateQRDataURL } from "@/lib/qr";
 import { slugify } from "@/lib/slugify";
 
@@ -30,6 +30,7 @@ export interface LabelData {
   _sourcePrice?: string;
   _sourceDimensions?: string;
   labelSize?: LabelSize;
+  labelStyle?: LabelStyle;
   tagline?: string;
 }
 
@@ -141,6 +142,7 @@ export default function LabelSheet({ labels, labelVisibility, pageIndex }: Label
                   qrDataUrl={qrUrls[item.uniqueIndex] || ""}
                   isPortfolioLabel={item.label.isPortfolioLabel}
                   labelSize={currentSize}
+                  labelStyle={item.label.labelStyle}
                   tagline={item.label.tagline}
                   showMedium={vis ? vis.medium : true}
                   showDimensions={vis ? vis.dimensions : true}

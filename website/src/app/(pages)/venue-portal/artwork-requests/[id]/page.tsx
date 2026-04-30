@@ -99,7 +99,7 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
 
   return (
     <VenuePortalLayout activePath="/venue-portal/artwork-requests">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-3xl px-4 sm:px-6 py-8">
         {loading || !req ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : (

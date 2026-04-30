@@ -126,7 +126,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/artwork-requests">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-3xl px-4 sm:px-6 py-8">
         <Link href="/artist-portal/artwork-requests" className="text-xs text-muted hover:text-accent inline-block mb-4">← All requests</Link>
 
         <h1 className="text-2xl font-serif mb-2">{req.title}</h1>

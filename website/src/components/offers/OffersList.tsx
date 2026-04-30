@@ -1,12 +1,41 @@
 "use client";
 
 // Shared offers list — used in both the venue (buyer) and artist
-// (recipient) portals. Renders status, price, message, and the
-// appropriate action buttons based on viewer role + offer status.
+// (recipient) portals. Renders thumbnails of the works in the offer,
+// venue + artist details, status, price, message, and the appropriate
+// action buttons based on viewer role + offer status (Accept / Counter /
+// Decline / Withdraw / Pay).
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { authFetch } from "@/lib/api-client";
+
+interface EnrichedWork {
+  id: string;
+  title: string;
+  image: string | null;
+  dimensions: string | null;
+  medium: string | null;
+}
+
+interface EnrichedCollection {
+  id: string;
+  title: string;
+  work_ids: string[] | null;
+}
+
+interface EnrichedVenue {
+  user_id: string;
+  name: string;
+  slug: string | null;
+  location: string | null;
+}
+
+interface EnrichedArtist {
+  slug: string;
+  name: string;
+}
 
 interface OfferRow {
   id: string;
@@ -25,6 +54,10 @@ interface OfferRow {
   paid_order_id: string | null;
   created_at: string;
   parent_offer_id: string | null;
+  works?: EnrichedWork[];
+  collection?: EnrichedCollection | null;
+  venue?: EnrichedVenue | null;
+  artist?: EnrichedArtist | null;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -49,6 +82,9 @@ export default function OffersList({ viewerUserId, filter }: Props) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [counterFor, setCounterFor] = useState<OfferRow | null>(null);
+  const [counterAmount, setCounterAmount] = useState("");
+  const [counterMessage, setCounterMessage] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,6 +140,47 @@ export default function OffersList({ viewerUserId, filter }: Props) {
     }
   }
 
+  function openCounter(o: OfferRow) {
+    setCounterAmount((o.amount_pence / 100).toFixed(0));
+    setCounterMessage("");
+    setCounterFor(o);
+  }
+
+  async function submitCounter() {
+    if (!counterFor) return;
+    const amt = parseFloat(counterAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setError("Enter a valid counter amount.");
+      return;
+    }
+    setBusyId(counterFor.id);
+    setError(null);
+    try {
+      const res = await authFetch("/api/offers", {
+        method: "POST",
+        body: JSON.stringify({
+          artistSlug: counterFor.artist_slug,
+          workIds: counterFor.work_ids,
+          collectionId: counterFor.collection_id || undefined,
+          amountPence: Math.round(amt * 100),
+          message: counterMessage.trim() || undefined,
+          parentOfferId: counterFor.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || data.error || "Could not send counter.");
+      } else {
+        setCounterFor(null);
+        await load();
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (loading) return <p className="text-sm text-muted">Loading…</p>;
   if (offers.length === 0) {
     return (
@@ -119,74 +196,212 @@ export default function OffersList({ viewerUserId, filter }: Props) {
   return (
     <div className="space-y-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
+
       {offers.map((o) => {
         const iAmBuyer = o.buyer_user_id === viewerUserId;
         const iAmArtist = o.artist_user_id === viewerUserId;
         const formatted = `£${(o.amount_pence / 100).toFixed(2)}`;
-        const target = o.collection_id ? `Collection ${o.collection_id}` : `${o.work_ids.length} work${o.work_ids.length === 1 ? "" : "s"}`;
+        const works = o.works || [];
+        const primaryWork = works[0];
+        const targetTitle = o.collection?.title
+          ? `Collection: ${o.collection.title}`
+          : works.length === 1
+            ? primaryWork?.title || "Artwork"
+            : works.length > 1
+              ? `${works.length} works`
+              : "Artwork";
+
+        const counterpartyName = iAmBuyer
+          ? o.artist?.name || o.artist_slug || "Artist"
+          : o.venue?.name || "Venue";
+        const counterpartyHref = iAmBuyer && o.artist?.slug
+          ? `/browse/${o.artist.slug}`
+          : iAmArtist && o.venue?.slug
+            ? `/venues/${o.venue.slug}`
+            : undefined;
 
         return (
-          <article key={o.id} className="bg-surface border border-border rounded-sm p-5">
-            <header className="flex items-start justify-between gap-3 mb-2">
-              <div>
-                <p className="text-base font-medium">{formatted}</p>
-                <p className="text-xs text-muted">{target} · {iAmBuyer ? `to ${o.artist_slug || "artist"}` : "from venue"}</p>
-              </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded-sm border ${STATUS_BADGE[o.status] || STATUS_BADGE.pending}`}>
-                {o.status}
-              </span>
-            </header>
-            {o.message && <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap mb-3">{o.message}</p>}
+          <article key={o.id} className="bg-surface border border-border rounded-sm overflow-hidden">
+            <div className="flex flex-col sm:flex-row">
+              {primaryWork?.image && (
+                <div className="relative w-full sm:w-32 h-32 shrink-0 bg-foreground/5">
+                  <Image
+                    src={primaryWork.image}
+                    alt={primaryWork.title}
+                    fill
+                    className="object-cover"
+                    sizes="128px"
+                    unoptimized
+                  />
+                  {works.length > 1 && (
+                    <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/65 text-white rounded-sm text-[10px]">
+                      +{works.length - 1}
+                    </span>
+                  )}
+                </div>
+              )}
 
-            <footer className="flex flex-wrap gap-2 pt-2 border-t border-border">
-              {iAmArtist && (o.status === "pending" || o.status === "countered") && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => act(o.id, "accept")}
-                    disabled={busyId === o.id}
-                    className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-sm transition-colors disabled:opacity-60"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => act(o.id, "decline")}
-                    disabled={busyId === o.id}
-                    className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition-colors disabled:opacity-60"
-                  >
-                    Decline
-                  </button>
-                </>
-              )}
-              {iAmBuyer && (o.status === "pending" || o.status === "countered") && (
-                <button
-                  type="button"
-                  onClick={() => act(o.id, "withdraw")}
-                  disabled={busyId === o.id}
-                  className="px-3 py-1.5 text-xs font-medium text-muted bg-surface hover:bg-foreground/5 border border-border rounded-sm transition-colors disabled:opacity-60"
-                >
-                  Withdraw
-                </button>
-              )}
-              {iAmBuyer && o.status === "accepted" && (
-                <button
-                  type="button"
-                  onClick={() => pay(o.id)}
-                  disabled={busyId === o.id}
-                  className="px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent/90 rounded-sm transition-colors disabled:opacity-60"
-                >
-                  Complete payment — {formatted}
-                </button>
-              )}
-              {o.status === "paid" && (
-                <span className="text-xs text-emerald-700">Paid · order {o.paid_order_id}</span>
-              )}
-              <span className="text-[10px] text-muted ml-auto">{new Date(o.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
-            </footer>
+              <div className="flex-1 p-4 sm:p-5">
+                <header className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p className="text-base font-medium">{formatted}</p>
+                    <p className="text-xs text-muted">
+                      {targetTitle} ·{" "}
+                      {counterpartyHref ? (
+                        <Link href={counterpartyHref} className="hover:text-accent">
+                          {iAmBuyer ? `to ${counterpartyName}` : `from ${counterpartyName}`}
+                        </Link>
+                      ) : (
+                        <>{iAmBuyer ? `to ${counterpartyName}` : `from ${counterpartyName}`}</>
+                      )}
+                      {iAmArtist && o.venue?.location ? ` · ${o.venue.location}` : ""}
+                    </p>
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-sm border ${STATUS_BADGE[o.status] || STATUS_BADGE.pending}`}>
+                    {o.status}
+                  </span>
+                </header>
+
+                {works.length > 0 && (
+                  <ul className="space-y-0.5 mb-3">
+                    {works.map((w) => (
+                      <li key={w.id} className="text-[11px] text-muted">
+                        <span className="text-foreground/80 font-medium">{w.title}</span>
+                        {w.dimensions ? ` · ${w.dimensions}` : ""}
+                        {w.medium ? ` · ${w.medium}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {o.message && (
+                  <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap mb-3">
+                    &ldquo;{o.message}&rdquo;
+                  </p>
+                )}
+
+                <footer className="flex flex-wrap gap-2 pt-2 border-t border-border">
+                  {iAmArtist && (o.status === "pending" || o.status === "countered") && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => act(o.id, "accept")}
+                        disabled={busyId === o.id}
+                        className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-sm transition-colors disabled:opacity-60"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openCounter(o)}
+                        disabled={busyId === o.id}
+                        className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-sm transition-colors disabled:opacity-60"
+                      >
+                        Counter
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => act(o.id, "decline")}
+                        disabled={busyId === o.id}
+                        className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition-colors disabled:opacity-60"
+                      >
+                        Decline
+                      </button>
+                    </>
+                  )}
+                  {iAmBuyer && (o.status === "pending" || o.status === "countered") && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openCounter(o)}
+                        disabled={busyId === o.id}
+                        className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-sm transition-colors disabled:opacity-60"
+                      >
+                        Counter
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => act(o.id, "withdraw")}
+                        disabled={busyId === o.id}
+                        className="px-3 py-1.5 text-xs font-medium text-muted bg-surface hover:bg-foreground/5 border border-border rounded-sm transition-colors disabled:opacity-60"
+                      >
+                        Withdraw
+                      </button>
+                    </>
+                  )}
+                  {iAmBuyer && o.status === "accepted" && (
+                    <button
+                      type="button"
+                      onClick={() => pay(o.id)}
+                      disabled={busyId === o.id}
+                      className="px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent/90 rounded-sm transition-colors disabled:opacity-60"
+                    >
+                      Complete payment — {formatted}
+                    </button>
+                  )}
+                  {o.status === "paid" && (
+                    <span className="text-xs text-emerald-700">Paid · order {o.paid_order_id}</span>
+                  )}
+                  <span className="text-[10px] text-muted ml-auto">
+                    {new Date(o.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                </footer>
+              </div>
+            </div>
           </article>
         );
       })}
+
+      {counterFor && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-background rounded-sm w-full max-w-md p-6">
+            <h2 className="text-lg font-medium mb-2">Counter offer</h2>
+            <p className="text-xs text-muted mb-5">
+              Current offer: <strong>£{(counterFor.amount_pence / 100).toFixed(2)}</strong>. Suggest a new price.
+            </p>
+            <label htmlFor="counter-amount" className="block text-xs uppercase tracking-wider text-muted mb-1.5">Your counter (£)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/60 text-sm">£</span>
+              <input
+                id="counter-amount"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={counterAmount}
+                onChange={(e) => setCounterAmount(e.target.value)}
+                className="w-full pl-7 pr-3 py-3 bg-background border border-border rounded-sm text-base focus:outline-none focus:border-accent/60"
+                autoFocus
+              />
+            </div>
+            <label htmlFor="counter-message" className="block text-xs uppercase tracking-wider text-muted mb-1.5 mt-4">Message <span className="normal-case text-muted/70">(optional)</span></label>
+            <textarea
+              id="counter-message"
+              value={counterMessage}
+              onChange={(e) => setCounterMessage(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60 resize-y"
+            />
+            <div className="flex gap-2 mt-5">
+              <button
+                type="button"
+                onClick={submitCounter}
+                disabled={busyId === counterFor.id}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent/90 rounded-sm transition-colors disabled:opacity-60"
+              >
+                {busyId === counterFor.id ? "Sending…" : "Send counter"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCounterFor(null)}
+                className="px-4 py-2.5 text-sm text-muted hover:text-foreground transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

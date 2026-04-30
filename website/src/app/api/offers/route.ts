@@ -13,7 +13,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
-import { ReviewPostedNotification } from "@/emails/templates/messages/ReviewPostedNotification";
+import { OfferReceivedNotification } from "@/emails/templates/messages/OfferReceivedNotification";
 
 export const runtime = "nodejs";
 
@@ -24,6 +24,10 @@ const createSchema = z.object({
   workIds: z.array(z.string()).default([]),
   collectionId: z.string().optional(),
   amountPence: z.number().int().positive().max(50_000_000), // £500k cap, enough for any artwork
+  // Optional size label for single-work offers — when present, the
+  // 60% floor compares against this size's price specifically rather
+  // than the largest size on the work.
+  sizeLabel: z.string().max(120).optional(),
   message: z.string().max(2000).optional(),
   expiresAt: z.string().datetime().optional(),
   parentOfferId: z.string().optional(),
@@ -44,7 +48,7 @@ type DbWorkRow = {
  */
 async function computeAskingPricePence(
   db: ReturnType<typeof getSupabaseAdmin>,
-  target: { workIds: string[]; collectionId?: string | null },
+  target: { workIds: string[]; collectionId?: string | null; sizeLabel?: string },
 ): Promise<number | null> {
   let workIds = target.workIds;
   if (target.collectionId) {
@@ -64,14 +68,30 @@ async function computeAskingPricePence(
     .in("id", workIds);
   if (!works || works.length === 0) return null;
 
+  // Single-work offers can pin against a specific size variant the
+  // buyer chose on the artwork page. Multi-work / collection offers
+  // fall back to summing the largest price per work — the most
+  // permissive 60% floor.
+  const useLabel = target.sizeLabel && workIds.length === 1;
+  const labelLower = (target.sizeLabel || "").toLowerCase();
+
   let totalPence = 0;
   let priced = 0;
   for (const w of works as DbWorkRow[]) {
     const tiers = Array.isArray(w.pricing) ? w.pricing : [];
     if (tiers.length === 0) continue;
-    const maxPrice = Math.max(...tiers.map((t) => Number(t.price) || 0));
-    if (maxPrice > 0) {
-      totalPence += Math.round(maxPrice * 100);
+    let chosenPrice: number | null = null;
+    if (useLabel) {
+      const match = tiers.find((t) => (t.label || "").toLowerCase() === labelLower);
+      if (match && Number.isFinite(Number(match.price))) {
+        chosenPrice = Number(match.price);
+      }
+    }
+    if (chosenPrice == null) {
+      chosenPrice = Math.max(...tiers.map((t) => Number(t.price) || 0));
+    }
+    if (chosenPrice > 0) {
+      totalPence += Math.round(chosenPrice * 100);
       priced++;
     }
   }
@@ -123,7 +143,45 @@ export async function GET(request: Request) {
     console.error("[offers GET]", error);
     return NextResponse.json({ error: "Could not load offers" }, { status: 500 });
   }
-  return NextResponse.json({ offers: data || [] });
+  const offers = (data || []) as DbOffer[];
+
+  // Enrich with the buyer-side artwork + venue details so the offers
+  // list page can show actual context (image, title, dimensions, venue
+  // name) rather than just "1 work · from venue".
+  const allWorkIds = Array.from(new Set(offers.flatMap((o) => o.work_ids || [])));
+  const collectionIds = Array.from(new Set(offers.map((o) => o.collection_id).filter((x): x is string => !!x)));
+  const venueIds = Array.from(new Set(offers.map((o) => o.buyer_user_id)));
+  const artistSlugs = Array.from(new Set(offers.map((o) => o.artist_slug).filter((x): x is string => !!x)));
+
+  const [worksRes, collectionsRes, venuesRes, artistsRes] = await Promise.all([
+    allWorkIds.length
+      ? db.from("artist_works").select("id, title, image, dimensions, medium").in("id", allWorkIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; title: string; image: string | null; dimensions: string | null; medium: string | null }> }),
+    collectionIds.length
+      ? db.from("artist_collections").select("id, title, work_ids").in("id", collectionIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; title: string; work_ids: string[] | null }> }),
+    venueIds.length
+      ? db.from("venue_profiles").select("user_id, name, slug, location").in("user_id", venueIds)
+      : Promise.resolve({ data: [] as Array<{ user_id: string; name: string; slug: string | null; location: string | null }> }),
+    artistSlugs.length
+      ? db.from("artist_profiles").select("slug, name").in("slug", artistSlugs)
+      : Promise.resolve({ data: [] as Array<{ slug: string; name: string }> }),
+  ]);
+
+  const workById = new Map((worksRes.data || []).map((w) => [w.id, w]));
+  const collectionById = new Map((collectionsRes.data || []).map((c) => [c.id, c]));
+  const venueByUserId = new Map((venuesRes.data || []).map((v) => [v.user_id, v]));
+  const artistBySlug = new Map((artistsRes.data || []).map((a) => [a.slug, a]));
+
+  const enriched = offers.map((o) => ({
+    ...o,
+    works: (o.work_ids || []).map((id) => workById.get(id)).filter(Boolean),
+    collection: o.collection_id ? collectionById.get(o.collection_id) ?? null : null,
+    venue: venueByUserId.get(o.buyer_user_id) ?? null,
+    artist: o.artist_slug ? artistBySlug.get(o.artist_slug) ?? null : null,
+  }));
+
+  return NextResponse.json({ offers: enriched });
 }
 
 export async function POST(request: Request) {
@@ -136,7 +194,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid offer" }, { status: 400 });
   }
 
-  const { artistSlug, workIds, collectionId, amountPence, message, expiresAt, parentOfferId } = parsed.data;
+  const { artistSlug, workIds, collectionId, amountPence, sizeLabel, message, expiresAt, parentOfferId } = parsed.data;
 
   if ((workIds.length === 0 && !collectionId) || (workIds.length > 0 && collectionId)) {
     return NextResponse.json({ error: "Provide either workIds or a collectionId" }, { status: 400 });
@@ -187,7 +245,7 @@ export async function POST(request: Request) {
   // Counters from the artist side aren't subject to this floor — they
   // can negotiate freely on their own work.
   if (!isArtistCountering) {
-    const askingPence = await computeAskingPricePence(db, { workIds, collectionId });
+    const askingPence = await computeAskingPricePence(db, { workIds, collectionId, sizeLabel });
     if (askingPence != null) {
       const floor = Math.ceil(askingPence * 0.60);
       if (amountPence < floor) {
@@ -256,7 +314,14 @@ export async function POST(request: Request) {
     const recipient = recipientId.buyer_user_id === buyerId ? recipientId.artist_user_id : recipientId.buyer_user_id;
     if (recipient) {
       const formatted = `£${(amountPence / 100).toFixed(2)}`;
-      const link = `/${parentOfferId ? "customer-portal" : artistProfile.user_id === recipient ? "artist-portal" : "customer-portal"}/offers`;
+      // Recipient-side portal link. Buyer is always a venue (offers are
+      // venue-only), so a venue recipient → /venue-portal/offers, an
+      // artist recipient → /artist-portal/offers. The previous
+      // implementation keyed off the *actor's* role and broke when an
+      // artist countered.
+      const link = recipient === artistProfile.user_id
+        ? "/artist-portal/offers"
+        : "/venue-portal/offers";
       createNotification({
         userId: recipient,
         kind: parentOfferId ? "offer_counter" : "offer_received",
@@ -265,32 +330,82 @@ export async function POST(request: Request) {
         link,
       }).catch((err) => console.warn("[offers] bell failed:", err));
 
-      // Email — reuse the review template? No — write a new minimal
-      // notification email so we don't conflate categories. For now
-      // send a plain text-ish ReviewPostedNotification-shaped email
-      // with a fake rating-style summary; or fall back to legacy
-      // notify. Keeping this lean: just bell + email_event log via a
-      // dedicated message call.
+      // Drop a "you have an offer" message into the artist↔venue
+      // conversation thread. Users were getting only the bell + email
+      // before, which felt detached from the rest of the conversation.
+      // Best-effort — we don't 500 if the message insert fails.
+      try {
+        const { data: venueRow } = await db
+          .from("venue_profiles")
+          .select("slug, name")
+          .eq("user_id", recipientId.buyer_user_id)
+          .maybeSingle<{ slug: string | null; name: string | null }>();
+        const buyerSlug = venueRow?.slug;
+        if (buyerSlug && artistSlug) {
+          // Deterministic conversation id between the two slugs.
+          const [a, b] = [buyerSlug, artistSlug].sort();
+          const conversationId = `dm-${a}__${b}`;
+          // Identify sender slug: the user who's posting this offer.
+          const senderSlug = buyerId === recipientId.buyer_user_id ? buyerSlug : artistSlug;
+          const recipientSlug = buyerId === recipientId.buyer_user_id ? artistSlug : buyerSlug;
+          const senderType = buyerId === recipientId.buyer_user_id ? "venue" : "artist";
+          const summary = parentOfferId
+            ? `Sent a counter offer of ${formatted}.`
+            : `Made an offer of ${formatted}${message ? ` — "${message.slice(0, 200)}"` : ""}.`;
+          await db.from("messages").insert({
+            conversation_id: conversationId,
+            sender_id: buyerId,
+            sender_name: senderSlug,
+            sender_type: senderType,
+            recipient_slug: recipientSlug,
+            recipient_user_id: recipient,
+            content: summary,
+            // Auto-system messages are pre-read for the recipient — the
+            // bell notification carries the unread signal so we don't
+            // double-bump.
+            is_read: true,
+            created_at: new Date().toISOString(),
+            message_type: "text",
+            metadata: { offerId: id, offerAmountPence: amountPence },
+          });
+        }
+      } catch (err) {
+        console.warn("[offers] thread message skipped:", err);
+      }
+
+      // Email the recipient with the dedicated offer template.
+      // Previously this reused ReviewPostedNotification with a fake
+      // 5-star rating, which read as nonsense.
       try {
         const { data: { user: target } } = await db.auth.admin.getUserById(recipient);
         if (target?.email) {
-          // Use the review template visually — it's the closest fit
-          // until we ship a dedicated offer template.
+          const firstName = (
+            (target.user_metadata?.display_name as string | undefined) ||
+            target.email.split("@")[0]
+          ).split(" ")[0];
+          const venueName =
+            (await db.from("venue_profiles").select("name").eq("user_id", recipientId.buyer_user_id).maybeSingle<{ name: string | null }>())
+              .data?.name || "A venue";
+          const subjectLine = parentOfferId
+            ? `Counter offer of ${formatted}`
+            : `New offer of ${formatted} from ${venueName}`;
+          const recipientIsArtist = recipient === artistProfile.user_id;
           await sendEmail({
             idempotencyKey: `offer:${id}:${recipient}`,
             template: "offer_received",
             category: "placements",
             to: target.email,
-            subject: parentOfferId
-              ? `Counter offer of ${formatted} on Wallplace`
-              : `New offer of ${formatted} on Wallplace`,
+            subject: subjectLine,
             userId: recipient,
-            react: ReviewPostedNotification({
-              firstName: (target.user_metadata?.display_name as string || target.email.split("@")[0]).split(" ")[0],
-              reviewerName: parentOfferId ? "Buyer" : auth.user!.email?.split("@")[0] || "Buyer",
-              reviewRating: 5,
-              reviewText: `${formatted}${message ? `\n\n${message}` : ""}`,
-              reviewUrl: `${SITE}${link}`,
+            react: OfferReceivedNotification({
+              firstName,
+              venueName,
+              formattedAmount: formatted,
+              message: message || undefined,
+              isCounter: !!parentOfferId,
+              offersUrl: `${SITE}${link}`,
+              recipientRole: recipientIsArtist ? "artist" : "venue",
+              supportUrl: "https://wallplace.co.uk/support",
             }),
             metadata: { offerId: id },
           });

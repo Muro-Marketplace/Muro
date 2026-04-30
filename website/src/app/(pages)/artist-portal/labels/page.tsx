@@ -6,7 +6,7 @@ import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
 import type { LabelData } from "@/components/labels/LabelSheet";
-import { LABEL_SIZES, LABEL_STYLES, PAPER_FINISHES, type LabelSize, type LabelStyle, type PaperFinish } from "@/components/labels/QRLabel";
+import { LABEL_SIZES, LABEL_STYLES, type LabelSize, type LabelStyle } from "@/components/labels/QRLabel";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
 
@@ -41,20 +41,21 @@ export default function LabelsPage() {
   // High-level style picker — drives size + which fields to show, so
   // the artist doesn't have to think about both. Falling back to
   // "minimal" matches the existing default size of medium.
-  const [labelStyle, setLabelStyleRaw] = useState<LabelStyle>("minimal");
-  const [paperFinish, setPaperFinish] = useState<PaperFinish>("matte");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [labelStyle, setLabelStyle] = useState<LabelStyle>("minimal");
 
   function applyStyle(style: LabelStyle) {
-    setLabelStyleRaw(style);
+    // Style + size are independent now (per design feedback). Picking
+    // a style sets the *default* size for that style on first selection
+    // but doesn't override an explicit size the user has already
+    // chosen. Field toggles are always live so Editorial actually
+    // shows medium/dimensions/price.
+    setLabelStyle(style);
     const cfg = LABEL_STYLES.find((s) => s.key === style);
-    if (cfg) {
-      setLabelSize(cfg.size);
-      setOptions({
-        showMedium: cfg.showMedium,
-        showDimensions: cfg.showDimensions,
-        showPrice: cfg.showPrice,
-      });
+    if (cfg) setLabelSize(cfg.defaultSize);
+    if (style === "editorial") {
+      setOptions({ showMedium: true, showDimensions: true, showPrice: true });
+    } else if (style === "minimal") {
+      setOptions({ showMedium: false, showDimensions: false, showPrice: false });
     }
   }
 
@@ -167,7 +168,8 @@ export default function LabelsPage() {
         quantity: portfolioQty,
         isPortfolioLabel: true,
         labelSize,
-        tagline: (labelSize === "large" || labelSize === "xlarge") ? tagline || undefined : undefined,
+        labelStyle,
+        tagline: (labelSize === "large" || labelSize === "xlarge") && labelStyle !== "qr_only" ? tagline || undefined : undefined,
       });
     }
 
@@ -176,16 +178,9 @@ export default function LabelsPage() {
       labels.push({
         artistName: currentArtist.name,
         artistSlug: currentArtist.slug,
-        // Real work id so the QR scan analytics_events.work_id
-        // matches artist_works.id (rather than the URL-encoded
-        // title we used to send).
         workId: work.id,
         venueName: selectedVenue || undefined,
         workTitle: work.title,
-        // Always populate the data fields. Whether they show on the
-        // rendered label is controlled by labelVisibility in LabelPreview;
-        // gating the data here used to leave the second-label toggle
-        // unable to re-enable a field once turned off.
         workMedium: work.medium,
         workDimensions: selectedSizes[i] || work.dimensions,
         workPrice: work.priceBand,
@@ -194,7 +189,8 @@ export default function LabelsPage() {
         _sourcePrice: work.priceBand,
         _sourceDimensions: work.dimensions,
         labelSize,
-        tagline: (labelSize === "large" || labelSize === "xlarge") ? tagline || undefined : undefined,
+        labelStyle,
+        tagline: (labelSize === "large" || labelSize === "xlarge") && labelStyle !== "qr_only" ? tagline || undefined : undefined,
       });
     });
     return labels;
@@ -248,88 +244,63 @@ export default function LabelsPage() {
               ))}
             </div>
 
-            {/* Paper finish — informational, no behaviour change. */}
-            <div className="grid sm:grid-cols-2 gap-3 mb-3">
-              <div>
-                <p className="text-xs text-muted mb-1.5">Paper finish</p>
-                <select
-                  value={paperFinish}
-                  onChange={(e) => setPaperFinish(e.target.value as PaperFinish)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/60"
-                >
-                  {PAPER_FINISHES.map((f) => (
-                    <option key={f.key} value={f.key}>{f.name}</option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-muted mt-1">{PAPER_FINISHES.find((f) => f.key === paperFinish)?.description}</p>
-              </div>
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced((v) => !v)}
-                  className="text-xs text-muted hover:text-accent transition-colors mt-6"
-                >
-                  {showAdvanced ? "Hide advanced" : "Advanced options"}
-                </button>
+            {/* Label size — front-and-centre. Style + size are
+                independent: pick the visual treatment above, then the
+                physical dimensions here. */}
+            <div className="mb-3">
+              <p className="text-xs text-muted mb-1.5">Label size</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {LABEL_SIZES.map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => setLabelSize(s.key)}
+                    className={`px-3 py-1.5 text-xs rounded-sm border transition-colors ${
+                      labelSize === s.key ? "bg-foreground text-white border-foreground" : "border-border text-muted hover:border-foreground/30"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {showAdvanced && (
-              <>
-                {/* Raw size selector — power users can override style. */}
-                <div className="mb-3">
-                  <p className="text-xs text-muted mb-1.5">Label size</p>
-                  <div className="flex gap-1.5 flex-wrap">
-                    {LABEL_SIZES.map((s) => (
-                      <button
-                        key={s.key}
-                        onClick={() => setLabelSize(s.key)}
-                        className={`px-3 py-1.5 text-xs rounded-sm border transition-colors ${
-                          labelSize === s.key ? "bg-foreground text-white border-foreground" : "border-border text-muted hover:border-foreground/30"
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            {(labelSize === "large" || labelSize === "xlarge") && labelStyle !== "qr_only" && (
+              <div className="mb-3">
+                <p className="text-xs text-muted mb-1.5">Tagline (shown on label)</p>
+                <input
+                  type="text"
+                  value={tagline}
+                  onChange={(e) => setTagline(e.target.value)}
+                  placeholder="e.g. Scan to view & purchase this artwork"
+                  maxLength={80}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/60"
+                />
+              </div>
+            )}
 
-                {(labelSize === "large" || labelSize === "xlarge") && (
-                  <div className="mb-3">
-                    <p className="text-xs text-muted mb-1.5">Tagline (shown on label)</p>
-                    <input
-                      type="text"
-                      value={tagline}
-                      onChange={(e) => setTagline(e.target.value)}
-                      placeholder="e.g. Scan to view & purchase this artwork"
-                      maxLength={80}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/60"
-                    />
-                  </div>
-                )}
-
-                <div className="flex flex-wrap gap-x-5 gap-y-2">
-                  {([
-                    { key: "showMedium" as const, label: "Medium" },
-                    { key: "showDimensions" as const, label: "Dimensions" },
-                    { key: "showPrice" as const, label: "Price" },
-                  ]).map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
-                      <button
-                        onClick={() => setOptions((prev) => ({ ...prev, [key]: !prev[key] }))}
-                        className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-colors ${
-                          options[key] ? "bg-accent border-accent" : "bg-white border-border"
-                        }`}
-                      >
-                        {options[key] && (
-                          <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
-                        )}
-                      </button>
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </>
+            {/* Field toggles — only meaningful for Editorial style. */}
+            {labelStyle === "editorial" && (
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                {([
+                  { key: "showMedium" as const, label: "Medium" },
+                  { key: "showDimensions" as const, label: "Dimensions" },
+                  { key: "showPrice" as const, label: "Price" },
+                ]).map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
+                    <button
+                      onClick={() => setOptions((prev) => ({ ...prev, [key]: !prev[key] }))}
+                      className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-colors ${
+                        options[key] ? "bg-accent border-accent" : "bg-white border-border"
+                      }`}
+                    >
+                      {options[key] && (
+                        <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
+                      )}
+                    </button>
+                    {label}
+                  </label>
+                ))}
+              </div>
             )}
           </div>
 

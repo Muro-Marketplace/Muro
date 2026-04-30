@@ -1,6 +1,18 @@
+// Printable QR label.
+//
+// Two independent axes:
+//   1. **size** (LabelSize): physical dimensions — micro / small /
+//      medium / large / xlarge. Drives sheet density.
+//   2. **style** (LabelStyle): visual treatment of the *content* —
+//      Minimal (artist + title + QR), Editorial (gallery-style
+//      framing with full meta), QR Only (just the code).
+//
+// Style and size are decoupled: an Editorial label at "small" still
+// reads as Editorial, just compressed. The portal page can preset
+// sensible (style, size) pairs but power users can override either.
+
 export type LabelSize = "micro" | "small" | "medium" | "large" | "xlarge";
 export type LabelStyle = "minimal" | "editorial" | "qr_only";
-export type PaperFinish = "matte" | "satin" | "glossy";
 
 export const LABEL_SIZES: { key: LabelSize; label: string; width: string; height: string; qr: string; perPage: number }[] = [
   { key: "micro", label: "QR Only", width: "25mm", height: "25mm", qr: "25mm", perPage: 48 },
@@ -10,51 +22,16 @@ export const LABEL_SIZES: { key: LabelSize; label: string; width: string; height
   { key: "xlarge", label: "Extra Large", width: "130mm", height: "80mm", qr: "44mm", perPage: 3 },
 ];
 
-// Curated styles from the design mockup. Each style picks a sensible
-// size + decides which fields to show. Artists can still drop down to
-// raw size + per-field toggles via the advanced controls.
 export const LABEL_STYLES: {
   key: LabelStyle;
   name: string;
   description: string;
-  size: LabelSize;
-  showMedium: boolean;
-  showDimensions: boolean;
-  showPrice: boolean;
+  /** Sensible size to default to when this style is picked. */
+  defaultSize: LabelSize;
 }[] = [
-  {
-    key: "minimal",
-    name: "Minimal",
-    description: "Clean and classic. Artist, title and QR code.",
-    size: "medium",
-    showMedium: false,
-    showDimensions: false,
-    showPrice: false,
-  },
-  {
-    key: "editorial",
-    name: "Editorial",
-    description: "Adds artwork details for a gallery-style label.",
-    size: "large",
-    showMedium: true,
-    showDimensions: true,
-    showPrice: true,
-  },
-  {
-    key: "qr_only",
-    name: "QR Only",
-    description: "QR code only. For ultra-minimal spaces.",
-    size: "micro",
-    showMedium: false,
-    showDimensions: false,
-    showPrice: false,
-  },
-];
-
-export const PAPER_FINISHES: { key: PaperFinish; name: string; description: string }[] = [
-  { key: "matte", name: "Matte (Recommended)", description: "Best for venues — no glare, premium feel." },
-  { key: "satin", name: "Satin", description: "Light sheen. Holds up well over time." },
-  { key: "glossy", name: "Glossy", description: "High contrast for QR scans in low light." },
+  { key: "minimal", name: "Minimal", description: "Artist, title and QR code only. Clean and classic.", defaultSize: "medium" },
+  { key: "editorial", name: "Editorial", description: "Adds medium, dimensions and price for a gallery-style label.", defaultSize: "large" },
+  { key: "qr_only", name: "QR Only", description: "QR code only, ultra-minimal.", defaultSize: "micro" },
 ];
 
 interface QRLabelProps {
@@ -66,10 +43,11 @@ interface QRLabelProps {
   qrDataUrl: string;
   isPortfolioLabel?: boolean;
   labelSize?: LabelSize;
+  /** Visual treatment. Defaults to "minimal". */
+  labelStyle?: LabelStyle;
   tagline?: string;
-  /** Per-label visibility flags. Default true so existing call sites
-   *  that don't pass them keep their behaviour. The flags gate
-   *  rendering only, the data still flows through. */
+  /** Per-label field toggles. Default true for the data the user
+   *  has provided; render code also gates by style (Editorial only). */
   showMedium?: boolean;
   showDimensions?: boolean;
   showPrice?: boolean;
@@ -84,17 +62,18 @@ export default function QRLabel({
   qrDataUrl,
   isPortfolioLabel,
   labelSize = "medium",
+  labelStyle = "minimal",
   tagline,
   showMedium = true,
   showDimensions = true,
   showPrice = true,
 }: QRLabelProps) {
   const sizeConfig = LABEL_SIZES.find((s) => s.key === labelSize) || LABEL_SIZES[2];
-  const isMicro = labelSize === "micro";
-  const isLarge = labelSize === "large" || labelSize === "xlarge";
-  const isSmall = labelSize === "small";
+  const isLargeSize = labelSize === "large" || labelSize === "xlarge";
+  const isSmallSize = labelSize === "small";
 
-  if (isMicro) {
+  // ── Style: QR Only ───────────────────────────────────────────────
+  if (labelStyle === "qr_only") {
     return (
       <div
         className="qr-label"
@@ -104,37 +83,177 @@ export default function QRLabel({
           boxSizing: "border-box",
           pageBreakInside: "avoid",
           backgroundColor: "#fff",
+          border: "0.5pt solid #ddd",
+          padding: "2mm",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
         {qrDataUrl && (
           <img
             src={qrDataUrl}
             alt="QR code"
-            style={{ width: "100%", height: "100%", display: "block" }}
+            style={{ width: "78%", height: "78%", display: "block", objectFit: "contain" }}
           />
         )}
+        <p
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: isSmallSize ? "5pt" : "6pt",
+            color: "#999",
+            margin: "1.5mm 0 0 0",
+            letterSpacing: "0.05em",
+          }}
+        >
+          wallplace.co.uk
+        </p>
       </div>
     );
   }
 
+  const containerStyle: React.CSSProperties = {
+    width: sizeConfig.width,
+    height: sizeConfig.height,
+    border: "0.5pt solid #ddd",
+    boxSizing: "border-box",
+    pageBreakInside: "avoid",
+    backgroundColor: "#fff",
+    fontFamily: "var(--font-sans)",
+  };
+
+  // ── Style: Editorial ─────────────────────────────────────────────
+  if (labelStyle === "editorial") {
+    return (
+      <div
+        className="qr-label"
+        style={{
+          ...containerStyle,
+          padding: isLargeSize ? "6mm 5mm" : isSmallSize ? "3mm" : "4.5mm",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ width: "100%", textAlign: "center" }}>
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: isLargeSize ? "7pt" : "6pt",
+              color: "#6B6B6B",
+              margin: 0,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+            }}
+          >
+            {artistName}
+          </p>
+          {!isPortfolioLabel && workTitle && (
+            <p
+              style={{
+                fontFamily: "var(--font-serif)",
+                fontSize: isLargeSize ? "16pt" : isSmallSize ? "10pt" : "13pt",
+                fontWeight: 400,
+                color: "#1A1A1A",
+                margin: "1.5mm 0 0 0",
+                lineHeight: 1.15,
+              }}
+            >
+              {workTitle}
+            </p>
+          )}
+          {isPortfolioLabel && (
+            <p
+              style={{
+                fontFamily: "var(--font-serif)",
+                fontSize: isLargeSize ? "12pt" : "10pt",
+                fontStyle: "italic",
+                color: "#6B6B6B",
+                margin: "1.5mm 0 0 0",
+              }}
+            >
+              Scan to view full portfolio
+            </p>
+          )}
+          <div
+            style={{
+              width: isLargeSize ? "10mm" : "6mm",
+              height: "0.4pt",
+              backgroundColor: "#C17C5A",
+              margin: "2mm auto 0",
+            }}
+          />
+        </div>
+
+        <div style={{ width: sizeConfig.qr, height: sizeConfig.qr }}>
+          {qrDataUrl && (
+            <img
+              src={qrDataUrl}
+              alt="QR code"
+              style={{ width: "100%", height: "100%", display: "block" }}
+            />
+          )}
+        </div>
+
+        <div style={{ width: "100%", textAlign: "center" }}>
+          {!isPortfolioLabel && (
+            <div
+              style={{
+                fontSize: isLargeSize ? "7pt" : "6pt",
+                color: "#6B6B6B",
+                lineHeight: 1.4,
+              }}
+            >
+              {showMedium && workMedium && <div>{workMedium}</div>}
+              {showDimensions && workDimensions && <div>{workDimensions}</div>}
+              {showPrice && workPrice && (
+                <div style={{ color: "#C17C5A", fontWeight: 500, marginTop: "1mm" }}>
+                  {workPrice}
+                </div>
+              )}
+            </div>
+          )}
+          {isLargeSize && tagline && (
+            <p
+              style={{
+                fontSize: "7pt",
+                color: "#6B6B6B",
+                fontStyle: "italic",
+                margin: "2mm 0 0 0",
+              }}
+            >
+              {tagline}
+            </p>
+          )}
+          <p
+            style={{
+              fontSize: isSmallSize ? "5pt" : "6pt",
+              color: "#999",
+              margin: "1.5mm 0 0 0",
+              letterSpacing: "0.05em",
+            }}
+          >
+            wallplace.co.uk
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Style: Minimal (default) ─────────────────────────────────────
   return (
     <div
       className="qr-label"
       style={{
-        width: sizeConfig.width,
-        height: sizeConfig.height,
-        border: "0.5pt solid #ddd",
-        padding: isSmall ? "3mm" : isLarge ? "5mm" : "4mm",
+        ...containerStyle,
+        padding: isSmallSize ? "3mm" : isLargeSize ? "5mm" : "4mm",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "stretch",
-        fontFamily: "var(--font-sans)",
-        boxSizing: "border-box",
-        pageBreakInside: "avoid",
-        backgroundColor: "#fff",
       }}
     >
-      {/* Left: text content */}
       <div
         style={{
           display: "flex",
@@ -149,7 +268,7 @@ export default function QRLabel({
           <p
             style={{
               fontFamily: "var(--font-serif)",
-              fontSize: isLarge ? "14pt" : isSmall ? "9pt" : "11pt",
+              fontSize: isLargeSize ? "14pt" : isSmallSize ? "9pt" : "11pt",
               fontWeight: 600,
               color: "#1A1A1A",
               margin: 0,
@@ -171,61 +290,22 @@ export default function QRLabel({
               Scan to view full portfolio
             </p>
           ) : (
-            <>
-              {workTitle && (
-                <p
-                  style={{
-                    fontSize: "9pt",
-                    fontWeight: 500,
-                    color: "#1A1A1A",
-                    margin: "2mm 0 0 0",
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {workTitle}
-                </p>
-              )}
-              {showMedium && workMedium && (
-                <p
-                  style={{
-                    fontSize: "7.5pt",
-                    color: "#6B6B6B",
-                    margin: "1mm 0 0 0",
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {workMedium}
-                </p>
-              )}
-              {showDimensions && workDimensions && (
-                <p
-                  style={{
-                    fontSize: "7pt",
-                    color: "#999",
-                    margin: "0.5mm 0 0 0",
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {workDimensions}
-                </p>
-              )}
-              {showPrice && workPrice && (
-                <p
-                  style={{
-                    fontSize: "8pt",
-                    fontWeight: 500,
-                    color: "#C17C5A",
-                    margin: "1.5mm 0 0 0",
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {workPrice}
-                </p>
-              )}
-            </>
+            workTitle && (
+              <p
+                style={{
+                  fontSize: isLargeSize ? "10pt" : "9pt",
+                  fontWeight: 500,
+                  color: "#1A1A1A",
+                  margin: "2mm 0 0 0",
+                  lineHeight: 1.3,
+                }}
+              >
+                {workTitle}
+              </p>
+            )
           )}
         </div>
-        {isLarge && tagline && (
+        {isLargeSize && tagline && (
           <p
             style={{
               fontSize: "7.5pt",
@@ -240,7 +320,7 @@ export default function QRLabel({
         )}
         <p
           style={{
-            fontSize: isSmall ? "5.5pt" : "6.5pt",
+            fontSize: isSmallSize ? "5.5pt" : "6.5pt",
             color: "#999",
             margin: 0,
             letterSpacing: "0.03em",
@@ -249,8 +329,6 @@ export default function QRLabel({
           wallplace.co.uk
         </p>
       </div>
-
-      {/* Right: QR code */}
       <div
         style={{
           width: sizeConfig.qr,

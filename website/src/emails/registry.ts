@@ -59,6 +59,7 @@ import PlacementContractCountersigned from "./templates/placements/PlacementCont
 import MessageUnreadNotification from "./templates/messages/MessageUnreadNotification";
 import MessageHourlyDigest from "./templates/messages/MessageHourlyDigest";
 import ReviewPostedNotification from "./templates/messages/ReviewPostedNotification";
+import OfferReceivedNotification from "./templates/messages/OfferReceivedNotification";
 
 // ── Performance (artist) ──────────────────────────────────────────────────
 import ArtistFirstQrScan from "./templates/performance/ArtistFirstQrScan";
@@ -203,6 +204,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   MessageUnreadNotification,
   MessageHourlyDigest,
   ReviewPostedNotification,
+  OfferReceivedNotification,
 
   // Performance
   ArtistFirstQrScan,

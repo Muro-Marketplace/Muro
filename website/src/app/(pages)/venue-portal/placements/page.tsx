@@ -87,7 +87,7 @@ const normaliseStatus = (raw: string): PlacementStatus => sharedNormaliseStatus(
  * timestamps. Surfaces the most useful next-action text at a glance so
  * venues don't have to expand each row to understand state.
  */
-function nextActionText(p: {
+function nextActionText(_p: {
   status: PlacementStatus;
   acceptedAt?: string | null;
   scheduledFor?: string | null;
@@ -95,17 +95,9 @@ function nextActionText(p: {
   liveFrom?: string | null;
   collectedAt?: string | null;
 }): string | null {
-  // Pending status is already surfaced via the top-right badge as
-  // "Awaiting response", so we suppress the "Awaiting artist response"
-  // duplicate here to keep the card concise.
-  if (p.status === "Pending") return null;
-  if (p.status === "Declined") return null;
-  if (p.status === "Completed" || p.status === "Sold") return null;
-  // Active, walk lifecycle
-  if (!p.scheduledFor) return "Next: schedule installation with the artist";
-  if (!p.installedAt) return "Next: confirm the artwork is installed";
-  if (!p.liveFrom) return "Next: mark live on wall";
-  if (!p.collectedAt) return "Next: mark collected when the piece comes down";
+  // "Next: …" hints removed — the stepper + action buttons already
+  // make the next step obvious, and the duplicate copy felt
+  // patronising once users knew the lifecycle.
   return null;
 }
 

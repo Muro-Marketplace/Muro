@@ -605,6 +605,23 @@ export default function ArtworkPageClient({
               : `Buy Original, £${selectedInStorePrice}`}
           </button>
         )}
+        {/* Venues see Make-an-Offer as a primary secondary CTA. Other
+            user types still see the modal if they tap into it (it
+            handles the non-venue explainer), but only venues get the
+            visible button so the page stays clean for customers. */}
+        {(!user || userType === "venue") && (
+          <button
+            type="button"
+            onClick={() => setOfferOpen(true)}
+            className="w-full px-5 py-3 text-sm font-medium text-foreground border border-border hover:border-foreground/50 rounded-sm transition-colors"
+          >
+            Make an offer
+          </button>
+        )}
+
+        {/* Message the artist — quiet text link beneath the
+            primary CTAs. The artwork-page actions used to be three
+            stacked buttons which read as crowded. */}
         <button
           onClick={() => {
             const nameParam = artistName ? `&artistName=${encodeURIComponent(artistName)}` : "";
@@ -618,21 +635,9 @@ export default function ArtworkPageClient({
               router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
             }
           }}
-          className="w-full px-5 py-3 text-sm font-medium text-foreground hover:text-accent transition-colors"
+          className="w-full px-5 py-2 text-xs text-muted hover:text-accent transition-colors border-t border-border"
         >
-          Message the artist
-          <span className="ml-1">→</span>
-        </button>
-
-        {/* Make-an-Offer — venue-only, surfaced quietly under the
-            primary buy + message actions to avoid cluttering the page
-            for customers. The modal handles the auth/non-venue gates. */}
-        <button
-          type="button"
-          onClick={() => setOfferOpen(true)}
-          className="w-full px-5 py-3 text-xs text-muted hover:text-accent transition-colors border-t border-border"
-        >
-          Make an offer (venues)
+          Message the artist <span className="ml-0.5">→</span>
         </button>
       </div>
 
@@ -642,12 +647,15 @@ export default function ArtworkPageClient({
         artistSlug={artistSlug}
         artistName={artistName}
         workIds={[work.id]}
-        workTitle={work.title}
-        askingPriceGbp={(() => {
-          const tiers = work.pricing || [];
-          if (tiers.length === 0) return null;
-          return Math.max(...tiers.map((t) => Number(t.price) || 0));
-        })()}
+        // Surface the selected size in the modal heading so the venue
+        // knows exactly which variant the offer covers.
+        workTitle={selectedPricing?.label ? `${work.title} (${selectedPricing.label})` : work.title}
+        sizeLabel={selectedPricing?.label}
+        // Asking price reflects the SELECTED size (with frame uplift if
+        // the buyer ticked one). Previously this was the largest size's
+        // price across the whole work, which made the 60% floor wildly
+        // off when the buyer was offering on a smaller variant.
+        askingPriceGbp={displayPrice ?? selectedPricing?.price ?? null}
       />
 
       {/* Wall visualiser, opens as a modal from the "View on your wall"

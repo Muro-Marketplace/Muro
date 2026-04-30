@@ -17,6 +17,9 @@ interface Props {
   /** EITHER a list of workIds OR a single collectionId. */
   workIds?: string[];
   workTitle?: string; // Display only.
+  /** Size label of the variant the buyer is offering on — pins the
+   *  60% floor against the right size on the server. */
+  sizeLabel?: string;
   collectionId?: string;
   collectionTitle?: string; // Display only.
   /** Asking price in pounds, used to surface the minimum. */
@@ -39,6 +42,7 @@ function MakeOfferModalBody({
   artistName,
   workIds,
   workTitle,
+  sizeLabel,
   collectionId,
   collectionTitle,
   askingPriceGbp,
@@ -117,6 +121,7 @@ function MakeOfferModalBody({
           workIds: workIds || [],
           collectionId: collectionId || undefined,
           amountPence: Math.round(numericAmount * 100),
+          sizeLabel: sizeLabel || undefined,
           message: message.trim() || undefined,
         }),
       });

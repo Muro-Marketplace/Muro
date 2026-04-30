@@ -9,6 +9,7 @@ import type { ArtistWork } from "@/data/artists";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import SaveButton from "@/components/SaveButton";
+import MakeOfferModal from "@/components/offers/MakeOfferModal";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 import { SIZE_BANDS, bandForCm, type SizeBandKey } from "@/components/browse/SizeBands";
 import { parseDimensions } from "@/lib/shipping-calculator";
@@ -26,6 +27,7 @@ export default function CollectionDetailPage() {
   const { user, userType } = useAuth();
   const [collection, setCollection] = useState<ArtistCollection | null>(null);
   const [works, setWorks] = useState<CollectionWork[]>([]);
+  const [offerOpen, setOfferOpen] = useState(false);
   const [arrangements, setArrangements] = useState<{
     openToFreeLoan: boolean;
     openToRevenueShare: boolean;
@@ -148,16 +150,24 @@ export default function CollectionDetailPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
         <div className="relative h-full flex items-end">
           <div className="max-w-[1200px] mx-auto px-6 pb-8 w-full">
-            <Link
-              href={`/browse/${collection.artistSlug}`}
-              className="text-white/60 text-xs hover:text-white transition-colors mb-2 inline-block"
-            >
-              &larr; {collection.artistName}
-            </Link>
-            <h1 className="text-3xl lg:text-4xl font-serif text-white mb-2">{collection.name}</h1>
-            <p className="text-white/60 text-sm">
-              {collection.workIds.length} works &middot; {collection.bundlePriceBand}
-            </p>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Link
+                  href={`/browse/${collection.artistSlug}`}
+                  className="text-white/60 text-xs hover:text-white transition-colors mb-2 inline-block"
+                >
+                  &larr; {collection.artistName}
+                </Link>
+                <h1 className="text-3xl lg:text-4xl font-serif text-white mb-2">{collection.name}</h1>
+                <p className="text-white/60 text-sm">
+                  {collection.workIds.length} works &middot; {collection.bundlePriceBand}
+                </p>
+              </div>
+              {/* Heart up top, beside the artist name + collection title.
+                  Used to live way down by the secondary actions, where it
+                  was easy to miss. */}
+              <SaveButton type="collection" itemId={collection.id} size="md" />
+            </div>
           </div>
         </div>
       </section>
@@ -460,15 +470,41 @@ export default function CollectionDetailPage() {
                     </Link>
                   );
                 })()}
-                <div className="flex gap-2">
-                  <Link
-                    href={`/browse/${collection.artistSlug}`}
-                    className="flex-1 inline-flex items-center justify-center px-5 py-3 text-sm font-medium text-foreground border border-border hover:border-foreground/30 rounded-sm transition-colors"
+                {/* Make an Offer (venue-only). Visible alongside Buy
+                    Collection so venues can negotiate a bundle price. */}
+                {(!user || userType === "venue") && collection.available && (
+                  <button
+                    type="button"
+                    onClick={() => setOfferOpen(true)}
+                    className="w-full px-5 py-3 text-sm font-medium text-foreground border border-border hover:border-foreground/50 rounded-sm transition-colors"
                   >
-                    View Artist
-                  </Link>
-                  <SaveButton type="collection" itemId={collection.id} size="md" />
-                </div>
+                    Make an offer
+                  </button>
+                )}
+                <Link
+                  href={`/browse/${collection.artistSlug}`}
+                  className="block w-full text-center px-5 py-3 text-sm font-medium text-foreground hover:text-accent transition-colors"
+                >
+                  View artist <span className="ml-1">→</span>
+                </Link>
+                <MakeOfferModal
+                  open={offerOpen}
+                  onClose={() => setOfferOpen(false)}
+                  artistSlug={collection.artistSlug}
+                  artistName={collection.artistName}
+                  collectionId={collection.id}
+                  collectionTitle={collection.name}
+                  askingPriceGbp={(() => {
+                    // Sum the largest size price per work, in pounds.
+                    const total = works.reduce((sum, w) => {
+                      const tiers = w.pricing || [];
+                      if (tiers.length === 0) return sum;
+                      const maxP = Math.max(...tiers.map((t) => Number(t.price) || 0));
+                      return sum + (maxP > 0 ? maxP : 0);
+                    }, 0);
+                    return total > 0 ? total : null;
+                  })()}
+                />
               </div>
             </div>
           </div>

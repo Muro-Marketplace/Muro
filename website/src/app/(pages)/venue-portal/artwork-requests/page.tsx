@@ -44,7 +44,7 @@ export default function VenueArtworkRequestsPage() {
 
   return (
     <VenuePortalLayout activePath="/venue-portal/artwork-requests">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-3xl px-4 sm:px-6 py-8">
         <div className="flex items-start justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-serif">Artwork requests</h1>

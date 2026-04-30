@@ -48,7 +48,7 @@ export default function ArtistPostsPage() {
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/posts">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-5xl px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-serif">Social posts</h1>
           <p className="text-sm text-muted mt-1">Generate Instagram posts, stories, and reel ideas for your work in one click.</p>

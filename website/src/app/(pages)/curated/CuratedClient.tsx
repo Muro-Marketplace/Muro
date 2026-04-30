@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { useAuth } from "@/context/AuthContext";
 
 type TierKey = "single_wall" | "full_space" | "bespoke" | "managed_monthly" | "managed_quarterly";
 
@@ -112,6 +113,27 @@ export default function CuratedClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const cancelled = searchParams.get("cancelled") === "1";
+  const { userType, loading: authLoading } = useAuth();
+
+  // Wallplace Curated is a venue product. Artists who land here see
+  // a polite redirect explaining it's not for them rather than the
+  // venue-targeted briefing form.
+  if (!authLoading && userType === "artist") {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-6">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-serif mb-3">Wallplace Curated is for venues</h1>
+          <p className="text-sm text-muted leading-relaxed mb-6">
+            Curated is our hand-pick service for venues looking for artwork.
+            Artists are matched <em>through</em> Curated, not <em>for</em> it — keep building your portfolio and we&rsquo;ll surface you to venues that fit.
+          </p>
+          <Link href="/artist-portal" className="text-sm text-accent hover:underline">
+            Back to your portal →
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const [selectedTier, setSelectedTier] = useState<TierKey | null>(null);
   const [form, setForm] = useState({

@@ -99,6 +99,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 
   if (notifyRecipient) {
+    // Recipient-side portal link. Offers are venue-only on the buy
+    // side, so the buyer always lands at /venue-portal/offers; the
+    // artist always at /artist-portal/offers. The previous logic
+    // keyed off the *actor's* role and routed the buyer to the
+    // wrong portal on accept, breaking the "tap to complete
+    // checkout" flow entirely.
+    const recipientLink = notifyRecipient === offer.buyer_user_id
+      ? "/venue-portal/offers"
+      : "/artist-portal/offers";
     createNotification({
       userId: notifyRecipient,
       kind: notifyKind,
@@ -108,8 +117,48 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         : newStatus === "declined"
           ? "Make a new offer if you'd like to revise."
           : "The buyer has withdrawn this offer.",
-      link: isBuyer ? "/artist-portal/offers" : "/customer-portal/offers",
+      link: recipientLink,
     }).catch((err) => console.warn("[offers] bell failed:", err));
+
+    // Drop a status-change line into the conversation thread so the
+    // negotiation reads as one continuous chat rather than disjointed
+    // bell notifications. Best-effort — don't block the response.
+    try {
+      const [{ data: artistRow }, { data: venueRow }] = await Promise.all([
+        db.from("artist_profiles").select("slug").eq("user_id", offer.artist_user_id).maybeSingle<{ slug: string | null }>(),
+        db.from("venue_profiles").select("slug").eq("user_id", offer.buyer_user_id).maybeSingle<{ slug: string | null }>(),
+      ]);
+      const artistSlug = artistRow?.slug;
+      const venueSlug = venueRow?.slug;
+      if (artistSlug && venueSlug) {
+        const [a, b] = [artistSlug, venueSlug].sort();
+        const conversationId = `dm-${a}__${b}`;
+        const formatted = `£${(offer.amount_pence / 100).toFixed(2)}`;
+        const senderIsArtist = me === offer.artist_user_id;
+        const senderSlug = senderIsArtist ? artistSlug : venueSlug;
+        const recipientSlug = senderIsArtist ? venueSlug : artistSlug;
+        const summary = newStatus === "accepted"
+          ? `Accepted the offer of ${formatted}.`
+          : newStatus === "declined"
+            ? `Declined the offer of ${formatted}.`
+            : `Withdrew the offer of ${formatted}.`;
+        await db.from("messages").insert({
+          conversation_id: conversationId,
+          sender_id: me,
+          sender_name: senderSlug,
+          sender_type: senderIsArtist ? "artist" : "venue",
+          recipient_slug: recipientSlug,
+          recipient_user_id: notifyRecipient,
+          content: summary,
+          is_read: true,
+          created_at: new Date().toISOString(),
+          message_type: "text",
+          metadata: { offerId: id, offerStatus: newStatus },
+        });
+      }
+    } catch (err) {
+      console.warn("[offers] thread message skipped:", err);
+    }
   }
 
   return NextResponse.json({ success: true, status: newStatus });
