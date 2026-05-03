@@ -8,6 +8,7 @@ const footerColumns = [
       { label: "Apply to Join", href: "/apply" },
       { label: "Pricing", href: "/pricing" },
       { label: "Venue Demand", href: "/spaces-looking-for-art" },
+      { label: "Artwork Requests", href: "/artwork-requests" },
       { label: "Browse Venues", href: "/venues" },
       { label: "FAQs", href: "/faqs" },
     ],

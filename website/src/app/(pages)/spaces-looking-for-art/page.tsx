@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { geocodePostcode } from "@/lib/geocode";
 import { useAuth } from "@/context/AuthContext";
 import SpacesPlacementRequestForm, {
   type SpacesVenueOption,
 } from "@/components/SpacesPlacementRequestForm";
+import ArtworkRequestsList from "@/components/ArtworkRequestsList";
 
 interface ArtistWorkLite {
   id: string;
@@ -59,6 +60,19 @@ function calcDistance(lat1: number, lng1: number, lat2: number, lng2: number): n
 const VENUE_TYPES = ["All", "Café", "Restaurant", "Hotel", "Office", "Salon", "Gallery", "Coworking", "Wine Bar"];
 
 export default function SpacesLookingForArtPage() {
+  // Suspense boundary for useSearchParams (the inner component reads
+  // ?view=) so the rest of the route stays statically prerenderable.
+  return (
+    <Suspense fallback={null}>
+      <SpacesPageContent />
+    </Suspense>
+  );
+}
+
+function SpacesPageContent() {
+  const searchParams = useSearchParams();
+  const view = searchParams?.get("view") === "requests" ? "requests" : "walls";
+
   const [venues, setVenues] = useState<DemandVenue[]>([]);
   const [stats, setStats] = useState<DemandStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -247,6 +261,46 @@ export default function SpacesLookingForArtPage() {
         </div>
       </section>
 
+      {/* View toggle: Walls (venue listings) vs Open requests
+          (structured demand). Driven by ?view=requests. Lives outside
+          the conditional so the tab strip is always visible — users
+          can flip between both modes from either page. */}
+      <section className="border-b border-border bg-white">
+        <div className="max-w-[1200px] mx-auto px-6">
+          <div className="flex items-center gap-1">
+            <Link
+              href="/spaces-looking-for-art"
+              className={`px-1 pt-3 pb-2.5 text-sm transition-colors border-b-2 -mb-px ${
+                view === "walls"
+                  ? "font-medium text-foreground border-accent"
+                  : "text-muted border-transparent hover:text-foreground"
+              }`}
+            >
+              Walls
+            </Link>
+            <span className="w-3" />
+            <Link
+              href="/spaces-looking-for-art?view=requests"
+              className={`px-1 pt-3 pb-2.5 text-sm transition-colors border-b-2 -mb-px ${
+                view === "requests"
+                  ? "font-medium text-foreground border-accent"
+                  : "text-muted border-transparent hover:text-foreground"
+              }`}
+            >
+              Open requests
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {view === "requests" ? (
+        <section className="py-10 lg:py-14">
+          <div className="max-w-[1200px] mx-auto px-6">
+            <ArtworkRequestsList />
+          </div>
+        </section>
+      ) : (
+      <>
       {/* Stats, computed from filtered results */}
       <section className="border-b border-border">
         <div className="max-w-[1200px] mx-auto px-6 py-4">
@@ -620,6 +674,8 @@ export default function SpacesLookingForArtPage() {
           )}
         </div>
       </section>
+      </>
+      )}
     </div>
   );
 }

@@ -18,7 +18,11 @@ const marketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string, v: string) => p === "/spaces-looking-for-art" && v !== "requests" },
+  // "Open requests" surfaces venue-led artwork demand (Plan G Task 6a).
+  // The same list lives at /artwork-requests so the tab also matches
+  // there, keeping the active state correct from either entrypoint.
+  { label: "Open requests", href: "/spaces-looking-for-art?view=requests", match: (p: string, v: string) => (p === "/spaces-looking-for-art" && v === "requests") || p === "/artwork-requests" },
 ];
 
 // Public (logged-out) variant: keeps How It Works + Blog inline on the
@@ -28,7 +32,8 @@ const publicMarketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string, v: string) => p === "/spaces-looking-for-art" && v !== "requests" },
+  { label: "Open requests", href: "/spaces-looking-for-art?view=requests", match: (p: string, v: string) => (p === "/spaces-looking-for-art" && v === "requests") || p === "/artwork-requests" },
   { label: "How It Works", href: "/how-it-works", match: (p: string) => p === "/how-it-works" },
   { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
 ];
@@ -149,7 +154,10 @@ export default function Header() {
   const portalDropdownRef = useRef<HTMLDivElement>(null);
   const [otherRoles, setOtherRoles] = useState<string[]>([]);
 
-  const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces-looking-for-art";
+  const isMarketplaceArea =
+    pathname.startsWith("/browse") ||
+    pathname === "/spaces-looking-for-art" ||
+    pathname === "/artwork-requests";
 
   const portalBase = userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal";
   const [resolvedSlug, setResolvedSlug] = useState("");
