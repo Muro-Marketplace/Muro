@@ -201,7 +201,9 @@ export default function ArtistsPage() {
                 For Artists
               </p>
               <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
-                Display, discover, sell.<br />All in one place.
+                Display, discover, sell.
+                <br />
+                All in one place.
               </h1>
               <p className="text-lg lg:text-xl text-white/60 leading-relaxed max-w-xl mb-10">
                 Access high-intent venue demand. Get discovered by cafés, restaurants,
