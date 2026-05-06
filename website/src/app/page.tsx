@@ -43,8 +43,8 @@ export default function Home() {
         {/* Hero background image – scoped to hero only */}
         <div className="absolute inset-0 -z-10">
           <Image
-            src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=1080&fit=crop&crop=center"
-            alt="Gallery interior"
+            src="https://images.unsplash.com/photo-1766890410688-77af00a1dc41?w=1920&h=1080&fit=crop&crop=center"
+            alt="Gallery interior with multiple framed artworks under spotlights"
             fill
             className="object-cover"
             priority
