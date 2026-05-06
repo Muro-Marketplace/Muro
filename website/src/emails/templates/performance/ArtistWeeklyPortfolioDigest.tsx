@@ -26,7 +26,7 @@ export function ArtistWeeklyPortfolioDigest({ firstName, weekStart, weekEnd, pro
     { label: "Placement requests", value: placementRequests },
   ];
   return (
-    <EmailShell stream="notify" persona="artist" category="digests" preview={`Your week on Wallplace (${weekStart}–${weekEnd})`}>
+    <EmailShell stream="notify" persona="artist" category="digests" preview={`Your week on Wallplace (${weekStart} - ${weekEnd})`}>
       <H1>Your week on Wallplace</H1>
       <P>Hi {firstName}, here&rsquo;s how your work performed from {weekStart} to {weekEnd}.</P>
       <StatBlock stats={stats} />

@@ -93,26 +93,54 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
       const exists = savedItems.find((s) => s.type === type && s.id === id);
 
       const label = type === "collection" ? "Collection" : type === "artist" ? "Artist" : "Work";
+      // Capture a snapshot for rollback if the network request fails.
+      // Plan F Task 7: previously the .catch was a silent swallow, so
+      // the optimistic toggle would lie to the user about a save that
+      // never persisted.
+      const snapshot = savedItems;
+
       if (exists) {
-        // Remove
         setSavedItems((prev) => prev.filter((s) => !(s.type === type && s.id === id)));
         if (user) {
           authFetch("/api/saved", {
             method: "DELETE",
             body: JSON.stringify({ itemType: type, itemId: id }),
-          }).catch(() => {});
+          })
+            .then((res) => {
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              showToast(`${label} removed from favourites`);
+            })
+            .catch(() => {
+              setSavedItems(snapshot);
+              showToast("Couldn't update favourites. Try again.", {
+                variant: "error",
+                durationMs: 4000,
+              });
+            });
+        } else {
+          showToast(`${label} removed from favourites`);
         }
-        showToast(`${label} removed from favourites`);
       } else {
-        // Add
         setSavedItems((prev) => [...prev, { type, id, savedAt: new Date().toISOString() }]);
         if (user) {
           authFetch("/api/saved", {
             method: "POST",
             body: JSON.stringify({ itemType: type, itemId: id }),
-          }).catch(() => {});
+          })
+            .then((res) => {
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              showToast(`${label} added to favourites`);
+            })
+            .catch(() => {
+              setSavedItems(snapshot);
+              showToast("Couldn't update favourites. Try again.", {
+                variant: "error",
+                durationMs: 4000,
+              });
+            });
+        } else {
+          showToast(`${label} added to favourites`);
         }
-        showToast(`${label} added to favourites`);
       }
     },
     [savedItems, user, showToast]

@@ -119,7 +119,7 @@ export default function ArtistProfileClient({
       if (result.ok) okCount++;
     }
     if (okCount > 0) {
-      router.push("/checkout");
+      router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
     } else {
       showToast("Couldn't add any of these works to the cart.");
     }
@@ -472,7 +472,7 @@ export default function ArtistProfileClient({
                                     dimensions: sp.label || work.dimensions,
                                     framed: false,
                                   });
-                                  router.push("/checkout");
+                                  router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                                 }}
                                 className="px-2 py-1 text-[10px] bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
                               >
@@ -863,7 +863,7 @@ export default function ArtistProfileClient({
                           }
                           navigatingAway.current = true;
                           setLightboxIndex(null);
-                          router.push("/checkout");
+                          router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                         }}
                         className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >

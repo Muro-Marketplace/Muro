@@ -52,11 +52,6 @@ export default function CollectionCard({ collection, distance }: CollectionCardP
         <div className="absolute top-3 right-3">
           <SaveButton type="collection" itemId={collection.id} />
         </div>
-        <div className="absolute bottom-3 left-3">
-          <span className="text-[10px] font-medium px-2 py-0.5 bg-white/90 text-foreground rounded-sm backdrop-blur-sm">
-            {collection.workIds.length} works
-          </span>
-        </div>
       </div>
       <div className="p-4">
         <div className="flex items-baseline justify-between gap-2">
@@ -71,7 +66,24 @@ export default function CollectionCard({ collection, distance }: CollectionCardP
         {collection.description && (
           <p className="text-xs text-muted line-clamp-2 mb-2">{collection.description}</p>
         )}
-        <p className="text-sm font-medium text-accent">{collection.bundlePriceBand}</p>
+        {/* Plan F #11: collapse the count + price band into one
+            metadata line so both are visible at a glance. The count
+            previously sat as an image-overlay pill, which faded
+            against bright collection thumbnails. */}
+        <p className="text-xs text-muted">
+          <span>
+            {collection.workIds.length} work
+            {collection.workIds.length === 1 ? "" : "s"}
+          </span>
+          {collection.bundlePriceBand && (
+            <>
+              {" · "}
+              <span className="text-accent font-medium">
+                {collection.bundlePriceBand}
+              </span>
+            </>
+          )}
+        </p>
       </div>
     </Link>
   );

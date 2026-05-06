@@ -10,10 +10,21 @@ import { COUNTRIES, regionForCountry } from "@/lib/iso-countries";
 import { SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
 import { calculateOrderShipping } from "@/lib/shipping-checkout";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, removeItem, updateQuantity, subtotal, ready } = useCart();
+  // Plan G #1: explicit back link, callers append ?backTo= to ensure
+  // browser-back has a known-good destination even if the history
+  // entry has been replaced (e.g. offer-accept flows that redirect
+  // through several intermediate routes).
+  const [backHref, setBackHref] = useState<string>("/browse");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = new URLSearchParams(window.location.search).get("backTo");
+    setBackHref(safeRedirect(raw, "/browse"));
+  }, []);
   const [shipping, setShipping] = useState<ShippingInfo>({
     fullName: "",
     email: "",
@@ -222,6 +233,16 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 sm:py-10">
+      <Link
+        href={backHref}
+        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-4"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <line x1="19" y1="12" x2="5" y2="12" />
+          <polyline points="12 19 5 12 12 5" />
+        </svg>
+        Back
+      </Link>
       <h1 className="text-2xl sm:text-3xl font-serif mb-6 sm:mb-8">Checkout</h1>
 
       <div className="grid lg:grid-cols-5 gap-6 sm:gap-8 lg:gap-10">
@@ -338,6 +359,20 @@ export default function CheckoutPage() {
             <p className="text-sm text-muted leading-relaxed">
               You&apos;ll be redirected to Stripe&apos;s secure checkout to complete your payment. We never see or store your card details.
             </p>
+            {/* Plan F #20: surface the supported payment methods at a
+                glance so buyers know they can use Apple Pay / Google Pay
+                rather than reaching for a card. Stripe Checkout itself
+                still drives the actual selection. */}
+            <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Supported payment methods">
+              {["Visa", "Mastercard", "Amex", "Apple Pay", "Google Pay"].map((method) => (
+                <span
+                  key={method}
+                  className="inline-flex items-center px-2 py-1 text-[10px] font-medium tracking-wide text-foreground/70 bg-white border border-border rounded-sm"
+                >
+                  {method}
+                </span>
+              ))}
+            </div>
           </div>
 
           {/* Artist fulfilment notice */}

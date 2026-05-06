@@ -31,6 +31,7 @@ import type {
 } from "@/lib/visualizer/dimensions";
 import type { VisualizerMode } from "@/lib/visualizer/types";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
+import ImageWithFallback from "@/components/ImageWithFallback";
 
 export interface PanelWork {
   id: string;
@@ -199,12 +200,11 @@ export default function WorksPanel({
                 className="group block w-full text-left rounded overflow-hidden border border-black/5 bg-white hover:border-black/20 transition cursor-grab active:cursor-grabbing"
                 title={dragHint(w)}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <ImageWithFallback
                   src={w.imageUrl}
                   alt={w.title}
                   className="block w-full aspect-square object-cover"
-                  loading="lazy"
+                  placeholderClassName="block w-full aspect-square bg-accent/10 text-accent flex items-center justify-center text-xl font-medium"
                 />
                 <div className="px-2 py-1.5">
                   <p className="text-[11px] font-medium text-stone-800 truncate">

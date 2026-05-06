@@ -509,17 +509,23 @@ function ViewsChart({ data }: { data: { date: string; profile_views: number; art
   const labelEvery = Math.max(1, Math.ceil(data.length / 14));
 
   return (
-    <div ref={containerRef} className="w-full">
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-3">
-        {lines.map((line) => (
-          <div key={line.key} className="flex items-center gap-1.5">
-            <div className="w-3 h-[2px] rounded-full" style={{ backgroundColor: line.color }} />
-            <span className="text-[10px] text-muted">{line.label}</span>
-          </div>
-        ))}
-      </div>
-      <svg width={width} height={chartHeight}>
+    // Plan F #13: scroll horizontally if the viewport is narrower
+    // than the minimum legible chart width (400px). Inside the scroll
+    // wrapper the SVG keeps its measured-width responsive behaviour;
+    // the min-width clamp on the inner div prevents legend collapse
+    // and unreadable axis labels on iPhone SE-sized screens.
+    <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div ref={containerRef} className="min-w-[400px]">
+        {/* Legend */}
+        <div className="flex items-center gap-4 mb-3">
+          {lines.map((line) => (
+            <div key={line.key} className="flex items-center gap-1.5">
+              <div className="w-3 h-[2px] rounded-full" style={{ backgroundColor: line.color }} />
+              <span className="text-[10px] text-muted">{line.label}</span>
+            </div>
+          ))}
+        </div>
+        <svg width={width} height={chartHeight}>
         {yTicks.map((tick) => {
           const y = padding.top + innerHeight - (tick / maxVal) * innerHeight;
           return (
@@ -588,7 +594,8 @@ function ViewsChart({ data }: { data: { date: string; profile_views: number; art
             </g>
           );
         })}
-      </svg>
+        </svg>
+      </div>
     </div>
   );
 }
@@ -604,7 +611,9 @@ function niceMax(val: number): number {
   return 10 * mag;
 }
 
-function formatPounds(val: number): string {
+// Compact format for chart axis labels: "£12k" / "£500". For full
+// currency strings (£12,345.67) use formatPounds from @/lib/format-currency.
+function formatPoundsCompact(val: number): string {
   if (val >= 1000) return `£${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
   return `£${val.toLocaleString()}`;
 }
@@ -643,15 +652,18 @@ function EarningsChart({ data }: { data: { month: string; earnings: number; sale
   const yTicks = [0, maxEarnings * 0.25, maxEarnings * 0.5, maxEarnings * 0.75, maxEarnings];
 
   return (
-    <div ref={containerRef} className="w-full">
-      <svg width={width} height={chartHeight}>
+    // Plan F #13: same horizontal-scroll pattern as the views chart so
+    // the earnings line stays legible on phones.
+    <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div ref={containerRef} className="min-w-[400px]">
+        <svg width={width} height={chartHeight}>
         {yTicks.map((tick) => {
           const y = padding.top + innerHeight - (tick / maxEarnings) * innerHeight;
           return (
             <g key={tick}>
               <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#E5E2DD" strokeWidth="0.5" />
               <text x={padding.left - 8} y={y + 4} textAnchor="end" className="fill-muted" fontSize="10">
-                {formatPounds(Math.round(tick))}
+                {formatPoundsCompact(Math.round(tick))}
               </text>
             </g>
           );
@@ -685,7 +697,8 @@ function EarningsChart({ data }: { data: { month: string; earnings: number; sale
             </text>
           </g>
         ))}
-      </svg>
+        </svg>
+      </div>
     </div>
   );
 }

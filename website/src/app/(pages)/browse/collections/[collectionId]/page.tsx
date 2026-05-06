@@ -132,7 +132,7 @@ export default function CollectionDetailPage() {
       price: collection.bundlePrice,
       quantity: 1,
     });
-    router.push("/checkout");
+    router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
   }
 
   return (
@@ -325,7 +325,7 @@ export default function CollectionDetailPage() {
                                   dimensions: work.selectedSize || work.dimensions,
                                   framed: false,
                                 });
-                                router.push("/checkout");
+                                router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                               }}
                               className="px-2 py-1 text-[10px] bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
                             >

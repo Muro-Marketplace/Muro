@@ -16,7 +16,8 @@ import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
 import ArtworkThumb from "@/components/ArtworkThumb";
-import SearchBar from "@/components/SearchBar";
+import SaveButton from "@/components/SaveButton";
+import SearchInput from "@/components/SearchInput";
 import PostcodeInput, { readPersistedCoords, clearPersistedLocation } from "@/components/PostcodeInput";
 import {
   ANY_DISTANCE,
@@ -304,6 +305,22 @@ function BrowsePortfoliosPageInner() {
   // survive a view switch. Previously this overwrote the whole
   // query string, so setting "Within 10km" on Galleries and tabbing
   // to Collections wiped the filter.
+  // Search query, mirrored to ?q= so the filter persists across reloads
+  // and shows up in shared links. Read directly from the URL on every
+  // render so SearchInput's debounced setter (Plan F #4) stays the only
+  // owner of the value — no extra useState to keep in sync.
+  const searchQuery = searchParams?.get("q") || "";
+  const setSearchQuery = useCallback(
+    (next: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      if (next) params.set("q", next);
+      else params.delete("q");
+      const qs = params.toString();
+      router.replace(`/browse${qs ? `?${qs}` : ""}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
   const switchView = useCallback((target: "gallery" | "portfolios" | "collections") => {
     if (target === "gallery") {
       setViewAs("works");
@@ -630,9 +647,24 @@ function BrowsePortfoliosPageInner() {
   }, [activeDisciplineObj, artists]);
 
   const filteredArtists = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return artists.filter((artist) => {
       // Must have at least one artwork to appear in marketplace
       if (!artist.works || artist.works.length === 0) return false;
+      // Free-text search across name + medium + bio + tags. Plan F Task 4.
+      if (q) {
+        const haystack = [
+          artist.name,
+          artist.primaryMedium,
+          artist.shortBio,
+          artist.location,
+          ...(artist.styleTags || []),
+          ...(artist.themes || []),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       // Discipline filter, fall back to inferring from primary medium
       // so seed artists (without an explicit discipline field) and older
       // DB rows that missed the backfill still match the right category.
@@ -724,7 +756,7 @@ function BrowsePortfoliosPageInner() {
       if (!a.isFoundingArtist && b.isFoundingArtist) return 1;
       return 0;
     });
-  }, [artists, filters, userCoords, maxDistance, activeDisciplineObj, activeSubStyles, artistSort]);
+  }, [artists, filters, userCoords, maxDistance, activeDisciplineObj, activeSubStyles, artistSort, searchQuery]);
 
   const allMediums = useMemo(
     () => Array.from(new Set(artists.map((a) => a.primaryMedium))).sort(),
@@ -739,7 +771,21 @@ function BrowsePortfoliosPageInner() {
   );
 
   const filteredGalleryWorks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return allGalleryWorks.filter((work) => {
+      // Free-text search, Plan F Task 4. Match on title / artist name /
+      // medium so works AND their authors are findable from one input.
+      if (q) {
+        const haystack = [
+          work.title,
+          work.artistName,
+          work.medium,
+          work.artistPrimaryMedium,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       // Discipline filter
       if (activeDisciplineObj && work.artistDiscipline !== activeDisciplineObj.id) return false;
       // Sub-style filter, work's artist must have at least one matching sub-style
@@ -831,7 +877,7 @@ function BrowsePortfoliosPageInner() {
       if (!a.artistIsFounding && b.artistIsFounding) return 1;
       return 0;
     });
-  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, gallerySizes, galleryLocationMode, userCoords, maxDistance, activeDisciplineObj, activeSubStyles, gallerySort]);
+  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, gallerySizes, galleryLocationMode, userCoords, maxDistance, activeDisciplineObj, activeSubStyles, gallerySort, searchQuery]);
 
   const hasGalleryFilters =
     !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || !!userCoords || gallerySizes.size > 0;
@@ -841,8 +887,26 @@ function BrowsePortfoliosPageInner() {
   // that collections only had location filtering vs portfolios/galleries
   // which had the full set).
   const filteredCollections = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return collections.filter((c) => {
       if (!c.available) return false;
+      // Free-text search, Plan F Task 4. Collections inherit search
+      // matching against their own name + description and the underlying
+      // artist's name so a search for the artist still surfaces their
+      // bundles.
+      if (q) {
+        const collectionArtist = artists.find((a) => a.slug === c.artistSlug);
+        const haystack = [
+          c.name,
+          c.description,
+          c.artistName,
+          collectionArtist?.primaryMedium,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       // Distance, only when the user has set a location.
       if (collectionsLocationMode === "local" && userCoords) {
         const artist = artists.find((a) => a.slug === c.artistSlug);
@@ -864,7 +928,7 @@ function BrowsePortfoliosPageInner() {
       }
       return true;
     });
-  }, [collections, collectionsLocationMode, userCoords, artists, maxDistance, collectionsPriceMin, collectionsPriceMax, collectionsFreeLoan, collectionsRevShare, collectionsPurchase]);
+  }, [collections, collectionsLocationMode, userCoords, artists, maxDistance, collectionsPriceMin, collectionsPriceMax, collectionsFreeLoan, collectionsRevShare, collectionsPurchase, searchQuery]);
 
   const hasCollectionsFilters =
     collectionsLocationMode === "local" ||
@@ -1260,7 +1324,7 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto overflow-x-visible pr-2 -mr-2 scrollbar-thin">
+              <aside className="hidden lg:block w-56 shrink-0 sticky top-8">
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm font-medium text-foreground">
                     Filters
@@ -1371,15 +1435,19 @@ function BrowsePortfoliosPageInner() {
                 {/* Search + count + view toggle – desktop */}
                 <div className="hidden lg:flex items-center justify-between mb-6 gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-56">
-                      <SearchBar variant="light" mode="desktop" placeholder="Search artists..." />
+                    <div className="w-64">
+                      <SearchInput
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        placeholder="Search artists, themes, mediums"
+                      />
                     </div>
                     <p className="text-sm text-muted whitespace-nowrap">
                       {dataReady ? (
                         <>
                           {filteredArtists.length} artist
                           {filteredArtists.length !== 1 ? "s" : ""}
-                          {hasActiveFilters && " matching"}
+                          {(hasActiveFilters || searchQuery) && " matching"}
                         </>
                       ) : (
                         "…"
@@ -1589,7 +1657,7 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto overflow-x-visible pr-2 -mr-2 scrollbar-thin">
+              <aside className="hidden lg:block w-56 shrink-0 sticky top-8">
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm font-medium text-foreground">Filters</span>
                   {hasGalleryFilters && (
@@ -2009,8 +2077,12 @@ function BrowsePortfoliosPageInner() {
                 {/* Search + count + toggle – desktop */}
                 <div className="hidden lg:flex items-center justify-between mb-6 gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-56">
-                      <SearchBar variant="light" mode="desktop" placeholder="Search artworks..." />
+                    <div className="w-64">
+                      <SearchInput
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        placeholder="Search works, artists, mediums"
+                      />
                     </div>
                     <p className="text-sm text-muted whitespace-nowrap">
                       {dataReady
@@ -2098,6 +2170,13 @@ function BrowsePortfoliosPageInner() {
                               </span>
                             )}
                             {/* Hover action buttons */}
+                            {/* Plan G #11: hover-revealed save heart on
+                                desktop, always-visible on mobile (since
+                                hover doesn't fire on touch). SaveButton
+                                handles the auth gate + toast. */}
+                            <div className="absolute top-3 left-3 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity duration-200">
+                              <SaveButton type="work" itemId={work.id} size="sm" />
+                            </div>
                             <div className="absolute top-3 right-3 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                               <Link
                                 href={quickLookHref}

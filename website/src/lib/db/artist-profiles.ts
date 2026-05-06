@@ -130,6 +130,13 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
     subscriptionPlan: profile.subscription_plan || undefined,
     shipsInternationally: profile.ships_internationally || false,
     internationalShippingPrice: profile.international_shipping_price ?? undefined,
+    // Plan F #12: a profile reaches the public app only after
+    // review_status flips to "approved" (legacy rows without the
+    // column are treated as approved by getAllDatabaseArtists).
+    // Either path means the artist passed admin review, so surface
+    // that as a Verified trust signal on the public profile.
+    isVerified:
+      profile.review_status === "approved" || profile.review_status == null,
     works: works.map((w) => ({
       id: w.id,
       title: w.title,

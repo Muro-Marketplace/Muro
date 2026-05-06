@@ -18,6 +18,7 @@ interface RequestRow {
   location: string | null;
   timescale: string | null;
   venue_slug: string | null;
+  venue_name: string | null;
   created_at: string;
 }
 
@@ -64,7 +65,9 @@ export default function ArtistArtworkRequestsPage() {
                 >
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <h3 className="text-base font-medium">{r.title}</h3>
-                    <span className="text-[10px] text-muted">{r.venue_slug}</span>
+                    <span className="text-[10px] text-muted">
+                      {r.venue_name || r.venue_slug || "Venue"}
+                    </span>
                   </div>
                   <p className="text-sm text-muted line-clamp-2 mb-3">{r.description}</p>
                   <div className="flex flex-wrap gap-2 text-[10px]">

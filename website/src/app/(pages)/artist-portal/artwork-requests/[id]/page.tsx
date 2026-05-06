@@ -7,6 +7,7 @@
 import { use, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import ImageWithFallback from "@/components/ImageWithFallback";
 import { authFetch } from "@/lib/api-client";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 
@@ -189,8 +190,12 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                       }`}
                     >
                       {w.image && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={w.image} alt={w.title} className="w-full h-full object-cover" />
+                        <ImageWithFallback
+                          src={w.image}
+                          alt={w.title}
+                          className="w-full h-full object-cover"
+                          placeholderClassName="w-full h-full bg-accent/10 text-accent flex items-center justify-center text-2xl font-medium"
+                        />
                       )}
                       <span className="absolute bottom-0 inset-x-0 px-1 py-0.5 bg-black/55 text-white text-[10px] truncate">{w.title}</span>
                     </button>

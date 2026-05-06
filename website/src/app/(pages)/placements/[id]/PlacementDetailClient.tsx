@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
@@ -101,6 +102,7 @@ interface Props {
 export default function PlacementDetailClient({ placementId }: Props) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const [placement, setPlacement] = useState<PlacementRow | null>(null);
   const [record, setRecord] = useState<PlacementRecord | null>(null);
   const [recordVersions, setRecordVersions] = useState<RecordVersion[]>([]);
@@ -193,6 +195,32 @@ export default function PlacementDetailClient({ placementId }: Props) {
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [user, load]);
+
+  // Background refresh diff toast (Plan F Task 8). The silent refetch
+  // above keeps the page in sync, but if the placement transitions or
+  // a new photo lands while the user was on another tab, there's no
+  // visible signal — they just see different data. Track the previous
+  // status + photo count between fetches and surface a toast when
+  // something material moved. We deliberately use a ref (not state)
+  // so the comparison doesn't itself trigger another render.
+  const lastSeenRef = useRef<{ status: string; photoCount: number } | null>(null);
+  useEffect(() => {
+    if (!placement) return;
+    const next = { status: placement.status, photoCount: photos.length };
+    const prev = lastSeenRef.current;
+    lastSeenRef.current = next;
+    if (!prev) return; // first render after load — nothing to diff
+    if (prev.status !== next.status) {
+      showToast(`Status changed: ${prev.status} → ${next.status}`, {
+        durationMs: 4000,
+      });
+    } else if (next.photoCount > prev.photoCount) {
+      const delta = next.photoCount - prev.photoCount;
+      showToast(`${delta} new photo${delta === 1 ? "" : "s"} added`, {
+        durationMs: 3000,
+      });
+    }
+  }, [placement, photos.length, showToast]);
 
   // Auto-open the loan record drawer the first time a record turns up,
   // so users don't have to expand it manually. Won't reopen if the user

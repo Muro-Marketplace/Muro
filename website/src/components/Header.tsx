@@ -18,7 +18,11 @@ const marketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string, v: string) => p === "/spaces-looking-for-art" && v !== "requests" },
+  // "Open requests" surfaces venue-led artwork demand (Plan G Task 6a).
+  // The same list lives at /artwork-requests so the tab also matches
+  // there, keeping the active state correct from either entrypoint.
+  { label: "Open requests", href: "/spaces-looking-for-art?view=requests", match: (p: string, v: string) => (p === "/spaces-looking-for-art" && v === "requests") || p === "/artwork-requests" },
 ];
 
 // Public (logged-out) variant: keeps How It Works + Blog inline on the
@@ -28,7 +32,8 @@ const publicMarketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string, v: string) => p === "/spaces-looking-for-art" && v !== "requests" },
+  { label: "Open requests", href: "/spaces-looking-for-art?view=requests", match: (p: string, v: string) => (p === "/spaces-looking-for-art" && v === "requests") || p === "/artwork-requests" },
   { label: "How It Works", href: "/how-it-works", match: (p: string) => p === "/how-it-works" },
   { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
 ];
@@ -49,9 +54,14 @@ type NavLink = { label: string; href: string; subLinks?: { label: string; href: 
 const publicNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
   { label: "How It Works", href: "/how-it-works" },
-  { label: "For Venues", href: "/venues" },
   { label: "Blog", href: "/blog" },
   { label: "Spaces", href: "/spaces-looking-for-art" },
+  // "For Venues" (/venues) deliberately dropped from the logged-out
+  // public nav: a cold visitor seeing both "Spaces" (which surfaces
+  // venue inventory) and "For Venues" (the venue-recruitment landing)
+  // reads as redundant, and the venue-side onboarding goes through the
+  // pricing / signup flow rather than this nav entry. The /venues
+  // route is still live for direct links and the footer.
   // Waitlist (#18), page kept live for warm prospects we already
   // sent the link to, but unsurfaced from the nav. Also gated from
   // search via robots metadata in the page itself.
@@ -149,7 +159,10 @@ export default function Header() {
   const portalDropdownRef = useRef<HTMLDivElement>(null);
   const [otherRoles, setOtherRoles] = useState<string[]>([]);
 
-  const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces-looking-for-art";
+  const isMarketplaceArea =
+    pathname.startsWith("/browse") ||
+    pathname === "/spaces-looking-for-art" ||
+    pathname === "/artwork-requests";
 
   const portalBase = userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal";
   const [resolvedSlug, setResolvedSlug] = useState("");
@@ -723,12 +736,18 @@ export default function Header() {
                     // it's parity). Settings stays at the end so the
                     // visual order matches the sidebar's secondary
                     // section.
+                    // IMPORTANT: keep these arrays in sync with the
+                    // {Artist,Venue,Customer}PortalLayout sidebar
+                    // `navItems` arrays. Plan G #2: there's no automated
+                    // check, so audit when adding portal pages.
                     const links = userType === "venue"
                       ? [
                           { label: "Dashboard", href: "/venue-portal" },
                           { label: "Venue Profile", href: "/venue-portal/profile" },
                           { label: "Messages", href: "/venue-portal/messages" },
                           { label: "Placements", href: "/venue-portal/placements" },
+                          { label: "My Offers", href: "/venue-portal/offers" },
+                          { label: "Artwork Requests", href: "/venue-portal/artwork-requests" },
                           { label: "My Walls", href: "/venue-portal/walls" },
                           { label: "Saved", href: "/venue-portal/saved" },
                           { label: "QR Labels", href: "/venue-portal/labels" },
@@ -750,10 +769,13 @@ export default function Header() {
                             { label: "Showroom", href: "/artist-portal/showroom" },
                             { label: "Messages", href: "/artist-portal/messages" },
                             { label: "Placements", href: "/artist-portal/placements" },
+                            { label: "My Offers", href: "/artist-portal/offers" },
+                            { label: "Artwork Requests", href: "/artist-portal/artwork-requests" },
                             { label: "Collections", href: "/artist-portal/collections" },
                             { label: "Saved", href: "/artist-portal/saved" },
                             { label: "Orders", href: "/artist-portal/orders" },
                             { label: "QR Labels", href: "/artist-portal/labels" },
+                            { label: "Social Posts", href: "/artist-portal/posts" },
                             { label: "Analytics", href: "/artist-portal/analytics" },
                             { label: "Billing", href: "/artist-portal/billing" },
                             { label: "Settings", href: "/artist-portal/settings" },

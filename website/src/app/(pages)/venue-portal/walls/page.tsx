@@ -14,6 +14,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import EmptyState from "@/components/EmptyState";
+import ImageWithFallback from "@/components/ImageWithFallback";
+import { safeHexBackground } from "@/lib/hex-color";
 import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
 import type { Wall } from "@/lib/visualizer/types";
@@ -130,22 +132,25 @@ function WallCard({ wall }: { wall: Wall }) {
     >
       <div className="bg-stone-100 grid place-items-center p-6" style={{ minHeight: 160 }}>
         {photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photoUrl}
-            alt={wall.name}
-            className="rounded shadow-inner object-cover"
+          <div
             style={{
               width: cardWidth,
               height: cardHeight,
               maxWidth: "100%",
             }}
-          />
+          >
+            <ImageWithFallback
+              src={photoUrl}
+              alt={wall.name}
+              className="rounded shadow-inner object-cover w-full h-full"
+              placeholderClassName="rounded shadow-inner bg-accent/10 text-accent flex items-center justify-center text-xl font-medium w-full h-full"
+            />
+          </div>
         ) : (
           <div
             className="rounded shadow-inner"
             style={{
-              backgroundColor: `#${wall.wall_color_hex}`,
+              backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA"),
               width: cardWidth,
               height: cardHeight,
               maxWidth: "100%",

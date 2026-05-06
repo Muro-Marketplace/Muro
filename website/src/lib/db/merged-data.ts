@@ -10,8 +10,13 @@ export async function getAllArtists(): Promise<Artist[]> {
   const dbArtists = await getAllDatabaseArtists();
   const dbSlugs = new Set(dbArtists.map((a) => a.slug));
 
-  // Static artists that aren't overridden by database entries
-  const staticOnly = staticArtists.filter((a) => !dbSlugs.has(a.slug));
+  // Static artists that aren't overridden by database entries.
+  // Plan F #12: hand-curated seed artists are verified by definition,
+  // dbProfileToArtist sets isVerified for DB rows, so we backfill it
+  // here for the static slice.
+  const staticOnly = staticArtists
+    .filter((a) => !dbSlugs.has(a.slug))
+    .map((a) => ({ ...a, isVerified: a.isVerified ?? true }));
 
   return [...dbArtists, ...staticOnly];
 }
@@ -26,7 +31,8 @@ export async function getArtistBySlug(slug: string): Promise<Artist | null> {
     return dbProfileToArtist(dbResult.profile, dbResult.works);
   }
 
-  // Fall back to static data
+  // Fall back to static data — same isVerified backfill as getAllArtists.
   const staticArtist = staticArtists.find((a) => a.slug === slug);
-  return staticArtist || null;
+  if (!staticArtist) return null;
+  return { ...staticArtist, isVerified: staticArtist.isVerified ?? true };
 }

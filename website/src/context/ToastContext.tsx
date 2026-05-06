@@ -45,8 +45,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {/* Toast container */}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+      {/* Toast container, Plan F #21: full-width on mobile so toasts
+          read clearly above the home indicator and any bottom-sheet
+          drawer; pinned bottom-right on desktop. The pb env() variable
+          lifts the stack above iOS Safari's home indicator. */}
+      <div className="fixed left-4 right-4 bottom-4 z-[100] flex flex-col gap-2 pointer-events-none pb-[env(safe-area-inset-bottom)] sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-sm">
         {toasts.map((toast) => (
           <div
             key={toast.id}

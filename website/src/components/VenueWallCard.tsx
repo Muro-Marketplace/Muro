@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { safeHexBackground } from "@/lib/hex-color";
 
 export interface VenueWallCardProps {
   wall: {
@@ -95,7 +96,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
               <div
                 className="rounded shadow-inner"
                 style={{
-                  backgroundColor: `#${wall.wall_color_hex}`,
+                  backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA"),
                   width: `${Math.min(100, (wall.width_cm / wall.height_cm) * 60)}%`,
                   aspectRatio: `${wall.width_cm} / ${wall.height_cm}`,
                   maxHeight: "100%",
@@ -168,7 +169,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
                   <div
                     className="rounded shadow-inner"
                     style={{
-                      backgroundColor: `#${wall.wall_color_hex}`,
+                      backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA"),
                       width: `${Math.min(80, (wall.width_cm / wall.height_cm) * 50)}%`,
                       aspectRatio: `${wall.width_cm} / ${wall.height_cm}`,
                       maxHeight: "70vh",

@@ -53,11 +53,16 @@ export async function GET(request: Request) {
     if (auth.error) return auth.error;
     const { data, error } = await db
       .from("artwork_requests")
-      .select("*")
+      .select("*, venue:venue_profiles!venue_user_id(name)")
       .eq("venue_user_id", auth.user!.id)
       .order("created_at", { ascending: false });
     if (error) return NextResponse.json({ error: "Could not load requests" }, { status: 500 });
-    return NextResponse.json({ requests: data || [] });
+    return NextResponse.json({
+      requests: (data || []).map((r) => ({
+        ...r,
+        venue_name: (r as { venue?: { name?: string } | null }).venue?.name ?? null,
+      })),
+    });
   }
 
   // Browse — verified-artist requests for everyone, plus any private
@@ -77,7 +82,7 @@ export async function GET(request: Request) {
 
   let query = db
     .from("artwork_requests")
-    .select("*")
+    .select("*, venue:venue_profiles!venue_user_id(name)")
     .eq("status", status)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -96,7 +101,15 @@ export async function GET(request: Request) {
     console.error("[artwork-requests GET]", error);
     return NextResponse.json({ error: "Could not load requests" }, { status: 500 });
   }
-  return NextResponse.json({ requests: data || [] });
+  // Plan G #3: surface the resolved venue name alongside the slug so
+  // the artist-portal list shows "Copper Kettle" instead of a slug or
+  // bare uuid.
+  return NextResponse.json({
+    requests: (data || []).map((r) => ({
+      ...r,
+      venue_name: (r as { venue?: { name?: string } | null }).venue?.name ?? null,
+    })),
+  });
 }
 
 export async function POST(request: Request) {

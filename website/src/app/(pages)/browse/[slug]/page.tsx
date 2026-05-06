@@ -10,6 +10,7 @@ import Button from "@/components/Button";
 import CollectionCard from "@/components/CollectionCard";
 import MessageArtistButton from "@/components/MessageArtistButton";
 import SaveButton from "@/components/SaveButton";
+import VerifiedBadge from "@/components/VerifiedBadge";
 import { PlacementButton, PlacementCTASection } from "@/components/PlacementCTA";
 import ArtistProfileClient from "./ArtistProfileClient";
 import { getArtistBySlug } from "@/lib/db/merged-data";
@@ -226,7 +227,7 @@ export default async function ArtistProfilePage({
                 <p className="text-[11px] text-muted uppercase tracking-[0.18em] mb-1.5">
                   {disciplineLabel(artist.primaryMedium, artist.discipline)}
                 </p>
-                <div className="flex items-start gap-3 mb-1.5">
+                <div className="flex items-start gap-3 mb-1.5 flex-wrap">
                   <h1 className="font-serif text-3xl text-foreground leading-tight tracking-tight">
                     {artist.name}
                   </h1>
@@ -236,6 +237,9 @@ export default async function ArtistProfilePage({
                       back to them, same affordance as Saatchi /
                       Vinted. */}
                   <SaveButton type="artist" itemId={artist.slug} size="sm" />
+                  {artist.isVerified && (
+                    <VerifiedBadge className="self-center" />
+                  )}
                 </div>
                 <p className="text-muted text-sm">{artist.location}</p>
                 {artist.instagram && (

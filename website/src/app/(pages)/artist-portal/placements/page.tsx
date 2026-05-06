@@ -252,7 +252,13 @@ export default function PlacementsPage() {
   // dialog onSuccess) can trigger a fresh fetch.
   const loadPlacements = React.useCallback(() => {
     if (!artist) return;
-    const url = showArchived ? "/api/placements?archived=1" : "/api/placements";
+    // Plan G #6c: engaged-only filter drops pending venue-initiated
+    // requests the artist hasn't responded to yet. Discovery moves to
+    // the public /artwork-requests surface; the portal stays focused
+    // on rows the artist has actually engaged with.
+    const url = showArchived
+      ? "/api/placements?archived=1"
+      : "/api/placements?engaged=true";
     return authFetch(url)
       .then((res) => res.json())
       .then((data) => {

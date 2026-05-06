@@ -104,6 +104,8 @@ export interface Artist {
   subscriptionPlan?: string;
   shipsInternationally?: boolean;
   internationalShippingPrice?: number | null;
+  /** True once the profile has been admin-approved (review_status === "approved"). */
+  isVerified?: boolean;
 }
 
 export const artists: Artist[] = [

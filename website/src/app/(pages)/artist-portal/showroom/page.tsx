@@ -24,6 +24,7 @@ import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
+import { safeHexBackground } from "@/lib/hex-color";
 import type { Wall } from "@/lib/visualizer/types";
 
 export default function ArtistShowroomPage() {
@@ -160,7 +161,7 @@ function WallCard({ wall }: { wall: Wall }) {
           <div
             className="rounded shadow-inner"
             style={{
-              backgroundColor: `#${wall.wall_color_hex}`,
+              backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA"),
               width: cardWidth,
               height: cardHeight,
               maxWidth: "100%",

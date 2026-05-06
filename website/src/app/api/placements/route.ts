@@ -79,6 +79,23 @@ export async function GET(request: Request) {
       query = db.from("placements").select("*").eq("venue_user_id", auth.user!.id);
     }
 
+    // Plan G #6c: artist portal asks for ?engaged=true to drop pending
+    // venue-initiated requests the artist has never opened. A row is
+    // 'engaged' when ANY is true:
+    //   - status != 'pending'  (already moved past discovery)
+    //   - requester_user_id === caller  (the artist initiated it)
+    // The third potential branch (caller has sent a message into the
+    // thread) is omitted on purpose — it requires a metadata join that
+    // the existing PostgREST select doesn't easily express, and the two
+    // conditions above already cover the bulk of the discovery noise.
+    const engagedOnly =
+      new URL(request.url).searchParams.get("engaged") === "true";
+    if (engagedOnly && role.type === "artist") {
+      query = query.or(
+        `status.neq.pending,requester_user_id.eq.${auth.user!.id}`,
+      );
+    }
+
     let { data, error } = await query.order("created_at", { ascending: false });
 
     // Retry without any envs where the hidden_for_* columns don't exist

@@ -140,8 +140,14 @@ export default function Wall3DCanvas({
     <div
       onDrop={handleDrop}
       onDragOver={handleDragOver}
-      className="relative w-full h-full bg-stone-100"
-      style={{ overflow: "hidden" }}
+      className="relative w-full h-full bg-stone-100 touch-none"
+      // touchAction: "none" stops iOS Safari's pan-y / pinch-zoom from
+      // hijacking touches before OrbitControls sees them. Without this
+      // a one-finger drag scrolls the page and pinch zooms the page,
+      // not the scene. The `touch-none` Tailwind class is the same
+      // declaration; we set the inline style as well so it survives
+      // any utility-class purge.
+      style={{ overflow: "hidden", touchAction: "none" }}
     >
       <Canvas
         shadows="soft"
@@ -266,6 +272,18 @@ export default function Wall3DCanvas({
             minAzimuthAngle={-Math.PI / 2.3}
             maxAzimuthAngle={Math.PI / 2.3}
             target={[0, wallH * 0.5, 0]}
+            // Touch gestures: one-finger ROTATE (the headline 3D
+            // feature, lets users orbit the room), two-finger DOLLY_PAN
+            // (pinch-to-zoom). DOLLY_PAN's pan component is ignored
+            // because enablePan={false}, so two-finger gestures
+            // effectively become pinch-zoom only — which is what we
+            // want on mobile. These match three.js's defaults for a
+            // perspective camera but we set them explicitly so the
+            // behaviour can't drift if upstream defaults change.
+            touches={{
+              ONE: THREE.TOUCH.ROTATE,
+              TWO: THREE.TOUCH.DOLLY_PAN,
+            }}
           />
         </Suspense>
       </Canvas>

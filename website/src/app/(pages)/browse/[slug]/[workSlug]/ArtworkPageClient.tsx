@@ -508,7 +508,7 @@ export default function ArtworkPageClient({
                     showToast(r.reason === "out-of-stock" ? "This size is sold out" : `Only ${r.available} left at this size`);
                     return;
                   }
-                  router.push("/checkout");
+                  router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                 }}
                 className="flex-1 px-5 py-3.5 text-[13px] font-medium tracking-wider uppercase text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
               >
@@ -591,7 +591,7 @@ export default function ArtworkPageClient({
                 quantity: 1,
                 shippingPrice: 0,
               });
-              router.push("/checkout");
+              router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
             }}
             className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
           >

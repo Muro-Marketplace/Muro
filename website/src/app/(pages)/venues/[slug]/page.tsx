@@ -40,6 +40,39 @@ interface PublicWall {
   source_image_url?: string;
 }
 
+interface PublicArtworkRequest {
+  id: string;
+  title: string;
+  description: string | null;
+  intent: string[] | null;
+  budget_min_pence: number | null;
+  budget_max_pence: number | null;
+  created_at: string;
+}
+
+async function loadPublicArtworkRequests(
+  venueUserId: string,
+): Promise<PublicArtworkRequest[]> {
+  // Plan G #6b: surface a venue's own open artwork-requests on their
+  // public profile so visiting artists can see what they're calling
+  // for without bouncing off to /artwork-requests.
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
+      .from("artwork_requests")
+      .select("id, title, description, intent, budget_min_pence, budget_max_pence, created_at")
+      .eq("venue_user_id", venueUserId)
+      .eq("status", "open")
+      .eq("visibility", "semi_public")
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (error) return [];
+    return (data || []) as PublicArtworkRequest[];
+  } catch {
+    return [];
+  }
+}
+
 async function loadPublicWalls(venueUserId: string): Promise<PublicWall[]> {
   try {
     const db = getSupabaseAdmin();
@@ -156,6 +189,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
   // Pulled in parallel with the gallery render, empty array
   // gracefully hides the section.
   const publicWalls = userId ? await loadPublicWalls(userId) : [];
+  const openRequests = userId ? await loadPublicArtworkRequests(userId) : [];
   const arrangements = [
     venue.interested_in_free_loan && "Paid loan",
     venue.interested_in_revenue_share && "Revenue share",
@@ -206,6 +240,55 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
             <section>
               <h2 className="font-serif text-lg text-foreground mb-3">About the space</h2>
               <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{venue.description}</p>
+            </section>
+          )}
+
+          {openRequests.length > 0 && (
+            <section>
+              <h2 className="font-serif text-lg text-foreground mb-1">Open artwork requests</h2>
+              <p className="text-xs text-muted mb-3">
+                What this venue is calling for right now. Submit work that
+                fits the brief and they&rsquo;ll see it in their inbox.
+              </p>
+              <ul className="space-y-2">
+                {openRequests.map((r) => {
+                  const min = r.budget_min_pence ?? null;
+                  const max = r.budget_max_pence ?? null;
+                  const budget =
+                    min != null && max != null
+                      ? `£${(min / 100).toFixed(0)} - £${(max / 100).toFixed(0)}`
+                      : min != null
+                      ? `from £${(min / 100).toFixed(0)}`
+                      : max != null
+                      ? `up to £${(max / 100).toFixed(0)}`
+                      : null;
+                  return (
+                    <li key={r.id} className="border border-border rounded-sm p-4 hover:border-accent/40 transition-colors">
+                      <Link
+                        href={`/artist-portal/artwork-requests/${r.id}`}
+                        className="block"
+                      >
+                        <p className="text-sm font-medium text-foreground mb-1">{r.title}</p>
+                        {r.description && (
+                          <p className="text-xs text-muted line-clamp-2">{r.description}</p>
+                        )}
+                        <div className="flex flex-wrap gap-2 mt-2 text-[10px]">
+                          {(r.intent || []).map((i) => (
+                            <span key={i} className="px-1.5 py-0.5 bg-accent/5 text-accent rounded-sm capitalize">
+                              {i}
+                            </span>
+                          ))}
+                          {budget && (
+                            <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">
+                              {budget}
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
             </section>
           )}
 

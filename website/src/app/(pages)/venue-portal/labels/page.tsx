@@ -6,7 +6,7 @@ import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
 import type { LabelData } from "@/components/labels/LabelSheet";
-import { LABEL_SIZES, type LabelSize } from "@/components/labels/QRLabel";
+import { LABEL_SIZES, LABEL_STYLES, type LabelSize, type LabelStyle } from "@/components/labels/QRLabel";
 import { authFetch } from "@/lib/api-client";
 
 interface LabelOptions {
@@ -62,11 +62,25 @@ export default function VenueLabelsPage() {
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [labelSize, setLabelSize] = useState<LabelSize>("medium");
   const [tagline, setTagline] = useState("");
+  // Plan G #7: parity with the artist side. The high-level style
+  // preset drives the default field-toggle set; users can still
+  // override toggles individually below.
+  const [labelStyle, setLabelStyle] = useState<LabelStyle>("minimal");
   const [options, setOptions] = useState<LabelOptions>({
     showMedium: false,
     showDimensions: false,
     showPrice: false,
   });
+  function applyStyle(style: LabelStyle) {
+    setLabelStyle(style);
+    const cfg = LABEL_STYLES.find((s) => s.key === style);
+    if (cfg) setLabelSize(cfg.defaultSize);
+    if (style === "editorial") {
+      setOptions({ showMedium: true, showDimensions: true, showPrice: true });
+    } else if (style === "minimal") {
+      setOptions({ showMedium: false, showDimensions: false, showPrice: false });
+    }
+  }
   const [showPreview, setShowPreview] = useState(false);
   const [previewLabels, setPreviewLabels] = useState<LabelData[]>([]);
 
@@ -239,7 +253,11 @@ export default function VenueLabelsPage() {
         _sourceDimensions: effectiveDimensions,
         quantity: getQty(i),
         labelSize,
-        tagline: (labelSize === "large" || labelSize === "xlarge") ? tagline || undefined : undefined,
+        labelStyle,
+        tagline:
+          (labelSize === "large" || labelSize === "xlarge") && labelStyle !== "qr_only"
+            ? tagline || undefined
+            : undefined,
       };
     });
   }
@@ -280,7 +298,26 @@ export default function VenueLabelsPage() {
             {/* Options row */}
             <div className="flex flex-col lg:flex-row gap-4 mb-6">
               <div className="flex-1 bg-surface border border-border rounded-sm p-4">
-                <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-3">Label Options</h3>
+                <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-3">Label Style</h3>
+
+                {/* Plan G #7: high-level style picker (parity with the
+                    artist label editor). Pre-fills the default size +
+                    field toggles for the selected style. */}
+                <div className="grid sm:grid-cols-3 gap-2 mb-4">
+                  {LABEL_STYLES.map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => applyStyle(s.key)}
+                      className={`text-left p-3 rounded-sm border transition-colors ${
+                        labelStyle === s.key ? "border-accent bg-accent/5" : "border-border hover:border-accent/40"
+                      }`}
+                    >
+                      <p className="text-sm font-medium text-foreground mb-0.5">{s.name}</p>
+                      <p className="text-[11px] text-muted leading-snug">{s.description}</p>
+                    </button>
+                  ))}
+                </div>
 
                 <div className="mb-3">
                   <p className="text-xs text-muted mb-1.5">Label Size</p>
@@ -313,6 +350,12 @@ export default function VenueLabelsPage() {
                   </div>
                 )}
 
+                <p className="text-[11px] text-muted leading-relaxed mb-2">
+                  Hide a row from the printed label without removing the
+                  underlying data. Toggles only affect what shows up on
+                  the printed card - the QR code itself always points to
+                  the work.
+                </p>
                 <div className="flex flex-wrap gap-x-5 gap-y-2">
                   {([
                     { key: "showMedium" as const, label: "Medium" },
@@ -391,7 +434,14 @@ export default function VenueLabelsPage() {
 
                     <div className="p-3">
                       <h3 className="text-sm font-medium text-foreground leading-snug line-clamp-1">{p.work_title}</h3>
-                      <p className="text-xs text-muted mt-0.5 line-clamp-1">{artistName}</p>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className="text-xs text-muted line-clamp-1">{artistName}</p>
+                        {p.work_size && (
+                          <span className="text-[10px] text-muted/80 tabular-nums shrink-0">
+                            {p.work_size}
+                          </span>
+                        )}
+                      </div>
 
                       <div className="flex items-center justify-between mt-2">
                         {isSelected ? (
