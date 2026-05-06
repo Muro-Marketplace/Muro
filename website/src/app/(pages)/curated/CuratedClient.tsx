@@ -366,13 +366,15 @@ export default function CuratedClient() {
       {/* Immersive hero — pulls behind the header with negative margin
           and matches the /artists & /venues hero pattern (full-bleed
           dark photo, dual CTA, trust strip on the dark band at the
-          bottom). Photo is the existing Unsplash gallery shot until
-          Plan G Task 13 ships a brand asset. */}
+          bottom). Gallery-interior shot with multiple framed artworks
+          under spotlights — closer to what Curated actually delivers
+          (a placed, lit hang) than the previous abstract close-up.
+          Plan G Task 13 may still ship a custom brand asset later. */}
       <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 overflow-hidden bg-[#1A1A1A]">
         <div className="absolute inset-0 -z-10">
           <Image
-            src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=1080&fit=crop&crop=center"
-            alt="Curated artwork on a venue wall"
+            src="https://images.unsplash.com/photo-1766890410688-77af00a1dc41?w=1920&h=1080&fit=crop&crop=center"
+            alt="Curated gallery interior with multiple framed artworks under spotlights"
             fill
             className="object-cover"
             sizes="100vw"
