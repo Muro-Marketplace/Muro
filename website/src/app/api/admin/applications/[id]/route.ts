@@ -12,7 +12,7 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error } = await getAdminUser(request);
+  const { user, error } = await getAdminUser(request);
   if (error) return error;
 
   const { id } = await params;
@@ -47,7 +47,11 @@ export async function PUT(
     if (action === "reject") {
       const { error: updateError } = await db
         .from("artist_applications")
-        .update({ status: "rejected" })
+        .update({
+          status: "rejected",
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: user!.id,
+        })
         .eq("id", id);
 
       if (updateError) {
@@ -174,7 +178,11 @@ export async function PUT(
     // Mark application as accepted
     await db
       .from("artist_applications")
-      .update({ status: "accepted" })
+      .update({
+        status: "accepted",
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: user!.id,
+      })
       .eq("id", id);
 
     // Approved email. For new invited users, Supabase's invite email

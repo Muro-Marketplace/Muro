@@ -8,6 +8,7 @@
 
 import { useState, useEffect, type FormEvent } from "react";
 import Link from "next/link";
+import { labelForStatus } from "@/lib/order-status-labels";
 
 interface OrderItem {
   title?: string;
@@ -37,16 +38,19 @@ interface TrackedOrder {
   tracking: { number: string; url: string | null } | null;
 }
 
-const STATUS_COPY: Record<string, { label: string; tone: "neutral" | "good" | "warn" }> = {
-  confirmed: { label: "Order placed", tone: "neutral" },
-  artist_notified: { label: "Artist notified", tone: "neutral" },
-  awaiting_dispatch: { label: "Awaiting dispatch", tone: "neutral" },
-  shipped: { label: "Shipped", tone: "good" },
-  delivered: { label: "Delivered", tone: "good" },
-  cancelled: { label: "Cancelled", tone: "warn" },
-  refunded: { label: "Refunded", tone: "warn" },
-  disputed: { label: "Disputed", tone: "warn" },
-};
+// Labels live in the canonical module (src/lib/order-status-labels.ts).
+// Tones are a UI decision local to this page: shipped/delivered are "good"
+// (the happy path is making progress), cancelled is "danger" (hard stop —
+// matches OrderStatusTracker's red treatment), refunded/disputed are "warn"
+// (the order ran into trouble but money/dispute resolution is in flight),
+// everything else is "neutral".
+type StatusTone = "neutral" | "good" | "warn" | "danger";
+function toneFor(status: string): StatusTone {
+  if (status === "shipped" || status === "delivered") return "good";
+  if (status === "cancelled") return "danger";
+  if (status === "refunded" || status === "disputed") return "warn";
+  return "neutral";
+}
 
 function fmtMoney(amount: number | null, currency: string): string {
   if (amount == null) return "–";
@@ -123,13 +127,17 @@ export default function OrderTrackPage() {
     }
   }
 
-  const statusInfo = order ? STATUS_COPY[order.status] || { label: order.status, tone: "neutral" as const } : null;
-  const toneClass = (tone: "neutral" | "good" | "warn") =>
+  const statusInfo = order
+    ? { label: labelForStatus(order.status), tone: toneFor(order.status) }
+    : null;
+  const toneClass = (tone: StatusTone) =>
     tone === "good"
       ? "bg-green-50 text-green-700 border-green-200"
       : tone === "warn"
         ? "bg-amber-50 text-amber-700 border-amber-200"
-        : "bg-surface text-foreground border-border";
+        : tone === "danger"
+          ? "bg-red-50 text-red-700 border-red-200"
+          : "bg-surface text-foreground border-border";
 
   return (
     <div className="bg-background">
@@ -263,7 +271,7 @@ export default function OrderTrackPage() {
                     {order.history.map((h, i) => (
                       <li key={i} className="text-sm">
                         <p className="text-foreground">
-                          {STATUS_COPY[h.status || ""]?.label || h.status}
+                          {labelForStatus(h.status || "")}
                         </p>
                         {h.at && <p className="text-xs text-muted">{fmtDate(h.at)}</p>}
                         {h.note && <p className="text-xs text-muted/80 mt-0.5">{h.note}</p>}

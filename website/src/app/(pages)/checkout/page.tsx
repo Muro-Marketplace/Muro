@@ -25,6 +25,11 @@ export default function CheckoutPage() {
     const raw = new URLSearchParams(window.location.search).get("backTo");
     setBackHref(safeRedirect(raw, "/browse"));
   }, []);
+  // Cart-level error surfaced when the API rejects the cart at submit
+  // time (G2-15: a line points at a sold/deleted/re-priced work). We
+  // remove the offending line from the cart and show this banner so
+  // the buyer doesn't bounce off a generic toast and lose context.
+  const [cartError, setCartError] = useState<string | null>(null);
   const [shipping, setShipping] = useState<ShippingInfo>({
     fullName: "",
     email: "",
@@ -37,9 +42,9 @@ export default function CheckoutPage() {
     notes: "",
   });
   const [errors, setErrors] = useState<Record<string, boolean>>({});
-  // Fulfilment method — buyer chooses ship (default), collection from
-  // the artist (drop-off), or digital (rare). Collection skips shipping
-  // costs and the address requirement.
+  // Fulfilment method — buyer chooses ship (default) or collection from
+  // the artist (drop-off). Collection skips shipping costs and the
+  // address requirement.
   const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection">("ship");
   const [collectionNotes, setCollectionNotes] = useState("");
 
@@ -139,6 +144,8 @@ export default function CheckoutPage() {
       return;
     }
 
+    setCartError(null);
+
     // Create Stripe Checkout Session and redirect
     try {
       const res = await fetch("/api/checkout", {
@@ -158,6 +165,32 @@ export default function CheckoutPage() {
           collectionNotes,
         }),
       });
+
+      // 409 = cart re-validation failed (G2-15). The API returns a
+      // human-readable error and the offending workId; we drop that
+      // line from the cart and surface the message rather than redirect
+      // to Stripe with a stale price.
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        const offendingId = typeof data?.workId === "string" ? data.workId : null;
+        if (offendingId) {
+          // Match by workId rather than cart-line id (CartContext
+          // generates a random "cart-..." id on add). One artwork can
+          // appear as multiple lines (different sizes / framed), drop
+          // them all so the buyer doesn't keep bouncing off the same
+          // unavailable work.
+          for (const line of items) {
+            if (line.workId === offendingId) removeItem(line.id);
+          }
+        }
+        setCartError(
+          typeof data?.error === "string"
+            ? data.error
+            : "One of the works in your cart is no longer available.",
+        );
+        return;
+      }
+
       const data = await res.json();
 
       if (data.url) {
@@ -386,6 +419,24 @@ export default function CheckoutPage() {
               Your order will be fulfilled directly by the artist. They&apos;ll pack and ship your artwork within 7 working days.
             </p>
           </div>
+
+          {/* Cart-error banner (G2-15: API rejected cart because a
+              work was sold/deleted/re-priced). The offending line is
+              already removed from the cart at this point — this is
+              the user-facing breadcrumb explaining why. */}
+          {cartError && (
+            <div
+              role="alert"
+              className="bg-amber-50 border border-amber-300 rounded-sm p-4 flex gap-3"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <p className="text-sm text-amber-900">{cartError}</p>
+            </div>
+          )}
 
           {/* Submit */}
           <button

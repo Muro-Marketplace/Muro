@@ -172,33 +172,106 @@ export const placementUpdateSchema = z.object({
   }).optional(),
 });
 
-export const checkoutSchema = z.object({
-  items: z.array(z.object({
-    title: safeString(200),
-    artistName: safeString(100),
-    artistSlug: optionalString(100),
-    size: safeString(50),
-    price: z.number().positive().max(100000),
-    quantity: z.number().int().positive().max(10),
-    image: optionalString(2000),
-    shippingPrice: z.number().min(0).max(1000).optional(),
-    // Surfaced through to the API so the shared shipping helper can
-    // do per-item dimension-based estimation, regional override, and
-    // framed-uplift, same inputs the display page uses, so the cart
-    // total and the Stripe charge can never drift.
-    internationalShippingPrice: z.number().min(0).max(1000).optional(),
-    dimensions: optionalString(200),
-    framed: z.boolean().optional(),
-  })).min(1).max(50),
-  shipping: z.object({
-    fullName: safeString(100),
-    email,
-    phone: safeString(30),
-    addressLine1: safeString(200),
-    addressLine2: optionalString(200),
-    city: safeString(100),
-    postcode: safeString(20),
-    country: safeString(100),
-    notes: optionalString(500),
-  }),
+// Cart line shape — shared between the ship and collection branches.
+const checkoutItemSchema = z.object({
+  title: safeString(200),
+  artistName: safeString(100),
+  artistSlug: optionalString(100),
+  size: safeString(50),
+  price: z.number().positive().max(100000),
+  quantity: z.number().int().positive().max(10),
+  image: optionalString(2000),
+  shippingPrice: z.number().min(0).max(1000).optional(),
+  // Surfaced through to the API so the shared shipping helper can
+  // do per-item dimension-based estimation, regional override, and
+  // framed-uplift, same inputs the display page uses, so the cart
+  // total and the Stripe charge can never drift.
+  internationalShippingPrice: z.number().min(0).max(1000).optional(),
+  dimensions: optionalString(200),
+  framed: z.boolean().optional(),
+  // Cart line identity — `workId` for individual artworks, `collectionId`
+  // for bundles. Both optional because legacy localStorage carts may
+  // pre-date the field, but G2-15 cart re-validation needs at least
+  // one to look the row up against the DB.
+  type: z.enum(["work", "collection"]).optional(),
+  workId: optionalString(200),
+  collectionId: optionalString(200),
 });
+
+// Shipping subset for "Collect from artist" — buyer picks up in person,
+// so addressLine1/city/postcode are optional. We still keep the maxlength
+// caps active when a value IS supplied so a malicious payload can't sneak
+// a 600-char addressLine through the collection door.
+const collectionShippingSchema = z.object({
+  fullName: safeString(100),
+  email,
+  phone: safeString(30),
+  addressLine1: optionalString(200),
+  addressLine2: optionalString(200),
+  city: optionalString(100),
+  postcode: optionalString(20),
+  country: safeString(100),
+  notes: optionalString(500),
+});
+
+// Full shipping address — required for ship-mode orders.
+const shipShippingSchema = z.object({
+  fullName: safeString(100),
+  email,
+  phone: safeString(30),
+  addressLine1: safeString(200),
+  addressLine2: optionalString(200),
+  city: safeString(100),
+  postcode: safeString(20),
+  country: safeString(100),
+  notes: optionalString(500),
+});
+
+// Top-level metadata fields shared by both fulfilment branches. Lives
+// in a base object so we don't repeat them in each variant. Task 1
+// review flagged that the route was reading `body.source` etc. straight
+// off the un-validated input — once these are on the schema, the route
+// can read `parsed.data.source` and benefit from the trim/cap.
+const checkoutMetaShape = {
+  // ?ref= passed through from the artwork or QR landing — used for
+  // attribution; "direct" when none. Capped at 100 chars to stop a
+  // malicious source string DoSing the metadata column.
+  source: optionalString(100),
+  venueSlug: optionalString(100),
+  // Client-computed shipping figure for divergence logging. Capped at
+  // £10k as a sanity bound; real orders top out an order of magnitude
+  // below that. Cleared on undefined so old callers still work.
+  expectedShippingCost: z.number().min(0).max(10000).optional(),
+  expectedSubtotal: z.number().min(0).max(1_000_000).optional(),
+  collectionNotes: optionalString(1000),
+};
+
+// Discriminated on fulfilmentMethod. The client sends 'ship' (default)
+// or 'collection'. We accept an omitted fulfilmentMethod for back-compat
+// and treat it as 'ship' (older callers may still POST without the field).
+const shipCheckoutSchema = z.object({
+  fulfilmentMethod: z.literal("ship"),
+  items: z.array(checkoutItemSchema).min(1).max(50),
+  shipping: shipShippingSchema,
+  ...checkoutMetaShape,
+});
+
+const collectionCheckoutSchema = z.object({
+  fulfilmentMethod: z.literal("collection"),
+  items: z.array(checkoutItemSchema).min(1).max(50),
+  shipping: collectionShippingSchema,
+  ...checkoutMetaShape,
+});
+
+export const checkoutSchema = z.preprocess(
+  // Normalise an absent fulfilmentMethod to 'ship' so legacy clients that
+  // didn't send the field keep working. Anything non-object falls through
+  // to the union which will reject with a useful error.
+  (input) => {
+    if (input && typeof input === "object" && !("fulfilmentMethod" in input)) {
+      return { ...input, fulfilmentMethod: "ship" };
+    }
+    return input;
+  },
+  z.discriminatedUnion("fulfilmentMethod", [shipCheckoutSchema, collectionCheckoutSchema]),
+);
