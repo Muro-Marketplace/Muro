@@ -185,8 +185,13 @@ export default function WallCanvas({
         // Click-on-empty-area to deselect (only if not consumed by a Konva node).
         if (e.target === containerRef.current) onSelectItem(null);
       }}
-      className="relative w-full h-full bg-stone-100"
-      style={{ overflow: "hidden" }}
+      className="relative w-full h-full bg-stone-100 touch-none"
+      // touchAction: "none" prevents iOS Safari from scrolling the
+      // surrounding page when a one-finger drag starts on an artwork
+      // (Konva owns the gesture instead). The wall is fit-to-container
+      // here, so we don't need pinch-zoom on the canvas itself, but
+      // page scroll-trap is the headline mobile bug.
+      style={{ overflow: "hidden", touchAction: "none" }}
     >
       {pxPerCm > 0 && (
         <Stage

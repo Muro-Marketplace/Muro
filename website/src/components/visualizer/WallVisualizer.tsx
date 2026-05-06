@@ -34,6 +34,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { isFlagOn } from "@/lib/feature-flags";
+import { useMediaQuery } from "@/lib/use-media-query";
 import {
   buildSizeVariants,
   parseDimensions,
@@ -155,6 +156,22 @@ function WallVisualizerInner(props: ExtendedProps) {
   const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | undefined>(undefined);
   const [upgradeTier, setUpgradeTier] = useState<VisualizerTier | null>(null);
   const [upgradeResetsAt, setUpgradeResetsAt] = useState<string | null>(null);
+
+  // ── Mobile UX ─────────────────────────────────────────────────────
+  // On phones (and small tablets in portrait) the side rail of works
+  // and the floating wall-config bar make the canvas unusable. Below
+  // 768px we collapse the rail and the config bar into bottom-sheet
+  // overlays toggled from a fixed bottom toolbar. The breakpoint
+  // matches Tailwind's `md` so the change lines up with how the rest
+  // of the site flips between mobile and tablet layouts.
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  const [mobileSheet, setMobileSheet] = useState<"works" | "wall" | null>(null);
+  // If the viewport widens out of mobile range while a sheet is open
+  // (e.g. landscape rotation on a small tablet) drop the overlay so
+  // the desktop layout takes over cleanly.
+  useEffect(() => {
+    if (!isMobile) setMobileSheet(null);
+  }, [isMobile]);
 
   // Mockup-save state, only relevant in artist modes. Tracked here
   // (rather than inside RenderPreview) so it survives previews opening
@@ -771,18 +788,32 @@ function WallVisualizerInner(props: ExtendedProps) {
   );
 
   // ── Render ──────────────────────────────────────────────────────────
+  // Common props for WorksPanel — used at two render points (the
+  // desktop side rail, and the mobile bottom-sheet variant). Tap-to-
+  // place inside the mobile sheet auto-closes it so the user sees the
+  // wall immediately after picking a work.
+  const worksPanelProps = {
+    mode: props.mode,
+    works,
+    myWorks,
+    savedWorks,
+    allWorks,
+    loading: worksLoading,
+    error: worksError,
+    onSelect: (w: PanelWork) => {
+      handleSelectFromPanel(w);
+      if (isMobile) setMobileSheet(null);
+    },
+  };
+
+  // Whether the floating Render button should be shown at all. Same
+  // gate the desktop branch used; reused for the mobile toolbar.
+  const renderButtonVisible =
+    canPersist || (props.mode === "customer_artwork_page" && items.length > 0);
+
   return (
     <div className="flex h-full w-full bg-stone-50">
-      <WorksPanel
-        mode={props.mode}
-        works={works}
-        myWorks={myWorks}
-        savedWorks={savedWorks}
-        allWorks={allWorks}
-        loading={worksLoading}
-        error={worksError}
-        onSelect={handleSelectFromPanel}
-      />
+      {!isMobile && <WorksPanel {...worksPanelProps} />}
 
       <div className="relative flex-1 min-w-0">
         {viewMode === "3d" ? (
@@ -863,31 +894,35 @@ function WallVisualizerInner(props: ExtendedProps) {
           </div>
         )}
 
-        {/* Bottom-centre wall config bar */}
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
-          <WallConfigBar
-            currentPresetId={
-              background.kind === "preset" ? background.preset_id : null
-            }
-            colorHex={
-              background.kind === "preset" ? background.color_hex : "FFFFFF"
-            }
-            widthCm={widthCm}
-            heightCm={heightCm}
-            onPickPreset={handlePickPreset}
-            onColorChange={handleColorChange}
-            onWidthChange={(v) => setWidthCm(clampDimension(v))}
-            onHeightChange={(v) => setHeightCm(clampDimension(v))}
-            onClose={props.onClose}
-          />
-        </div>
+        {/* Bottom-centre wall config bar — desktop only. On mobile this
+            collapses into the "Wall" entry of the bottom toolbar,
+            which opens a slide-up sheet hosting the same controls. */}
+        {!isMobile && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+            <WallConfigBar
+              currentPresetId={
+                background.kind === "preset" ? background.preset_id : null
+              }
+              colorHex={
+                background.kind === "preset" ? background.color_hex : "FFFFFF"
+              }
+              widthCm={widthCm}
+              heightCm={heightCm}
+              onPickPreset={handlePickPreset}
+              onColorChange={handleColorChange}
+              onWidthChange={(v) => setWidthCm(clampDimension(v))}
+              onHeightChange={(v) => setHeightCm(clampDimension(v))}
+              onClose={props.onClose}
+            />
+          </div>
+        )}
 
-        {/* Bottom-right floating render button.
+        {/* Bottom-right floating render button — desktop only.
             Visible whenever there's something to render, either a
             saved wall+layout (venue/artist editor) OR a customer-flow
-            sheet with a locked work auto-placed. */}
-        {(canPersist ||
-          (props.mode === "customer_artwork_page" && items.length > 0)) && (
+            sheet with a locked work auto-placed. The mobile toolbar
+            below carries the equivalent button. */}
+        {!isMobile && renderButtonVisible && (
           <div className="absolute bottom-3 right-3 flex flex-col items-end gap-2">
             {renderError && (
               <div className="px-3 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs max-w-[260px] text-right">
@@ -915,6 +950,73 @@ function WallVisualizerInner(props: ExtendedProps) {
               )}
             </button>
           </div>
+        )}
+
+        {/* Mobile-only: bottom toolbar pinned above the home indicator,
+            plus the slide-up sheets that host WorksPanel and
+            WallConfigBar. Both sheets are mounted only while open so
+            their internal state (filter, tab) starts fresh each time. */}
+        {isMobile && (
+          <>
+            <MobileBottomBar
+              activeSheet={mobileSheet}
+              onToggleSheet={(which) =>
+                setMobileSheet((prev) => (prev === which ? null : which))
+              }
+              renderVisible={renderButtonVisible}
+              renderInFlight={renderInFlight}
+              renderError={renderError}
+              onRender={handleRender}
+            />
+
+            {mobileSheet === "works" && (
+              <MobileSheet
+                title="Works"
+                onClose={() => setMobileSheet(null)}
+              >
+                {/* WorksPanel ships an `aside w-60` rail; in the sheet
+                    we override its width to fill, drop the right
+                    border (the sheet draws its own divider) and let
+                    the background show through. */}
+                <div className="h-full w-full [&>aside]:!w-full [&>aside]:!border-r-0 [&>aside]:!bg-transparent [&>aside]:!backdrop-blur-none">
+                  <WorksPanel {...worksPanelProps} />
+                </div>
+              </MobileSheet>
+            )}
+
+            {mobileSheet === "wall" && (
+              <MobileSheet
+                title="Wall settings"
+                onClose={() => setMobileSheet(null)}
+              >
+                <div className="p-4 overflow-x-auto">
+                  <WallConfigBar
+                    currentPresetId={
+                      background.kind === "preset"
+                        ? background.preset_id
+                        : null
+                    }
+                    colorHex={
+                      background.kind === "preset"
+                        ? background.color_hex
+                        : "FFFFFF"
+                    }
+                    widthCm={widthCm}
+                    heightCm={heightCm}
+                    onPickPreset={handlePickPreset}
+                    onColorChange={handleColorChange}
+                    onWidthChange={(v) => setWidthCm(clampDimension(v))}
+                    onHeightChange={(v) => setHeightCm(clampDimension(v))}
+                    // Don't pipe the parent's onClose through on mobile —
+                    // the sheet has its own close button, and tapping
+                    // "Close" inside the WallConfigBar would shut the
+                    // whole visualizer, not just the sheet.
+                    onClose={undefined}
+                  />
+                </div>
+              </MobileSheet>
+            )}
+          </>
         )}
       </div>
 
@@ -1273,4 +1375,186 @@ function ownerTypeFromMode(mode: VisualizerEditorProps["mode"]) {
   // artist → venue → customer based on what the user actually is, which
   // is what we want here. Real customers still resolve to customer tier.
   return undefined;
+}
+
+// ── Mobile bottom toolbar ───────────────────────────────────────────────
+
+/**
+ * Mobile-only toolbar pinned to the bottom of the canvas column. Three
+ * controls: Works (toggles a slide-up bottom-sheet listing placeable
+ * works), Wall (toggles the same sheet for wall preset / colour /
+ * dimensions), and Render (mirrors the desktop floating button).
+ *
+ * Padding-bottom uses env(safe-area-inset-bottom) so the bar sits above
+ * the iPhone home indicator instead of being chopped by it.
+ */
+function MobileBottomBar({
+  activeSheet,
+  onToggleSheet,
+  renderVisible,
+  renderInFlight,
+  renderError,
+  onRender,
+}: {
+  activeSheet: "works" | "wall" | null;
+  onToggleSheet: (which: "works" | "wall") => void;
+  renderVisible: boolean;
+  renderInFlight: boolean;
+  renderError: string | null;
+  onRender: () => void;
+}) {
+  return (
+    <>
+      {renderError && (
+        <div className="absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+72px)] z-30 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs text-center shadow-sm">
+          {renderError}
+        </div>
+      )}
+      <div
+        className="absolute bottom-0 left-0 right-0 z-20 flex items-stretch bg-white/95 backdrop-blur border-t border-black/10 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <MobileToolbarButton
+          active={activeSheet === "works"}
+          onClick={() => onToggleSheet("works")}
+          label="Works"
+          icon={
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+          }
+        />
+        <MobileToolbarButton
+          active={activeSheet === "wall"}
+          onClick={() => onToggleSheet("wall")}
+          label="Wall"
+          icon={
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="1" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="3" y1="15" x2="21" y2="15" />
+            </svg>
+          }
+        />
+        {renderVisible && (
+          <button
+            type="button"
+            onClick={onRender}
+            disabled={renderInFlight}
+            className="flex-1 m-2 rounded-full bg-stone-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 px-4"
+          >
+            {renderInFlight ? (
+              <>
+                <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                Rendering…
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="6,4 20,12 6,20" />
+                </svg>
+                Render
+              </>
+            )}
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+function MobileToolbarButton({
+  active,
+  onClick,
+  label,
+  icon,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      // 64px tall meets Apple's recommended touch-target minimum even
+      // after the safe-area inset padding pushes content up.
+      className={`flex-1 min-h-[56px] flex flex-col items-center justify-center gap-0.5 transition ${
+        active ? "text-stone-900 bg-stone-100" : "text-stone-500"
+      }`}
+    >
+      {icon}
+      <span className="text-[10px] font-medium tracking-wide">{label}</span>
+    </button>
+  );
+}
+
+// ── Mobile sheet (slide-up panel) ───────────────────────────────────────
+
+/**
+ * Mobile-only slide-up sheet that overlays the canvas column. Tapping
+ * the dimmed backdrop closes the sheet. The sheet itself caps at 70 %
+ * of the column height so the user can still see the wall while
+ * editing settings or scrolling through works.
+ */
+function MobileSheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="absolute inset-0 z-30 flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      {/* Dim backdrop, also acts as a tap-to-close target. Using a
+          button (rather than a div + onClick) so screen readers
+          describe it as activatable. */}
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="flex-1 bg-black/40 backdrop-blur-[1px] cursor-default"
+      />
+      <div
+        className="bg-white rounded-t-2xl shadow-2xl max-h-[70%] flex flex-col"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {/* Drag handle + header */}
+        <div className="shrink-0 flex flex-col items-stretch border-b border-black/5">
+          <div className="flex justify-center pt-2 pb-1">
+            <div className="h-1 w-10 rounded-full bg-stone-300" />
+          </div>
+          <div className="flex items-center justify-between px-4 pb-2">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
+              {title}
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="-mr-1 p-1 text-stone-500 hover:text-stone-900 transition-colors"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
+      </div>
+    </div>
+  );
 }
