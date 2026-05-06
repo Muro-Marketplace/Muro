@@ -151,6 +151,50 @@ export async function POST(request: Request) {
     // insensitive — labels in the cart may differ in casing from the
     // DB ("8x10" vs "8X10"), and we'd rather charge the DB price than
     // refuse to checkout because of a cosmetic mismatch.
+    //
+    // Frame uplift edge case: cart lines for framed orders carry size
+    // "<base> + <frame label>" which won't match any DB pricing tier
+    // (DB tiers are bare base sizes). For these lines:
+    // - Availability gate (sold/deleted/out-of-stock) STILL fires — the
+    //   workId lookup is size-independent.
+    // - Price-recompute is partial: we parse the base size, look up the
+    //   base tier, and reject 409 ("price_below_base") if the client's
+    //   total is below the DB base. Above-base lines fall back to the
+    //   client price for unit_amount and emit a warn log so we can
+    //   observe how often the fallback runs.
+    // Full price-correction for framed lines requires either parsing the
+    // uplift server-side or carrying frame identity on the cart line.
+    // Tracked as a Plan G2 follow-up.
+    for (const item of items) {
+      if (!item.workId) continue;
+      const isFramedLine = item.framed === true || (typeof item.size === "string" && item.size.includes(" + "));
+      if (!isFramedLine) continue;
+      const row = workById.get(item.workId);
+      if (!row?.pricing || !Array.isArray(row.pricing)) continue;
+      const baseSize = typeof item.size === "string" ? item.size.split(" + ")[0] : "";
+      if (!baseSize) {
+        console.warn("[checkout] could not parse base size for framed line: workId=%s size=%s", item.workId, item.size);
+        continue;
+      }
+      const dbBaseTier = row.pricing.find(
+        (p) => p?.label?.toLowerCase?.() === baseSize.toLowerCase(),
+      );
+      if (!dbBaseTier || typeof dbBaseTier.price !== "number" || dbBaseTier.price <= 0) {
+        console.warn("[checkout] could not parse base size for framed line: workId=%s size=%s", item.workId, item.size);
+        continue;
+      }
+      if (item.price < dbBaseTier.price) {
+        return NextResponse.json(
+          {
+            error: `"${row.title || item.title}" has been re-priced — please refresh your cart.`,
+            code: "price_below_base",
+            workId: item.workId,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const lineItems = items.map((item) => {
       const row = item.workId ? workById.get(item.workId) : undefined;
       let unitPence = Math.round(item.price * 100);
@@ -166,6 +210,27 @@ export async function POST(request: Request) {
               clientPrice: item.price,
               dbPrice: dbTier.price,
             });
+          }
+        } else {
+          // No DB tier matched — for framed lines this is the expected
+          // path (size has " + <frame>" suffix). The above floor check
+          // already guarded against an artist re-pricing the base down;
+          // here we just observe how often we fall back to the client
+          // price so we can prioritise the full server-side uplift fix.
+          const isFramedLine = item.framed === true || (typeof item.size === "string" && item.size.includes(" + "));
+          if (isFramedLine) {
+            const baseSize = typeof item.size === "string" ? item.size.split(" + ")[0] : "";
+            const dbBaseTier = baseSize
+              ? row.pricing.find((p) => p?.label?.toLowerCase?.() === baseSize.toLowerCase())
+              : undefined;
+            if (dbBaseTier && typeof dbBaseTier.price === "number") {
+              console.warn(
+                "[checkout] framed line uses client price: workId=%s clientPrice=%s dbBasePrice=%s",
+                item.workId,
+                item.price,
+                dbBaseTier.price,
+              );
+            }
           }
         }
       }

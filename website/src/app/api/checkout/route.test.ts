@@ -421,6 +421,70 @@ describe("POST /api/checkout cart re-validation (G2-15)", () => {
     const body = await res.json();
     expect(body.workId).toBe("w-bad");
   });
+
+  // Plan G2 PR-1 Task 2 follow-up: defensive floor for framed lines.
+  // Framed cart lines carry size "<base> + <frame label>", which won't
+  // match the DB's bare-size pricing tiers, so the existing recompute
+  // step falls back to the client price. The floor check parses the
+  // base size out of the cart line, looks up the DB base tier, and
+  // refuses to checkout if the cart's total is below today's base.
+  it("rejects framed line where client price is below DB base price", async () => {
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "A3", price: 100 }],
+      title: "Untitled",
+    }]);
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 80,
+        size: "A3 + Black Wood Frame",
+        framed: true,
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+      fulfilmentMethod: "collection",
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("price_below_base");
+    expect(body.workId).toBe("w-1");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("accepts framed line where client price is at or above DB base (with warn log)", async () => {
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "A3", price: 100 }],
+      title: "Untitled",
+    }]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 120,
+        size: "A3 + Black Wood Frame",
+        framed: true,
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+      fulfilmentMethod: "collection",
+    }));
+    expect(res.status).toBe(200);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/framed line uses client price/),
+      "w-1",
+      120,
+      100,
+    );
+    warn.mockRestore();
+  });
 });
 
 // Plan G2 Task 2 — drops the dead `digital` fulfilment branch. The
