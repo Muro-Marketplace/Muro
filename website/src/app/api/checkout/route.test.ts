@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // vi.hoisted runs before vi.mock factories so refs in the factories
 // below are initialised when the factory is evaluated.
 const { stripeCreate, fromMock, canArtistAcceptOrdersMock } = vi.hoisted(() => ({
-  stripeCreate: vi.fn(async () => ({ url: "https://stripe.example/session" })),
+  stripeCreate: vi.fn(async () => ({ id: "sess_test", url: "https://stripe.example/session" })),
   fromMock: vi.fn(),
   canArtistAcceptOrdersMock: vi.fn(async () => true),
 }));
@@ -83,16 +83,89 @@ const baseItem = {
   framed: false,
 };
 
+// Default Supabase mock — used by tests that don't set up their own
+// `fromMock` impl. Returns no artist profile for the auth lookup and
+// returns the cart line as a "fresh" `artist_works` row at the price
+// the cart claimed (so the existing self-purchase / country / Connect
+// tests below don't trip the new G2-15 re-validation gate).
+function setupDefaultDbMock() {
+  fromMock.mockImplementation((table: string) => {
+    if (table === "artist_profiles") {
+      return {
+        select: () => ({
+          eq: () => ({ single: async () => ({ data: null }) }),
+        }),
+      };
+    }
+    if (table === "artist_works") {
+      return {
+        select: () => ({
+          in: async (_col: string, ids: string[]) => ({
+            // Echo back a row per id so re-validation passes when the
+            // test doesn't explicitly mock the cart's DB state.
+            data: ids.map((id) => ({
+              id,
+              available: true,
+              quantity_available: 10,
+              pricing: [{ label: "S", price: 100 }],
+              title: "Untitled",
+            })),
+            error: null,
+          }),
+        }),
+      };
+    }
+    if (table === "artist_collections") {
+      return {
+        select: () => ({
+          in: async (_col: string, ids: string[]) => ({
+            data: ids.map((id) => ({
+              id,
+              available: true,
+              bundle_price: 100,
+              name: "Bundle",
+            })),
+            error: null,
+          }),
+        }),
+      };
+    }
+    return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+  });
+}
+
+beforeEach(() => {
+  setupDefaultDbMock();
+});
+
 // Plan A Task 11 — self-purchase guard (Bearer auth + cart slug match → 403).
 describe("POST /api/checkout self-purchase guard", () => {
   it("rejects when authenticated artist's slug matches a cart item", async () => {
-    fromMock.mockImplementation(() => ({
-      select: () => ({
-        eq: () => ({ single: async () => ({ data: { slug: "alice", user_id: "u-alice" } }) }),
-      }),
-    }));
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({ single: async () => ({ data: { slug: "alice", user_id: "u-alice" } }) }),
+          }),
+        };
+      }
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => ({
+                id, available: true, quantity_available: 10,
+                pricing: [{ label: "S", price: 100 }], title: "Untitled",
+              })),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+    });
     const res = await POST(req({
-      items: [baseItem],
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "GB" },
     }, "Bearer artist-alice"));
     expect(res.status).toBe(403);
@@ -103,7 +176,7 @@ describe("POST /api/checkout self-purchase guard", () => {
 
   it("permits a guest checkout (no auth)", async () => {
     const res = await POST(req({
-      items: [baseItem],
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "GB" },
     }));
     expect(res.status).toBe(200);
@@ -111,13 +184,31 @@ describe("POST /api/checkout self-purchase guard", () => {
   });
 
   it("permits an artist buying a different artist's work", async () => {
-    fromMock.mockImplementation(() => ({
-      select: () => ({
-        eq: () => ({ single: async () => ({ data: { slug: "alice", user_id: "u-alice" } }) }),
-      }),
-    }));
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({ single: async () => ({ data: { slug: "alice", user_id: "u-alice" } }) }),
+          }),
+        };
+      }
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => ({
+                id, available: true, quantity_available: 10,
+                pricing: [{ label: "S", price: 100 }], title: "Untitled",
+              })),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+    });
     const res = await POST(req({
-      items: [{ ...baseItem, artistSlug: "bob" }],
+      items: [{ ...baseItem, artistSlug: "bob", type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "GB" },
     }, "Bearer artist-alice"));
     expect(res.status).toBe(200);
@@ -129,7 +220,7 @@ describe("POST /api/checkout self-purchase guard", () => {
 describe("POST /api/checkout country guard", () => {
   it("rejects an unsupported country with 400", async () => {
     const res = await POST(req({
-      items: [baseItem],
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "ZZ" },
     }));
     expect(res.status).toBe(400);
@@ -140,7 +231,7 @@ describe("POST /api/checkout country guard", () => {
 
   it("accepts GB and creates a Stripe session with slim metadata", async () => {
     const res = await POST(req({
-      items: [baseItem],
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "GB" },
     }));
     expect(res.status).toBe(200);
@@ -156,7 +247,7 @@ describe("POST /api/checkout country guard", () => {
 
   it("accepts US (international) and creates a Stripe session", async () => {
     const res = await POST(req({
-      items: [baseItem],
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "US" },
     }));
     expect(res.status).toBe(200);
@@ -165,7 +256,7 @@ describe("POST /api/checkout country guard", () => {
 
   it("rejects 'United Kingdom' (the legacy free-text value) with 400", async () => {
     const res = await POST(req({
-      items: [baseItem],
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "United Kingdom" },
     }));
     expect(res.status).toBe(400);
@@ -177,7 +268,7 @@ describe("POST /api/checkout Stripe Connect pre-flight", () => {
   it("rejects with 422 when an artist isn't charges_enabled", async () => {
     canArtistAcceptOrdersMock.mockResolvedValue(false);
     const res = await POST(req({
-      items: [baseItem],
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "GB" },
     }));
     expect(res.status).toBe(422);
@@ -190,10 +281,173 @@ describe("POST /api/checkout Stripe Connect pre-flight", () => {
   it("permits checkout when all artists are ready", async () => {
     canArtistAcceptOrdersMock.mockResolvedValue(true);
     const res = await POST(req({
-      items: [baseItem],
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "GB" },
     }));
     expect(res.status).toBe(200);
     expect(stripeCreate).toHaveBeenCalled();
+  });
+});
+
+// Plan G2 Task 2 (G2-15) — cart re-validation against DB. Without this
+// gate, a stale localStorage cart can carry an old price for a sold /
+// deleted / re-priced work, and Stripe gets billed for whatever the
+// client claimed. These tests pin the route to re-fetch from the DB
+// before minting a Stripe session.
+describe("POST /api/checkout cart re-validation (G2-15)", () => {
+  // Helper: build a `from` mock that returns the works the test wants.
+  function mockWorks(rows: Array<{ id: string; available?: boolean; quantity_available?: number | null; pricing?: Array<{ label: string; price: number }>; title?: string }>) {
+    const map = new Map(rows.map((r) => [r.id, r]));
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({ single: async () => ({ data: null }) }),
+          }),
+        };
+      }
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => map.get(id)).filter(Boolean),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+    });
+  }
+
+  it("rejects with 409 when a cart line refers to a sold-out work", async () => {
+    // available=false simulates the artist marking the work sold.
+    mockWorks([{
+      id: "w-sold",
+      available: false,
+      quantity_available: 0,
+      pricing: [{ label: "S", price: 250 }],
+      title: "Sunset",
+    }]);
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-sold", price: 250, title: "Sunset" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/sold|unavailable|no longer/i);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects with 409 when a cart line refers to a deleted work (row missing)", async () => {
+    mockWorks([]); // empty → ids.map(...).filter(Boolean) returns []
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-deleted", price: 400, title: "Gone" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/no longer|unavailable|sold/i);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects with 409 when quantity_available has dropped to 0", async () => {
+    // Edge: the row still exists and `available` may even still be
+    // true, but inventory has hit zero. We don't want the buyer to
+    // pay for stock that isn't there.
+    mockWorks([{
+      id: "w-empty",
+      available: true,
+      quantity_available: 0,
+      pricing: [{ label: "S", price: 100 }],
+      title: "Out of stock",
+    }]);
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-empty", price: 100 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("recomputes unit_amount from DB price (ignores stale client price)", async () => {
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "S", price: 100 }], // DB says £100
+      title: "Untitled",
+    }]);
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-1", price: 50 /* stale */, size: "S" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    expect(stripeCreate).toHaveBeenCalledTimes(1);
+    const calls = stripeCreate.mock.calls as unknown as Array<
+      [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
+    >;
+    const lineItems = calls[0]?.[0]?.line_items ?? [];
+    // First line item is the work — unit_amount should be the DB
+    // price in pence (100 × 100 = 10000), NOT the client's 5000.
+    expect(lineItems[0]?.price_data?.unit_amount).toBe(10000);
+  });
+
+  it("ship-fulfilment carts also re-validate", async () => {
+    // Fourth scenario per the plan: ensures the gate isn't only
+    // exercised on collection-mode payloads.
+    mockWorks([]); // deleted
+    const res = await POST(req({
+      fulfilmentMethod: "ship",
+      items: [{ ...baseItem, type: "work", workId: "w-gone", price: 100 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns the offending workId so the client can drop it from the cart", async () => {
+    mockWorks([
+      { id: "w-good", available: true, quantity_available: 10, pricing: [{ label: "S", price: 100 }], title: "Good" },
+    ]);
+    const res = await POST(req({
+      items: [
+        { ...baseItem, type: "work", workId: "w-good", price: 100 },
+        { ...baseItem, type: "work", workId: "w-bad", price: 200, title: "Bad" },
+      ],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.workId).toBe("w-bad");
+  });
+});
+
+// Plan G2 Task 2 — drops the dead `digital` fulfilment branch. The
+// schema (real, not the pass-through mock used here) already rejects
+// `digital`, so the only remaining behaviour we can pin in this test
+// file is that the route narrows to ship/collection: even with a
+// pass-through schema mock, a `digital` payload must NOT result in a
+// Stripe session whose metadata records the rogue value.
+describe("POST /api/checkout no-digital", () => {
+  it("never records fulfilment_method=digital on the Stripe session", async () => {
+    const res = await POST(req({
+      fulfilmentMethod: "digital",
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    // Schema-rejection via the real validations module would 400; with
+    // the pass-through mock we hit the route's own narrowing and 200
+    // is fine — what we're really pinning is that the route silently
+    // collapses an unknown value to "ship" rather than letting
+    // "digital" leak into Stripe metadata or shipping logic.
+    if (res.status === 200) {
+      const calls = stripeCreate.mock.calls as unknown as Array<
+        [{ metadata?: { fulfilment_method?: string } }]
+      >;
+      expect(calls[0]?.[0]?.metadata?.fulfilment_method).toBe("ship");
+    } else {
+      expect([400, 409]).toContain(res.status);
+    }
   });
 });

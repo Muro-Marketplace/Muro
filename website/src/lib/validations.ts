@@ -189,6 +189,13 @@ const checkoutItemSchema = z.object({
   internationalShippingPrice: z.number().min(0).max(1000).optional(),
   dimensions: optionalString(200),
   framed: z.boolean().optional(),
+  // Cart line identity — `workId` for individual artworks, `collectionId`
+  // for bundles. Both optional because legacy localStorage carts may
+  // pre-date the field, but G2-15 cart re-validation needs at least
+  // one to look the row up against the DB.
+  type: z.enum(["work", "collection"]).optional(),
+  workId: optionalString(200),
+  collectionId: optionalString(200),
 });
 
 // Shipping subset for "Collect from artist" — buyer picks up in person,
@@ -220,6 +227,25 @@ const shipShippingSchema = z.object({
   notes: optionalString(500),
 });
 
+// Top-level metadata fields shared by both fulfilment branches. Lives
+// in a base object so we don't repeat them in each variant. Task 1
+// review flagged that the route was reading `body.source` etc. straight
+// off the un-validated input — once these are on the schema, the route
+// can read `parsed.data.source` and benefit from the trim/cap.
+const checkoutMetaShape = {
+  // ?ref= passed through from the artwork or QR landing — used for
+  // attribution; "direct" when none. Capped at 100 chars to stop a
+  // malicious source string DoSing the metadata column.
+  source: optionalString(100),
+  venueSlug: optionalString(100),
+  // Client-computed shipping figure for divergence logging. Capped at
+  // £10k as a sanity bound; real orders top out an order of magnitude
+  // below that. Cleared on undefined so old callers still work.
+  expectedShippingCost: z.number().min(0).max(10000).optional(),
+  expectedSubtotal: z.number().min(0).max(1_000_000).optional(),
+  collectionNotes: optionalString(1000),
+};
+
 // Discriminated on fulfilmentMethod. The client sends 'ship' (default)
 // or 'collection'. We accept an omitted fulfilmentMethod for back-compat
 // and treat it as 'ship' (older callers may still POST without the field).
@@ -227,14 +253,14 @@ const shipCheckoutSchema = z.object({
   fulfilmentMethod: z.literal("ship"),
   items: z.array(checkoutItemSchema).min(1).max(50),
   shipping: shipShippingSchema,
-  collectionNotes: optionalString(1000),
+  ...checkoutMetaShape,
 });
 
 const collectionCheckoutSchema = z.object({
   fulfilmentMethod: z.literal("collection"),
   items: z.array(checkoutItemSchema).min(1).max(50),
   shipping: collectionShippingSchema,
-  collectionNotes: optionalString(1000),
+  ...checkoutMetaShape,
 });
 
 export const checkoutSchema = z.preprocess(
