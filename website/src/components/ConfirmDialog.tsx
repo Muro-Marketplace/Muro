@@ -84,13 +84,6 @@ export default function ConfirmDialog({
     setReason("");
   }
 
-  // Confirm dialogs are conventionally phrased as questions — auto-append a
-  // "?" when the title doesn't already end with terminating punctuation so
-  // callers can pass concise verbs ("Delete", "Reject") and still get a
-  // question-shaped headline. Callers that want a statement ("Account
-  // deleted.") can add their own punctuation and we leave it alone.
-  const displayTitle = /[?!.]$/.test(title.trim()) ? title : `${title}?`;
-
   return (
     <div
       role="dialog"
@@ -107,7 +100,7 @@ export default function ConfirmDialog({
           id="confirm-dialog-title"
           className="text-lg font-medium text-foreground"
         >
-          {displayTitle}
+          {title}
         </h3>
         {body && <p className="text-sm text-muted mt-2 leading-relaxed">{body}</p>}
         {reasonRequired && (

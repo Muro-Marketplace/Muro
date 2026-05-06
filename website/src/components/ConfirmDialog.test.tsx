@@ -71,11 +71,10 @@ describe("<ConfirmDialog />", () => {
   });
 
   it("uses destructive=true to render the confirm button in red", () => {
-    const { getByText } = render(
+    const { getByRole } = render(
       <ConfirmDialog open title="Delete" destructive confirmLabel="Delete" onConfirm={() => {}} onClose={() => {}} />
     );
-    const btn = getByText("Delete");
-    // Either via className containing 'red' or aria attribute — assert one of them
+    const btn = getByRole("button", { name: "Delete" });
     expect(btn.className).toMatch(/red/);
   });
 });
