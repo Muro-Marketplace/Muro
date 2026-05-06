@@ -144,8 +144,11 @@ export default function PricingPage() {
               </div>
               <div className="shrink-0">
                 <Button href="/apply" size="md">
-                  Apply to join — first month free
+                  Apply to join — first month free if accepted
                 </Button>
+                <p className="text-[11px] text-muted mt-2">
+                  Applications reviewed within 5 business days.
+                </p>
               </div>
             </div>
           </div>
@@ -321,8 +324,11 @@ export default function PricingPage() {
             First month free on all plans. No commitment, cancel any time.
           </p>
           <Button href="/apply" size="lg">
-            Apply to join — first month free
+            Apply to join — first month free if accepted
           </Button>
+          <p className="text-[11px] text-muted mt-3">
+            Applications reviewed within 5 business days.
+          </p>
         </div>
       </section>
     </div>

@@ -213,6 +213,9 @@ export default function ArtistsPage() {
                   APPLY TO JOIN
                 </Button>
               </div>
+              <p className="mt-3 text-[11px] text-white/50">
+                Applications reviewed within 5 business days.
+              </p>
             </div>
           </div>
         </div>
@@ -486,6 +489,9 @@ export default function ArtistsPage() {
           </div>
           <p className="mt-6 text-sm text-white/40">
             First month free. Membership from &pound;9.99/month.
+          </p>
+          <p className="mt-2 text-[11px] text-white/40">
+            Applications reviewed within 5 business days.
           </p>
         </div>
       </section>
