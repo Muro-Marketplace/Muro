@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidPostcode } from "./postcode";
 
 // Shared helpers
 const safeString = (max = 500) => z.string().trim().min(1).max(max);
@@ -273,5 +274,26 @@ export const checkoutSchema = z.preprocess(
     }
     return input;
   },
-  z.discriminatedUnion("fulfilmentMethod", [shipCheckoutSchema, collectionCheckoutSchema]),
+  z.discriminatedUnion("fulfilmentMethod", [shipCheckoutSchema, collectionCheckoutSchema])
+    // Country-aware postcode format check — only meaningful on the ship
+    // branch. Collection mode treats postcode as optional and may have
+    // it blank, so we skip the format check there. Lives at the union
+    // level so the discriminated union itself stays a ZodObject pair.
+    .superRefine((data, ctx) => {
+      if (data.fulfilmentMethod !== "ship") return;
+      const postcode = data.shipping?.postcode;
+      const country = data.shipping?.country;
+      if (
+        typeof postcode === "string" &&
+        typeof country === "string" &&
+        postcode.length > 0 &&
+        !isValidPostcode(postcode, country)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["shipping", "postcode"],
+          message: "Postcode doesn't match the expected format for this country.",
+        });
+      }
+    }),
 );
