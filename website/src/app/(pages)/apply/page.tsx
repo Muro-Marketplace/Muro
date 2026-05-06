@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import ApplicationGate from "@/components/ApplicationGate";
 
 export const metadata: Metadata = {
-  title: "Apply to Join – Wallplace",
+  title: "Apply to join",
   description:
     "Apply to join Wallplace, the curated platform connecting artists with independent venues. First month free for all accepted artists.",
 };
