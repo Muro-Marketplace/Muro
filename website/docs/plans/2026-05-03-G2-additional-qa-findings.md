@@ -18,7 +18,7 @@
 
 **Format:** Each finding has Title, Symptom, Where, Confidence, Already-in-Plan-A-G check, and Suggested approach. Numbered G2-1 onward so they can be appended into Plan G's existing 1–17 sequence without renumbering.
 
-**Total findings:** 36 (consolidated from 58 raw findings; lower-value duplicates pruned).
+**Total findings:** 55 (consolidated from 58+ raw findings; lower-value duplicates pruned). G2-55 added 2026-05-03 after a follow-up note from the product owner about artwork-request responses rendering as placeholders.
 
 ---
 
@@ -855,15 +855,62 @@ Also no og:image PNG anywhere in `/public`; root `openGraph` has no `images` arr
 
 ---
 
+### G2-55: Artwork-request responses are placeholder rows — no selected works, no artist name, no expanded offer detail
+
+**Symptom:** When an artist responds to a venue's artwork request (offering specific works at a price, or proposing a placement / commission), the venue's view of the response is essentially a stub:
+- Artist identity rendered as `r.artist_slug || "Artist"` — the venue sees a slug ("maya-chen") not a name ("Maya Chen").
+- Selected works are stored in the response row as `work_ids: uuid[]` but the page **never iterates them** — no thumbnails, no titles, no size labels. The venue cannot see *which* works the artist offered without clicking through to the artist's portfolio and guessing.
+- Compared to a placement-request offer row (which shows arrangement type, monthly fee, revenue-share %, work thumbnail, dates), the response card is two lines of text and an Accept/Decline pair. It feels like a placeholder.
+- The artist's own view of their submitted response is similarly thin — no read-back of what they actually sent.
+
+The API GET `/api/artwork-requests/[id]/responses` doesn't join `works` (no title/image) or `artist_profiles` (no name) — so even if the page wanted to render thumbnails it'd have to fetch them itself. Server-side fix needed alongside the UI fix.
+
+**Where:**
+- API: `src/app/api/artwork-requests/[id]/responses/route.ts:GET` (no joins on `works` or `artist_profiles`)
+- API: `src/app/api/artwork-requests/[id]/route.ts` (parent route — same gap when responses are pulled via parent)
+- Venue side: `src/app/(pages)/venue-portal/artwork-requests/[id]/page.tsx:142-200` (responses rendering loop — only `r.artist_slug` and `r.proposed_offer_amount_pence`; no `r.work_ids` iteration)
+- Artist side: `src/app/(pages)/artist-portal/artwork-requests/[id]/page.tsx:143, 162` (composes response, but post-submit view of own response is also missing the read-back)
+
+**Confidence:** high. Verified by reading the source: the response row stores `work_ids` (per migration 046_artwork_requests_and_commissions.sql), the POST route writes them, the GET route returns them, but neither portal renders them.
+
+**Plan A–G?** No.
+- Plan G Task 4 covers placement *offer rows* on `/venue-portal/placements` — different surface (placements table, not artwork_request_responses table).
+- Plan G Task 5 added a Counter button to artwork-request offer rows but didn't expand the row content.
+- G2-25 fixes the venue *name* on the artist-side artwork-request *detail* page (header line "From {venue}"), not the artist *name* on the venue-side response cards.
+
+This finding is the artwork-request twin of Plan G Task 4: render selected works + party name + expanded offer detail, on **both** sides of the artwork-request thread.
+
+**Suggested fix:**
+1. **Server (`/api/artwork-requests/[id]/responses` GET + parent route):** add joins for the artist profile and the selected works. Approximate Supabase shape:
+   ```ts
+   const { data } = await db
+     .from("artwork_request_responses")
+     .select(`
+       *,
+       artist_profile:artist_profiles!artist_user_id ( name, slug, avatar_url ),
+       works:works!inner ( id, title, primary_image_url, price )
+     `)
+     // Note: works can't be joined directly via FK because work_ids is a uuid[]
+     // — fetch the rows with .in("id", flat_work_ids) in a second query and
+     // attach by mapping. (Rendered shape below.)
+   ```
+   Return each response with `artist_profile: { name, slug, avatar_url }` and `selected_works: [{ id, title, primary_image_url, price, size_label }]` (the `size_label` comes from `r.metadata.size_labels`, populated by the POST handler).
+2. **Venue side (`/venue-portal/artwork-requests/[id]/page.tsx`):** rewrite each response card to show, top-to-bottom: artist avatar + name (`r.artist_profile?.name ?? r.artist_slug ?? "Artist"`), response type badge ("Offer" / "Placement" / "Commission" / "Message"), proposed amount with currency formatting, message body, and a thumbnail strip of `selected_works` (use `<ImageWithFallback>` from Plan F Task 2 if landed, else plain `<img>` with onError). Cap at 4 thumbs + "+N more" overflow, mirroring Plan G Task 4's pattern.
+3. **Artist side:** if the current artist already has a response on this request, render a read-back panel above the (now-disabled or hidden) response form titled "Your response sent {relative-time}". Same expanded layout as the venue sees, plus a "Withdraw response" affordance (mirroring Plan G2 Task 35's Withdraw pattern for placements).
+
+This task should land alongside Plan G Tasks 3-5 (placement offer-row work) so the artwork-request and placement surfaces feel like the same product.
+
+---
+
 ## Self-review
 
 **Coverage check vs the user's original list of 11 items:** all 11 are already in Plan G (Tasks 1–17). Plan G2 contains zero items from that list and is purely additional findings.
 
-**Coverage check vs Plans A–F merged + Plans E/F/G unmerged:** every finding above carries a "Plan A–G?" line. None duplicate an existing task. Several explicitly call out partial-coverage cases (e.g. G2-22 calls out the alert() callers Plan F Task 21's ToastContext widening doesn't migrate; G2-50 augments Plan G Task 13's grep target list with /blog).
+**Coverage check vs Plans A–F merged + Plans E/F/G unmerged:** every finding above carries a "Plan A–G?" line. None duplicate an existing task. Several explicitly call out partial-coverage cases (e.g. G2-22 calls out the alert() callers Plan F Task 21's ToastContext widening doesn't migrate; G2-50 augments Plan G Task 13's grep target list with /blog; G2-55 is the artwork-request twin of Plan G Task 4).
 
 **Severity grouping (rough):**
 - **Severity 1 (likely-broken-in-prod):** G2-14 (checkout 400), G2-15 (stale price → Stripe), G2-16 (statuses outside the tracker's whitelist), G2-23 (delete-account dead button), G2-28 (settings save lies), G2-30 (settings save lies on venue side), G2-41 (admin reviewed_at never written).
-- **Severity 2 (cross-page logic gaps):** G2-1, G2-2, G2-3, G2-4, G2-5, G2-7, G2-8, G2-9, G2-29, G2-49.
+- **Severity 2 (cross-page logic gaps):** G2-1, G2-2, G2-3, G2-4, G2-5, G2-7, G2-8, G2-9, G2-29, G2-49, **G2-55** (responses look like placeholders).
 - **Severity 3 (UX polish / a11y):** G2-10, G2-11, G2-12, G2-13, G2-17, G2-18, G2-19, G2-20, G2-21, G2-22, G2-24, G2-25, G2-26, G2-27, G2-31, G2-32, G2-33, G2-34, G2-35, G2-36, G2-37, G2-38, G2-39, G2-40, G2-42, G2-43, G2-44, G2-45, G2-46, G2-47, G2-48, G2-50, G2-51, G2-52, G2-53, G2-54.
 
 **Risk notes:**

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Close every finding in `docs/plans/2026-05-03-G2-additional-qa-findings.md` (54 items, G2-1 through G2-54), grouped into a phased rollout that ships the highest-blast-radius bugs first and lets the rest land in slices.
+**Goal:** Close every finding in `docs/plans/2026-05-03-G2-additional-qa-findings.md` (55 items, G2-1 through G2-55), grouped into a phased rollout that ships the highest-blast-radius bugs first and lets the rest land in slices.
 
 **Architecture:** Six new shared utilities (`arrangement-labels`, `postcode`, `order-status-labels`, `useUrlState`, `confirmDialog`, `assert-handler`) plus surgical edits to ~50 files across portals, checkout, admin, and the public marketing surface. Three small DB migrations: `paid_loan` column rename, `orders.order_number` short id, `artist_applications.reviewed_at` / `reviewed_by`.
 
@@ -32,7 +32,7 @@
 | 2. Foundations (utilities + migrations) | 8–13 | **PR-2: G2 foundations** | Land the shared libs/migrations the rest depends on |
 | 3. Cross-page IA & copy | 14–23 | **PR-3: IA + copy** | Wants product/copy review |
 | 4. Customer-portal & checkout | 24–31 | **PR-4: customer + checkout** | Round out customer journey |
-| 5. Artist-portal | 32–37 | **PR-5: artist polish** | (alert→toast in 5; subscription copy in 6) |
+| 5. Artist-portal | 32–37 (incl. **34b**) | **PR-5: artist polish** | (alert→toast in 5; subscription copy in 6; artwork-request response card in 34b) |
 | 6. Venue-portal | 38–46 | **PR-5 cont.** | Wall editor + settings + labels |
 | 7. Admin | 47–50 | **PR-6: admin uplift** | New surfaces (users/disputes/payouts) |
 | 8. Public forms & browse | 51–57 | **PR-7: forms + browse polish** | Spam, GDPR, slider caps, URL state |
@@ -1983,6 +1983,265 @@ git commit -m "fix(artwork-requests): detail page renders venue name"
 
 ---
 
+### Task 34b: Artwork-request responses render full offer detail on both sides (covers G2-55)
+
+**Assessment:** Net new. Plan G Task 4 covers placement-offer rows (different table); Plan G Task 5 added a Counter button to artwork-request offer rows but didn't expand row content; G2-25 (Task 34 above) only fixes the artist-side header's venue name.
+
+**Symptom:** Venue's view of artist responses shows `r.artist_slug || "Artist"` and the proposed amount — and that's it. `work_ids` is stored on the response row but never iterated. No thumbnails, no titles, no size labels. Compared to a placement offer (full thumbnails + dates + arrangement), the response card looks like a placeholder.
+
+**Files:**
+- Modify: `src/app/api/artwork-requests/[id]/responses/route.ts` (GET — add joins)
+- Modify: `src/app/api/artwork-requests/[id]/route.ts` (parent route — same join shape so the page can pull responses inline)
+- Modify: `src/app/(pages)/venue-portal/artwork-requests/[id]/page.tsx` (rewrite response card)
+- Modify: `src/app/(pages)/artist-portal/artwork-requests/[id]/page.tsx` (add post-submit read-back)
+- Test: `src/app/api/artwork-requests/[id]/responses/route.test.ts` (extend or create)
+
+- [ ] **Step 1: Read the current API GET shape**
+
+```bash
+grep -n "from(\"artwork_request_responses\"\|artist_profiles\|works" "src/app/api/artwork-requests/[id]/responses/route.ts" | head
+sed -n '40,90p' "src/app/api/artwork-requests/[id]/responses/route.ts"
+```
+
+Confirm: GET selects `*` from `artwork_request_responses` with no joins. `work_ids` is a `uuid[]` (array column), not a foreign key, so it can't be joined directly through Supabase's relational selector — needs a follow-up `.in("id", flat_work_ids)` query.
+
+- [ ] **Step 2: Failing test for the GET shape**
+
+```ts
+// src/app/api/artwork-requests/[id]/responses/route.test.ts
+import { describe, expect, it, vi } from "vitest";
+
+// Seed mocked Supabase: one response with work_ids: ["w1","w2"], artist_user_id "a1"
+// Mock the select chain so the route's calls hit the right tables.
+
+describe("GET /api/artwork-requests/[id]/responses", () => {
+  it("returns each response with artist_profile {name, slug, avatar_url}", async () => {
+    // ...mock setup...
+    const res = await GET(...);
+    const body = await res.json();
+    expect(body.responses[0].artist_profile).toEqual({
+      name: "Maya Chen", slug: "maya-chen", avatar_url: expect.any(String),
+    });
+  });
+
+  it("attaches selected_works [{id,title,primary_image_url,price,size_label}] from work_ids", async () => {
+    const res = await GET(...);
+    const body = await res.json();
+    expect(body.responses[0].selected_works).toHaveLength(2);
+    expect(body.responses[0].selected_works[0]).toMatchObject({
+      id: "w1", title: expect.any(String), primary_image_url: expect.any(String),
+    });
+  });
+
+  it("falls back gracefully when work_ids is empty (selected_works = [])", async () => {
+    // ...
+  });
+});
+```
+
+- [ ] **Step 3: Verify FAIL**
+
+`npx vitest run "src/app/api/artwork-requests/[id]/responses/route.test.ts"`. Expected: assertions on `artist_profile` / `selected_works` fail because the route doesn't return them.
+
+- [ ] **Step 4: Implement the joins**
+
+In `src/app/api/artwork-requests/[id]/responses/route.ts:GET`:
+
+```ts
+import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const db = getSupabaseAdmin();
+
+  // 1) Pull responses with the artist profile joined via FK.
+  const { data: rows, error } = await db
+    .from("artwork_request_responses")
+    .select(`
+      *,
+      artist_profile:artist_profiles!artist_user_id ( name, slug, avatar_url )
+    `)
+    .eq("request_id", id)
+    .order("created_at", { ascending: false });
+  if (error) return NextResponse.json({ error: "Could not load responses" }, { status: 500 });
+
+  // 2) Collect every distinct work id across responses, fetch them in one query, attach.
+  const allIds = Array.from(new Set((rows || []).flatMap((r) => Array.isArray(r.work_ids) ? r.work_ids : [])));
+  const worksById = new Map<string, { id: string; title: string; primary_image_url: string | null; price: number | null }>();
+  if (allIds.length > 0) {
+    const { data: workRows } = await db
+      .from("works")
+      .select("id, title, primary_image_url, price")
+      .in("id", allIds);
+    for (const w of workRows ?? []) worksById.set(w.id, w);
+  }
+
+  const sizeLabelsByResponseId = new Map<string, Record<string, string>>(
+    (rows || []).map((r) => [r.id, (r.metadata?.size_labels ?? {}) as Record<string, string>]),
+  );
+
+  const responses = (rows || []).map((r) => ({
+    ...r,
+    selected_works: (r.work_ids ?? []).map((wid: string) => {
+      const w = worksById.get(wid);
+      const sizeLabel = sizeLabelsByResponseId.get(r.id)?.[wid];
+      return w ? { ...w, size_label: sizeLabel ?? null } : { id: wid, title: "Work removed", primary_image_url: null, price: null, size_label: sizeLabel ?? null };
+    }),
+  }));
+
+  return NextResponse.json({ responses });
+}
+```
+
+(If `r.metadata.size_labels` doesn't exist yet on the response shape, that's the existing POST handler's stash — verify by reading. If absent, drop the `size_label` line and add a follow-up chip.)
+
+Mirror the same shape inside `src/app/api/artwork-requests/[id]/route.ts` if the parent route also returns `responses` inline. Look for the existing `responses` field in its select and replace with the same enrichment logic — extract a `loadResponsesForRequest(requestId)` helper into `src/lib/db/artwork-request-responses.ts` to avoid duplication.
+
+- [ ] **Step 5: Verify PASS (server)**
+
+`npm run typecheck && npx vitest run "src/app/api/artwork-requests/[id]/responses/route.test.ts"`. Expected: all pass.
+
+- [ ] **Step 6: Rewrite the venue-side response card**
+
+In `src/app/(pages)/venue-portal/artwork-requests/[id]/page.tsx`, the existing response loop is at roughly lines 142–200. Replace the per-row JSX with:
+
+```tsx
+import ImageWithFallback from "@/components/ImageWithFallback"; // Plan F Task 2 — if not landed, use plain <img onError>
+import { formatCurrency } from "@/lib/format-currency";        // Task 27 of this plan
+
+// Inside the responses.map((r) => …):
+<article className="border border-border rounded-sm p-4 mb-3">
+  <header className="flex items-start gap-3">
+    {r.artist_profile?.avatar_url && (
+      <ImageWithFallback
+        src={r.artist_profile.avatar_url}
+        alt={r.artist_profile.name ?? r.artist_slug ?? "Artist"}
+        className="w-10 h-10 rounded-full object-cover"
+      />
+    )}
+    <div className="flex-1">
+      <Link href={`/browse/${r.artist_slug ?? ""}`} className="font-medium text-foreground hover:text-accent">
+        {r.artist_profile?.name ?? r.artist_slug ?? "Artist"}
+      </Link>
+      <p className="text-xs text-muted capitalize">
+        {r.response_type.replace("_", " ")}
+        {r.proposed_offer_amount_pence != null && (
+          <> · <strong className="text-foreground">{formatCurrency(r.proposed_offer_amount_pence / 100, "GBP")}</strong> offer</>
+        )}
+        {r.proposed_commission_amount_pence != null && (
+          <> · <strong className="text-foreground">{formatCurrency(r.proposed_commission_amount_pence / 100, "GBP")}</strong> commission</>
+        )}
+      </p>
+      {r.proposed_commission_timeline && (
+        <p className="text-xs text-muted mt-0.5">Timeline: {r.proposed_commission_timeline}</p>
+      )}
+    </div>
+  </header>
+
+  {r.message && (
+    <p className="text-sm text-foreground mt-3 whitespace-pre-wrap">{r.message}</p>
+  )}
+
+  {Array.isArray(r.selected_works) && r.selected_works.length > 0 && (
+    <div className="mt-3">
+      <p className="text-[11px] uppercase tracking-wider text-muted mb-2">Selected works</p>
+      <div className="flex gap-2 flex-wrap">
+        {r.selected_works.slice(0, 4).map((w) => (
+          <Link
+            key={w.id}
+            href={w.id ? `/browse/${r.artist_slug ?? ""}/${w.id}` : "#"}
+            className="block w-20 group"
+          >
+            <ImageWithFallback
+              src={w.primary_image_url}
+              alt={w.title}
+              className="w-20 h-20 rounded-sm object-cover border border-border group-hover:border-accent transition-colors"
+            />
+            <p className="text-[10px] text-muted mt-1 truncate" title={w.title}>{w.title}</p>
+            {w.size_label && <p className="text-[10px] text-muted">{w.size_label}</p>}
+            {w.price != null && <p className="text-[10px] text-foreground">{formatCurrency(w.price, "GBP")}</p>}
+          </Link>
+        ))}
+        {r.selected_works.length > 4 && (
+          <span className="text-xs text-muted self-center">+{r.selected_works.length - 4}</span>
+        )}
+      </div>
+    </div>
+  )}
+
+  <footer className="flex justify-end gap-2 mt-4">
+    {r.status === "pending" && (
+      <>
+        <button onClick={() => act(r.id, "decline")} disabled={busy === r.id} className="text-xs px-3 py-1.5 border border-border rounded-sm hover:bg-background">Decline</button>
+        <button onClick={() => act(r.id, "accept")} disabled={busy === r.id} className="text-xs px-3 py-1.5 bg-accent text-white rounded-sm hover:bg-accent-hover">Accept</button>
+      </>
+    )}
+    {r.status === "accepted" && (r.linked_offer_id || r.linked_commission_id) && (
+      <p className="text-xs text-muted">
+        {r.linked_offer_id && <Link href="/venue-portal/offers" className="hover:underline">View created offer →</Link>}
+        {r.linked_commission_id && <Link href="/venue-portal/commissions" className="hover:underline">View commission →</Link>}
+      </p>
+    )}
+  </footer>
+</article>
+```
+
+(Drop the existing inline `{r.artist_slug || "Artist"}` link and the bare `£` formatting once this card is in place.)
+
+- [ ] **Step 7: Add an artist-side read-back panel**
+
+In `src/app/(pages)/artist-portal/artwork-requests/[id]/page.tsx`, after the request body but before the response form, fetch the artist's own response (if any) and render the same card layout above the form. When a response exists, replace the form with the read-back panel + a "Withdraw response" button:
+
+```tsx
+const ownResponse = useMemo(() => responses.find((r) => r.artist_user_id === user?.id) ?? null, [responses, user]);
+
+// In JSX:
+{ownResponse ? (
+  <section aria-labelledby="own-response-h">
+    <h2 id="own-response-h" className="text-sm font-medium uppercase tracking-wider text-muted mb-3">
+      Your response · sent {formatDistanceToNow(new Date(ownResponse.created_at), { addSuffix: true })}
+    </h2>
+    {/* Same card as Step 6, with the artist context (no Accept/Decline footer; instead a Withdraw button) */}
+    <ResponseCard response={ownResponse} self />
+    <button onClick={withdrawResponse} className="text-xs text-red-600 hover:underline mt-2">Withdraw response</button>
+  </section>
+) : (
+  // ...existing response form...
+)}
+```
+
+Extract the response-card JSX from Step 6 into a small `<ResponseCard>` component (`src/components/ResponseCard.tsx`) that both portals import. Pass a `self` prop to omit the Accept/Decline buttons when the viewer is the responder.
+
+- [ ] **Step 8: Wire the Withdraw endpoint**
+
+Reuse the existing DELETE on `/api/artwork-requests/[id]/responses/[responseId]/route.ts` if it exists; otherwise add a DELETE handler that lets the response's `artist_user_id` delete their own row while `status === "pending"`.
+
+- [ ] **Step 9: Smoke**
+
+Sign in as Maya Chen. Send an offer-type response with two works to a venue's request. Sign in as the venue: see the response card with name + avatar + thumbnails + size labels + offer amount. Sign back in as Maya: see "Your response · sent 2 minutes ago" with the same expanded layout and a Withdraw button. Click Withdraw → response gone, form returns.
+
+- [ ] **Step 10: Commit (split for diff readability)**
+
+```bash
+git add src/lib/db/artwork-request-responses.ts \
+        src/app/api/artwork-requests/\[id\]/responses/route.ts \
+        src/app/api/artwork-requests/\[id\]/responses/route.test.ts \
+        src/app/api/artwork-requests/\[id\]/route.ts
+git commit -m "feat(artwork-requests): API joins artist + selected works on responses"
+
+git add src/components/ResponseCard.tsx
+git commit -m "feat(ui): ResponseCard — full offer detail for artwork-request responses"
+
+git add "src/app/(pages)/venue-portal/artwork-requests/[id]/page.tsx" \
+        "src/app/(pages)/artist-portal/artwork-requests/[id]/page.tsx"
+git commit -m "fix(artwork-requests): both sides see expanded offer detail (name + thumbnails + amount)"
+```
+
+> **Severity:** This is Severity-2 (cross-page logic gap) per the findings doc. Sits in Phase 5 alongside Task 34. Soft dep on Plan F Task 2's `<ImageWithFallback>` — the plain `<img onError>` fallback works if Plan F isn't merged.
+
+---
+
 ### Task 35: Profile Save Changes has saving state (covers G2-26)
 
 **Files:**
@@ -2941,8 +3200,9 @@ Closes the following items from `docs/plans/2026-05-03-G2-additional-qa-findings
 | G2-52 | Task 57 | 8 |
 | G2-53 | Task 57 | 8 |
 | G2-54 | Task 57 | 8 |
+| G2-55 | Task 34b | 5 |
 
-**Every G2 finding is covered. Several are folded into compound tasks where the surface area is shared (G2-22 alert→toast in two portals; G2-51-54 four small public-page polish items batched).**
+**Every G2 finding is covered. Several are folded into compound tasks where the surface area is shared (G2-22 alert→toast in two portals; G2-51-54 four small public-page polish items batched). G2-55 was added 2026-05-03 after a follow-up product-owner note and inserted as Task 34b to keep existing task numbering stable.**
 
 **Placeholder scan:** every step has actual code or an exact command. The places that say "Mirror Plan G Task 3's pattern" reference an existing, already-merged task whose pattern is plain in `docs/plans/2026-05-03-G-targeted-fixes-and-features.md`. The "decide on canonical tier set" step (Task 20) is bounded by an explicit recommendation.
 
