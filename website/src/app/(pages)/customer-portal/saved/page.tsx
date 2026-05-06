@@ -7,6 +7,7 @@ import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import { authFetch } from "@/lib/api-client";
 import { slugify } from "@/lib/slugify";
+import { useUrlState } from "@/lib/use-url-state";
 
 type ItemType = "work" | "artist" | "collection";
 
@@ -49,7 +50,7 @@ export default function CustomerSavedPage() {
   const [items, setItems] = useState<SavedItemRow[]>([]);
   const [allArtists, setAllArtists] = useState<ArtistData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ItemType>("work");
+  const [activeTab, setActiveTab] = useUrlState<ItemType>("tab", "work");
   const [removing, setRemoving] = useState<string | null>(null);
 
   const workMap = useMemo(() => {
