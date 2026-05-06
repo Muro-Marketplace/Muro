@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import PortalGuard from "@/components/PortalGuard";
 
 const navItems = [
   { label: "My Orders", href: "/customer-portal" },
@@ -13,18 +14,17 @@ const navItems = [
 ];
 
 export default function CustomerPortalLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <PortalGuard allowedType="customer">
+      <CustomerPortalShell>{children}</CustomerPortalShell>
+    </PortalGuard>
+  );
+}
+
+function CustomerPortalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const { user, loading, userType, displayName, signOut } = useAuth();
+  const { displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/login");
-    }
-  }, [loading, user, router]);
-
-  if (loading || !user) return null;
 
   return (
     <div className="flex flex-1 bg-background">

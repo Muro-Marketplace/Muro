@@ -83,3 +83,49 @@ describe("<PortalGuard /> wrong-role redirect toast", () => {
     expect(replace).toHaveBeenCalledWith("/customer-portal");
   });
 });
+
+describe("<PortalGuard allowedType=customer />", () => {
+  it("blocks an unverified customer with the email-verify gate", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u", email_confirmed_at: null },
+      userType: "customer",
+      loading: false,
+    });
+    render(
+      <PortalGuard allowedType="customer">
+        <span>portal</span>
+      </PortalGuard>,
+    );
+    await waitFor(() => expect(screen.queryByText("portal")).toBeNull());
+    expect(screen.getByText(/verify/i)).toBeTruthy();
+  });
+
+  it("allows a verified customer through (no subscription gate)", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u", email_confirmed_at: "2026-01-01T00:00:00Z" },
+      userType: "customer",
+      loading: false,
+    });
+    render(
+      <PortalGuard allowedType="customer">
+        <span>portal</span>
+      </PortalGuard>,
+    );
+    await waitFor(() => expect(screen.getByText("portal")).toBeTruthy());
+  });
+
+  it("redirects an artist landing on the customer portal", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u", email_confirmed_at: "2026-01-01T00:00:00Z" },
+      userType: "artist",
+      loading: false,
+    });
+    render(
+      <PortalGuard allowedType="customer">
+        <span>portal</span>
+      </PortalGuard>,
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/artist-portal"));
+    expect(showToast.mock.calls[0][0]).toMatch(/customer portal/i);
+  });
+});

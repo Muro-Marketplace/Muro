@@ -9,7 +9,7 @@ import { authFetch } from "@/lib/api-client";
 import { portalPathForRole, parseRole } from "@/lib/auth-roles";
 
 interface PortalGuardProps {
-  allowedType: "artist" | "venue" | "admin";
+  allowedType: "artist" | "venue" | "admin" | "customer";
   children: React.ReactNode;
 }
 
