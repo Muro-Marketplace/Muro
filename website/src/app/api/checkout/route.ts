@@ -164,7 +164,6 @@ export async function POST(request: Request) {
     //   observe how often the fallback runs.
     // Full price-correction for framed lines requires either parsing the
     // uplift server-side or carrying frame identity on the cart line.
-    // Tracked as a Plan G2 follow-up.
     for (const item of items) {
       if (!item.workId) continue;
       const isFramedLine = item.framed === true || (typeof item.size === "string" && item.size.includes(" + "));

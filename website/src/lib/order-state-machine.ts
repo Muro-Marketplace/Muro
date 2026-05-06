@@ -31,7 +31,8 @@ export const ORDER_STATUSES = [
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 const TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  confirmed: ["artist_notified", "cancelled"],
+  // Skip-ahead allowed for artists who go straight from receipt to making/dispatching.
+  confirmed: ["artist_notified", "processing", "cancelled"],
   artist_notified: ["awaiting_dispatch", "processing", "cancelled"],
   awaiting_dispatch: ["processing", "shipped", "cancelled"],
   processing: ["shipped", "cancelled"],

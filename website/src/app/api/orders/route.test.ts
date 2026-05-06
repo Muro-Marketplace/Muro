@@ -67,6 +67,18 @@ describe("PATCH /api/orders state machine", () => {
     expect(res.status).toBe(200);
   });
 
+  it("allows confirmed → processing (skip-ahead, used by artist portal)", async () => {
+    fromMock.mockImplementation(() =>
+      chainSelectSingle({
+        artist_user_id: "u-artist",
+        status: "confirmed",
+        status_history: [],
+      }),
+    );
+    const res = await PATCH(req({ orderId: "o1", status: "processing" }));
+    expect(res.status).toBe(200);
+  });
+
   it("rejects shipped → processing (backward)", async () => {
     fromMock.mockImplementation(() =>
       chainSelectSingle({

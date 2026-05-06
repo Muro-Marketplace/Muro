@@ -42,6 +42,10 @@ describe("canTransition()", () => {
     expect(canTransition(from, to)).toEqual({ ok: true });
   });
 
+  it("allows confirmed → processing as a skip-ahead (artist_notified is optional)", () => {
+    expect(canTransition("confirmed", "processing").ok).toBe(true);
+  });
+
   // Cancellation: any state up through processing.
   it.each([
     ["confirmed", "cancelled"],

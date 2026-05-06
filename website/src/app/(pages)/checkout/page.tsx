@@ -42,9 +42,9 @@ export default function CheckoutPage() {
     notes: "",
   });
   const [errors, setErrors] = useState<Record<string, boolean>>({});
-  // Fulfilment method — buyer chooses ship (default), collection from
-  // the artist (drop-off), or digital (rare). Collection skips shipping
-  // costs and the address requirement.
+  // Fulfilment method — buyer chooses ship (default) or collection from
+  // the artist (drop-off). Collection skips shipping costs and the
+  // address requirement.
   const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection">("ship");
   const [collectionNotes, setCollectionNotes] = useState("");
 
