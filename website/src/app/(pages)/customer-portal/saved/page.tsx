@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
@@ -47,6 +47,24 @@ interface ArtistWork { id: string; title: string; image: string; }
 interface ArtistData { slug: string; name: string; image: string; works: ArtistWork[]; }
 
 export default function CustomerSavedPage() {
+  // useUrlState transitively calls useSearchParams, which forces the
+  // Client Component subtree to bail out of static prerender. Suspense
+  // wrapping is the documented Next 16 fix (see customer-portal/messages
+  // for the same pattern).
+  return (
+    <Suspense
+      fallback={
+        <CustomerPortalLayout>
+          <p className="text-muted text-sm py-12 text-center">Loading saved items...</p>
+        </CustomerPortalLayout>
+      }
+    >
+      <CustomerSavedContent />
+    </Suspense>
+  );
+}
+
+function CustomerSavedContent() {
   const [items, setItems] = useState<SavedItemRow[]>([]);
   const [allArtists, setAllArtists] = useState<ArtistData[]>([]);
   const [loading, setLoading] = useState(true);

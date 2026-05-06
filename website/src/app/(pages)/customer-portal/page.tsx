@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { Suspense, useMemo, useState, useEffect } from "react";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
@@ -57,6 +57,23 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
 const TERMINAL_NON_DELIVERED = new Set(["cancelled", "refunded", "disputed"]);
 
 export default function CustomerPortalPage() {
+  // useUrlState transitively calls useSearchParams, which in Next 16
+  // triggers "Missing Suspense boundary" prerender errors. Wrap the
+  // dynamic subtree in Suspense (mirrors customer-portal/messages).
+  return (
+    <Suspense
+      fallback={
+        <CustomerPortalLayout>
+          <p className="text-muted text-sm py-12 text-center">Loading orders...</p>
+        </CustomerPortalLayout>
+      }
+    >
+      <CustomerPortalContent />
+    </Suspense>
+  );
+}
+
+function CustomerPortalContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrderId, setSelectedOrderId] = useUrlState<string>("order", "");
