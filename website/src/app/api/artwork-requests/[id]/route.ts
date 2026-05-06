@@ -33,7 +33,14 @@ const patchSchema = z.object({
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const db = getSupabaseAdmin();
-  const { data: req } = await db.from("artwork_requests").select("*").eq("id", id).maybeSingle();
+  // Plan G2 #4: join venue_profiles so the artist-portal detail page
+  // can render the venue's NAME instead of a slug. List endpoint
+  // already does this — see /api/artwork-requests/route.ts.
+  const { data: req } = await db
+    .from("artwork_requests")
+    .select("*, venue:venue_profiles!venue_user_id(name)")
+    .eq("id", id)
+    .maybeSingle();
   if (!req) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Pull responses (artist replies) too.
@@ -43,7 +50,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     .eq("request_id", id)
     .order("created_at", { ascending: false });
 
-  return NextResponse.json({ request: req, responses: responses || [] });
+  // Flatten the join for the client — same shape as the list endpoint.
+  const venue = (req as { venue?: { name?: string } | null }).venue;
+  const requestRow = { ...req, venue_name: venue?.name ?? null } as Record<string, unknown>;
+  delete requestRow.venue;
+
+  return NextResponse.json({ request: requestRow, responses: responses || [] });
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {

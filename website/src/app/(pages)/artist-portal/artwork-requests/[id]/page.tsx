@@ -11,7 +11,10 @@ import ImageWithFallback from "@/components/ImageWithFallback";
 import { authFetch } from "@/lib/api-client";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 
-type ResponseType = "existing_works" | "placement" | "offer" | "commission" | "message";
+// Plan G2: dropped `existing_works` — it duplicated `offer` minus the
+// price field. Artists who want to surface portfolio works without a
+// price now use `placement` (work picker, no price) or `message`.
+type ResponseType = "placement" | "offer" | "commission" | "message";
 
 interface RequestRow {
   id: string;
@@ -25,12 +28,12 @@ interface RequestRow {
   location: string | null;
   timescale: string | null;
   venue_slug: string | null;
+  venue_name: string | null;
   status: string;
 }
 
 const TYPE_LABELS: Record<ResponseType, { name: string; tip: string }> = {
-  existing_works: { name: "Suggest existing works", tip: "Pick from your portfolio." },
-  placement: { name: "Propose a placement", tip: "Loan or revenue share — venue confirms terms next." },
+  placement: { name: "Propose a placement", tip: "Loan or revenue share — set the terms here, venue confirms." },
   offer: { name: "Quote a price", tip: "Name a price for one of your works." },
   commission: { name: "Suggest a commission", tip: "Custom-make something for this brief." },
   message: { name: "Just a message", tip: "Open the conversation; no proposal yet." },
@@ -50,6 +53,11 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
   const [offerAmount, setOfferAmount] = useState("");
   const [commissionAmount, setCommissionAmount] = useState("");
   const [commissionTimeline, setCommissionTimeline] = useState("");
+  // Plan G2: artist-proposed placement terms. These pre-populate the
+  // placements row the venue gets to confirm on accept.
+  const [proposedMonthlyFee, setProposedMonthlyFee] = useState("");
+  const [proposedRevSharePercent, setProposedRevSharePercent] = useState("");
+  const [proposedQrEnabled, setProposedQrEnabled] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +90,10 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
       setError("Add a short message explaining the fit.");
       return;
     }
-    if ((responseType === "existing_works" || responseType === "offer" || responseType === "placement") && selectedWorks.size === 0 && responseType !== "placement") {
+    // Offer requires a work to be picked (you can't quote a price on
+    // nothing). Placement work selection is optional — the artist may
+    // be proposing terms without committing to specific pieces yet.
+    if (responseType === "offer" && selectedWorks.size === 0) {
       setError("Pick at least one work.");
       return;
     }
@@ -106,6 +117,17 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
       if (responseType === "commission" && commissionAmount) {
         body.proposedCommissionAmountPence = Math.round(parseFloat(commissionAmount) * 100);
         body.proposedCommissionTimeline = commissionTimeline.trim() || undefined;
+      }
+      if (responseType === "placement") {
+        const feeNum = proposedMonthlyFee.trim() ? Number(proposedMonthlyFee) : null;
+        if (feeNum != null && Number.isFinite(feeNum) && feeNum >= 0) {
+          body.proposedMonthlyFeePence = Math.round(feeNum * 100);
+        }
+        const revNum = proposedRevSharePercent.trim() ? Number(proposedRevSharePercent) : null;
+        if (revNum != null && Number.isFinite(revNum) && revNum >= 0) {
+          body.proposedRevenueSharePercent = Math.round(revNum);
+        }
+        body.proposedQrEnabled = proposedQrEnabled;
       }
       const res = await authFetch(`/api/artwork-requests/${id}/responses`, {
         method: "POST",
@@ -141,7 +163,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
         <Link href="/artist-portal/artwork-requests" className="text-xs text-muted hover:text-accent inline-block mb-4">← All requests</Link>
 
         <h1 className="text-2xl font-serif mb-2">{req.title}</h1>
-        <p className="text-sm text-muted mb-2">From {req.venue_slug}</p>
+        <p className="text-sm text-muted mb-2">From {req.venue_name || req.venue_slug || "Venue"}</p>
         <p className="text-sm text-foreground/80 leading-relaxed mb-4 whitespace-pre-wrap">{req.description}</p>
         <div className="flex flex-wrap gap-2 text-[10px] mb-8">
           {req.intent.map((i) => <span key={i} className="px-1.5 py-0.5 bg-accent/5 text-accent rounded-sm capitalize">{i}</span>)}
@@ -165,7 +187,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
             <div>
               <p className="block text-xs uppercase tracking-wider text-muted mb-2">Response type</p>
               <div className="grid sm:grid-cols-2 gap-2">
-                {(["existing_works", "placement", "offer", "commission", "message"] as ResponseType[]).map((t) => (
+                {(["placement", "offer", "commission", "message"] as ResponseType[]).map((t) => (
                   <button key={t} type="button" onClick={() => setResponseType(t)} className={`text-left p-3 rounded-sm border transition-colors ${
                     responseType === t ? "border-accent bg-accent/5" : "border-border hover:border-accent/40"
                   }`}>
@@ -176,9 +198,11 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
               </div>
             </div>
 
-            {(responseType === "existing_works" || responseType === "offer") && works.length > 0 && (
+            {(responseType === "placement" || responseType === "offer") && works.length > 0 && (
               <div>
-                <p className="block text-xs uppercase tracking-wider text-muted mb-2">Pick works</p>
+                <p className="block text-xs uppercase tracking-wider text-muted mb-2">
+                  {responseType === "placement" ? "Pick the work(s) you're proposing (optional)" : "Pick works"}
+                </p>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {works.map((w) => (
                     <button
@@ -241,6 +265,61 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                     })}
                   </div>
                 )}
+              </div>
+            )}
+
+            {responseType === "placement" && (
+              <div className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="placement-fee" className="block text-xs uppercase tracking-wider text-muted mb-1.5">
+                      Monthly fee (£)
+                    </label>
+                    <input
+                      id="placement-fee"
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={proposedMonthlyFee}
+                      onChange={(e) => setProposedMonthlyFee(e.target.value)}
+                      placeholder="0 for free loan"
+                      className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60"
+                    />
+                    <p className="text-[11px] text-muted mt-1">Leave 0 if you&rsquo;re proposing a free display.</p>
+                  </div>
+                  <div>
+                    <label htmlFor="placement-rev" className="block text-xs uppercase tracking-wider text-muted mb-1.5">
+                      Revenue share (%)
+                    </label>
+                    <input
+                      id="placement-rev"
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="50"
+                      value={proposedRevSharePercent}
+                      onChange={(e) => setProposedRevSharePercent(e.target.value)}
+                      placeholder="0–50"
+                      className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60"
+                    />
+                    <p className="text-[11px] text-muted mt-1">Max 50% to the venue.</p>
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={proposedQrEnabled}
+                    onChange={(e) => setProposedQrEnabled(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    QR enabled
+                    <span className="block text-[11px] text-muted">
+                      Customers can scan a label and buy the work directly. Required for revenue share.
+                    </span>
+                  </span>
+                </label>
               </div>
             )}
 

@@ -21,8 +21,13 @@ export const runtime = "nodejs";
 // `workSelections` is the new shape: each entry can pin to a specific
 // size variant on the work. Falls back to plain `workIds` for older
 // callers; the route normalises both.
+//
+// Plan G2: `existing_works` was removed from the canonical set — it
+// duplicated `offer` minus the price field with no clear UX benefit.
+// The DB CHECK constraint still allows it for legacy rows; we just
+// don't accept new responses with that type.
 const createSchema = z.object({
-  responseType: z.enum(["existing_works", "placement", "offer", "commission", "message"]),
+  responseType: z.enum(["placement", "offer", "commission", "message"]),
   message: z.string().min(1).max(4000),
   workIds: z.array(z.string()).max(20).optional().default([]),
   workSelections: z
@@ -37,6 +42,13 @@ const createSchema = z.object({
   proposedOfferAmountPence: z.number().int().positive().optional(),
   proposedCommissionAmountPence: z.number().int().positive().optional(),
   proposedCommissionTimeline: z.string().max(160).optional(),
+  // Plan G2: artist-proposed placement terms. Only meaningful when
+  // responseType === "placement"; the route ignores them for other
+  // types. £10,000/mo cap matches the existing placementSchema bound
+  // (monthlyFeeGbp.max(100000) — pounds — × 100 pence).
+  proposedMonthlyFeePence: z.number().int().min(0).max(10_000_00).optional(),
+  proposedQrEnabled: z.boolean().optional(),
+  proposedRevenueSharePercent: z.number().int().min(0).max(50).optional(),
 });
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -113,6 +125,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       .map((s) => [s.id, s.sizeLabel]),
   );
 
+  // Plan G2: only persist placement terms when the response is a
+  // placement proposal — keeping the columns null for offer/commission/
+  // message rows makes the data easier to reason about downstream.
+  const isPlacement = parsed.data.responseType === "placement";
+
   const { data: inserted, error } = await db
     .from("artwork_request_responses")
     .insert({
@@ -128,6 +145,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       proposed_offer_amount_pence: parsed.data.proposedOfferAmountPence ?? null,
       proposed_commission_amount_pence: parsed.data.proposedCommissionAmountPence ?? null,
       proposed_commission_timeline: parsed.data.proposedCommissionTimeline ?? null,
+      proposed_monthly_fee_pence: isPlacement ? parsed.data.proposedMonthlyFeePence ?? null : null,
+      proposed_qr_enabled: isPlacement ? parsed.data.proposedQrEnabled ?? null : null,
+      proposed_revenue_share_percent: isPlacement ? parsed.data.proposedRevenueSharePercent ?? null : null,
     })
     .select("id")
     .single();
