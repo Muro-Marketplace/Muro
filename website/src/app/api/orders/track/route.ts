@@ -14,6 +14,7 @@ import { verifyOrderToken } from "@/lib/order-tracking-token";
 
 interface DbOrder {
   id: string;
+  order_number: string | null;
   status: string | null;
   buyer_email: string | null;
   buyer_name: string | null;
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
   const { data, error } = await db
     .from("orders")
     .select(
-      "id, status, buyer_email, buyer_name, artist_slug, total_amount, shipping_amount, currency, cart_items, status_history, tracking_number, tracking_url, shipped_at, delivered_at, created_at",
+      "id, order_number, status, buyer_email, buyer_name, artist_slug, total_amount, shipping_amount, currency, cart_items, status_history, tracking_number, tracking_url, shipped_at, delivered_at, created_at",
     )
     .eq("id", cleanedId)
     .maybeSingle<DbOrder>();
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     order: {
       id: data.id,
+      orderNumber: data.order_number,
       status: data.status || "confirmed",
       placedAt: data.created_at,
       buyerName: data.buyer_name,
