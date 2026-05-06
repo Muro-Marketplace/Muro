@@ -13,6 +13,10 @@ type Update = { table: string; patch: Record<string, unknown> };
 
 let inserts: Insert[] = [];
 let updates: Update[] = [];
+// Per-test override: when set to null the venue_profiles.single() lookup
+// returns no row, exercising the auto-create fallback path. Default
+// shape is the seeded Copper Kettle name used by the happy-path test.
+let venueProfileRow: { name: string } | null = { name: "Copper Kettle" };
 
 // ---- Mocks -----------------------------------------------------------
 
@@ -74,6 +78,15 @@ vi.mock("@/lib/supabase-admin", () => {
       }
       return { data: null, error: null };
     };
+    // The placements auto-create path also calls
+    //   db.from("venue_profiles").select("name").eq(...).single()
+    // to pull the venue display name for the NOT NULL `venue` column.
+    chain.single = async () => {
+      if (table === "venue_profiles") {
+        return { data: venueProfileRow, error: null };
+      }
+      return { data: null, error: null };
+    };
     chain.insert = (row: Record<string, unknown>) => {
       inserts.push({ table, row });
       return { error: null };
@@ -96,6 +109,7 @@ beforeEach(() => {
   vi.resetModules();
   inserts = [];
   updates = [];
+  venueProfileRow = { name: "Copper Kettle" };
 });
 
 function buildRequest(action: "accept" | "decline") {
@@ -126,6 +140,10 @@ describe("PATCH /api/artwork-requests/[id]/responses/[responseId]", () => {
     expect(row.venue_user_id).toBe("u-venue");
     expect(row.artist_slug).toBe("the-artist");
     expect(row.venue_slug).toBe("copper-kettle");
+    // The venue display name is pulled from venue_profiles. The
+    // placements table has `venue TEXT NOT NULL`, so without it the
+    // insert silently fails and the auto-create never lands.
+    expect(row.venue).toBe("Copper Kettle");
     // 25% rev share takes priority over the £50/mo fee — both proposed
     // means revenue_share is the canonical arrangement.
     expect(row.arrangement_type).toBe("revenue_share");
@@ -142,5 +160,34 @@ describe("PATCH /api/artwork-requests/[id]/responses/[responseId]", () => {
 
     // nextStepLink should deep-link straight to the placement.
     expect(json.nextStepLink).toMatch(/^\/venue-portal\/placements\/pl_/);
+  });
+
+  it("falls back to legacy placements link when venue profile is missing", async () => {
+    // Force the venue_profiles lookup to return no row, mirroring a
+    // venue that hasn't completed their profile. We cannot satisfy
+    // placements.venue NOT NULL, so the auto-create must be skipped
+    // and the response should still flip to "accepted" with the
+    // legacy nextStepLink.
+    venueProfileRow = null;
+
+    const { PATCH } = await import("./route");
+    const res = await PATCH(buildRequest("accept"), ctx);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.status).toBe("accepted");
+
+    // No placements row should have been inserted.
+    expect(inserts.find((i) => i.table === "placements")).toBeUndefined();
+
+    // Response is still accepted, just without a linked placement id.
+    const respUpdate = updates.find((u) => u.table === "artwork_request_responses");
+    expect(respUpdate).toBeTruthy();
+    expect(respUpdate!.patch.status).toBe("accepted");
+    expect(respUpdate!.patch.linked_placement_id).toBeNull();
+
+    // Legacy fallback link routes the venue back to the placements
+    // page filtered by artist so they can finish manually.
+    expect(json.linkedPlacementId).toBeNull();
+    expect(json.nextStepLink).toBe("/venue-portal/placements?artist=the-artist");
   });
 });

@@ -130,44 +130,69 @@ export async function PATCH(
       return "free_loan";
     })();
 
-    // placements.id is TEXT — same id-shape the /api/placements POST
-    // uses (see src/app/api/placements/route.ts). We mirror it so any
-    // analytics that key off id-prefix continue to work.
-    const placementId = `pl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const monthlyFeeGbp = typeof monthlyFeePence === "number" ? monthlyFeePence / 100 : 0;
+    // The placements table has `venue TEXT NOT NULL` (see
+    // supabase-tables-migration.sql). Without the venue's display
+    // name the insert fails with a NOT NULL violation and the auto-
+    // create silently falls back to the legacy flow. Fetch the
+    // venue profile here so the row validates — mirrors the pattern
+    // in /api/placements/route.ts.
+    const { data: venueProfile } = await db
+      .from("venue_profiles")
+      .select("name")
+      .eq("user_id", req.venue_user_id)
+      .single();
 
-    const { error: placementErr } = await db.from("placements").insert({
-      id: placementId,
-      artist_user_id: resp.artist_user_id,
-      artist_slug: resp.artist_slug,
-      venue_user_id: req.venue_user_id,
-      venue_slug: req.venue_slug,
-      // The placements table requires work_title (NOT NULL in early
-      // migrations). When the artist didn't pin specific works we
-      // fall back to the brief title so the row still validates; the
-      // venue can rename / reassign on the placements page.
-      work_title: req.title || "Placement from artwork request",
-      work_image: null,
-      arrangement_type: arrangementType,
-      revenue_share_percent: typeof revSharePct === "number" ? revSharePct : null,
-      monthly_fee_gbp: monthlyFeeGbp,
-      qr_enabled: resp.proposed_qr_enabled ?? false,
-      message: `Created from artwork-request response. Original brief: ${req.title ?? ""}`.slice(0, 1000),
-      status: "pending",
-      requester_user_id: resp.artist_user_id,
-      created_at: new Date().toISOString(),
-      notes: null,
-    });
-
-    if (placementErr) {
-      // Don't block the accept itself — fall back to the old
-      // route-the-venue-to-placements flow so the response still
-      // moves to "accepted" and the artist gets their notification.
-      console.warn("[artwork-request-accept] failed to auto-create placement:", placementErr);
+    if (!venueProfile?.name) {
+      // Without a venue name we can't satisfy placements.venue NOT
+      // NULL. Fall back to the legacy route-the-venue-to-placements
+      // flow so the response still flips to "accepted" and the
+      // artist still gets their notification.
+      console.warn(
+        "[artwork-request-accept] missing venue profile for venue_user_id=%s, falling back",
+        req.venue_user_id,
+      );
       nextStepLink = `/venue-portal/placements?artist=${encodeURIComponent(resp.artist_slug || "")}`;
     } else {
-      linkedPlacementId = placementId;
-      nextStepLink = `/venue-portal/placements/${placementId}`;
+      // placements.id is TEXT — same id-shape the /api/placements POST
+      // uses (see src/app/api/placements/route.ts). We mirror it so any
+      // analytics that key off id-prefix continue to work.
+      const placementId = `pl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const monthlyFeeGbp = typeof monthlyFeePence === "number" ? monthlyFeePence / 100 : 0;
+
+      const { error: placementErr } = await db.from("placements").insert({
+        id: placementId,
+        artist_user_id: resp.artist_user_id,
+        artist_slug: resp.artist_slug,
+        venue_user_id: req.venue_user_id,
+        venue_slug: req.venue_slug,
+        venue: venueProfile.name,
+        // The placements table requires work_title (NOT NULL in early
+        // migrations). When the artist didn't pin specific works we
+        // fall back to the brief title so the row still validates; the
+        // venue can rename / reassign on the placements page.
+        work_title: req.title || "Placement from artwork request",
+        work_image: null,
+        arrangement_type: arrangementType,
+        revenue_share_percent: typeof revSharePct === "number" ? revSharePct : null,
+        monthly_fee_gbp: monthlyFeeGbp,
+        qr_enabled: resp.proposed_qr_enabled ?? false,
+        message: `Created from artwork-request response. Original brief: ${req.title ?? ""}`.slice(0, 1000),
+        status: "pending",
+        requester_user_id: resp.artist_user_id,
+        created_at: new Date().toISOString(),
+        notes: null,
+      });
+
+      if (placementErr) {
+        // Don't block the accept itself — fall back to the old
+        // route-the-venue-to-placements flow so the response still
+        // moves to "accepted" and the artist gets their notification.
+        console.warn("[artwork-request-accept] failed to auto-create placement:", placementErr);
+        nextStepLink = `/venue-portal/placements?artist=${encodeURIComponent(resp.artist_slug || "")}`;
+      } else {
+        linkedPlacementId = placementId;
+        nextStepLink = `/venue-portal/placements/${placementId}`;
+      }
     }
   } else {
     // existing_works / message — no downstream entity, just an
