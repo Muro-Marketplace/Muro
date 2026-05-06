@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
@@ -114,6 +115,13 @@ export default function PricingPage() {
               to the Wallplace platform and venue network. The difference
               is visibility and the platform fee on sales.
             </p>
+            <aside className="mt-8 border border-border rounded-sm p-4 bg-surface">
+              <p className="text-sm text-foreground">
+                <strong>Are you a venue?</strong> Browsing and enquiring is free. See{" "}
+                <Link href="/venues" className="underline">how it works for venues</Link> or{" "}
+                <Link href="/curated" className="underline">explore Curated</Link> for managed selection from £49.
+              </p>
+            </aside>
           </div>
         </div>
       </section>
@@ -131,13 +139,16 @@ export default function PricingPage() {
                   First month free on all plans
                 </p>
                 <p className="text-muted text-sm mt-1">
-                  Try any plan for 30 days at no cost. No commitment, cancel any time.
+                  No commitment, cancel any time.
                 </p>
               </div>
               <div className="shrink-0">
                 <Button href="/apply" size="md">
-                  Start Your 30-Day Free Trial
+                  Apply to join — first month free if accepted
                 </Button>
+                <p className="text-[11px] text-muted mt-2">
+                  Applications reviewed within 5 business days.
+                </p>
               </div>
             </div>
           </div>
@@ -313,8 +324,11 @@ export default function PricingPage() {
             First month free on all plans. No commitment, cancel any time.
           </p>
           <Button href="/apply" size="lg">
-            Start Your 30-Day Free Trial
+            Apply to join — first month free if accepted
           </Button>
+          <p className="text-[11px] text-muted mt-3">
+            Applications reviewed within 5 business days.
+          </p>
         </div>
       </section>
     </div>

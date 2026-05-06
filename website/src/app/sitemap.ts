@@ -23,7 +23,7 @@ const STATIC_ROUTES: string[] = [
   "/signup",
   "/login",
   "/waitlist",
-  "/register-venue",
+  "/signup/venue",
   "/terms",
   "/privacy",
   "/cookies",

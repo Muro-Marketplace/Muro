@@ -201,7 +201,9 @@ export default function ArtistsPage() {
                 For Artists
               </p>
               <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
-                Display, discover, sell.<br />All in one place.
+                Display, discover, sell.
+                <br />
+                All in one place.
               </h1>
               <p className="text-lg lg:text-xl text-white/60 leading-relaxed max-w-xl mb-10">
                 Access high-intent venue demand. Get discovered by cafés, restaurants,
@@ -213,6 +215,9 @@ export default function ArtistsPage() {
                   APPLY TO JOIN
                 </Button>
               </div>
+              <p className="mt-3 text-[11px] text-white/50">
+                Applications reviewed within 5 business days.
+              </p>
             </div>
           </div>
         </div>
@@ -309,7 +314,7 @@ export default function ArtistsPage() {
               First month free on all plans.
             </p>
             <p className="mt-2 text-2xl md:text-3xl font-serif text-accent">
-              Start your 30-day free trial today.
+              Apply to join — first month free.
             </p>
           </div>
 
@@ -486,6 +491,9 @@ export default function ArtistsPage() {
           </div>
           <p className="mt-6 text-sm text-white/40">
             First month free. Membership from &pound;9.99/month.
+          </p>
+          <p className="mt-2 text-[11px] text-white/40">
+            Applications reviewed within 5 business days.
           </p>
         </div>
       </section>

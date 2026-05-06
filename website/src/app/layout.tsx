@@ -41,11 +41,23 @@ export const metadata: Metadata = {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
     locale: "en_GB",
+    // TODO(brand): drop a 1200x630 PNG at /public/og-image.png. Until
+    // it lands, social cards will 404 the image and fall back to the
+    // text-only embed.
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Wallplace",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,

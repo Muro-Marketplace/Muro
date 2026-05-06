@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import ApplicationGate from "@/components/ApplicationGate";
 
 export const metadata: Metadata = {
-  title: "Apply to Join – Wallplace",
+  title: "Apply to join",
   description:
     "Apply to join Wallplace, the curated platform connecting artists with independent venues. First month free for all accepted artists.",
 };
@@ -49,7 +49,7 @@ export default function ApplyPage() {
                 First month free on all plans.
               </p>
               <p className="text-muted text-sm mt-1">
-                Try any plan for 30 days at no cost. No commitment, cancel any time.
+                No commitment, cancel any time.
               </p>
             </div>
           </div>

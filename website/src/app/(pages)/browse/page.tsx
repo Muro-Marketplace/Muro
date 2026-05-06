@@ -2510,7 +2510,7 @@ function BrowsePortfoliosPageInner() {
                 Whether you run a café, restaurant, coworking space, or office,
                 we can help you find the right artwork for your walls.
               </p>
-              <Button href="/register-venue" variant="secondary" size="md">
+              <Button href="/signup/venue" variant="secondary" size="md">
                 Register Your Venue
               </Button>
             </div>

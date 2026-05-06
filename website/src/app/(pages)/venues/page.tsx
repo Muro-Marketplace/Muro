@@ -202,7 +202,7 @@ export default function VenuesPage() {
                 <a href="/browse" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors">
                   DISCOVER ART
                 </a>
-                <a href="/register-venue" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white text-foreground rounded-sm hover:bg-white/90 transition-colors">
+                <a href="/signup/venue" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white text-foreground rounded-sm hover:bg-white/90 transition-colors">
                   REGISTER YOUR VENUE
                 </a>
               </div>
@@ -348,7 +348,7 @@ export default function VenuesPage() {
             <a href="/browse" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors">
               DISCOVER ART
             </a>
-            <a href="/register-venue" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase border border-white/30 text-white rounded-sm hover:bg-white/10 transition-colors">
+            <a href="/signup/venue" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase border border-white/30 text-white rounded-sm hover:bg-white/10 transition-colors">
               REGISTER YOUR VENUE
             </a>
           </div>
@@ -417,7 +417,7 @@ export default function VenuesPage() {
             <Link href="/browse" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors">
               DISCOVER ART
             </Link>
-            <Link href="/register-venue" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white text-foreground rounded-sm hover:bg-white/90 transition-colors">
+            <Link href="/signup/venue" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white text-foreground rounded-sm hover:bg-white/90 transition-colors">
               REGISTER YOUR VENUE
             </Link>
           </div>

@@ -133,7 +133,7 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
             Pick a plan to get started. All plans include a free trial, and you won&rsquo;t be charged until it ends.
           </p>
           <p className="text-xs text-muted mb-6">
-            All plans include a 30-day free trial.
+            All plans include a first month free.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button

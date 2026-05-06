@@ -1,19 +1,13 @@
-import Accordion from "@/components/Accordion";
 import Button from "@/components/Button";
 import Link from "next/link";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import FaqsClient, { type FaqEntry } from "./FaqsClient";
 
 export const metadata: Metadata = {
   title: "FAQs – Wallplace",
   description:
     "Frequently asked questions about Wallplace for artists, venues, and buyers.",
 };
-
-interface FaqEntry {
-  question: string;
-  answer: ReactNode;
-}
 
 const generalFaqs: FaqEntry[] = [
   {
@@ -319,101 +313,61 @@ const venueFaqs: FaqEntry[] = [
   },
 ];
 
+const buyerFaqs: FaqEntry[] = [
+  {
+    question: "How does buying through Wallplace work?",
+    answer: (
+      <p>
+        Buying through Wallplace is the same as buying from any reputable
+        online shop. Every piece is sold by the artist directly &mdash; we
+        process the payment and coordinate the transaction. See our{" "}
+        <Link href="/terms" className="text-accent hover:underline">Terms of Sale</Link>,{" "}
+        <Link href="/returns" className="text-accent hover:underline">Returns Policy</Link>, and{" "}
+        <Link href="/complaints" className="text-accent hover:underline">Complaints Policy</Link>{" "}
+        for the full answers to delivery, refunds, damage, and dispute questions.
+      </p>
+    ),
+  },
+  {
+    question: "Can I track an order without a Wallplace account?",
+    answer: (
+      <p>
+        Yes. You can{" "}
+        <Link href="/orders/track" className="text-accent hover:underline">
+          track an order
+        </Link>{" "}
+        using the order ID and email from your receipt &mdash; no account
+        required.
+      </p>
+    ),
+  },
+  {
+    question: "Who do I contact if something goes wrong with my order?",
+    answer: (
+      <p>
+        Email{" "}
+        <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">
+          hello@wallplace.co.uk
+        </a>{" "}
+        and we&rsquo;ll sort it. For formal disputes, use our{" "}
+        <Link href="/complaints" className="text-accent hover:underline">
+          complaints process
+        </Link>
+        .
+      </p>
+    ),
+  },
+];
+
 export default function FaqsPage() {
   return (
     <div className="bg-background">
-      {/* Header */}
-      <section className="py-20 lg:py-24">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-2xl">
-            <h1 className="text-4xl lg:text-5xl mb-5">
-              Frequently Asked Questions
-            </h1>
-            <p className="text-lg text-muted leading-relaxed">
-              Everything you need to know about how Wallplace works for artists,
-              venues, and art lovers.
-            </p>
-          </div>
-
-          {/* Role quick-nav, jump to the right FAQ section. Anchor links
-              are plain <a>s so deep-links work (#artists, #venues, #buyers). */}
-          <div className="mt-8 flex flex-wrap gap-2">
-            <a href="#artists" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full border border-border bg-surface text-foreground hover:border-foreground/40 transition-colors">
-              I&rsquo;m an artist
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 6h6M6 3l3 3-3 3" /></svg>
-            </a>
-            <a href="#venues" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full border border-border bg-surface text-foreground hover:border-foreground/40 transition-colors">
-              I&rsquo;m a venue
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 6h6M6 3l3 3-3 3" /></svg>
-            </a>
-            <a href="#buyers" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full border border-border bg-surface text-foreground hover:border-foreground/40 transition-colors">
-              I&rsquo;m a buyer
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 6h6M6 3l3 3-3 3" /></svg>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* General */}
-      <section className="pb-16 lg:pb-20 scroll-mt-24" id="general">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl mb-6">General</h2>
-            <Accordion items={generalFaqs} />
-          </div>
-        </div>
-      </section>
-
-      {/* For Artists */}
-      <section className="pb-16 lg:pb-20 scroll-mt-24" id="artists">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl mb-6">For Artists</h2>
-            <Accordion items={artistFaqs} />
-          </div>
-        </div>
-      </section>
-
-      {/* For Venues */}
-      <section className="pb-16 lg:pb-20 scroll-mt-24" id="venues">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl mb-6">For Venues</h2>
-            <Accordion items={venueFaqs} />
-          </div>
-        </div>
-      </section>
-
-      {/* For Buyers, point at external pages for full policy answers */}
-      <section className="pb-16 lg:pb-20 scroll-mt-24" id="buyers">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl mb-6">For Buyers</h2>
-            <div className="space-y-4 text-muted leading-relaxed">
-              <p>
-                Buying through Wallplace is the same as buying from any reputable online shop.
-                See our <Link href="/terms" className="text-accent hover:underline">Terms of Sale</Link>,{" "}
-                <Link href="/returns" className="text-accent hover:underline">Returns Policy</Link>, and{" "}
-                <Link href="/complaints" className="text-accent hover:underline">Complaints Policy</Link>{" "}
-                for the full answers to delivery, refunds, damage, and dispute questions.
-              </p>
-              <p>
-                Don&rsquo;t have a Wallplace account? You can still{" "}
-                <Link href="/orders/track" className="text-accent hover:underline">
-                  track an order
-                </Link>{" "}
-                using the order ID + email from your receipt.
-              </p>
-              <p>
-                Every piece on Wallplace is sold by the artist directly, we process the payment
-                and coordinate the transaction. If anything goes wrong, email{" "}
-                <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a>{" "}
-                and we&rsquo;ll sort it.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <FaqsClient
+        general={generalFaqs}
+        artist={artistFaqs}
+        venue={venueFaqs}
+        buyer={buyerFaqs}
+      />
 
       {/* CTA */}
       <section className="py-20 lg:py-24 border-t border-border">

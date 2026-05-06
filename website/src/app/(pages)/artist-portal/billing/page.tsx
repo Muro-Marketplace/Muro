@@ -408,7 +408,7 @@ export default function BillingPage() {
             })}
           </div>
           <p className="text-xs text-muted mt-3 text-center">
-            All plans include a 30-day free trial. Annual plans save ~17%.
+            All plans include a first month free. Annual plans save ~17%.
           </p>
         </div>
       )}

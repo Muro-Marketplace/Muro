@@ -137,7 +137,7 @@ export default function SustainabilityPage() {
               Apply as an artist
             </Link>
             <Link
-              href="/register-venue"
+              href="/signup/venue"
               className="inline-flex items-center justify-center px-6 py-3 border border-border text-foreground text-sm font-medium rounded-sm hover:border-foreground/40 transition-colors"
             >
               Register your venue
