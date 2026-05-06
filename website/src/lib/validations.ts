@@ -297,3 +297,43 @@ export const checkoutSchema = z.preprocess(
       }
     }),
 );
+
+// Customer address book (PR-4 G2-21). Used by /api/customer-addresses
+// for create/update; the GET path returns whatever is in DB so we don't
+// gate retrieval on Zod.
+const customerAddressFieldsShape = {
+  fullName: safeString(100),
+  line1: safeString(200),
+  line2: optionalString(200),
+  city: safeString(100),
+  postcode: safeString(20),
+  country: safeString(100),
+  isDefault: z.boolean().optional(),
+};
+
+const postcodeFormatRefiner = (
+  data: { postcode?: string; country?: string },
+  ctx: z.RefinementCtx,
+) => {
+  if (
+    typeof data.postcode === "string" &&
+    typeof data.country === "string" &&
+    data.postcode.length > 0 &&
+    !isValidPostcode(data.postcode, data.country)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["postcode"],
+      message: "Postcode doesn't match the expected format for this country.",
+    });
+  }
+};
+
+export const customerAddressInputSchema = z
+  .object(customerAddressFieldsShape)
+  .superRefine(postcodeFormatRefiner);
+
+export const customerAddressUpdateSchema = z
+  .object(customerAddressFieldsShape)
+  .partial()
+  .superRefine(postcodeFormatRefiner);
