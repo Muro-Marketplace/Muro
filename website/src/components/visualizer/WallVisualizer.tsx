@@ -952,26 +952,58 @@ function WallVisualizerInner(props: ExtendedProps) {
           </div>
         )}
 
-        {/* Mobile-only: bottom toolbar pinned above the home indicator,
-            plus the slide-up sheets that host WorksPanel and
-            WallConfigBar. Both sheets are mounted only while open so
-            their internal state (filter, tab) starts fresh each time. */}
+        {/* Mobile-only: a single stacked toolbar at the bottom — a
+            collapsible works strip (peek/collapsed states), an
+            optional render-error banner, and a slim iOS-style action
+            bar (wall-settings icon + Render). The wall stays
+            dominant because the strip is short and collapsable, and
+            the action bar is only ~52px tall. The full WorksPanel
+            and WallConfigBar still live in slide-up sheets, but
+            those are now opt-in rather than the only entry point. */}
         {isMobile && (
           <>
-            <MobileBottomBar
-              activeSheet={mobileSheet}
-              onToggleSheet={(which) =>
-                setMobileSheet((prev) => (prev === which ? null : which))
-              }
-              renderVisible={renderButtonVisible}
-              renderInFlight={renderInFlight}
-              renderError={renderError}
-              onRender={handleRender}
-            />
+            <div
+              className="absolute bottom-0 left-0 right-0 z-20 flex flex-col bg-white/95 backdrop-blur border-t border-black/10"
+              style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+            >
+              {/* Customer-artwork-page mode locks onto a single work
+                  that auto-spawns; a one-tile carousel adds clutter
+                  without value, so skip the strip entirely there. */}
+              {props.mode !== "customer_artwork_page" && (
+                <MobileWorksStrip
+                  works={
+                    props.mode === "venue_my_walls"
+                      ? [...myWorks, ...savedWorks, ...allWorks]
+                      : works
+                  }
+                  loading={worksLoading}
+                  error={worksError}
+                  onSelect={handleSelectFromPanel}
+                  onExpand={() => setMobileSheet("works")}
+                />
+              )}
 
+              {renderError && (
+                <div className="px-3 py-1.5 bg-red-50 border-t border-red-200 text-red-700 text-xs text-center">
+                  {renderError}
+                </div>
+              )}
+
+              <MobileActionBar
+                wallActive={mobileSheet === "wall"}
+                onToggleWall={() =>
+                  setMobileSheet((prev) => (prev === "wall" ? null : "wall"))
+                }
+                renderVisible={renderButtonVisible}
+                renderInFlight={renderInFlight}
+                onRender={handleRender}
+              />
+            </div>
+
+            {/* Sheet overlays sit above the toolbar (z-30 vs z-20). */}
             {mobileSheet === "works" && (
               <MobileSheet
-                title="Works"
+                title="All works"
                 onClose={() => setMobileSheet(null)}
               >
                 {/* WorksPanel ships an `aside w-60` rail; in the sheet
@@ -988,6 +1020,7 @@ function WallVisualizerInner(props: ExtendedProps) {
               <MobileSheet
                 title="Wall settings"
                 onClose={() => setMobileSheet(null)}
+                autoHeight
               >
                 <div className="p-4 overflow-x-auto">
                   <WallConfigBar
@@ -1377,120 +1410,237 @@ function ownerTypeFromMode(mode: VisualizerEditorProps["mode"]) {
   return undefined;
 }
 
-// ── Mobile bottom toolbar ───────────────────────────────────────────────
+// ── Mobile works strip (collapsible peek carousel) ─────────────────────
 
 /**
- * Mobile-only toolbar pinned to the bottom of the canvas column. Three
- * controls: Works (toggles a slide-up bottom-sheet listing placeable
- * works), Wall (toggles the same sheet for wall preset / colour /
- * dimensions), and Render (mirrors the desktop floating button).
+ * A horizontal-scroll strip of work thumbnails pinned just above the
+ * action bar on mobile. Replaces the full-screen "Works" bottom sheet
+ * as the primary picker so the wall stays visually dominant — only
+ * ~96px of vertical space is given up by default, and the user can
+ * collapse the strip down to a thin 28px tab when they want the wall
+ * fully unobstructed.
  *
- * Padding-bottom uses env(safe-area-inset-bottom) so the bar sits above
- * the iPhone home indicator instead of being chopped by it.
+ * Tap a thumbnail to drop the work onto the wall (the parent's
+ * onSelect places it at wall centre). For full search, filtering, and
+ * tabs (venue mode), tap "See all" to open the full WorksPanel in a
+ * sheet.
  */
-function MobileBottomBar({
-  activeSheet,
-  onToggleSheet,
-  renderVisible,
-  renderInFlight,
-  renderError,
-  onRender,
+function MobileWorksStrip({
+  works,
+  loading,
+  error,
+  onSelect,
+  onExpand,
 }: {
-  activeSheet: "works" | "wall" | null;
-  onToggleSheet: (which: "works" | "wall") => void;
-  renderVisible: boolean;
-  renderInFlight: boolean;
-  renderError: string | null;
-  onRender: () => void;
+  works: PanelWork[];
+  loading: boolean | undefined;
+  error: string | null | undefined;
+  onSelect: (w: PanelWork) => void;
+  onExpand: () => void;
 }) {
-  return (
-    <>
-      {renderError && (
-        <div className="absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+72px)] z-30 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs text-center shadow-sm">
-          {renderError}
-        </div>
-      )}
-      <div
-        className="absolute bottom-0 left-0 right-0 z-20 flex items-stretch bg-white/95 backdrop-blur border-t border-black/10 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+  const [collapsed, setCollapsed] = useState(false);
+  // Cap the inline carousel; if the user has hundreds of saved works
+  // we don't want the strip's scroll list to grow without bound.
+  // "See all" opens the full sheet for that case.
+  const MAX_PREVIEW = 24;
+  const previewWorks = works.slice(0, MAX_PREVIEW);
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="flex items-center justify-center gap-1.5 py-1.5 text-[11px] text-stone-600 hover:text-stone-900 transition-colors"
+        aria-label="Show works"
       >
-        <MobileToolbarButton
-          active={activeSheet === "works"}
-          onClick={() => onToggleSheet("works")}
-          label="Works"
-          icon={
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <rect x="14" y="14" width="7" height="7" rx="1" />
-            </svg>
-          }
-        />
-        <MobileToolbarButton
-          active={activeSheet === "wall"}
-          onClick={() => onToggleSheet("wall")}
-          label="Wall"
-          icon={
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="1" />
-              <line x1="3" y1="9" x2="21" y2="9" />
-              <line x1="3" y1="15" x2="21" y2="15" />
-            </svg>
-          }
-        />
-        {renderVisible && (
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+        <span className="font-medium tracking-wide uppercase">
+          Works
+          {works.length > 0 && (
+            <span className="ml-1 text-stone-400 normal-case tracking-normal">
+              · {works.length}
+            </span>
+          )}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col">
+      {/* Header row: collapse toggle on the left, "See all" link on
+          the right. Compact (28px tall) so most of the strip's
+          vertical budget goes to the thumbnails themselves. */}
+      <div className="flex items-center justify-between px-3 pt-1.5">
+        <button
+          type="button"
+          onClick={() => setCollapsed(true)}
+          aria-label="Hide works"
+          className="-ml-1 p-1 flex items-center gap-1 text-[10px] text-stone-500 hover:text-stone-900 transition-colors"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+          <span className="font-medium uppercase tracking-[0.18em]">Works</span>
+        </button>
+        {works.length > MAX_PREVIEW && (
           <button
             type="button"
-            onClick={onRender}
-            disabled={renderInFlight}
-            className="flex-1 m-2 rounded-full bg-stone-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 px-4"
+            onClick={onExpand}
+            className="text-[10px] text-stone-500 hover:text-stone-900 underline-offset-2 hover:underline"
           >
-            {renderInFlight ? (
-              <>
-                <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-                Rendering…
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polygon points="6,4 20,12 6,20" />
-                </svg>
-                Render
-              </>
-            )}
+            See all {works.length}
           </button>
         )}
       </div>
-    </>
+
+      {/* Carousel body */}
+      {loading ? (
+        <p className="px-3 py-2 text-[11px] text-stone-400">Loading…</p>
+      ) : error ? (
+        <p className="px-3 py-2 text-[11px] text-red-600">
+          Couldn&apos;t load works.
+        </p>
+      ) : previewWorks.length === 0 ? (
+        <p className="px-3 py-2 text-[11px] text-stone-500">
+          No works to add.
+        </p>
+      ) : (
+        <div
+          // Horizontal scroll: hide the scrollbar (cosmetic) and turn
+          // on momentum scrolling on iOS for a native feel.
+          className="flex gap-2 overflow-x-auto px-3 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          {previewWorks.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => onSelect(w)}
+              title={w.title}
+              aria-label={`Add ${w.title} to the wall`}
+              className="shrink-0 h-16 w-16 rounded-md overflow-hidden border border-black/10 bg-white active:scale-95 transition-transform"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={w.imageUrl}
+                alt={w.title}
+                className="block h-full w-full object-cover"
+                loading="lazy"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-function MobileToolbarButton({
-  active,
-  onClick,
-  label,
-  icon,
+// ── Mobile action bar ──────────────────────────────────────────────────
+
+/**
+ * Slim iOS-style action bar at the very bottom of the visualizer on
+ * mobile. Two controls: a circular wall-settings button (gear icon),
+ * and the primary Render pill that takes the remaining width.
+ *
+ * Roughly 52 px tall (plus safe-area-inset on the parent), so the wall
+ * stays dominant. Pairs with MobileWorksStrip above it.
+ */
+function MobileActionBar({
+  wallActive,
+  onToggleWall,
+  renderVisible,
+  renderInFlight,
+  onRender,
 }: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  icon: React.ReactNode;
+  wallActive: boolean;
+  onToggleWall: () => void;
+  renderVisible: boolean;
+  renderInFlight: boolean;
+  onRender: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      // 64px tall meets Apple's recommended touch-target minimum even
-      // after the safe-area inset padding pushes content up.
-      className={`flex-1 min-h-[56px] flex flex-col items-center justify-center gap-0.5 transition ${
-        active ? "text-stone-900 bg-stone-100" : "text-stone-500"
-      }`}
-    >
-      {icon}
-      <span className="text-[10px] font-medium tracking-wide">{label}</span>
-    </button>
+    <div className="flex items-center gap-2 px-3 py-2 border-t border-black/5">
+      <button
+        type="button"
+        onClick={onToggleWall}
+        aria-pressed={wallActive}
+        aria-label="Wall settings"
+        className={`shrink-0 h-10 w-10 rounded-full flex items-center justify-center transition-colors ${
+          wallActive
+            ? "bg-stone-900 text-white"
+            : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+        }`}
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="3" y1="9" x2="21" y2="9" />
+          <line x1="9" y1="21" x2="9" y2="9" />
+        </svg>
+      </button>
+
+      {renderVisible ? (
+        <button
+          type="button"
+          onClick={onRender}
+          disabled={renderInFlight}
+          className="flex-1 h-10 rounded-full bg-stone-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 px-4"
+        >
+          {renderInFlight ? (
+            <>
+              <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+              Rendering…
+            </>
+          ) : (
+            <>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <polygon points="6,4 20,12 6,20" />
+              </svg>
+              Render
+            </>
+          )}
+        </button>
+      ) : (
+        // No render path (e.g. customer-mode with no items yet) — keep
+        // the row balanced with a transparent spacer so the wall-
+        // settings button doesn't drift to centre.
+        <span className="flex-1" aria-hidden />
+      )}
+    </div>
   );
 }
 
@@ -1498,18 +1648,22 @@ function MobileToolbarButton({
 
 /**
  * Mobile-only slide-up sheet that overlays the canvas column. Tapping
- * the dimmed backdrop closes the sheet. The sheet itself caps at 70 %
- * of the column height so the user can still see the wall while
- * editing settings or scrolling through works.
+ * the dimmed backdrop closes the sheet. By default the sheet caps at
+ * 70 % of the column height so the user can still see the wall while
+ * scrolling through works. Pass `autoHeight` for sheets whose content
+ * is short and predictable (e.g. wall settings) so the sheet hugs
+ * its content instead of reserving a fixed slab.
  */
 function MobileSheet({
   title,
   onClose,
   children,
+  autoHeight,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  autoHeight?: boolean;
 }) {
   return (
     <div
@@ -1528,7 +1682,13 @@ function MobileSheet({
         className="flex-1 bg-black/40 backdrop-blur-[1px] cursor-default"
       />
       <div
-        className="bg-white rounded-t-2xl shadow-2xl max-h-[70%] flex flex-col"
+        className={`bg-white rounded-t-2xl shadow-2xl flex flex-col ${
+          // autoHeight: hug content, keep a generous safety cap so
+          // pathological content (very tall picker, etc.) can't push
+          // past the canvas. Default: reserve a slab for scrollable
+          // long lists (e.g. WorksPanel grid).
+          autoHeight ? "max-h-[80%]" : "max-h-[70%]"
+        }`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {/* Drag handle + header */}
@@ -1553,7 +1713,18 @@ function MobileSheet({
             </button>
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
+        <div
+          className={
+            // autoHeight: hug content, just scroll if it overflows the
+            // outer cap. Default: take all remaining height (long
+            // scrollable lists like the works grid).
+            autoHeight
+              ? "overflow-y-auto"
+              : "flex-1 min-h-0 overflow-y-auto"
+          }
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
