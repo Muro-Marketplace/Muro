@@ -7,6 +7,7 @@ import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
+import { formatCurrency } from "@/lib/format-currency";
 
 function safeArray(val: unknown): { title: string; qty: number; price: number; artistSlug?: string }[] {
   if (Array.isArray(val)) return val;
@@ -16,13 +17,19 @@ function safeArray(val: unknown): { title: string; qty: number; price: number; a
 
 interface Order {
   id: string;
+  order_number?: string | null;
   items: { title: string; qty: number; price: number; artistSlug?: string }[];
+  subtotal?: number | null;
+  shipping_cost?: number | null;
+  tax_total?: number | null;
   total: number;
+  currency?: string | null;
   status: string;
   status_history: { status: string; timestamp: string }[];
   tracking_number?: string;
   shipping: { fullName: string; addressLine1: string; city: string; postcode: string };
   created_at: string;
+  delivered_at?: string | null;
   artist_slug?: string;
   venue_slug?: string;
 }
@@ -157,13 +164,35 @@ export default function CustomerPortalPage() {
             {safeArray(selected.items).map((item, i) => (
               <div key={i} className="flex items-center justify-between text-sm border-b border-border pb-2">
                 <span className="text-foreground">{item.title} &times; {item.qty}</span>
-                <span className="text-foreground font-medium">&pound;{(item.price * item.qty).toFixed(2)}</span>
+                <span className="text-foreground font-medium">{formatCurrency(item.price * item.qty, selected.currency)}</span>
               </div>
             ))}
-            <div className="flex items-center justify-between text-sm font-medium pt-2">
-              <span>Total</span>
-              <span>&pound;{selected.total.toFixed(2)}</span>
-            </div>
+            <ul className="space-y-1 pt-2">
+              {selected.subtotal != null && (
+                <li className="flex justify-between text-sm">
+                  <span className="text-muted">Subtotal</span>
+                  <span className="text-foreground">{formatCurrency(selected.subtotal, selected.currency)}</span>
+                </li>
+              )}
+              {selected.shipping_cost != null && (
+                <li className="flex justify-between text-sm">
+                  <span className="text-muted">Shipping</span>
+                  <span className="text-foreground">
+                    {selected.shipping_cost > 0 ? formatCurrency(selected.shipping_cost, selected.currency) : "Included"}
+                  </span>
+                </li>
+              )}
+              {selected.tax_total != null && selected.tax_total > 0 && (
+                <li className="flex justify-between text-sm">
+                  <span className="text-muted">VAT</span>
+                  <span className="text-foreground">{formatCurrency(selected.tax_total, selected.currency)}</span>
+                </li>
+              )}
+              <li className="flex items-center justify-between text-base font-medium border-t border-border pt-2 mt-2">
+                <span>Total</span>
+                <span>{formatCurrency(selected.total, selected.currency)}</span>
+              </li>
+            </ul>
           </div>
 
           <div className="mt-6">
@@ -322,7 +351,7 @@ export default function CustomerPortalPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium">&pound;{order.total?.toFixed(2)}</p>
+                  <p className="text-sm font-medium">{formatCurrency(order.total, order.currency)}</p>
                   <OrderStatusTracker currentStatus={order.status} compact />
                 </div>
               </div>
