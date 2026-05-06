@@ -324,6 +324,15 @@ describe("checkoutSchema fulfilment branches", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("ship branch enforces addressLine1 length cap", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "ship",
+      shipping: { ...fullShipping, addressLine1: "x".repeat(600) },
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("applySchema", () => {
