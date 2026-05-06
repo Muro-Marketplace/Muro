@@ -16,19 +16,12 @@
 // mark an order delivered the moment it's paid (which would release the
 // 14-day pending transfer early).
 
-export const ORDER_STATUSES = [
-  "confirmed",
-  "artist_notified",
-  "awaiting_dispatch",
-  "processing",
-  "shipped",
-  "delivered",
-  "cancelled",
-  "refunded",
-  "disputed",
-] as const;
-
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
+// OrderStatus is the single source of truth in src/lib/order-status-labels.ts
+// (paired with the labels). The state machine derives ORDER_STATUSES from
+// the transition graph's keys so the two modules can never drift out of
+// sync — adding a status only to one breaks the typecheck on the other.
+import type { OrderStatus } from "./order-status-labels";
+export type { OrderStatus };
 
 const TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   // Skip-ahead allowed for artists who go straight from receipt to making/dispatching.
@@ -42,6 +35,8 @@ const TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   refunded: [],
   disputed: ["refunded", "delivered"],
 };
+
+export const ORDER_STATUSES = Object.keys(TRANSITIONS) as readonly OrderStatus[];
 
 export type TransitionResult = { ok: true } | { ok: false; reason: string };
 
