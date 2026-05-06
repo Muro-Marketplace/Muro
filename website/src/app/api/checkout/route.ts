@@ -173,14 +173,20 @@ export async function POST(request: Request) {
       if (!row?.pricing || !Array.isArray(row.pricing)) continue;
       const baseSize = typeof item.size === "string" ? item.size.split(" + ")[0] : "";
       if (!baseSize) {
-        console.warn("[checkout] could not parse base size for framed line: workId=%s size=%s", item.workId, item.size);
+        console.warn("[checkout] framed line: empty base size", {
+          workId: item.workId,
+          size: item.size,
+        });
         continue;
       }
       const dbBaseTier = row.pricing.find(
         (p) => p?.label?.toLowerCase?.() === baseSize.toLowerCase(),
       );
       if (!dbBaseTier || typeof dbBaseTier.price !== "number" || dbBaseTier.price <= 0) {
-        console.warn("[checkout] could not parse base size for framed line: workId=%s size=%s", item.workId, item.size);
+        console.warn("[checkout] framed line: base tier missing in DB pricing", {
+          workId: item.workId,
+          baseSize,
+        });
         continue;
       }
       if (item.price < dbBaseTier.price) {
@@ -207,8 +213,8 @@ export async function POST(request: Request) {
           if (unitPence !== Math.round(item.price * 100)) {
             console.warn("[checkout] price drift corrected", {
               workId: item.workId,
-              clientPrice: item.price,
-              dbPrice: dbTier.price,
+              clientPence: Math.round(item.price * 100),
+              dbPence: unitPence,
             });
           }
         } else {
@@ -224,12 +230,11 @@ export async function POST(request: Request) {
               ? row.pricing.find((p) => p?.label?.toLowerCase?.() === baseSize.toLowerCase())
               : undefined;
             if (dbBaseTier && typeof dbBaseTier.price === "number") {
-              console.warn(
-                "[checkout] framed line uses client price: workId=%s clientPrice=%s dbBasePrice=%s",
-                item.workId,
-                item.price,
-                dbBaseTier.price,
-              );
+              console.warn("[checkout] framed line uses client price", {
+                workId: item.workId,
+                clientPence: Math.round(item.price * 100),
+                dbBasePence: Math.round(dbBaseTier.price * 100),
+              });
             }
           }
         }

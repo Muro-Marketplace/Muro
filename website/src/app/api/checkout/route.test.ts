@@ -2,10 +2,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // vi.hoisted runs before vi.mock factories so refs in the factories
 // below are initialised when the factory is evaluated.
-const { stripeCreate, fromMock, canArtistAcceptOrdersMock } = vi.hoisted(() => ({
+const { stripeCreate, fromMock, canArtistAcceptOrdersMock, saveCartSessionMock } = vi.hoisted(() => ({
   stripeCreate: vi.fn(async () => ({ id: "sess_test", url: "https://stripe.example/session" })),
   fromMock: vi.fn(),
   canArtistAcceptOrdersMock: vi.fn(async () => true),
+  saveCartSessionMock: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/api-auth", () => ({
@@ -40,7 +41,7 @@ vi.mock("@/lib/validations", () => ({
 }));
 
 vi.mock("@/lib/cart-sessions", () => ({
-  saveCartSession: vi.fn(async () => undefined),
+  saveCartSession: saveCartSessionMock,
 }));
 
 import { POST } from "./route";
@@ -50,6 +51,7 @@ beforeEach(() => {
   fromMock.mockReset();
   canArtistAcceptOrdersMock.mockReset();
   canArtistAcceptOrdersMock.mockResolvedValue(true);
+  saveCartSessionMock.mockClear();
 });
 
 function req(body: unknown, auth: string | null = null): Request {
@@ -478,12 +480,70 @@ describe("POST /api/checkout cart re-validation (G2-15)", () => {
     }));
     expect(res.status).toBe(200);
     expect(warn).toHaveBeenCalledWith(
-      expect.stringMatching(/framed line uses client price/),
-      "w-1",
-      120,
-      100,
+      "[checkout] framed line uses client price",
+      expect.objectContaining({
+        workId: "w-1",
+        clientPence: 12000,
+        dbBasePence: 10000,
+      }),
     );
     warn.mockRestore();
+  });
+
+  // Pins the contract that the route persists subtotal off the
+  // DB-corrected line items (not the client price). Without this,
+  // a stale localStorage cart could drive expectedSubtotalPence on
+  // cart_sessions to the old number and the webhook reconciliation
+  // would silently accept a mismatch.
+  it("persists subtotal computed from DB-corrected line items, not client prices", async () => {
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "S", price: 100 }], // DB price £100
+      title: "Untitled",
+    }]);
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 50, // stale client price
+        quantity: 2,
+        size: "S",
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    expect(saveCartSessionMock).toHaveBeenCalledTimes(1);
+    const saveCalls = saveCartSessionMock.mock.calls as unknown as Array<
+      [{ expectedSubtotalPence?: number }]
+    >;
+    const saveArgs = saveCalls[0]?.[0];
+    // 100 (DB) × 100 pence × 2 quantity = 20000 — NOT 50 × 100 × 2 = 10000.
+    expect(saveArgs?.expectedSubtotalPence).toBe(20000);
+  });
+
+  // The page strips ALL cart lines whose workId matches the offending
+  // one on a 409 (bulk removal). The API only needs to surface the
+  // first offending workId — the page handles the rest. This pins
+  // that contract so a refactor that returns ALL bad workIds (or
+  // changes the field name) doesn't silently break the page.
+  it("returns the offending workId for any line that fails the gate (page strips all matching lines)", async () => {
+    mockWorks([
+      { id: "work-2-sold", available: false, quantity_available: 0, pricing: [{ label: "A3", price: 100 }], title: "Sold work" },
+    ]);
+    const res = await POST(req({
+      items: [
+        { ...baseItem, type: "work", workId: "work-2-sold", price: 100, size: "A3", title: "Sold work" },
+        { ...baseItem, type: "work", workId: "work-2-sold", price: 100, size: "A4", title: "Sold work" },
+      ],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.workId).toBe("work-2-sold");
+    expect(stripeCreate).not.toHaveBeenCalled();
   });
 });
 
