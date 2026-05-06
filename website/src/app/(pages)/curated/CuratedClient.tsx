@@ -8,107 +8,15 @@ import { useAuth } from "@/context/AuthContext";
 import Accordion from "@/components/Accordion";
 import AnimateIn from "@/components/AnimateIn";
 import ScrollButton from "@/components/ScrollButton";
+import {
+  CURATED_TIERS,
+  CURATED_TIER_KEYS,
+  type CuratedTier,
+  type CuratedTierKey,
+} from "@/lib/curated-tiers";
 
-type TierKey =
-  | "single_wall"
-  | "full_space"
-  | "bespoke"
-  | "managed_monthly"
-  | "managed_quarterly";
-
-interface Tier {
-  key: TierKey;
-  label: string;
-  priceLabel: string;
-  strapline: string;
-  bullets: string[];
-  cta: string;
-  group: "one_off" | "managed";
-  /** Surfaces a "Most popular" badge on this card. The middle one-off
-   *  tier is the conversion target — venues with 2+ walls converge here
-   *  and the price-quality ratio is the strongest of the five. */
-  popular?: boolean;
-}
-
-const ONE_OFF_TIERS: Tier[] = [
-  {
-    key: "single_wall",
-    label: "Single wall",
-    priceLabel: "£49",
-    strapline: "One feature wall, hand-picked.",
-    bullets: [
-      "Shortlist of 5–8 works suited to your space",
-      "Size, style and budget matched to your brief",
-      "Delivered by email within 5 business days",
-    ],
-    cta: "Book for £49",
-    group: "one_off",
-  },
-  {
-    key: "full_space",
-    label: "Full space",
-    priceLabel: "£149",
-    strapline: "Every wall in your venue, considered together.",
-    bullets: [
-      "Multi-wall shortlist with grouping notes",
-      "Mood and palette guidance for a coherent look",
-      "Optional revisions if you'd like alternatives",
-      "Delivered within 5 business days",
-    ],
-    cta: "Book for £149",
-    group: "one_off",
-    popular: true,
-  },
-  {
-    key: "bespoke",
-    label: "Bespoke project",
-    priceLabel: "From £299",
-    strapline:
-      "For hotels, hospitality groups, offices, or larger venues.",
-    bullets: [
-      "Full curation plan tailored to your brand and space",
-      "Artist shortlist + commissioned work if needed",
-      "Rotation schedule and installation guidance",
-      "Quote based on scope, just tell us what you need",
-    ],
-    cta: "Request a quote",
-    group: "one_off",
-  },
-];
-
-const MANAGED_TIERS: Tier[] = [
-  {
-    key: "managed_monthly",
-    label: "Monthly rotation",
-    priceLabel: "£79.99 / month",
-    strapline: "New shortlist every month, walls kept fresh.",
-    bullets: [
-      "New curated shortlist each month",
-      "Rotation suggestions tuned to season and traffic",
-      "Priority support and swap coordination",
-      "Cancel anytime",
-    ],
-    cta: "Start monthly, £79.99/mo",
-    group: "managed",
-  },
-  {
-    key: "managed_quarterly",
-    label: "Quarterly refresh",
-    priceLabel: "£199.99 / quarter",
-    strapline: "Seasonal refresh, less admin.",
-    bullets: [
-      "One considered refresh every three months",
-      "Works best paired with a rotating loan arrangement",
-      "Seasonal mood guidance included",
-      "Cancel anytime",
-    ],
-    cta: "Start quarterly, £199.99/qtr",
-    group: "managed",
-  },
-];
-
-const ALL_TIERS = [...ONE_OFF_TIERS, ...MANAGED_TIERS];
-const TIER_KEYS = new Set<TierKey>(ALL_TIERS.map((t) => t.key));
+const ONE_OFF_TIERS = CURATED_TIERS.filter((t) => t.group === "one_off");
+const MANAGED_TIERS = CURATED_TIERS.filter((t) => t.group === "managed");
 
 const VENUE_TYPES = [
   "Café",
@@ -214,7 +122,7 @@ export default function CuratedClient() {
   const cancelled = searchParams.get("cancelled") === "1";
   const { userType, loading: authLoading } = useAuth();
 
-  const [selectedTier, setSelectedTier] = useState<TierKey | null>(null);
+  const [selectedTier, setSelectedTier] = useState<CuratedTierKey | null>(null);
   const [form, setForm] = useState({
     venueName: "",
     contactName: "",
@@ -250,8 +158,8 @@ export default function CuratedClient() {
   // effect (below) will then bring the form into view automatically.
   useEffect(() => {
     const tierParam = searchParams.get("tier");
-    if (tierParam && TIER_KEYS.has(tierParam as TierKey)) {
-      setSelectedTier(tierParam as TierKey);
+    if (tierParam && CURATED_TIER_KEYS.has(tierParam as CuratedTierKey)) {
+      setSelectedTier(tierParam as CuratedTierKey);
     }
   }, [searchParams]);
 
@@ -358,7 +266,7 @@ export default function CuratedClient() {
     "block text-xs font-medium text-muted uppercase tracking-wider mb-1";
 
   const selectedTierData = selectedTier
-    ? ALL_TIERS.find((t) => t.key === selectedTier)
+    ? CURATED_TIERS.find((t) => t.key === selectedTier)
     : null;
 
   return (
@@ -951,7 +859,7 @@ function TierCard({
   selected,
   onSelect,
 }: {
-  tier: Tier;
+  tier: CuratedTier;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -987,9 +895,9 @@ function TierCard({
         <p className="font-serif text-3xl text-foreground mb-2">
           {tier.priceLabel}
         </p>
-        <p className="text-sm text-foreground mb-4">{tier.strapline}</p>
+        <p className="text-sm text-foreground mb-4">{tier.summary.strapline}</p>
         <ul className="space-y-2 mb-5">
-          {tier.bullets.map((b) => (
+          {tier.summary.bullets.map((b) => (
             <li key={b} className="flex gap-2 text-sm text-muted">
               <svg
                 width="14"
