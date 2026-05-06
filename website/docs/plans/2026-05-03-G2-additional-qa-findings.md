@@ -393,9 +393,11 @@ Also no og:image PNG anywhere in `/public`; root `openGraph` has no `images` arr
 
 ---
 
-### G2-23: "Yes, delete my account" button has no onClick — dead button on artist AND venue settings
+### G2-23: ~~"Yes, delete my account" button has no onClick~~ — RESOLVED before G2
 
-**Symptom:** Confirm button in the Danger Zone is wired to nothing. User clicks → no API call, no feedback. Effectively a dead button. Worse than a mailto fallback.
+**Status:** Already fixed when G2 was drafted (commit `66ae791 feat(account): in-app delete account from settings (was mailto)`). The shared `AccountDangerZone` component (`src/components/AccountDangerZone.tsx`) wires the button to `POST /api/account/delete` with the typed `"DELETE MY ACCOUNT"` confirmation seatbelt and 5 passing tests. The G2 finding was based on a stale read of the codebase by the original discovery agent. Verified during PR-1 execution and skipped (no code change in PR-1).
+
+**Original symptom (no longer present):** Confirm button in the Danger Zone is wired to nothing. User clicks → no API call, no feedback. Effectively a dead button. Worse than a mailto fallback.
 
 **Where:**
 - Artist: `src/app/(pages)/artist-portal/settings/page.tsx:257-259`
@@ -467,9 +469,11 @@ Also no og:image PNG anywhere in `/public`; root `openGraph` has no `images` arr
 
 ---
 
-### G2-28: Notification-preference toggles silently no-op for 6 of 7 categories
+### G2-28: ~~Notification-preference toggles silently no-op for 6 of 7 categories~~ — RESOLVED before G2
 
-**Symptom:** Artist/venue toggles "Sales", "Payout notifications", "Wallplace newsletter" etc., clicks Save Preferences, sees "Saved!" — but only `messageNotifsEnabled` actually persists to the DB. The other six write to localStorage and are lost on every other device / private window. The success message is a lie.
+**Status:** Already fixed when G2 was drafted (commits `e849cdd feat(account): persistent notification preferences API + migration` + `d945d3b fix(settings): notification prefs persisted server-side, not localStorage`). Both settings pages now use the shared `useNotificationPrefs` hook → `PATCH /api/account/preferences` with optimistic update + revert-on-failure. The "Save Preferences" button and the lying "Saved!" toast are gone; the UI explicitly says "Changes save automatically." Only the 3 canonical toggles (`order_notifications_enabled`, `message_notifications_enabled`, `email_digest_enabled`) remain — the unbacked Sales/Payout/Newsletter toggles were removed/consolidated. Verified during PR-1 execution and skipped (no code change in PR-1).
+
+**Original symptom (no longer present):** Artist/venue toggles "Sales", "Payout notifications", "Wallplace newsletter" etc., clicks Save Preferences, sees "Saved!" — but only `messageNotifsEnabled` actually persists to the DB.
 
 **Where:**
 - Artist: `src/app/(pages)/artist-portal/settings/page.tsx:108-117`
@@ -909,7 +913,7 @@ This task should land alongside Plan G Tasks 3-5 (placement offer-row work) so t
 **Coverage check vs Plans A–F merged + Plans E/F/G unmerged:** every finding above carries a "Plan A–G?" line. None duplicate an existing task. Several explicitly call out partial-coverage cases (e.g. G2-22 calls out the alert() callers Plan F Task 21's ToastContext widening doesn't migrate; G2-50 augments Plan G Task 13's grep target list with /blog; G2-55 is the artwork-request twin of Plan G Task 4).
 
 **Severity grouping (rough):**
-- **Severity 1 (likely-broken-in-prod):** G2-14 (checkout 400), G2-15 (stale price → Stripe), G2-16 (statuses outside the tracker's whitelist), G2-23 (delete-account dead button), G2-28 (settings save lies), G2-30 (settings save lies on venue side), G2-41 (admin reviewed_at never written).
+- **Severity 1 (likely-broken-in-prod):** G2-14 (checkout 400), G2-15 (stale price → Stripe), G2-16 (statuses outside the tracker's whitelist), ~~G2-23 (delete-account dead button — resolved before G2)~~, ~~G2-28 (settings save lies — resolved before G2)~~, G2-30 (venue Account Details fields are dead — still live; deferred from PR-1 to PR-5 venue-portal phase), G2-41 (admin reviewed_at never written). PR-1 closed G2-14, G2-15, G2-16, G2-41.
 - **Severity 2 (cross-page logic gaps):** G2-1, G2-2, G2-3, G2-4, G2-5, G2-7, G2-8, G2-9, G2-29, G2-49, **G2-55** (responses look like placeholders).
 - **Severity 3 (UX polish / a11y):** G2-10, G2-11, G2-12, G2-13, G2-17, G2-18, G2-19, G2-20, G2-21, G2-22, G2-24, G2-25, G2-26, G2-27, G2-31, G2-32, G2-33, G2-34, G2-35, G2-36, G2-37, G2-38, G2-39, G2-40, G2-42, G2-43, G2-44, G2-45, G2-46, G2-47, G2-48, G2-50, G2-51, G2-52, G2-53, G2-54.
 
