@@ -11,6 +11,7 @@ import { SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
 import { calculateOrderShipping } from "@/lib/shipping-checkout";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { safeRedirect } from "@/lib/safe-redirect";
+import { isValidPostcode } from "@/lib/postcode";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -119,7 +120,15 @@ export default function CheckoutPage() {
 
   function updateField(field: keyof ShippingInfo, value: string) {
     setShipping((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => ({ ...prev, [field]: false }));
+    setErrors((prev) => {
+      const next = { ...prev, [field]: false };
+      // Editing postcode OR country should clear the format error so the
+      // user isn't stuck on a stale "wrong format" once they fix it.
+      if (field === "postcode" || field === "country") {
+        next.postcodeFormat = false;
+      }
+      return next;
+    });
   }
 
   async function handleSubmit() {
@@ -346,7 +355,43 @@ export default function CheckoutPage() {
                   />
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {renderInput("city", "City *")}
-                    {renderInput("postcode", "Postcode *")}
+                    {/* Postcode gets a country-aware format check on blur
+                        (G2-20). The generic required-error from renderInput
+                        is replaced inline so we can show either "required"
+                        OR "format wrong" without fighting the renderInput
+                        helper's single-error contract. */}
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="Postcode *"
+                        value={shipping.postcode || ""}
+                        onChange={(e) => updateField("postcode", e.target.value)}
+                        onBlur={() => {
+                          if (
+                            shipping.postcode &&
+                            !isValidPostcode(shipping.postcode, shipping.country)
+                          ) {
+                            setErrors((prev) => ({ ...prev, postcodeFormat: true }));
+                          } else {
+                            setErrors((prev) => ({ ...prev, postcodeFormat: false }));
+                          }
+                        }}
+                        className={inputClass(
+                          errors.postcodeFormat ? "postcodeFormat" : "postcode",
+                        )}
+                      />
+                      {errors.postcode && !errors.postcodeFormat && (
+                        <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          Postcode is required
+                        </p>
+                      )}
+                      {errors.postcodeFormat && (
+                        <p className="text-xs text-red-700 mt-1">
+                          Postcode doesn&apos;t look right for {shipping.country}. Double-check it.
+                        </p>
+                      )}
+                    </div>
                     <select
                       value={shipping.country}
                       onChange={(e) => updateField("country", e.target.value)}

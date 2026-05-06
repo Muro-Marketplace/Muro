@@ -333,6 +333,24 @@ describe("checkoutSchema fulfilment branches", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("ship branch rejects garbage postcode for GB country", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "ship",
+      shipping: { ...fullShipping, postcode: "ab", country: "GB" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("ship branch accepts valid postcode for GB country", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "ship",
+      shipping: { ...fullShipping, postcode: "SW1A 1AA", country: "GB" },
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("applySchema", () => {

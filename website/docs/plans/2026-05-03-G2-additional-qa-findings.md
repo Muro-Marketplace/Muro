@@ -18,7 +18,7 @@
 
 **Format:** Each finding has Title, Symptom, Where, Confidence, Already-in-Plan-A-G check, and Suggested approach. Numbered G2-1 onward so they can be appended into Plan G's existing 1–17 sequence without renumbering.
 
-**Total findings:** 55 (consolidated from 58+ raw findings; lower-value duplicates pruned). G2-55 added 2026-05-03 after a follow-up note from the product owner about artwork-request responses rendering as placeholders.
+**Total findings:** 56. G2-55 added 2026-05-03 after a product-owner note about artwork-request responses rendering as placeholders. G2-56 added 2026-05-03 after PR-1 (G2-15) closed unframed-line price-drift correction with documented partial coverage on framed lines.
 
 ---
 
@@ -906,6 +906,32 @@ This task should land alongside Plan G Tasks 3-5 (placement offer-row work) so t
 
 ---
 
+### G2-56: Framed cart lines bypass full server-side price-drift correction at checkout
+
+**Symptom:** Plan G2 PR-1 (commit `d24f458` / merged 2026-05-03) closed G2-15 for unframed cart lines: `/api/checkout` looks up every work in `artist_works`, rejects 409 for sold/deleted/out-of-stock, and recomputes `unit_amount` from the DB tier matched on `pricing.label`. **For framed cart lines this match fails** — the cart's `size` for a framed line is `"<base size> + <frame label>"` (e.g. `"A3 + Black Wood Frame"`), which never matches the DB tier `"A3"`. The route falls back to the client-supplied price for the recompute step.
+
+A defensive layer was added: parse the base size out, look up the DB base tier, and **reject 409 `code: "price_below_base"` if `clientPrice < dbBasePrice`** (catches the worst case — artist re-priced base downward, buyer would pay less than current minimum). Above-base lines fall through to the client price + a structured `console.warn("[checkout] framed line uses client price", { workId, clientPence, dbBasePence })` log so production can observe the fallback rate.
+
+The remaining gap: if the artist re-prices base **upward** within the uplift slack, OR re-prices the uplift, the buyer is charged the stale total. Bounded — frame options are an opt-in artist setting, not the default flow — but real.
+
+**Where:**
+- Route: `src/app/api/checkout/route.ts` (the framed-line floor block + fallback warn-log; comments document the partial coverage)
+- Cart line composition: `src/app/(pages)/browse/[slug]/[workSlug]/ArtworkPageClient.tsx` (where `size` becomes `"<base> + <frame>"` and `displayPrice` becomes `selectedPricing.price + frameUplift`)
+
+**Confidence:** high. Verified during PR-1 implementation and final review. Documented as a known limitation in `route.ts` (the comment block above the floor check).
+
+**Plan A–G?** No. This is a follow-up to PR-1's partial closure of G2-15.
+
+**Suggested fix (two options):**
+
+1. **Carry frame identity on the cart line.** Add `frameId` (or `frameSku`) to the cart-line shape. Server lookup: pull `artist_works.frames` (a JSONB array of `{ id, label, priceUplift }` keyed by id), reconstruct `expectedTotal = dbBasePrice + dbFrameUplift`, reject 409 if `clientPrice < expectedTotal`. This is the cleanest fix; full server-side authority. Schema change: 1 column on cart-line shape; 1 conditional column on `artist_works` if frames aren't already there as JSONB.
+
+2. **Parse `size` and assume a fixed uplift schedule.** Server reconstructs `clientPrice - dbBasePrice` as the implicit uplift; if the parsed uplift is within a tolerance band (e.g. 0–50% of base, or matches one of the artist's known uplifts), accept; else reject. Cheaper, no schema change, but loses precision and depends on artists not re-pricing uplifts often.
+
+Recommended: option 1. The schema change is small and the resulting authority model matches how unframed lines already work — server is the source of truth, client price is a verifier.
+
+---
+
 ## Self-review
 
 **Coverage check vs the user's original list of 11 items:** all 11 are already in Plan G (Tasks 1–17). Plan G2 contains zero items from that list and is purely additional findings.
@@ -914,7 +940,7 @@ This task should land alongside Plan G Tasks 3-5 (placement offer-row work) so t
 
 **Severity grouping (rough):**
 - **Severity 1 (likely-broken-in-prod):** G2-14 (checkout 400), G2-15 (stale price → Stripe), G2-16 (statuses outside the tracker's whitelist), ~~G2-23 (delete-account dead button — resolved before G2)~~, ~~G2-28 (settings save lies — resolved before G2)~~, G2-30 (venue Account Details fields are dead — still live; deferred from PR-1 to PR-5 venue-portal phase), G2-41 (admin reviewed_at never written). PR-1 closed G2-14, G2-15, G2-16, G2-41.
-- **Severity 2 (cross-page logic gaps):** G2-1, G2-2, G2-3, G2-4, G2-5, G2-7, G2-8, G2-9, G2-29, G2-49, **G2-55** (responses look like placeholders).
+- **Severity 2 (cross-page logic gaps):** G2-1, G2-2, G2-3, G2-4, G2-5, G2-7, G2-8, G2-9, G2-29, G2-49, **G2-55** (responses look like placeholders), **G2-56** (framed checkout price-drift gap, partial mitigation in PR-1).
 - **Severity 3 (UX polish / a11y):** G2-10, G2-11, G2-12, G2-13, G2-17, G2-18, G2-19, G2-20, G2-21, G2-22, G2-24, G2-25, G2-26, G2-27, G2-31, G2-32, G2-33, G2-34, G2-35, G2-36, G2-37, G2-38, G2-39, G2-40, G2-42, G2-43, G2-44, G2-45, G2-46, G2-47, G2-48, G2-50, G2-51, G2-52, G2-53, G2-54.
 
 **Risk notes:**

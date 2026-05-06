@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch } from "@/lib/api-client";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 interface VenueRow {
   id: string;
@@ -96,9 +97,9 @@ export default function AdminVenuesPage() {
           {filtered.map((venue) => {
             const expanded = expandedId === venue.id;
             const arrangements = [
-              venue.interested_in_free_loan && "Paid Loan",
-              venue.interested_in_revenue_share && "Revenue Share",
-              venue.interested_in_direct_purchase && "Purchase",
+              venue.interested_in_free_loan && ARRANGEMENT_LABEL.paid_loan,
+              venue.interested_in_revenue_share && ARRANGEMENT_LABEL.revenue_share,
+              venue.interested_in_direct_purchase && ARRANGEMENT_LABEL.purchase,
             ].filter(Boolean) as string[];
             return (
               <div key={venue.id} className="bg-white border border-border rounded-sm overflow-hidden">

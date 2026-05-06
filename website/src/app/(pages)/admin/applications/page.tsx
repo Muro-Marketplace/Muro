@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch } from "@/lib/api-client";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 interface Application {
   id: string;
@@ -247,9 +248,9 @@ export default function AdminApplicationsPage() {
                         <p className="text-xs text-muted uppercase tracking-wider mb-1">Arrangements</p>
                         <div className="flex flex-wrap gap-1.5">
                           {[
-                            app.open_to_free_loan && "Paid Loan",
-                            app.open_to_revenue_share && "Revenue Share",
-                            app.open_to_purchase && "Purchase",
+                            app.open_to_free_loan && ARRANGEMENT_LABEL.paid_loan,
+                            app.open_to_revenue_share && ARRANGEMENT_LABEL.revenue_share,
+                            app.open_to_purchase && ARRANGEMENT_LABEL.purchase,
                           ].filter(Boolean).map((o) => (
                             <span key={o as string} className="px-2 py-0.5 text-[10px] bg-surface text-muted border border-border rounded-sm">{o}</span>
                           ))}

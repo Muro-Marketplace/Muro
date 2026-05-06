@@ -10,6 +10,7 @@ import SpacesPlacementRequestForm, {
   type SpacesVenueOption,
 } from "@/components/SpacesPlacementRequestForm";
 import ArtworkRequestsList from "@/components/ArtworkRequestsList";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 interface ArtistWorkLite {
   id: string;
@@ -486,13 +487,20 @@ function SpacesPageContent() {
 
                     {/* Arrangement badges */}
                     <div className="flex flex-wrap gap-1.5 mb-3">
-                      {(venue.interestedInFreeLoan || venue.interestedInRevenueShare) && (
+                      {venue.interestedInFreeLoan && (
                         <span className="text-[10px] px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-sm">
-                          Display{venue.interestedInRevenueShare ? " + Rev Share" : ""}
+                          {ARRANGEMENT_LABEL.paid_loan}
+                        </span>
+                      )}
+                      {venue.interestedInRevenueShare && (
+                        <span className="text-[10px] px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-sm">
+                          {ARRANGEMENT_LABEL.revenue_share}
                         </span>
                       )}
                       {venue.interestedInDirectPurchase && (
-                        <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-sm">Purchase</span>
+                        <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-sm">
+                          {ARRANGEMENT_LABEL.purchase}
+                        </span>
                       )}
                     </div>
 
