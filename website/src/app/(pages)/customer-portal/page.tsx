@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import { formatCurrency } from "@/lib/format-currency";
+import { isRefundEligible } from "@/lib/order-status-labels";
 
 function safeArray(val: unknown): { title: string; qty: number; price: number; artistSlug?: string }[] {
   if (Array.isArray(val)) return val;
@@ -205,7 +206,7 @@ export default function CustomerPortalPage() {
           <div className="mt-6 pt-4 border-t border-border">
             {(() => {
               const orderRefund = refundRequests.find((r) => r.order_id === selected.id);
-              const refundEligible = ["confirmed", "processing", "shipped", "delivered"].includes(selected.status);
+              const refundEligible = isRefundEligible(selected);
 
               if (refundSuccess && orderRefund?.order_id === selected.id) {
                 return (
