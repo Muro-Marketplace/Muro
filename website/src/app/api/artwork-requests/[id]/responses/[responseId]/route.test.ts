@@ -17,6 +17,10 @@ let updates: Update[] = [];
 // returns no row, exercising the auto-create fallback path. Default
 // shape is the seeded Copper Kettle name used by the happy-path test.
 let venueProfileRow: { name: string } | null = { name: "Copper Kettle" };
+// Per-test override: shallow patch applied over the default
+// artwork_request_responses row. Lets a test pin
+// proposed_qr_enabled: null without rewriting the whole fixture.
+let responseOverride: Record<string, unknown> = {};
 
 // ---- Mocks -----------------------------------------------------------
 
@@ -72,6 +76,7 @@ vi.mock("@/lib/supabase-admin", () => {
             proposed_commission_amount_pence: null,
             proposed_commission_timeline: null,
             status: "sent",
+            ...responseOverride,
           },
           error: null,
         };
@@ -110,6 +115,7 @@ beforeEach(() => {
   inserts = [];
   updates = [];
   venueProfileRow = { name: "Copper Kettle" };
+  responseOverride = {};
 });
 
 function buildRequest(action: "accept" | "decline") {
@@ -158,8 +164,11 @@ describe("PATCH /api/artwork-requests/[id]/responses/[responseId]", () => {
     expect(respUpdate!.patch.status).toBe("accepted");
     expect(respUpdate!.patch.linked_placement_id).toEqual(expect.stringMatching(/^pl_/));
 
-    // nextStepLink should deep-link straight to the placement.
-    expect(json.nextStepLink).toMatch(/^\/venue-portal\/placements\/pl_/);
+    // nextStepLink should deep-link straight to the placement detail
+    // page at /placements/[id] (NOT /venue-portal/placements/[id], which
+    // doesn't exist as a route — the detail page infers viewer role).
+    expect(json.nextStepLink).toMatch(/^\/placements\/pl_/);
+    expect(json.nextStepLink).not.toMatch(/^\/venue-portal\/placements\/pl_/);
   });
 
   it("falls back to legacy placements link when venue profile is missing", async () => {
@@ -189,5 +198,21 @@ describe("PATCH /api/artwork-requests/[id]/responses/[responseId]", () => {
     // page filtered by artist so they can finish manually.
     expect(json.linkedPlacementId).toBeNull();
     expect(json.nextStepLink).toBe("/venue-portal/placements?artist=the-artist");
+  });
+
+  it("defaults qr_enabled to true for revenue_share when proposed_qr_enabled is null", async () => {
+    // QR is how customers buy off the venue's wall, so a rev-share
+    // placement without QR is broken-by-default. The artwork-request
+    // accept path must mirror /api/placements POST, which defaults
+    // qr_enabled to true unless the artist explicitly opted out.
+    responseOverride = { proposed_qr_enabled: null };
+    const { PATCH } = await import("./route");
+    const res = await PATCH(buildRequest("accept"), ctx);
+    expect(res.status).toBe(200);
+
+    const placementInsert = inserts.find((i) => i.table === "placements");
+    expect(placementInsert).toBeTruthy();
+    expect(placementInsert!.row.arrangement_type).toBe("revenue_share");
+    expect(placementInsert!.row.qr_enabled).toBe(true);
   });
 });

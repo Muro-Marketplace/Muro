@@ -200,7 +200,7 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                       <p className="text-xs text-emerald-700 pt-2 border-t border-border">
                         {r.linked_offer_id && <Link href="/venue-portal/offers" className="hover:underline">View created offer →</Link>}
                         {r.linked_commission_id && <Link href="/venue-portal/commissions" className="hover:underline">View commission →</Link>}
-                        {r.linked_placement_id && <Link href={`/venue-portal/placements/${r.linked_placement_id}`} className="hover:underline">View placement →</Link>}
+                        {r.linked_placement_id && <Link href={`/placements/${r.linked_placement_id}`} className="hover:underline">View placement →</Link>}
                       </p>
                     )}
                   </li>

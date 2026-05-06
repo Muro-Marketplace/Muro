@@ -175,7 +175,10 @@ export async function PATCH(
         arrangement_type: arrangementType,
         revenue_share_percent: typeof revSharePct === "number" ? revSharePct : null,
         monthly_fee_gbp: monthlyFeeGbp,
-        qr_enabled: resp.proposed_qr_enabled ?? false,
+        // QR defaults: rev-share placements need QR (it's how customers buy from
+        // the venue's wall); other arrangements default to off if the artist
+        // didn't explicitly tick the box. Matches /api/placements POST behaviour.
+        qr_enabled: resp.proposed_qr_enabled ?? (arrangementType === "revenue_share"),
         message: `Created from artwork-request response. Original brief: ${req.title ?? ""}`.slice(0, 1000),
         status: "pending",
         requester_user_id: resp.artist_user_id,
@@ -191,7 +194,10 @@ export async function PATCH(
         nextStepLink = `/venue-portal/placements?artist=${encodeURIComponent(resp.artist_slug || "")}`;
       } else {
         linkedPlacementId = placementId;
-        nextStepLink = `/venue-portal/placements/${placementId}`;
+        // The placement detail page lives at /placements/[id] and infers
+        // viewer role internally — there is no /venue-portal/placements/[id]
+        // route, so deep-linking there 404s.
+        nextStepLink = `/placements/${placementId}`;
       }
     }
   } else {

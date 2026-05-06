@@ -1051,6 +1051,7 @@ function BrowsePortfoliosPageInner() {
           <button
             type="button"
             onClick={() => setFilter("revenueShare", !filters.revenueShare)}
+            aria-pressed={filters.revenueShare}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.revenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
@@ -1099,6 +1100,7 @@ function BrowsePortfoliosPageInner() {
           <button
             type="button"
             onClick={() => setFilter("paidLoan", !filters.paidLoan)}
+            aria-pressed={filters.paidLoan}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.paidLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
@@ -1114,6 +1116,7 @@ function BrowsePortfoliosPageInner() {
           <button
             type="button"
             onClick={() => setFilter("outrightPurchase", !filters.outrightPurchase)}
+            aria-pressed={filters.outrightPurchase}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.outrightPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
@@ -1719,6 +1722,7 @@ function BrowsePortfoliosPageInner() {
                       <button
                         type="button"
                         onClick={() => setGalleryRevenueShare(!galleryRevenueShare)}
+                        aria-pressed={galleryRevenueShare}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
                           galleryRevenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
@@ -1763,6 +1767,7 @@ function BrowsePortfoliosPageInner() {
                       <button
                         type="button"
                         onClick={() => setGalleryFreeLoan(!galleryFreeLoan)}
+                        aria-pressed={galleryFreeLoan}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
                           galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
@@ -1778,6 +1783,7 @@ function BrowsePortfoliosPageInner() {
                       <button
                         type="button"
                         onClick={() => setGalleryPurchase(!galleryPurchase)}
+                        aria-pressed={galleryPurchase}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
                           galleryPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
