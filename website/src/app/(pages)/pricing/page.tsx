@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
@@ -114,6 +115,13 @@ export default function PricingPage() {
               to the Wallplace platform and venue network. The difference
               is visibility and the platform fee on sales.
             </p>
+            <aside className="mt-8 border border-border rounded-sm p-4 bg-surface">
+              <p className="text-sm text-foreground">
+                <strong>Are you a venue?</strong> Browsing and enquiring is free. See{" "}
+                <Link href="/venues" className="underline">how it works for venues</Link> or{" "}
+                <Link href="/curated" className="underline">explore Curated</Link> for managed selection from £49.
+              </p>
+            </aside>
           </div>
         </div>
       </section>
