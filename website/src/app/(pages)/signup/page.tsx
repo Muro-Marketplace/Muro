@@ -29,7 +29,7 @@ const options = [
   {
     label: "Venue",
     description: "Find artwork for your space. Free to display, optional revenue share. Browse and connect instantly.",
-    href: "/register-venue",
+    href: "/signup/venue",
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />

@@ -220,7 +220,7 @@ export default function DemoLandingPage() {
               Apply as Artist
             </Link>
             <Link
-              href="/register-venue"
+              href="/signup/venue"
               className="inline-flex items-center justify-center w-full sm:w-auto sm:min-w-[180px] px-7 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors"
             >
               Register Your Venue

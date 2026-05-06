@@ -210,7 +210,7 @@ export default function Home() {
                     <Link href="/browse" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Discover Art
                     </Link>
-                    <Link href="/register-venue" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                    <Link href="/signup/venue" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
                       REGISTER YOUR VENUE
                     </Link>
                   </div>
@@ -308,7 +308,7 @@ export default function Home() {
                     <Step dark number="03" title="Arrange" description="Display art for free with optional revenue share, or purchase outright." />
                   </div>
                   <div className="mt-10">
-                    <Link href="/register-venue" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                    <Link href="/signup/venue" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Register Your Venue
                     </Link>
                   </div>
@@ -435,7 +435,7 @@ export default function Home() {
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Venues</p>
                   <h3 className="font-serif text-xl mb-3">Source artwork risk-free</h3>
                   <p className="text-sm text-muted mb-6 flex-1">Free to browse and enquire. No contracts.</p>
-                  <Link href="/register-venue" className="inline-flex items-center justify-center w-full px-4 py-3.5 bg-accent text-white text-xs font-semibold tracking-wide uppercase rounded-sm hover:bg-accent-hover transition-colors whitespace-nowrap">
+                  <Link href="/signup/venue" className="inline-flex items-center justify-center w-full px-4 py-3.5 bg-accent text-white text-xs font-semibold tracking-wide uppercase rounded-sm hover:bg-accent-hover transition-colors whitespace-nowrap">
                     Register Your Venue
                   </Link>
                 </div>
