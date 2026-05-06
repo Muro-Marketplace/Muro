@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import type { ShippingInfo } from "@/lib/types";
 import { COUNTRIES, regionForCountry } from "@/lib/iso-countries";
 import { SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
@@ -12,10 +13,26 @@ import { calculateOrderShipping } from "@/lib/shipping-checkout";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { safeRedirect } from "@/lib/safe-redirect";
 import { isValidPostcode } from "@/lib/postcode";
+import { authFetch } from "@/lib/api-client";
+
+interface SavedAddressRow {
+  id: string;
+  full_name: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  postcode: string;
+  country: string;
+  is_default: boolean;
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, removeItem, updateQuantity, subtotal, ready } = useCart();
+  const { user } = useAuth();
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddressRow[]>([]);
+  // "" = picker not chosen yet; "__new" = "Use new address" picked.
+  const [savedAddressId, setSavedAddressId] = useState<string>("");
   // Plan G #1: explicit back link, callers append ?backTo= to ensure
   // browser-back has a known-good destination even if the history
   // entry has been replaced (e.g. offer-accept flows that redirect
@@ -62,6 +79,76 @@ export default function CheckoutPage() {
       setShipping((prev) => (prev.email ? prev : { ...prev, email: presetEmail }));
     }
   }, []);
+
+  // Saved-address book (G2-21): when the buyer is signed in, fetch their
+  // address book so the form can offer a one-click pre-fill. Guests get
+  // the original blank form. We also auto-pick the default if there is
+  // one and the address fields are still empty, so the most common case
+  // (one saved address, returning buyer) needs zero clicks.
+  useEffect(() => {
+    if (!user) {
+      setSavedAddresses([]);
+      setSavedAddressId("");
+      return;
+    }
+    let cancelled = false;
+    authFetch("/api/customer-addresses")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const list: SavedAddressRow[] = Array.isArray(data?.addresses) ? data.addresses : [];
+        setSavedAddresses(list);
+        const def = list.find((a) => a.is_default) || list[0];
+        if (def) {
+          setSavedAddressId(def.id);
+          setShipping((prev) => (prev.addressLine1 ? prev : {
+            ...prev,
+            fullName: prev.fullName || def.full_name,
+            addressLine1: def.line1,
+            addressLine2: def.line2 || "",
+            city: def.city,
+            postcode: def.postcode,
+            country: def.country,
+          }));
+        }
+      })
+      .catch(() => { /* guest path / network blip — silently fall back to blank form */ });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  function applySavedAddress(id: string) {
+    setSavedAddressId(id);
+    if (id === "__new") {
+      setShipping((prev) => ({
+        ...prev,
+        addressLine1: "",
+        addressLine2: "",
+        city: "",
+        postcode: "",
+        country: "GB",
+      }));
+      setErrors((prev) => ({ ...prev, postcodeFormat: false }));
+      return;
+    }
+    const picked = savedAddresses.find((a) => a.id === id);
+    if (!picked) return;
+    setShipping((prev) => ({
+      ...prev,
+      fullName: picked.full_name,
+      addressLine1: picked.line1,
+      addressLine2: picked.line2 || "",
+      city: picked.city,
+      postcode: picked.postcode,
+      country: picked.country,
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      addressLine1: false,
+      city: false,
+      postcode: false,
+      postcodeFormat: false,
+    }));
+  }
 
   const region = regionForCountry(shipping.country);
 
@@ -343,6 +430,24 @@ export default function CheckoutPage() {
                 {renderInput("email", "Email address *", "email")}
                 {renderInput("phone", "Phone number *", "tel")}
               </div>
+              {fulfilmentMethod === "ship" && savedAddresses.length > 0 && (
+                <div>
+                  <label className="block text-xs text-muted mb-1">Use a saved address</label>
+                  <select
+                    value={savedAddressId}
+                    onChange={(e) => applySavedAddress(e.target.value)}
+                    className={inputClass("savedAddress")}
+                  >
+                    {savedAddresses.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.full_name} — {a.line1}, {a.postcode}
+                        {a.is_default ? " (default)" : ""}
+                      </option>
+                    ))}
+                    <option value="__new">Use a new address</option>
+                  </select>
+                </div>
+              )}
               {fulfilmentMethod === "ship" && (
                 <>
                   {renderInput("addressLine1", "Address line 1 *")}

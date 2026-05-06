@@ -9,6 +9,7 @@ import PortalGuard from "@/components/PortalGuard";
 const navItems = [
   { label: "My Orders", href: "/customer-portal" },
   { label: "Saved", href: "/customer-portal/saved" },
+  { label: "Addresses", href: "/customer-portal/addresses" },
   { label: "Messages", href: "/customer-portal/messages" },
   { label: "Settings", href: "/customer-portal/settings" },
 ];
