@@ -844,11 +844,13 @@ function WallVisualizerInner(props: ExtendedProps) {
           />
         )}
 
-        {/* Top-right, quota chip + save status. The 2D/3D toggle
-            used to live here too but the centred ItemToolbar (top
-            centre) gets wide enough to overlap, so the toggle moved
-            to its own bottom-left perch. */}
-        <div className="absolute top-3 right-3 flex items-center gap-2">
+        {/* Top-right, quota chip + save status. Hidden on mobile —
+            the visualizer's mobile layout is space-constrained and
+            ItemToolbar (per-item operations) needs the full top
+            edge for horizontal scrolling. The quota counter still
+            surfaces via UpgradeModal when limits are hit, and
+            auto-save just works without a visible status indicator. */}
+        <div className="absolute top-3 right-3 hidden md:flex items-center gap-2">
           {canPersist && (
             <SaveStatus
               status={saveStatus}
@@ -871,26 +873,34 @@ function WallVisualizerInner(props: ExtendedProps) {
           />
         </div>
 
-        {/* Bottom-left, 2D / 3D toggle. Clear of the centred wall
-            config bar (bottom-centre) and the centred item toolbar
-            (top-centre). */}
-        <div className="absolute bottom-3 left-3 z-10">
+        {/* Bottom-left 2D / 3D toggle on desktop. On mobile this
+            position is occupied by the bottom toolbar, so the
+            toggle moves into the toolbar itself (see MobileActionBar
+            below). */}
+        <div className="absolute bottom-3 left-3 z-10 hidden md:block">
           <ViewModeToggle value={viewMode} onChange={setViewMode} />
         </div>
 
-        {/* Per-item toolbar, top centre when an item is selected */}
+        {/* Per-item toolbar. On desktop centred at top; on mobile
+            spans the available top width with horizontal scroll so
+            the user can swipe through size / frame / order / delete
+            controls when the bar is wider than the screen. */}
         {selectedItem && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-auto">
-            <ItemToolbar
-              item={selectedItem}
-              sizes={workById[selectedItem.work_id]?.sizes}
-              orientation={workById[selectedItem.work_id]?.orientation}
-              onChange={(partial) => handleItemChange(selectedItem.id, partial)}
-              onBringForward={handleBringForward}
-              onSendBack={handleSendBack}
-              onDuplicate={handleDuplicate}
-              onDelete={handleDelete}
-            />
+          <div className="absolute top-3 left-3 right-3 md:left-1/2 md:right-auto md:-translate-x-1/2 pointer-events-auto z-10">
+            <div className="overflow-x-auto md:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="inline-block">
+                <ItemToolbar
+                  item={selectedItem}
+                  sizes={workById[selectedItem.work_id]?.sizes}
+                  orientation={workById[selectedItem.work_id]?.orientation}
+                  onChange={(partial) => handleItemChange(selectedItem.id, partial)}
+                  onBringForward={handleBringForward}
+                  onSendBack={handleSendBack}
+                  onDuplicate={handleDuplicate}
+                  onDelete={handleDelete}
+                />
+              </div>
+            </div>
           </div>
         )}
 
@@ -990,6 +1000,8 @@ function WallVisualizerInner(props: ExtendedProps) {
               )}
 
               <MobileActionBar
+                viewMode={viewMode}
+                onChangeViewMode={setViewMode}
                 wallActive={mobileSheet === "wall"}
                 onToggleWall={() =>
                   setMobileSheet((prev) => (prev === "wall" ? null : "wall"))
@@ -1446,16 +1458,21 @@ function MobileWorksStrip({
   const previewWorks = works.slice(0, MAX_PREVIEW);
 
   if (collapsed) {
+    // Collapsed state: a thin tab the user can tap anywhere along
+    // its full width to expand the carousel back. Bigger chevron
+    // and obvious "Show" wording so the affordance reads as a
+    // tappable expand button (the previous version's 12px chevron +
+    // "Works · N" was too easy to miss).
     return (
       <button
         type="button"
         onClick={() => setCollapsed(false)}
-        className="flex items-center justify-center gap-1.5 py-1.5 text-[11px] text-stone-600 hover:text-stone-900 transition-colors"
+        className="flex items-center justify-center gap-2 py-2 text-xs text-stone-700 bg-stone-50 hover:bg-stone-100 active:bg-stone-200 transition-colors"
         aria-label="Show works"
       >
         <svg
-          width="12"
-          height="12"
+          width="14"
+          height="14"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -1464,12 +1481,10 @@ function MobileWorksStrip({
         >
           <polyline points="18 15 12 9 6 15" />
         </svg>
-        <span className="font-medium tracking-wide uppercase">
-          Works
+        <span className="font-medium tracking-wide">
+          Show works
           {works.length > 0 && (
-            <span className="ml-1 text-stone-400 normal-case tracking-normal">
-              · {works.length}
-            </span>
+            <span className="ml-1.5 text-stone-400">· {works.length}</span>
           )}
         </span>
       </button>
@@ -1479,18 +1494,21 @@ function MobileWorksStrip({
   return (
     <div className="flex flex-col">
       {/* Header row: collapse toggle on the left, "See all" link on
-          the right. Compact (28px tall) so most of the strip's
-          vertical budget goes to the thumbnails themselves. */}
-      <div className="flex items-center justify-between px-3 pt-1.5">
+          the right. Always show the expand button when there are
+          works so the user has an obvious path to the full grid
+          (search, tabs in venue mode); previously this only
+          appeared when works > MAX_PREVIEW which hid it for most
+          accounts. */}
+      <div className="flex items-center justify-between px-3 pt-2 pb-1">
         <button
           type="button"
           onClick={() => setCollapsed(true)}
           aria-label="Hide works"
-          className="-ml-1 p-1 flex items-center gap-1 text-[10px] text-stone-500 hover:text-stone-900 transition-colors"
+          className="-ml-1 px-1 py-0.5 flex items-center gap-1 text-[11px] text-stone-600 hover:text-stone-900 transition-colors"
         >
           <svg
-            width="12"
-            height="12"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -1501,13 +1519,36 @@ function MobileWorksStrip({
           </svg>
           <span className="font-medium uppercase tracking-[0.18em]">Works</span>
         </button>
-        {works.length > MAX_PREVIEW && (
+        {works.length > 0 && (
           <button
             type="button"
             onClick={onExpand}
-            className="text-[10px] text-stone-500 hover:text-stone-900 underline-offset-2 hover:underline"
+            aria-label="Open full works grid"
+            className="px-2 py-0.5 flex items-center gap-1 text-[11px] text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded transition-colors"
           >
-            See all {works.length}
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            <span>
+              See all
+              {works.length > MAX_PREVIEW && (
+                <span className="ml-1 text-stone-400">
+                  · {works.length}
+                </span>
+              )}
+            </span>
           </button>
         )}
       </div>
@@ -1565,12 +1606,16 @@ function MobileWorksStrip({
  * stays dominant. Pairs with MobileWorksStrip above it.
  */
 function MobileActionBar({
+  viewMode,
+  onChangeViewMode,
   wallActive,
   onToggleWall,
   renderVisible,
   renderInFlight,
   onRender,
 }: {
+  viewMode: ViewMode;
+  onChangeViewMode: (next: ViewMode) => void;
   wallActive: boolean;
   onToggleWall: () => void;
   renderVisible: boolean;
@@ -1579,6 +1624,11 @@ function MobileActionBar({
 }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2 border-t border-black/5">
+      {/* 2D / 3D toggle — replaces the bottom-left floating pill on
+          desktop, since on mobile that corner is now under the
+          bottom toolbar. */}
+      <ViewModeToggle value={viewMode} onChange={onChangeViewMode} />
+
       <button
         type="button"
         onClick={onToggleWall}
