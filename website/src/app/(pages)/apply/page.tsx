@@ -49,7 +49,7 @@ export default function ApplyPage() {
                 First month free on all plans.
               </p>
               <p className="text-muted text-sm mt-1">
-                Try any plan for 30 days at no cost. No commitment, cancel any time.
+                No commitment, cancel any time.
               </p>
             </div>
           </div>

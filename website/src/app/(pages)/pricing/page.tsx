@@ -139,12 +139,12 @@ export default function PricingPage() {
                   First month free on all plans
                 </p>
                 <p className="text-muted text-sm mt-1">
-                  Try any plan for 30 days at no cost. No commitment, cancel any time.
+                  No commitment, cancel any time.
                 </p>
               </div>
               <div className="shrink-0">
                 <Button href="/apply" size="md">
-                  Start Your 30-Day Free Trial
+                  Apply to join — first month free
                 </Button>
               </div>
             </div>
@@ -321,7 +321,7 @@ export default function PricingPage() {
             First month free on all plans. No commitment, cancel any time.
           </p>
           <Button href="/apply" size="lg">
-            Start Your 30-Day Free Trial
+            Apply to join — first month free
           </Button>
         </div>
       </section>

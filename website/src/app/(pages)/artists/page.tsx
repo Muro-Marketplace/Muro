@@ -309,7 +309,7 @@ export default function ArtistsPage() {
               First month free on all plans.
             </p>
             <p className="mt-2 text-2xl md:text-3xl font-serif text-accent">
-              Start your 30-day free trial today.
+              Apply to join — first month free.
             </p>
           </div>
 
