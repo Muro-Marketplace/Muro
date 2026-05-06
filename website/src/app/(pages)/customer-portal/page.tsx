@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
-import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import { formatCurrency } from "@/lib/format-currency";
 import { isRefundEligible } from "@/lib/order-status-labels";
+import { useUrlState } from "@/lib/use-url-state";
 
 function safeArray(val: unknown): { title: string; qty: number; price: number; artistSlug?: string }[] {
   if (Array.isArray(val)) return val;
@@ -45,11 +45,25 @@ interface RefundRequest {
   created_at: string;
 }
 
+type StatusFilter = "all" | "active" | "delivered" | "cancelled";
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "active", label: "Active" },
+  { key: "delivered", label: "Delivered" },
+  { key: "cancelled", label: "Cancelled" },
+];
+
+const TERMINAL_NON_DELIVERED = new Set(["cancelled", "refunded", "disputed"]);
+
 export default function CustomerPortalPage() {
-  const { displayName } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useUrlState<string>("order", "");
+  const [statusFilter, setStatusFilter] = useUrlState<StatusFilter>("status", "all");
+  const [fromDate, setFromDate] = useUrlState<string>("from", "");
+  const [toDate, setToDate] = useUrlState<string>("to", "");
+  const [query, setQuery] = useUrlState<string>("q", "");
   const [showRefundForm, setShowRefundForm] = useState(false);
   const [refundType, setRefundType] = useState<"full" | "partial">("full");
   const [refundAmount, setRefundAmount] = useState("");
@@ -98,7 +112,31 @@ export default function CustomerPortalPage() {
   }
 
   const totalSpent = orders.reduce((sum, o) => sum + (o.total || 0), 0);
-  const rawSelected = orders.find((o) => o.id === selectedOrder);
+
+  const filteredOrders = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const fromMs = fromDate ? new Date(fromDate).getTime() : null;
+    // Inclusive end-of-day so a "to" of 6 May matches an order placed 6 May 23:59.
+    const toMs = toDate ? new Date(toDate).getTime() + 24 * 60 * 60 * 1000 - 1 : null;
+    return orders.filter((o) => {
+      if (statusFilter === "active" && (TERMINAL_NON_DELIVERED.has(o.status) || o.status === "delivered")) return false;
+      if (statusFilter === "delivered" && o.status !== "delivered") return false;
+      if (statusFilter === "cancelled" && !TERMINAL_NON_DELIVERED.has(o.status)) return false;
+      if (fromMs != null && new Date(o.created_at).getTime() < fromMs) return false;
+      if (toMs != null && new Date(o.created_at).getTime() > toMs) return false;
+      if (q) {
+        const haystack = [
+          o.order_number || "",
+          o.id,
+          ...safeArray(o.items).map((it) => it.title),
+        ].join(" ").toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [orders, statusFilter, fromDate, toDate, query]);
+
+  const rawSelected = orders.find((o) => o.id === selectedOrderId);
   // Ensure items is always an array and status_history is parsed
   const selected = rawSelected ? {
     ...rawSelected,
@@ -130,8 +168,8 @@ export default function CustomerPortalPage() {
       {selected && (
         <div className="bg-surface border border-accent/20 rounded-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-base font-medium">Order {selected.id}</h2>
-            <button onClick={() => setSelectedOrder(null)} className="text-xs text-muted hover:text-foreground">Close</button>
+            <h2 className="text-base font-medium">Order {selected.order_number || selected.id}</h2>
+            <button onClick={() => setSelectedOrderId("")} className="text-xs text-muted hover:text-foreground">Close</button>
           </div>
 
           <OrderStatusTracker
@@ -336,29 +374,97 @@ export default function CustomerPortalPage() {
           cta={{ label: "Discover art", href: "/browse" }}
         />
       ) : (
-        <div className="space-y-3">
-          {orders.map((order) => (
-            <button
-              key={order.id}
-              onClick={() => setSelectedOrder(selectedOrder === order.id ? null : order.id)}
-              className={`w-full text-left bg-surface border rounded-sm p-4 sm:p-5 transition-all hover:border-accent/30 ${selectedOrder === order.id ? "border-accent/40 shadow-sm" : "border-border"}`}
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{order.id}</p>
-                  <p className="text-xs text-muted mt-0.5">
-                    {new Date(order.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                    {" · "}{safeArray(order.items).length} item{safeArray(order.items).length !== 1 ? "s" : ""}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium">{formatCurrency(order.total, order.currency)}</p>
-                  <OrderStatusTracker currentStatus={order.status} compact />
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
+        <>
+          {/* Filters */}
+          <div className="space-y-3 mb-4">
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter orders by status">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  role="tab"
+                  aria-selected={statusFilter === f.key}
+                  onClick={() => setStatusFilter(f.key)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    statusFilter === f.key
+                      ? "bg-accent text-white border-accent"
+                      : "bg-surface text-foreground border-border hover:border-accent/50"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2 items-center">
+              <label className="flex items-center gap-1.5 text-xs text-muted">
+                From
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="bg-surface border border-border rounded-sm px-2 py-1 text-sm text-foreground"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted">
+                To
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="bg-surface border border-border rounded-sm px-2 py-1 text-sm text-foreground"
+                />
+              </label>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by order number or work title"
+                className="flex-1 min-w-[12rem] bg-surface border border-border rounded-sm px-3 py-1.5 text-sm text-foreground placeholder:text-muted"
+                aria-label="Search orders"
+              />
+              {(statusFilter !== "all" || fromDate || toDate || query) && (
+                <button
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setFromDate("");
+                    setToDate("");
+                    setQuery("");
+                  }}
+                  className="text-xs text-muted hover:text-foreground transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {filteredOrders.length === 0 ? (
+            <p className="text-muted text-sm py-12 text-center">No orders match these filters.</p>
+          ) : (
+            <div className="space-y-3">
+              {filteredOrders.map((order) => (
+                <button
+                  key={order.id}
+                  onClick={() => setSelectedOrderId(selectedOrderId === order.id ? "" : order.id)}
+                  className={`w-full text-left bg-surface border rounded-sm p-4 sm:p-5 transition-all hover:border-accent/30 ${selectedOrderId === order.id ? "border-accent/40 shadow-sm" : "border-border"}`}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{order.order_number || order.id}</p>
+                      <p className="text-xs text-muted mt-0.5">
+                        {new Date(order.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        {" · "}{safeArray(order.items).length} item{safeArray(order.items).length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{formatCurrency(order.total, order.currency)}</p>
+                      <OrderStatusTracker currentStatus={order.status} compact />
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </CustomerPortalLayout>
   );
