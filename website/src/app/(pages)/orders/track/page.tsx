@@ -40,12 +40,15 @@ interface TrackedOrder {
 
 // Labels live in the canonical module (src/lib/order-status-labels.ts).
 // Tones are a UI decision local to this page: shipped/delivered are "good"
-// (the happy path is making progress), cancelled/refunded/disputed are
-// "warn" (something went sideways), everything else is "neutral".
-type StatusTone = "neutral" | "good" | "warn";
+// (the happy path is making progress), cancelled is "danger" (hard stop —
+// matches OrderStatusTracker's red treatment), refunded/disputed are "warn"
+// (the order ran into trouble but money/dispute resolution is in flight),
+// everything else is "neutral".
+type StatusTone = "neutral" | "good" | "warn" | "danger";
 function toneFor(status: string): StatusTone {
   if (status === "shipped" || status === "delivered") return "good";
-  if (status === "cancelled" || status === "refunded" || status === "disputed") return "warn";
+  if (status === "cancelled") return "danger";
+  if (status === "refunded" || status === "disputed") return "warn";
   return "neutral";
 }
 
@@ -132,7 +135,9 @@ export default function OrderTrackPage() {
       ? "bg-green-50 text-green-700 border-green-200"
       : tone === "warn"
         ? "bg-amber-50 text-amber-700 border-amber-200"
-        : "bg-surface text-foreground border-border";
+        : tone === "danger"
+          ? "bg-red-50 text-red-700 border-red-200"
+          : "bg-surface text-foreground border-border";
 
   return (
     <div className="bg-background">

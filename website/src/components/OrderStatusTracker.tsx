@@ -55,6 +55,8 @@ export default function OrderStatusTracker({ currentStatus, statusHistory = [], 
             </div>
           );
         })}
+        {/* Defensive fallback: this only fires when currentStatus is unknown to
+            the system entirely. Off-pipeline statuses already returned above. */}
         <span className="text-xs font-medium text-foreground ml-2">{ORDER_STEPS[currentIdx]?.label ?? labelForStatus(currentStatus)}</span>
       </div>
     );
