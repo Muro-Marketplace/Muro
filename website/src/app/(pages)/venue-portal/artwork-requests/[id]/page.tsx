@@ -28,15 +28,22 @@ interface ResponseRow {
   id: string;
   artist_user_id: string;
   artist_slug: string | null;
+  // Legacy `existing_works` rows may still exist in the DB; the artist
+  // portal doesn't offer it as a new option but the venue still needs
+  // to render the historic ones, so the union keeps it.
   response_type: "existing_works" | "placement" | "offer" | "commission" | "message";
   message: string;
   work_ids: string[];
   proposed_offer_amount_pence: number | null;
   proposed_commission_amount_pence: number | null;
   proposed_commission_timeline: string | null;
+  proposed_monthly_fee_pence: number | null;
+  proposed_qr_enabled: boolean | null;
+  proposed_revenue_share_percent: number | null;
   status: string;
   linked_offer_id: string | null;
   linked_commission_id: string | null;
+  linked_placement_id: string | null;
   created_at: string;
 }
 
@@ -164,6 +171,17 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                             {r.proposed_commission_timeline && <span className="text-muted"> · {r.proposed_commission_timeline}</span>}
                           </p>
                         )}
+                        {r.response_type === "placement" && (
+                          <p className="text-xs text-muted mt-1">
+                            Proposed: {r.proposed_monthly_fee_pence != null && r.proposed_monthly_fee_pence > 0
+                              ? `£${(r.proposed_monthly_fee_pence / 100).toFixed(2)}/mo`
+                              : "Free display"}
+                            {r.proposed_revenue_share_percent != null && r.proposed_revenue_share_percent > 0
+                              ? ` · ${r.proposed_revenue_share_percent}% rev share`
+                              : ""}
+                            {r.proposed_qr_enabled ? " · QR enabled" : ""}
+                          </p>
+                        )}
                       </div>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border capitalize ${
                         r.status === "accepted" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -178,10 +196,11 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                         <button type="button" onClick={() => act(r.id, "decline")} disabled={busy === r.id} className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition-colors disabled:opacity-60">Decline</button>
                       </div>
                     )}
-                    {r.status === "accepted" && (r.linked_offer_id || r.linked_commission_id) && (
+                    {r.status === "accepted" && (r.linked_offer_id || r.linked_commission_id || r.linked_placement_id) && (
                       <p className="text-xs text-emerald-700 pt-2 border-t border-border">
                         {r.linked_offer_id && <Link href="/venue-portal/offers" className="hover:underline">View created offer →</Link>}
                         {r.linked_commission_id && <Link href="/venue-portal/commissions" className="hover:underline">View commission →</Link>}
+                        {r.linked_placement_id && <Link href={`/placements/${r.linked_placement_id}`} className="hover:underline">View placement →</Link>}
                       </p>
                     )}
                   </li>
