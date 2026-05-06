@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -145,6 +145,115 @@ function CheckPill({
         {label}
       </span>
     </button>
+  );
+}
+
+/**
+ * Self-contained distance slider with a debounced URL commit.
+ *
+ * The "stuck slider" bug had three flavours, fixed in three commits:
+ *   1. Controlled value lived in the URL → router.replace lag → thumb
+ *      snapped back during fast drags. Solved with local draft state.
+ *   2. onMouseUp on the slider misses the common "release outside the
+ *      thumb" case → draft never committed. Solved with a 250ms idle
+ *      debounce that fires regardless of release location.
+ *   3. Safari/WebKit fights React-controlled <input type="range"> even
+ *      with local state. Solved with `defaultValue` + a `key` keyed to
+ *      the URL value (so external commits remount, internal drag
+ *      doesn't).
+ *
+ * Even with all three, on Safari the page felt "rate limited" after a
+ * few drags because the draft state lived at the *page* level — every
+ * input event re-rendered the entire portfolio grid (30+ artist cards,
+ * no React.memo). Lifting the draft into this child component means
+ * a drag re-renders ~one slider's worth of JSX, not the whole page.
+ *
+ * The component is intentionally render-prop-light: `numberInputSuffix`
+ * lets each call site drop in its own trailing element ("mi" label vs
+ * "Change postcode" button) without forking the component.
+ */
+function DistanceSliderControl({
+  value,
+  onCommit,
+  labelClassName,
+  shortAny = false,
+  withNumberInput = false,
+  numberInputRowClassName = "flex items-center gap-2",
+  numberInputSuffix,
+  sliderClassName = "w-full accent-accent h-1.5 cursor-pointer",
+}: {
+  value: number;
+  onCommit: (n: number) => void;
+  labelClassName: string;
+  shortAny?: boolean;
+  withNumberInput?: boolean;
+  numberInputRowClassName?: string;
+  numberInputSuffix?: ReactNode;
+  sliderClassName?: string;
+}) {
+  const [draft, setDraft] = useState<number | null>(null);
+  const display = draft ?? value;
+  const isAny = display >= 9999;
+  const labelText = isAny
+    ? `Within ${shortAny ? "any" : "any distance"}`
+    : `Within ${display} mi`;
+
+  // Debounced commit — handles every release scenario (mouseup outside,
+  // touchend on a different element, blur from number input). 250ms idle
+  // is long enough to avoid mid-drag commits but short enough not to
+  // feel sluggish.
+  useEffect(() => {
+    if (draft == null) return;
+    const t = setTimeout(() => {
+      onCommit(draft);
+      setDraft(null);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [draft, onCommit]);
+
+  const slider = (
+    <input
+      type="range"
+      min={0}
+      max={200}
+      step={1}
+      key={`maxd-${value}`}
+      defaultValue={isAny ? 200 : display}
+      onChange={(e) => {
+        const v = Number(e.target.value);
+        setDraft(v >= 200 ? ANY_DISTANCE : v);
+      }}
+      className={sliderClassName}
+    />
+  );
+
+  return (
+    <>
+      <p className={labelClassName}>{labelText}</p>
+      {withNumberInput ? (
+        <div className="space-y-2.5">
+          {slider}
+          <div className={numberInputRowClassName}>
+            <input
+              type="number"
+              min={0}
+              max={9999}
+              value={isAny ? "" : display}
+              placeholder="Any"
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") { setDraft(ANY_DISTANCE); return; }
+                setDraft(Math.max(0, Number(raw) || 0));
+              }}
+              className="w-20 px-2 py-1 text-xs bg-surface border border-border rounded-sm text-foreground focus:outline-none focus:border-accent/50"
+            />
+            {numberInputSuffix}
+          </div>
+        </div>
+      ) : (
+        slider
+      )}
+    </>
   );
 }
 
@@ -324,6 +433,11 @@ function BrowsePortfoliosPageInner() {
     },
     [parsedLocation, setLocation],
   );
+
+  // Distance slider's draft state lives in the <DistanceSliderControl>
+  // child component now — see the doc comment on that component for the
+  // full bug-fix history. Lifting it down means a drag only re-renders
+  // the slider, not the entire portfolio grid.
 
   // Hydrate from localStorage on first mount when the URL itself is
   // location-less. This keeps the existing UX where a returning
@@ -847,39 +961,13 @@ function BrowsePortfoliosPageInner() {
             {/* Distance, max only, once we have a location (F48) */}
             {userCoords && (
               <div>
-                <p className="text-xs text-muted mb-2">
-                  Within {maxDistance >= 9999 ? "any distance" : `${maxDistance} mi`}
-                </p>
-                <div className="space-y-2.5">
-                  <input
-                    type="range"
-                    min={0}
-                    max={200}
-                    step={1}
-                    value={maxDistance >= 9999 ? 200 : maxDistance}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setMaxDistance(v >= 200 ? ANY_DISTANCE : v);
-                    }}
-                    className="w-full accent-accent h-1.5 cursor-pointer"
-                  />
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={9999}
-                      value={maxDistance >= 9999 ? "" : maxDistance}
-                      placeholder="Any"
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        if (raw === "") { setMaxDistance(ANY_DISTANCE); return; }
-                        setMaxDistance(Math.max(0, Number(raw) || 0));
-                      }}
-                      className="w-20 px-2 py-1 text-xs bg-surface border border-border rounded-sm text-foreground focus:outline-none focus:border-accent/50"
-                    />
-                    <span className="text-xs text-muted">mi</span>
-                  </div>
-                </div>
+                <DistanceSliderControl
+                  value={maxDistance}
+                  onCommit={setMaxDistance}
+                  labelClassName="text-xs text-muted mb-2"
+                  withNumberInput
+                  numberInputSuffix={<span className="text-xs text-muted">mi</span>}
+                />
               </div>
             )}
           </div>
@@ -1518,36 +1606,13 @@ function BrowsePortfoliosPageInner() {
                     <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Location</p>
                     {userCoords && (
                       <div>
-                        <p className="text-xs text-muted mb-2">
-                          Within {maxDistance >= 9999 ? "any distance" : `${maxDistance} mi`}
-                        </p>
-                        <div className="space-y-2.5">
-                          <input
-                            type="range"
-                            min={0}
-                            max={200}
-                            step={1}
-                            value={maxDistance >= 9999 ? 200 : maxDistance}
-                            onChange={(e) => {
-                              const v = Number(e.target.value);
-                              setMaxDistance(v >= 200 ? ANY_DISTANCE : v);
-                            }}
-                            className="w-full accent-accent h-1.5 cursor-pointer"
-                          />
-                          <div className="flex items-center justify-between gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={9999}
-                              value={maxDistance >= 9999 ? "" : maxDistance}
-                              placeholder="Any"
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                if (raw === "") { setMaxDistance(ANY_DISTANCE); return; }
-                                setMaxDistance(Math.max(0, Number(raw) || 0));
-                              }}
-                              className="w-20 px-2 py-1 text-xs bg-surface border border-border rounded-sm text-foreground focus:outline-none focus:border-accent/50"
-                            />
+                        <DistanceSliderControl
+                          value={maxDistance}
+                          onCommit={setMaxDistance}
+                          labelClassName="text-xs text-muted mb-2"
+                          withNumberInput
+                          numberInputRowClassName="flex items-center justify-between gap-2"
+                          numberInputSuffix={
                             <button
                               type="button"
                               onClick={() => { clearLocation(); setPostcodeError(false); }}
@@ -1555,8 +1620,8 @@ function BrowsePortfoliosPageInner() {
                             >
                               Change postcode
                             </button>
-                          </div>
-                        </div>
+                          }
+                        />
                       </div>
                     )}
                     {!userCoords && !geoRequesting && (
@@ -1808,20 +1873,10 @@ function BrowsePortfoliosPageInner() {
                               change
                             </button>
                           </p>
-                          <p className="text-[10px] text-muted mb-1.5">
-                            Within {maxDistance >= 9999 ? "any distance" : `${maxDistance} mi`}
-                          </p>
-                          <input
-                            type="range"
-                            min={0}
-                            max={200}
-                            step={1}
-                            value={maxDistance >= 9999 ? 200 : maxDistance}
-                            onChange={(e) => {
-                              const v = Number(e.target.value);
-                              setMaxDistance(v >= 200 ? ANY_DISTANCE : v);
-                            }}
-                            className="w-full accent-accent h-1.5 cursor-pointer"
+                          <DistanceSliderControl
+                            value={maxDistance}
+                            onCommit={setMaxDistance}
+                            labelClassName="text-[10px] text-muted mb-1.5"
                           />
                         </>
                       )}
@@ -2191,20 +2246,10 @@ function BrowsePortfoliosPageInner() {
                     </button>
                   </p>
                   <div>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">
-                      Within {maxDistance >= 9999 ? "any distance" : `${maxDistance} mi`}
-                    </p>
-                    <input
-                      type="range"
-                      min={0}
-                      max={200}
-                      step={1}
-                      value={maxDistance >= 9999 ? 200 : maxDistance}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setMaxDistance(v >= 200 ? ANY_DISTANCE : v);
-                      }}
-                      className="w-full accent-accent h-1.5 cursor-pointer"
+                    <DistanceSliderControl
+                      value={maxDistance}
+                      onCommit={setMaxDistance}
+                      labelClassName="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5"
                     />
                   </div>
                 </>
@@ -2251,20 +2296,11 @@ function BrowsePortfoliosPageInner() {
                     use-my-location otherwise. */}
                 {userCoords && (
                   <div className="hidden lg:block min-w-[180px]">
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">
-                      Within {maxDistance >= 9999 ? "any" : `${maxDistance} mi`}
-                    </p>
-                    <input
-                      type="range"
-                      min={0}
-                      max={200}
-                      step={1}
-                      value={maxDistance >= 9999 ? 200 : maxDistance}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setMaxDistance(v >= 200 ? ANY_DISTANCE : v);
-                      }}
-                      className="w-full accent-accent h-1.5 cursor-pointer"
+                    <DistanceSliderControl
+                      value={maxDistance}
+                      onCommit={setMaxDistance}
+                      labelClassName="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5"
+                      shortAny
                     />
                   </div>
                 )}
