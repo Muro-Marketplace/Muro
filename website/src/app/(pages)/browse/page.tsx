@@ -1966,22 +1966,28 @@ function BrowsePortfoliosPageInner() {
                     <div>
                       <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Arrangement</p>
                       <div className="space-y-2">
+                        {/* Revenue Share */}
                         <button
                           type="button"
-                          onClick={() => { setGalleryFreeLoan(!galleryFreeLoan); if (!galleryFreeLoan) setGalleryRevenueShare(true); }}
+                          onClick={() => setGalleryRevenueShare(!galleryRevenueShare)}
+                          aria-pressed={galleryRevenueShare}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm border text-left transition-colors ${
-                            galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                            galleryRevenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                           }`}
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={galleryFreeLoan ? "text-accent" : "text-muted"}>
-                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={galleryRevenueShare ? "text-accent" : "text-muted"}>
+                            <path d="m11 17 2 2a1 1 0 1 0 3-3" />
+                            <path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" />
+                            <path d="m21 3 1 11h-2" />
+                            <path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3" />
+                            <path d="M3 4h8" />
                           </svg>
                           <div>
-                            <p className="text-xs font-medium">Display</p>
-                            <p className="text-[10px] text-muted">Revenue share or paid loan</p>
+                            <p className="text-xs font-medium">Revenue Share</p>
+                            <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
                           </div>
                         </button>
-                        {galleryFreeLoan && (
+                        {galleryRevenueShare && (
                           <div className="flex items-center gap-2 pl-3 py-0.5">
                             <span className="text-[10px] text-muted">Min rev share</span>
                             <input
@@ -1992,13 +1998,33 @@ function BrowsePortfoliosPageInner() {
                               onChange={(e) => setGalleryRevenueShareMin(e.target.value === "" ? 0 : Number(e.target.value))}
                               placeholder="Any"
                               className="w-14 px-2 py-1 bg-surface border border-border rounded-sm text-xs text-foreground text-center focus:outline-none focus:border-accent/50"
+                              aria-label="Minimum revenue share"
                             />
                             <span className="text-[10px] text-muted">%</span>
                           </div>
                         )}
+
+                        {/* Paid Loan */}
+                        <button
+                          type="button"
+                          onClick={() => setGalleryFreeLoan(!galleryFreeLoan)}
+                          aria-pressed={galleryFreeLoan}
+                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm border text-left transition-colors ${
+                            galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                          }`}
+                        >
+                          <span className={`text-base font-serif font-semibold leading-none w-4 text-center ${galleryFreeLoan ? "text-accent" : "text-muted"}`}>&pound;</span>
+                          <div>
+                            <p className="text-xs font-medium">Paid Loan</p>
+                            <p className="text-[10px] text-muted">Monthly fee to display the work</p>
+                          </div>
+                        </button>
+
+                        {/* Direct Purchase */}
                         <button
                           type="button"
                           onClick={() => setGalleryPurchase(!galleryPurchase)}
+                          aria-pressed={galleryPurchase}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm border text-left transition-colors ${
                             galleryPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                           }`}
@@ -2007,7 +2033,7 @@ function BrowsePortfoliosPageInner() {
                             <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
                           </svg>
                           <div>
-                            <p className="text-xs font-medium">Purchase</p>
+                            <p className="text-xs font-medium">Direct Purchase</p>
                             <p className="text-[10px] text-muted">Buy artwork outright</p>
                           </div>
                         </button>
