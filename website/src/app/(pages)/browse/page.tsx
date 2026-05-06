@@ -884,7 +884,15 @@ function BrowsePortfoliosPageInner() {
                     min={0}
                     max={200}
                     step={1}
-                    value={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
+                    // Uncontrolled: lets the DOM thumb track the drag natively.
+                    // Safari/WebKit fights React-controlled range inputs during
+                    // rapid value updates, even with local state — the thumb
+                    // snaps back mid-drag. The `key` forces a remount whenever
+                    // the URL commits a new maxDistance, so external changes
+                    // (view switch, deep link, our own debounced commit) still
+                    // sync the thumb.
+                    key={`maxd-${maxDistance}`}
+                    defaultValue={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
                     onChange={(e) => {
                       const v = Number(e.target.value);
                       setDraftMaxDistance(v >= 200 ? ANY_DISTANCE : v);
@@ -1555,7 +1563,11 @@ function BrowsePortfoliosPageInner() {
                             min={0}
                             max={200}
                             step={1}
-                            value={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
+                            // Uncontrolled — see comment on the same slider in the
+                            // filterPanel above. Safari fights React-controlled
+                            // ranges; the `key` remounts on URL commits.
+                            key={`maxd-${maxDistance}`}
+                            defaultValue={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
                             onChange={(e) => {
                               const v = Number(e.target.value);
                               setDraftMaxDistance(v >= 200 ? ANY_DISTANCE : v);
@@ -1844,7 +1856,11 @@ function BrowsePortfoliosPageInner() {
                             min={0}
                             max={200}
                             step={1}
-                            value={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
+                            // Uncontrolled — see comment on the same slider in the
+                            // filterPanel above. Safari fights React-controlled
+                            // ranges; the `key` remounts on URL commits.
+                            key={`maxd-${maxDistance}`}
+                            defaultValue={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
                             onChange={(e) => {
                               const v = Number(e.target.value);
                               setDraftMaxDistance(v >= 200 ? ANY_DISTANCE : v);
@@ -2227,7 +2243,11 @@ function BrowsePortfoliosPageInner() {
                       min={0}
                       max={200}
                       step={1}
-                      value={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
+                      // Uncontrolled — see comment on the same slider in the
+                      // filterPanel above. Safari fights React-controlled
+                      // ranges; the `key` remounts on URL commits.
+                      key={`maxd-${maxDistance}`}
+                      defaultValue={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
                       onChange={(e) => {
                         const v = Number(e.target.value);
                         setDraftMaxDistance(v >= 200 ? ANY_DISTANCE : v);
@@ -2287,7 +2307,11 @@ function BrowsePortfoliosPageInner() {
                       min={0}
                       max={200}
                       step={1}
-                      value={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
+                      // Uncontrolled — see comment on the same slider in the
+                      // filterPanel above. Safari fights React-controlled
+                      // ranges; the `key` remounts on URL commits.
+                      key={`maxd-${maxDistance}`}
+                      defaultValue={displayMaxDistance >= 9999 ? 200 : displayMaxDistance}
                       onChange={(e) => {
                         const v = Number(e.target.value);
                         setDraftMaxDistance(v >= 200 ? ANY_DISTANCE : v);
