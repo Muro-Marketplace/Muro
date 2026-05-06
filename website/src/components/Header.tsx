@@ -54,9 +54,14 @@ type NavLink = { label: string; href: string; subLinks?: { label: string; href: 
 const publicNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
   { label: "How It Works", href: "/how-it-works" },
-  { label: "For Venues", href: "/venues" },
   { label: "Blog", href: "/blog" },
   { label: "Spaces", href: "/spaces-looking-for-art" },
+  // "For Venues" (/venues) deliberately dropped from the logged-out
+  // public nav: a cold visitor seeing both "Spaces" (which surfaces
+  // venue inventory) and "For Venues" (the venue-recruitment landing)
+  // reads as redundant, and the venue-side onboarding goes through the
+  // pricing / signup flow rather than this nav entry. The /venues
+  // route is still live for direct links and the footer.
   // Waitlist (#18), page kept live for warm prospects we already
   // sent the link to, but unsurfaced from the nav. Also gated from
   // search via robots metadata in the page itself.
