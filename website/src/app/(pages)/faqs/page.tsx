@@ -201,7 +201,7 @@ const venueFaqs: FaqEntry[] = [
         <p>
           Your enquiry lands in the artist&rsquo;s Wallplace inbox + email.
           Most artists reply within 48 hours. From there you agree the
-          arrangement (display loan, paid loan, or outright purchase),
+          arrangement (paid loans, revenue-share loans, and direct purchases),
           confirm dates and conditions, and the artist confirms the
           placement on the platform, that creates the loan record both
           parties countersign before the work is dispatched. You can track
