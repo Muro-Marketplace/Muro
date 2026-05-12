@@ -9,6 +9,7 @@ import { slugify } from "@/lib/slugify";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import Dropdown from "@/components/Dropdown";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
+import Turnstile from "@/components/Turnstile";
 
 const venueTypes = [
   "Café / Coffee Shop",
@@ -22,8 +23,8 @@ const venueTypes = [
 ];
 
 const wallSpaceOptions = [
-  "1–3 walls (small café / studio)",
-  "4–8 walls (restaurant / office floor)",
+  "1 to 3 walls (small café / studio)",
+  "4 to 8 walls (restaurant / office floor)",
   "9+ walls (hotel / large venue)",
 ];
 
@@ -94,6 +95,7 @@ export default function RegisterVenuePage() {
   const [agreedToTos, setAgreedToTos] = useState(false);
   const [agreedToVenueTerms, setAgreedToVenueTerms] = useState(false);
   const [acknowledgedInsurance, setAcknowledgedInsurance] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   function updateField(field: keyof VenueFormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -124,7 +126,25 @@ export default function RegisterVenuePage() {
       return;
     }
 
+    if (!turnstileToken) {
+      setError("Please complete the verification challenge.");
+      setSubmitting(false);
+      return;
+    }
+
     try {
+      const verifyRes = await fetch("/api/auth/verify-turnstile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: turnstileToken }),
+      });
+      const verifyData = (await verifyRes.json().catch(() => ({}))) as { ok?: boolean };
+      if (!verifyRes.ok || !verifyData.ok) {
+        setError("Verification failed. Refresh and try again.");
+        setSubmitting(false);
+        return;
+      }
+
       const venueSlug = slugify(form.venueName);
 
       // Persist the registration record AND seed the venue profile
@@ -222,7 +242,7 @@ export default function RegisterVenuePage() {
             <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">For Venues</p>
             <h1 className="text-4xl lg:text-5xl font-serif mb-4 text-white">Register Your Venue</h1>
             <p className="text-lg text-white/60 leading-relaxed">
-              Tell us about your space and we&rsquo;ll match you with artists whose work fits your environment. Completely free – no contracts, no commitments.
+              Tell us about your space and we&rsquo;ll match you with artists whose work fits your environment. Completely free, no contracts, no commitments.
             </p>
             <p className="mt-5 text-sm text-white/50">
               Want us to do the curation for you?{" "}
@@ -419,11 +439,15 @@ export default function RegisterVenuePage() {
                 </label>
               </div>
 
+              <div className="pt-2">
+                <Turnstile onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
+              </div>
+
               {/* Submit */}
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={submitting || !agreedToTos || !agreedToVenueTerms || !acknowledgedInsurance}
+                  disabled={submitting || !agreedToTos || !agreedToVenueTerms || !acknowledgedInsurance || !turnstileToken}
                   className="px-8 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? "Registering..." : "Register Your Venue"}

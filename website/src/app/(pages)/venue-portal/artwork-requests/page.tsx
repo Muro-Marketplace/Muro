@@ -84,7 +84,7 @@ export default function VenueArtworkRequestsPage() {
                     {r.intent.map((i) => <span key={i} className="px-1.5 py-0.5 bg-foreground/5 rounded-sm capitalize">{i}</span>)}
                     {(r.budget_min_pence || r.budget_max_pence) && (
                       <span className="px-1.5 py-0.5 bg-foreground/5 rounded-sm">
-                        £{((r.budget_min_pence || 0) / 100).toFixed(0)}–£{((r.budget_max_pence || 0) / 100).toFixed(0)}
+                        £{((r.budget_min_pence || 0) / 100).toFixed(0)} to £{((r.budget_max_pence || 0) / 100).toFixed(0)}
                       </span>
                     )}
                   </div>

@@ -85,7 +85,7 @@ function VenueExplainer() {
         },
       ]}
       cta={{ href: "/browse", label: "Browse artists" }}
-      secondaryCta={{ href: "/curated", label: "Or explore Curated — managed selection from £49" }}
+      secondaryCta={{ href: "/curated", label: "Or explore Curated, a managed selection from £49" }}
     />
   );
 }
@@ -114,7 +114,7 @@ function ArtistExplainer() {
             "Venues enquire directly. Display work in their spaces, sell originals through your QR-coded display, or sell prints from your storefront.",
         },
       ]}
-      cta={{ href: "/apply", label: "Apply to join — first month free if accepted" }}
+      cta={{ href: "/apply", label: "Apply to join, first month free if accepted" }}
       secondaryCta={{ href: "/pricing", label: "See pricing" }}
     />
   );
@@ -123,7 +123,7 @@ function ArtistExplainer() {
 function BuyerExplainer() {
   return (
     <Explainer
-      lede="Buy original artwork directly from independent artists — through a venue display you've spotted in person, or from the artist's storefront online."
+      lede="Buy original artwork directly from independent artists, through a venue display you've spotted in person, or from the artist's storefront online."
       steps={[
         {
           number: "01",

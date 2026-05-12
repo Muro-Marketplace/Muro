@@ -390,7 +390,10 @@ export default function BillingPage() {
                     {isAnnual ? `\u00a3${d.priceAnnual}/yr` : `\u00a3${d.priceMonthly}/mo`}
                   </p>
                   {isAnnual ? (
-                    <p className="text-[11px] text-accent mb-3">{annualMonthlyEquivalent(d.priceAnnual)} &middot; save {saves}%</p>
+                    <p className="text-[11px] mb-3">
+                      <span className="text-muted">{annualMonthlyEquivalent(d.priceAnnual)} &middot; </span>
+                      <span className="inline-block px-1.5 py-0.5 bg-accent text-white font-bold uppercase tracking-wider text-[10px] rounded-sm">save {saves}%</span>
+                    </p>
                   ) : (
                     <p className="text-[11px] text-muted mb-3">billed monthly</p>
                   )}
@@ -438,7 +441,10 @@ export default function BillingPage() {
                     {isAnnual ? `\u00a3${d.priceAnnual}/yr` : `\u00a3${d.priceMonthly}/mo`}
                   </p>
                   {isAnnual ? (
-                    <p className="text-[11px] text-accent mb-2">{annualMonthlyEquivalent(d.priceAnnual)} &middot; save {saves}%</p>
+                    <p className="text-[11px] mb-2">
+                      <span className="text-muted">{annualMonthlyEquivalent(d.priceAnnual)} &middot; </span>
+                      <span className="inline-block px-1.5 py-0.5 bg-accent text-white font-bold uppercase tracking-wider text-[10px] rounded-sm">save {saves}%</span>
+                    </p>
                   ) : (
                     <p className="text-[11px] text-muted mb-2">billed monthly</p>
                   )}
@@ -575,8 +581,8 @@ function BillingCycleToggle({
         }`}
       >
         Annual
-        <span className={`px-1.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider ${
-          value === "annual" ? "bg-white/15 text-white" : "bg-accent/10 text-accent"
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+          value === "annual" ? "bg-white text-foreground" : "bg-accent text-white"
         }`}>
           Save 17%
         </span>

@@ -152,7 +152,7 @@ export default function FeatureRequestsPage() {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Title — what would you like?"
+                placeholder="Title, what would you like?"
                 maxLength={160}
                 className="w-full px-3 py-2 mb-3 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60"
               />

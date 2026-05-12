@@ -32,7 +32,7 @@ describe("isValidPostcode", () => {
     expect(isValidPostcode("K1A0B1", "CA")).toBe(true);
   });
 
-  it("falls back to non-empty 1–20 char rule for unsupported countries", () => {
+  it("falls back to non-empty 1 to 20 char rule for unsupported countries", () => {
     expect(isValidPostcode("123 ABC", "FR")).toBe(true);
     expect(isValidPostcode("75001", "FR")).toBe(true);
     expect(isValidPostcode("", "FR")).toBe(false);

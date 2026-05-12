@@ -318,7 +318,7 @@ export default function SpacesPlacementRequestForm({
         // fallback); when 'commission' graduates to its own arrangement
         // type, this branch flips a single string and the rest of the
         // payload stays the same.
-        const priceLine = `Commission proposal — proposed price £${Number(proposedPrice).toLocaleString("en-GB")}`;
+        const priceLine = `Commission proposal, proposed price £${Number(proposedPrice).toLocaleString("en-GB")}`;
         const briefTrim = commissionBrief.trim();
         const composed = [priceLine, briefTrim, messageTrim]
           .filter((s) => s.length > 0)
@@ -907,14 +907,14 @@ export default function SpacesPlacementRequestForm({
             <textarea
               value={commissionBrief}
               onChange={(e) => setCommissionBrief(e.target.value.slice(0, 1000))}
-              placeholder={`What you'd make for ${venue.name} — medium, scale, palette, mood, timeline…`}
+              placeholder={`What you'd make for ${venue.name}: medium, scale, palette, mood, timeline…`}
               rows={4}
               className="w-full px-3 py-2 text-xs border border-border rounded-sm bg-background focus:outline-none focus:border-accent resize-none"
             />
             {commissionBrief.trim().length > 0 &&
               commissionBrief.trim().length < 30 && (
                 <p className="text-[10px] text-muted/80 mt-1">
-                  A few sentences on what you&rsquo;d make works best — venues
+                  A few sentences on what you&rsquo;d make works best, venues
                   need enough to picture it.
                 </p>
               )}
@@ -955,7 +955,7 @@ export default function SpacesPlacementRequestForm({
             autoFocus
           />
           <p className="text-[10px] text-muted/80 mt-1">
-            This opens a normal DM thread. No placement, no terms — just a
+            This opens a normal DM thread. No placement, no terms, just a
             conversation.
           </p>
         </div>

@@ -8,7 +8,7 @@ import AnimateIn from "@/components/AnimateIn";
 import ScrollButton from "@/components/ScrollButton";
 
 export const metadata: Metadata = {
-  title: "For Artists – Wallplace",
+  title: "For Artists | Wallplace",
   description:
     "Display your work in real venues and sell directly online. Your Wallplace page is your portfolio and your storefront. Every QR scan is a sale opportunity.",
 };
@@ -22,7 +22,7 @@ const valueBlocks = [
       </svg>
     ),
     title: "High-intent venue demand",
-    description: "Real venues actively looking for art – cafés, restaurants, hotels, galleries, offices, and salons.",
+    description: "Real venues actively looking for art, cafés, restaurants, hotels, galleries, offices, and salons.",
   },
   {
     icon: (
@@ -63,7 +63,7 @@ const valueBlocks = [
       </svg>
     ),
     title: "Fair platform fees",
-    description: "5–15% platform fee. No gallery taking half. You keep the majority of every sale.",
+    description: "5 to 15% platform fee. No gallery taking half. You keep the majority of every sale.",
   },
   {
     icon: (
@@ -87,10 +87,10 @@ const pipelineSteps = [
 const comparisonData = [
   {
     category: "Platform fee",
-    gallery: "40–60%",
-    marketplace: "15–30%",
+    gallery: "40 to 60%",
+    marketplace: "15 to 30%",
     instagram: "N/A",
-    wallplace: "5–15%",
+    wallplace: "5 to 15%",
   },
   {
     category: "Physical display",
@@ -108,10 +108,10 @@ const comparisonData = [
   },
   {
     category: "Cost",
-    gallery: "£200–1,000/week",
-    marketplace: "Free–£30/month",
+    gallery: "£200 to 1,000/week",
+    marketplace: "Free to £30/month",
     instagram: "Free",
-    wallplace: "£9.99–£49.99/month",
+    wallplace: "£9.99 to £49.99/month",
   },
   {
     category: "Audience",
@@ -133,12 +133,12 @@ const faqItems = [
   {
     question: "Will my work actually sell?",
     answer:
-      "We can't guarantee sales – no honest platform can. What we do is connect you with venues that have real daily footfall and genuine interest in displaying art. Every piece gets a QR code linking to your sales page, and venues are matched to your style and medium. The rest is down to the work.",
+      "We can't guarantee sales, no honest platform can. What we do is connect you with venues that have real daily footfall and genuine interest in displaying art. Every piece gets a QR code linking to your sales page, and venues are matched to your style and medium. The rest is down to the work.",
   },
   {
     question: "Why should I pay for this?",
     answer:
-      "Because a gallery would take 40–60% of every sale on top of significant upfront costs. Wallplace gives you a platform fee of 5–15%, ongoing commercial visibility, sales infrastructure, and access to a growing network of venues – for less than the cost of a round of drinks per month.",
+      "Because a gallery would take 40 to 60% of every sale on top of significant upfront costs. Wallplace gives you a platform fee of 5 to 15%, ongoing commercial visibility, sales infrastructure, and access to a growing network of venues, for less than the cost of a round of drinks per month.",
   },
   {
     question: "Do you handle delivery and installation?",
@@ -314,7 +314,7 @@ export default function ArtistsPage() {
               First month free on all plans.
             </p>
             <p className="mt-2 text-2xl md:text-3xl font-serif text-accent">
-              Apply to join — first month free.
+              Apply to join, first month free.
             </p>
           </div>
 
@@ -337,7 +337,7 @@ export default function ArtistsPage() {
                   Gallery hire
                 </p>
                 <p className="text-sm text-white/40">
-                  &pound;200&ndash;1,000/week
+                  &pound;200 to 1,000/week
                 </p>
               </div>
               <span className="text-red-400 text-lg">&times;</span>
@@ -347,7 +347,7 @@ export default function ArtistsPage() {
                 <p className="text-sm font-medium text-white/60">
                   Art fair table
                 </p>
-                <p className="text-sm text-white/40">&pound;300&ndash;500/day</p>
+                <p className="text-sm text-white/40">&pound;300 to 500/day</p>
               </div>
               <span className="text-red-400 text-lg">&times;</span>
             </div>
@@ -357,7 +357,7 @@ export default function ArtistsPage() {
                   Instagram promotion
                 </p>
                 <p className="text-sm text-white/40">
-                  &pound;50&ndash;200/month, no physical presence
+                  &pound;50 to 200/month, no physical presence
                 </p>
               </div>
               <span className="text-red-400 text-lg">&times;</span>
@@ -468,10 +468,10 @@ export default function ArtistsPage() {
             Real commercial spaces actively seeking artwork to display. Enter your postcode to see demand in your area.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a href="/spaces-looking-for-art" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+            <a href="/spaces" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
               SEE VENUE DEMAND
             </a>
-            <a href="/spaces-looking-for-art" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors">
+            <a href="/spaces" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors">
               SEARCH BY POSTCODE
             </a>
           </div>

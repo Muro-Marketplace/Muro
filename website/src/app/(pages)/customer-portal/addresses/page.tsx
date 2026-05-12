@@ -119,7 +119,7 @@ export default function CustomerAddressesPage() {
       cancelEdit();
       loadAddresses();
     } catch {
-      showToast("Network error — please try again.", { variant: "error" });
+      showToast("Network error, please try again.", { variant: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -139,7 +139,7 @@ export default function CustomerAddressesPage() {
       showToast("Default address updated");
       loadAddresses();
     } catch {
-      showToast("Network error — please try again.", { variant: "error" });
+      showToast("Network error, please try again.", { variant: "error" });
     }
   }
 
@@ -157,7 +157,7 @@ export default function CustomerAddressesPage() {
       showToast("Address removed");
       loadAddresses();
     } catch {
-      showToast("Network error — please try again.", { variant: "error" });
+      showToast("Network error, please try again.", { variant: "error" });
     } finally {
       setPendingDelete(null);
     }
@@ -358,7 +358,7 @@ export default function CustomerAddressesPage() {
         title="Delete this address?"
         body={
           pendingDelete
-            ? `${pendingDelete.full_name} — ${pendingDelete.line1}, ${pendingDelete.postcode}`
+            ? `${pendingDelete.full_name}, ${pendingDelete.line1}, ${pendingDelete.postcode}`
             : undefined
         }
         confirmLabel="Delete"

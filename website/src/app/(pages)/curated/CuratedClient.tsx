@@ -41,7 +41,7 @@ const HOW_IT_WORKS = [
   {
     n: "02",
     title: "Curate",
-    body: "A Wallplace curator hand-picks 5–8 works that fit your brief.",
+    body: "A Wallplace curator hand-picks 5 to 8 works that fit your brief.",
   },
   {
     n: "03",
@@ -77,7 +77,7 @@ const FAQ_ITEMS = [
   {
     question: "Who is this for?",
     answer:
-      "Cafés, restaurants, hotels, bars, offices, co-working spaces, clinics, retail — any venue with walls and a sense of how they want them to feel.",
+      "Cafés, restaurants, hotels, bars, offices, co-working spaces, clinics, retail. Any venue with walls and a sense of how they want them to feel.",
   },
   {
     question: "How is this different from just browsing artists?",
@@ -92,7 +92,7 @@ const FAQ_ITEMS = [
   {
     question: "What's NOT included in the price?",
     answer:
-      "The artwork itself. Curated covers the curation — getting the art on the wall (free QR-loan, paid loan, or outright purchase) is arranged separately.",
+      "The artwork itself. Curated covers the curation. Getting the art on the wall (free QR-loan, paid loan, or outright purchase) is arranged separately.",
   },
   {
     question: "What if I don't love any of the shortlist?",
@@ -112,7 +112,7 @@ const FAQ_ITEMS = [
   {
     question: "Do you visit in person?",
     answer:
-      "Not on £49–£199.99 plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.",
+      "Not on £49 to £199.99 plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.",
   },
 ];
 
@@ -184,8 +184,8 @@ export default function CuratedClient() {
           </h1>
           <p className="text-sm text-muted leading-relaxed mb-6">
             Curated is our hand-pick service for venues looking for artwork.
-            Artists are matched <em>through</em> Curated, not <em>for</em> it
-            — keep building your portfolio and we&rsquo;ll surface you to
+            Artists are matched <em>through</em> Curated, not <em>for</em> it.
+            Keep building your portfolio and we&rsquo;ll surface you to
             venues that fit.
           </p>
           <Link
@@ -281,14 +281,11 @@ export default function CuratedClient() {
       <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 overflow-hidden bg-[#1A1A1A]">
         <div className="absolute inset-0 -z-10">
           <Image
-            src="https://images.unsplash.com/photo-1766890410688-77af00a1dc41?w=1920&h=1080&fit=crop&crop=center"
-            alt="Curated gallery interior with multiple framed artworks under spotlights"
+            src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=1080&fit=crop&crop=center"
+            alt="Curated gallery wall with framed artworks"
             fill
             className="object-cover"
             sizes="100vw"
-            // `preload` replaces the deprecated `priority` prop in
-            // Next 16 — used here because the hero photo is the LCP
-            // element above the fold.
             preload
           />
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/55 to-black/40" />
@@ -354,7 +351,7 @@ export default function CuratedClient() {
       {cancelled && (
         <div className="max-w-[1100px] mx-auto px-6 pt-8">
           <div className="bg-amber-50 border border-amber-200 rounded-sm px-4 py-3 text-sm text-amber-900">
-            Checkout cancelled. Nothing has been charged — pick a plan below
+            Checkout cancelled. Nothing has been charged. Pick a plan below
             to try again.
           </div>
         </div>
@@ -461,7 +458,7 @@ export default function CuratedClient() {
                     Priced separately
                   </p>
                   <p className="text-sm text-foreground/85 leading-relaxed">
-                    The artwork itself — free QR-loan, paid loan, or
+                    The artwork itself, free QR-loan, paid loan, or
                     direct purchase, your choice. Installation. Rotation
                     logistics on Bespoke.
                   </p>
@@ -498,7 +495,7 @@ export default function CuratedClient() {
                 what.&rdquo;
               </p>
               <p className="mt-3 text-xs tracking-[0.25em] uppercase text-white/50">
-                — Wallplace curators
+                Wallplace curators
               </p>
             </div>
           </div>
@@ -722,7 +719,7 @@ export default function CuratedClient() {
                         value={form.budgetGbp}
                         onChange={(e) => update("budgetGbp", e.target.value)}
                         className={inputCls}
-                        placeholder="e.g. 500 or 1000–2500"
+                        placeholder="e.g. 500 or 1000 to 2500"
                       />
                     </div>
                   )}
@@ -792,7 +789,7 @@ export default function CuratedClient() {
                     {!selectedTier
                       ? "Select a plan above to continue."
                       : selectedTier === "bespoke"
-                        ? "No charge yet — we'll email a tailored quote."
+                        ? "No charge yet, we'll email a tailored quote."
                         : selectedTier === "managed_monthly" ||
                           selectedTier === "managed_quarterly"
                           ? `You'll be sent to secure Stripe checkout. Subscription: ${selectedTierData?.priceLabel}. Cancel anytime.`

@@ -483,6 +483,24 @@ function WallVisualizerInner(props: ExtendedProps) {
     );
   }, []);
 
+  // Customer-side wall photo upload. We don't persist to Storage here:
+  // customers using "View on a wall" aren't saving a Wall row, they
+  // just want to preview the artwork on their own space. A blob URL
+  // keeps the photo client-side only.
+  const [customBgUrl, setCustomBgUrl] = useState<string | null>(null);
+  useEffect(() => {
+    return () => {
+      if (customBgUrl) URL.revokeObjectURL(customBgUrl);
+    };
+  }, [customBgUrl]);
+  const handleUploadPhoto = useCallback((file: File) => {
+    if (customBgUrl) URL.revokeObjectURL(customBgUrl);
+    const url = URL.createObjectURL(file);
+    setCustomBgUrl(url);
+    setBackground({ kind: "uploaded", image_path: url });
+  }, [customBgUrl]);
+  const effectiveBgImageUrl = customBgUrl ?? props.bgImageUrl ?? null;
+
   // ── Item mutations ────────────────────────────────────────────────
   /**
    * Add an item at (xCm, yCm). Resolves the size in this order:
@@ -827,7 +845,7 @@ function WallVisualizerInner(props: ExtendedProps) {
             onSelectItem={setSelectedItemId}
             onItemChange={handleItemChange}
             onAddItem={(workId, xCm, yCm) => addItemAt(workId, xCm, yCm)}
-            bgImageUrl={props.bgImageUrl ?? null}
+            bgImageUrl={effectiveBgImageUrl}
           />
         ) : (
           <WallCanvas
@@ -840,7 +858,7 @@ function WallVisualizerInner(props: ExtendedProps) {
             onSelectItem={setSelectedItemId}
             onItemChange={handleItemChange}
             onAddItem={(workId, xCm, yCm) => addItemAt(workId, xCm, yCm)}
-            bgImageUrl={props.bgImageUrl ?? null}
+            bgImageUrl={effectiveBgImageUrl}
           />
         )}
 
@@ -898,7 +916,7 @@ function WallVisualizerInner(props: ExtendedProps) {
             collapses into the "Wall" entry of the bottom toolbar,
             which opens a slide-up sheet hosting the same controls. */}
         {!isMobile && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[calc(100%-1.5rem)]">
             <WallConfigBar
               currentPresetId={
                 background.kind === "preset" ? background.preset_id : null
@@ -912,6 +930,7 @@ function WallVisualizerInner(props: ExtendedProps) {
               onColorChange={handleColorChange}
               onWidthChange={(v) => setWidthCm(clampDimension(v))}
               onHeightChange={(v) => setHeightCm(clampDimension(v))}
+              onUploadPhoto={props.mode === "customer_artwork_page" ? handleUploadPhoto : undefined}
               onClose={props.onClose}
             />
           </div>
@@ -1022,7 +1041,7 @@ function WallVisualizerInner(props: ExtendedProps) {
                 onClose={() => setMobileSheet(null)}
                 autoHeight
               >
-                <div className="p-4 overflow-x-auto">
+                <div className="p-4">
                   <WallConfigBar
                     currentPresetId={
                       background.kind === "preset"
@@ -1040,6 +1059,7 @@ function WallVisualizerInner(props: ExtendedProps) {
                     onColorChange={handleColorChange}
                     onWidthChange={(v) => setWidthCm(clampDimension(v))}
                     onHeightChange={(v) => setHeightCm(clampDimension(v))}
+                    onUploadPhoto={props.mode === "customer_artwork_page" ? handleUploadPhoto : undefined}
                     // Don't pipe the parent's onClose through on mobile —
                     // the sheet has its own close button, and tapping
                     // "Close" inside the WallConfigBar would shut the
@@ -1219,6 +1239,7 @@ interface ConfigProps {
   onColorChange: (hex: string) => void;
   onWidthChange: (v: number) => void;
   onHeightChange: (v: number) => void;
+  onUploadPhoto?: (file: File) => void;
   onClose?: () => void;
 }
 
@@ -1231,18 +1252,19 @@ function WallConfigBar({
   onColorChange,
   onWidthChange,
   onHeightChange,
+  onUploadPhoto,
   onClose,
 }: ConfigProps) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-white/85 backdrop-blur border border-black/5 shadow-sm">
-      <div className="flex items-center gap-1">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 sm:px-4 py-2 rounded-2xl sm:rounded-full bg-white/85 backdrop-blur border border-black/5 shadow-sm max-w-full">
+      <div className="flex items-center gap-1 flex-shrink-0">
         {PRESET_WALLS.map((p) => (
           <button
             key={p.id}
             type="button"
             title={p.name}
             onClick={() => onPickPreset(p.id)}
-            className={`h-6 w-6 rounded-full border ${
+            className={`h-7 w-7 sm:h-6 sm:w-6 rounded-full border ${
               currentPresetId === p.id
                 ? "ring-2 ring-stone-900 ring-offset-1"
                 : "border-black/10"
@@ -1252,55 +1274,81 @@ function WallConfigBar({
         ))}
       </div>
 
-      <span className="h-4 w-px bg-black/10" />
+      <span className="hidden sm:inline-block h-4 w-px bg-black/10" />
 
-      <label className="flex items-center gap-1 text-[11px] text-stone-600">
+      <label className="flex items-center gap-1.5 text-[11px] text-stone-600 flex-shrink-0">
         <span>Colour</span>
         <input
           type="color"
           value={`#${colorHex}`}
           onChange={(e) => onColorChange(e.target.value)}
-          className="h-5 w-7 rounded border border-black/10 bg-transparent"
+          className="h-6 w-8 sm:h-5 sm:w-7 rounded border border-black/10 bg-transparent cursor-pointer"
         />
       </label>
 
-      <span className="h-4 w-px bg-black/10" />
+      {onUploadPhoto && (
+        <>
+          <span className="hidden sm:inline-block h-4 w-px bg-black/10" />
+          <label className="flex items-center gap-1 text-[11px] text-stone-600 cursor-pointer hover:text-stone-900 flex-shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span>Upload photo</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onUploadPhoto(file);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </>
+      )}
 
-      <label className="flex items-center gap-1 text-[11px] text-stone-600">
-        <span>W</span>
-        <input
-          type="number"
-          min={50}
-          max={1000}
-          step={5}
-          value={widthCm}
-          onChange={(e) => onWidthChange(Number(e.target.value))}
-          className="w-14 rounded border border-black/10 px-1 py-0.5 text-xs"
-        />
-        <span className="text-stone-400">cm</span>
-      </label>
+      <span className="hidden sm:inline-block h-4 w-px bg-black/10" />
 
-      <label className="flex items-center gap-1 text-[11px] text-stone-600">
-        <span>H</span>
-        <input
-          type="number"
-          min={50}
-          max={1000}
-          step={5}
-          value={heightCm}
-          onChange={(e) => onHeightChange(Number(e.target.value))}
-          className="w-14 rounded border border-black/10 px-1 py-0.5 text-xs"
-        />
-        <span className="text-stone-400">cm</span>
-      </label>
+      <div className="flex items-center gap-2 sm:gap-3">
+        <label className="flex items-center gap-1 text-[11px] text-stone-600">
+          <span>W</span>
+          <input
+            type="number"
+            min={50}
+            max={1000}
+            step={5}
+            value={widthCm}
+            onChange={(e) => onWidthChange(Number(e.target.value))}
+            className="w-14 rounded border border-black/10 px-1 py-1 sm:py-0.5 text-xs"
+          />
+          <span className="text-stone-400">cm</span>
+        </label>
+
+        <label className="flex items-center gap-1 text-[11px] text-stone-600">
+          <span>H</span>
+          <input
+            type="number"
+            min={50}
+            max={1000}
+            step={5}
+            value={heightCm}
+            onChange={(e) => onHeightChange(Number(e.target.value))}
+            className="w-14 rounded border border-black/10 px-1 py-1 sm:py-0.5 text-xs"
+          />
+          <span className="text-stone-400">cm</span>
+        </label>
+      </div>
 
       {onClose && (
         <>
-          <span className="h-4 w-px bg-black/10" />
+          <span className="hidden sm:inline-block h-4 w-px bg-black/10" />
           <button
             type="button"
             onClick={onClose}
-            className="text-[11px] text-stone-500 hover:text-stone-900"
+            className="text-[11px] text-stone-500 hover:text-stone-900 ml-auto sm:ml-0"
           >
             Close
           </button>

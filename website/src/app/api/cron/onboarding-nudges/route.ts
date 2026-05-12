@@ -174,7 +174,7 @@ export async function GET(request: Request) {
           react: ArtistOnboardingGraduation({
             firstName,
             dashboardUrl: `${SITE}/artist-portal`,
-            discoverVenuesUrl: `${SITE}/spaces-looking-for-art`,
+            discoverVenuesUrl: `${SITE}/spaces`,
             profileUrl: `${SITE}/artist-portal/profile`,
           }),
         });

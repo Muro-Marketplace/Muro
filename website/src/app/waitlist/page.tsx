@@ -312,7 +312,7 @@ function HowItWorks() {
                   </h3>
                   <p className="text-base text-white/50 leading-relaxed mb-10">
                     Your prints displayed in cafés, restaurants, hotels, and
-                    galleries – reaching people who actually buy art. Not another
+                    galleries, reaching people who actually buy art. Not another
                     social feed. Real, physical walls.
                   </p>
 
@@ -330,7 +330,7 @@ function HowItWorks() {
                     <Step
                       number="03"
                       title="Earn"
-                      description="Sell prints outright, offer bundles, take commissions, or arrange revenue-share deals – all through the marketplace."
+                      description="Sell prints outright, offer bundles, take commissions, or arrange revenue-share deals, all through the marketplace."
                     />
                   </div>
                 </div>
@@ -355,7 +355,7 @@ function HowItWorks() {
                     icon={
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
                     }
-                    title="5–15% Platform Fee on Sales"
+                    title="5 to 15% Platform Fee on Sales"
                     description="No gallery taking 50%. Transparent, fair pricing. Keep most of what you earn."
                   />
                 </div>
@@ -383,8 +383,8 @@ function HowItWorks() {
                     Art for your space. No upfront cost.
                   </h3>
                   <p className="text-base text-white/50 leading-relaxed mb-10">
-                    Whether you run a café, restaurant, hotel, office, or salon
-                    – browse curated artist portfolios and source original
+                    Whether you run a café, restaurant, hotel, office, or salon,
+                    browse curated artist portfolios and source original
                     work for your walls on terms that work for you.
                   </p>
 

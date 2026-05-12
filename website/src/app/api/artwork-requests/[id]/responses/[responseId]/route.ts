@@ -65,7 +65,7 @@ export async function PATCH(
       userId: resp.artist_user_id,
       kind: "artwork_response_declined",
       title: `Response declined`,
-      body: `${req.title} — the venue passed on this response.`,
+      body: `${req.title}: the venue passed on this response.`,
       link: `/artist-portal/artwork-requests`,
     }).catch(() => {});
     return NextResponse.json({ success: true, status: "declined" });
@@ -180,7 +180,12 @@ export async function PATCH(
         // didn't explicitly tick the box. Matches /api/placements POST behaviour.
         qr_enabled: resp.proposed_qr_enabled ?? (arrangementType === "revenue_share"),
         message: `Created from artwork-request response. Original brief: ${req.title ?? ""}`.slice(0, 1000),
-        status: "pending",
+        // Both sides have already agreed: artist proposed the terms in
+        // the response, venue accepted them here. Skip the "pending"
+        // approval step so the placement lands in My Placements as
+        // active for both parties.
+        status: "active",
+        accepted_at: new Date().toISOString(),
         requester_user_id: resp.artist_user_id,
         created_at: new Date().toISOString(),
         notes: null,
@@ -225,7 +230,7 @@ export async function PATCH(
     userId: resp.artist_user_id,
     kind: "artwork_response_accepted",
     title: `Response accepted`,
-    body: `${req.title} — the venue accepted your response. Tap to continue.`,
+    body: `${req.title}: the venue accepted your response. Tap to continue.`,
     link: linkedOfferId
       ? `/artist-portal/offers`
       : linkedCommissionId

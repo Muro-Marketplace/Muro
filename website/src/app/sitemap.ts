@@ -11,7 +11,7 @@ const STATIC_ROUTES: string[] = [
   "/artists",
   "/galleries",
   "/venues",
-  "/spaces-looking-for-art",
+  "/spaces",
   "/curated",
   "/how-it-works",
   "/about",

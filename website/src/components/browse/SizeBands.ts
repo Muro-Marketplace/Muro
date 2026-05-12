@@ -18,10 +18,10 @@ export interface SizeBand {
 }
 
 export const SIZE_BANDS: readonly SizeBand[] = [
-  { key: "small",  label: "Small",  minCm: null, maxCm: 30,   dimensionHint: "≤ 30 cm"   },
-  { key: "medium", label: "Medium", minCm: 30,   maxCm: 60,   dimensionHint: "30–60 cm"  },
-  { key: "large",  label: "Large",  minCm: 60,   maxCm: 100,  dimensionHint: "60–100 cm" },
-  { key: "xl",     label: "XL",     minCm: 100,  maxCm: null, dimensionHint: "> 100 cm"  },
+  { key: "small",  label: "Small",  minCm: null, maxCm: 30,   dimensionHint: "up to 30 cm"   },
+  { key: "medium", label: "Medium", minCm: 30,   maxCm: 60,   dimensionHint: "30 to 60 cm"   },
+  { key: "large",  label: "Large",  minCm: 60,   maxCm: 100,  dimensionHint: "60 to 100 cm"  },
+  { key: "xl",     label: "XL",     minCm: 100,  maxCm: null, dimensionHint: "over 100 cm"   },
 ];
 
 export function bandForCm(longestEdgeCm: number): SizeBandKey {

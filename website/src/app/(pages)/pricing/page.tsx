@@ -5,9 +5,9 @@ import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
 
 export const metadata: Metadata = {
-  title: "Pricing – Wallplace",
+  title: "Pricing | Wallplace",
   description:
-    "Transparent pricing for artists on Wallplace. First month free. Choose Core, Premium, or Pro – all with access to our curated venue network.",
+    "Transparent pricing for artists on Wallplace. First month free. Choose Core, Premium, or Pro, all with access to our curated venue network.",
 };
 
 const comparisonRows = [
@@ -71,12 +71,12 @@ const faqItems = [
   {
     question: "What is a platform fee?",
     answer:
-      "The platform fee is the percentage Wallplace takes when a sale is made through the platform – whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is separate from your membership cost. Core artists pay 15%, Premium 8%, and Pro artists pay 5%, so our fees run 5–15% depending on plan. You keep the rest.",
+      "The platform fee is the percentage Wallplace takes when a sale is made through the platform, whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is separate from your membership cost. Core artists pay 15%, Premium 8%, and Pro artists pay 5%, so our fees run 5 to 15% depending on plan. You keep the rest.",
   },
   {
     question: "Is the first month really free?",
     answer:
-      "Yes. Every approved artist gets their first month at no cost, on any tier. You can start with Core and upgrade later, or begin on Premium or Pro – the first month is always free. After that, billing begins on your chosen plan.",
+      "Yes. Every approved artist gets their first month at no cost, on any tier. You can start with Core and upgrade later, or begin on Premium or Pro. The first month is always free. After that, billing begins on your chosen plan.",
   },
   {
     question: "Can I change my tier?",
@@ -86,7 +86,7 @@ const faqItems = [
   {
     question: "Is placement guaranteed?",
     answer:
-      "No. We are a platform that connects artists with venues – we do not guarantee placement in any specific venue. What we do is ensure your profile is in front of venues that are actively looking for artwork, and we work to match you with the right spaces for your practice.",
+      "No. We are a platform that connects artists with venues, we do not guarantee placement in any specific venue. What we do is ensure your profile is in front of venues that are actively looking for artwork, and we work to match you with the right spaces for your practice.",
   },
   {
     question: "What happens when I cancel?",
@@ -96,7 +96,7 @@ const faqItems = [
   {
     question: "Are there any other fees?",
     answer:
-      "No hidden fees. Your monthly membership and the platform fee on sales are the only costs. Delivery, framing, and any materials are your own costs as an artist – Wallplace does not add charges for these.",
+      "No hidden fees. Your monthly membership and the platform fee on sales are the only costs. Delivery, framing, and any materials are your own costs as an artist. Wallplace does not add charges for these.",
   },
 ];
 
@@ -144,7 +144,7 @@ export default function PricingPage() {
               </div>
               <div className="shrink-0">
                 <Button href="/apply" size="md">
-                  Apply to join — first month free if accepted
+                  Apply to join, first month free if accepted
                 </Button>
                 <p className="text-[11px] text-muted mt-2">
                   Applications reviewed within 5 business days.
@@ -219,17 +219,17 @@ export default function PricingPage() {
                 {[
                   {
                     label: "Gallery hire",
-                    detail: "£200–1,000 per week",
+                    detail: "£200 to 1,000 per week",
                     wallplace: false,
                   },
                   {
                     label: "Art fair table",
-                    detail: "£300–500 per day",
+                    detail: "£300 to 500 per day",
                     wallplace: false,
                   },
                   {
                     label: "Instagram paid promotion",
-                    detail: "£50–200/month, no physical presence",
+                    detail: "£50 to 200/month, no physical presence",
                     wallplace: false,
                   },
                   {
@@ -287,7 +287,7 @@ export default function PricingPage() {
               <p className="text-muted leading-relaxed mb-4">
                 At &pound;49.99/month, Pro pays for itself quickly for any artist with
                 regular sales. On a &pound;500 sale, Core would cost you &pound;75 in
-                platform fees, Premium &pound;40. Pro costs just &pound;25 &ndash; keeping
+                platform fees, Premium &pound;40. Pro costs just &pound;25, keeping
                 &pound;475.
               </p>
               <p className="text-muted leading-relaxed mb-6">
@@ -324,7 +324,7 @@ export default function PricingPage() {
             First month free on all plans. No commitment, cancel any time.
           </p>
           <Button href="/apply" size="lg">
-            Apply to join — first month free if accepted
+            Apply to join, first month free if accepted
           </Button>
           <p className="text-[11px] text-muted mt-3">
             Applications reviewed within 5 business days.

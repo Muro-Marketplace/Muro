@@ -8,7 +8,7 @@ import CartIndicator from "./CartIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
-// When the user is inside the marketplace area (/browse or /spaces-looking-for-art)
+// When the user is inside the marketplace area (/browse or /spaces)
 // the top-level "Marketplace" link is replaced by these inline tabs.
 // Galleries is the default landing view (#4), order in the nav now
 // reflects that, with Galleries first and the default empty view
@@ -18,7 +18,7 @@ const marketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces", match: (p: string) => p === "/spaces" },
 ];
 
 // Public (logged-out) variant: keeps How It Works + Blog inline on the
@@ -28,7 +28,7 @@ const publicMarketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces", match: (p: string) => p === "/spaces" },
   { label: "How It Works", href: "/how-it-works", match: (p: string) => p === "/how-it-works" },
   { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
 ];
@@ -50,9 +50,9 @@ const publicNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
-  { label: "Spaces", href: "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces" },
   // "For Venues" used to live here but the venue value-prop is already
-  // covered by /spaces-looking-for-art and the homepage; the dedicated
+  // covered by /spaces and the homepage; the dedicated
   // /venues page is kept reachable from the footer + any deep links.
   // Waitlist (#18), page kept live for warm prospects we already
   // sent the link to, but unsurfaced from the nav. Also gated from
@@ -61,7 +61,7 @@ const publicNavLinks: NavLink[] = [
 
 const loggedInNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
-  { label: "Spaces", href: "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces" },
 ];
 
 // Venues don't need the "Spaces" (venues browsing venues) link, they
@@ -83,7 +83,11 @@ const moreLinks = [
   { label: "Pricing", href: "/pricing" },
 ];
 
-const immersiveRoutes = ["/", "/venues", "/artists", "/about", "/how-it-works"];
+// /how-it-works has a plain light-coloured top section (no dark hero),
+// so the immersive transparent header was effectively invisible against
+// the page background. Keep it out of the immersive list so the solid
+// header renders by default.
+const immersiveRoutes = ["/", "/venues", "/artists", "/about"];
 
 // Marketplace tabs pulled into their own component so the useSearchParams call
 // is isolated behind a <Suspense> boundary. Without that, every page that
@@ -151,7 +155,7 @@ export default function Header() {
   const portalDropdownRef = useRef<HTMLDivElement>(null);
   const [otherRoles, setOtherRoles] = useState<string[]>([]);
 
-  const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces-looking-for-art";
+  const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces";
 
   const portalBase = userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal";
   const [resolvedSlug, setResolvedSlug] = useState("");
@@ -302,7 +306,7 @@ export default function Header() {
 
   const isPortal = pathname.startsWith("/artist-portal") || pathname.startsWith("/venue-portal") || pathname.startsWith("/customer-portal");
   const isBrowsePage = pathname === "/browse";
-  const isSpacesPage = pathname === "/spaces-looking-for-art";
+  const isSpacesPage = pathname === "/spaces";
   const showSolid = !isImmersive || scrolled;
 
   return (
@@ -333,7 +337,7 @@ export default function Header() {
           {/* Desktop Navigation, centered on page */}
           <nav className="hidden lg:flex items-center gap-7 absolute left-1/2 -translate-x-1/2" role="navigation" aria-label="Main navigation">
             {isMarketplaceArea ? (
-              // F47, marketplace tabs replace the normal nav while inside /browse or /spaces-looking-for-art
+              // F47, marketplace tabs replace the normal nav while inside /browse or /spaces
               <Suspense fallback={null}>
                 <MarketplaceTabsNav
                   pathname={pathname}
@@ -881,10 +885,13 @@ export default function Header() {
           <div className="mx-auto max-w-[1400px] px-6 py-6 space-y-6">
             {/* Primary nav links, when inside the marketplace area, swap in
                 the marketplace tabs (Portfolios/Galleries/Collections/Spaces)
-                so the mobile nav matches the desktop top-nav. */}
+                so the mobile nav matches the desktop top-nav. Venues get
+                their own marketplace tab list (drops Spaces, adds Wallplace
+                Curated + Blog) so the mobile dropdown mirrors the desktop
+                venue nav. */}
             <nav className="flex flex-col gap-4">
               {isMarketplaceArea ? (
-                marketplaceTabs.map((tab) => (
+                (userType === "venue" ? venueMarketplaceTabs : marketplaceTabs).map((tab) => (
                   <Link
                     key={tab.href}
                     href={tab.href}

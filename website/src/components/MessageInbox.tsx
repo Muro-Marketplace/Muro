@@ -910,7 +910,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     {selectedConvData?.otherPartyType === "artist" ? (
                       <Link href={`/browse/${selectedConvData.otherParty}`} className="text-sm font-medium truncate hover:text-accent transition-colors">{selectedConvData.otherPartyDisplayName}</Link>
                     ) : selectedConvData?.otherPartyType === "venue" ? (
-                      <Link href="/spaces-looking-for-art" className="text-sm font-medium truncate hover:text-accent transition-colors">{selectedConvData.otherPartyDisplayName}</Link>
+                      <Link href="/spaces" className="text-sm font-medium truncate hover:text-accent transition-colors">{selectedConvData.otherPartyDisplayName}</Link>
                     ) : (
                       <p className="text-sm font-medium truncate">{selectedConvData?.otherPartyDisplayName}</p>
                     )}
@@ -942,7 +942,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     <Link href={`/browse/${selectedConvData.otherParty}`} className="text-xs text-accent hover:text-accent-hover transition-colors">View Portfolio</Link>
                   )}
                   {selectedConvData?.otherPartyType === "venue" && (
-                    <Link href="/spaces-looking-for-art" className="text-xs text-accent hover:text-accent-hover transition-colors">View Spaces</Link>
+                    <Link href="/spaces" className="text-xs text-accent hover:text-accent-hover transition-colors">View Spaces</Link>
                   )}
                   {/* Mobile-only placement status drawer toggle.
                       Rendered as an inline chevron link rather than a pill so

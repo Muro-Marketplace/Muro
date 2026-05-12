@@ -33,11 +33,11 @@ function buildCaption(p: Props, tab: Tab): string {
     return `${venueLine}"${p.workTitle}" by ${p.artistName}\n\nSwipe up to view → wallplace.co.uk/${p.artistSlug}`;
   }
   if (tab === "reel") {
-    return `Reel idea — show ${p.workTitle} from three angles, hold on the QR label.\n\nCaption:\n${venueLine}"${p.workTitle}" by ${p.artistName}. Real art, real spaces. Find it on Wallplace.`;
+    return `Reel idea: show ${p.workTitle} from three angles, hold on the QR label.\n\nCaption:\n${venueLine}"${p.workTitle}" by ${p.artistName}. Real art, real spaces. Find it on Wallplace.`;
   }
   // post (default)
   const tagline = p.showingAtVenueName
-    ? `${venueLine}"${p.workTitle}" by ${p.artistName} — captured in real space.`
+    ? `${venueLine}"${p.workTitle}" by ${p.artistName}, captured in real space.`
     : `"${p.workTitle}" by ${p.artistName}.`;
   return `${tagline}\n\nOriginal art. Real spaces.\nDiscover more on Wallplace.\n\n#Wallplace #${slugifyTag(p.artistName)} #ArtInSpaces #OriginalArt${p.workMedium ? ` #${slugifyTag(p.workMedium)}` : ""}`;
 }

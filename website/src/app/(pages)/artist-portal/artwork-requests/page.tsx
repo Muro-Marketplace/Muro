@@ -66,7 +66,7 @@ export default function ArtistArtworkRequestsPage() {
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <h3 className="text-base font-medium">{r.title}</h3>
                     <span className="text-[10px] text-muted">
-                      {r.venue_name || r.venue_slug || "Venue"}
+                      {r.venue_name || "Venue"}
                     </span>
                   </div>
                   <p className="text-sm text-muted line-clamp-2 mb-3">{r.description}</p>
@@ -75,7 +75,7 @@ export default function ArtistArtworkRequestsPage() {
                     {r.mediums.slice(0, 4).map((m) => <span key={m} className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">{m}</span>)}
                     {(r.budget_min_pence || r.budget_max_pence) && (
                       <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">
-                        £{((r.budget_min_pence || 0) / 100).toFixed(0)}–£{((r.budget_max_pence || 0) / 100).toFixed(0)}
+                        £{((r.budget_min_pence || 0) / 100).toFixed(0)} to £{((r.budget_max_pence || 0) / 100).toFixed(0)}
                       </span>
                     )}
                     {r.location && <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">{r.location}</span>}

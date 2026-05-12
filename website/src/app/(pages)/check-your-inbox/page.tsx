@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Check your inbox – Wallplace",
+  title: "Check your inbox | Wallplace",
   robots: { index: false, follow: false },
 };
 
@@ -17,7 +17,7 @@ export default function CheckYourInboxPage() {
           to arrive.
         </p>
         <p className="text-xs text-muted mb-8">
-          Wrong email? Sign up again with the correct address — Wallplace
+          Wrong email? Sign up again with the correct address. Wallplace
           won&rsquo;t auto-merge accounts, but the unverified one expires
           on its own after 7 days.
         </p>

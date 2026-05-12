@@ -15,6 +15,7 @@ import { bandsForWork } from "@/components/browse/SizeBands";
 import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
+import SubscriptionUpsellBanner from "@/components/SubscriptionUpsellBanner";
 import ArtworkThumb from "@/components/ArtworkThumb";
 import SaveButton from "@/components/SaveButton";
 import SearchInput from "@/components/SearchInput";
@@ -964,9 +965,9 @@ function BrowsePortfoliosPageInner() {
     });
   }
   const SIZE_BANDS: { id: SizeBand; label: string; sub: string }[] = [
-    { id: "small", label: "Small", sub: "≤30cm" },
-    { id: "medium", label: "Medium", sub: "30–60cm" },
-    { id: "large", label: "Large", sub: "60–100cm" },
+    { id: "small", label: "Small", sub: "up to 30cm" },
+    { id: "medium", label: "Medium", sub: "30 to 60cm" },
+    { id: "large", label: "Large", sub: "60 to 100cm" },
     { id: "xl", label: "Extra-large", sub: "100cm+" },
   ];
 
@@ -1814,7 +1815,7 @@ function BrowsePortfoliosPageInner() {
                       doesn't dominate the panel. */}
                   <div>
                     <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Size</p>
-                    <div className="grid grid-cols-2 gap-1">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {SIZE_BANDS.map((b) => {
                         const active = gallerySizes.has(b.id);
                         return (
@@ -1822,11 +1823,11 @@ function BrowsePortfoliosPageInner() {
                             key={b.id}
                             type="button"
                             onClick={() => toggleSize(b.id)}
-                            className={`px-2 py-1 rounded-sm border text-left transition-colors ${
+                            className={`px-2 py-1.5 rounded-sm border text-left transition-colors ${
                               active ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                             }`}
                           >
-                            <span className="flex items-center justify-between gap-2">
+                            <span className="flex flex-col items-start gap-0.5">
                               <span className="text-[11px] font-medium leading-tight">{b.label}</span>
                               <span className="text-[9px] text-muted leading-tight tabular-nums">{b.sub}</span>
                             </span>
@@ -1839,7 +1840,7 @@ function BrowsePortfoliosPageInner() {
                   {/* Price Range */}
                   <div>
                     <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
-                      Price: £{galleryPriceMin} – {galleryPriceMax >= 1000 ? "£1000+" : `£${galleryPriceMax}`}
+                      Price: £{galleryPriceMin} to {galleryPriceMax >= 1000 ? "£1000+" : `£${galleryPriceMax}`}
                     </p>
                     <div className="space-y-3 px-1">
                       <div>
@@ -2078,7 +2079,7 @@ function BrowsePortfoliosPageInner() {
                     </div>
                     <div>
                       <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">
-                        Price: £{galleryPriceMin} – {galleryPriceMax >= 1000 ? "£1000+" : `£${galleryPriceMax}`}
+                        Price: £{galleryPriceMin} to {galleryPriceMax >= 1000 ? "£1000+" : `£${galleryPriceMax}`}
                       </p>
                       <div className="space-y-2 px-1">
                         <input type="range" min={0} max={1000} step={50} value={galleryPriceMin} onChange={(e) => { const v = Number(e.target.value); setGalleryPriceMin(Math.min(v, galleryPriceMax)); }} className="w-full accent-accent h-1.5" />
@@ -2309,65 +2310,37 @@ function BrowsePortfoliosPageInner() {
         </section>
       )}
 
-      {activeDiscipline === "collections" && (
-        <section className="py-10 lg:py-14">
-          <div className="max-w-[1400px] mx-auto px-6">
-            {/* Mobile toolbar, view pill-dropdown + Global/Local pills + slider */}
-            <div className="lg:hidden mb-6 space-y-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative">
-                  <select
-                    value="collections"
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "gallery") { switchView("gallery"); }
-                      else if (v === "portfolios") { switchView("portfolios"); }
-                    }}
-                    className="appearance-none pl-3 pr-7 py-1.5 text-[11px] rounded-full border border-border bg-white text-foreground font-medium cursor-pointer focus:outline-none focus:border-foreground/50"
-                  >
-                    <option value="gallery">Galleries</option>
-                    <option value="portfolios">Portfolios</option>
-                    <option value="collections">Collections</option>
-                  </select>
-                  <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <polyline points="2 4 6 8 10 4" />
-                  </svg>
-                </div>
-              </div>
-              {/* Location handling matches the gallery + portfolio
-                  views: toggle removed (#9), slider when a location
-                  is set, dynamic PostcodeInput + use-my-location
-                  fallback when not. */}
+      {activeDiscipline === "collections" && (() => {
+        // Sidebar filter panel reused on desktop sidebar + mobile drawer
+        // so collections matches the galleries/portfolios layout pattern.
+        const collectionsFilterPanel = (
+          <div className="space-y-7">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Location</p>
               {geoRequesting && (
                 <p className="text-xs text-muted animate-pulse">Detecting your location…</p>
               )}
               {!geoRequesting && userCoords && (
-                <>
-                  <p className="text-xs text-accent flex items-center gap-1.5">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                    </svg>
-                    Location set
+                <DistanceSliderControl
+                  value={maxDistance}
+                  onCommit={setMaxDistance}
+                  labelClassName="text-xs text-muted mb-2"
+                  withNumberInput
+                  numberInputRowClassName="flex items-center justify-between gap-2"
+                  numberInputSuffix={
                     <button
                       type="button"
                       onClick={() => { clearLocation(); setPostcodeError(false); }}
-                      className="ml-1 text-[10px] text-muted underline cursor-pointer"
+                      className="text-[11px] text-muted underline hover:text-foreground"
                     >
-                      change
+                      Change postcode
                     </button>
-                  </p>
-                  <div>
-                    <DistanceSliderControl
-                      value={maxDistance}
-                      onCommit={setMaxDistance}
-                      labelClassName="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5"
-                    />
-                  </div>
-                </>
+                  }
+                />
               )}
               {!userCoords && !geoRequesting && (
                 <div>
-                  <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">Postcode</p>
+                  <p className="text-xs text-muted mb-1.5">Enter your postcode to filter by distance</p>
                   <PostcodeInput
                     initial={postcodeInput}
                     onGeocoded={(coords, pc) => {
@@ -2380,146 +2353,240 @@ function BrowsePortfoliosPageInner() {
                 </div>
               )}
             </div>
-            {/* Desktop view toggle, 3-way pill group, right-aligned.
-                Order matches the rest of the marketplace: Galleries
-                first, then Portfolios, then Collections. */}
-            <div className="hidden lg:flex mb-6 items-center justify-end">
-              <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5">
-                <button type="button" onClick={() => { switchView("gallery"); }} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
-                  Galleries
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Arrangement</p>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setCollectionsRevShare(!collectionsRevShare)}
+                  aria-pressed={collectionsRevShare}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                    collectionsRevShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={collectionsRevShare ? "text-accent" : "text-muted"}>
+                    <path d="m11 17 2 2a1 1 0 1 0 3-3" />
+                    <path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" />
+                    <path d="m21 3 1 11h-2" />
+                    <path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3" />
+                    <path d="M3 4h8" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium">Revenue Share</p>
+                    <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
+                  </div>
                 </button>
-                <button type="button" onClick={() => { switchView("portfolios"); }} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
-                  Portfolios
+                <button
+                  type="button"
+                  onClick={() => setCollectionsFreeLoan(!collectionsFreeLoan)}
+                  aria-pressed={collectionsFreeLoan}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                    collectionsFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  <span className={`text-base font-serif font-semibold leading-none w-4 text-center ${collectionsFreeLoan ? "text-accent" : "text-muted"}`}>&pound;</span>
+                  <div>
+                    <p className="text-sm font-medium">Paid Loan</p>
+                    <p className="text-[10px] text-muted">Monthly fee to display the work</p>
+                  </div>
                 </button>
-                <button type="button" onClick={() => switchView("collections")} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer bg-white text-foreground shadow-sm">
-                  Collections
+                <button
+                  type="button"
+                  onClick={() => setCollectionsPurchase(!collectionsPurchase)}
+                  aria-pressed={collectionsPurchase}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                    collectionsPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={collectionsPurchase ? "text-accent" : "text-muted"}>
+                    <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium">Direct Purchase</p>
+                    <p className="text-[10px] text-muted">Buy artwork outright</p>
+                  </div>
                 </button>
               </div>
             </div>
-            <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <h2 className="text-2xl font-serif mb-2">Curated Collections</h2>
-                <p className="text-sm text-muted">Themed bundles of artwork at a set price. Ready to transform your space.</p>
-              </div>
-              <div className="flex flex-wrap items-end gap-4">
-                {/* Desktop location, toggle removed (#9). Slider when
-                    a postcode is set, dynamic PostcodeInput +
-                    use-my-location otherwise. */}
-                {userCoords && (
-                  <div className="hidden lg:block min-w-[180px]">
-                    <DistanceSliderControl
-                      value={maxDistance}
-                      onCommit={setMaxDistance}
-                      labelClassName="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5"
-                      shortAny
-                    />
-                  </div>
-                )}
-                {!userCoords && !geoRequesting && (
-                  <div className="hidden lg:block min-w-[200px]">
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">Postcode</p>
-                    <PostcodeInput
-                      initial={postcodeInput}
-                      onGeocoded={(coords, pc) => {
-                        updateLocationCoords(coords, pc);
-                        setPostcodeError(false);
-                      }}
-                      onError={(failed) => setPostcodeError(failed)}
-                    />
-                    {postcodeError && <p className="text-[10px] text-red-400 mt-1">Postcode not found</p>}
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Collections filter row (#42), bundle price + arrangement
-                chips, in parity with the gallery / portfolio filter
-                pattern but trimmed to filters that actually apply at
-                the collection level. */}
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-5">
-              <div className="sm:max-w-xs sm:flex-1">
-                <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">
-                  Bundle price: £{collectionsPriceMin} – {collectionsPriceMax >= 2000 ? "£2000+" : `£${collectionsPriceMax}`}
-                </p>
-                <div className="space-y-2 px-1">
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+                Bundle price: £{collectionsPriceMin} {collectionsPriceMax >= 2000 ? "and £2000+" : `and £${collectionsPriceMax}`}
+              </p>
+              <div className="space-y-3 px-1">
+                <div>
+                  <label className="text-[10px] text-muted">Min</label>
                   <input type="range" min={0} max={2000} step={50} value={collectionsPriceMin} onChange={(e) => { const v = Number(e.target.value); setCollectionsPriceMin(Math.min(v, collectionsPriceMax)); }} className="w-full accent-accent h-1.5 cursor-pointer" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted">Max</label>
                   <input type="range" min={0} max={2000} step={50} value={collectionsPriceMax} onChange={(e) => { const v = Number(e.target.value); setCollectionsPriceMax(Math.max(v, collectionsPriceMin)); }} className="w-full accent-accent h-1.5 cursor-pointer" />
                 </div>
               </div>
-              <div className="flex flex-wrap items-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCollectionsFreeLoan((v) => !v)}
-                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
-                    collectionsFreeLoan ? "border-accent bg-accent/5 text-accent" : "border-border bg-white text-muted hover:border-foreground/30"
-                  }`}
-                >
-                  Display
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCollectionsRevShare((v) => !v)}
-                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
-                    collectionsRevShare ? "border-accent bg-accent/5 text-accent" : "border-border bg-white text-muted hover:border-foreground/30"
-                  }`}
-                >
-                  Rev share
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCollectionsPurchase((v) => !v)}
-                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
-                    collectionsPurchase ? "border-accent bg-accent/5 text-accent" : "border-border bg-white text-muted hover:border-foreground/30"
-                  }`}
-                >
-                  Purchase
-                </button>
-                {hasCollectionsFilters && (
-                  <button
-                    type="button"
-                    onClick={clearCollectionsFilters}
-                    className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer"
-                  >
-                    Clear
-                  </button>
+            </div>
+          </div>
+        );
+
+        return (
+        <section className="pt-5 pb-10 lg:pt-8 lg:pb-14">
+          <div className="max-w-[1400px] mx-auto px-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-serif mb-1">Curated Collections</h2>
+              <p className="text-sm text-muted">Themed bundles of artwork at a set price. Ready to transform your space.</p>
+            </div>
+            <div className="flex gap-10 lg:gap-14 items-start">
+              {/* Sidebar – desktop */}
+              <aside className="hidden lg:block w-56 shrink-0 sticky top-8">
+                <div className="flex items-center justify-between mb-6">
+                  <span className="text-sm font-medium text-foreground">Filters</span>
+                  {hasCollectionsFilters && (
+                    <button type="button" onClick={clearCollectionsFilters} className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">
+                      Clear all
+                    </button>
+                  )}
+                </div>
+                {collectionsFilterPanel}
+              </aside>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                {/* Mobile filter toggle */}
+                <div className="lg:hidden mb-4 flex items-center justify-between">
+                  <p className="text-sm text-muted">
+                    {dataReady
+                      ? `${filteredCollections.length} collection${filteredCollections.length !== 1 ? "s" : ""}`
+                      : "…"}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <select
+                        value="collections"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "gallery") switchView("gallery");
+                          else if (v === "portfolios") switchView("portfolios");
+                        }}
+                        className="appearance-none pl-3 pr-7 py-1.5 text-[11px] rounded-full border border-border bg-white text-foreground font-medium cursor-pointer focus:outline-none focus:border-foreground/50"
+                      >
+                        <option value="gallery">Galleries</option>
+                        <option value="portfolios">Portfolios</option>
+                        <option value="collections">Collections</option>
+                      </select>
+                      <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                        <polyline points="2 4 6 8 10 4" />
+                      </svg>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSidebarOpen(!sidebarOpen)}
+                      className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-sm text-sm text-foreground hover:bg-surface transition-colors cursor-pointer"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="16" y2="12" /><line x1="4" y1="17" x2="12" y2="17" /></svg>
+                      Filters
+                      {hasCollectionsFilters && <span className="text-xs text-white bg-accent rounded-full w-4 h-4 flex items-center justify-center">!</span>}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mobile filter drawer */}
+                {sidebarOpen && (
+                  <div className="lg:hidden mb-6 bg-surface border border-border rounded-sm p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm font-medium">Filters</span>
+                      <button type="button" onClick={() => setSidebarOpen(false)} className="text-xs text-muted hover:text-foreground cursor-pointer">Close</button>
+                    </div>
+                    {collectionsFilterPanel}
+                    {hasCollectionsFilters && (
+                      <button type="button" onClick={clearCollectionsFilters} className="mt-4 text-sm text-accent hover:text-accent-hover transition-colors cursor-pointer">Clear all filters</button>
+                    )}
+                  </div>
+                )}
+
+                {/* Search + count + view toggle – desktop */}
+                <div className="hidden lg:flex items-center justify-between mb-6 gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-64">
+                      <SearchInput
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        placeholder="Search collections, artists"
+                      />
+                    </div>
+                    <p className="text-sm text-muted whitespace-nowrap">
+                      {dataReady
+                        ? `${filteredCollections.length} collection${filteredCollections.length !== 1 ? "s" : ""}`
+                        : "…"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5 mr-1">
+                      <button type="button" onClick={() => switchView("gallery")} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
+                        Galleries
+                      </button>
+                      <button type="button" onClick={() => switchView("portfolios")} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
+                        Portfolios
+                      </button>
+                      <button type="button" onClick={() => switchView("collections")} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer bg-white text-foreground shadow-sm">
+                        Collections
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {filteredCollections.length > 0 ? (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+                      {filteredCollections.slice(0, loadedCollections).map((col) => {
+                        const collectionArtist = artists.find((a) => a.slug === col.artistSlug);
+                        const colDistance = userCoords && collectionArtist?.coordinates
+                          ? calcDistance(userCoords.lat, userCoords.lng, collectionArtist.coordinates.lat, collectionArtist.coordinates.lng)
+                          : null;
+                        return <CollectionCard key={col.id} collection={col} distance={colDistance} />;
+                      })}
+                    </div>
+                    {filteredCollections.length > loadedCollections && (
+                      <div className="mt-10 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setLoadedCollections((n) => n + PAGE_SIZE)}
+                          className="px-6 py-2.5 text-sm font-medium text-foreground border border-foreground/30 rounded-sm hover:border-foreground hover:bg-surface transition-colors cursor-pointer"
+                        >
+                          Show {Math.min(PAGE_SIZE, filteredCollections.length - loadedCollections)} more
+                        </button>
+                        <p className="text-xs text-muted mt-2">
+                          Showing {loadedCollections} of {filteredCollections.length}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="py-20 text-center">
+                    <p className="text-muted mb-3">
+                      {collections.filter((c) => c.available).length === 0
+                        ? "No collections available yet."
+                        : "No collections match these filters."}
+                    </p>
+                    {hasCollectionsFilters && (
+                      <button type="button" onClick={clearCollectionsFilters} className="text-sm text-accent hover:text-accent-hover transition-colors cursor-pointer">Clear all filters</button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
-            {filteredCollections.length > 0 ? (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {filteredCollections.slice(0, loadedCollections).map((col) => {
-                    const collectionArtist = artists.find((a) => a.slug === col.artistSlug);
-                    const colDistance = userCoords && collectionArtist?.coordinates
-                      ? calcDistance(userCoords.lat, userCoords.lng, collectionArtist.coordinates.lat, collectionArtist.coordinates.lng)
-                      : null;
-                    return <CollectionCard key={col.id} collection={col} distance={colDistance} />;
-                  })}
-                </div>
-                {filteredCollections.length > loadedCollections && (
-                  <div className="mt-10 text-center">
-                    <button
-                      type="button"
-                      onClick={() => setLoadedCollections((n) => n + PAGE_SIZE)}
-                      className="px-6 py-2.5 text-sm font-medium text-foreground border border-foreground/30 rounded-sm hover:border-foreground hover:bg-surface transition-colors cursor-pointer"
-                    >
-                      Show {Math.min(PAGE_SIZE, filteredCollections.length - loadedCollections)} more
-                    </button>
-                    <p className="text-xs text-muted mt-2">
-                      Showing {loadedCollections} of {filteredCollections.length}
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-muted text-center py-16">
-                {collections.filter((c) => c.available).length === 0
-                  ? "No collections available yet."
-                  : "No collections match this filter."}
-              </p>
-            )}
           </div>
         </section>
-      )}
+        );
+      })()}
+
+      {/* Subscription CTA for logged-in artists who haven't subscribed.
+          The component is a noop for everyone else (loading, anonymous,
+          venues, customers, already-subscribed), so it lives inline. */}
+      <section className="px-6">
+        <div className="max-w-[1400px] mx-auto pb-6">
+          <SubscriptionUpsellBanner variant="compact" />
+        </div>
+      </section>
 
       {/* CTAs */}
       <section className="py-20 lg:py-24 border-t border-border">

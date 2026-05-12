@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import FaqsClient, { type FaqEntry } from "./FaqsClient";
 
 export const metadata: Metadata = {
-  title: "FAQs – Wallplace",
+  title: "FAQs | Wallplace",
   description:
     "Frequently asked questions about Wallplace for artists, venues, and buyers.",
 };
@@ -21,7 +21,7 @@ const generalFaqs: FaqEntry[] = [
       <>
         <p>
           Wallplace earns through artist membership plans (from £9.99/month)
-          and a platform fee on artwork sales (5–15% depending on the artist&rsquo;s
+          and a platform fee on artwork sales (5 to 15% depending on the artist&rsquo;s
           plan). When a piece sells, the artist keeps the majority. Venues
           never pay a platform fee.
         </p>
@@ -74,7 +74,7 @@ const artistFaqs: FaqEntry[] = [
         </p>
         <p>
           Once your portfolio is live, venues can start enquiring immediately,
-          most artists see their first venue interest in the first 2–3 weeks.
+          most artists see their first venue interest in the first 2 to 3 weeks.
           You can read more about{" "}
           <Link href="/how-it-works">how the platform works end-to-end</Link>{" "}
           or check the <Link href="/artist-agreement">artist agreement</Link>.
@@ -91,7 +91,7 @@ const artistFaqs: FaqEntry[] = [
           held until the artwork has been confirmed delivered (or 14 days
           have passed without a buyer dispute, whichever comes first). At
           that point we transfer your share, sale price minus our platform
-          fee (5–15% depending on plan) and any agreed venue revenue share,
+          fee (5 to 15% depending on plan) and any agreed venue revenue share,
           straight to your linked bank account. You&rsquo;ll see every
           payout itemised in <Link href="/artist-portal/billing">your billing page</Link>.
         </p>
@@ -210,9 +210,9 @@ const venueFaqs: FaqEntry[] = [
       <>
         <p>
           For an off-the-shelf placement (i.e. the work already exists),
-          most arrangements go from first message to installed in 2–3 weeks.
-          Roughly 3–5 days of conversation + agreement, then 5–10 days for
-          dispatch + install scheduling. Bespoke commissions take longer,
+          most arrangements go from first message to installed in 2 to 3 weeks.
+          Roughly 3 to 5 days of conversation plus agreement, then 5 to 10 days for
+          dispatch and install scheduling. Bespoke commissions take longer,
           weeks to months depending on the artist.
         </p>
         <p>
@@ -294,7 +294,7 @@ const venueFaqs: FaqEntry[] = [
   {
     question: "What happens when a customer wants to buy a piece?",
     answer:
-      "Each artwork on display includes a discreet label with the artist name, title, and a QR code or URL linking to the piece on Wallplace. Customers can enquire or purchase directly through us. Your staff do not need to handle any sales – they just point customers to the label.",
+      "Each artwork on display includes a discreet label with the artist name, title, and a QR code or URL linking to the piece on Wallplace. Customers can enquire or purchase directly through us. Your staff do not need to handle any sales, they just point customers to the label.",
   },
   {
     question: "Do our staff need to do anything?",
@@ -304,7 +304,7 @@ const venueFaqs: FaqEntry[] = [
   {
     question: "How often does the artwork change?",
     answer:
-      "That depends on your arrangement with the artist. Some venues prefer a rotation every 2–3 months to keep the space feeling fresh. Others prefer to keep pieces longer. You agree this directly with the artist when arranging the placement.",
+      "That depends on your arrangement with the artist. Some venues prefer a rotation every 2 to 3 months to keep the space feeling fresh. Others prefer to keep pieces longer. You agree this directly with the artist when arranging the placement.",
   },
   {
     question: "Can we buy the artwork ourselves?",
@@ -319,7 +319,7 @@ const buyerFaqs: FaqEntry[] = [
     answer: (
       <p>
         Buying through Wallplace is the same as buying from any reputable
-        online shop. Every piece is sold by the artist directly &mdash; we
+        online shop. Every piece is sold by the artist directly. We
         process the payment and coordinate the transaction. See our{" "}
         <Link href="/terms" className="text-accent hover:underline">Terms of Sale</Link>,{" "}
         <Link href="/returns" className="text-accent hover:underline">Returns Policy</Link>, and{" "}
@@ -336,7 +336,7 @@ const buyerFaqs: FaqEntry[] = [
         <Link href="/orders/track" className="text-accent hover:underline">
           track an order
         </Link>{" "}
-        using the order ID and email from your receipt &mdash; no account
+        using the order ID and email from your receipt. No account
         required.
       </p>
     ),

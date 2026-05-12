@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { isFlagOn } from "@/lib/feature-flags";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
+import Turnstile from "@/components/Turnstile";
 
 export default function CustomerSignUpPage() {
   const router = useRouter();
@@ -17,6 +18,9 @@ export default function CustomerSignUpPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [agreedToTos, setAgreedToTos] = useState(false);
+  // Cloudflare Turnstile token; the component emits "dev-bypass" if the
+  // site key isn't configured so signup still works in local dev.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,7 +33,29 @@ export default function CustomerSignUpPage() {
       return;
     }
 
+    if (!turnstileToken) {
+      setError("Please complete the verification challenge.");
+      setLoading(false);
+      return;
+    }
+
     try {
+      // Verify the Turnstile token server-side before letting Supabase
+      // create the account. The server route is a no-op when no
+      // TURNSTILE_SECRET_KEY is set so preview / dev environments
+      // continue to work.
+      const verifyRes = await fetch("/api/auth/verify-turnstile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: turnstileToken }),
+      });
+      const verifyData = (await verifyRes.json().catch(() => ({}))) as { ok?: boolean };
+      if (!verifyRes.ok || !verifyData.ok) {
+        setError("Verification failed. Refresh and try again.");
+        setLoading(false);
+        return;
+      }
+
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -204,9 +230,11 @@ export default function CustomerSignUpPage() {
               />
             </div>
 
+            <Turnstile onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
+
             <button
               type="submit"
-              disabled={loading || !agreedToTos}
+              disabled={loading || !agreedToTos || !turnstileToken}
               className="w-full px-6 py-3 bg-accent text-white text-sm font-semibold uppercase tracking-wider rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {loading ? "Creating Account..." : "Create Account"}

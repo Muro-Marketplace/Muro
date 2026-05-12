@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
 
 export const metadata: Metadata = {
-  title: "Sign Up – Wallplace",
+  title: "Sign Up | Wallplace",
   description: "Join Wallplace as an artist, venue, or customer.",
 };
 

@@ -443,7 +443,7 @@ function VariantC({ artist }: { artist: Artist }) {
           <Fact label="Suited for" value={artist.venueTypesSuitedFor.slice(0, 2).join(", ") || "Any venue"} />
           <div>
             <p className="text-[10px] text-muted uppercase tracking-wider mb-1.5">Instagram</p>
-            <p className="text-sm font-medium text-foreground">{artist.instagram || "–"}</p>
+            <p className="text-sm font-medium text-foreground">{artist.instagram || "-"}</p>
           </div>
         </div>
         {(offerings.length > 0 || terms.length > 0) && (
@@ -574,7 +574,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-[10px] text-muted uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-sm font-medium text-foreground">{value || "–"}</p>
+      <p className="text-sm font-medium text-foreground">{value || "-"}</p>
     </div>
   );
 }

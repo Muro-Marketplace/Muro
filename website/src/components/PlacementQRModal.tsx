@@ -6,6 +6,10 @@ import { generateQRDataURL } from "@/lib/qr";
 
 const QR_MIN = 100;
 const QR_MAX = 600;
+// 96px ≈ 1 inch ≈ 25.4mm on default web DPI. Used to display the QR
+// size as a real-world dimension on the venue side (task: venue QR
+// should use mm, not pixels).
+const PX_TO_MM = 25.4 / 96;
 
 interface Props {
   open: boolean;
@@ -147,9 +151,9 @@ export default function PlacementQRModal({
                   className="flex-1 accent-accent"
                   aria-label="QR size"
                 />
-                <span className="text-[11px] text-muted tabular-nums w-12 text-right">{Math.round(qrSize)}px</span>
+                <span className="text-[11px] text-muted tabular-nums w-14 text-right">{Math.round(qrSize * PX_TO_MM)}mm</span>
               </div>
-              <p className="text-[10px] text-muted">Drag the QR, or slide, to resize. The downloaded PNG keeps this size.</p>
+              <p className="text-[10px] text-muted">Drag the QR, or slide, to resize. The downloaded PNG keeps this size and prints at roughly the dimension shown.</p>
               <div className="text-center">
                 {artistName && <p className="text-xs text-muted">{artistName}</p>}
                 <p className="text-[11px] text-muted break-all">{targetUrl}</p>

@@ -6,12 +6,12 @@ describe("SIZE_BANDS", () => {
     expect(SIZE_BANDS.map((b) => b.key)).toEqual(["small", "medium", "large", "xl"]);
   });
 
-  it("uses en dash, not em dash, in dimension hints", () => {
-    // En dash (U+2013) is the right glyph for ranges ("30–60 cm").
-    // Em dash (U+2014) is the parenthetical glyph and should never
-    // appear in a numeric range — guard against accidental autocorrect.
+  it("avoids em and en dashes in dimension hints", () => {
+    // Public-copy style rule: ranges read as plain English ("30 to 60 cm")
+    // instead of dashed glyphs. Guards against accidental autocorrect.
     for (const b of SIZE_BANDS) {
       expect(b.dimensionHint).not.toContain("—");
+      expect(b.dimensionHint).not.toContain("–");
     }
   });
 

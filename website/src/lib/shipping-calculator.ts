@@ -174,11 +174,11 @@ function tierForSize(longestEdgeCm: number, weightKg: number): ShippingTier {
 }
 
 const PRICING: Record<ShippingTier, { uk: number; international: number; days: string }> = {
-  flat:      { uk: 3.50,  international: 10.00, days: "2–3 working days" },
-  small:     { uk: 6.50,  international: 18.00, days: "3–5 working days" },
-  medium:    { uk: 10.50, international: 28.00, days: "3–7 working days" },
-  large:     { uk: 18.00, international: 48.00, days: "5–10 working days" },
-  oversized: { uk: 35.00, international: 95.00, days: "7–14 working days (specialist courier)" },
+  flat:      { uk: 3.50,  international: 10.00, days: "2 to 3 working days" },
+  small:     { uk: 6.50,  international: 18.00, days: "3 to 5 working days" },
+  medium:    { uk: 10.50, international: 28.00, days: "3 to 7 working days" },
+  large:     { uk: 18.00, international: 48.00, days: "5 to 10 working days" },
+  oversized: { uk: 35.00, international: 95.00, days: "7 to 14 working days (specialist courier)" },
 };
 
 /** Orders at or above this price automatically ship signed-for. Terms §7. */
