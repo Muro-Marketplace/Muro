@@ -8,7 +8,7 @@ import AnimateIn from "@/components/AnimateIn";
 import ScrollButton from "@/components/ScrollButton";
 
 export const metadata: Metadata = {
-  title: "For Venues – Wallplace",
+  title: "For Venues | Wallplace",
   description:
     "Discover original artwork for your space. Browse curated artist portfolios, filter by style and location, and enquire directly. Free for independent venues.",
 };
@@ -128,7 +128,7 @@ const faqItems = [
   {
     question: "Do you handle installation?",
     answer:
-      "Installation is not included as standard – it's an optional paid add-on. Delivery and collection are arranged directly between you and the artist, with our support if needed.",
+      "Installation is not included as standard, it's an optional paid add-on. Delivery and collection are arranged directly between you and the artist, with our support if needed.",
   },
   {
     question: "What if I don't like the art?",
@@ -386,7 +386,7 @@ export default function VenuesPage() {
         <div className="relative h-full flex items-center justify-center text-center px-6">
           <div>
             <p className="text-white text-3xl lg:text-4xl font-serif mb-3">Zero upfront cost</p>
-            <p className="text-white/60 text-sm lg:text-base">Browse, enquire, and arrange – completely free for venues</p>
+            <p className="text-white/60 text-sm lg:text-base">Browse, enquire, and arrange, completely free for venues</p>
           </div>
         </div>
       </section>

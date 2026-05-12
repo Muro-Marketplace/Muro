@@ -30,7 +30,7 @@ export function ArtistNewVenueMatch({ firstName, matchedVenues, discoverVenuesUr
 export const mock: ArtistNewVenueMatchProps = {
   firstName: "Maya",
   matchedVenues: [mockVenue, mockVenueSecondary],
-  discoverVenuesUrl: "https://wallplace.co.uk/spaces-looking-for-art",
+  discoverVenuesUrl: "https://wallplace.co.uk/spaces",
   matchReason: "All looking for photography in East/Central London.",
 };
 

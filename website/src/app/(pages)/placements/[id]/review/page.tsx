@@ -52,7 +52,7 @@ export default function PlacementReviewPage({ params }: { params: Promise<{ id: 
             </svg>
           </div>
           <h1 className="text-2xl font-serif mb-2">Review submitted</h1>
-          <p className="text-sm text-muted mb-6">Thanks — your feedback has been shared with the other party.</p>
+          <p className="text-sm text-muted mb-6">Thanks. Your feedback has been shared with the other party.</p>
           <Link href={`/placements/${encodeURIComponent(id)}`} className="text-sm text-accent hover:underline">
             Back to placement
           </Link>

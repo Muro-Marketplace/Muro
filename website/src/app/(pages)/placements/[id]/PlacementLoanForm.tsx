@@ -105,7 +105,7 @@ function VersionLog({ versions, approvalsPending }: { versions: RecordVersion[];
                 {v.changed_by_role === "artist" ? "Artist" : v.changed_by_role === "venue" ? "Venue" : "Someone"}
               </span>
               {v.changed_fields && v.changed_fields.length > 0 && (
-                <span className="text-muted ml-1">– {v.changed_fields.map(fieldLabel).join(", ")}</span>
+                <span className="text-muted ml-1">- {v.changed_fields.map(fieldLabel).join(", ")}</span>
               )}
             </li>
           ))}

@@ -3,6 +3,19 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { Artist, ArtistWork, SizePricing } from "@/data/artists";
 import type { DisciplineId } from "@/data/categories";
 
+/**
+ * Prefix the £ symbol to any numeric token in a price band string that
+ * isn't already prefixed. Catches DB rows like "180 – 320" or "From 150"
+ * and turns them into "£180 – £320" / "From £150" so the public
+ * surfaces aren't missing the currency mark.
+ */
+function normalisePriceBand(raw: string | null | undefined): string {
+  if (!raw) return "";
+  // Replace any digit run that isn't immediately preceded by £ (or a $/€,
+  // for safety) with a £-prefixed version.
+  return raw.replace(/(^|[^£$€\d])(\d[\d,]*(?:\.\d+)?)/g, (_match, prefix, num) => `${prefix}£${num}`);
+}
+
 export interface DbArtistProfile {
   id: string;
   user_id: string;
@@ -142,7 +155,11 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
       title: w.title,
       medium: w.medium,
       dimensions: w.dimensions,
-      priceBand: w.price_band,
+      // Some DB rows store price_band as a bare "180 – 320" without
+      // the currency symbol, which surfaced for artists like Maya Chen
+      // as a stripped-looking price. Normalise here so the public
+      // surfaces always show the £ even when the source is missing it.
+      priceBand: normalisePriceBand(w.price_band),
       pricing: w.pricing || [],
       available: w.available,
       color: w.color,

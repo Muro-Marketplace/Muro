@@ -1555,7 +1555,7 @@ export async function PATCH(request: Request) {
                 react: ArtistPlacementDeclined({
                   firstName: requesterFirstName,
                   venueName,
-                  discoverMoreVenuesUrl: `${SITE}/spaces-looking-for-art`,
+                  discoverMoreVenuesUrl: `${SITE}/spaces`,
                 }),
                 metadata: { placementId: id },
               });

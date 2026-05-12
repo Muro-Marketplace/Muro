@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Complaints Policy – Wallplace",
+  title: "Complaints Policy | Wallplace",
   description:
     "Wallplace Complaints Policy. How to raise a complaint, how we respond, and what to do if you are not satisfied.",
 };

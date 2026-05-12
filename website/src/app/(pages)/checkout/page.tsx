@@ -440,7 +440,7 @@ export default function CheckoutPage() {
                   >
                     {savedAddresses.map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.full_name} — {a.line1}, {a.postcode}
+                        {a.full_name}, {a.line1}, {a.postcode}
                         {a.is_default ? " (default)" : ""}
                       </option>
                     ))}
@@ -520,7 +520,7 @@ export default function CheckoutPage() {
               )}
               {fulfilmentMethod === "collection" && (
                 <textarea
-                  placeholder="Pickup notes — when works for you, anyone we should ask for? (optional)"
+                  placeholder="Pickup notes, when works for you, anyone we should ask for? (optional)"
                   value={collectionNotes}
                   onChange={(e) => setCollectionNotes(e.target.value)}
                   rows={3}
@@ -593,7 +593,7 @@ export default function CheckoutPage() {
             onClick={handleSubmit}
             className="w-full px-6 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
           >
-            Proceed to Payment – £{total.toFixed(2)}
+            Proceed to Payment, £{total.toFixed(2)}
           </button>
         </div>
 

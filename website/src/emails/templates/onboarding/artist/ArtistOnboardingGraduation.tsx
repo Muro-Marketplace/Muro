@@ -33,7 +33,7 @@ export function ArtistOnboardingGraduation({ firstName, dashboardUrl, discoverVe
 export const mock: ArtistOnboardingGraduationProps = {
   firstName: "Maya",
   dashboardUrl: "https://wallplace.co.uk/artist-portal",
-  discoverVenuesUrl: "https://wallplace.co.uk/spaces-looking-for-art",
+  discoverVenuesUrl: "https://wallplace.co.uk/spaces",
   profileUrl: "https://wallplace.co.uk/artist-portal/profile",
 };
 

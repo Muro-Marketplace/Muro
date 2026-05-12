@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       if (worksErr) {
         console.error("[checkout] cart re-validation lookup failed:", worksErr);
         return NextResponse.json(
-          { error: "Couldn't validate your cart — please try again." },
+          { error: "Couldn't validate your cart, please try again." },
           { status: 500 },
         );
       }
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
       if (!row) {
         return NextResponse.json(
           {
-            error: `"${line.title}" is no longer available — please remove it from your cart.`,
+            error: `"${line.title}" is no longer available. Please remove it from your cart.`,
             code: "work_unavailable",
             workId: line.workId,
           },
@@ -191,7 +191,7 @@ export async function POST(request: Request) {
       if (item.price < dbBaseTier.price) {
         return NextResponse.json(
           {
-            error: `"${row.title || item.title}" has been re-priced — please refresh your cart.`,
+            error: `"${row.title || item.title}" has been re-priced. Please refresh your cart.`,
             code: "price_below_base",
             workId: item.workId,
           },
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
           currency: "gbp",
           product_data: {
             name: item.title,
-            description: `${item.artistName} – ${item.size}`,
+            description: `${item.artistName}, ${item.size}`,
             ...(item.image && !item.image.startsWith("data:") ? { images: [item.image] } : {}),
           },
           unit_amount: unitPence,
@@ -279,7 +279,7 @@ export async function POST(request: Request) {
         {
           error:
             blocked.length === 1
-              ? `${blocked[0]} isn't ready to take orders yet — try again in a few minutes.`
+              ? `${blocked[0]} isn't ready to take orders yet. Try again in a few minutes.`
               : `${blocked.length} artists in this cart aren't ready to take orders yet.`,
           blocked,
         },

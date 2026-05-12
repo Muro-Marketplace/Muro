@@ -101,7 +101,7 @@ export default function EditArtworkRequestPage({ params }: { params: Promise<{ i
       <div className="max-w-2xl px-4 sm:px-6 py-8">
         <h1 className="text-2xl font-serif mb-2">Edit artwork request</h1>
         <p className="text-sm text-muted mb-6">
-          Update the brief — open responses stay live and continue against the new terms.
+          Update the brief. Open responses stay live and continue against the new terms.
         </p>
         {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
         {loading || !initial ? (

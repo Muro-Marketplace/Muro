@@ -275,7 +275,7 @@ export async function POST(request: Request) {
   if (parentOfferId) {
     const { data: parent } = await db
       .from("purchase_offers")
-      .select("buyer_user_id, buyer_type, buyer_email, artist_user_id, artist_slug, status")
+      .select("buyer_user_id, buyer_type, buyer_email, artist_user_id, artist_slug, status, created_by_user_id")
       .eq("id", parentOfferId)
       .maybeSingle();
     if (!parent || (parent.buyer_user_id !== buyerId && parent.artist_user_id !== buyerId)) {
@@ -283,6 +283,20 @@ export async function POST(request: Request) {
     }
     if (parent.status !== "pending" && parent.status !== "countered") {
       return NextResponse.json({ error: "Offer is no longer open" }, { status: 409 });
+    }
+    // The actor must be the *recipient* of the parent, not its sender.
+    // Otherwise users can counter their own counter and the negotiation
+    // never reaches the other side.
+    const parentSenderId = parent.created_by_user_id || parent.buyer_user_id;
+    if (parentSenderId === buyerId) {
+      return NextResponse.json(
+        {
+          error: "self_counter",
+          message:
+            "You can't counter an offer you sent. Wait for the other side to respond, or withdraw and start again.",
+        },
+        { status: 403 },
+      );
     }
     parentRow = parent;
     // Mark the parent as countered. The new row becomes the live one.
@@ -350,7 +364,7 @@ export async function POST(request: Request) {
       createNotification({
         userId: recipient,
         kind: parentOfferId ? "offer_counter" : "offer_received",
-        title: parentOfferId ? `Counter offer — ${formatted}` : `New offer — ${formatted}`,
+        title: parentOfferId ? `Counter offer, ${formatted}` : `New offer, ${formatted}`,
         body: message ? message.slice(0, 140) : "Tap to review",
         link,
       }).catch((err) => console.warn("[offers] bell failed:", err));
@@ -399,7 +413,7 @@ export async function POST(request: Request) {
           const primary = workDetails[0];
           const summary = parentOfferId
             ? `Sent a counter offer of ${formatted}.`
-            : `Made an offer of ${formatted}${message ? ` — "${message.slice(0, 200)}"` : ""}.`;
+            : `Made an offer of ${formatted}${message ? `: "${message.slice(0, 200)}"` : ""}.`;
 
           await db.from("messages").insert({
             conversation_id: conversationId,

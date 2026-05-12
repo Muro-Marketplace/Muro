@@ -16,7 +16,7 @@ export default function VerifiedBadge({
   const padding = size === "sm" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px]";
   return (
     <span
-      title="Verified artist — reviewed and approved by Wallplace"
+      title="Verified artist, reviewed and approved by Wallplace"
       aria-label="Verified artist"
       className={`inline-flex items-center gap-1 rounded-full bg-accent/10 text-accent font-medium tracking-wide ${padding} ${className}`}
     >

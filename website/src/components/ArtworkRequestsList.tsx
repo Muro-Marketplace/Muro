@@ -1,7 +1,7 @@
 "use client";
 
 // Public-surface artwork-requests list. Used standalone on
-// /artwork-requests and inline as a tab on /spaces-looking-for-art.
+// /artwork-requests and inline as a tab on /spaces.
 //
 // Data source: /api/artwork-requests/public (unauth, curated fields,
 // joined with venue_profiles for the venue name + image).
@@ -35,7 +35,7 @@ function formatBudget(minP: number | null, maxP: number | null): string | null {
   if (!minP && !maxP) return null;
   const min = minP ? Math.round(minP / 100) : 0;
   const max = maxP ? Math.round(maxP / 100) : 0;
-  if (min && max) return `£${min}–£${max}`;
+  if (min && max) return `£${min} to £${max}`;
   if (min) return `From £${min}`;
   if (max) return `Up to £${max}`;
   return null;
@@ -87,7 +87,7 @@ export default function ArtworkRequestsList() {
       <EmptyState
         title="No open requests right now"
         hint="Venues post here when they&rsquo;re actively looking for work. Check back soon, or browse spaces directly."
-        cta={{ label: "Browse spaces", href: "/spaces-looking-for-art" }}
+        cta={{ label: "Browse spaces", href: "/spaces" }}
       />
     );
   }

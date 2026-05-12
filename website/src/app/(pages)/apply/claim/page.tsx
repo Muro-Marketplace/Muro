@@ -131,7 +131,7 @@ function ClaimForm() {
       </h1>
       <p className="text-muted leading-relaxed mb-8">
         Your application is with our team. While we review it, claim your
-        space in under two minutes. Just the essentials now &mdash; you can
+        space in under two minutes. Just the essentials now. You can
         add your full portfolio, statement, and works any time.
       </p>
 

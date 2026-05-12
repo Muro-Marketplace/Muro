@@ -511,6 +511,24 @@ export default function PlacementDetailClient({ placementId }: Props) {
                 </Link>
               );
             })()}
+            {/* Venue-side shortcut: once an active placement exists, the
+                venue can jump straight to their wall visualiser with this
+                work pre-loaded in "My Works". /venue-portal/walls picks
+                the active placements up via /api/walls/my-works, so the
+                artwork is available to drag onto any wall. */}
+            {viewerRole === "venue" && placement.status === "active" && (
+              <Link
+                href="/venue-portal/walls"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/5 border border-accent/30 hover:bg-accent/10 rounded-sm px-2.5 py-1 transition-colors"
+                title="Place on a wall in your visualiser"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <rect x="7" y="7" width="6" height="6" />
+                </svg>
+                Place on a wall
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -874,7 +892,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
               <p className="text-lg font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
                 {placement.qr_enabled && placement.revenue_share_percent != null && placement.revenue_share_percent > 0 && (
-                  <> &mdash; {placement.revenue_share_percent}% share on QR sales</>
+                  <>, {placement.revenue_share_percent}% share on QR sales</>
                 )}
               </p>
             </div>
@@ -884,7 +902,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Direct purchase</p>
               <p className="text-lg font-medium text-foreground">Venue owns the work</p>
-              <p className="text-[11px] text-muted mt-1">Outright sale &mdash; no ongoing split</p>
+              <p className="text-[11px] text-muted mt-1">Outright sale, no ongoing split</p>
             </div>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">QR display</p>

@@ -53,7 +53,7 @@ function toneFor(status: string): StatusTone {
 }
 
 function fmtMoney(amount: number | null, currency: string): string {
-  if (amount == null) return "–";
+  if (amount == null) return "-";
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: currency.toUpperCase() }).format(amount);
 }
 

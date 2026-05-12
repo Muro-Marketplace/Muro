@@ -1,7 +1,7 @@
 /**
  * Single source of truth for Wallplace Curated tiers.
  *
- * Used by both `/curated` (CuratedClient.tsx — the landing/plan picker)
+ * Used by both `/curated` (CuratedClient.tsx, the landing/plan picker)
  * and `/curated/[tier]` (deep-dive page) so the tier set, prices, and
  * CTAs can never drift between the two surfaces.
  */
@@ -22,7 +22,7 @@ export interface CuratedTier {
   cta: string;
   group: CuratedTierGroup;
   /** Surfaces a "Most popular" badge on the card. The middle one-off
-   *  tier is the conversion target — venues with 2+ walls converge here
+   *  tier is the conversion target, venues with 2+ walls converge here
    *  and the price-quality ratio is the strongest of the five. */
   popular?: boolean;
   /** Short-form copy used on the landing-page tier cards. */
@@ -49,7 +49,7 @@ export const CURATED_TIERS: CuratedTier[] = [
     summary: {
       strapline: "One feature wall, hand-picked.",
       bullets: [
-        "Shortlist of 5–8 works suited to your space",
+        "Shortlist of 5 to 8 works suited to your space",
         "Size, style and budget matched to your brief",
         "Delivered by email within 5 business days",
       ],
@@ -59,10 +59,10 @@ export const CURATED_TIERS: CuratedTier[] = [
         "One feature wall, hand-picked. A curated shortlist tuned to your space, delivered in 5 business days.",
       highlights: [
         "A curator reviews your photos, brand, and tone",
-        "Shortlist of 5–8 works suited to your space, with curator notes on each",
+        "Shortlist of 5 to 8 works suited to your space, with curator notes on each",
         "Sized, styled, and budget-matched to your brief",
         "One round of revisions if you'd like alternatives",
-        "Clear next-step options — free QR-loan, paid loan, or outright purchase",
+        "Clear next-step options, free QR-loan, paid loan, or outright purchase",
       ],
       howItWorks: [
         {
@@ -71,11 +71,11 @@ export const CURATED_TIERS: CuratedTier[] = [
         },
         {
           title: "2. A curator reviews your brief",
-          body: "A Wallplace curator matches available artists to your space — palette, scale, and audience.",
+          body: "A Wallplace curator matches available artists to your space, palette, scale, and audience.",
         },
         {
           title: "3. You get a shortlist",
-          body: "5–8 works with curator notes, arrangement options, and price indications. Delivered by email within 5 business days.",
+          body: "5 to 8 works with curator notes, arrangement options, and price indications. Delivered by email within 5 business days.",
         },
         {
           title: "4. Pick and place",
@@ -89,7 +89,7 @@ export const CURATED_TIERS: CuratedTier[] = [
         },
         {
           q: "Do I pay for the art on top of the £49?",
-          a: "Arrangements vary by work. Many shortlists include free QR-loan options (zero ongoing cost, you share QR sales with the artist) and revenue-share arrangements. Paid-loan and outright purchase options are also shown — you pick what works for the space.",
+          a: "Arrangements vary by work. Many shortlists include free QR-loan options (zero ongoing cost, you share QR sales with the artist) and revenue-share arrangements. Paid-loan and outright purchase options are also shown, you pick what works for the space.",
         },
         {
           q: "When should I upgrade to Full space?",
@@ -116,9 +116,9 @@ export const CURATED_TIERS: CuratedTier[] = [
     },
     detail: {
       strapline:
-        "Every wall in your venue, considered together — palette, mood, and flow as one coherent look.",
+        "Every wall in your venue, considered together, palette, mood, and flow as one coherent look.",
       highlights: [
-        "Multi-wall shortlist with grouping notes — which works belong side-by-side",
+        "Multi-wall shortlist with grouping notes, which works belong side-by-side",
         "Mood and palette guidance so the venue feels intentional, not patchwork",
         "One revision round included if you'd like alternatives",
         "Best for venues with 2+ walls, adjoining rooms, corridors, or multi-room layouts",
@@ -145,7 +145,7 @@ export const CURATED_TIERS: CuratedTier[] = [
       faq: [
         {
           q: "Can I split the budget across walls?",
-          a: "Yes — the £149 covers the curation. Each wall can independently use free QR-loan, paid loan, or purchase, depending on what suits the work and the room.",
+          a: "Yes, the £149 covers the curation. Each wall can independently use free QR-loan, paid loan, or purchase, depending on what suits the work and the room.",
         },
         {
           q: "How is this different from buying Single wall × N?",
@@ -204,7 +204,7 @@ export const CURATED_TIERS: CuratedTier[] = [
       faq: [
         {
           q: "Is this suitable for a hotel chain?",
-          a: "Yes — Bespoke scales from a single boutique hotel to a multi-site group.",
+          a: "Yes, Bespoke scales from a single boutique hotel to a multi-site group.",
         },
         {
           q: "Can you work to a brand guideline?",
@@ -232,9 +232,9 @@ export const CURATED_TIERS: CuratedTier[] = [
       strapline:
         "A new curated shortlist every month, keeping walls fresh without you lifting a finger.",
       highlights: [
-        "One new shortlist per month with 3–5 fresh options",
+        "One new shortlist per month with 3 to 5 fresh options",
         "Rotation suggestions tuned to season, traffic, and what's performing",
-        "Priority artist coordination — we handle swaps end-to-end",
+        "Priority artist coordination, we handle swaps end-to-end",
         "Cancel any time; no notice period",
       ],
       howItWorks: [
@@ -254,7 +254,7 @@ export const CURATED_TIERS: CuratedTier[] = [
       faq: [
         {
           q: "Do I pay for the art on top of £79.99?",
-          a: "Curation is £79.99. The art itself follows whichever arrangement you pick — free QR-loan, paid loan, or outright purchase.",
+          a: "Curation is £79.99. The art itself follows whichever arrangement you pick, free QR-loan, paid loan, or outright purchase.",
         },
         {
           q: "What happens if I cancel?",
@@ -280,7 +280,7 @@ export const CURATED_TIERS: CuratedTier[] = [
     },
     detail: {
       strapline:
-        "One considered seasonal refresh every three months — less admin than monthly.",
+        "One considered seasonal refresh every three months, less admin than monthly.",
       highlights: [
         "One full shortlist every quarter (four per year)",
         "Seasonal mood and palette guidance",

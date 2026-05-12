@@ -44,7 +44,7 @@ export async function generateMetadata({
     const artist = await getArtistBySlug(slug);
 
     if (!artist) {
-      return { title: "Artist Not Found – Wallplace" };
+      return { title: "Artist Not Found | Wallplace" };
     }
 
     // Defensive coercions, anything missing or malformed flows
@@ -67,17 +67,17 @@ export async function generateMetadata({
     }
 
     return {
-      title: `${safeName} – Wallplace`,
+      title: `${safeName} | Wallplace`,
       description: safeBio,
       openGraph: {
-        title: `${safeName} – Wallplace`,
+        title: `${safeName} | Wallplace`,
         description: safeBio,
         images: ogImage ? [ogImage] : [],
         type: "profile",
       },
       twitter: {
         card: "summary",
-        title: `${safeName} – Wallplace`,
+        title: `${safeName} | Wallplace`,
         description: safeBio,
       },
     };
@@ -310,7 +310,7 @@ export default async function ArtistProfilePage({
             <div className="border-t border-border pt-4 grid grid-cols-2 gap-x-4 gap-y-3">
               <div>
                 <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Delivery</p>
-                <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "–"}</p>
+                <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "-"}</p>
               </div>
               <div>
                 <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Suited for</p>
@@ -476,11 +476,11 @@ export default async function ArtistProfilePage({
               <div className="grid grid-cols-1 gap-y-3">
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Location</p>
-                  <p className="text-sm font-medium text-foreground">{artist.location || "–"}</p>
+                  <p className="text-sm font-medium text-foreground">{artist.location || "-"}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Delivery</p>
-                  <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "–"}</p>
+                  <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "-"}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Suited for</p>

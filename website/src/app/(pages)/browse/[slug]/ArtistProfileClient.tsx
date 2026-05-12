@@ -867,7 +867,7 @@ export default function ArtistProfileClient({
                         }}
                         className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {soldOut ? "Sold out" : `Buy Now – £${totalPrice}`}
+                        {soldOut ? "Sold out" : `Buy Now, £${totalPrice}`}
                       </button>
                       <button
                         disabled={soldOut}
@@ -1018,7 +1018,7 @@ export default function ArtistProfileClient({
                           senderName,
                           senderType: userType || "anonymous",
                           recipientSlug: artistSlug,
-                          content: `[${data.get("enquiryType")}] ${currentWork ? `Re: ${currentWork.title} – ` : ""}${data.get("message")}`,
+                          content: `[${data.get("enquiryType")}] ${currentWork ? `Re: ${currentWork.title}, ` : ""}${data.get("message")}`,
                         }),
                       });
                       // Also save to enquiries table for backward compatibility

@@ -201,7 +201,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-5">
         <Breadcrumbs
           items={[
-            { label: "Spaces", href: "/spaces-looking-for-art" },
+            { label: "Spaces", href: "/spaces" },
             { label: venue.name },
           ]}
         />
@@ -417,7 +417,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
             )}
           </div>
           <Link
-            href="/spaces-looking-for-art"
+            href="/spaces"
             className="inline-flex items-center gap-1 mt-4 text-xs text-accent hover:underline"
           >
             &larr; All spaces

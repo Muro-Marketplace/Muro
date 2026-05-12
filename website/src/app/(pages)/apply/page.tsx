@@ -78,7 +78,7 @@ export default function ApplyPage() {
                     "A coherent body of work",
                     "Commercial viability for venue display",
                     "Professional approach and communication",
-                    "Original work – no AI-generated pieces",
+                    "Original work, no AI-generated pieces",
                   ].map((item) => (
                     <li
                       key={item}

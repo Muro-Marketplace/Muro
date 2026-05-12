@@ -416,7 +416,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                       disabled={busyId === o.id}
                       className="px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent/90 rounded-sm transition-colors disabled:opacity-60"
                     >
-                      Complete payment — {formatted}
+                      Complete payment, {formatted}
                     </button>
                   )}
                   {o.status === "paid" && (

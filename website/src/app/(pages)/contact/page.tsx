@@ -3,9 +3,9 @@ import ContactForm from "@/components/ContactForm";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Contact – Wallplace",
+  title: "Contact | Wallplace",
   description:
-    "Get in touch with the Wallplace team. Whether you're an artist, a venue, or just curious – we'd love to hear from you.",
+    "Get in touch with the Wallplace team. Whether you're an artist, a venue, or just curious, we'd love to hear from you.",
 };
 
 export default function ContactPage() {
@@ -17,7 +17,7 @@ export default function ContactPage() {
           <div className="max-w-2xl">
             <h1 className="text-4xl lg:text-5xl mb-5">Get in Touch</h1>
             <p className="text-lg text-muted leading-relaxed">
-              Whether you&rsquo;re an artist, a venue, or just curious –
+              Whether you&rsquo;re an artist, a venue, or just curious,
               we&rsquo;d love to hear from you.
             </p>
           </div>

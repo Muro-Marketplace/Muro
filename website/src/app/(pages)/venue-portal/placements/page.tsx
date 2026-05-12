@@ -1376,7 +1376,7 @@ export default function VenuePlacementsPage() {
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         {(() => {
                           const dir = directionFor({ requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id);
-                          return dir ? <PlacementDirectionTag direction={dir} /> : <span className="text-[11px] text-muted">–</span>;
+                          return dir ? <PlacementDirectionTag direction={dir} /> : <span className="text-[11px] text-muted">-</span>;
                         })()}
                       </td>
                       <td className="px-6 py-3.5 text-right">

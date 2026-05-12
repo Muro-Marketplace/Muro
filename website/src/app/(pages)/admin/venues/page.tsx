@@ -118,7 +118,7 @@ export default function AdminVenuesPage() {
                       )}
                     </div>
                     <p className="text-xs text-muted mt-0.5">
-                      {[venue.type, venue.city || venue.location, venue.contact_name].filter(Boolean).join(" · ") || "–"}
+                      {[venue.type, venue.city || venue.location, venue.contact_name].filter(Boolean).join(" · ") || "-"}
                     </p>
                   </div>
                   <p className="text-xs text-muted shrink-0 hidden sm:block">
@@ -152,7 +152,7 @@ export default function AdminVenuesPage() {
                         <KV label="Postcode" value={venue.postcode} />
                       </Section>
                       <Section label="Preferences">
-                        <KV label="Arrangements" value={arrangements.length ? arrangements.join(", ") : "–"} />
+                        <KV label="Arrangements" value={arrangements.length ? arrangements.join(", ") : "-"} />
                         <KV label="Footfall" value={venue.approximate_footfall} />
                         <KV label="Audience" value={venue.audience_type} />
                         <KV label="Wall Space (signup)" value={venue.wall_space} />
@@ -180,7 +180,7 @@ export default function AdminVenuesPage() {
                         <KV label="Placements" value={String(venue.placement_count ?? 0)} />
                         <KV label="Joined" value={new Date(venue.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} />
                         <p className="text-xs text-muted mt-2">
-                          <a href={`/spaces-looking-for-art#venue-${venue.slug}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                          <a href={`/spaces#venue-${venue.slug}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
                             View public profile →
                           </a>
                         </p>

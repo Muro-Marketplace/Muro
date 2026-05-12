@@ -309,7 +309,7 @@ export default function ArtworkPageClient({
                   {work.pricing.map((sp) => {
                     const stock = sp.quantityAvailable;
                     const label = typeof stock !== "number"
-                      ? "–"
+                      ? "-"
                       : stock <= 0
                         ? "Sold out"
                         : `${stock} available`;

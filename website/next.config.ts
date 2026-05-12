@@ -70,6 +70,14 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      // /spaces is the new canonical URL for the "venues looking for art"
+      // listing; keep the old path working with a permanent redirect so
+      // bookmarks + indexed links still land in the right place.
+      { source: "/spaces-looking-for-art", destination: "/spaces", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -275,7 +275,7 @@ export default function Home() {
                   <ul className="space-y-3 mb-10">
                     <BulletPoint text="Get displayed in cafés, restaurants, hotels, and offices" />
                     <BulletPoint text="Sell directly online, every QR scan leads to your store" />
-                    <BulletPoint text="5–15% platform fee. No gallery taking 50%." />
+                    <BulletPoint text="5 to 15% platform fee. No gallery taking 50%." />
                   </ul>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -409,7 +409,7 @@ export default function Home() {
                 Cafés, restaurants, hotels, and offices actively seeking artwork to display. See what&rsquo;s available near you.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Link href="/spaces-looking-for-art" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                <Link href="/spaces" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                   See Venue Demand
                 </Link>
                 <Link href="/apply" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">

@@ -79,7 +79,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       // regardless of who accepted (artist accepted venue's price OR
       // venue accepted artist's counter price → venue still pays).
       notifyRecipient = offer.buyer_user_id;
-      notifyTitle = `Offer accepted — £${(offer.amount_pence / 100).toFixed(2)}`;
+      notifyTitle = `Offer accepted, £${(offer.amount_pence / 100).toFixed(2)}`;
       notifyKind = "offer_accepted";
       break;
     case "decline":

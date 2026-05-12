@@ -270,7 +270,7 @@ function SpacesPageContent() {
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="flex items-center gap-1">
             <Link
-              href="/spaces-looking-for-art"
+              href="/spaces"
               className={`px-1 pt-3 pb-2.5 text-sm transition-colors border-b-2 -mb-px ${
                 view === "walls"
                   ? "font-medium text-foreground border-accent"
@@ -281,7 +281,7 @@ function SpacesPageContent() {
             </Link>
             <span className="w-3" />
             <Link
-              href="/spaces-looking-for-art?view=requests"
+              href="/spaces?view=requests"
               className={`px-1 pt-3 pb-2.5 text-sm transition-colors border-b-2 -mb-px ${
                 view === "requests"
                   ? "font-medium text-foreground border-accent"

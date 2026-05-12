@@ -33,8 +33,8 @@ const THEME_TAGS = [
 
 const SIZE_OPTIONS = [
   "Small (up to 40cm)",
-  "Medium (40–80cm)",
-  "Large (80–120cm)",
+  "Medium (40 to 80cm)",
+  "Large (80 to 120cm)",
   "Oversized (120cm+)",
 ];
 
@@ -246,7 +246,7 @@ export default function VenueProfilePage() {
       setLocalArtists(venue.interestedInLocalArtists ?? false);
       setStyles(venue.preferredStyles?.length ? venue.preferredStyles : ["Contemporary", "Minimal", "Photography"]);
       setThemes(venue.preferredThemes?.length ? venue.preferredThemes : ["Nature", "City", "Architecture"]);
-      setSizes(["Medium (40–80cm)", "Large (80–120cm)"]);
+      setSizes(["Medium (40 to 80cm)", "Large (80 to 120cm)"]);
       setDetailName(venue.name || "");
       setDetailType(venue.type || "");
       setDetailLocation(venue.location || "");

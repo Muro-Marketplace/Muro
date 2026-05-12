@@ -33,10 +33,10 @@ interface RequestRow {
 }
 
 const TYPE_LABELS: Record<ResponseType, { name: string; tip: string }> = {
-  placement: { name: "Propose a placement", tip: "Loan or revenue share — set the terms here, venue confirms." },
+  placement: { name: "Request a placement", tip: "Loan or revenue share. Set the terms here, venue confirms." },
   offer: { name: "Quote a price", tip: "Name a price for one of your works." },
   commission: { name: "Suggest a commission", tip: "Custom-make something for this brief." },
-  message: { name: "Just a message", tip: "Open the conversation; no proposal yet." },
+  message: { name: "Just a message", tip: "Open the conversation, no proposal yet." },
 };
 
 export default function ArtistArtworkRequestRespondPage({ params }: { params: Promise<{ id: string }> }) {
@@ -163,13 +163,13 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
         <Link href="/artist-portal/artwork-requests" className="text-xs text-muted hover:text-accent inline-block mb-4">← All requests</Link>
 
         <h1 className="text-2xl font-serif mb-2">{req.title}</h1>
-        <p className="text-sm text-muted mb-2">From {req.venue_name || req.venue_slug || "Venue"}</p>
+        <p className="text-sm text-muted mb-2">From {req.venue_name || "Venue"}</p>
         <p className="text-sm text-foreground/80 leading-relaxed mb-4 whitespace-pre-wrap">{req.description}</p>
         <div className="flex flex-wrap gap-2 text-[10px] mb-8">
           {req.intent.map((i) => <span key={i} className="px-1.5 py-0.5 bg-accent/5 text-accent rounded-sm capitalize">{i}</span>)}
           {(req.budget_min_pence || req.budget_max_pence) && (
             <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">
-              £{((req.budget_min_pence || 0) / 100).toFixed(0)}–£{((req.budget_max_pence || 0) / 100).toFixed(0)}
+              £{((req.budget_min_pence || 0) / 100).toFixed(0)} to £{((req.budget_max_pence || 0) / 100).toFixed(0)}
             </span>
           )}
           {req.location && <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">{req.location}</span>}
@@ -256,7 +256,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                             <option value="">Any size</option>
                             {tiers.map((t) => (
                               <option key={t.label} value={t.label}>
-                                {t.label} — £{t.price.toFixed(0)}
+                                {t.label}, £{t.price.toFixed(0)}
                               </option>
                             ))}
                           </select>
@@ -299,7 +299,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                       max="50"
                       value={proposedRevSharePercent}
                       onChange={(e) => setProposedRevSharePercent(e.target.value)}
-                      placeholder="0–50"
+                      placeholder="0 to 50"
                       className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60"
                     />
                     <p className="text-[11px] text-muted mt-1">Max 50% to the venue.</p>
@@ -338,7 +338,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                 </div>
                 <div>
                   <label htmlFor="com-tl" className="block text-xs uppercase tracking-wider text-muted mb-1.5">Timeline</label>
-                  <input id="com-tl" type="text" value={commissionTimeline} onChange={(e) => setCommissionTimeline(e.target.value)} placeholder="6–8 weeks" className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60" />
+                  <input id="com-tl" type="text" value={commissionTimeline} onChange={(e) => setCommissionTimeline(e.target.value)} placeholder="6 to 8 weeks" className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60" />
                 </div>
               </div>
             )}

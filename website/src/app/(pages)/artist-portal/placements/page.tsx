@@ -155,7 +155,7 @@ export default function PlacementsPage() {
   // Form state
   const [venueSlug, setVenueSlug] = useState("");
   // Ref for the new-placement form so we can scroll to it when an
-  // external link (e.g. /spaces-looking-for-art) deep-links here with
+  // external link (e.g. /spaces) deep-links here with
   // ?venue=<slug>.
   const formRef = useRef<HTMLDivElement | null>(null);
   const searchParams = useSearchParams();
@@ -1266,7 +1266,7 @@ export default function PlacementsPage() {
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     {p.direction
                       ? <PlacementDirectionTag direction={p.direction} />
-                      : <span className="text-[11px] text-muted">–</span>}
+                      : <span className="text-[11px] text-muted">-</span>}
                   </td>
                   <td className="px-6 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-3">

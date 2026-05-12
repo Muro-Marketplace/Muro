@@ -68,7 +68,7 @@ export default function LabelPreview({
       <div className="label-preview-toolbar no-print border-b border-border bg-surface px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-sm font-medium text-foreground">
-            Print Preview – {totalCount} label{totalCount !== 1 ? "s" : ""}
+            Print Preview, {totalCount} label{totalCount !== 1 ? "s" : ""}
           </h2>
           {/* Style + size pills so the venue/artist can verify what
               they're about to send to the printer at a glance. The
@@ -246,7 +246,7 @@ export default function LabelPreview({
               ))}
 
               {labels.length === 0 && (
-                <p className="text-sm text-muted text-center py-8">No labels – close and select some works.</p>
+                <p className="text-sm text-muted text-center py-8">No labels. Close and select some works.</p>
               )}
             </div>
           )}

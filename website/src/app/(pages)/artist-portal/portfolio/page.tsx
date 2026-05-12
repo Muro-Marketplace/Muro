@@ -2422,7 +2422,7 @@ export default function PortfolioPage() {
                                     updated[i] = e.target.value;
                                     return { ...p, inStorePricing: updated };
                                   })}
-                                  placeholder="–"
+                                  placeholder="-"
                                   className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                                 />
                               </div>
@@ -2558,7 +2558,7 @@ export default function PortfolioPage() {
                                   updated[i] = e.target.value;
                                   return { ...p, inStorePricing: updated };
                                 })}
-                                placeholder="–"
+                                placeholder="-"
                                 className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
                               />
                             </div>
@@ -2937,7 +2937,7 @@ export default function PortfolioPage() {
           <div className="text-center py-16 px-6">
             <h3 className="text-base font-medium text-foreground mb-2">No works yet</h3>
             <p className="text-sm text-muted leading-relaxed max-w-sm mx-auto mb-6">
-              Add your first piece — venues find your work through your portfolio.
+              Add your first piece, venues find your work through your portfolio.
             </p>
             <div className="flex items-center justify-center gap-3">
               <button
@@ -2957,7 +2957,7 @@ export default function PortfolioPage() {
         ) : (
           <>
             <p className="text-[11px] text-muted mb-3">
-              Drag cards to reorder &mdash; the order here is what
+              Drag cards to reorder. The order here is what
               venues see on your public profile.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

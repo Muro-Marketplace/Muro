@@ -33,17 +33,17 @@ export async function generateMetadata({
   try {
     artist = await getArtistBySlug(slug);
   } catch {
-    return { title: "Artwork – Wallplace" };
+    return { title: "Artwork | Wallplace" };
   }
 
   if (!artist) {
-    return { title: "Artwork Not Found – Wallplace" };
+    return { title: "Artwork Not Found | Wallplace" };
   }
 
   const work = artist.works.find((w) => slugify(w.title) === workSlug);
 
   if (!work) {
-    return { title: "Artwork Not Found – Wallplace" };
+    return { title: "Artwork Not Found | Wallplace" };
   }
 
   const description = work.description && work.description.trim()
@@ -51,17 +51,17 @@ export async function generateMetadata({
     : `${work.title}, ${work.medium}, ${work.dimensions}. ${work.available ? "Available" : "Sold"}. By ${artist.name} on Wallplace.`;
 
   return {
-    title: `${work.title} by ${artist.name} – Wallplace`,
+    title: `${work.title} by ${artist.name} | Wallplace`,
     description,
     openGraph: {
-      title: `${work.title} by ${artist.name} – Wallplace`,
+      title: `${work.title} by ${artist.name} | Wallplace`,
       description,
       images: work.image ? [{ url: work.image, width: 800, height: 800 }] : [],
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: `${work.title} by ${artist.name} – Wallplace`,
+      title: `${work.title} by ${artist.name} | Wallplace`,
       description,
       images: work.image ? [work.image] : [],
     },

@@ -126,7 +126,7 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
               {req.mediums.map((m) => <span key={m} className="px-2 py-1 bg-foreground/5 text-foreground/70 rounded-sm capitalize">{m}</span>)}
               {(req.budget_min_pence || req.budget_max_pence) && (
                 <span className="px-2 py-1 bg-foreground/5 text-foreground/70 rounded-sm">
-                  £{((req.budget_min_pence || 0) / 100).toFixed(0)}–£{((req.budget_max_pence || 0) / 100).toFixed(0)}
+                  £{((req.budget_min_pence || 0) / 100).toFixed(0)} to £{((req.budget_max_pence || 0) / 100).toFixed(0)}
                 </span>
               )}
               {req.location && <span className="px-2 py-1 bg-foreground/5 text-foreground/70 rounded-sm">{req.location}</span>}

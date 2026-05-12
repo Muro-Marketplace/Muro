@@ -420,7 +420,7 @@ export default function CollectionDetailPage() {
                     >
                       <span className="truncate pr-2">{w.title}</span>
                       <span className="shrink-0">
-                        {w.selectedSize || "–"}
+                        {w.selectedSize || "-"}
                         {w.selectedSizePrice != null ? ` · £${w.selectedSizePrice}` : ""}
                       </span>
                     </div>
@@ -434,7 +434,7 @@ export default function CollectionDetailPage() {
                     onClick={handleBuyCollection}
                     className="w-full px-5 py-3 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
                   >
-                    Buy Collection – {collection.bundlePriceBand}
+                    Buy Collection, {collection.bundlePriceBand}
                   </button>
                 )}
                 {/* Request placement (#41). Always shown when the
