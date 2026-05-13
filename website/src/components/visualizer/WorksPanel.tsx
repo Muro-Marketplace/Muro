@@ -210,16 +210,24 @@ export default function WorksPanel({
                   <p className="text-[11px] font-medium text-stone-800 truncate">
                     {w.title}
                   </p>
-                  {w.dimensions && (
-                    <p className="text-[10px] text-stone-500 truncate">
-                      {formatDimensionsForDisplay(w.dimensions)}
-                      {w.sizes && w.sizes.length > 1 && (
-                        <span className="ml-1 text-stone-400">
-                          · {w.sizes.length} sizes
-                        </span>
-                      )}
-                    </p>
-                  )}
+                  {(() => {
+                    // Empty-formatted check covers both "no dimensions"
+                    // and "dimensions present but failed the plausibility
+                    // cap in formatDimensionsForDisplay".
+                    const dims = w.dimensions ? formatDimensionsForDisplay(w.dimensions) : "";
+                    const hasSizes = !!(w.sizes && w.sizes.length > 1);
+                    if (!dims && !hasSizes) return null;
+                    return (
+                      <p className="text-[10px] text-stone-500 truncate">
+                        {dims}
+                        {hasSizes && (
+                          <span className={dims ? "ml-1 text-stone-400" : "text-stone-400"}>
+                            {dims ? "· " : ""}{w.sizes!.length} sizes
+                          </span>
+                        )}
+                      </p>
+                    );
+                  })()}
                 </div>
               </button>
             </li>

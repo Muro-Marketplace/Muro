@@ -723,16 +723,26 @@ export default function ArtistProfileClient({
                 {currentWork.title}
               </h3>
 
-              {/* Details */}
+              {/* Details. Dimensions row is suppressed entirely when
+                  formatDimensionsForDisplay returns empty so a row
+                  with an empty value (which is what happens when the
+                  stored dimensions are implausibly large) doesn't
+                  render. */}
               <div className="space-y-1.5 sm:space-y-2 mb-3 sm:mb-5">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted">Medium</span>
                   <span className="text-foreground font-medium">{currentWork.medium}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted">Dimensions</span>
-                  <span className="text-foreground font-medium">{formatDimensionsForDisplay(currentWork.dimensions)}</span>
-                </div>
+                {(() => {
+                  const dims = formatDimensionsForDisplay(currentWork.dimensions);
+                  if (!dims) return null;
+                  return (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">Dimensions</span>
+                      <span className="text-foreground font-medium">{dims}</span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Availability + Save */}

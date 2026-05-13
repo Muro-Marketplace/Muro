@@ -1,30 +1,49 @@
 /**
  * Dimension display helper.
  *
- * Some artwork rows carry pixel dimensions (e.g. "2420 × 3632 px") in
- * the `dimensions` field because the value was captured from the
- * uploaded image rather than a physical-size field. Surfacing pixel
- * counts on offer cards or QR labels is meaningless to a venue
- * choosing a print, so this helper detects the pixel form and either
- * hides it or substitutes a small placeholder physical size.
+ * Two failure modes exist on the `dimensions` field:
+ *   1. Pixel dimensions ("2420 × 3632 px") captured from the uploaded
+ *      image instead of a physical-size field. Meaningless to a venue
+ *      choosing a print.
+ *   2. Implausibly large physical dimensions ("128 × 192 in
+ *      (325 × 487 cm)") that look like data error — either pixel data
+ *      mis-labelled as inches, or a unit confusion during a migration.
+ *      A 325 cm × 487 cm "print" is bigger than most walls.
  *
- * Returns the original string when it already looks physical
- * (contains "cm", "mm", inch markers like `"`, or matches a size
- * label like "A4"), `null` when we have nothing useful to show.
+ * Both surface on offer cards + QR labels, which is where venues see
+ * them. This helper hides anything that can't be trusted as a real
+ * print dimension. The QA guidance was "use smallest possible
+ * dimensions e.g. 3x2" when in doubt, so for unknown / unreliable
+ * values we either drop them or fall back to a tiny static label.
+ *
+ * Returns the original string when it parses as a plausible print
+ * size (any side ≤ MAX_REASONABLE_CM), the FALLBACK_DIMENSIONS string
+ * when we want to substitute a placeholder, or `null` to hide.
  */
+
+import { parseDimensions } from "@/lib/shipping-calculator";
 
 const PIXEL_HINT = /\bpx\b|pixels?\b/i;
 const PHYSICAL_HINT = /\b(cm|mm|m|in|inch|inches|ft|feet|A\d|B\d)\b/i;
 // Pure "NNNN × NNNN" with both values typical of image-pixel size
-// (>= 200 and no physical unit anywhere). This catches values like
-// "2420 × 3632" with no suffix.
+// (>= 100 on both sides, no physical unit anywhere). Catches values
+// like "2420 × 3632" with no suffix.
 const RAW_PIXEL_PAIR = /^\s*(\d{3,5})\s*[x×]\s*(\d{3,5})\s*$/i;
 
+// Anything bigger than this on a single side is almost certainly a
+// data error: most prints, paintings, and photographs that venues
+// place top out around 150cm; 200cm gives a generous margin for
+// large statement pieces while still catching the 325 × 487 cm
+// phantom QA flagged. Display in cm; helper converts inch sources
+// before comparing.
+const MAX_REASONABLE_CM = 200;
+
 /**
- * Smallest sensible fallback when only pixel data is available.
- * Matches the QA-team default: any tiny placeholder reads as "we
- * don't have a real size, treat this as a hint" without claiming a
- * specific print dimension. Empty string disables the fallback.
+ * Smallest sensible fallback when only pixel data or junk is
+ * available. Empty string disables the fallback so the caller can
+ * hide the line entirely (the default). Flip this to e.g. "3 × 2 in"
+ * if a static placeholder is preferred per the QA note "use smallest
+ * possible dimensions e.g. 3x2".
  */
 const FALLBACK_DIMENSIONS = "";
 
@@ -35,19 +54,36 @@ export function displayPhysicalDimensions(
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  // Already labelled as physical (cm, inches, A4, etc.) — show as-is.
-  if (PHYSICAL_HINT.test(trimmed) && !PIXEL_HINT.test(trimmed)) {
-    return trimmed;
-  }
-
-  // Explicitly labelled pixels, or a raw pair that's almost certainly
-  // an image resolution rather than a print size. Drop it and let the
-  // caller fall back to the placeholder (or nothing).
+  // Explicit pixel form, or a raw integer pair that looks like an
+  // image resolution. Drop straight to the fallback.
   if (PIXEL_HINT.test(trimmed) || RAW_PIXEL_PAIR.test(trimmed)) {
     return FALLBACK_DIMENSIONS || null;
   }
 
-  // Anything else (e.g. "Medium", "Various sizes") passes through —
-  // it's an artist-authored description, not a pixel artefact.
+  // Try to parse the value as a real physical size. parseDimensions
+  // handles cm, mm, inches, A-sizes, and mixed-unit strings like
+  // "20×28\" (50×70cm)". When it parses, we can sanity-check the
+  // numbers and reject anything beyond MAX_REASONABLE_CM.
+  const parsed = parseDimensions(trimmed);
+  if (parsed) {
+    const { widthCm, heightCm } = parsed;
+    if (widthCm <= 0 || heightCm <= 0) {
+      return FALLBACK_DIMENSIONS || null;
+    }
+    if (widthCm > MAX_REASONABLE_CM || heightCm > MAX_REASONABLE_CM) {
+      return FALLBACK_DIMENSIONS || null;
+    }
+    return trimmed;
+  }
+
+  // Couldn't parse as a number but the string still looks physical
+  // ("Multiple sizes", "Various", "Medium") — let it through; that's
+  // artist-authored copy, not a pixel artefact.
+  if (PHYSICAL_HINT.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Anything else (e.g. "Medium" without a number) passes through;
+  // it's a description, not a measurement.
   return trimmed;
 }
