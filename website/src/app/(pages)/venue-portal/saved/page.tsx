@@ -36,11 +36,36 @@ export default function SavedPage() {
   // any work bumped the saved-artists count). Counts on the
   // dashboard, the placement-request artist picker, and this
   // page now all read from the same explicit savedItems source.
+  //
+  // The list is built from `savedItems` directly, not from
+  // intersecting with the static `artists` array, because artists
+  // who joined after the seed shipped (or who only live in the
+  // database) were being silently dropped. Effect was a dashboard
+  // pill showing 5 saved artists while the page rendered 3. Build
+  // a row per saved slug and look up display details from `artists`
+  // when available, falling back to a slug-derived display name and
+  // a placeholder image otherwise.
   const savedArtistSlugs = useMemo(() => {
-    const ids = new Set(
-      savedItems.filter((s) => s.type === "artist").map((s) => s.id),
-    );
-    return artists.filter((a) => ids.has(a.slug));
+    const lookup = new Map(artists.map((a) => [a.slug, a] as const));
+    return savedItems
+      .filter((s) => s.type === "artist")
+      .map((s) => {
+        const known = lookup.get(s.id);
+        if (known) return known;
+        return {
+          slug: s.id,
+          // Slug to readable name fallback. Same transform the
+          // placement picker uses for slugs without resolved names.
+          name: s.id
+            .split("-")
+            .map((w) => (w.charAt(0).toUpperCase() + w.slice(1)))
+            .join(" "),
+          // Empty image is handled by the next/image fallback below.
+          image: "",
+          primaryMedium: "",
+          location: "",
+        };
+      });
   }, [savedItems]);
 
   return (
@@ -86,18 +111,24 @@ export default function SavedPage() {
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {savedWorks.map((work) => (
+              {savedWorks.map((work, index) => (
                 <div
                   key={work!.id}
                   className="bg-white border border-border rounded-sm overflow-hidden"
                 >
                   <div className="relative aspect-[4/3] bg-border/20">
+                    {/* Eager-load the first row (≤3 cards) so above-fold
+                        thumbnails appear without scrolling. The Intersection
+                        Observer next/image uses for lazy-load has been
+                        triggering AFTER the user lands on the page,
+                        leaving the visible row blank for a tick. */}
                     <Image
                       src={work!.image}
                       alt={work!.title}
                       fill
                       className="object-cover"
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      priority={index < 3}
                     />
                   </div>
                   <div className="p-4">
@@ -142,36 +173,53 @@ export default function SavedPage() {
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-              {savedArtistSlugs.map((artist) => (
-                <div
-                  key={artist.slug}
-                  className="bg-white border border-border rounded-sm overflow-hidden"
-                >
-                  <div className="relative aspect-[3/4] bg-border/20">
-                    <Image
-                      src={artist.image}
-                      alt={artist.name}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
-                    />
+              {savedArtistSlugs.map((artist) => {
+                // Some saved entries are slug-only fallbacks (artist
+                // wasn't in the static seed). Render a coloured-initial
+                // placeholder for those instead of letting next/image
+                // hit an empty src.
+                const hasImage = typeof artist.image === "string" && artist.image.length > 0;
+                const meta = [artist.primaryMedium, artist.location]
+                  .filter((v): v is string => typeof v === "string" && v.length > 0)
+                  .join(" · ");
+                return (
+                  <div
+                    key={artist.slug}
+                    className="bg-white border border-border rounded-sm overflow-hidden"
+                  >
+                    <div className="relative aspect-[3/4] bg-border/20">
+                      {hasImage ? (
+                        <Image
+                          src={artist.image}
+                          alt={artist.name}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 grid place-items-center bg-accent/10 text-accent text-3xl font-medium">
+                          {(artist.name.trim().charAt(0) || "?").toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h3 className="font-medium text-sm text-foreground mb-0.5">
+                        {artist.name}
+                      </h3>
+                      {meta && (
+                        <p className="text-xs text-muted mb-4">{meta}</p>
+                      )}
+                      {!meta && <div className="mb-4" />}
+                      <Link
+                        href={`/browse/${artist.slug}`}
+                        className="block text-center px-3 py-1.5 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors"
+                      >
+                        View Profile
+                      </Link>
+                    </div>
                   </div>
-                  <div className="p-4">
-                    <h3 className="font-medium text-sm text-foreground mb-0.5">
-                      {artist.name}
-                    </h3>
-                    <p className="text-xs text-muted mb-4">
-                      {artist.primaryMedium} &middot; {artist.location}
-                    </p>
-                    <Link
-                      href={`/browse/${artist.slug}`}
-                      className="block text-center px-3 py-1.5 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors"
-                    >
-                      View Profile
-                    </Link>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>

@@ -1100,8 +1100,20 @@ export async function PATCH(request: Request) {
 
       // Use the explicit stageDate when the caller supplied one (e.g.
       // the Schedule date picker on the progress bar), otherwise fall
-      // back to the current timestamp. Accepts any ISO 8601 string;
-      // future dates are fine so venues can pre-schedule installs.
+      // back to the current timestamp. Future dates are fine so venues
+      // can pre-schedule installs, but reject dates in the past for the
+      // `scheduled` stage so a typo (or a paste-bypass of the date
+      // picker's `min` attribute) can't backdate an install.
+      if (stage === "scheduled" && stageDate) {
+        const draftDay = stageDate.slice(0, 10);
+        const todayDay = new Date(now).toISOString().slice(0, 10);
+        if (draftDay < todayDay) {
+          return NextResponse.json(
+            { error: "Install date can't be in the past." },
+            { status: 400 },
+          );
+        }
+      }
       const ts = stageDate || now;
       if (stage === "scheduled") updates.scheduled_for = ts;
       if (stage === "installed") updates.installed_at = ts;

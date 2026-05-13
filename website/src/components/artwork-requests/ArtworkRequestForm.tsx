@@ -127,6 +127,17 @@ export default function ArtworkRequestForm({ initial = {}, mode, onSubmit, onCan
       return;
     }
 
+    const budgetMinPence = budgetMin ? Math.round(parseFloat(budgetMin) * 100) : undefined;
+    const budgetMaxPence = budgetMax ? Math.round(parseFloat(budgetMax) * 100) : undefined;
+    if (
+      typeof budgetMinPence === "number" &&
+      typeof budgetMaxPence === "number" &&
+      budgetMaxPence < budgetMinPence
+    ) {
+      setError("Budget max must be greater than or equal to budget min.");
+      return;
+    }
+
     const invitedSlugs =
       visibility === "private"
         ? invitedSlugsRaw
@@ -146,8 +157,8 @@ export default function ArtworkRequestForm({ initial = {}, mode, onSubmit, onCan
           : undefined,
         styles: styles.split(",").map((s) => s.trim()).filter(Boolean),
         mediums: mediums.split(",").map((s) => s.trim()).filter(Boolean),
-        budgetMinPence: budgetMin ? Math.round(parseFloat(budgetMin) * 100) : undefined,
-        budgetMaxPence: budgetMax ? Math.round(parseFloat(budgetMax) * 100) : undefined,
+        budgetMinPence,
+        budgetMaxPence,
         location: location.trim() || undefined,
         timescale: timescale || undefined,
         visibility,

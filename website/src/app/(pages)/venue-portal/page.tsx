@@ -7,6 +7,7 @@ import PlacementActionItems from "@/components/PlacementActionItems";
 import { useAuth } from "@/context/AuthContext";
 import { useSaved } from "@/context/SavedContext";
 import { authFetch } from "@/lib/api-client";
+import { formatPounds } from "@/lib/format-currency";
 
 interface OnboardingItem {
   key: string;
@@ -115,8 +116,8 @@ export default function VenueDashboardPage() {
 
       setStats([
         { label: "Saved Artists", value: String(savedArtistCount) },
-        { label: "Total Spent", value: `\u00a3${totalSpent.toLocaleString()}` },
-        { label: "Revenue Share Earned", value: `\u00a3${revenueEarned.toLocaleString()}` },
+        { label: "Total Spent", value: formatPounds(totalSpent) },
+        { label: "Revenue Share Earned", value: formatPounds(revenueEarned) },
         { label: "QR Scans", value: String(qrScans) },
       ]);
 
@@ -178,9 +179,12 @@ export default function VenueDashboardPage() {
       for (const o of orders.slice(0, 8) as Array<{ id?: string; total?: number; created_at?: string; artist_slug?: string }>) {
         if (!o.created_at) continue;
         const artistName = formatName(o.artist_slug || "");
+        const amountLabel = typeof o.total === "number" && Number.isFinite(o.total)
+          ? ` for ${formatPounds(o.total)}`
+          : "";
         activityItems.push({
           id: "o-" + (o.id || o.created_at),
-          text: `Order placed${o.total ? ` for \u00a3${o.total}` : ""}${artistName ? `, ${artistName}` : ""}`,
+          text: `Order placed${amountLabel}${artistName ? `, ${artistName}` : ""}`,
           time: formatRelativeTime(o.created_at),
           sortTime: new Date(o.created_at).getTime(),
           type: "order",

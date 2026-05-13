@@ -746,7 +746,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
               </span>
             )}
           </div>
-          <p className="text-xs text-muted truncate mt-0.5">{conv.latestMessage}</p>
+          {/* line-clamp-2 instead of truncate, single-line truncate
+              cut messages like "Sent a counter offer" at "Sent a counte"
+              because the row width is fairly narrow. Allowing two lines
+              gives the venue enough preview to recognise the message
+              without opening the thread. */}
+          <p className="text-xs text-muted mt-0.5 line-clamp-2 break-words">{conv.latestMessage}</p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <span className="text-[10px] text-muted">{timeAgo(conv.lastActivity)}</span>

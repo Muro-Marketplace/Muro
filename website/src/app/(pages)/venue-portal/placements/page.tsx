@@ -20,7 +20,7 @@ function formatSlug(slug: string): string {
   return slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
-type FilterTab = "All" | "Pending" | "Active" | "Completed" | "Archived";
+type FilterTab = "Current" | "Pending" | "Active" | "Completed" | "Archived";
 // Open-ended so combined labels ("Paid loan + QR") can come through the
 // shared arrangementLabel helper.
 type ArrangementType = string;
@@ -78,7 +78,11 @@ interface ArtistWork {
 
 const statusBadge = (status: string) => statusBadgeClass(sharedNormaliseStatus(status));
 
-const tabs: FilterTab[] = ["All", "Pending", "Active", "Completed", "Archived"];
+// "Current" replaces the old "All" label: archived rows are fetched
+// from a different endpoint and were never included in this list, so
+// calling it "All" was misleading. "Current" reads as "everything live
+// right now" and matches what the tab actually shows.
+const tabs: FilterTab[] = ["Current", "Pending", "Active", "Completed", "Archived"];
 
 const normaliseStatus = (raw: string): PlacementStatus => sharedNormaliseStatus(raw) as PlacementStatus;
 
@@ -295,7 +299,7 @@ function ArtistPickerDropdown({ onPick }: { onPick: (slug: string, name: string)
 export default function VenuePlacementsPage() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<FilterTab>("All");
+  const [activeTab, setActiveTab] = useState<FilterTab>("Current");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -303,6 +307,11 @@ export default function VenuePlacementsPage() {
   // Updated on mount + after every archive / unarchive action so the
   // number stays fresh regardless of which tab the user is on.
   const [archivedCount, setArchivedCount] = useState(0);
+  // Count of LIVE (non-archived) placements with status === Active, used
+  // by the header pill. Loaded independently of the list-fetch so it
+  // doesn't flicker when the user switches to the Archived tab and the
+  // displayed `placements` swaps to archived rows.
+  const [liveActiveCount, setLiveActiveCount] = useState<number | null>(null);
   // The Archived filter tab controls what we fetch, ?archived=1
   // returns the user's archive rather than their live list.
   const showArchived = activeTab === "Archived";
@@ -419,6 +428,21 @@ export default function VenuePlacementsPage() {
     } catch { /* badge falls back to 0 */ }
   }, []);
 
+  // Live (non-archived) active-count loader. Powers the header pill,
+  // which previously read `placements.filter(p => p.status === Active)`
+  // and flickered between values whenever the user toggled the Archived
+  // tab and the displayed list swapped. Fetching it independently keeps
+  // the header stable.
+  const loadLiveActiveCount = React.useCallback(async () => {
+    try {
+      const res = await authFetch("/api/placements");
+      const data = await res.json();
+      const rows: Array<{ status?: string }> = Array.isArray(data?.placements) ? data.placements : [];
+      const count = rows.filter((p) => sharedNormaliseStatus(p.status || "") === "Active").length;
+      setLiveActiveCount(count);
+    } catch { /* fall back: header shows nothing */ }
+  }, []);
+
   // Load existing placements. Exposed via useCallback so callers
   // (e.g. counter-dialog onSuccess) can trigger a fresh fetch.
   const loadPlacements = React.useCallback(async () => {
@@ -502,14 +526,21 @@ export default function VenuePlacementsPage() {
 
   useEffect(() => { loadPlacements(); }, [loadPlacements]);
   useEffect(() => { loadArchivedCount(); }, [loadArchivedCount]);
+  useEffect(() => { loadLiveActiveCount(); }, [loadLiveActiveCount]);
 
   // Listen for any placement mutation dispatched from Messages / Counter
   // dialog / Stepper so the list refreshes without a manual reload.
+  // The header count and archived badge refresh in parallel so the
+  // sidebar/header pills don't go stale after an accept/decline/archive.
   useEffect(() => {
-    const handler = () => { loadPlacements(); };
+    const handler = () => {
+      loadPlacements();
+      loadLiveActiveCount();
+      loadArchivedCount();
+    };
     window.addEventListener("wallplace:placement-changed", handler);
     return () => window.removeEventListener("wallplace:placement-changed", handler);
-  }, [loadPlacements]);
+  }, [loadPlacements, loadLiveActiveCount, loadArchivedCount]);
 
   function setWorkSize(title: string, sizeLabel: string) {
     setSelectedWorkSizes((prev) => ({ ...prev, [title]: sizeLabel }));
@@ -815,23 +846,33 @@ export default function VenuePlacementsPage() {
     return d.getTime();
   })();
   const search = searchTerm.trim().toLowerCase();
-  const filtered = placements.filter((p) => {
-    // 'Archived' is its own tab, the placements state already holds
-    // only archived rows when that tab is active, so no extra filter.
-    if (activeTab !== "All" && activeTab !== "Archived") {
-      if (activeTab === "Completed") {
-        if (p.status !== "Completed" && p.status !== "Sold") return false;
-      } else if (p.status !== activeTab) {
-        return false;
-      }
-    }
-    if (dateCutoff && p.createdAtTs && p.createdAtTs < dateCutoff) return false;
-    if (search) {
-      const haystack = `${p.workTitle} ${p.artistName} ${p.type}`.toLowerCase();
-      if (!haystack.includes(search)) return false;
-    }
-    return true;
-  });
+  // Memoised filter so the reference stays stable across re-renders that
+  // don't change the inputs. Without this, every parent re-render (e.g.
+  // a sibling state change, focus event, scroll-triggered work) hands
+  // child rows a fresh array reference and React reconciles every row
+  // body even when nothing visible changed, this is the most likely
+  // culprit for the long script tasks the user saw on Archived (35
+  // rows) when clicking Current/Active. Cheap to compute, expensive
+  // to ignore.
+  const filtered = React.useMemo(
+    () =>
+      placements.filter((p) => {
+        if (activeTab !== "Current" && activeTab !== "Archived") {
+          if (activeTab === "Completed") {
+            if (p.status !== "Completed" && p.status !== "Sold") return false;
+          } else if (p.status !== activeTab) {
+            return false;
+          }
+        }
+        if (dateCutoff && p.createdAtTs && p.createdAtTs < dateCutoff) return false;
+        if (search) {
+          const haystack = `${p.workTitle} ${p.artistName} ${p.type}`.toLowerCase();
+          if (!haystack.includes(search)) return false;
+        }
+        return true;
+      }),
+    [placements, activeTab, dateCutoff, search],
+  );
 
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
 
@@ -842,7 +883,12 @@ export default function VenuePlacementsPage() {
         <h1 className="text-2xl lg:text-3xl">Placements</h1>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted">
-            {placements.filter((p) => p.status === "Active").length} active
+            {/* liveActiveCount is loaded independently of the displayed
+                list so the number doesn't flicker when the user switches
+                to the Archived tab and `placements` swaps to archived
+                rows. While the first fetch is in flight we render an
+                em-dash placeholder rather than a misleading "0 active". */}
+            {liveActiveCount === null ? "…" : `${liveActiveCount} active`}
           </span>
           {!showForm && (
             <button
@@ -960,13 +1006,18 @@ export default function VenuePlacementsPage() {
                   <input
                     type="number"
                     min={0}
-                    max={50}
+                    max={100}
+                    step={1}
                     value={revenuePercent}
                     onChange={(e) => {
                       const v = e.target.value;
                       if (v === "") { setRevenuePercent(""); return; }
                       const n = Number(v);
-                      if (!Number.isNaN(n)) setRevenuePercent(n);
+                      if (Number.isNaN(n)) return;
+                      // Clamp on the way in so users can't type negative or
+                      // out-of-range values via the keyboard, the HTML
+                      // min/max only constrain the spinner.
+                      setRevenuePercent(Math.max(0, Math.min(100, Math.round(n))));
                     }}
                     onBlur={() => { if (revenuePercent === "") setRevenuePercent(0); }}
                     className="w-20 bg-background border border-border rounded-sm px-3 py-3 text-sm text-center focus:outline-none focus:border-accent/60"
@@ -1163,7 +1214,7 @@ export default function VenuePlacementsPage() {
             count = archivedCount;
           } else if (onArchivedTab) {
             count = null;
-          } else if (tab === "All") {
+          } else if (tab === "Current") {
             count = placements.length;
           } else if (tab === "Completed") {
             count = placements.filter((p) => p.status === "Completed" || p.status === "Sold").length;
@@ -1336,7 +1387,15 @@ export default function VenuePlacementsPage() {
                           return (
                             <div className="flex flex-col gap-1.5">
                               <div className="flex flex-wrap items-center gap-1.5">
-                                {p.status === "Pending" ? (
+                                {showArchived ? (
+                                  // Archived rows can carry any underlying status, but inside the
+                                  // archive tab "Awaiting their reply" is misleading: the row is
+                                  // archived, not waiting on anyone. Render an Archived pill so
+                                  // the badge matches what the user is looking at.
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted/15 text-muted">
+                                    Archived
+                                  </span>
+                                ) : p.status === "Pending" ? (
                                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadge(p.status)}`}>
                                     {dir === "sent" ? "Awaiting their reply" : dir === "received" ? "Your turn" : "Pending"}
                                   </span>
@@ -1625,7 +1684,20 @@ export default function VenuePlacementsPage() {
 
           {/* Cards - mobile */}
           <div className="sm:hidden space-y-3">
-            {filtered.map((p) => (
+            {filtered.map((p) => {
+              // Compute once per row, the same identity object was being
+              // built up to four times per row before, which added up on
+              // archived (35 rows) and contributed to the re-render
+              // stalls reported on Current/Active tab clicks.
+              const rowDirection = directionFor(
+                {
+                  requester_user_id: p.requesterUserId,
+                  artist_user_id: p.artistUserId,
+                  venue_user_id: p.venueUserId,
+                },
+                user?.id,
+              );
+              return (
               <div key={p.id} className="bg-surface border border-border rounded-sm overflow-hidden">
                 <div
                   className="p-4 cursor-pointer"
@@ -1649,18 +1721,27 @@ export default function VenuePlacementsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {directionFor({ requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id) && (
-                        <PlacementDirectionTag direction={directionFor({ requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id)!} size="compact" />
+                      {rowDirection && (
+                        <PlacementDirectionTag direction={rowDirection} size="compact" />
                       )}
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${statusBadge(p.status)}`}>
-                        {p.status === "Pending"
-                          ? (directionFor({ requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id) === "sent"
-                              ? "Awaiting their reply"
-                              : directionFor({ requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id) === "received"
-                                ? "Your turn"
-                                : "Pending")
-                          : p.status}
-                      </span>
+                      {showArchived ? (
+                        // Same archived override as the desktop table: any
+                        // underlying status maps to a single "Archived" pill
+                        // inside the archive tab to avoid contradictory copy.
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap bg-muted/15 text-muted">
+                          Archived
+                        </span>
+                      ) : (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${statusBadge(p.status)}`}>
+                          {p.status === "Pending"
+                            ? (rowDirection === "sent"
+                                ? "Awaiting their reply"
+                                : rowDirection === "received"
+                                  ? "Your turn"
+                                  : "Pending")
+                            : p.status}
+                        </span>
+                      )}
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className={`text-muted transition-transform duration-200 ${expandedId === p.id ? "rotate-180" : ""}`}>
                         <polyline points="3 5 7 9 11 5" />
                       </svg>
@@ -1873,7 +1954,8 @@ export default function VenuePlacementsPage() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
             {filtered.length === 0 && (
               <p className="text-center text-muted text-sm py-8">No placements found.</p>
             )}

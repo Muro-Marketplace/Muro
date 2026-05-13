@@ -301,10 +301,12 @@ function EmptyTab({ tab, mode }: { tab: Tab | null; mode: VisualizerMode }) {
     return (
       <div className="px-2 py-3 space-y-1.5">
         <p className="text-xs text-stone-600">
-          No artworks on display yet.
+          No accepted placements yet.
         </p>
         <p className="text-[11px] text-stone-500 leading-snug">
-          Once a placement is accepted, the artwork shows up here automatically.
+          Decor pieces already on the wall are preset visuals to show
+          scale. Once you accept a placement, the real artwork shows up
+          here so you can drop it in.
         </p>
       </div>
     );

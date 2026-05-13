@@ -25,6 +25,37 @@ const bottomItems = [
   { label: "Settings", href: "/venue-portal/settings" },
 ];
 
+/**
+ * Per-route document title. Every portal page previously inherited the
+ * site-wide "Wallplace | Curated Art for Commercial Spaces" title, which
+ * made flipping between portal tabs impossible to tell apart from the
+ * browser tab strip. Match by longest-prefix so /venue-portal/walls/abc
+ * still resolves to "My Walls".
+ */
+const TITLE_BY_PREFIX: Array<readonly [string, string]> = [
+  ["/venue-portal/artwork-requests", "Artwork Requests"],
+  ["/venue-portal/analytics", "Analytics"],
+  ["/venue-portal/messages", "Messages"],
+  ["/venue-portal/placements", "Placements"],
+  ["/venue-portal/offers", "My Offers"],
+  ["/venue-portal/walls", "My Walls"],
+  ["/venue-portal/saved", "Saved"],
+  ["/venue-portal/labels", "QR Labels"],
+  ["/venue-portal/orders", "My Orders"],
+  ["/venue-portal/profile", "Venue Profile"],
+  ["/venue-portal/settings", "Settings"],
+  ["/venue-portal", "Dashboard"],
+];
+
+function portalTitleFor(pathname: string): string {
+  for (const [prefix, label] of TITLE_BY_PREFIX) {
+    if (pathname === prefix || pathname.startsWith(prefix + "/")) {
+      return `${label} · Venue Portal · Wallplace`;
+    }
+  }
+  return "Venue Portal · Wallplace";
+}
+
 interface VenuePortalLayoutProps {
   children: React.ReactNode;
   activePath?: string;
@@ -43,6 +74,16 @@ export default function VenuePortalLayout({
       router.replace("/login");
     }
   }, [loading, user, userType, router]);
+
+  // Set a per-page document.title so the browser tab strip is
+  // distinguishable when several portal pages are open at once. The
+  // app root metadata still owns the public site title; this only
+  // runs while inside the portal and is restored on navigation away
+  // by Next's own metadata pipeline.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.title = portalTitleFor(pathname);
+  }, [pathname]);
 
   // One-time back-fill for venues registered after the email-verification
   // gate landed: the profile was created server-side without a user_id
@@ -147,11 +188,17 @@ export default function VenuePortalLayout({
         />
       )}
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer. aria-hidden when closed so screen readers
+          don't see the duplicate nav (the desktop sidebar above is
+          always present in the DOM and exposes the same links).
+          Without this, AT users hear every portal nav item twice
+          and the QA report shows the duplicate <aside> in the
+          accessibility tree. */}
       <aside
         className={`lg:hidden fixed top-14 left-0 bottom-0 z-50 w-64 bg-[#F5F3F0] border-r border-border transform transition-transform duration-200 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
+        aria-hidden={!sidebarOpen}
       >
         <NavContent />
       </aside>

@@ -8,6 +8,7 @@ import LabelPreview from "@/components/labels/LabelPreview";
 import type { LabelData } from "@/components/labels/LabelSheet";
 import { LABEL_SIZES, LABEL_STYLES, type LabelSize, type LabelStyle } from "@/components/labels/QRLabel";
 import { authFetch } from "@/lib/api-client";
+import { displayPhysicalDimensions } from "@/lib/dimensions";
 
 interface LabelOptions {
   showMedium: boolean;
@@ -231,8 +232,11 @@ export default function VenueLabelsPage() {
       // Prefer the size the venue / artist agreed on in the placement
       // itself, that's what's actually on the wall, over the artist's
       // generic published dimensions. Falls back cleanly if no specific
-      // size was picked.
-      const effectiveDimensions = p.work_size || work?.dimensions;
+      // size was picked. The helper additionally strips pixel-format
+      // dimensions (e.g. "4869 × 3246 px") that came from the image
+      // upload, those should never appear on a printed label.
+      const effectiveDimensions =
+        displayPhysicalDimensions(p.work_size) ?? displayPhysicalDimensions(work?.dimensions) ?? undefined;
       return {
         artistName: formatArtistName(p.artist_slug),
         artistSlug: p.artist_slug,
@@ -399,11 +403,35 @@ export default function VenueLabelsPage() {
 
             {/* Placements grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {placements.map((p, index) => {
-                const isSelected = selected.has(index);
-                const qty = getQty(index);
-                const artistName = formatArtistName(p.artist_slug);
-                return (
+              {(() => {
+                // Build a map of how many times each work title appears,
+                // and assign each appearance a 1-based index. When the
+                // same work is on two different placements, both cards
+                // get a "1 of 2" / "2 of 2" badge so the venue can tell
+                // them apart, the cards are otherwise visually identical
+                // (same thumbnail, same title) and printing the wrong
+                // QR would attribute scans to the wrong placement.
+                const titleCounts: Record<string, number> = {};
+                const indexInGroup: number[] = [];
+                placements.forEach((p) => {
+                  const key = p.work_title || "(untitled)";
+                  titleCounts[key] = (titleCounts[key] || 0) + 1;
+                });
+                const seen: Record<string, number> = {};
+                placements.forEach((p, i) => {
+                  const key = p.work_title || "(untitled)";
+                  seen[key] = (seen[key] || 0) + 1;
+                  indexInGroup[i] = seen[key];
+                });
+                return placements.map((p, index) => {
+                  const isSelected = selected.has(index);
+                  const qty = getQty(index);
+                  const artistName = formatArtistName(p.artist_slug);
+                  const titleKey = p.work_title || "(untitled)";
+                  const totalForTitle = titleCounts[titleKey] || 1;
+                  const showDuplicateBadge = totalForTitle > 1;
+                  const duplicateBadgeLabel = `${indexInGroup[index]} of ${totalForTitle}`;
+                  return (
                   <div
                     // Composite key, multiple expanded entries share
                     // p.id, so we use the per-entry _key to keep
@@ -426,7 +454,17 @@ export default function VenueLabelsPage() {
 
                     <div className="aspect-[4/3] relative bg-border/20 cursor-pointer" onClick={() => toggleWork(index)}>
                       {p.work_image ? (
-                        <Image src={p.work_image} alt={p.work_title} fill className="object-cover" sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" />
+                        // Above-fold cards (first row at typical grid sizes
+                        // is ≤4 cards) load eagerly so the page doesn't
+                        // briefly show a row of empty placeholders.
+                        <Image
+                          src={p.work_image}
+                          alt={p.work_title}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          priority={index < 4}
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-xs text-muted">No image</div>
                       )}
@@ -472,9 +510,18 @@ export default function VenueLabelsPage() {
                         </button>
                       </div>
                     </div>
+                    {showDuplicateBadge && (
+                      <span
+                        className="absolute bottom-2 left-2 text-[9px] font-medium px-1.5 py-0.5 rounded-sm bg-foreground/85 text-white tabular-nums"
+                        title={`This work appears in ${totalForTitle} placements. Each card prints labels for a different placement, scans are attributed separately.`}
+                      >
+                        Placement {duplicateBadgeLabel}
+                      </span>
+                    )}
                   </div>
                 );
-              })}
+              });
+              })()}
             </div>
           </>
         )}
