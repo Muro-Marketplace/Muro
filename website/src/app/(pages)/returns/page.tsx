@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Returns and Refunds | Wallplace",
+  title: "Returns and Refunds",
   description:
     "Wallplace Returns & Refunds Policy. Your rights, how to return artwork, and how refunds are processed.",
 };

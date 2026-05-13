@@ -8,7 +8,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Partner with us, Wallplace",
+  title: "Partner with us",
   description:
     "Hospitality groups, build-to-rent operators, property developers and other multi-site partners, bring local artists into your spaces with one Wallplace account.",
 };

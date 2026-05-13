@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | Wallplace",
+  title: "Terms of Service",
   description:
     "Wallplace Platform Terms of Service. The rules and obligations governing use of the Wallplace marketplace.",
 };

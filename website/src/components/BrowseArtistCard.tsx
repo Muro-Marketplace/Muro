@@ -17,6 +17,11 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
   const { userType } = useAuth();
   const [imgIndex, setImgIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState(0);
+  // Per-image "has loaded" flags so we can render a skeleton shimmer
+  // behind each slide until its `<Image>` actually paints. Previously
+  // the off-white matting sat blank for a beat before pop-in, which
+  // read as a broken card rather than a loading one.
+  const [imgLoaded, setImgLoaded] = useState<boolean[]>(() => artist.works.map(() => false));
   const images = artist.works.map((w) => w.image);
 
   // Build a clean one-line summary using the three core methods; the
@@ -61,15 +66,29 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
                 index === imgIndex ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
             >
+              {/* Loading shimmer behind the image. Animates while the
+                  Next/Image fetch + decode hasn't finished; flips to
+                  invisible the moment the image's onLoad fires. */}
+              {!imgLoaded[index] && (
+                <div className="absolute inset-4 sm:inset-6 bg-gradient-to-br from-[#E8E4DD] via-[#F0EDE8] to-[#E8E4DD] animate-pulse rounded-sm" />
+              )}
               <div className="absolute inset-4 sm:inset-6">
                 <Image
                   src={src}
                   alt={`${artist.works[index]?.title || "Artwork"} by ${artist.name}`}
                   fill
-                  className="object-contain group-hover:scale-[1.03] transition-transform duration-700 pointer-events-none select-none"
+                  className={`object-contain group-hover:scale-[1.03] transition-transform duration-700 pointer-events-none select-none ${
+                    imgLoaded[index] ? "opacity-100" : "opacity-0"
+                  }`}
                   sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
                   draggable={false}
                   onContextMenu={(e) => e.preventDefault()}
+                  onLoad={() => setImgLoaded((prev) => {
+                    if (prev[index]) return prev;
+                    const next = prev.slice();
+                    next[index] = true;
+                    return next;
+                  })}
                 />
               </div>
             </div>

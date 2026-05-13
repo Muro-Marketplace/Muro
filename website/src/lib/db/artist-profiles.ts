@@ -2,19 +2,9 @@ import { supabase } from "@/lib/supabase";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { Artist, ArtistWork, SizePricing } from "@/data/artists";
 import type { DisciplineId } from "@/data/categories";
+import { normalisePriceBand } from "./normalise-price-band";
 
-/**
- * Prefix the £ symbol to any numeric token in a price band string that
- * isn't already prefixed. Catches DB rows like "180 – 320" or "From 150"
- * and turns them into "£180 – £320" / "From £150" so the public
- * surfaces aren't missing the currency mark.
- */
-function normalisePriceBand(raw: string | null | undefined): string {
-  if (!raw) return "";
-  // Replace any digit run that isn't immediately preceded by £ (or a $/€,
-  // for safety) with a £-prefixed version.
-  return raw.replace(/(^|[^£$€\d])(\d[\d,]*(?:\.\d+)?)/g, (_match, prefix, num) => `${prefix}£${num}`);
-}
+export { normalisePriceBand };
 
 export interface DbArtistProfile {
   id: string;

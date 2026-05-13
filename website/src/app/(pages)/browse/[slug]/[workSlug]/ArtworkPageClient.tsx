@@ -230,11 +230,11 @@ export default function ArtworkPageClient({
 
       {/* Views this week (#6). Real analytics_events count, computed
           in the parent server component from `artwork_view` events
-          over the last 7 days. Hidden for brand-new works with no
-          views yet so we don't show "0 views this week". The
-          venues-looking-for-similar chip was removed in favour of
-          this single live signal. */}
-      {typeof viewsThisWeek === "number" && viewsThisWeek > 0 && (
+          over the last 7 days. Hidden below a small threshold (3)
+          because "1 view this week" or "2 views this week" reads as
+          tumbleweed next to a 4,000-total-views work, the chip should
+          signal momentum, not draw attention to its absence. */}
+      {typeof viewsThisWeek === "number" && viewsThisWeek >= 3 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6 text-[11px] text-muted">
           <span className="inline-flex items-center gap-1.5">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -290,9 +290,16 @@ export default function ArtworkPageClient({
                 onChange={(v) => setSelectedSizeIdx(Number(v))}
                 options={work.pricing.map((sp, i) => {
                   const stock = sp.quantityAvailable;
+                  // Some DB rows have an empty `label` on the pricing
+                  // option, which used to render ", £160" with an
+                  // orphaned comma. Fall back to the work's own
+                  // dimensions; if that's also missing, just show
+                  // the price unprefixed.
+                  const sizeText = formatSizeLabelForDisplay(sp.label) ||
+                    formatDimensionsForDisplay(work.dimensions);
                   return {
                     value: String(i),
-                    label: `${formatSizeLabelForDisplay(sp.label)}, £${sp.price}`,
+                    label: sizeText ? `${sizeText}, £${sp.price}` : `£${sp.price}`,
                     description: typeof stock === "number"
                       ? (stock <= 0 ? "Sold out" : `${stock} available`)
                       : undefined,

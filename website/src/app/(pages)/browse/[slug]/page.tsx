@@ -44,7 +44,7 @@ export async function generateMetadata({
     const artist = await getArtistBySlug(slug);
 
     if (!artist) {
-      return { title: "Artist Not Found | Wallplace" };
+      return { title: "Artist not found" };
     }
 
     // Defensive coercions, anything missing or malformed flows
@@ -67,7 +67,7 @@ export async function generateMetadata({
     }
 
     return {
-      title: `${safeName} | Wallplace`,
+      title: safeName,
       description: safeBio,
       openGraph: {
         title: `${safeName} | Wallplace`,
@@ -86,7 +86,7 @@ export async function generateMetadata({
       "[browse/[slug] metadata] crashed:",
       err instanceof Error ? err.message : String(err),
     );
-    return { title: "Wallplace artist" };
+    return { title: "Artist" };
   }
 }
 

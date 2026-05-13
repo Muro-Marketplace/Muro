@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { venues as staticVenues } from "@/data/venues";
 import VenueWallCard from "@/components/VenueWallCard";
@@ -177,6 +178,27 @@ async function loadVenue(slug: string): Promise<{ venue: VenueShape; userId: str
   };
 }
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  try {
+    const { slug } = await params;
+    const loaded = await loadVenue(slug);
+    if (!loaded) return { title: "Space not found" };
+    const { venue } = loaded;
+    const subtitle = [venue.type, venue.city || venue.location]
+      .filter(Boolean)
+      .join(", ");
+    const desc = (venue.description || "").trim().slice(0, 160) ||
+      (subtitle ? `${venue.name}, ${subtitle}.` : venue.name);
+    return { title: venue.name, description: desc };
+  } catch {
+    return { title: "Space" };
+  }
+}
+
 export default async function VenueDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const loaded = await loadVenue(slug);
@@ -224,11 +246,27 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70" />
         <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 text-white">
-          <div className="max-w-[1100px] mx-auto">
-            <p className="text-[10px] font-medium uppercase tracking-[0.18em] opacity-80">
-              {[venue.type, venue.city || venue.location].filter(Boolean).join(" · ")}
-            </p>
-            <h1 className="font-serif text-3xl sm:text-4xl mt-1">{venue.name}</h1>
+          <div className="max-w-[1100px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] opacity-80">
+                {[venue.type, venue.city || venue.location].filter(Boolean).join(" · ")}
+              </p>
+              <h1 className="font-serif text-3xl sm:text-4xl mt-1">{venue.name}</h1>
+            </div>
+            {/* Primary CTA. Previously the venue detail page had no
+                actionable surface: visitors landed and could only go
+                back. Route artists into the application flow, anchor
+                to open requests when there are any so they can see
+                what the venue is calling for first. */}
+            <Link
+              href={openRequests.length > 0 ? "#open-requests" : "/signup/artist"}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white text-foreground text-sm font-medium rounded-sm hover:bg-white/90 transition-colors self-start sm:self-end"
+            >
+              {openRequests.length > 0 ? "View open artwork requests" : "Apply to be displayed here"}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+              </svg>
+            </Link>
           </div>
         </div>
       </div>
@@ -244,7 +282,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
           )}
 
           {openRequests.length > 0 && (
-            <section>
+            <section id="open-requests" className="scroll-mt-24">
               <h2 className="font-serif text-lg text-foreground mb-1">Open artwork requests</h2>
               <p className="text-xs text-muted mb-3">
                 What this venue is calling for right now. Submit work that
