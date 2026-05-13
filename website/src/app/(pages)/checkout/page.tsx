@@ -205,6 +205,20 @@ export default function CheckoutPage() {
   const shippingCost = fulfilmentMethod === "collection" ? 0 : totalShipping;
   const total = subtotal + shippingCost;
 
+  // Pick the slowest tier across all artist groups so the static
+  // "ships within X" copy reflects the real wait. Calculator-provided
+  // estimatedDays strings already include "working days" (e.g.
+  // "2 to 3 working days"), so the surrounding template appends
+  // nothing — and the fallback is the full phrase too. We take the
+  // lexically largest as a proxy for slowest.
+  const aggregatedEstimatedDays = useMemo(() => {
+    const all = artistGroupsArr
+      .map((g) => g.estimatedDays)
+      .filter((d): d is string => !!d);
+    if (all.length === 0) return "5 to 7 working days";
+    return all.sort().slice(-1)[0];
+  }, [artistGroupsArr]);
+
   function updateField(field: keyof ShippingInfo, value: string) {
     setShipping((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => {
@@ -398,7 +412,7 @@ export default function CheckoutPage() {
                   </svg>
                   <p className="text-sm font-medium">Ship to me</p>
                 </div>
-                <p className="text-xs text-muted leading-snug">Tracked delivery from the artist. 7 working days.</p>
+                <p className="text-xs text-muted leading-snug">Tracked delivery from the artist. {aggregatedEstimatedDays}.</p>
               </button>
               <button
                 type="button"
@@ -566,7 +580,7 @@ export default function CheckoutPage() {
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
             <p className="text-sm text-foreground/70">
-              Your order will be fulfilled directly by the artist. They&apos;ll pack and ship your artwork within 7 working days.
+              Your order will be fulfilled directly by the artist. They&apos;ll pack and ship your artwork within {aggregatedEstimatedDays}.
             </p>
           </div>
 
@@ -612,7 +626,9 @@ export default function CheckoutPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
                     <p className="text-xs text-muted">{item.artistName}</p>
-                    {item.size && <p className="text-xs text-muted">{formatSizeLabelForDisplay(item.size)}</p>}
+                    {item.size && formatSizeLabelForDisplay(item.size) && (
+                      <p className="text-xs text-muted">{formatSizeLabelForDisplay(item.size)}</p>
+                    )}
                     <div className="flex items-center justify-between mt-1.5 gap-2 flex-wrap">
                       {/* Per-line quantity stepper so buyers can grab
                           N of a specific size without going back to
@@ -685,7 +701,7 @@ export default function CheckoutPage() {
                         </p>
                       )}
                       <p className="text-[11px] text-muted mt-1">
-                        {group.artistName} ships within {group.estimatedDays || "5-7"} working days.
+                        {group.artistName} ships within {group.estimatedDays || "5 to 7 working days"}.
                       </p>
                     </div>
                   ))}

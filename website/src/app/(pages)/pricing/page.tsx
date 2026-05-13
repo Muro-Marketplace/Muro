@@ -5,7 +5,7 @@ import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
 
 export const metadata: Metadata = {
-  title: "Pricing | Wallplace",
+  title: "Pricing",
   description:
     "Transparent pricing for artists on Wallplace. First month free. Choose Core, Premium, or Pro, all with access to our curated venue network.",
 };

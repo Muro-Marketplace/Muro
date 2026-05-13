@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Intellectual Property and Takedown Policy | Wallplace",
+  title: "Intellectual Property and Takedown Policy",
   description:
     "Wallplace Intellectual Property & Takedown Policy. How to report infringement and our process for handling IP claims.",
 };

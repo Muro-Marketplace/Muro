@@ -463,18 +463,12 @@ function WallVisualizerInner(props: ExtendedProps) {
   }, [props.mode, props.lockedWork, items.length, widthCm, heightCm]);
 
   // ── Wall config handlers ──────────────────────────────────────────
-  const handlePickPreset = useCallback((presetId: string) => {
-    const preset = getPresetWall(presetId);
-    if (!preset) return;
-    setBackground({
-      kind: "preset",
-      preset_id: preset.id,
-      color_hex: preset.defaultColorHex,
-    });
-    setWidthCm(preset.defaultWidthCm);
-    setHeightCm(preset.defaultHeightCm);
-  }, []);
-
+  // (Previously a `handlePickPreset` lived here that switched colour
+  // AND dimensions atomically; it was wired to the swatches in
+  // WallConfigBar but users read the swatches as a colour-only quick
+  // pick. The dimensions were the surprise. Removed alongside the
+  // swatch behaviour change. Future work: bring back a "Use preset…"
+  // menu that explicitly mentions the dimension reset.)
   const handleColorChange = useCallback((hex: string) => {
     const clean = hex.replace(/^#/, "").toUpperCase();
     if (!/^[0-9A-F]{6}$/.test(clean)) return;
@@ -918,15 +912,11 @@ function WallVisualizerInner(props: ExtendedProps) {
         {!isMobile && (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[calc(100%-1.5rem)]">
             <WallConfigBar
-              currentPresetId={
-                background.kind === "preset" ? background.preset_id : null
-              }
               colorHex={
                 background.kind === "preset" ? background.color_hex : "FFFFFF"
               }
               widthCm={widthCm}
               heightCm={heightCm}
-              onPickPreset={handlePickPreset}
               onColorChange={handleColorChange}
               onWidthChange={(v) => setWidthCm(clampDimension(v))}
               onHeightChange={(v) => setHeightCm(clampDimension(v))}
@@ -1043,11 +1033,6 @@ function WallVisualizerInner(props: ExtendedProps) {
               >
                 <div className="p-4">
                   <WallConfigBar
-                    currentPresetId={
-                      background.kind === "preset"
-                        ? background.preset_id
-                        : null
-                    }
                     colorHex={
                       background.kind === "preset"
                         ? background.color_hex
@@ -1055,7 +1040,6 @@ function WallVisualizerInner(props: ExtendedProps) {
                     }
                     widthCm={widthCm}
                     heightCm={heightCm}
-                    onPickPreset={handlePickPreset}
                     onColorChange={handleColorChange}
                     onWidthChange={(v) => setWidthCm(clampDimension(v))}
                     onHeightChange={(v) => setHeightCm(clampDimension(v))}
@@ -1231,11 +1215,9 @@ function SaveStatus({
 // ── Wall config bar ─────────────────────────────────────────────────────
 
 interface ConfigProps {
-  currentPresetId: string | null;
   colorHex: string;
   widthCm: number;
   heightCm: number;
-  onPickPreset: (id: string) => void;
   onColorChange: (hex: string) => void;
   onWidthChange: (v: number) => void;
   onHeightChange: (v: number) => void;
@@ -1244,11 +1226,9 @@ interface ConfigProps {
 }
 
 function WallConfigBar({
-  currentPresetId,
   colorHex,
   widthCm,
   heightCm,
-  onPickPreset,
   onColorChange,
   onWidthChange,
   onHeightChange,
@@ -1257,15 +1237,23 @@ function WallConfigBar({
 }: ConfigProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 sm:px-4 py-2 rounded-2xl sm:rounded-full bg-white/85 backdrop-blur border border-black/5 shadow-sm max-w-full">
+      {/* Colour quick-picks from the preset palette. Previously each
+          chip switched the entire preset (colour + dimensions), which
+          surprised users who saw a "colour swatch" but got an
+          unexpected wall resize. Decoupled, the chip writes the
+          preset's colour and leaves widthCm/heightCm alone. The W/H
+          inputs are the only way to change dimensions. The active-
+          chip ring stays on whichever chip matches the current colour
+          (purely cosmetic feedback, no functional link to presets). */}
       <div className="flex items-center gap-1 flex-shrink-0">
         {PRESET_WALLS.map((p) => (
           <button
             key={p.id}
             type="button"
-            title={p.name}
-            onClick={() => onPickPreset(p.id)}
+            title={`${p.name} colour`}
+            onClick={() => onColorChange(`#${p.defaultColorHex}`)}
             className={`h-7 w-7 sm:h-6 sm:w-6 rounded-full border ${
-              currentPresetId === p.id
+              colorHex.toUpperCase() === p.defaultColorHex.toUpperCase()
                 ? "ring-2 ring-stone-900 ring-offset-1"
                 : "border-black/10"
             }`}

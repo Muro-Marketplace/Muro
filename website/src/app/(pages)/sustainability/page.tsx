@@ -8,7 +8,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Sustainability, Wallplace",
+  title: "Sustainability",
   description:
     "How Wallplace makes the way the UK consumes wall art more sustainable: real artists, real spaces, no shipping-once-displayed-once cycle, and an alternative to landfill prints.",
 };

@@ -1,9 +1,19 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+
+export const metadata: Metadata = {
+  title: "Page not found",
+  robots: { index: false, follow: false },
+};
 
 export default function NotFound() {
   return (
-    <div className="min-h-[60vh] flex items-center justify-center bg-background px-6">
-      <div className="text-center max-w-lg">
+    <>
+      <Header />
+      <div className="min-h-[60vh] flex items-center justify-center bg-background px-6 py-20">
+        <div className="text-center max-w-lg">
         <p className="font-serif text-8xl sm:text-9xl text-foreground/10 select-none mb-4">
           404
         </p>
@@ -103,7 +113,9 @@ export default function NotFound() {
           </svg>
           Go back home
         </Link>
+        </div>
       </div>
-    </div>
+      <Footer />
+    </>
   );
 }

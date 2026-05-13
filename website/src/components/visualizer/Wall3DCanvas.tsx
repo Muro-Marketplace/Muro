@@ -204,18 +204,32 @@ export default function Wall3DCanvas({
             intensity={0.25}
             color="#FFFFFF"
           />
-          <Environment preset="apartment" />
+          {/* Environment HDR loads from drei's CDN. Quarantine in its own
+              Suspense so a slow/blocked HDR fetch doesn't gate the wall +
+              lights + artwork from appearing. Previously the outer
+              Suspense had fallback={null}, which meant a stuck HDR fetch
+              made the entire scene render as blank (the bug behind the
+              "3D shows nothing" report). The directional lights alone give
+              the scene a sensible look without the HDR. */}
+          <Suspense fallback={null}>
+            <Environment preset="apartment" />
+          </Suspense>
 
-          <Room
-            wallW={wallW}
-            wallH={wallH}
-            wallColor={wallColor}
-            wallImageUrl={
-              bgImageUrl ??
-              (background.kind === "uploaded" ? background.image_path : null)
-            }
-            kind={background.kind}
-          />
+          {/* Room (back wall + side wall + floor). Wrapped in its own
+              Suspense, the wall image is via useTexture and if the URL
+              is unreachable it would otherwise blank the whole scene. */}
+          <Suspense fallback={null}>
+            <Room
+              wallW={wallW}
+              wallH={wallH}
+              wallColor={wallColor}
+              wallImageUrl={
+                bgImageUrl ??
+                (background.kind === "uploaded" ? background.image_path : null)
+              }
+              kind={background.kind}
+            />
+          </Suspense>
 
           {/* Venue dressing, café/gallery furniture so the scene reads
               as somewhere a customer might actually see the artwork. */}
@@ -225,26 +239,32 @@ export default function Wall3DCanvas({
             .slice()
             .sort((a, b) => a.z_index - b.z_index)
             .map((item) => (
-              <ArtworkMesh
-                key={item.id}
-                item={item}
-                wallW={wallW}
-                wallH={wallH}
-                imageUrl={workById[item.work_id]?.imageUrl}
-                selected={item.id === selectedItemId}
-                onSelect={() => onSelectItem(item.id)}
-                onMove={(xCm, yCm) =>
-                  onItemChange(item.id, { x_cm: xCm, y_cm: yCm })
-                }
-                onResize={(widthCm, heightCm) =>
-                  onItemChange(item.id, {
-                    width_cm: widthCm,
-                    height_cm: heightCm,
-                  })
-                }
-                onDragStart={() => setDraggingItem(true)}
-                onDragEnd={() => setDraggingItem(false)}
-              />
+              // Per-item Suspense, isolates a single failing artwork
+              // texture so it doesn't blank every other item plus the
+              // wall + lights. The fallback is null because an empty
+              // item slot reads as "this image is loading" without
+              // any visible scaffolding.
+              <Suspense key={item.id} fallback={null}>
+                <ArtworkMesh
+                  item={item}
+                  wallW={wallW}
+                  wallH={wallH}
+                  imageUrl={workById[item.work_id]?.imageUrl}
+                  selected={item.id === selectedItemId}
+                  onSelect={() => onSelectItem(item.id)}
+                  onMove={(xCm, yCm) =>
+                    onItemChange(item.id, { x_cm: xCm, y_cm: yCm })
+                  }
+                  onResize={(widthCm, heightCm) =>
+                    onItemChange(item.id, {
+                      width_cm: widthCm,
+                      height_cm: heightCm,
+                    })
+                  }
+                  onDragStart={() => setDraggingItem(true)}
+                  onDragEnd={() => setDraggingItem(false)}
+                />
+              </Suspense>
             ))}
 
           <DropBridge

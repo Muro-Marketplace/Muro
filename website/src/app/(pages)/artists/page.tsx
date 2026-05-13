@@ -8,7 +8,7 @@ import AnimateIn from "@/components/AnimateIn";
 import ScrollButton from "@/components/ScrollButton";
 
 export const metadata: Metadata = {
-  title: "For Artists | Wallplace",
+  title: "For Artists",
   description:
     "Display your work in real venues and sell directly online. Your Wallplace page is your portfolio and your storefront. Every QR scan is a sale opportunity.",
 };

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy | Wallplace",
+  title: "Cookie Policy",
   description:
     "Wallplace Cookie Policy. Learn about the cookies we use and how to control them.",
 };

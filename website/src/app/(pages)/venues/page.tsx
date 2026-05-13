@@ -8,7 +8,7 @@ import AnimateIn from "@/components/AnimateIn";
 import ScrollButton from "@/components/ScrollButton";
 
 export const metadata: Metadata = {
-  title: "For Venues | Wallplace",
+  title: "For Venues",
   description:
     "Discover original artwork for your space. Browse curated artist portfolios, filter by style and location, and enquire directly. Free for independent venues.",
 };

@@ -23,7 +23,13 @@ const PLAN_DETAILS: Record<string, { name: string; priceMonthly: number; priceAn
 };
 
 function annualMonthlyEquivalent(priceAnnual: number): string {
-  return `\u00a3${(priceAnnual / 12).toFixed(2)}/mo`;
+  // Floor-round so the equivalent never overstates the actual annual
+  // charge. \u00a3499.99/12 = \u00a341.6583 which toFixed rounds up to \u00a341.67
+  // (implies \u00a3500.04 over the year, 5p above what we actually bill).
+  // Floor keeps the per-month conservative and the implied annual \u2264
+  // priceAnnual.
+  const floored = Math.floor((priceAnnual / 12) * 100) / 100;
+  return `\u00a3${floored.toFixed(2)}/mo`;
 }
 
 function annualSavingsPercent(priceMonthly: number, priceAnnual: number): number {

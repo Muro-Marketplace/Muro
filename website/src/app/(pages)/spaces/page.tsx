@@ -162,6 +162,12 @@ function SpacesPageContent() {
   // Venues are locked out of viewing other venues, this page is for artists/customers
   // discovering venue demand. Venues manage their own profile through /venue-portal.
   const canSeeDetails = userType !== "venue" && (isSubscribed || userType === "customer");
+  // Even when the gated details are hidden, the whole card should
+  // still navigate somewhere: logged-out and unsubscribed visitors
+  // get the public venue profile page (read-only summary). Without
+  // this the card was a dead click for everyone outside the
+  // subscribed/customer cohort.
+  const canClickThroughCard = userType !== "venue";
   const canMessageVenues = userType !== "venue" && (isSubscribed || userType === "customer");
   // Inline placement requests are artist-only. We don't gate on
   // subscription here, the underlying API enforces tier rules and
@@ -415,14 +421,17 @@ function SpacesPageContent() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filtered.map((venue) => (
-                <div id={`venue-${venue.slug}`} key={venue.slug} className={`relative bg-surface border border-border rounded-sm overflow-hidden transition-all scroll-mt-24 target:ring-2 target:ring-accent ${canSeeDetails ? "hover:border-accent/30 hover:shadow-sm" : ""}`}>
+                <div id={`venue-${venue.slug}`} key={venue.slug} className={`relative bg-surface border border-border rounded-sm overflow-hidden transition-all scroll-mt-24 target:ring-2 target:ring-accent ${canClickThroughCard ? "hover:border-accent/30 hover:shadow-sm" : ""}`}>
                   {/* Whole-card link (#28). Sits at z-[1] above the
                       static image/title/description so clicks anywhere
                       "empty" navigate to the venue page. Action buttons
                       below are wrapped in `relative z-[2]` so they keep
-                      receiving clicks. Suppressed for locked cards
-                      where the venue identity is hidden anyway. */}
-                  {canSeeDetails && (
+                      receiving clicks. Visible for everyone except
+                      venues (who can't view other venues). Logged-out
+                      and unsubscribed visitors land on the read-only
+                      public profile, subscribed/customer users get the
+                      full version. */}
+                  {canClickThroughCard && (
                     <Link
                       href={`/venues/${venue.slug}`}
                       className="absolute inset-0 z-[1]"

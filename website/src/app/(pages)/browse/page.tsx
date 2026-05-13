@@ -799,11 +799,14 @@ function BrowsePortfoliosPageInner() {
       if (galleryStyle && work.artistPrimaryMedium !== galleryStyle) return false;
       // Availability
       if (galleryAvailableOnly && !work.available) return false;
-      // Price range
+      // Price range. Reads from the authoritative numeric pricing
+      // array rather than the priceBand string, which only matched
+      // integer pounds and silently dropped the fractional part of
+      // values like "From £29.99".
       if (galleryPriceMin > 0 || galleryPriceMax < 1000) {
-        const match = work.priceBand.replace(/[£,]/g, "").match(/\d+/);
-        if (match) {
-          const low = parseInt(match[0], 10);
+        const prices = work.pricing.map((p) => p.price).filter((n) => n > 0);
+        if (prices.length > 0) {
+          const low = Math.min(...prices);
           if (low < galleryPriceMin) return false;
           if (galleryPriceMax < 1000 && low > galleryPriceMax) return false;
         }
@@ -845,14 +848,21 @@ function BrowsePortfoliosPageInner() {
       }
       if (gallerySort === "az") return a.title.localeCompare(b.title);
       if (gallerySort === "price_low") {
-        const aPrice = a.pricing[0]?.price ?? 0;
-        const bPrice = b.pricing[0]?.price ?? 0;
-        return aPrice - bPrice;
+        // pricing[0] isn't guaranteed to be the cheapest size, the
+        // array is sorted by the artist's entry order. Take the min
+        // so "low to high" reflects the lowest entry price for the work.
+        const aPrices = a.pricing.map((p) => p.price).filter((n) => n > 0);
+        const bPrices = b.pricing.map((p) => p.price).filter((n) => n > 0);
+        const aMin = aPrices.length > 0 ? Math.min(...aPrices) : Infinity;
+        const bMin = bPrices.length > 0 ? Math.min(...bPrices) : Infinity;
+        return aMin - bMin;
       }
       if (gallerySort === "price_high") {
-        const aPrice = a.pricing[0]?.price ?? 0;
-        const bPrice = b.pricing[0]?.price ?? 0;
-        return bPrice - aPrice;
+        const aPrices = a.pricing.map((p) => p.price).filter((n) => n > 0);
+        const bPrices = b.pricing.map((p) => p.price).filter((n) => n > 0);
+        const aMax = aPrices.length > 0 ? Math.max(...aPrices) : -Infinity;
+        const bMax = bPrices.length > 0 ? Math.max(...bPrices) : -Infinity;
+        return bMax - aMax;
       }
       if (gallerySort === "revenue_share") return (b.revenueSharePercent || 0) - (a.revenueSharePercent || 0);
       if (gallerySort === "distance" && userCoords) {

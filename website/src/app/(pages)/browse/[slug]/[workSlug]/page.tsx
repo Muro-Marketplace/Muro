@@ -33,17 +33,17 @@ export async function generateMetadata({
   try {
     artist = await getArtistBySlug(slug);
   } catch {
-    return { title: "Artwork | Wallplace" };
+    return { title: "Artwork" };
   }
 
   if (!artist) {
-    return { title: "Artwork Not Found | Wallplace" };
+    return { title: "Artwork not found" };
   }
 
   const work = artist.works.find((w) => slugify(w.title) === workSlug);
 
   if (!work) {
-    return { title: "Artwork Not Found | Wallplace" };
+    return { title: "Artwork not found" };
   }
 
   const description = work.description && work.description.trim()
@@ -73,7 +73,7 @@ export default async function ArtworkPage({
   searchParams,
 }: {
   params: Promise<{ slug: string; workSlug: string }>;
-  searchParams: Promise<{ ref?: string; venue?: string }>;
+  searchParams: Promise<{ ref?: string; venue?: string; from?: string }>;
 }) {
   const { slug, workSlug } = await params;
   const query = await searchParams;
@@ -141,12 +141,23 @@ export default async function ArtworkPage({
 
   return (
     <div className="bg-background">
-      {/* Breadcrumb */}
+      {/* Breadcrumb. Reflect the tab the visitor came from when we
+          know it (Galleries/Portfolios/Collections from `?from=`); the
+          neutral "Artists" label is the default because a portfolio
+          artist landing on "Galleries › Maya Chen" reads as wrong.
+          Honouring `?from=` keeps the back-link visually consistent
+          with where they actually came from. */}
       <section className="pt-5 pb-1">
         <div className="max-w-[1240px] mx-auto px-6">
           <Breadcrumbs
             items={[
-              { label: "Galleries", href: "/browse" },
+              query.from === "portfolios"
+                ? { label: "Portfolios", href: "/browse?view=portfolios" }
+                : query.from === "collections"
+                  ? { label: "Collections", href: "/browse?view=collections" }
+                  : query.from === "galleries"
+                    ? { label: "Galleries", href: "/browse" }
+                    : { label: "Artists", href: "/browse" },
               { label: artist.name, href: `/browse/${slug}` },
               { label: work.title },
             ]}

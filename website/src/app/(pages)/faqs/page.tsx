@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import FaqsClient, { type FaqEntry } from "./FaqsClient";
 
 export const metadata: Metadata = {
-  title: "FAQs | Wallplace",
+  title: "FAQs",
   description:
     "Frequently asked questions about Wallplace for artists, venues, and buyers.",
 };

@@ -185,7 +185,7 @@ function ConfirmationContent() {
           <circle cx="18.5" cy="18.5" r="2.5" />
         </svg>
         <p className="text-sm text-foreground/70">
-          Your order will be packed and shipped directly by the artist. Dispatch within 7 working days.
+          Your order will be packed and shipped directly by the artist. Dispatch within 5 to 7 working days.
           {order?.customerEmail && <> You&apos;ll receive updates at <strong>{order.customerEmail}</strong>.</>}
         </p>
       </div>
