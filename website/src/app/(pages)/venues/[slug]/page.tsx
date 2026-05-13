@@ -290,11 +290,18 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
               </p>
               <ul className="space-y-2">
                 {openRequests.map((r) => {
-                  const min = r.budget_min_pence ?? null;
-                  const max = r.budget_max_pence ?? null;
+                  const rawMin = r.budget_min_pence ?? null;
+                  const rawMax = r.budget_max_pence ?? null;
+                  // Defensive: legacy rows may have been saved with min > max
+                  // before validation existed. Swap on render so the chip
+                  // always reads as an ascending range.
+                  const min =
+                    rawMin != null && rawMax != null && rawMin > rawMax ? rawMax : rawMin;
+                  const max =
+                    rawMin != null && rawMax != null && rawMin > rawMax ? rawMin : rawMax;
                   const budget =
                     min != null && max != null
-                      ? `£${(min / 100).toFixed(0)} - £${(max / 100).toFixed(0)}`
+                      ? `£${(min / 100).toFixed(0)} to £${(max / 100).toFixed(0)}`
                       : min != null
                       ? `from £${(min / 100).toFixed(0)}`
                       : max != null
@@ -404,12 +411,18 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
           {((venue.preferred_styles || []).length > 0 || (venue.preferred_themes || []).length > 0) && (
             <section>
               <h2 className="font-serif text-lg text-foreground mb-3">What the venue looks for</h2>
+              {/* Both rows render with the same chip style now, the
+                  Styles row used to be filled accent while Themes
+                  used a grey outline, the inconsistency made the two
+                  read as different categories of thing. Unified on
+                  the outlined-surface style so the heading hierarchy
+                  carries the meaning, not the chip styling. */}
               {(venue.preferred_styles || []).length > 0 && (
                 <div className="mb-3">
                   <p className="text-[10px] uppercase tracking-wider text-muted mb-1.5">Styles</p>
                   <div className="flex flex-wrap gap-1.5">
                     {(venue.preferred_styles || []).map((s) => (
-                      <span key={s} className="text-xs px-2 py-1 bg-accent/5 text-accent border border-accent/20 rounded-full">{s}</span>
+                      <span key={s} className="text-xs px-2 py-1 bg-surface text-foreground border border-border rounded-full">{s}</span>
                     ))}
                   </div>
                 </div>

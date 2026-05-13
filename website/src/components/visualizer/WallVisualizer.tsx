@@ -856,6 +856,28 @@ function WallVisualizerInner(props: ExtendedProps) {
           />
         )}
 
+        {/* Empty-canvas hint, sits over the canvas (pointer-events
+            disabled) so it never steals drag targets. Shown when
+            there's nothing on the wall yet, the 3D view in particular
+            reads as a blank room without it. Auto-hides as soon as an
+            item lands. */}
+        {items.length === 0 && (
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            aria-hidden="true"
+          >
+            <div className="bg-white/85 backdrop-blur-sm border border-border rounded-sm px-4 py-3 text-center max-w-xs shadow-sm">
+              <p className="text-sm font-medium text-foreground">
+                {viewMode === "3d" ? "Your wall, in 3D" : "Your blank wall"}
+              </p>
+              <p className="text-xs text-muted mt-1">
+                Drag a work from the sidebar onto the wall to see how it
+                would look in this space.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Top-right, quota chip + save status. The 2D/3D toggle
             used to live here too but the centred ItemToolbar (top
             centre) gets wide enough to overlap, so the toggle moved

@@ -9,6 +9,10 @@ import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { authFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
+import {
+  clearRecentRequest,
+  getRecentRequests,
+} from "@/lib/recent-artwork-requests";
 
 interface Row {
   id: string;
@@ -20,6 +24,10 @@ interface Row {
   budget_min_pence: number | null;
   budget_max_pence: number | null;
   created_at: string;
+  /** Set when the row came from the local "just submitted" cache,
+   *  not the API. Used to surface a subtle "syncing" affordance so
+   *  the user understands why it's appearing. */
+  _local?: boolean;
 }
 
 export default function VenueArtworkRequestsPage() {
@@ -32,9 +40,54 @@ export default function VenueArtworkRequestsPage() {
     try {
       const res = await authFetch("/api/artwork-requests?mine=1");
       const data = await res.json();
-      setRows(data.requests || []);
+      const apiRows: Row[] = data.requests || [];
+
+      // QA-driven workaround: the API's `?mine=1` filter sometimes
+      // fails to return a request the venue has just inserted, even
+      // though it's already visible on the public venue page. Merge
+      // any rows the venue cached locally on submit so the list
+      // doesn't read as "No requests yet" while the row actually
+      // exists. Dedupe by id, and if the API now returns the cached
+      // row, drop it from the cache so we don't render twice.
+      const apiIds = new Set(apiRows.map((r) => r.id));
+      const cached = getRecentRequests();
+      const localOnly: Row[] = [];
+      for (const r of cached) {
+        if (apiIds.has(r.id)) {
+          clearRecentRequest(r.id);
+          continue;
+        }
+        localOnly.push({
+          id: r.id,
+          title: r.title,
+          description: r.description,
+          intent: r.intent,
+          status: r.status,
+          visibility: (r.visibility as Row["visibility"]) || "semi_public",
+          budget_min_pence: r.budget_min_pence,
+          budget_max_pence: r.budget_max_pence,
+          created_at: r.created_at,
+          _local: true,
+        });
+      }
+      // Local-only rows on top so a venue lands on their just-submitted
+      // request first.
+      setRows([...localOnly, ...apiRows]);
     } catch {
-      setRows([]);
+      setRows(
+        getRecentRequests().map((r) => ({
+          id: r.id,
+          title: r.title,
+          description: r.description,
+          intent: r.intent,
+          status: r.status,
+          visibility: (r.visibility as Row["visibility"]) || "semi_public",
+          budget_min_pence: r.budget_min_pence,
+          budget_max_pence: r.budget_max_pence,
+          created_at: r.created_at,
+          _local: true,
+        })),
+      );
     } finally {
       setLoading(false);
     }
@@ -75,9 +128,19 @@ export default function VenueArtworkRequestsPage() {
                 >
                   <div className="flex items-start justify-between gap-3 mb-1.5">
                     <h3 className="text-base font-medium">{r.title}</h3>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border capitalize ${
-                      r.status === "open" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-foreground/5 text-foreground/40 border-border"
-                    }`}>{r.status}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {r._local && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded-sm border bg-amber-50 text-amber-700 border-amber-200"
+                          title="Just submitted. Showing from local cache while it syncs to your portal."
+                        >
+                          Syncing
+                        </span>
+                      )}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border capitalize ${
+                        r.status === "open" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-foreground/5 text-foreground/40 border-border"
+                      }`}>{r.status}</span>
+                    </div>
                   </div>
                   <p className="text-sm text-muted line-clamp-2 mb-2">{r.description}</p>
                   <div className="flex flex-wrap gap-2 text-[10px] text-muted">

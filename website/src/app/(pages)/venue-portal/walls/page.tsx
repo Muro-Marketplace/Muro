@@ -20,6 +20,20 @@ import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
 import type { Wall } from "@/lib/visualizer/types";
 
+/**
+ * Render fallback for wall names. Legacy rows can be saved with empty
+ * strings or stray punctuation (".", ",", "..."), surfaced in QA as a
+ * card displaying just a comma. Any name that lacks a letter or number
+ * is replaced with "Untitled wall" so cards always read coherently.
+ */
+function displayWallName(name: string | null | undefined): string {
+  if (typeof name !== "string") return "Untitled wall";
+  const trimmed = name.trim();
+  if (!trimmed) return "Untitled wall";
+  if (!/[\p{L}\p{N}]/u.test(trimmed)) return "Untitled wall";
+  return trimmed;
+}
+
 export default function VenueWallsPage() {
   const { session, loading: authLoading } = useAuth();
   const [walls, setWalls] = useState<Wall[] | null>(null);
@@ -123,7 +137,18 @@ function WallCard({ wall }: { wall: Wall }) {
   const aspect = wall.width_cm / wall.height_cm;
   const cardHeight = aspect >= 1 ? 140 : 200;
   const cardWidth = cardHeight * aspect;
-  const photoUrl = wall.kind === "uploaded" ? wall.source_image_url : null;
+  // Only use the photo path when the wall is actually an uploaded
+  // type AND the signed URL is non-empty. Some legacy uploaded rows
+  // exist with `source_image_url = null` (failed upload finalise,
+  // bucket cleared); without this guard those cards fell through to
+  // ImageWithFallback's broken-image placeholder, which renders an
+  // empty box. Falling back to the colour swatch keeps every card
+  // visually filled.
+  const photoUrl =
+    wall.kind === "uploaded" && typeof wall.source_image_url === "string" && wall.source_image_url.length > 0
+      ? wall.source_image_url
+      : null;
+  const nameForFallback = displayWallName(wall.name);
 
   return (
     <Link
@@ -141,7 +166,7 @@ function WallCard({ wall }: { wall: Wall }) {
           >
             <ImageWithFallback
               src={photoUrl}
-              alt={wall.name}
+              alt={nameForFallback}
               className="rounded shadow-inner object-cover w-full h-full"
               placeholderClassName="rounded shadow-inner bg-accent/10 text-accent flex items-center justify-center text-xl font-medium w-full h-full"
             />
@@ -160,7 +185,7 @@ function WallCard({ wall }: { wall: Wall }) {
       </div>
       <div className="px-4 py-3">
         <p className="font-medium text-sm text-foreground truncate group-hover:text-accent transition-colors">
-          {wall.name}
+          {displayWallName(wall.name)}
         </p>
         <p className="text-xs text-muted mt-0.5 tabular-nums">
           {wall.width_cm} × {wall.height_cm} cm · {wall.kind}

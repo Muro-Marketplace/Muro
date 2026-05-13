@@ -135,6 +135,16 @@ export default function QuotaChip({
   const variant: "ok" | "warn" | "out" =
     remaining <= 0 ? "out" : ratio >= 0.8 ? "warn" : "ok";
 
+  // When the user hasn't burned any quota yet, the chip's "0 of 5
+  // artworks today" reads as a warning on a blank wall ("why is it
+  // already showing me a counter?"). Hide it until they've used at
+  // least one render, at that point the count becomes useful
+  // feedback. The warn/out variants still render unconditionally
+  // so users get the heads-up before they hit the cap.
+  if (variant === "ok" && used === 0) {
+    return null;
+  }
+
   const dotClass =
     variant === "out"
       ? "bg-red-500"

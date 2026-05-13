@@ -77,7 +77,7 @@ interface ConnectStatus {
 }
 
 export default function VenueSettingsPage() {
-  const { venue } = useCurrentVenue();
+  const { venue, loading: venueLoading } = useCurrentVenue();
   const { user } = useAuth();
   const { prefs, togglePref, error: prefsError } = useNotificationPrefs(user);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
@@ -142,27 +142,40 @@ export default function VenueSettingsPage() {
       </div>
 
       <div className="space-y-5 max-w-2xl">
-        {/* Account details */}
+        {/* Account details. We gate the form render on the venue
+            fetch completing because `Field` is an uncontrolled input
+            using `defaultValue`, so it captures whatever venue?.name
+            resolved to on first render. Previously that was the
+            "Your Venue" fallback (venue still loading) and the field
+            never refreshed, even after the actual name arrived. Keys
+            on the section also force a remount in the rare case a
+            user re-fetches their profile while the page is open. */}
         <SectionCard title="Account Details">
-          <div className="space-y-4">
-            <Field label="Venue Name" defaultValue={venue?.name || "Your Venue"} />
-            <Field
-              label="Email Address"
-              defaultValue={user?.email || ""}
-              type="email"
-            />
-            <Field label="Phone Number" defaultValue="" type="tel" />
-            <div className="pt-2">
-              <label className="block text-xs font-medium text-muted mb-1">
-                Password
-              </label>
-              <a
-                href="/forgot-password"
-                className="text-sm text-accent hover:underline cursor-pointer"
-              >
-                Change password
-              </a>
-            </div>
+          <div className="space-y-4" key={venue?.slug || "venue-loading"}>
+            {venueLoading ? (
+              <p className="text-sm text-muted">Loading account details…</p>
+            ) : (
+              <>
+                <Field label="Venue Name" defaultValue={venue?.name || "Your Venue"} />
+                <Field
+                  label="Email Address"
+                  defaultValue={user?.email || ""}
+                  type="email"
+                />
+                <Field label="Phone Number" defaultValue="" type="tel" />
+                <div className="pt-2">
+                  <label className="block text-xs font-medium text-muted mb-1">
+                    Password
+                  </label>
+                  <a
+                    href="/forgot-password"
+                    className="text-sm text-accent hover:underline cursor-pointer"
+                  >
+                    Change password
+                  </a>
+                </div>
+              </>
+            )}
           </div>
         </SectionCard>
 

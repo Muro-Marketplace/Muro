@@ -76,6 +76,11 @@ const nextConfig: NextConfig = {
       // listing; keep the old path working with a permanent redirect so
       // bookmarks + indexed links still land in the right place.
       { source: "/spaces-looking-for-art", destination: "/spaces", permanent: true },
+      // QR Labels lives at /venue-portal/labels in the codebase, but
+      // the sidebar label reads "QR Labels" so users (and anyone who
+      // bookmarks from the page title) reasonably guess the URL
+      // /venue-portal/qr-labels. Redirect it so the guess works.
+      { source: "/venue-portal/qr-labels", destination: "/venue-portal/labels", permanent: true },
     ];
   },
 };

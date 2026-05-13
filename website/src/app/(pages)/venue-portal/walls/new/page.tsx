@@ -154,6 +154,15 @@ export default function NewVenueWallPage() {
       setError("Please give the wall a name.");
       return;
     }
+    // .trim() only strips whitespace, so a name like "," or "..." would
+    // pass and produce a wall card that reads as just a stray comma. We
+    // require at least one alphanumeric character so the name is
+    // recognisable. Emoji-only names are still allowed (they tokenise
+    // outside this class) since some venues label by icon.
+    if (!/[\p{L}\p{N}]/u.test(trimmedName)) {
+      setError("Wall name must contain a letter or number.");
+      return;
+    }
     if (mode === "upload" && !photoPath) {
       setError("Please upload a photo of your wall first.");
       return;

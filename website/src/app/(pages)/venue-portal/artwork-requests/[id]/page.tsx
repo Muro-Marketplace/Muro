@@ -7,6 +7,7 @@ import { use, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { authFetch } from "@/lib/api-client";
+import { getRecentRequestById } from "@/lib/recent-artwork-requests";
 
 interface RequestRow {
   id: string;
@@ -54,16 +55,70 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set when the row we're showing came from the local just-submitted
+  // cache (API didn't surface it). Drives a subtle "syncing" banner
+  // so the user knows the row exists even if the portal hasn't fully
+  // caught up yet.
+  const [fromLocalCache, setFromLocalCache] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await authFetch(`/api/artwork-requests/${id}`);
       const data = await res.json();
-      setReq(data.request);
-      setResponses(data.responses || []);
+      if (data?.request) {
+        setReq(data.request);
+        setResponses(data.responses || []);
+        setFromLocalCache(false);
+      } else {
+        // API returned nothing for a request the user just submitted,
+        // QA hit this when the row exists publicly but `?mine=1`
+        // wasn't surfacing it. Fall back to the locally-cached payload
+        // so the detail page renders the request details instead of
+        // sticking on "Loading…".
+        const cached = getRecentRequestById(id);
+        if (cached) {
+          setReq({
+            id: cached.id,
+            title: cached.title,
+            description: cached.description,
+            intent: cached.intent,
+            styles: cached.styles,
+            mediums: cached.mediums,
+            budget_min_pence: cached.budget_min_pence,
+            budget_max_pence: cached.budget_max_pence,
+            status: cached.status,
+            visibility: cached.visibility,
+            location: cached.location,
+            timescale: cached.timescale,
+            created_at: cached.created_at,
+          });
+          setResponses([]);
+          setFromLocalCache(true);
+        }
+      }
     } catch {
-      /* swallow */
+      // Same fallback for network failures.
+      const cached = getRecentRequestById(id);
+      if (cached) {
+        setReq({
+          id: cached.id,
+          title: cached.title,
+          description: cached.description,
+          intent: cached.intent,
+          styles: cached.styles,
+          mediums: cached.mediums,
+          budget_min_pence: cached.budget_min_pence,
+          budget_max_pence: cached.budget_max_pence,
+          status: cached.status,
+          visibility: cached.visibility,
+          location: cached.location,
+          timescale: cached.timescale,
+          created_at: cached.created_at,
+        });
+        setResponses([]);
+        setFromLocalCache(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -112,6 +167,13 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
         ) : (
           <>
             <Link href="/venue-portal/artwork-requests" className="text-xs text-muted hover:text-accent inline-block mb-4">← All requests</Link>
+            {fromLocalCache && (
+              <div className="mb-4 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-sm px-3 py-2">
+                Just submitted. Your portal is still catching up, so we&rsquo;re
+                showing this from your local cache. Responses from artists
+                will appear here once the request finishes syncing.
+              </div>
+            )}
             <div className="flex items-start justify-between gap-3 mb-2">
               <h1 className="text-2xl font-serif">{req.title}</h1>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border self-start capitalize ${

@@ -10,6 +10,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { authFetch } from "@/lib/api-client";
+import { displayPhysicalDimensions } from "@/lib/dimensions";
 
 interface EnrichedWork {
   id: string;
@@ -264,7 +265,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
     <div className="space-y-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {offers.map((o) => {
+      {offers.map((o, offerIndex) => {
         const iAmBuyer = o.buyer_user_id === viewerUserId;
         const iAmArtist = o.artist_user_id === viewerUserId;
         // Sender = whoever made *this* offer/counter. Falls back to
@@ -301,6 +302,9 @@ export default function OffersList({ viewerUserId, filter }: Props) {
             <div className="flex flex-col sm:flex-row">
               {primaryWork?.image && (
                 <div className="relative w-full sm:w-32 h-32 shrink-0 bg-foreground/5">
+                  {/* Above-fold offers (first few cards) load eagerly
+                      so the visible row isn't blank when the user
+                      lands. Anything below the fold stays lazy. */}
                   <Image
                     src={primaryWork.image}
                     alt={primaryWork.title}
@@ -308,6 +312,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                     className="object-cover"
                     sizes="128px"
                     unoptimized
+                    priority={offerIndex < 3}
                   />
                   {works.length > 1 && (
                     <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/65 text-white rounded-sm text-[10px]">
@@ -340,20 +345,42 @@ export default function OffersList({ viewerUserId, filter }: Props) {
 
                 {works.length > 0 && (
                   <ul className="space-y-0.5 mb-3">
-                    {works.map((w) => (
-                      <li key={w.id} className="text-[11px] text-muted">
-                        <span className="text-foreground/80 font-medium">{w.title}</span>
-                        {w.dimensions ? ` · ${w.dimensions}` : ""}
-                        {w.medium ? ` · ${w.medium}` : ""}
-                      </li>
-                    ))}
+                    {works.map((w) => {
+                      // displayPhysicalDimensions strips pixel-format
+                      // dimensions ("2420 × 3632 px") that came from
+                      // the uploaded image rather than a physical-size
+                      // field, those are useless to a venue choosing
+                      // a print. Cm / inch / A-sized labels pass
+                      // through unchanged.
+                      const dims = displayPhysicalDimensions(w.dimensions);
+                      return (
+                        <li key={w.id} className="text-[11px] text-muted">
+                          <span className="text-foreground/80 font-medium">{w.title}</span>
+                          {dims ? ` · ${dims}` : ""}
+                          {w.medium ? ` · ${w.medium}` : ""}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
 
                 {o.message && (
-                  <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap mb-3">
-                    &ldquo;{o.message}&rdquo;
-                  </p>
+                  <div className="mb-3">
+                    {/* Label the quote so a stale message left behind
+                        by an earlier counter doesn't read as the
+                        latest position. QA flagged a card showing
+                        "come on pls its only 8p" next to an £18.02
+                        offer, the message was from a previous round.
+                        Tagging it as "Original message" gives the
+                        reader the right frame: this is what was said
+                        when, not what the offer means now. */}
+                    <p className="text-[10px] uppercase tracking-wider text-muted mb-1">
+                      Original message
+                    </p>
+                    <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                      &ldquo;{o.message}&rdquo;
+                    </p>
+                  </div>
                 )}
 
                 <footer className="flex flex-wrap gap-2 pt-2 border-t border-border">

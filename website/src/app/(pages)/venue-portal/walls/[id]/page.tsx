@@ -28,6 +28,19 @@ import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
 import type { Wall, WallLayout } from "@/lib/visualizer/types";
 
+/**
+ * Render fallback for wall names. Mirrors the helper in walls/page.tsx
+ * so the editor title bar reads coherently when a legacy row carries
+ * an empty or punctuation-only name.
+ */
+function displayWallName(name: string | null | undefined): string {
+  if (typeof name !== "string") return "Untitled wall";
+  const trimmed = name.trim();
+  if (!trimmed) return "Untitled wall";
+  if (!/[\p{L}\p{N}]/u.test(trimmed)) return "Untitled wall";
+  return trimmed;
+}
+
 // Visualizer is client-only and pulls in Konva, dynamic-load.
 const WallVisualizer = dynamic(
   () => import("@/components/visualizer/WallVisualizer"),
@@ -256,7 +269,7 @@ export default function VenueWallEditorPage({
           </Link>
           <span className="h-4 w-px bg-black/10 mx-1 shrink-0" />
           <p className="text-sm font-medium text-foreground truncate">
-            {ready ? state.wall.name : "Loading…"}
+            {ready ? displayWallName(state.wall.name) : "Loading…"}
           </p>
           {ready && (
             <span className="text-xs text-muted tabular-nums shrink-0">

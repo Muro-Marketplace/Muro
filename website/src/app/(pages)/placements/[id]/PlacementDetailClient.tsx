@@ -440,11 +440,19 @@ export default function PlacementDetailClient({ placementId }: Props) {
   return (
     <div>
       {/* Sticky breadcrumb so the back link is always reachable on long
-          placement records without scrolling to the top. */}
+          placement records without scrolling to the top. Includes the
+          portal root as the first crumb so the user can see at a glance
+          that they're still in the venue / artist portal context, this
+          detail page lives at /placements/[id] (top-level), without the
+          crumb the page reads like a separate destination. */}
       <div className="sticky top-14 lg:top-16 bg-background border-b border-border z-10 px-4 sm:px-6 py-2">
         <div className="max-w-[1100px] mx-auto">
           <Breadcrumbs
             items={[
+              {
+                label: viewerRole === "venue" ? "Venue portal" : "Artist portal",
+                href: portalBase,
+              },
               { label: "Placements", href: `${portalBase}/placements` },
               { label: placement.work_title || "Placement" },
             ]}
@@ -597,7 +605,16 @@ export default function PlacementDetailClient({ placementId }: Props) {
                         <p className={`text-[10px] font-medium ${reached ? "text-foreground" : "text-muted"}`}>{s.label}</p>
                         {s.ts && (
                           <p className="text-[9px] text-muted">
-                            {new Date(s.ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                            {(() => {
+                              const d = new Date(s.ts);
+                              // Show year for any date outside the current
+                              // calendar year so a backdated stage can't be
+                              // visually confused with one set this year.
+                              const sameYear = d.getFullYear() === new Date().getFullYear();
+                              return d.toLocaleDateString("en-GB", sameYear
+                                ? { day: "numeric", month: "short" }
+                                : { day: "numeric", month: "short", year: "numeric" });
+                            })()}
                           </p>
                         )}
                       </div>

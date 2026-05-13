@@ -31,7 +31,14 @@ interface Step {
 
 function formatDate(ts: string | null | undefined) {
   if (!ts) return null;
-  return new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const d = new Date(ts);
+  // Show the year for any date outside the current calendar year so a
+  // 1990 install can't be visually confused with a 2026 one. Same-year
+  // dates stay compact ("1 Jan") to keep the stepper readable.
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-GB", sameYear
+    ? { day: "numeric", month: "short" }
+    : { day: "numeric", month: "short", year: "numeric" });
 }
 
 function isoDateToInput(ts: string | null | undefined): string {
@@ -115,6 +122,14 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
 
   async function confirmSchedule() {
     if (!scheduleDraft) return;
+    // Reject past dates here, the HTML `min` attribute only constrains
+    // the date picker UI; users can still paste or type a past date.
+    // Compare on calendar-day granularity so today is still allowed.
+    const todayInput = isoDateToInput(new Date().toISOString());
+    if (scheduleDraft < todayInput) {
+      setError("Install date can't be in the past.");
+      return;
+    }
     // Convert the picker's YYYY-MM-DD into an ISO datetime at midday
     // local time, so the saved timestamp lands on the intended calendar
     // day regardless of the viewer's timezone.

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { authFetch } from "@/lib/api-client";
 import ArtworkRequestForm, { type ArtworkRequestPayload } from "@/components/artwork-requests/ArtworkRequestForm";
+import { recordSubmission } from "@/lib/recent-artwork-requests";
 
 export default function NewArtworkRequestPage() {
   const router = useRouter();
@@ -21,6 +22,27 @@ export default function NewArtworkRequestPage() {
     if (!res.ok) {
       throw new Error(data.message || data.error || "Could not create request.");
     }
+    // QA flagged that the API's `?mine=1` GET sometimes fails to
+    // surface a row the venue has just inserted, so they land on a
+    // detail page stuck on "Loading…" and a list page that says
+    // "No requests yet". Cache the submission locally so the
+    // portal stays usable until the API surfaces it. TTL is short
+    // (7 days) and the cache merges with API data, deduped by id.
+    recordSubmission({
+      id: data.id,
+      title: payload.title,
+      description: payload.description,
+      intent: payload.intent,
+      styles: payload.styles,
+      mediums: payload.mediums,
+      budget_min_pence: payload.budgetMinPence ?? null,
+      budget_max_pence: payload.budgetMaxPence ?? null,
+      location: payload.location ?? null,
+      timescale: payload.timescale ?? null,
+      visibility: payload.visibility,
+      status: "open",
+      created_at: new Date().toISOString(),
+    });
     router.push(`/venue-portal/artwork-requests/${data.id}`);
   }
 

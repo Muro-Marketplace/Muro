@@ -39,6 +39,29 @@ const createSchema = z.object({
   visibility: z.enum(["semi_public", "private"]).default("semi_public"),
   invitedArtistSlugs: z.array(z.string().min(1).max(100)).max(50).optional().default([]),
   wallId: z.string().uuid().optional(),
+}).superRefine((data, ctx) => {
+  if (
+    typeof data.budgetMinPence === "number" &&
+    typeof data.budgetMaxPence === "number" &&
+    data.budgetMaxPence < data.budgetMinPence
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["budgetMaxPence"],
+      message: "Budget max must be greater than or equal to budget min.",
+    });
+  }
+  if (
+    typeof data.minDimensionCm === "number" &&
+    typeof data.maxDimensionCm === "number" &&
+    data.maxDimensionCm < data.minDimensionCm
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["maxDimensionCm"],
+      message: "Max dimension must be greater than or equal to min dimension.",
+    });
+  }
 });
 
 export async function GET(request: Request) {
