@@ -262,12 +262,21 @@ export default function ArtworkPageClient({
           <dt className="text-muted uppercase tracking-wider text-[10px]">Medium</dt>
           <dd className="text-foreground text-right">{work.medium}</dd>
         </div>
-        {work.dimensions && (
-          <div className="flex justify-between items-baseline">
-            <dt className="text-muted uppercase tracking-wider text-[10px]">Dimensions</dt>
-            <dd className="text-foreground text-right">{formatDimensionsForDisplay(work.dimensions)}</dd>
-          </div>
-        )}
+        {(() => {
+          // Check the formatted output, not the raw field: a raw
+          // string like "325 × 487 cm" is truthy but
+          // formatDimensionsForDisplay rejects it as implausible and
+          // returns empty. Without this we render an empty <dd> next
+          // to the "Dimensions" label.
+          const dims = work.dimensions ? formatDimensionsForDisplay(work.dimensions) : "";
+          if (!dims) return null;
+          return (
+            <div className="flex justify-between items-baseline">
+              <dt className="text-muted uppercase tracking-wider text-[10px]">Dimensions</dt>
+              <dd className="text-foreground text-right">{dims}</dd>
+            </div>
+          );
+        })()}
       </dl>
 
       {/* Size & Price */}

@@ -340,7 +340,16 @@ export default function CollectionDetailPage() {
                     <h3 className="text-sm font-medium">{work.title}</h3>
                     <p className="text-xs text-muted">
                       {work.medium}
-                      {work.dimensions ? ` · ${formatDimensionsForDisplay(work.dimensions)}` : ""}
+                      {(() => {
+                        // Check the formatted value not the raw field:
+                        // implausibly large stored dims (e.g.
+                        // "325 × 487 cm") would render an orphan " · "
+                        // separator with an empty trailing value.
+                        const dims = work.dimensions
+                          ? formatDimensionsForDisplay(work.dimensions)
+                          : "";
+                        return dims ? ` · ${dims}` : "";
+                      })()}
                     </p>
                     {work.placed_at_venue && (
                       <p className="text-[10px] text-muted mt-1 inline-flex items-center gap-1.5">
