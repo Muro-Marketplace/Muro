@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { venues as staticVenues } from "@/data/venues";
 import VenueWallCard from "@/components/VenueWallCard";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import VenueProfileApplyCta from "@/components/VenueProfileApplyCta";
 
 interface VenueShape {
   slug: string;
@@ -253,20 +254,19 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
               </p>
               <h1 className="font-serif text-3xl sm:text-4xl mt-1">{venue.name}</h1>
             </div>
-            {/* Primary CTA. Previously the venue detail page had no
-                actionable surface: visitors landed and could only go
-                back. Route artists into the application flow, anchor
-                to open requests when there are any so they can see
-                what the venue is calling for first. */}
-            <Link
-              href={openRequests.length > 0 ? "#open-requests" : "/signup/artist"}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white text-foreground text-sm font-medium rounded-sm hover:bg-white/90 transition-colors self-start sm:self-end"
-            >
-              {openRequests.length > 0 ? "View open artwork requests" : "Apply to be displayed here"}
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
-              </svg>
-            </Link>
+            {/* Primary CTA. Auth-aware: signed-out visitors see
+                "Apply to be displayed here" into the artist signup
+                flow; signed-in artists see "Message this venue"
+                because they're already on the platform; non-artists
+                see no CTA (the apply prompt was rendering even when
+                viewers were already logged in, which read as a stale
+                marketing nudge). Anchored to the open-requests
+                section whenever a venue has live calls. */}
+            <VenueProfileApplyCta
+              venueSlug={venue.slug}
+              venueName={venue.name}
+              hasOpenRequests={openRequests.length > 0}
+            />
           </div>
         </div>
       </div>
