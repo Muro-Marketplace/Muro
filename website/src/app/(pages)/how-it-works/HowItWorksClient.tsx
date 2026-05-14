@@ -84,7 +84,7 @@ function VenueExplainer() {
             "Display work for free with an optional revenue share on sales, or purchase pieces outright for your permanent collection.",
         },
       ]}
-      cta={{ href: "/browse", label: "Browse artists" }}
+      cta={{ href: "/signup/venue", label: "Register your venue" }}
       secondaryCta={{ href: "/curated", label: "Or explore Curated, a managed selection from £49" }}
     />
   );
