@@ -278,7 +278,7 @@ export default function CuratedClient() {
           under spotlights — closer to what Curated actually delivers
           (a placed, lit hang) than the previous abstract close-up.
           Plan G Task 13 may still ship a custom brand asset later. */}
-      <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 overflow-hidden bg-[#1A1A1A]">
+      <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 overflow-hidden">
         <div className="absolute inset-0 -z-10">
           <Image
             src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=1080&fit=crop&crop=center"

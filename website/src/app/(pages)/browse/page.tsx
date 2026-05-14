@@ -10,6 +10,7 @@ import { artistsToGalleryWorks } from "@/data/galleries";
 import { collections as staticCollections, type ArtistCollection } from "@/data/collections";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, resolveDiscipline, disciplineLabel } from "@/data/categories";
 import { slugify } from "@/lib/slugify";
+import { formatPriceRange } from "@/lib/format-currency";
 import { geocodePostcode } from "@/lib/geocode";
 import { bandsForWork } from "@/components/browse/SizeBands";
 import Button from "@/components/Button";
@@ -2124,7 +2125,7 @@ function BrowsePortfoliosPageInner() {
                       <SearchInput
                         value={searchQuery}
                         onChange={setSearchQuery}
-                        placeholder="Search works, artists, mediums"
+                        placeholder="Search works or artists"
                       />
                     </div>
                     <p className="text-sm text-muted whitespace-nowrap">
@@ -2280,7 +2281,7 @@ function BrowsePortfoliosPageInner() {
                               {work.medium}
                             </p>
                             <p className="text-[11px] text-foreground/80 mt-1 font-medium">
-                              {work.priceBand}
+                              {formatPriceRange(work.pricing) || work.priceBand}
                             </p>
                             <p className="text-[11px] text-muted/70 mt-1">
                               {[work.openToFreeLoan ? "Display" : "", work.openToOutrightPurchase ? "Purchase" : ""].filter(Boolean).join(" · ")}

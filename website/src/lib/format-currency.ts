@@ -27,6 +27,33 @@ export function formatPounds(value: unknown): string {
  */
 const ISO_4217 = /^[A-Z]{3}$/;
 
+/**
+ * Format a price range from a list of size-pricing rows.
+ *
+ * Returns:
+ *   - "£min to £max" when min and max differ
+ *   - "£X" when there's only one size (or all sizes share a price)
+ *   - "" when no valid prices are found (caller decides the fallback)
+ *
+ * Uses whole pounds (no decimals) to match the rest of the marketplace
+ * card UI. Used in the gallery view and on cards where we want to show
+ * the actual span an artwork is available at, rather than a
+ * "From £X" anchor that hides the upper bound.
+ */
+export function formatPriceRange(
+  pricing: ReadonlyArray<{ price: number }> | null | undefined,
+): string {
+  if (!Array.isArray(pricing) || pricing.length === 0) return "";
+  const prices = pricing
+    .map((p) => Number(p?.price))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (prices.length === 0) return "";
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  if (min === max) return `£${Math.round(min)}`;
+  return `£${Math.round(min)} to £${Math.round(max)}`;
+}
+
 export function formatCurrency(value: unknown, currency?: string | null): string {
   const code = (currency || "GBP").toUpperCase();
   if (code === "GBP" || !ISO_4217.test(code)) return formatPounds(value);

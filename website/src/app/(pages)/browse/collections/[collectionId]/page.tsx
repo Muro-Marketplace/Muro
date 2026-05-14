@@ -521,7 +521,13 @@ export default function CollectionDetailPage() {
                   collectionId={collection.id}
                   collectionTitle={collection.name}
                   askingPriceGbp={(() => {
-                    // Sum the largest size price per work, in pounds.
+                    // Prefer the artist's declared bundle price, the
+                    // headline figure on the Buy CTA. Falls back to the
+                    // sum of each work's selected-size price (the
+                    // "buy individually" line), and finally to the sum
+                    // of largest-size prices if neither is available.
+                    if (collection.bundlePrice > 0) return collection.bundlePrice;
+                    if (individualTotal > 0) return individualTotal;
                     const total = works.reduce((sum, w) => {
                       const tiers = w.pricing || [];
                       if (tiers.length === 0) return sum;

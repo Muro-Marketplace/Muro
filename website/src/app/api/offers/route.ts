@@ -41,10 +41,11 @@ type DbWorkRow = {
 /**
  * Compute the "asking price" used to enforce the 60% offer floor.
  * For works: sum of the largest size price per work. For collections:
- * sum of all collection items' largest sizes.
+ * the artist's declared bundle_price when set (matches the headline
+ * Buy CTA the venue sees), otherwise sum of each work's largest size.
  *
  * Returns `null` if we can't determine a price (in which case the
- * caller should let the offer through — the artist can still decline).
+ * caller should let the offer through, the artist can still decline).
  */
 async function computeAskingPricePence(
   db: ReturnType<typeof getSupabaseAdmin>,
@@ -54,10 +55,20 @@ async function computeAskingPricePence(
   if (target.collectionId) {
     const { data: collection } = await db
       .from("artist_collections")
-      .select("work_ids")
+      .select("work_ids, bundle_price")
       .eq("id", target.collectionId)
-      .maybeSingle<{ work_ids: string[] | null }>();
+      .maybeSingle<{ work_ids: string[] | null; bundle_price: number | null }>();
     if (!collection?.work_ids?.length) return null;
+    // Pin the floor to the artist's declared bundle price when set;
+    // otherwise fall through to summing the works below. Stored as
+    // pounds (NUMERIC), convert to pence here.
+    if (
+      typeof collection.bundle_price === "number" &&
+      Number.isFinite(collection.bundle_price) &&
+      collection.bundle_price > 0
+    ) {
+      return Math.round(collection.bundle_price * 100);
+    }
     workIds = collection.work_ids;
   }
   if (workIds.length === 0) return null;
