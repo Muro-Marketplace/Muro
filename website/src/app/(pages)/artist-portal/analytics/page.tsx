@@ -31,6 +31,16 @@ interface Placement {
   revenue: string | null;
 }
 
+/** Per-order artist payout. Mirrors the dashboard's calculation
+ *  (/api/dashboard/route.ts → totalRevenue) so Analytics and Dashboard
+ *  show the same number. Falls back to the buyer-side `total` only for
+ *  legacy rows that pre-date the `artist_revenue` column. */
+function orderPayout(o: { total?: number; artist_revenue?: number | null }): number {
+  if (typeof o.artist_revenue === "number" && Number.isFinite(o.artist_revenue)) return o.artist_revenue;
+  if (typeof o.total === "number" && Number.isFinite(o.total)) return o.total;
+  return 0;
+}
+
 interface AnalyticsData {
   totals: {
     profile_views: number;
@@ -51,7 +61,7 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState("Last 30 days");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [placements, setPlacements] = useState<Placement[]>([]);
-  const [orders, setOrders] = useState<{ total?: number; created_at?: string }[]>([]);
+  const [orders, setOrders] = useState<{ total?: number; artist_revenue?: number | null; created_at?: string }[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
@@ -102,7 +112,12 @@ export default function AnalyticsPage() {
   const activePlacements = placements.filter((p) => p.status === "Active").length;
   const pendingPlacements = placements.filter((p) => p.status === "Pending").length;
   const completedPlacements = placements.filter((p) => p.status === "Completed" || p.status === "Sold").length;
-  const totalEarnings = orders.reduce((sum: number, o: { total?: number }) => sum + (o.total || 0), 0);
+  // Use the artist's net payout (artist_revenue) rather than the
+  // buyer-paid gross (total) so this figure matches the dashboard's
+  // "Total Sales" tile and the per-row payouts on the Orders page.
+  // Falls back to `total` for legacy rows pre-dating the artist_revenue
+  // column so we don't silently zero them out.
+  const totalEarnings = orders.reduce((sum: number, o) => sum + orderPayout(o), 0);
   const uniqueVenues = new Set(placements.map((p) => p.venue)).size;
 
   const venuePerformance = useMemo(() => {
@@ -133,7 +148,7 @@ export default function AnalyticsPage() {
       });
       data.push({
         month: monthStr,
-        earnings: monthOrders.reduce((s: number, o: { total?: number }) => s + (o.total || 0), 0),
+        earnings: monthOrders.reduce((s: number, o) => s + orderPayout(o), 0),
         sales: monthOrders.length,
       });
     }
@@ -323,9 +338,9 @@ export default function AnalyticsPage() {
       {/* ── EXISTING: Revenue metrics ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-surface border border-border rounded-sm p-5">
-          <p className="text-sm text-muted mb-1">Total Earnings</p>
+          <p className="text-sm text-muted mb-1">Total Sales</p>
           <p className="text-2xl font-medium">£{totalEarnings.toLocaleString()}</p>
-          <p className="text-xs text-muted mt-1">All time</p>
+          <p className="text-xs text-muted mt-1">All time, your share after fees</p>
         </div>
         <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Pieces Placed</p>

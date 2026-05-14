@@ -82,6 +82,11 @@ export default function BillingPage() {
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [connectLoading, setConnectLoading] = useState(true);
   const [connectRedirecting, setConnectRedirecting] = useState(false);
+  // Inline error for the Set Up Payouts / Continue Setup / Open Stripe
+  // Dashboard buttons. Previously surfaced via window.alert which is
+  // easy to miss (and silently dropped by some pop-up blockers). Now
+  // renders right under the button so it's part of the page flow.
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   // Tracks "just came back from Stripe Checkout", used to poll the
   // profile until the webhook lands and the subscription_status flips
@@ -195,38 +200,50 @@ export default function BillingPage() {
   }
 
   async function handleConnectOnboard() {
+    setConnectError(null);
     setConnectRedirecting(true);
     try {
       const res = await authFetch("/api/stripe-connect/onboard", {
         method: "POST",
         body: JSON.stringify({ accountType: "artist" }),
       });
-      const data = await res.json();
-      if (data.url) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) {
         window.location.href = data.url;
-      } else {
-        alert(data.error || "Failed to start payout setup");
-        setConnectRedirecting(false);
+        // Leave `connectRedirecting` true so the button stays in the
+        // "Redirecting..." state during the browser navigation.
+        return;
       }
+      setConnectError(
+        typeof data?.error === "string"
+          ? data.error
+          : "Couldn't start payout setup. Please try again.",
+      );
+      setConnectRedirecting(false);
     } catch {
-      alert("Something went wrong. Please try again.");
+      setConnectError("Network error. Check your connection and try again.");
       setConnectRedirecting(false);
     }
   }
 
   async function handleConnectDashboard() {
+    setConnectError(null);
     setConnectRedirecting(true);
     try {
       const res = await authFetch("/api/stripe-connect/dashboard", { method: "POST" });
-      const data = await res.json();
-      if (data.url) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) {
         window.location.href = data.url;
-      } else {
-        alert(data.error || "Failed to open Stripe dashboard");
-        setConnectRedirecting(false);
+        return;
       }
+      setConnectError(
+        typeof data?.error === "string"
+          ? data.error
+          : "Couldn't open Stripe dashboard. Please try again.",
+      );
+      setConnectRedirecting(false);
     } catch {
-      alert("Something went wrong. Please try again.");
+      setConnectError("Network error. Check your connection and try again.");
       setConnectRedirecting(false);
     }
   }
@@ -556,6 +573,14 @@ export default function BillingPage() {
               {connectRedirecting ? "Redirecting..." : "Set Up Payouts"}
             </button>
           </>
+        )}
+        {connectError && !connectLoading && (
+          <div
+            role="alert"
+            className="mt-4 bg-red-50 border border-red-200 rounded-sm px-3 py-2.5 text-xs text-red-800 leading-relaxed"
+          >
+            {connectError}
+          </div>
         )}
       </div>
     </ArtistPortalLayout>

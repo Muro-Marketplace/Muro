@@ -1,15 +1,20 @@
 "use client";
 
-// Public-surface artwork-requests list. Used standalone on
+// Artist-gated artwork-requests list. Used standalone on
 // /artwork-requests and inline as a tab on /spaces.
 //
-// Data source: /api/artwork-requests/public (unauth, curated fields,
-// joined with venue_profiles for the venue name + image).
+// Data source: /api/artwork-requests/public (auth-required, returns
+// curated fields joined with venue_profiles for the venue name + image).
+// Non-artists see a gated explainer with the right CTAs instead of
+// the list, and the API double-checks the caller is a verified artist
+// so a direct fetch can't bypass the UI gate.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import EmptyState from "@/components/EmptyState";
+import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 
 export interface PublicArtworkRequest {
   id: string;
@@ -57,12 +62,21 @@ function arrangementSummary(r: PublicArtworkRequest): string {
 }
 
 export default function ArtworkRequestsList() {
+  const { user, userType, loading: authLoading } = useAuth();
   const [rows, setRows] = useState<PublicArtworkRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const isArtist = !!user && userType === "artist";
+
   useEffect(() => {
+    if (authLoading) return;
+    if (!isArtist) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
-    fetch("/api/artwork-requests/public", { cache: "no-store" })
+    setLoading(true);
+    authFetch("/api/artwork-requests/public", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) setRows(data.requests || []);
@@ -76,10 +90,42 @@ export default function ArtworkRequestsList() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authLoading, isArtist]);
 
-  if (loading) {
+  if (authLoading || (isArtist && loading)) {
     return <p className="text-sm text-muted text-center py-16">Loading requests…</p>;
+  }
+
+  // Gate. Only verified artists can see what venues are asking for, so
+  // we don't broadcast active demand back to the venues themselves and
+  // we keep the channel a useful artist-side workflow instead of a
+  // browseable feed.
+  if (!isArtist) {
+    if (!user) {
+      return (
+        <EmptyState
+          title="Open requests are for Wallplace artists"
+          hint="Sign in as an artist to browse what venues are looking for and respond directly. New here? Apply to join, accepted artists get their first month free."
+          cta={{ label: "Sign in", href: "/login?next=/spaces?view=requests" }}
+          secondaryCta={{ label: "Apply to join", href: "/apply" }}
+        />
+      );
+    }
+    return (
+      <EmptyState
+        title="Open requests are for artists"
+        hint={
+          userType === "venue"
+            ? "Open requests is the artist-side view of venue demand. To post your own request, head to your venue portal."
+            : "This list is reserved for Wallplace artists. If you'd like to apply, we'd love to see your work."
+        }
+        cta={
+          userType === "venue"
+            ? { label: "Open venue portal", href: "/venue-portal/artwork-requests" }
+            : { label: "Apply to join as an artist", href: "/apply" }
+        }
+      />
+    );
   }
 
   if (rows.length === 0) {
@@ -192,10 +238,10 @@ export default function ArtworkRequestsList() {
                   <span className="text-xs text-muted">Venue details unavailable</span>
                 )}
                 <Link
-                  href={`/login?next=${encodeURIComponent(`/artist-portal/artwork-requests/${r.id}`)}`}
-                  className="text-xs text-muted hover:text-foreground transition-colors"
+                  href={`/artist-portal/artwork-requests/${r.id}`}
+                  className="text-xs font-medium text-foreground hover:text-accent transition-colors"
                 >
-                  Sign in to respond
+                  Respond →
                 </Link>
               </div>
             </div>

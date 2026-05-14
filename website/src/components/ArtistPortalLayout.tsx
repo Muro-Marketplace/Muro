@@ -76,6 +76,11 @@ export default function ArtistPortalLayout({
   const { user, loading, userType, displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  // Tracks the artist_profiles existence check. We can't render the
+  // portal until we know whether to keep them here or bounce them to
+  // /apply — otherwise newly-signed-up artists with no profile row see
+  // the portal chrome flash before the redirect kicks in.
+  const [profileCheck, setProfileCheck] = useState<"loading" | "missing" | "present">("loading");
 
   // Sync the tab title to the current portal page. The parent route's
   // metadata template is a server-rendered concept, but every portal
@@ -95,29 +100,56 @@ export default function ArtistPortalLayout({
   }, [loading, user, userType, router]);
 
   useEffect(() => {
-    if (user && userType === "artist") {
-      authFetch("/api/artist-profile")
-        .then((r) => r.json())
-        .then((data) => {
-          // Brand-new artist accounts (signed up, never approved /
-          // never filled in the application) land here with no
-          // artist_profile row. The portal pages all rely on that row
-          // existing — billing throws "Artist profile not found" on
-          // /api/subscribe, profile page sits on "Loading…" forever.
-          // Send them through /apply instead so they can complete the
-          // application. Once an admin approves it the profile row is
-          // created and this guard naturally lets them in.
-          if (!data?.profile) {
-            router.replace("/apply");
-            return;
-          }
-          if (data.profile.profile_image) setProfileImage(data.profile.profile_image);
-        })
-        .catch(() => {});
+    if (loading) return;
+    if (!user || userType !== "artist") {
+      // Auth-fail branch is handled by the other effect (router.replace
+      // to /login). Keep the check in a single state so we don't render
+      // portal chrome during the redirect.
+      setProfileCheck("missing");
+      return;
     }
-  }, [user, userType, router]);
+    let cancelled = false;
+    setProfileCheck("loading");
+    authFetch("/api/artist-profile")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        // Brand-new artist accounts (signed up, never approved /
+        // never filled in the application) land here with no
+        // artist_profile row. The portal pages all rely on that row
+        // existing — billing throws "Artist profile not found" on
+        // /api/subscribe, profile page sits on "Loading…" forever.
+        // Send them through /apply instead so they can complete the
+        // application. Once an admin approves it the profile row is
+        // created and this guard naturally lets them in.
+        if (!data?.profile) {
+          setProfileCheck("missing");
+          router.replace("/apply");
+          return;
+        }
+        if (data.profile.profile_image) setProfileImage(data.profile.profile_image);
+        setProfileCheck("present");
+      })
+      .catch(() => {
+        // Treat a failed check as missing so we don't render the portal
+        // for an account that may not actually have a profile. The
+        // /apply redirect is the safe default; if the network was just
+        // flaky, the user can retry from there.
+        if (cancelled) return;
+        setProfileCheck("missing");
+        router.replace("/apply");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user, userType, router]);
 
-  if (loading) {
+  // Keep the loading screen visible until BOTH the auth check and the
+  // artist_profile existence check resolve. Without this guard, the
+  // portal chrome (sidebar + dashboard tiles) renders for ~500ms while
+  // the profile check is in flight, then the user is bounced to /apply
+  // — that flash is exactly what the previous fix introduced.
+  if (loading || profileCheck === "loading") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <div className="w-48 h-1 bg-border rounded-full overflow-hidden">
@@ -135,7 +167,7 @@ export default function ArtistPortalLayout({
     );
   }
 
-  if (!user || userType !== "artist") return null;
+  if (!user || userType !== "artist" || profileCheck !== "present") return null;
 
   return (
     <div className="bg-background flex flex-1">

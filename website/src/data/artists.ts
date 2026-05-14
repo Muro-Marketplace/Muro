@@ -87,6 +87,9 @@ export interface Artist {
   openToRevenueShare: boolean;
   revenueSharePercent?: number;
   openToOutrightPurchase: boolean;
+  /** Artist has opted in to letting buyers collect orders in person.
+   *  Drives the "Collect from artist" fulfilment option at checkout. */
+  offersPickup?: boolean;
   canProvideFrames: boolean;
   canArrangeFraming: boolean;
   venueTypesSuitedFor: string[];

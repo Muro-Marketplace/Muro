@@ -1,16 +1,18 @@
-// /api/artwork-requests/public — unauth listing of open venue-posted
-// artwork requests for the public /artwork-requests surface.
+// /api/artwork-requests/public — artist-only listing of open venue-posted
+// artwork requests for the artist-facing /artwork-requests and
+// /spaces?view=requests surfaces.
 //
-// Distinct from /api/artwork-requests (auth-aware, exposes all columns
-// including private/invitation fields). This one returns only a curated
-// subset of safe fields plus the venue's display name + slug joined
-// from venue_profiles, so the public card has enough to render without
-// leaking anything sensitive.
+// Despite the legacy "public" path, this is gated to authenticated
+// artists. Venues see their own demand in their portal; venues looking
+// at venues, customers, and anonymous visitors shouldn't be able to
+// scrape the active-demand feed. The list itself stays the curated
+// subset of safe fields (no private/invitation columns).
 //
 // No FK between artwork_requests.venue_user_id and venue_profiles, so
 // we fetch in two passes and merge by user_id.
 
 import { NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -41,8 +43,25 @@ interface VenueLookup {
   image: string | null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Artist-gate: require a signed-in user who has an artist_profile
+  // row. Anonymous + venues + customers are blocked at the API boundary
+  // so a direct fetch can't bypass the UI gate in ArtworkRequestsList.
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
   const db = getSupabaseAdmin();
+  const { data: artistRow } = await db
+    .from("artist_profiles")
+    .select("id")
+    .eq("user_id", auth.user!.id)
+    .maybeSingle<{ id: string }>();
+  if (!artistRow) {
+    return NextResponse.json(
+      { error: "Open requests are only available to Wallplace artists." },
+      { status: 403 },
+    );
+  }
 
   const { data: rows, error } = await db
     .from("artwork_requests")

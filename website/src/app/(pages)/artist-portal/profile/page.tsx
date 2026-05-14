@@ -332,6 +332,10 @@ interface ProfileState {
   openToRevenueShare: boolean;
   revenueSharePercent: number;
   openToOutrightPurchase: boolean;
+  /** Migration 055: opt-in to "Collect from artist" at checkout. Default
+   *  false so existing artists don't start receiving pickup requests
+   *  until they've explicitly enabled it. */
+  offersPickup: boolean;
   /**
    * Single "can provide framing" flag. Replaces the previous pair
    * (`canProvideFrames` + `canArrangeFraming`) which were confusingly
@@ -375,6 +379,7 @@ function emptyProfile(nameSeed: string): ProfileState {
     openToRevenueShare: false,
     revenueSharePercent: 10,
     openToOutrightPurchase: false,
+    offersPickup: false,
     canProvideFraming: false,
     availableSizes: [],
     deliveryRadius: "",
@@ -420,6 +425,7 @@ function initProfile(a: Artist): ProfileState {
     openToRevenueShare: a.openToRevenueShare,
     revenueSharePercent: a.revenueSharePercent || 10,
     openToOutrightPurchase: a.openToOutrightPurchase,
+    offersPickup: a.offersPickup ?? false,
     // Treat the legacy pair as "either provides framing", collapse to
     // the new single flag.
     canProvideFraming: a.canProvideFrames || a.canArrangeFraming,
@@ -679,6 +685,7 @@ export default function ProfileEditorPage() {
           open_to_revenue_share: profile.openToRevenueShare,
           revenue_share_percent: profile.revenueSharePercent,
           open_to_outright_purchase: profile.openToOutrightPurchase,
+          offers_pickup: profile.offersPickup,
           // Single framing flag drives both legacy columns so existing
           // search filters keep matching.
           can_provide_frames: profile.canProvideFraming,
@@ -1004,6 +1011,7 @@ export default function ProfileEditorPage() {
                 // "can provide frames" + "can arrange framing" pair,
                 // which were saying nearly the same thing in two ways.
                 { key: "canProvideFraming" as const, label: "Can provide framing" },
+                { key: "offersPickup" as const, label: "Collect from artist (in person)" },
               ]).map(({ key, label }) => (
                 <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
                   <button
@@ -1019,6 +1027,9 @@ export default function ProfileEditorPage() {
                 </label>
               ))}
             </div>
+            <p className="text-xs text-muted mt-2 leading-relaxed">
+              &ldquo;Collect from artist&rdquo; lets buyers pick orders up in person at checkout instead of paying for shipping. Leave it off if you&rsquo;d rather only ship.
+            </p>
           </div>
 
           {/* Deal types */}
