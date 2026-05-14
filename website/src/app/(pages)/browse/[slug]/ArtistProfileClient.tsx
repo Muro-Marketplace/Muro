@@ -555,6 +555,44 @@ export default function ArtistProfileClient({
                     </Link>
                   </div>
                 </div>
+
+                {/* Always-visible caption beneath the thumbnail. QA
+                    flagged /browse/fin-coles cards showing only an
+                    "Available" pill, the title + medium + price band
+                    were hidden inside the hover overlay so visitors on
+                    touch (or anyone who didn't hover) had to tap the
+                    card just to see what the artwork was. Pulling the
+                    label down here keeps the hover overlay for the
+                    quick-view + buy buttons but gives every visitor
+                    the basic context up front. Mirrors how the other
+                    demo artist pages already render their grid. */}
+                <div className="px-1 pt-2 pb-1">
+                  <p className="text-sm font-medium text-foreground line-clamp-1">
+                    {work.title}
+                  </p>
+                  {(() => {
+                    const sizesText =
+                      work.pricing.length === 0
+                        ? null
+                        : work.pricing.length === 1
+                          ? formatSizeLabelForDisplay(work.pricing[0].label)
+                          : `${work.pricing.length} sizes`;
+                    const subtitleParts = [work.medium, sizesText].filter(
+                      (p): p is string => Boolean(p),
+                    );
+                    if (subtitleParts.length === 0) return null;
+                    return (
+                      <p className="text-xs text-muted line-clamp-1">
+                        {subtitleParts.join(" · ")}
+                      </p>
+                    );
+                  })()}
+                  {work.priceBand && (
+                    <p className="text-xs text-foreground/80 mt-0.5">
+                      {work.priceBand}
+                    </p>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -1021,6 +1059,15 @@ export default function ArtistProfileClient({
                     const data = new FormData(form);
                     const senderName = (data.get("senderName") as string) || authDisplayName || "Anonymous";
                     try {
+                      // The enquiry type used to live as a [bracket]
+                      // tag at the start of the content, which then
+                      // surfaced in inbox previews ("[venue_looking] Re:
+                      // Last Light o…"). The tag is for internal
+                      // routing only, the artist shouldn't see the raw
+                      // enum value. Now we tuck the type into metadata
+                      // so the messaging UI can read it without
+                      // contaminating the human-readable content.
+                      const enquiryType = (data.get("enquiryType") as string) || "general";
                       await authFetch("/api/messages", {
                         method: "POST",
                         body: JSON.stringify({
@@ -1028,7 +1075,8 @@ export default function ArtistProfileClient({
                           senderName,
                           senderType: userType || "anonymous",
                           recipientSlug: artistSlug,
-                          content: `[${data.get("enquiryType")}] ${currentWork ? `Re: ${currentWork.title}, ` : ""}${data.get("message")}`,
+                          content: `${currentWork ? `Re: ${currentWork.title}\n\n` : ""}${data.get("message")}`,
+                          metadata: { enquiryType },
                         }),
                       });
                       // Also save to enquiries table for backward compatibility

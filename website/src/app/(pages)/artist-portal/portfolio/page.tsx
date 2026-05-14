@@ -1314,10 +1314,23 @@ export default function PortfolioPage() {
     // `seed` lets the Duplicate flow preload everything except the
     // title + image, those should be unique per work so the artist
     // doesn't accidentally publish two artworks with the same headline.
+    //
+    // shippingPrice inherits the account-level default when no per-
+    // size shipping is on. QA flagged the new-work form ignoring the
+    // artist's saved default (e.g. £9.95), leaving the field empty so
+    // new works didn't pick up the account-level setting. Pre-fill so
+    // "default" actually means default for new works too.
+    const seededShipping =
+      seed?.shippingPrice !== undefined
+        ? seed.shippingPrice
+        : defaultShipping && defaultShipping.trim()
+          ? defaultShipping
+          : "";
     const fresh: WorkFormState = {
       ...emptyWork,
       sizes: [...defaultSizes],
       ...seed,
+      shippingPrice: seededShipping,
       title: "",
       imagePreview: "",
       additionalImages: [],
@@ -1768,7 +1781,15 @@ export default function PortfolioPage() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <span className="text-xs text-muted">{works.length}/{limit} works</span>
+                {/* Pro tier is effectively unlimited (limit = 9999),
+                    which surfaced as "15/9999 works" in QA, looking
+                    like an arbitrary 4-digit cap. Drop the denominator
+                    on tiers that don't have a meaningful ceiling and
+                    just show the live count, the upgrade message
+                    branch above continues to handle Core/Premium. */}
+                <span className="text-xs text-muted">
+                  {limit >= 1000 ? `${works.length} works` : `${works.length}/${limit} works`}
+                </span>
                 <button onClick={() => openAdd()} className="px-4 py-1.5 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors">
                   + Add New Work
                 </button>
@@ -1844,26 +1865,43 @@ export default function PortfolioPage() {
 
         {/* Save all shipping settings */}
         <div className="border-t border-border pt-4">
-          <button
-            onClick={async () => {
-              setSavingDefault(true);
-              const ukVal = defaultShipping.trim() ? parseFloat(defaultShipping) : null;
-              const intlVal = internationalShipping.trim() ? parseFloat(internationalShipping) : null;
-              await authFetch("/api/artist-profile", {
-                method: "PUT",
-                body: JSON.stringify({
-                  default_shipping_price: ukVal,
-                  ships_internationally: shipsInternationally,
-                  international_shipping_price: intlVal,
-                }),
-              }).catch(() => {});
-              setSavingDefault(false);
-            }}
-            disabled={savingDefault}
-            className="px-4 py-2 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-50"
-          >
-            {savingDefault ? "Saving..." : "Save Shipping Settings"}
-          </button>
+          {(() => {
+            // Inline guard, surfaces what the save handler will reject
+            // so the artist sees the problem before clicking Save.
+            const ukVal = defaultShipping.trim() ? parseFloat(defaultShipping) : null;
+            const intlVal = internationalShipping.trim() ? parseFloat(internationalShipping) : null;
+            const ukInvalid = ukVal !== null && (!Number.isFinite(ukVal) || ukVal < 0);
+            const intlInvalid = intlVal !== null && (!Number.isFinite(intlVal) || intlVal < 0);
+            const hasError = ukInvalid || intlInvalid;
+            return (
+              <>
+                {hasError && (
+                  <p className="text-xs text-red-600 mb-2">
+                    Shipping prices must be zero or greater. Leave blank to use the system default.
+                  </p>
+                )}
+                <button
+                  onClick={async () => {
+                    if (hasError) return;
+                    setSavingDefault(true);
+                    await authFetch("/api/artist-profile", {
+                      method: "PUT",
+                      body: JSON.stringify({
+                        default_shipping_price: ukVal,
+                        ships_internationally: shipsInternationally,
+                        international_shipping_price: intlVal,
+                      }),
+                    }).catch(() => {});
+                    setSavingDefault(false);
+                  }}
+                  disabled={savingDefault || hasError}
+                  className="px-4 py-2 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingDefault ? "Saving..." : "Save Shipping Settings"}
+                </button>
+              </>
+            );
+          })()}
         </div>
       </div>
       )}
@@ -2368,10 +2406,12 @@ export default function PortfolioPage() {
                               <span className="text-xs text-muted">£</span>
                               <input
                                 type="number"
-                                min={0}
+                                min={0.01}
+                                step="0.01"
+                                required
                                 value={size.price || ""}
                                 onChange={(e) => updateSize(i, "price", Number(e.target.value) || 0)}
-                                placeholder="0"
+                                placeholder="Price"
                                 className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                               />
                             </div>
@@ -2495,12 +2535,14 @@ export default function PortfolioPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-2 mt-2">
                         <label className="flex flex-col gap-1">
-                          <span className="text-[10px] text-muted uppercase tracking-wider">Price</span>
+                          <span className="text-[10px] text-muted uppercase tracking-wider">Price <span className="text-accent">*</span></span>
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-muted">£</span>
                             <input
                               type="number"
-                              min={0}
+                              min={0.01}
+                              step="0.01"
+                              required
                               value={size.price || ""}
                               onChange={(e) => updateSize(i, "price", Number(e.target.value) || 0)}
                               placeholder="Price"
@@ -3095,10 +3137,12 @@ export default function PortfolioPage() {
                   </div>
                 );
               })}
-              {/* In-grid "+ Add new work" tile so the artist doesn't
+              {/* In-grid "+ Add New Work" tile so the artist doesn't
                   have to scroll to the top to add another. Hidden in
                   select-mode where the focus is on the existing
-                  selection. */}
+                  selection. Capitalisation matches the top-of-page
+                  primary button + the form header so the two add
+                  affordances read as the same action. */}
               {!selectMode && (
                 <button
                   type="button"
@@ -3106,7 +3150,7 @@ export default function PortfolioPage() {
                   className="aspect-square flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-sm text-muted hover:border-accent hover:text-accent hover:bg-accent/5 transition-colors"
                 >
                   <span className="text-2xl leading-none">+</span>
-                  <span className="text-xs font-medium">Add new work</span>
+                  <span className="text-xs font-medium">Add New Work</span>
                 </button>
               )}
             </div>

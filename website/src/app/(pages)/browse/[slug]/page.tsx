@@ -66,18 +66,23 @@ export async function generateMetadata({
       }
     }
 
+    // Match the suffix used on artwork detail pages so every public
+    // artist page reads "<Name> | Wallplace" in the tab title. The
+    // earlier title was just the bare name, which made the tab look
+    // like a stray browser bookmark instead of a Wallplace page.
+    const tabTitle = `${safeName} | Wallplace`;
     return {
-      title: safeName,
+      title: tabTitle,
       description: safeBio,
       openGraph: {
-        title: `${safeName} | Wallplace`,
+        title: tabTitle,
         description: safeBio,
         images: ogImage ? [ogImage] : [],
         type: "profile",
       },
       twitter: {
         card: "summary",
-        title: `${safeName} | Wallplace`,
+        title: tabTitle,
         description: safeBio,
       },
     };
@@ -86,7 +91,7 @@ export async function generateMetadata({
       "[browse/[slug] metadata] crashed:",
       err instanceof Error ? err.message : String(err),
     );
-    return { title: "Artist" };
+    return { title: "Artist | Wallplace" };
   }
 }
 
@@ -247,7 +252,7 @@ export default async function ArtistProfilePage({
                     href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors mt-1.5"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground hover:underline transition-colors mt-1.5"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
                     {artist.instagram}
@@ -426,7 +431,7 @@ export default async function ArtistProfilePage({
                       href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground hover:underline transition-colors"
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
                       {artist.instagram}

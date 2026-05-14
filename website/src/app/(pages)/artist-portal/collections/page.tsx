@@ -91,6 +91,40 @@ export default function CollectionsPage() {
   const handleSave = useCallback(async () => {
     if (!artist || !form.name || form.workIds.length < 2 || !form.bundlePrice) return;
 
+    const bundleNum = parseFloat(form.bundlePrice);
+    if (!Number.isFinite(bundleNum) || bundleNum <= 0) {
+      setFormError("Bundle price must be a positive number.");
+      return;
+    }
+
+    // A collection priced higher than the sum of its parts gives the
+    // buyer no reason to bundle. QA flagged a "Landscapes" collection
+    // saved at £300 against £180 of individual works. The form already
+    // warns inline, but nothing blocked publish. Require the artist to
+    // explicitly confirm before sending an overpriced bundle live.
+    const individualTotal = form.workIds.reduce((sum, wid) => {
+      const work = artist.works.find((w) => w.id === wid);
+      if (!work) return sum;
+      const sizeLabel = form.workSizes[wid] || work.pricing?.[0]?.label;
+      const sizeEntry = work.pricing?.find((p) => p.label === sizeLabel) || work.pricing?.[0];
+      const sizePrice = typeof sizeEntry?.price === "number" ? sizeEntry.price : 0;
+      return sum + sizePrice;
+    }, 0);
+    if (individualTotal > 0 && bundleNum > individualTotal) {
+      const overBy = (bundleNum - individualTotal).toFixed(0);
+      const ok = typeof window !== "undefined"
+        ? window.confirm(
+            `This bundle is £${overBy} more than buying the works individually. Publish anyway?`,
+          )
+        : false;
+      if (!ok) {
+        setFormError(
+          `Bundle price is £${overBy} more than the sum of its works. Lower the bundle price, or confirm publish to override.`,
+        );
+        return;
+      }
+    }
+
     // Convert workSizes record -> array. For works with no explicit choice,
     // fall back to the first pricing entry (if any).
     const workSizesArr: { workId: string; sizeLabel: string }[] = [];

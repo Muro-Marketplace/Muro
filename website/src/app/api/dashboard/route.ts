@@ -56,16 +56,41 @@ export async function GET(request: Request) {
         .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime())
         .slice(0, 5);
 
+      // Dashboard counts must exclude rows the artist has archived,
+      // otherwise the dashboard ("26 Active Placements") and the
+      // placements page ("Active 0") tell two different stories. QA
+      // flagged that the dashboard happily counts hidden_for_artist
+      // rows while the placements page filters them out.
+      const visiblePlacements = placements.filter(
+        (p) => (p as { hidden_for_artist?: boolean }).hidden_for_artist !== true,
+      );
+
+      // Total revenue uses the artist's payout (artist_revenue), not
+      // the buyer-side total, so the dashboard number matches what
+      // the artist actually receives and what the per-order revenue
+      // breakdown shows. The previous `o.total` summed the gross
+      // (buyer-paid) figure which didn't reconcile with the per-row
+      // payouts on the Orders page.
+      const totalRevenue = orders.reduce((sum, o) => {
+        const payout =
+          typeof (o as { artist_revenue?: number | null }).artist_revenue === "number"
+            ? (o as { artist_revenue?: number | null }).artist_revenue!
+            : typeof (o as { total?: number | null }).total === "number"
+              ? (o as { total: number }).total
+              : 0;
+        return sum + (Number.isFinite(payout) ? payout : 0);
+      }, 0);
+
       return NextResponse.json({
         userType: "artist",
         profile: artistProfile,
-        placements,
+        placements: visiblePlacements,
         orders,
         conversations,
         worksCount: worksCountRes.count ?? 0,
         stats: {
-          activePlacements: placements.filter((p) => p.status === "active").length,
-          totalRevenue: orders.reduce((sum, o) => sum + (o.total || 0), 0),
+          activePlacements: visiblePlacements.filter((p) => p.status === "active").length,
+          totalRevenue,
           enquiries: artistProfile.total_enquiries || 0,
           views: artistProfile.total_views || 0,
         },

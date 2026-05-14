@@ -81,6 +81,13 @@ const nextConfig: NextConfig = {
       // bookmarks from the page title) reasonably guess the URL
       // /venue-portal/qr-labels. Redirect it so the guess works.
       { source: "/venue-portal/qr-labels", destination: "/venue-portal/labels", permanent: true },
+      // Same affordance for the artist portal: sidebar label is "QR
+      // Labels" but the route is /artist-portal/labels. Catch the
+      // obvious guess so the URL isn't a dead-end.
+      { source: "/artist-portal/qr-labels", destination: "/artist-portal/labels", permanent: true },
+      // And "Social Posts" in the sidebar lives at /artist-portal/posts.
+      // Catch the /social guess for the same reason.
+      { source: "/artist-portal/social", destination: "/artist-portal/posts", permanent: true },
     ];
   },
 };

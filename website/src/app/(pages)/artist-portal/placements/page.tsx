@@ -237,6 +237,21 @@ export default function PlacementsPage() {
   const [venues, setVenues] = useState<InteractedVenue[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(false);
 
+  // Stable per-status counts. Computed from a single "all engaged" fetch
+  // so the header and tab badges don't change as the user clicks
+  // between tabs. QA flagged the active counter showing 0, then 18,
+  // then 4 across the All → Archived → Pending sequence: the badges
+  // were reading off whatever subset was currently in `placements`,
+  // which is the wrong source. nonArchivedCounts is hydrated once
+  // (and refreshed on mutations), and the badges read from it.
+  const [nonArchivedCounts, setNonArchivedCounts] = useState<{
+    all: number;
+    pending: number;
+    active: number;
+    completed: number;
+    initialised: boolean;
+  }>({ all: 0, pending: 0, active: 0, completed: 0, initialised: false });
+
   // Fire-and-forget archived count, keeps the Archived tab badge
   // live whether the user is on that tab or not.
   const loadArchivedCount = React.useCallback(async () => {
@@ -246,6 +261,38 @@ export default function PlacementsPage() {
       const data = await res.json();
       setArchivedCount(Array.isArray(data?.placements) ? data.placements.length : 0);
     } catch { /* badge falls back to 0 */ }
+  }, [artist]);
+
+  // Independent count fetch for the non-archived tabs. Mirrors
+  // loadArchivedCount so we have a stable source of truth for tab
+  // badges regardless of which tab is currently displayed.
+  const loadNonArchivedCounts = React.useCallback(async () => {
+    if (!artist) return;
+    try {
+      const res = await authFetch("/api/placements?engaged=true");
+      const data = await res.json();
+      const rows: Array<{ status?: string }> = Array.isArray(data?.placements)
+        ? data.placements
+        : [];
+      let pending = 0,
+        active = 0,
+        completed = 0;
+      for (const r of rows) {
+        const s = sharedNormaliseStatus((r.status as string) || "active");
+        if (s === "Pending") pending += 1;
+        else if (s === "Active") active += 1;
+        else if (s === "Completed" || s === "Sold") completed += 1;
+      }
+      setNonArchivedCounts({
+        all: rows.length,
+        pending,
+        active,
+        completed,
+        initialised: true,
+      });
+    } catch {
+      setNonArchivedCounts((c) => ({ ...c, initialised: true }));
+    }
   }, [artist]);
 
   // Load placements. Exposed via useCallback so callers (e.g. counter
@@ -343,7 +390,8 @@ export default function PlacementsPage() {
     if (!artist || initialised) return;
     loadPlacements();
     loadArchivedCount();
-  }, [artist, initialised, loadPlacements, loadArchivedCount]);
+    loadNonArchivedCounts();
+  }, [artist, initialised, loadPlacements, loadArchivedCount, loadNonArchivedCounts]);
 
   // Re-fetch when the user toggles the Archived filter.
   useEffect(() => {
@@ -352,11 +400,19 @@ export default function PlacementsPage() {
   }, [showArchived, artist, initialised, loadPlacements]);
 
   // Refresh when an accept / counter / advance fires anywhere else.
+  // Also refresh the count summaries so the badges follow the
+  // latest state. Without this an archive / unarchive action would
+  // leave the tab badges stale until the next page load.
   useEffect(() => {
-    const handler = () => { if (artist) loadPlacements(); };
+    const handler = () => {
+      if (!artist) return;
+      loadPlacements();
+      loadArchivedCount();
+      loadNonArchivedCounts();
+    };
     window.addEventListener("wallplace:placement-changed", handler);
     return () => window.removeEventListener("wallplace:placement-changed", handler);
-  }, [artist, loadPlacements]);
+  }, [artist, loadPlacements, loadArchivedCount, loadNonArchivedCounts]);
 
   async function respond(id: string, accept: boolean) {
     setResponding(id);
@@ -715,8 +771,16 @@ export default function PlacementsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl lg:text-3xl">Placements</h1>
         <div className="flex items-center gap-3">
+          {/* Header count reads from the stable nonArchivedCounts
+              fetch, not from `placements` which only holds whichever
+              tab is currently shown. Without this the badge swung
+              between 0 and 18 and 4 as the user clicked tabs. Render
+              a non-breaking space while loading so the layout doesn't
+              jump on first hydration. */}
           <span className="text-sm text-muted">
-            {placements.filter((p) => p.status === "Active").length} active
+            {nonArchivedCounts.initialised
+              ? `${nonArchivedCounts.active} active`
+              : " "}
           </span>
           <Link
             href="/artist-portal/labels"
@@ -1058,22 +1122,28 @@ export default function PlacementsPage() {
           don't break Completed / Archived onto a second row. */}
       <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 flex-nowrap">
         {tabs.map((tab) => {
-          // Archived count comes from the separate fetch so the badge
-          // stays accurate on every tab. Other tabs derive from the
-          // currently-loaded placements; when viewing the archive
-          // those counts hide (placements only holds archived rows).
-          const onArchivedTab = activeTab === "Archived";
+          // All tab badges read from independent count fetches
+          // (nonArchivedCounts + archivedCount) so they stay stable
+          // regardless of which tab the user is currently viewing.
+          // Earlier the All/Pending/Active/Completed badges read off
+          // whatever was loaded in `placements`, which is the wrong
+          // source whenever the user lands on Archived (placements
+          // then holds only the archived rows).
           let count: number | null;
           if (tab === "Archived") {
             count = archivedCount;
-          } else if (onArchivedTab) {
+          } else if (!nonArchivedCounts.initialised) {
             count = null;
           } else if (tab === "All") {
-            count = placements.length;
+            count = nonArchivedCounts.all;
+          } else if (tab === "Pending") {
+            count = nonArchivedCounts.pending;
+          } else if (tab === "Active") {
+            count = nonArchivedCounts.active;
           } else if (tab === "Completed") {
-            count = placements.filter((p) => p.status === "Completed" || p.status === "Sold").length;
+            count = nonArchivedCounts.completed;
           } else {
-            count = placements.filter((p) => p.status === tab).length;
+            count = null;
           }
           return (
             <button

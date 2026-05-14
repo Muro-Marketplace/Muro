@@ -123,10 +123,14 @@ export async function GET(request: NextRequest) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, counts]) => ({ date, ...counts }));
 
-  // Top works by views, enrich with titles
+  // Top works by views, enrich with titles. Drop rows whose work_id
+  // no longer resolves to a live artist_works row (deleted works
+  // still own legacy view events). QA flagged the list showing raw
+  // slugs like "fin-coles-1775872509197", which the artist has no
+  // way to identify.
   const topWorkIds = Object.entries(workViewCounts)
     .sort(([, a], [, b]) => b - a)
-    .slice(0, 10);
+    .slice(0, 20); // pull more so the post-filter still shows 10
 
   let workTitleMap: Record<string, string> = {};
   if (topWorkIds.length > 0) {
@@ -140,11 +144,32 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const top_works = topWorkIds.map(([work_id, views]) => ({
-    work_id,
-    title: workTitleMap[work_id] || work_id,
-    views,
-  }));
+  // Two works can legitimately share a title (the artist duplicated
+  // a row and never cleaned up). Showing the same title twice with
+  // different view counts is confusing, so we aggregate by lowercase
+  // title and keep the work_id of the most-viewed copy for the link
+  // target. The sum of views is what the artist actually wants to
+  // see for that title.
+  const byTitle: Record<string, { work_id: string; title: string; views: number }> = {};
+  for (const [work_id, views] of topWorkIds) {
+    const title = workTitleMap[work_id];
+    if (!title) continue; // skip unresolved (deleted) work rows
+    const key = title.trim().toLowerCase();
+    const existing = byTitle[key];
+    if (!existing || existing.views < views) {
+      byTitle[key] = {
+        work_id,
+        title,
+        views: (existing?.views || 0) + views,
+      };
+    } else {
+      existing.views += views;
+    }
+  }
+
+  const top_works = Object.values(byTitle)
+    .sort((a, b) => b.views - a.views)
+    .slice(0, 10);
 
   // Traffic sources
   const traffic_sources = Object.entries(sourceCounts)

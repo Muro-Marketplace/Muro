@@ -5,6 +5,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import { authFetch } from "@/lib/api-client";
 
 interface RequestRow {
   id: string;
@@ -29,7 +30,13 @@ export default function ArtistArtworkRequestsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/artwork-requests?status=open");
+      // authFetch attaches the Supabase bearer token so the API can
+      // resolve the artist's slug and include any private requests
+      // they've been invited to. The plain fetch() variant didn't
+      // forward the token, so artists never saw their private
+      // invitations and the inbox always read as "No open requests"
+      // for accounts the venue had hand-picked.
+      const res = await authFetch("/api/artwork-requests?status=open");
       const data = await res.json();
       setRows(data.requests || []);
     } catch {
