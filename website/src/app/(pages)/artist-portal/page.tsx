@@ -153,9 +153,45 @@ export default function ArtistPortalPage() {
       // Build activity from dashboard data
       const activityItems: ActivityItem[] = [];
       const conversations = data.conversations || [];
+      const orders = data.orders || [];
 
       const mySlug = profile.slug || "";
       const myUserId = profile.user_id || "";
+
+      // Sales activity. The dashboard API returns the artist's full
+      // orders list but the feed below was only reading placements +
+      // conversations, so a sale never appeared as recent activity even
+      // though the order was in the DB. Surface it here so the feed
+      // matches the email + bell notification fired by the webhook.
+      type DashboardOrder = {
+        id?: string;
+        created_at?: string;
+        paid_at?: string;
+        artist_revenue?: number | null;
+        total?: number | null;
+        items?: Array<{ title?: string }>;
+        status?: string;
+      };
+      for (const o of (orders as DashboardOrder[]).slice(0, 10)) {
+        const time = o.paid_at || o.created_at;
+        if (!time) continue;
+        const firstTitle = o.items?.[0]?.title || "Artwork";
+        const payout =
+          typeof o.artist_revenue === "number" && Number.isFinite(o.artist_revenue)
+            ? o.artist_revenue
+            : typeof o.total === "number" && Number.isFinite(o.total)
+              ? o.total
+              : 0;
+        activityItems.push({
+          id: "o-" + (o.id || time),
+          text: `Sale: ${firstTitle}, £${payout.toFixed(2)} to you${o.id ? ` (${o.id})` : ""}`,
+          time: formatRelativeTime(time),
+          sortTime: new Date(time).getTime(),
+          type: "sale",
+          link: o.id ? `/artist-portal/orders?id=${encodeURIComponent(o.id)}` : "/artist-portal/orders",
+        });
+      }
+
       for (const p of placements.slice(0, 10)) {
         const time = p.responded_at || p.created_at;
         const venueName = formatName(p.venue);

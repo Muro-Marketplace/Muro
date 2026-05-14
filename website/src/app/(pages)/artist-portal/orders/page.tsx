@@ -255,15 +255,45 @@ export default function ArtistOrdersPage() {
             </div>
           )}
 
-          {/* Items */}
+          {/* Items. The webhook overwrites orders.items with an
+              enriched shape (`quantity`, `lineTotal: {amount,currency}`)
+              once the receipt email is built; legacy rows persisted
+              before that overwrite still carry the cart shape (`qty`,
+              `price`). Read both so the breakdown never renders £NaN
+              on either generation. */}
           <div className="mt-6 space-y-2">
             <p className="text-xs text-muted uppercase tracking-wider">Items</p>
-            {(selected.items || []).map((item: { title: string; qty: number; price: number }, i: number) => (
-              <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
-                <span>{item.title} &times; {item.qty}</span>
-                <span className="font-medium">&pound;{(item.price * item.qty).toFixed(2)}</span>
-              </div>
-            ))}
+            {(selected.items || []).map(
+              (
+                item: {
+                  title?: string;
+                  qty?: number;
+                  quantity?: number;
+                  price?: number;
+                  lineTotal?: { amount?: number; currency?: string };
+                },
+                i: number,
+              ) => {
+                const qty = Number(item.quantity ?? item.qty ?? 1);
+                // Prefer lineTotal.amount (pence) when present; fall
+                // back to price * qty (pounds) for legacy rows.
+                const lineTotalPounds = (() => {
+                  const amt = item.lineTotal?.amount;
+                  if (typeof amt === "number" && Number.isFinite(amt)) return amt / 100;
+                  const price = Number(item.price);
+                  if (Number.isFinite(price) && Number.isFinite(qty)) return price * qty;
+                  return 0;
+                })();
+                return (
+                  <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
+                    <span>
+                      {item.title || "Artwork"} &times; {qty}
+                    </span>
+                    <span className="font-medium">&pound;{lineTotalPounds.toFixed(2)}</span>
+                  </div>
+                );
+              },
+            )}
           </div>
 
           {/* Revenue breakdown */}
