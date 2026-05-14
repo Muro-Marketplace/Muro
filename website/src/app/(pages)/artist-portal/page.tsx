@@ -154,9 +154,41 @@ export default function ArtistPortalPage() {
       const activityItems: ActivityItem[] = [];
       const conversations = data.conversations || [];
       const orders = data.orders || [];
+      const refundRequests = data.refundRequests || [];
 
       const mySlug = profile.slug || "";
       const myUserId = profile.user_id || "";
+
+      // Refund requests. Each pending request is an action item the
+      // artist needs to deal with, and the previous feed never surfaced
+      // them. Sorted with the most recent first below, alongside sales
+      // and placements.
+      type DashRefund = {
+        id?: string;
+        order_id?: string;
+        status?: string;
+        type?: string;
+        amount?: number | string;
+        reason?: string;
+        requester_type?: string;
+        created_at?: string;
+      };
+      for (const r of (refundRequests as DashRefund[]).slice(0, 10)) {
+        if (!r.created_at || r.requester_type === "artist") continue;
+        const amt = Number(r.amount);
+        const amtLabel = Number.isFinite(amt) ? `£${amt.toFixed(2)}` : "";
+        const text = r.status === "pending"
+          ? `Refund requested${amtLabel ? `, ${amtLabel}` : ""}${r.order_id ? ` on ${r.order_id}` : ""}`
+          : `Refund ${r.status}${amtLabel ? `, ${amtLabel}` : ""}${r.order_id ? ` on ${r.order_id}` : ""}`;
+        activityItems.push({
+          id: "r-" + (r.id || r.order_id || r.created_at),
+          text,
+          time: formatRelativeTime(r.created_at),
+          sortTime: new Date(r.created_at).getTime(),
+          type: "enquiry",
+          link: r.order_id ? `/artist-portal/orders?id=${encodeURIComponent(r.order_id)}` : "/artist-portal/orders",
+        });
+      }
 
       // Sales activity. The dashboard API returns the artist's full
       // orders list but the feed below was only reading placements +

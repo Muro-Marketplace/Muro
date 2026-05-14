@@ -28,6 +28,12 @@ interface Order {
   tracking_number?: string;
   venue_slug?: string;
   source?: string;
+  // "ship" (default) or "collection" — set by the checkout flow. When
+  // collection, the buyer's proposed pickup window is folded into
+  // collection_notes and we render it prominently with a CTA to email
+  // the buyer back so they can agree on a final time.
+  fulfilment_method?: "ship" | "collection";
+  collection_notes?: string | null;
   created_at: string;
 }
 
@@ -334,13 +340,65 @@ export default function ArtistOrdersPage() {
             </p>
           </div>
 
-          {/* Shipping */}
-          <div className="mt-5">
-            <p className="text-xs text-muted uppercase tracking-wider mb-2">Ship to</p>
-            <p className="text-sm font-medium">{selected.shipping?.fullName}</p>
-            <p className="text-sm text-muted">{selected.shipping?.addressLine1}{selected.shipping?.addressLine2 ? `, ${selected.shipping.addressLine2}` : ""}</p>
-            <p className="text-sm text-muted">{selected.shipping?.city}, {selected.shipping?.postcode}</p>
-          </div>
+          {/* Collection details. For "Collect from artist" orders the
+              buyer proposes a date + time window at checkout. Render
+              both prominently with the buyer's contact details and a
+              one-click mailto so the artist can confirm or counter-
+              propose without leaving the page. The email subject and
+              body are prefilled with the order context so the reply
+              thread reads sensibly in both inboxes. */}
+          {selected.fulfilment_method === "collection" ? (
+            <div className="mt-5 p-4 bg-[#FAF8F5] border border-border rounded-sm">
+              <p className="text-xs text-muted uppercase tracking-wider mb-2">
+                Pickup proposed by buyer
+              </p>
+              {selected.collection_notes ? (
+                <p className="text-sm text-foreground whitespace-pre-wrap mb-3">
+                  {selected.collection_notes}
+                </p>
+              ) : (
+                <p className="text-sm text-muted mb-3">
+                  No specific time given. Reach out to the buyer to agree on a pickup window.
+                </p>
+              )}
+              <div className="border-t border-border pt-3 space-y-1">
+                <p className="text-xs text-muted uppercase tracking-wider mb-1">Buyer contact</p>
+                <p className="text-sm font-medium">{selected.shipping?.fullName}</p>
+                {selected.shipping?.email && (
+                  <p className="text-sm text-muted">{selected.shipping.email}</p>
+                )}
+                {selected.shipping?.phone && (
+                  <p className="text-sm text-muted">{selected.shipping.phone}</p>
+                )}
+              </div>
+              {selected.shipping?.email && (
+                <a
+                  href={(() => {
+                    const subject = `Pickup for order ${selected.id}`;
+                    const body =
+                      `Hi ${(selected.shipping?.fullName || "").split(" ")[0] || "there"},\n\n` +
+                      `Thanks for ordering ${selected.items?.[0]?.title || "your artwork"} (${selected.id}).\n\n` +
+                      (selected.collection_notes
+                        ? `You suggested:\n${selected.collection_notes}\n\n`
+                        : "") +
+                      `Let me know if this still works, or propose a different time and I'll confirm.\n\n` +
+                      `Best,\n`;
+                    return `mailto:${encodeURIComponent(selected.shipping.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                  })()}
+                  className="inline-block mt-3 px-3 py-2 text-sm font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
+                >
+                  Email buyer to confirm pickup
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="mt-5">
+              <p className="text-xs text-muted uppercase tracking-wider mb-2">Ship to</p>
+              <p className="text-sm font-medium">{selected.shipping?.fullName}</p>
+              <p className="text-sm text-muted">{selected.shipping?.addressLine1}{selected.shipping?.addressLine2 ? `, ${selected.shipping.addressLine2}` : ""}</p>
+              <p className="text-sm text-muted">{selected.shipping?.city}, {selected.shipping?.postcode}</p>
+            </div>
+          )}
 
           {/* Refund management */}
           {(() => {
