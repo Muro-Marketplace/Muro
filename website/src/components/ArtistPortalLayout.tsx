@@ -39,6 +39,30 @@ const secondaryItems = [
   { label: "Settings", href: "/artist-portal/settings" },
 ];
 
+// All navigable artist-portal pages: used for the document.title sync
+// below so every page reads as "<Section> | Artist Portal | Wallplace"
+// instead of inheriting the default "Wallplace | Curated Art for
+// Commercial Spaces". Includes the dynamic sub-routes (showroom/[id],
+// orders/[id]) by suffix, since those pages reuse this layout with the
+// parent activePath.
+const allNav = [...navItems, ...secondaryItems];
+
+function titleFor(activePath: string): string {
+  // Strip query strings / trailing slashes before matching.
+  const cleanPath = activePath.replace(/[?#].*$/, "").replace(/\/$/, "") || "/";
+  // Exact match first.
+  const exact = allNav.find((n) => n.href === cleanPath);
+  if (exact) return exact.label;
+  // Sub-route match: longest matching prefix wins ("/artist-portal/orders/123"
+  // → "Orders").
+  const sorted = [...allNav].sort((a, b) => b.href.length - a.href.length);
+  const prefix = sorted.find(
+    (n) => n.href !== "/artist-portal" && cleanPath.startsWith(`${n.href}/`),
+  );
+  if (prefix) return prefix.label;
+  return "Artist Portal";
+}
+
 interface ArtistPortalLayoutProps {
   children: React.ReactNode;
   activePath: string;
@@ -52,6 +76,17 @@ export default function ArtistPortalLayout({
   const { user, loading, userType, displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  // Sync the tab title to the current portal page. The parent route's
+  // metadata template is a server-rendered concept, but every portal
+  // page is a client component, so we patch document.title from here.
+  // QA flagged every portal page reading the same generic site title,
+  // which made the bookmark/tab story useless for portal users.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const section = titleFor(activePath);
+    document.title = `${section} | Artist Portal | Wallplace`;
+  }, [activePath]);
 
   useEffect(() => {
     if (!loading && (!user || userType !== "artist")) {

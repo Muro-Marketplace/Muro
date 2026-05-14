@@ -27,8 +27,11 @@ const PIXEL_HINT = /\bpx\b|pixels?\b/i;
 const PHYSICAL_HINT = /\b(cm|mm|m|in|inch|inches|ft|feet|A\d|B\d)\b/i;
 // Pure "NNNN × NNNN" with both values typical of image-pixel size
 // (>= 100 on both sides, no physical unit anywhere). Catches values
-// like "2420 × 3632" with no suffix.
-const RAW_PIXEL_PAIR = /^\s*(\d{3,5})\s*[x×]\s*(\d{3,5})\s*$/i;
+// like "2420 × 3632" with no suffix. Loosened to permit "*" and
+// decimal suffixes since some legacy rows store fractional pixel
+// counts (e.g. "5141.0 × 3427.0") and would otherwise miss the
+// detector here.
+const RAW_PIXEL_PAIR = /^\s*(\d{3,6})(?:\.\d+)?\s*[x×*]\s*(\d{3,6})(?:\.\d+)?\s*$/i;
 
 // Anything bigger than this on a single side is almost certainly a
 // data error: most prints, paintings, and photographs that venues
@@ -58,6 +61,22 @@ export function displayPhysicalDimensions(
   // image resolution. Drop straight to the fallback.
   if (PIXEL_HINT.test(trimmed) || RAW_PIXEL_PAIR.test(trimmed)) {
     return FALLBACK_DIMENSIONS || null;
+  }
+
+  // Numeric-pair guard: any "<a> × <b>" with both values north of
+  // 1000 is pixel data even without the "px" marker. parseDimensions
+  // happily reinterprets such pairs as millimetres (any value > 300
+  // triggers the mm fallback), which would yield a 343 × 514 cm
+  // "print" for a 5141 × 3427 px image. Stop that here.
+  const numericPair = trimmed.match(
+    /^\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*$/i,
+  );
+  if (numericPair) {
+    const a = parseFloat(numericPair[1]);
+    const b = parseFloat(numericPair[2]);
+    if (Number.isFinite(a) && Number.isFinite(b) && a > 1000 && b > 1000) {
+      return FALLBACK_DIMENSIONS || null;
+    }
   }
 
   // Try to parse the value as a real physical size. parseDimensions

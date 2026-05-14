@@ -616,6 +616,20 @@ export default function ProfileEditorPage() {
   async function handleSave() {
     if (!profile) return;
 
+    // Postcode is freeform but flagged in the label as "used for
+    // distance search". Garbage values silently never match anything,
+    // catch them before they hit the geocode round-trip.
+    const postcodeRaw = profile.postcode.trim();
+    if (
+      postcodeRaw &&
+      !/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(postcodeRaw)
+    ) {
+      alert(
+        "Postcode doesn't look like a valid UK postcode (e.g. SW1A 1AA). Fix it or leave it blank.",
+      );
+      return;
+    }
+
     // Save to Supabase. upsertArtistProfile handles both "first save for
     // a freshly-claimed account" (no existing row yet) and "update
     // existing profile", so we don't need a separate path for new users.
@@ -821,7 +835,29 @@ export default function ProfileEditorPage() {
                   onChange={(e) => update("postcode", e.target.value.toUpperCase())}
                   placeholder="e.g. E8 1DY"
                   className={inputClass}
+                  aria-invalid={
+                    profile.postcode.trim().length > 0 &&
+                    !/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(
+                      profile.postcode.trim(),
+                    )
+                  }
                 />
+                {(() => {
+                  // Same regex the server uses, mirrored client-side so
+                  // the artist sees the problem before they hit Save and
+                  // the bad value never gets posted. Distance search
+                  // silently never matches anything when the postcode
+                  // can't geocode, so the validation is meaningful.
+                  const v = profile.postcode.trim();
+                  if (!v) return null;
+                  const valid = /^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(v);
+                  if (valid) return null;
+                  return (
+                    <p className="text-xs text-red-600 mt-1">
+                      Enter a valid UK postcode (e.g. SW1A 1AA), or leave blank.
+                    </p>
+                  );
+                })()}
               </div>
             </div>
             {/*

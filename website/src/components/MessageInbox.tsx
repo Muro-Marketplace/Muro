@@ -64,6 +64,19 @@ interface MessageInboxProps {
   works?: ArtistWork[];
 }
 
+/**
+ * Strip leading [enquiry_type] tags from a message preview. Legacy
+ * enquiry-form submissions stamped the type as a bracketed prefix
+ * (e.g. "[venue_looking] Re: Last Light"), which was meant for
+ * internal routing but ended up rendering in the inbox previews.
+ * Keep this on the display side so historical rows still read clean
+ * after the form started writing metadata instead of the prefix.
+ */
+function stripInternalTags(raw: string | null | undefined): string {
+  if (!raw) return "";
+  return raw.replace(/^\s*\[[a-z][a-z0-9_]*\]\s*/i, "");
+}
+
 function Avatar({ src, name, size = 36 }: { src?: string | null; name: string; size?: number }) {
   const initial = name?.charAt(0)?.toUpperCase() || "?";
   const cls = `rounded-full object-cover shrink-0`;
@@ -750,8 +763,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
               cut messages like "Sent a counter offer" at "Sent a counte"
               because the row width is fairly narrow. Allowing two lines
               gives the venue enough preview to recognise the message
-              without opening the thread. */}
-          <p className="text-xs text-muted mt-0.5 line-clamp-2 break-words">{conv.latestMessage}</p>
+              without opening the thread.
+
+              stripInternalTags removes the leading [enquiry_type] tag
+              that legacy enquiry messages stamped onto the content
+              (e.g. "[venue_looking] Re: Last Light"). The tag is an
+              internal routing field, not for the artist to read. */}
+          <p className="text-xs text-muted mt-0.5 line-clamp-2 break-words">{stripInternalTags(conv.latestMessage)}</p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <span className="text-[10px] text-muted">{timeAgo(conv.lastActivity)}</span>
@@ -1387,7 +1405,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           ))}
                         </div>
                       )}
-                      {msg.content && <p className="leading-relaxed">{msg.content}</p>}
+                      {msg.content && <p className="leading-relaxed">{stripInternalTags(msg.content)}</p>}
                       <p className={`text-[9px] mt-1 ${isMe ? "text-white/50" : "text-muted"} flex items-center gap-1`}>
                         {isPinned && (
                           <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z" /></svg>

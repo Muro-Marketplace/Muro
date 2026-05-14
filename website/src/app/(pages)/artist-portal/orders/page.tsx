@@ -11,6 +11,12 @@ interface Order {
   id: string;
   items: { title: string; qty: number; price: number }[];
   shipping: { fullName: string; email: string; phone: string; addressLine1: string; addressLine2?: string; city: string; postcode: string; country: string };
+  // Subtotal and shipping_cost expose the split that makes up `total`,
+  // so the revenue breakdown can show how the items-line and "Sale
+  // total" tie together. Optional because older order rows may not
+  // have these columns populated.
+  subtotal?: number;
+  shipping_cost?: number;
   total: number;
   artist_revenue: number;
   venue_revenue: number;
@@ -263,12 +269,39 @@ export default function ArtistOrdersPage() {
           {/* Revenue breakdown */}
           <div className="mt-5 p-4 bg-background rounded-sm border border-border space-y-2">
             <p className="text-xs text-muted uppercase tracking-wider mb-2">Revenue Breakdown</p>
+            {/* Items subtotal is the sum of the line items so the
+                breakdown reconciles cleanly with the Items rows above.
+                QA flagged that the breakdown jumped straight from the
+                items row (£69.99) to "Sale total £79.94" without
+                explaining the £9.95 shipping line, which is what makes
+                up the gap. */}
+            {typeof selected.subtotal === "number" && (
+              <div className="flex justify-between text-sm">
+                <span>Items subtotal</span>
+                <span className="font-medium">&pound;{selected.subtotal.toFixed(2)}</span>
+              </div>
+            )}
+            {typeof selected.shipping_cost === "number" && selected.shipping_cost > 0 && (
+              <div className="flex justify-between text-sm text-muted">
+                <span>Shipping</span>
+                <span>+&pound;{selected.shipping_cost.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm"><span>Sale total</span><span className="font-medium">&pound;{selected.total?.toFixed(2)}</span></div>
             {selected.venue_revenue > 0 && (
               <div className="flex justify-between text-sm text-muted"><span>Venue share ({selected.venue_revenue_share_percent}%)</span><span>-&pound;{selected.venue_revenue.toFixed(2)}</span></div>
             )}
             <div className="flex justify-between text-sm text-muted"><span>Platform fee ({selected.platform_fee_percent}%)</span><span>-&pound;{selected.platform_fee?.toFixed(2)}</span></div>
             <div className="flex justify-between text-sm font-medium pt-2 border-t border-border"><span>Your revenue</span><span className="text-accent">&pound;{selected.artist_revenue?.toFixed(2)}</span></div>
+            {/* Footnote: the fee % is whatever the artist's plan was
+                when the sale settled, NOT their current plan. QA
+                flagged a Pro artist seeing "Platform fee (15%)" on an
+                older order even though their billing page reads "5%
+                platform fee on sales", the two are both correct but
+                read as a contradiction without this note. */}
+            <p className="text-[10px] text-muted pt-2 border-t border-border">
+              Platform fee reflects your subscription plan at the time of sale. New sales use your current plan rate.
+            </p>
           </div>
 
           {/* Shipping */}

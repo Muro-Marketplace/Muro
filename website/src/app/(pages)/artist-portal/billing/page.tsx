@@ -23,13 +23,14 @@ const PLAN_DETAILS: Record<string, { name: string; priceMonthly: number; priceAn
 };
 
 function annualMonthlyEquivalent(priceAnnual: number): string {
-  // Floor-round so the equivalent never overstates the actual annual
-  // charge. \u00a3499.99/12 = \u00a341.6583 which toFixed rounds up to \u00a341.67
-  // (implies \u00a3500.04 over the year, 5p above what we actually bill).
-  // Floor keeps the per-month conservative and the implied annual \u2264
-  // priceAnnual.
-  const floored = Math.floor((priceAnnual / 12) * 100) / 100;
-  return `\u00a3${floored.toFixed(2)}/mo`;
+  // Display the monthly equivalent with a leading "~" so the reader
+  // doesn't read it as "12 \u00d7 this = exactly the yearly". QA flagged
+  // earlier rounding (\u00a341.66/mo \u00d7 12 = \u00a3499.92 instead of \u00a3499.99,
+  // a 7p drift on Pro). Standard rounding (Math.round) gives the
+  // closest 2dp value; the tilde flags it as an approximation and
+  // the actual annual price is shown right next to it on the card.
+  const rounded = Math.round((priceAnnual / 12) * 100) / 100;
+  return `~\u00a3${rounded.toFixed(2)}/mo`;
 }
 
 function annualSavingsPercent(priceMonthly: number, priceAnnual: number): number {

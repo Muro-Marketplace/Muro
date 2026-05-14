@@ -36,8 +36,11 @@ const MAX_REASONABLE_CM = 200;
 // Pixel-form detectors. Aligned with lib/dimensions.ts: any string
 // that explicitly mentions pixels, or a raw "1234 × 5678" pair with
 // no physical unit, is treated as image-resolution data and hidden.
+// We're permissive on what "looks like a pixel pair" so values like
+// "5141 × 3427" or "5141 x 3427" or "5141.0 × 3427.0" don't sneak
+// through and get reinterpreted as mm or inches by parseDimensions.
 const PIXEL_HINT = /\bpx\b|pixels?\b/i;
-const RAW_PIXEL_PAIR = /^\s*(\d{3,5})\s*[x×]\s*(\d{3,5})\s*$/i;
+const RAW_PIXEL_PAIR = /^\s*(\d{3,6})(?:\.\d+)?\s*[x×*]\s*(\d{3,6})(?:\.\d+)?\s*$/i;
 
 function inchesFromCm(cm: number): number {
   return Math.round(cm / CM_PER_INCH);
@@ -59,6 +62,24 @@ export function formatDimensionsForDisplay(raw: string | null | undefined): stri
   // browse and offer surfaces stay consistent.
   if (PIXEL_HINT.test(trimmed) || RAW_PIXEL_PAIR.test(trimmed)) {
     return "";
+  }
+
+  // Defensive numeric guard: any pair where BOTH values exceed
+  // ~250 (the largest plausible print dimension in any unit other
+  // than mm or pixels) is treated as pixel data even without an
+  // explicit "px" marker. This catches legacy rows that lost their
+  // unit suffix during a backfill and would otherwise reach
+  // parseDimensions, which guesses "mm" for values > 300 and
+  // produces a nonsensical 343×514 cm print.
+  const numericPair = trimmed.match(
+    /^\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*$/i,
+  );
+  if (numericPair) {
+    const a = parseFloat(numericPair[1]);
+    const b = parseFloat(numericPair[2]);
+    if (Number.isFinite(a) && Number.isFinite(b) && a > 1000 && b > 1000) {
+      return "";
+    }
   }
 
   const dims = parseDimensions(trimmed);
