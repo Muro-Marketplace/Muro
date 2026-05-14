@@ -29,16 +29,29 @@ export async function GET(request: Request) {
     if (artistProfile) {
       // Artist dashboard, fetch placements, orders, messages, works count in parallel
       const slug = artistProfile.slug;
-      const [placementsRes, ordersRes, messagesRes, worksCountRes] = await Promise.all([
+      const [placementsRes, ordersRes, messagesRes, worksCountRes, refundsRes] = await Promise.all([
         db.from("placements").select("*").eq("artist_user_id", userId).order("created_at", { ascending: false }),
         db.from("orders").select("*").eq("artist_slug", slug).order("created_at", { ascending: false }),
         db.from("messages").select("*").or(`recipient_slug.eq.${slug},sender_name.eq.${slug}`).order("created_at", { ascending: false }).limit(50),
         db.from("artist_works").select("id", { count: "exact", head: true }).eq("artist_id", artistProfile.id),
+        // Refund requests on this artist's orders. Fetched via a join
+        // through orders so we don't have to widen refund_requests with
+        // a denormalised artist_slug. Limited to 20 since the dashboard
+        // only surfaces the most recent few.
+        db
+          .from("refund_requests")
+          .select("id, order_id, status, type, amount, reason, requester_type, created_at, orders!inner(artist_slug)")
+          .eq("orders.artist_slug", slug)
+          .order("created_at", { ascending: false })
+          .limit(20),
       ]);
 
       const placements = placementsRes.data || [];
       const orders = ordersRes.data || [];
       const messages = messagesRes.data || [];
+      // refund_requests may not exist in every environment, fall back to
+      // an empty list rather than 500ing the whole dashboard.
+      const refundRequests = refundsRes.error ? [] : (refundsRes.data || []);
 
       // Group messages into conversations. latestSender is carried so the
       // dashboard activity feed can filter out messages the user sent.
@@ -84,6 +97,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         userType: "artist",
         profile: artistProfile,
+        refundRequests,
         placements: visiblePlacements,
         orders,
         conversations,

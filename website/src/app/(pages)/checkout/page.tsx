@@ -70,6 +70,16 @@ export default function CheckoutPage() {
   // address requirement.
   const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection">("ship");
   const [collectionNotes, setCollectionNotes] = useState("");
+  // Buyer's preferred pickup window. Captured separately from the free
+  // notes so the artist can see a concrete day + time on the order
+  // detail page rather than digging through prose. Stored as plain
+  // strings (HTML date + time inputs) and serialised into the
+  // collection_notes string we send to the API so we don't need a
+  // migration to land this v1.
+  const [collectionDate, setCollectionDate] = useState("");
+  const [collectionTimeWindow, setCollectionTimeWindow] = useState<
+    "morning" | "afternoon" | "evening" | ""
+  >("");
   // Per-artist "Collect from artist" availability. Buyers can only pick
   // the collection option when every artist in the cart has opted in
   // (artist_profiles.offers_pickup). Map is keyed by artistSlug. Starts
@@ -334,6 +344,41 @@ export default function CheckoutPage() {
     setCartError(null);
     setSubmitting(true);
 
+    // For collection orders, fold the proposed date + time window into
+    // the free-text notes so the existing `collection_notes` column
+    // carries everything the artist needs. Avoids a schema migration
+    // for v1; we can promote these to dedicated columns later if the
+    // dashboard wants to surface them in a more structured way.
+    const composedCollectionNotes = (() => {
+      if (fulfilmentMethod !== "collection") return collectionNotes;
+      const lines: string[] = [];
+      if (collectionDate) {
+        const formatted = (() => {
+          try {
+            return new Date(collectionDate + "T00:00:00").toLocaleDateString(
+              "en-GB",
+              { weekday: "long", day: "numeric", month: "long", year: "numeric" },
+            );
+          } catch {
+            return collectionDate;
+          }
+        })();
+        lines.push(`Preferred date: ${formatted}`);
+      }
+      if (collectionTimeWindow) {
+        const label =
+          collectionTimeWindow === "morning"
+            ? "Morning (9am to 12pm)"
+            : collectionTimeWindow === "afternoon"
+              ? "Afternoon (12pm to 5pm)"
+              : "Evening (5pm to 8pm)";
+        lines.push(`Time of day: ${label}`);
+      }
+      const trimmed = collectionNotes.trim();
+      if (trimmed) lines.push(`Notes: ${trimmed}`);
+      return lines.join("\n");
+    })();
+
     // Create Stripe Checkout Session and redirect
     try {
       const res = await fetch("/api/checkout", {
@@ -350,7 +395,7 @@ export default function CheckoutPage() {
           source: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ref") || "direct" : "direct",
           venueSlug: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("venue") || "" : "",
           fulfilmentMethod,
-          collectionNotes,
+          collectionNotes: composedCollectionNotes,
         }),
       });
 
@@ -639,13 +684,50 @@ export default function CheckoutPage() {
                 </>
               )}
               {fulfilmentMethod === "collection" && (
-                <textarea
-                  placeholder="Pickup notes, when works for you, anyone we should ask for? (optional)"
-                  value={collectionNotes}
-                  onChange={(e) => setCollectionNotes(e.target.value)}
-                  rows={3}
-                  className={inputClass("collectionNotes")}
-                />
+                <>
+                  <p className="text-xs text-muted -mt-1">
+                    Suggest a pickup time, the artist will confirm or
+                    propose a different one by message.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-muted mb-1">
+                        Preferred date
+                      </label>
+                      <input
+                        type="date"
+                        value={collectionDate}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => setCollectionDate(e.target.value)}
+                        className={inputClass("collectionDate")}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-muted mb-1">
+                        Time of day
+                      </label>
+                      <select
+                        value={collectionTimeWindow}
+                        onChange={(e) =>
+                          setCollectionTimeWindow(e.target.value as typeof collectionTimeWindow)
+                        }
+                        className={inputClass("collectionTimeWindow")}
+                      >
+                        <option value="">Any time</option>
+                        <option value="morning">Morning (9am to 12pm)</option>
+                        <option value="afternoon">Afternoon (12pm to 5pm)</option>
+                        <option value="evening">Evening (5pm to 8pm)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <textarea
+                    placeholder="Anything else the artist should know? (optional)"
+                    value={collectionNotes}
+                    onChange={(e) => setCollectionNotes(e.target.value)}
+                    rows={3}
+                    className={inputClass("collectionNotes")}
+                  />
+                </>
               )}
             </div>
           </div>
