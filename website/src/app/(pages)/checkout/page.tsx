@@ -48,6 +48,11 @@ export default function CheckoutPage() {
   // remove the offending line from the cart and show this banner so
   // the buyer doesn't bounce off a generic toast and lose context.
   const [cartError, setCartError] = useState<string | null>(null);
+  // In-flight flag on the Proceed-to-Payment button. Prevents the user
+  // from rage-clicking the button while we wait on /api/checkout, and
+  // gives the button a "Redirecting..." state so a slow Stripe round
+  // trip doesn't look like the page is hung.
+  const [submitting, setSubmitting] = useState(false);
   const [shipping, setShipping] = useState<ShippingInfo>({
     fullName: "",
     email: "",
@@ -65,6 +70,13 @@ export default function CheckoutPage() {
   // address requirement.
   const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection">("ship");
   const [collectionNotes, setCollectionNotes] = useState("");
+  // Per-artist "Collect from artist" availability. Buyers can only pick
+  // the collection option when every artist in the cart has opted in
+  // (artist_profiles.offers_pickup). Map is keyed by artistSlug. Starts
+  // empty; the fetch below populates it. Until it resolves we render the
+  // option but disable it, so a determined click can't beat the lookup.
+  const [pickupBySlug, setPickupBySlug] = useState<Record<string, boolean>>({});
+  const [pickupLoaded, setPickupLoaded] = useState(false);
 
   // Pre-fill the email from a QR-scan ref so the buyer doesn't have to
   // re-type it. ?ref=qr&email=foo@bar.com is the canonical form; we
@@ -115,6 +127,70 @@ export default function CheckoutPage() {
       .catch(() => { /* guest path / network blip — silently fall back to blank form */ });
     return () => { cancelled = true; };
   }, [user]);
+
+  // Resolve which artists in the current cart offer in-person pickup.
+  // Uses the public /api/browse-artists feed (server-cached) so we don't
+  // need a bespoke lookup endpoint. Re-runs whenever the cart changes
+  // so adding a second artist mid-flow correctly hides the option if
+  // the new artist hasn't opted in.
+  useEffect(() => {
+    const slugs = Array.from(new Set(items.map((i) => i.artistSlug).filter(Boolean)));
+    if (slugs.length === 0) {
+      setPickupBySlug({});
+      setPickupLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    setPickupLoaded(false);
+    fetch("/api/browse-artists", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const artists: Array<{ slug?: string; offersPickup?: boolean }> = Array.isArray(data?.artists) ? data.artists : [];
+        const next: Record<string, boolean> = {};
+        for (const slug of slugs) {
+          const match = artists.find((a) => a.slug === slug);
+          next[slug] = match?.offersPickup === true;
+        }
+        setPickupBySlug(next);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Network failure means we can't confirm consent. Default to
+        // "no pickup available" so we never accidentally book a buyer
+        // into a collection arrangement the artist hasn't agreed to.
+        const next: Record<string, boolean> = {};
+        for (const slug of slugs) next[slug] = false;
+        setPickupBySlug(next);
+      })
+      .finally(() => {
+        if (!cancelled) setPickupLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
+
+  // Pickup is offered to the buyer only when every artist in the cart
+  // has explicitly opted in. Mixed carts get shipping only — we don't
+  // try to split fulfilment per line in v1.
+  const cartArtistSlugs = useMemo(
+    () => Array.from(new Set(items.map((i) => i.artistSlug).filter(Boolean))),
+    [items],
+  );
+  const pickupAvailable =
+    pickupLoaded &&
+    cartArtistSlugs.length > 0 &&
+    cartArtistSlugs.every((s) => pickupBySlug[s] === true);
+
+  // If the user had collection selected and the cart changes such that
+  // it's no longer available, snap them back to shipping so the order
+  // can still be placed.
+  useEffect(() => {
+    if (pickupLoaded && !pickupAvailable && fulfilmentMethod === "collection") {
+      setFulfilmentMethod("ship");
+    }
+  }, [pickupLoaded, pickupAvailable, fulfilmentMethod]);
 
   function applySavedAddress(id: string) {
     setSavedAddressId(id);
@@ -233,6 +309,7 @@ export default function CheckoutPage() {
   }
 
   async function handleSubmit() {
+    if (submitting) return;
     // Collection only needs name + contact; addressLine/postcode/city
     // are skipped because the artist supplies the location.
     const required: (keyof ShippingInfo)[] = fulfilmentMethod === "collection"
@@ -255,6 +332,7 @@ export default function CheckoutPage() {
     }
 
     setCartError(null);
+    setSubmitting(true);
 
     // Create Stripe Checkout Session and redirect
     try {
@@ -298,6 +376,23 @@ export default function CheckoutPage() {
             ? data.error
             : "One of the works in your cart is no longer available.",
         );
+        setSubmitting(false);
+        return;
+      }
+
+      // Any non-2xx that isn't the 409 special-case path. The route
+      // returns a JSON `{ error }` for these (4xx schema rejections,
+      // self-purchase guard, Stripe blow-ups). Surface the message
+      // so the buyer can act on it instead of clicking a silent
+      // button repeatedly.
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setCartError(
+          typeof data?.error === "string"
+            ? data.error
+            : "Couldn't start checkout. Please try again, or get in touch if it keeps happening.",
+        );
+        setSubmitting(false);
         return;
       }
 
@@ -307,11 +402,16 @@ export default function CheckoutPage() {
         // Save shipping to localStorage for confirmation fallback
         localStorage.setItem("wallplace-last-shipping", JSON.stringify(shipping));
         window.location.href = data.url;
+        // Leave `submitting` true so the button stays disabled while
+        // the browser navigates to Stripe. Resetting it here flickers
+        // the label back to "Proceed to Payment" mid-redirect.
       } else {
-        setErrors({ submit: true } as Record<string, boolean>);
+        setCartError("Couldn't start checkout. Please try again, or get in touch if it keeps happening.");
+        setSubmitting(false);
       }
     } catch {
-      setErrors({ submit: true } as Record<string, boolean>);
+      setCartError("Network error. Check your connection and try again.");
+      setSubmitting(false);
     }
   }
 
@@ -391,10 +491,14 @@ export default function CheckoutPage() {
       <div className="grid lg:grid-cols-5 gap-6 sm:gap-8 lg:gap-10">
         {/* Form – 3 cols */}
         <div className="lg:col-span-3 space-y-8">
-          {/* Delivery method selector */}
+          {/* Delivery method selector. The "Collect from artist" tile is
+              only rendered when every artist in the cart has opted in
+              (artist_profiles.offers_pickup). If they haven't, we just
+              show "Ship to me" — quieter than a disabled tile that
+              advertises an unavailable option. */}
           <div>
             <h2 className="text-lg font-medium mb-4">Delivery Method</h2>
-            <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className={`grid gap-3 mb-6 ${pickupAvailable ? "grid-cols-2" : "grid-cols-1"}`}>
               <button
                 type="button"
                 onClick={() => setFulfilmentMethod("ship")}
@@ -414,24 +518,26 @@ export default function CheckoutPage() {
                 </div>
                 <p className="text-xs text-muted leading-snug">Tracked delivery from the artist. {aggregatedEstimatedDays}.</p>
               </button>
-              <button
-                type="button"
-                onClick={() => setFulfilmentMethod("collection")}
-                className={`text-left p-4 rounded-sm border transition-colors ${
-                  fulfilmentMethod === "collection"
-                    ? "border-accent bg-accent/5"
-                    : "border-border hover:border-accent/50"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={fulfilmentMethod === "collection" ? "text-accent" : "text-muted"}>
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                    <circle cx="12" cy="10" r="3" />
-                  </svg>
-                  <p className="text-sm font-medium">Collect from artist</p>
-                </div>
-                <p className="text-xs text-muted leading-snug">No shipping costs. Arrange a pickup time after payment.</p>
-              </button>
+              {pickupAvailable && (
+                <button
+                  type="button"
+                  onClick={() => setFulfilmentMethod("collection")}
+                  className={`text-left p-4 rounded-sm border transition-colors ${
+                    fulfilmentMethod === "collection"
+                      ? "border-accent bg-accent/5"
+                      : "border-border hover:border-accent/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={fulfilmentMethod === "collection" ? "text-accent" : "text-muted"}>
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                      <circle cx="12" cy="10" r="3" />
+                    </svg>
+                    <p className="text-sm font-medium">Collect from artist</p>
+                  </div>
+                  <p className="text-xs text-muted leading-snug">No shipping costs. Arrange a pickup time after payment.</p>
+                </button>
+              )}
             </div>
           </div>
 
@@ -605,9 +711,10 @@ export default function CheckoutPage() {
           {/* Submit */}
           <button
             onClick={handleSubmit}
-            className="w-full px-6 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
+            disabled={submitting}
+            className="w-full px-6 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:bg-accent/60 disabled:cursor-not-allowed"
           >
-            Proceed to Payment, £{total.toFixed(2)}
+            {submitting ? "Redirecting to Stripe..." : `Proceed to Payment, £${total.toFixed(2)}`}
           </button>
         </div>
 

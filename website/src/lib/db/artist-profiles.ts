@@ -33,6 +33,9 @@ export interface DbArtistProfile {
   open_to_revenue_share: boolean;
   revenue_share_percent: number;
   open_to_outright_purchase: boolean;
+  /** Migration 055: artist has opted in to in-person collection.
+   *  Drives the "Collect from artist" fulfilment option at checkout. */
+  offers_pickup?: boolean | null;
   can_provide_frames: boolean;
   can_arrange_framing: boolean;
   delivery_radius: string;
@@ -116,6 +119,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
     openToRevenueShare: profile.open_to_revenue_share ?? true,
     revenueSharePercent: profile.revenue_share_percent,
     openToOutrightPurchase: profile.open_to_outright_purchase ?? true,
+    offersPickup: profile.offers_pickup ?? false,
     canProvideFrames: profile.can_provide_frames,
     canArrangeFraming: profile.can_arrange_framing,
     venueTypesSuitedFor: profile.venue_types_suited_for || [],
