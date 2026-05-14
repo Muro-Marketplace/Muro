@@ -12,6 +12,7 @@ import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, resolveDiscipline,
 import { slugify } from "@/lib/slugify";
 import { formatPriceRange } from "@/lib/format-currency";
 import { geocodePostcode } from "@/lib/geocode";
+import { useAuth } from "@/context/AuthContext";
 import { bandsForWork } from "@/components/browse/SizeBands";
 import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
@@ -273,6 +274,12 @@ export default function BrowsePortfoliosPage() {
 const PAGE_SIZE = 20;
 
 function BrowsePortfoliosPageInner() {
+  // Audience-acquisition CTAs at the bottom of /browse only make sense
+  // for signed-out visitors. Signed-in artists / venues / customers
+  // already have an account, so showing the "Apply to Join" or
+  // "Register Your Venue" cards reads as marketing noise the user
+  // can't act on. Read auth here and gate the section below.
+  const { user: viewerUser, loading: viewerAuthLoading } = useAuth();
   // activeDiscipline stores either:
   //   - a discipline id (e.g. "photography")
   //   - "" for All
@@ -2599,34 +2606,41 @@ function BrowsePortfoliosPageInner() {
         </div>
       </section>
 
-      {/* CTAs */}
-      <section className="py-20 lg:py-24 border-t border-border">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
-              <h2 className="text-2xl mb-3">Are you an artist?</h2>
-              <p className="text-muted leading-relaxed mb-6">
-                We are always looking for talented artists to
-                join our curated roster. Apply today and get your work seen in
-                venues across the UK.
-              </p>
-              <Button href="/apply" variant="primary" size="md">
-                Apply to Join Wallplace
-              </Button>
-            </div>
-            <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
-              <h2 className="text-2xl mb-3">Looking for art?</h2>
-              <p className="text-muted leading-relaxed mb-6">
-                Whether you run a café, restaurant, coworking space, or office,
-                we can help you find the right artwork for your walls.
-              </p>
-              <Button href="/signup/venue" variant="secondary" size="md">
-                Register Your Venue
-              </Button>
+      {/* CTAs. Acquisition funnel for signed-out visitors only. Each
+          card pushes a different audience into signup, so leaving them
+          on for already-signed-in users (especially artists who would
+          read "Apply to Join Wallplace" as a stale prompt) muddies the
+          page. Render nothing while auth is loading so the cards
+          don't flash for returning users on a slow auth round-trip. */}
+      {!viewerAuthLoading && !viewerUser && (
+        <section className="py-20 lg:py-24 border-t border-border">
+          <div className="max-w-[1400px] mx-auto px-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
+                <h2 className="text-2xl mb-3">Are you an artist?</h2>
+                <p className="text-muted leading-relaxed mb-6">
+                  We are always looking for talented artists to
+                  join our curated roster. Apply today and get your work seen in
+                  venues across the UK.
+                </p>
+                <Button href="/apply" variant="primary" size="md">
+                  Apply to Join Wallplace
+                </Button>
+              </div>
+              <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
+                <h2 className="text-2xl mb-3">Looking for art?</h2>
+                <p className="text-muted leading-relaxed mb-6">
+                  Whether you run a café, restaurant, coworking space, or office,
+                  we can help you find the right artwork for your walls.
+                </p>
+                <Button href="/signup/venue" variant="secondary" size="md">
+                  Register Your Venue
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }
