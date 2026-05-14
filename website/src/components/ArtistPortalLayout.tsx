@@ -99,11 +99,23 @@ export default function ArtistPortalLayout({
       authFetch("/api/artist-profile")
         .then((r) => r.json())
         .then((data) => {
-          if (data.profile?.profile_image) setProfileImage(data.profile.profile_image);
+          // Brand-new artist accounts (signed up, never approved /
+          // never filled in the application) land here with no
+          // artist_profile row. The portal pages all rely on that row
+          // existing — billing throws "Artist profile not found" on
+          // /api/subscribe, profile page sits on "Loading…" forever.
+          // Send them through /apply instead so they can complete the
+          // application. Once an admin approves it the profile row is
+          // created and this guard naturally lets them in.
+          if (!data?.profile) {
+            router.replace("/apply");
+            return;
+          }
+          if (data.profile.profile_image) setProfileImage(data.profile.profile_image);
         })
         .catch(() => {});
     }
-  }, [user, userType]);
+  }, [user, userType, router]);
 
   if (loading) {
     return (

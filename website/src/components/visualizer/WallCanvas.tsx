@@ -211,14 +211,17 @@ export default function WallCanvas({
               onSelectItem(null);
               return;
             }
-            // Walk up to see if any ancestor is an "item" Group.
-            // We tag those with a `name` attr so we can detect them
-            // here without a parent ref. If none, treat as empty
-            // background and deselect. Typed as Konva Node so
+            // Walk up to see if any ancestor is an "item" Group or a
+            // Transformer (whose anchor nodes live as children of
+            // the Transformer, NOT inside the wall-item Group). We
+            // tag items with a `name` attr; Transformer is detected
+            // by Konva class name. If none of the above, treat as
+            // empty background and deselect. Typed as Konva Node so
             // getParent()'s Container return type fits.
             let node: import("konva/lib/Node").Node | null = target;
             while (node && node !== stage) {
               if (node.attrs?.name === "wall-item") return;
+              if (node.getClassName?.() === "Transformer") return;
               node = node.getParent();
             }
             onSelectItem(null);
