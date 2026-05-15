@@ -2290,7 +2290,19 @@ function BrowsePortfoliosPageInner() {
                               {formatPriceRange(work.pricing) || work.priceBand}
                             </p>
                             <p className="text-[11px] text-muted/70 mt-1">
-                              {[work.openToFreeLoan ? "Display" : "", work.openToOutrightPurchase ? "Purchase" : ""].filter(Boolean).join(" · ")}
+                              {/* Match the three canonical arrangement
+                                  labels used everywhere else (artist
+                                  card offers list, placement requests).
+                                  The previous "Display · Purchase" gloss
+                                  hid the difference between a paid-loan
+                                  arrangement and a revenue-share one,
+                                  which are the two paths a venue cares
+                                  most about. */}
+                              {[
+                                work.openToRevenueShare ? "Revenue Share" : "",
+                                work.openToFreeLoan ? "Paid Loan" : "",
+                                work.openToOutrightPurchase ? "Purchase" : "",
+                              ].filter(Boolean).join(" · ")}
                             </p>
                             {work.openToRevenueShare && work.revenueSharePercent != null && work.revenueSharePercent > 0 && (
                               <p className="text-[11px] text-accent font-medium mt-1">
