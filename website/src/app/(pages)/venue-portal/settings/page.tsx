@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import AccountDangerZone from "@/components/AccountDangerZone";
+import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
@@ -279,6 +280,16 @@ export default function VenueSettingsPage() {
 
         <AccountDangerZone />
       </div>
+
+      {/* One-shot payout-timing explainer. Same component the artist
+          billing page mounts; the `audience` flag swaps in the venue
+          copy (placement-orders, revenue share, etc.). Dismiss is
+          persisted in localStorage so subsequent visits stay clean. */}
+      <PayoutExplainerModal
+        audience="venue"
+        userId={user?.id}
+        active={!!connectStatus?.onboardingComplete}
+      />
     </VenuePortalLayout>
   );
 }

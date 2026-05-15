@@ -53,14 +53,15 @@ export default function CollectionCard({ collection, distance }: CollectionCardP
         <div className="absolute top-3 right-3">
           <SaveButton type="collection" itemId={collection.id} />
         </div>
-        {/* Distance pill bottom-left on the image so it's visible at a
-            glance, matches the placement on BrowseArtistCard and the
-            artwork grid cards on /browse. */}
-        <DistanceBadge distance={distance ?? null} corner="bottom-left" />
       </div>
-      <div className="p-4">
-        <p className="text-xs text-muted mb-0.5 min-w-0 truncate">{collection.artistName}</p>
-        <h3 className="text-sm font-medium text-foreground mb-1">{collection.name}</h3>
+      {/* Distance pill lives in the info section, top-right, so it
+          doesn't sit over the collection thumbnail. Right-padding on
+          the artist + title rows keeps long names from running under
+          the pill. */}
+      <div className="p-4 relative">
+        <DistanceBadge distance={distance ?? null} corner="top-right" />
+        <p className="text-xs text-muted mb-0.5 min-w-0 truncate pr-16">{collection.artistName}</p>
+        <h3 className="text-sm font-medium text-foreground mb-1 pr-16">{collection.name}</h3>
         {collection.description && (
           <p className="text-xs text-muted line-clamp-2 mb-2">{collection.description}</p>
         )}
