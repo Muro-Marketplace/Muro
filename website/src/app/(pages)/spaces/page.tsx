@@ -6,6 +6,11 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { geocodePostcode } from "@/lib/geocode";
 import { useAuth } from "@/context/AuthContext";
+import {
+  persistLocation,
+  readPersistedCoords,
+  clearPersistedLocation,
+} from "@/components/PostcodeInput";
 import SpacesPlacementRequestForm, {
   type SpacesVenueOption,
 } from "@/components/SpacesPlacementRequestForm";
@@ -116,6 +121,17 @@ function SpacesPageContent() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Hydrate location from the shared localStorage keys (same ones
+  // /browse uses) so a postcode entered on /browse carries over here,
+  // and vice versa. Done in an effect rather than a useState initialiser
+  // to avoid SSR/CSR hydration mismatch.
+  useEffect(() => {
+    const stored = readPersistedCoords();
+    if (!stored) return;
+    setUserCoords(stored.coords);
+    if (stored.label) setPostcode(stored.label);
+  }, []);
+
   // Venues shouldn't browse other venues, this page is for artists.
   // We fetch the venue's own slug so we can point them at their own
   // public profile rather than exposing the discovery UI to them.
@@ -181,9 +197,11 @@ function SpacesPageContent() {
     if (!postcode.trim()) return;
     setSearching(true);
     setPostcodeError(false);
-    const coords = await geocodePostcode(postcode.trim());
+    const trimmed = postcode.trim();
+    const coords = await geocodePostcode(trimmed);
     if (coords) {
       setUserCoords(coords);
+      persistLocation(coords, trimmed);
     } else {
       setPostcodeError(true);
     }
@@ -247,7 +265,7 @@ function SpacesPageContent() {
               <p className="text-accent text-xs flex items-center justify-center gap-1.5">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
                 Showing venues near {postcode}
-                <button onClick={() => { setUserCoords(null); setPostcode(""); setMaxDistance(9999); }} className="ml-1 text-white/50 underline">clear</button>
+                <button onClick={() => { setUserCoords(null); setPostcode(""); setMaxDistance(9999); clearPersistedLocation(); }} className="ml-1 text-white/50 underline">clear</button>
               </p>
               {/* Distance toggle */}
               <div className="flex items-center justify-center gap-1.5">
