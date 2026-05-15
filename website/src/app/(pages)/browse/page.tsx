@@ -991,13 +991,13 @@ function BrowsePortfoliosPageInner() {
   ];
 
   const filterPanel = (
-    <div className="space-y-7">
+    <div className="space-y-5">
       {/* Location (#9), the Local/Global toggle was removed; the
           slider is the only location control now. Default 25mi when
           a location is set. Drag to the right edge to switch back to
           "Anywhere". */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Location
         </p>
         {(() => {
@@ -1063,7 +1063,7 @@ function BrowsePortfoliosPageInner() {
           models: Revenue Share, Paid Loan, Direct Purchase. Rev share min
           % shows as a slider beneath the Revenue Share tile when active. */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Arrangement
         </p>
         <div className="space-y-2">
@@ -1072,7 +1072,7 @@ function BrowsePortfoliosPageInner() {
             type="button"
             onClick={() => setFilter("revenueShare", !filters.revenueShare)}
             aria-pressed={filters.revenueShare}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.revenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
@@ -1121,7 +1121,7 @@ function BrowsePortfoliosPageInner() {
             type="button"
             onClick={() => setFilter("paidLoan", !filters.paidLoan)}
             aria-pressed={filters.paidLoan}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.paidLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
@@ -1137,7 +1137,7 @@ function BrowsePortfoliosPageInner() {
             type="button"
             onClick={() => setFilter("outrightPurchase", !filters.outrightPurchase)}
             aria-pressed={filters.outrightPurchase}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.outrightPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
@@ -1154,7 +1154,7 @@ function BrowsePortfoliosPageInner() {
 
       {/* Availability – commissions removed */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Availability
         </p>
         <div className="space-y-2.5">
@@ -1178,7 +1178,7 @@ function BrowsePortfoliosPageInner() {
 
       {/* Venue Suitability */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Venue Type
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -1204,7 +1204,7 @@ function BrowsePortfoliosPageInner() {
           arrangement, availability, venue type) so the high-priority
           options stay above the fold. */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Style
         </p>
         <select
@@ -1222,7 +1222,7 @@ function BrowsePortfoliosPageInner() {
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Theme
         </p>
         <select
@@ -1347,8 +1347,8 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pr-2 -mr-2">
-                <div className="flex items-center justify-between mb-6">
+              <aside className="hidden lg:block w-60 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pr-2 -mr-2">
+                <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">
                     Filters
                   </span>
@@ -1686,8 +1686,8 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pr-2 -mr-2">
-                <div className="flex items-center justify-between mb-6">
+              <aside className="hidden lg:block w-60 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pr-2 -mr-2">
+                <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">Filters</span>
                   {hasGalleryFilters && (
                     <button type="button" onClick={clearGalleryFilters} className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">
@@ -1695,12 +1695,12 @@ function BrowsePortfoliosPageInner() {
                     </button>
                   )}
                 </div>
-                <div className="space-y-7">
+                <div className="space-y-5">
                   {/* Location (#9), toggle removed; the slider is the
                       only control. Postcode entry shows when no location
                       is set; slider shows once it is. */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Location</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Location</p>
                     {userCoords && (
                       <div>
                         <DistanceSliderControl
@@ -1742,14 +1742,14 @@ function BrowsePortfoliosPageInner() {
                       Direct Purchase). Rev share slider appears under the
                       Revenue Share tile when active. */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Arrangement</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Arrangement</p>
                     <div className="space-y-2">
                       {/* Revenue Share */}
                       <button
                         type="button"
                         onClick={() => setGalleryRevenueShare(!galleryRevenueShare)}
                         aria-pressed={galleryRevenueShare}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
                           galleryRevenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
                       >
@@ -1794,7 +1794,7 @@ function BrowsePortfoliosPageInner() {
                         type="button"
                         onClick={() => setGalleryFreeLoan(!galleryFreeLoan)}
                         aria-pressed={galleryFreeLoan}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
                           galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
                       >
@@ -1810,7 +1810,7 @@ function BrowsePortfoliosPageInner() {
                         type="button"
                         onClick={() => setGalleryPurchase(!galleryPurchase)}
                         aria-pressed={galleryPurchase}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
                           galleryPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
                       >
@@ -1827,7 +1827,7 @@ function BrowsePortfoliosPageInner() {
 
                   {/* Availability */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Availability</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Availability</p>
                     <div className="space-y-1.5">
                       <CheckPill checked={galleryOriginals} onChange={setGalleryOriginals} label="Originals available" />
                       <CheckPill checked={galleryPrints} onChange={setGalleryPrints} label="Prints available" />
@@ -1839,7 +1839,7 @@ function BrowsePortfoliosPageInner() {
                       pass: smaller padding, smaller label so the row
                       doesn't dominate the panel. */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Size</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Size</p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {SIZE_BANDS.map((b) => {
                         const active = gallerySizes.has(b.id);
@@ -1864,7 +1864,7 @@ function BrowsePortfoliosPageInner() {
 
                   {/* Price Range */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
                       Price: £{galleryPriceMin} to {galleryPriceMax >= 1000 ? "£1000+" : `£${galleryPriceMax}`}
                     </p>
                     <div className="space-y-3 px-1">
@@ -1884,7 +1884,7 @@ function BrowsePortfoliosPageInner() {
                       availability / size / price for buyers, so
                       they sit below the high-priority filters. */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Style</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Style</p>
                     <select value={galleryStyle} onChange={(e) => setGalleryStyle(e.target.value)} className="w-full px-3 py-2 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer">
                       <option value="">All styles</option>
                       {allMediums.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -1892,7 +1892,7 @@ function BrowsePortfoliosPageInner() {
                   </div>
 
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Theme</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Theme</p>
                     <select value={galleryTheme} onChange={(e) => setGalleryTheme(e.target.value)} className="w-full px-3 py-2 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer">
                       <option value="">All themes</option>
                       {themes.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -2345,7 +2345,7 @@ function BrowsePortfoliosPageInner() {
         const collectionsFilterPanel = (
           <div className="space-y-7">
             <div>
-              <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Location</p>
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Location</p>
               {geoRequesting && (
                 <p className="text-xs text-muted animate-pulse">Detecting your location…</p>
               )}
@@ -2384,13 +2384,13 @@ function BrowsePortfoliosPageInner() {
             </div>
 
             <div>
-              <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Arrangement</p>
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Arrangement</p>
               <div className="space-y-2">
                 <button
                   type="button"
                   onClick={() => setCollectionsRevShare(!collectionsRevShare)}
                   aria-pressed={collectionsRevShare}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
                     collectionsRevShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                   }`}
                 >
@@ -2410,7 +2410,7 @@ function BrowsePortfoliosPageInner() {
                   type="button"
                   onClick={() => setCollectionsFreeLoan(!collectionsFreeLoan)}
                   aria-pressed={collectionsFreeLoan}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
                     collectionsFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                   }`}
                 >
@@ -2424,7 +2424,7 @@ function BrowsePortfoliosPageInner() {
                   type="button"
                   onClick={() => setCollectionsPurchase(!collectionsPurchase)}
                   aria-pressed={collectionsPurchase}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
                     collectionsPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                   }`}
                 >
@@ -2440,7 +2440,7 @@ function BrowsePortfoliosPageInner() {
             </div>
 
             <div>
-              <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
                 Bundle price: £{collectionsPriceMin} {collectionsPriceMax >= 2000 ? "and £2000+" : `and £${collectionsPriceMax}`}
               </p>
               <div className="space-y-3 px-1">
@@ -2466,8 +2466,8 @@ function BrowsePortfoliosPageInner() {
             </div>
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pr-2 -mr-2">
-                <div className="flex items-center justify-between mb-6">
+              <aside className="hidden lg:block w-60 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pr-2 -mr-2">
+                <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">Filters</span>
                   {hasCollectionsFilters && (
                     <button type="button" onClick={clearCollectionsFilters} className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">
