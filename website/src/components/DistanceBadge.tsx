@@ -13,11 +13,12 @@ const CORNER_CLASS: Record<NonNullable<Props["corner"]>, string> = {
 };
 
 /**
- * Small dark pill that floats over an image corner to show how far a
- * card's subject is from the viewer. Rendered only when distance is
- * known, i.e. the viewer has entered a postcode on /browse and the
- * card subject has coordinates. The badge is non-interactive
- * (pointer-events-none) so it never swallows clicks meant for the
+ * Distance-from-you label that floats in a card corner. Just text +
+ * the pin glyph, no pill — the card already has its own background;
+ * a second one stacked over it competed with the title visually.
+ * Rendered only when distance is known (viewer has set a postcode on
+ * /browse AND the card subject has coordinates). Non-interactive
+ * (`pointer-events-none`) so it never swallows clicks meant for the
  * card link beneath it.
  */
 export default function DistanceBadge({ distance, corner = "bottom-left" }: Props) {
@@ -25,7 +26,7 @@ export default function DistanceBadge({ distance, corner = "bottom-left" }: Prop
   const label = distance < 0.2 ? "< 0.2 mi" : `${distance.toFixed(1)} mi`;
   return (
     <span
-      className={`absolute ${CORNER_CLASS[corner]} z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 text-white text-[10px] font-medium tracking-wide backdrop-blur-sm pointer-events-none`}
+      className={`absolute ${CORNER_CLASS[corner]} z-20 inline-flex items-center gap-1 text-[10px] font-medium tracking-wide text-muted pointer-events-none`}
     >
       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
