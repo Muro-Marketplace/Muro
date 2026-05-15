@@ -15,6 +15,15 @@ import { authFetch } from "@/lib/api-client";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { slugify } from "@/lib/slugify";
 import { useSearchParams } from "next/navigation";
+import {
+  PROFILE_THEMES,
+  LABEL_THEMES,
+  canCustomiseTheme,
+  DEFAULT_PROFILE_THEME,
+  DEFAULT_LABEL_THEME,
+  type ProfileTheme,
+  type LabelTheme,
+} from "@/lib/profile-themes";
 
 // Catalogue of common artwork mediums for the per-work Combobox. The
 // list is intentionally permissive, artists almost always have edge
@@ -352,6 +361,10 @@ interface ProfileState {
   availableSizes: string[];
   deliveryRadius: string;
   venueTypesSuitedFor: string[];
+  /** Premium+ public-profile theme id. NULL/empty -> default light. */
+  profileTheme: string;
+  /** Premium+ QR-label theme id. NULL/empty -> default classic. */
+  labelTheme: string;
 }
 
 /** Empty profile state for a brand-new artist who has just completed
@@ -384,6 +397,8 @@ function emptyProfile(nameSeed: string): ProfileState {
     availableSizes: [],
     deliveryRadius: "",
     venueTypesSuitedFor: [],
+    profileTheme: "",
+    labelTheme: "",
   };
 }
 
@@ -432,6 +447,8 @@ function initProfile(a: Artist): ProfileState {
     availableSizes: [...a.availableSizes],
     deliveryRadius: a.deliveryRadius,
     venueTypesSuitedFor: [...a.venueTypesSuitedFor],
+    profileTheme: a.profileTheme || "",
+    labelTheme: a.labelTheme || "",
   };
 }
 
@@ -692,6 +709,13 @@ export default function ProfileEditorPage() {
           can_arrange_framing: profile.canProvideFraming,
           delivery_radius: profile.deliveryRadius,
           venue_types_suited_for: profile.venueTypesSuitedFor,
+          // Premium+ theme selections. Sent for everyone so the API
+          // doesn't have to reach back into the user's plan; the
+          // server-side tier check in /api/artist-profile drops them
+          // for Core artists so a downgraded user can't keep a paid
+          // theme live by editing other fields.
+          profile_theme: profile.profileTheme || null,
+          label_theme: profile.labelTheme || null,
         }),
       });
 
@@ -1256,6 +1280,17 @@ export default function ProfileEditorPage() {
           </Link>
         </div>
 
+        <div className={sectionClass}>
+          <ThemePickerSection
+            profile={profile}
+            subscriptionPlan={artist?.subscriptionPlan}
+            onChange={(partial) => {
+              setProfile({ ...profile, ...partial });
+              setHasUnsavedChanges(true);
+            }}
+          />
+        </div>
+
         {/*
          * Bottom Save Changes, duplicates the top button so users on
          * a long edit page don't have to scroll back up after filling
@@ -1279,5 +1314,163 @@ export default function ProfileEditorPage() {
 
       </div>
     </ArtistPortalLayout>
+  );
+}
+
+interface ThemePickerSectionProps {
+  profile: ProfileState;
+  subscriptionPlan: string | null | undefined;
+  onChange: (partial: Partial<ProfileState>) => void;
+}
+
+function ThemePickerSection({ profile, subscriptionPlan, onChange }: ThemePickerSectionProps) {
+  const unlocked = canCustomiseTheme(subscriptionPlan);
+  const currentProfileTheme = profile.profileTheme || DEFAULT_PROFILE_THEME;
+  const currentLabelTheme = profile.labelTheme || DEFAULT_LABEL_THEME;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-medium">Profile & label theme</h2>
+          <p className="text-sm text-muted mt-1 max-w-xl">
+            Pick a colour scheme for your public profile and your QR labels.{" "}
+            {unlocked ? (
+              <>Changes apply on save.</>
+            ) : (
+              <>This is a Premium feature, you&rsquo;ll see a preview here but the public profile stays on the default scheme until you upgrade.</>
+            )}
+          </p>
+        </div>
+        {!unlocked && (
+          <Link
+            href="/artist-portal/billing"
+            className="inline-flex items-center justify-center px-4 py-2 text-xs font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors shrink-0"
+          >
+            Upgrade to Premium
+          </Link>
+        )}
+      </div>
+
+      <div className="mb-8">
+        <p className="text-xs uppercase tracking-wider text-muted mb-3">Public profile background</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {PROFILE_THEMES.map((t) => (
+            <ProfileThemeCard
+              key={t.id}
+              theme={t}
+              selected={currentProfileTheme === t.id}
+              disabled={!unlocked}
+              onPick={() => unlocked && onChange({ profileTheme: t.id })}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs uppercase tracking-wider text-muted mb-3">QR label colour</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {LABEL_THEMES.map((t) => (
+            <LabelThemeCard
+              key={t.id}
+              theme={t}
+              selected={currentLabelTheme === t.id}
+              disabled={!unlocked}
+              onPick={() => unlocked && onChange({ labelTheme: t.id })}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileThemeCard({
+  theme,
+  selected,
+  disabled,
+  onPick,
+}: {
+  theme: ProfileTheme;
+  selected: boolean;
+  disabled: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={`text-left rounded-sm border transition-colors ${
+        selected ? "border-accent ring-1 ring-accent/40" : "border-border hover:border-foreground/30"
+      } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+    >
+      {/* Mini preview, paints the actual bg + accent + text colours
+          so the artist can see what the theme will look like on the
+          public page before committing. */}
+      <div
+        className="aspect-[4/3] p-3 rounded-t-sm flex flex-col justify-between"
+        style={{ backgroundColor: theme.bg, color: theme.fg }}
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="block w-3 h-3 rounded-full" style={{ backgroundColor: theme.accent }} />
+          <span className="text-[10px] font-medium tracking-wide" style={{ color: theme.muted }}>
+            Aa
+          </span>
+        </div>
+        <p className="text-xs font-medium leading-tight">{theme.label}</p>
+      </div>
+      <div className="px-3 py-2 border-t border-border bg-surface">
+        <p className="text-[11px] text-muted leading-snug">{theme.description}</p>
+      </div>
+    </button>
+  );
+}
+
+function LabelThemeCard({
+  theme,
+  selected,
+  disabled,
+  onPick,
+}: {
+  theme: LabelTheme;
+  selected: boolean;
+  disabled: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={`text-left rounded-sm border transition-colors ${
+        selected ? "border-accent ring-1 ring-accent/40" : "border-border hover:border-foreground/30"
+      } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+    >
+      <div
+        className="aspect-square p-3 rounded-t-sm flex flex-col items-center justify-center gap-1.5"
+        style={{ backgroundColor: theme.bg, color: theme.fg, borderColor: theme.border }}
+      >
+        {/* Minimal QR stand-in, enough to read the contrast at a glance */}
+        <div
+          className="w-8 h-8 grid grid-cols-3 gap-0.5"
+          aria-hidden
+        >
+          {Array.from({ length: 9 }).map((_, i) => (
+            <span
+              key={i}
+              className="block"
+              style={{ backgroundColor: i % 2 === 0 ? theme.fg : theme.bg }}
+            />
+          ))}
+        </div>
+        <p className="text-[10px] font-medium" style={{ color: theme.subtle }}>By Artist</p>
+      </div>
+      <div className="px-2 py-1.5 border-t border-border bg-surface text-center">
+        <p className="text-[11px] text-foreground">{theme.label}</p>
+      </div>
+    </button>
   );
 }

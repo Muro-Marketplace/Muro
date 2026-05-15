@@ -156,7 +156,11 @@ describe("PATCH /api/artwork-requests/[id]/responses/[responseId]", () => {
     expect(row.revenue_share_percent).toBe(25);
     expect(row.monthly_fee_gbp).toBe(50); // 5000p / 100
     expect(row.qr_enabled).toBe(true);
-    expect(row.status).toBe("pending");
+    // The route skips the "pending" approval step because both sides
+    // have already agreed: the artist proposed terms in the response,
+    // the venue accepted here. The placement lands as "active".
+    expect(row.status).toBe("active");
+    expect(row.accepted_at).toEqual(expect.any(String));
 
     // The response row should be updated with linked_placement_id.
     const respUpdate = updates.find((u) => u.table === "artwork_request_responses");

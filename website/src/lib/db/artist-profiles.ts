@@ -57,6 +57,11 @@ export interface DbArtistProfile {
   /** "pending" for new claim-flow profiles; "approved" once admin reviews. */
   review_status?: "pending" | "approved" | "rejected";
   approved_at?: string | null;
+  /** Migration 056: optional theme overrides for the public profile and
+   *  QR labels. Premium+ artists set them via the portal; for Core
+   *  they're ignored at render time and defaults are used. */
+  profile_theme?: string | null;
+  label_theme?: string | null;
 }
 
 export interface DbArtistWork {
@@ -144,6 +149,8 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
     // that as a Verified trust signal on the public profile.
     isVerified:
       profile.review_status === "approved" || profile.review_status == null,
+    profileTheme: profile.profile_theme || undefined,
+    labelTheme: profile.label_theme || undefined,
     works: works.map((w) => ({
       id: w.id,
       title: w.title,

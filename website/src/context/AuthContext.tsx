@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User, Session, AuthError } from "@supabase/supabase-js";
 import { parseRole, type UserRole } from "@/lib/auth-roles";
@@ -50,6 +50,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Tracks user IDs we've already fired /api/auth/welcome for in this
+  // tab. Lives outside React state so it isn't reset by Strict Mode
+  // remounts or state updater replays. Without this, multiple SIGNED_IN
+  // events (initial session restore + subsequent OAuth callback) plus
+  // React 19's updater double-invocation in dev produced 4+ POSTs and the
+  // backend race-condition shipped duplicate welcome emails.
+  const welcomedRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     // Restore session on mount, set user immediately, don't wait for subscription
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -67,25 +75,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // silent refresh. The session object itself still gets updated for the
     // next Supabase request to use.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, s) => {
+      (event, s) => {
         setSession(s);
+        // Welcome fan-out lives OUTSIDE the setUser callback so React
+        // can't replay it (Strict Mode double-invokes updater functions
+        // in dev, which previously caused duplicate POSTs).
+        const nextUser = s?.user ?? null;
+        if (
+          nextUser &&
+          s?.access_token &&
+          event === "SIGNED_IN" &&
+          !welcomedRef.current.has(nextUser.id)
+        ) {
+          welcomedRef.current.add(nextUser.id);
+          // Fire-and-forget; we don't block UI on email send. The server
+          // route is idempotent (email_events.idempotency_key UNIQUE) so
+          // a stray duplicate from another tab is still safe.
+          fetch("/api/auth/welcome", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${s.access_token}` },
+          }).catch(() => { /* best-effort */ });
+        }
         setUser((prev) => {
           const prevId = prev?.id || null;
-          const nextId = s?.user?.id || null;
+          const nextId = nextUser?.id || null;
           if (prevId === nextId) return prev;
-          fetchSubscription(s?.user ?? null);
-          // Fire welcome (idempotent) on every fresh sign-in, covers email
-          // verification + password signins. OAuth signups also hit this,
-          // but they've already had welcome fired by oauth-finalize, so the
-          // call here is a no-op (welcomed_at + idempotency_key).
-          if (s?.user && s.access_token) {
-            // Fire-and-forget; we don't block UI on email send.
-            fetch("/api/auth/welcome", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${s.access_token}` },
-            }).catch(() => { /* best-effort */ });
-          }
-          return s?.user ?? null;
+          fetchSubscription(nextUser);
+          return nextUser;
         });
       }
     );

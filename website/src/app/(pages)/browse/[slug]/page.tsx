@@ -568,6 +568,8 @@ export default async function ArtistProfilePage({
               )
             : []
         }
+        profileTheme={artist.profileTheme}
+        subscriptionPlan={artist.subscriptionPlan}
       />
 
       {/* Collections, pulled from the DB by artist slug. The seed

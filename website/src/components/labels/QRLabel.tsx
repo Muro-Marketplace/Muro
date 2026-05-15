@@ -1,15 +1,20 @@
 // Printable QR label.
 //
-// Two independent axes:
-//   1. **size** (LabelSize): physical dimensions — micro / small /
+// Three independent axes:
+//   1. **size** (LabelSize): physical dimensions, micro / small /
 //      medium / large / xlarge. Drives sheet density.
-//   2. **style** (LabelStyle): visual treatment of the *content* —
+//   2. **style** (LabelStyle): visual treatment of the *content*,
 //      Minimal (artist + title + QR), Editorial (gallery-style
 //      framing with full meta), QR Only (just the code).
+//   3. **theme** (LabelTheme): colour scheme, Premium+ only. Default
+//      is the classic white-on-paper look every QR label rendered
+//      pre-2026-05-15.
 //
 // Style and size are decoupled: an Editorial label at "small" still
 // reads as Editorial, just compressed. The portal page can preset
 // sensible (style, size) pairs but power users can override either.
+
+import { getLabelTheme, type LabelTheme } from "@/lib/profile-themes";
 
 export type LabelSize = "micro" | "small" | "medium" | "large" | "xlarge";
 export type LabelStyle = "minimal" | "editorial" | "qr_only";
@@ -75,6 +80,9 @@ interface QRLabelProps {
   showMedium?: boolean;
   showDimensions?: boolean;
   showPrice?: boolean;
+  /** Premium+ colour theme id. Falls through to the classic
+   *  white/black scheme for Core artists (gating happens upstream). */
+  labelTheme?: string;
 }
 
 export default function QRLabel({
@@ -91,6 +99,7 @@ export default function QRLabel({
   showMedium = true,
   showDimensions = true,
   showPrice = true,
+  labelTheme,
 }: QRLabelProps) {
   // Effective dims swap for editorial → portrait. Keep the underlying
   // size key for size-bucket logic (small / medium / large) so we
@@ -98,6 +107,7 @@ export default function QRLabel({
   const sizeConfig = getEffectiveLabelDims(labelSize, labelStyle);
   const isLargeSize = labelSize === "large" || labelSize === "xlarge";
   const isSmallSize = labelSize === "small";
+  const theme: LabelTheme = getLabelTheme(labelTheme);
 
   // ── Style: QR Only ───────────────────────────────────────────────
   if (labelStyle === "qr_only") {
@@ -109,27 +119,33 @@ export default function QRLabel({
           height: sizeConfig.height,
           boxSizing: "border-box",
           pageBreakInside: "avoid",
-          backgroundColor: "#fff",
-          border: "0.5pt solid #ddd",
+          backgroundColor: theme.bg,
+          border: `0.5pt solid ${theme.border}`,
           padding: "2mm",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
+          // QR codes need a high-contrast quiet zone, on dark themes
+          // we still want the QR dots dark on white, so wrap the
+          // bitmap in its own white square. Tested with a phone
+          // camera scanning a printed dark-theme label at 50 cm.
         }}
       >
         {qrDataUrl && (
-          <img
-            src={qrDataUrl}
-            alt="QR code"
-            style={{ width: "78%", height: "78%", display: "block", objectFit: "contain" }}
-          />
+          <div style={{ backgroundColor: "#fff", padding: theme.qrDark ? "1mm" : 0, borderRadius: 1, lineHeight: 0 }}>
+            <img
+              src={qrDataUrl}
+              alt="QR code"
+              style={{ width: theme.qrDark ? "calc(78% * 0.95)" : "78%", height: theme.qrDark ? "calc(78% * 0.95)" : "78%", display: "block", objectFit: "contain" }}
+            />
+          </div>
         )}
         <p
           style={{
             fontFamily: "var(--font-sans)",
             fontSize: isSmallSize ? "5pt" : "6pt",
-            color: "#999",
+            color: theme.subtle,
             margin: "1.5mm 0 0 0",
             letterSpacing: "0.05em",
           }}
@@ -143,10 +159,10 @@ export default function QRLabel({
   const containerStyle: React.CSSProperties = {
     width: sizeConfig.width,
     height: sizeConfig.height,
-    border: "0.5pt solid #ddd",
+    border: `0.5pt solid ${theme.border}`,
     boxSizing: "border-box",
     pageBreakInside: "avoid",
-    backgroundColor: "#fff",
+    backgroundColor: theme.bg,
     fontFamily: "var(--font-sans)",
   };
 
@@ -169,7 +185,7 @@ export default function QRLabel({
             style={{
               fontFamily: "var(--font-sans)",
               fontSize: isLargeSize ? "7pt" : "6pt",
-              color: "#6B6B6B",
+              color: theme.subtle,
               margin: 0,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
@@ -187,7 +203,7 @@ export default function QRLabel({
                 // border. Large/xlarge stay at 16pt.
                 fontSize: isLargeSize ? "16pt" : isSmallSize ? "10pt" : "11pt",
                 fontWeight: 400,
-                color: "#1A1A1A",
+                color: theme.fg,
                 margin: "1.5mm 0 0 0",
                 lineHeight: 1.15,
                 wordBreak: "break-word",
@@ -203,7 +219,7 @@ export default function QRLabel({
                 fontFamily: "var(--font-serif)",
                 fontSize: isLargeSize ? "12pt" : "10pt",
                 fontStyle: "italic",
-                color: "#6B6B6B",
+                color: theme.subtle,
                 margin: "1.5mm 0 0 0",
               }}
             >
@@ -220,7 +236,7 @@ export default function QRLabel({
           />
         </div>
 
-        <div style={{ width: sizeConfig.qr, height: sizeConfig.qr }}>
+        <div style={{ width: sizeConfig.qr, height: sizeConfig.qr, backgroundColor: theme.qrDark ? "#fff" : "transparent", padding: theme.qrDark ? "0.8mm" : 0, borderRadius: 1, lineHeight: 0 }}>
           {qrDataUrl && (
             <img
               src={qrDataUrl}
@@ -235,7 +251,7 @@ export default function QRLabel({
             <div
               style={{
                 fontSize: isLargeSize ? "7pt" : "6pt",
-                color: "#6B6B6B",
+                color: theme.subtle,
                 lineHeight: 1.4,
               }}
             >
@@ -252,7 +268,7 @@ export default function QRLabel({
             <p
               style={{
                 fontSize: "7pt",
-                color: "#6B6B6B",
+                color: theme.subtle,
                 fontStyle: "italic",
                 margin: "2mm 0 0 0",
               }}
@@ -263,7 +279,7 @@ export default function QRLabel({
           <p
             style={{
               fontSize: isSmallSize ? "5pt" : "6pt",
-              color: "#999",
+              color: theme.subtle,
               margin: "1.5mm 0 0 0",
               letterSpacing: "0.05em",
             }}
@@ -303,7 +319,7 @@ export default function QRLabel({
               fontFamily: "var(--font-serif)",
               fontSize: isLargeSize ? "14pt" : isSmallSize ? "9pt" : "11pt",
               fontWeight: 600,
-              color: "#1A1A1A",
+              color: theme.fg,
               margin: 0,
               lineHeight: 1.2,
             }}
@@ -314,7 +330,7 @@ export default function QRLabel({
             <p
               style={{
                 fontSize: "8pt",
-                color: "#6B6B6B",
+                color: theme.subtle,
                 margin: "2mm 0 0 0",
                 lineHeight: 1.3,
                 fontStyle: "italic",
@@ -328,7 +344,7 @@ export default function QRLabel({
                 style={{
                   fontSize: isLargeSize ? "10pt" : "9pt",
                   fontWeight: 500,
-                  color: "#1A1A1A",
+                  color: theme.fg,
                   margin: "2mm 0 0 0",
                   lineHeight: 1.3,
                 }}
@@ -342,7 +358,7 @@ export default function QRLabel({
           <p
             style={{
               fontSize: "7.5pt",
-              color: "#6B6B6B",
+              color: theme.subtle,
               margin: "2mm 0 0 0",
               lineHeight: 1.3,
               fontStyle: "italic",
@@ -354,7 +370,7 @@ export default function QRLabel({
         <p
           style={{
             fontSize: isSmallSize ? "5.5pt" : "6.5pt",
-            color: "#999",
+            color: theme.subtle,
             margin: 0,
             letterSpacing: "0.03em",
           }}
@@ -368,6 +384,10 @@ export default function QRLabel({
           height: sizeConfig.qr,
           flexShrink: 0,
           alignSelf: "center",
+          backgroundColor: theme.qrDark ? "#fff" : "transparent",
+          padding: theme.qrDark ? "0.8mm" : 0,
+          borderRadius: 1,
+          lineHeight: 0,
         }}
       >
         {qrDataUrl && (

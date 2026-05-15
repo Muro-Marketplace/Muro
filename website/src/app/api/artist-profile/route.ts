@@ -81,6 +81,24 @@ export async function PUT(request: Request) {
       updatePayload[key] = num;
     }
 
+    // Premium+ tier gate for theme fields. Strip them for Core artists
+    // so a downgraded user can't keep a paid theme live by editing
+    // unrelated fields. The body-side allow-anything stays, the server
+    // is the authority on what gets persisted.
+    if ("profile_theme" in updatePayload || "label_theme" in updatePayload) {
+      const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
+      const { canCustomiseTheme } = await import("@/lib/profile-themes");
+      const { data: existing } = await getSupabaseAdmin()
+        .from("artist_profiles")
+        .select("subscription_plan")
+        .eq("user_id", auth.user!.id)
+        .maybeSingle<{ subscription_plan: string | null }>();
+      if (!canCustomiseTheme(existing?.subscription_plan)) {
+        delete updatePayload.profile_theme;
+        delete updatePayload.label_theme;
+      }
+    }
+
     const { error } = await upsertArtistProfile(auth.user!.id, updatePayload);
 
     if (error) {

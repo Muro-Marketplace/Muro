@@ -6,6 +6,7 @@
     { "path": "/api/cron/placement-review-request","schedule": "0 11 * * *" },
     { "path": "/api/cron/inactive-users",          "schedule": "0 10 * * *" },
     { "path": "/api/cron/onboarding-nudges",       "schedule": "0 10 * * *" },
-    { "path": "/api/cron/qr-scan-digest",          "schedule": "0 9 * * *" }
+    { "path": "/api/cron/qr-scan-digest",          "schedule": "0 9 * * *" },
+    { "path": "/api/stripe-connect/process-pending","schedule": "0 8 * * *" }
   ]
 }

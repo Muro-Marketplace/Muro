@@ -11,6 +11,10 @@ interface LabelPreviewProps {
   /** Initial per-label show flags. Index-parallel to `labels`. If
    *  omitted, defaults are derived from each label's data presence. */
   initialVisibility?: LabelVisibility[];
+  /** Premium+ colour theme id from the artist's profile. Passed
+   *  straight through to LabelSheet → QRLabel. Falls back to default
+   *  classic when undefined. */
+  labelTheme?: string;
   onClose: () => void;
 }
 
@@ -18,6 +22,7 @@ export default function LabelPreview({
   labels: initialLabels,
   availableSizes = [],
   initialVisibility,
+  labelTheme,
   onClose,
 }: LabelPreviewProps) {
   const [labels, setLabels] = useState<LabelData[]>(initialLabels);
@@ -273,7 +278,7 @@ export default function LabelPreview({
                   <div className="no-print absolute top-2 right-3 text-[10px] text-muted/50">
                     Page {pageIdx + 1} of {pageCount}
                   </div>
-                  <LabelSheet labels={labels} labelVisibility={labelVisibility} pageIndex={pageIdx} />
+                  <LabelSheet labels={labels} labelVisibility={labelVisibility} pageIndex={pageIdx} labelTheme={labelTheme} />
                 </div>
                 </div>
               ))}

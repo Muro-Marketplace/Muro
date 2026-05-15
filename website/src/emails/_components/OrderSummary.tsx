@@ -37,7 +37,15 @@ export function OrderSummary({ items, subtotal, shipping, tax, total }: Props) {
           }}
         >
           <Column style={{ width: 64, padding: "12px 0", verticalAlign: "top" }}>
-            <Img src={item.image} alt={item.title} width={64} height={64} style={{ display: "block", width: 64, height: 64, objectFit: "cover" as const }} />
+            {item.image && /^https?:\/\//.test(item.image) ? (
+              <Img src={item.image} alt={item.title} width={64} height={64} style={{ display: "block", width: 64, height: 64, objectFit: "cover" as const }} />
+            ) : (
+              // Render a calm placeholder rather than a broken-image icon
+              // when the cart item lacks a usable absolute image URL.
+              // Relative paths or data: URLs can't resolve in email
+              // clients, which produced the "missing thumbnail" complaint.
+              <div style={{ width: 64, height: 64, background: theme.border, borderRadius: 2 }} />
+            )}
           </Column>
           <Column style={{ padding: "12px 12px", verticalAlign: "top" }}>
             <Text style={cellTitle}>{item.title}</Text>

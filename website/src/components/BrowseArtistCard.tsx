@@ -7,6 +7,7 @@ import type { Artist } from "@/data/artists";
 import { useAuth } from "@/context/AuthContext";
 import { disciplineLabel } from "@/data/categories";
 import SaveButton from "@/components/SaveButton";
+import DistanceBadge from "@/components/DistanceBadge";
 
 interface BrowseArtistCardProps {
   artist: Artist;
@@ -153,20 +154,19 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               ))}
             </div>
           )}
+
+          {/* Distance pill, only renders when the viewer has set a
+              postcode and the artist has known coordinates. Sits
+              bottom-left so it doesn't collide with the centred dot
+              indicators or the Save heart in the top-right. */}
+          <DistanceBadge distance={distance} corner="bottom-left" />
         </div>
 
         {/* Info */}
         <div className="px-4 py-3.5 flex-1">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-sm font-medium text-foreground leading-tight">
-              {artist.name}
-            </h2>
-            {distance !== null && (
-              <span className="text-[10px] text-muted shrink-0">
-                {distance < 0.2 ? "< 0.2 mi" : `${distance.toFixed(1)} mi`}
-              </span>
-            )}
-          </div>
+          <h2 className="text-sm font-medium text-foreground leading-tight">
+            {artist.name}
+          </h2>
           <p className="text-xs text-muted mt-0.5">
             {disciplineLabel(artist.primaryMedium, artist.discipline)} · {artist.location}
           </p>

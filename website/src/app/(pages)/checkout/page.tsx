@@ -14,6 +14,7 @@ import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { safeRedirect } from "@/lib/safe-redirect";
 import { isValidPostcode } from "@/lib/postcode";
 import { authFetch } from "@/lib/api-client";
+import { readQrContext } from "@/lib/qr-context";
 
 interface SavedAddressRow {
   id: string;
@@ -392,8 +393,14 @@ export default function CheckoutPage() {
           // (and trusts its own number).
           expectedShippingCost: shippingCost,
           expectedSubtotal: subtotal,
-          source: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ref") || "direct" : "direct",
-          venueSlug: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("venue") || "" : "",
+          // Read QR attribution from localStorage first (set on the
+          // artist page when the visitor arrived via /api/qr). The
+          // current URL is /checkout?backTo=…, the original `?venue=`
+          // and `?ref=` query params from the QR redirect are no longer
+          // present on this page. Falling back to URL params keeps
+          // legacy/non-QR direct deep-links working.
+          source: (typeof window !== "undefined" && (readQrContext()?.source || new URLSearchParams(window.location.search).get("ref"))) || "direct",
+          venueSlug: (typeof window !== "undefined" && (readQrContext()?.venueSlug || new URLSearchParams(window.location.search).get("venue"))) || "",
           fulfilmentMethod,
           collectionNotes: composedCollectionNotes,
         }),
