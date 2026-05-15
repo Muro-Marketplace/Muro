@@ -5,7 +5,10 @@
       "name": "wallplace-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "port": 3000,
+      "env": {
+        "NODE_EXTRA_CA_CERTS": "/etc/ssl/cert.pem"
+      }
     }
   ]
 }

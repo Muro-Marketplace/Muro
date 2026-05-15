@@ -60,6 +60,15 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 2592000, // 30 days
+    // Dev-only escape hatch: the Next.js image proxy uses Node's
+    // native fetch to download upstream images. On macOS + Node 25,
+    // that fetch can't find the system CA bundle and every
+    // unsplash/picsum URL fails with UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
+    // so dev previews show empty image areas. `unoptimized` in dev
+    // makes the browser load the source URL directly, which uses the
+    // OS's TLS stack and doesn't trip the issue. Production deploys
+    // (NODE_ENV=production) keep the optimised pipeline.
+    unoptimized: process.env.NODE_ENV !== "production",
   },
   async headers() {
     return [
