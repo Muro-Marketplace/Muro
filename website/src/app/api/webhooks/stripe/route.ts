@@ -201,26 +201,62 @@ export async function POST(request: Request) {
           }
         }
 
-        // Look up venue placement for revenue share
-        if (venueSlug && firstArtistSlug) {
-          const { data: placement } = await db.from("placements")
-            .select("id, revenue_share_percent")
-            .eq("artist_slug", firstArtistSlug)
+        // Per-line venue revenue share. Multi-artist carts can mix
+        // placements at the same venue with different revenue_share_percent
+        // values, so we look up every artist's placement at this venue in
+        // one round-trip and apply each rate to its own line. Shipping is
+        // exempt; only artwork value contributes to the venue cut.
+        const lineArtistSlugs = (cartItems as Array<{ artistSlug?: string }>)
+          .map((i) => i.artistSlug || "")
+          .filter(Boolean);
+        const uniqueLineSlugs = Array.from(new Set(lineArtistSlugs));
+        const placementByArtistSlug = new Map<string, { id: string; revenue_share_percent: number }>();
+        if (venueSlug && uniqueLineSlugs.length > 0) {
+          const { data: rows } = await db.from("placements")
+            .select("id, artist_slug, revenue_share_percent")
+            .in("artist_slug", uniqueLineSlugs)
             .eq("venue_slug", venueSlug)
-            .eq("status", "active")
-            .limit(1)
-            .single();
-          if (placement) {
-            placementId = placement.id;
-            venueRevSharePct = placement.revenue_share_percent || 0;
+            .eq("status", "active");
+          for (const row of (rows || []) as Array<{ id: string; artist_slug: string; revenue_share_percent: number | null }>) {
+            placementByArtistSlug.set(row.artist_slug, {
+              id: row.id,
+              revenue_share_percent: row.revenue_share_percent || 0,
+            });
+          }
+          // Schema still records a single placement_id per order. Pick the
+          // first cart line whose artist has a placement so the choice is
+          // deterministic across replayed webhook deliveries.
+          for (const item of cartItems as Array<{ artistSlug?: string }>) {
+            const slug = item.artistSlug || "";
+            const place = placementByArtistSlug.get(slug);
+            if (place) {
+              placementId = place.id;
+              break;
+            }
           }
         }
 
-        // Calculate splits. Platform fee and venue revenue are computed on
-        // the subtotal (artwork value only), shipping is not subject to
-        // the cut and flows straight through to the artist, who pays the
+        // Sum the per-line venue cut. Lines whose artist has no placement
+        // at the venue contribute 0.
+        venueRevenue = (cartItems as Array<{ artistSlug?: string; price?: number; qty?: number; quantity?: number }>).reduce((sum, item) => {
+          const slug = item.artistSlug || "";
+          const pct = placementByArtistSlug.get(slug)?.revenue_share_percent ?? 0;
+          const lineValue = (item.price || 0) * Number(item.qty ?? item.quantity ?? 1);
+          return sum + lineValue * (pct / 100);
+        }, 0);
+        venueRevenue = Math.round(venueRevenue * 100) / 100;
+        // Blended effective rate against the subtotal, stored on the
+        // order for dashboard / receipt display. Equals the single-rate
+        // value when every line shares the same placement.
+        venueRevSharePct = subtotal > 0
+          ? Math.round((venueRevenue / subtotal) * 100 * 100) / 100
+          : 0;
+
+        // Platform fee stays at a single rate against subtotal (the
+        // first-artist plan). Multi-artist fee splitting is a separate
+        // concern from the venue split. Shipping is not subject to the
+        // cut and flows straight through to the artist, who pays the
         // courier out of pocket.
-        venueRevenue = Math.round(subtotal * (venueRevSharePct / 100) * 100) / 100;
         platformFee = Math.round(subtotal * (platformFeePct / 100) * 100) / 100;
         artistRevenue = Math.round((subtotal - venueRevenue - platformFee + shippingCost) * 100) / 100;
 
