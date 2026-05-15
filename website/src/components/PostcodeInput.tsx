@@ -72,7 +72,10 @@ const COORDS_STORAGE_KEY = "wallplace-coords";
  *  storage. The strict UK_POSTCODE check runs after `formatPostcode`. */
 const POSTCODE_LIKE = /^[A-Za-z0-9\s]{2,10}$/;
 
-function persistLocation(coords: { lat: number; lng: number }, label: string): void {
+/** Write the resolved coords + label so other pages can hydrate. Exported
+ *  so non-PostcodeInput surfaces (e.g. /spaces hero) can share the same
+ *  storage and a location set on one page persists on the others. */
+export function persistLocation(coords: { lat: number; lng: number }, label: string): void {
   if (typeof window === "undefined") return;
   try {
     // Only write to STORAGE_KEY when the label looks like a postcode.

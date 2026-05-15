@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef, Suspense, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -466,29 +466,23 @@ function BrowsePortfoliosPageInner() {
   // full bug-fix history. Lifting it down means a drag only re-renders
   // the slider, not the entire portfolio grid.
 
-  // Hydrate from localStorage on first mount when the URL itself is
-  // location-less. This keeps the existing UX where a returning
-  // visitor doesn't re-enter their postcode, while still letting a
-  // shared URL with explicit loc_* params win over the stored value.
-  // Run-once flag (a ref would do too) keeps a re-hydrate from
-  // firing if the user clears the location, since `parsedLocation`
-  // becomes coords:null again.
-  const hydratedFromStorageRef = useRef(false);
+  // Hydrate from localStorage whenever the URL has no coords but
+  // storage does. Runs on first mount AND on any subsequent navigation
+  // that drops the loc_* params (e.g. the top-nav "Galleries /
+  // Portfolios / Collections" links route to /browse without query),
+  // so a returning visitor keeps their location for the whole session.
+  // No re-entry loop: explicit clearLocation() also wipes storage, so
+  // readPersistedCoords() returns null on the next pass.
   useEffect(() => {
-    if (hydratedFromStorageRef.current) return;
-    hydratedFromStorageRef.current = true;
     if (parsedLocation.coords) return; // URL is the source of truth
     const stored = readPersistedCoords();
-    if (stored) {
-      setLocation({
-        coords: stored.coords,
-        label: stored.label ?? "",
-        maxDistance: parsedLocation.maxDistance,
-      });
-    }
-    // Intentionally only run once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!stored) return;
+    setLocation({
+      coords: stored.coords,
+      label: stored.label ?? "",
+      maxDistance: parsedLocation.maxDistance,
+    });
+  }, [parsedLocation.coords, parsedLocation.maxDistance, setLocation]);
 
   // Fetch merged artists (static + database) on mount.
   //
