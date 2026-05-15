@@ -154,17 +154,15 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               ))}
             </div>
           )}
-
-          {/* Distance pill, only renders when the viewer has set a
-              postcode and the artist has known coordinates. Sits
-              bottom-left so it doesn't collide with the centred dot
-              indicators or the Save heart in the top-right. */}
-          <DistanceBadge distance={distance} corner="bottom-left" />
         </div>
 
-        {/* Info */}
-        <div className="px-4 py-3.5 flex-1">
-          <h2 className="text-sm font-medium text-foreground leading-tight">
+        {/* Info. Distance pill floats top-right of THIS section
+            (not on the artwork itself) so it doesn't obscure the
+            piece. Right-padding on the title row keeps the artist's
+            name from running into the pill on long names. */}
+        <div className="px-4 py-3.5 flex-1 relative">
+          <DistanceBadge distance={distance} corner="top-right" />
+          <h2 className="text-sm font-medium text-foreground leading-tight pr-16">
             {artist.name}
           </h2>
           <p className="text-xs text-muted mt-0.5">

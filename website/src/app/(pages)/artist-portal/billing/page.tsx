@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
+import PayoutExplainerModal from "@/components/PayoutExplainerModal";
+import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
 interface ProfileSubscription {
@@ -74,6 +76,7 @@ interface ConnectStatus {
 }
 
 export default function BillingPage() {
+  const { user } = useAuth();
   const [sub, setSub] = useState<ProfileSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
@@ -583,6 +586,17 @@ export default function BillingPage() {
           </div>
         )}
       </div>
+
+      {/* One-shot payout-timing explainer. Fires the first time the
+          artist's Stripe Connect onboarding flips to complete, so the
+          most common support ticket ("I sold a piece a week ago,
+          where's the money?") gets answered before it's asked.
+          Dismiss is persisted in localStorage. */}
+      <PayoutExplainerModal
+        audience="artist"
+        userId={user?.id}
+        active={!!connectStatus?.onboardingComplete}
+      />
     </ArtistPortalLayout>
   );
 }

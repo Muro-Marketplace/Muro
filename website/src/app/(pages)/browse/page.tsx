@@ -1462,7 +1462,13 @@ function BrowsePortfoliosPageInner() {
                       <SearchInput
                         value={searchQuery}
                         onChange={setSearchQuery}
-                        placeholder="Search artists, themes, mediums"
+                        // Trimmed from "Search artists, themes, mediums",
+                        // the longer text clipped at "Search artists,
+                        // themes, m…" in the 256px (w-64) field on the
+                        // portfolios tab. Two-noun version reads the
+                        // same and parallels the works tab's "Search
+                        // works or artists".
+                        placeholder="Search artists or themes"
                       />
                     </div>
                     <p className="text-sm text-muted whitespace-nowrap">
@@ -2221,11 +2227,6 @@ function BrowsePortfoliosPageInner() {
                                 Sold
                               </span>
                             )}
-                            {/* Distance pill, bottom-left corner of the
-                                artwork image. Only renders when the
-                                viewer has set a postcode AND the work's
-                                artist has known coordinates. */}
-                            <DistanceBadge distance={workDistance} corner="bottom-left" />
                             {/* Hover action buttons */}
                             {/* Plan G #11: hover-revealed save heart on
                                 desktop, always-visible on mobile (since
@@ -2261,13 +2262,16 @@ function BrowsePortfoliosPageInner() {
                             </div>
                           </div>
 
-                          {/* Info — type sized down a notch per design
-                              feedback. Distance moved up onto the image
-                              corner (see DistanceBadge above) so the
-                              title row stays uncluttered. */}
-                          <div className="px-4 py-3 flex-1 flex flex-col">
+                          {/* Info — distance pill floats at the
+                              top-right corner of this section (below
+                              the image, not over the artwork), so
+                              the piece itself stays visually clean.
+                              `relative` is required so DistanceBadge's
+                              absolute positioning anchors here. */}
+                          <div className="px-4 py-3 flex-1 flex flex-col relative">
+                            <DistanceBadge distance={workDistance} corner="top-right" />
                             <a href={fullPageHref} target="_blank" rel="noopener noreferrer" className="block group/title min-w-0">
-                              <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate">
+                              <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate pr-16">
                                 {work.title}
                               </h3>
                             </a>
