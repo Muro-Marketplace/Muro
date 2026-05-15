@@ -19,6 +19,7 @@ import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
 import SubscriptionUpsellBanner from "@/components/SubscriptionUpsellBanner";
 import ArtworkThumb from "@/components/ArtworkThumb";
+import DistanceBadge from "@/components/DistanceBadge";
 import SaveButton from "@/components/SaveButton";
 import SearchInput from "@/components/SearchInput";
 import PostcodeInput, { readPersistedCoords, clearPersistedLocation } from "@/components/PostcodeInput";
@@ -2220,6 +2221,11 @@ function BrowsePortfoliosPageInner() {
                                 Sold
                               </span>
                             )}
+                            {/* Distance pill, bottom-left corner of the
+                                artwork image. Only renders when the
+                                viewer has set a postcode AND the work's
+                                artist has known coordinates. */}
+                            <DistanceBadge distance={workDistance} corner="bottom-left" />
                             {/* Hover action buttons */}
                             {/* Plan G #11: hover-revealed save heart on
                                 desktop, always-visible on mobile (since
@@ -2256,26 +2262,15 @@ function BrowsePortfoliosPageInner() {
                           </div>
 
                           {/* Info — type sized down a notch per design
-                              feedback. Distance from you sits on the
-                              right of the title row on web; on mobile it
-                              wraps below to keep the title readable. */}
+                              feedback. Distance moved up onto the image
+                              corner (see DistanceBadge above) so the
+                              title row stays uncluttered. */}
                           <div className="px-4 py-3 flex-1 flex flex-col">
-                            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                              <a href={fullPageHref} target="_blank" rel="noopener noreferrer" className="block group/title min-w-0 flex-1">
-                                <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate">
-                                  {work.title}
-                                </h3>
-                              </a>
-                              {workDistance !== null && (
-                                <span className="text-[10px] text-muted shrink-0 inline-flex items-center gap-0.5 order-3 sm:order-none w-full sm:w-auto mt-0.5 sm:mt-0">
-                                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                                    <circle cx="12" cy="10" r="3" />
-                                  </svg>
-                                  {workDistance < 0.2 ? "< 0.2 mi" : `${workDistance.toFixed(1)} mi`}
-                                </span>
-                              )}
-                            </div>
+                            <a href={fullPageHref} target="_blank" rel="noopener noreferrer" className="block group/title min-w-0">
+                              <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate">
+                                {work.title}
+                              </h3>
+                            </a>
                             <p className="text-[11px] text-muted mt-0.5">
                               <Link
                                 href={`/browse/${work.artistSlug}`}

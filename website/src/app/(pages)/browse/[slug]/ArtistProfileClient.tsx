@@ -13,6 +13,8 @@ import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
 import ArtworkThumb from "@/components/ArtworkThumb";
 import MakeOfferModal from "@/components/offers/MakeOfferModal";
+import { saveQrContext } from "@/lib/qr-context";
+import { getProfileTheme, themeCssVars, canCustomiseTheme, DEFAULT_PROFILE_THEME } from "@/lib/profile-themes";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 
@@ -22,6 +24,10 @@ interface ArtistProfileClientProps {
   extendedBio: string;
   themes: string[];
   works: ArtistWork[];
+  /** Premium+ profile theme id. Ignored if the artist is on Core. */
+  profileTheme?: string;
+  /** Subscription tier, drives the Premium+ theming gate. */
+  subscriptionPlan?: string;
 }
 
 export default function ArtistProfileClient({
@@ -30,6 +36,8 @@ export default function ArtistProfileClient({
   extendedBio,
   themes,
   works,
+  profileTheme,
+  subscriptionPlan,
 }: ArtistProfileClientProps) {
   const router = useRouter();
   const { addItem } = useCart();
@@ -285,19 +293,66 @@ export default function ArtistProfileClient({
   const currentWork = lightboxIndex !== null ? filteredWorks[lightboxIndex] : null;
 
   // QR-scan venue banner (#8). When the visitor has just scanned a
-  // QR code at a venue, the redirect carries `?ref=qr&venue=…`. We
-  // show a small "Seen in [venue name]" line at the top of the
-  // portfolio so the visitor has the context the physical scan
-  // gives them, and the venue gets a soft brand mention on the
-  // page that landed them here.
-  const qrVenueName = isQrScan ? searchParams.get("venue") : null;
+  // QR code at a venue, the redirect carries `?ref=qr&venue=<slug>
+  // &venueName=<display>`. We show a small "Seen in [venue name]"
+  // line at the top of the portfolio so the visitor has the context
+  // the physical scan gives them, and the venue gets a soft brand
+  // mention on the page that landed them here.
+  //
+  // Legacy fallback: older QR redirects put the display name in the
+  // `venue` slot. If `venueName` is missing we use whatever's there
+  // so the banner still reads sensibly. The slug-vs-name split is
+  // necessary because the checkout API needs the slug to credit the
+  // venue's revenue-share cut.
+  const qrVenueSlug = isQrScan ? searchParams.get("venue") : null;
+  const qrVenueNameParam = isQrScan ? searchParams.get("venueName") : null;
+  const qrVenueName = qrVenueNameParam || qrVenueSlug;
+
+  // Stash the QR context in localStorage so the venue attribution
+  // survives the navigation away from this page (buy buttons push
+  // `/checkout?backTo=…` which strips the `?venue=` param). The
+  // checkout page reads this back to pass venueSlug to the API.
+  useEffect(() => {
+    if (!isQrScan || !qrVenueSlug) return;
+    saveQrContext({
+      venueSlug: qrVenueSlug,
+      venueName: qrVenueNameParam || undefined,
+      source: "qr",
+    });
+  }, [isQrScan, qrVenueSlug, qrVenueNameParam]);
+
+  // Premium+ artists pick a profile theme via the artist portal; Core
+  // artists see the picker locked behind an upsell, so render-side we
+  // ignore any saved theme for Core and fall through to the default
+  // light scheme. canCustomiseTheme keeps the gate in one place.
+  const themeId =
+    profileTheme && canCustomiseTheme(subscriptionPlan)
+      ? profileTheme
+      : DEFAULT_PROFILE_THEME;
+  const theme = getProfileTheme(themeId);
+  const themeStyle = {
+    ...themeCssVars(theme),
+    backgroundColor: theme.bg,
+    color: theme.fg,
+  } as React.CSSProperties;
 
   return (
-    <>
+    <div
+      style={themeStyle}
+      data-theme={theme.id}
+      data-theme-dark={theme.isDark ? "true" : "false"}
+      className="min-h-screen"
+    >
       {qrVenueName && (
-        <div className="bg-accent/5 border-y border-accent/20">
-          <div className="max-w-[1200px] mx-auto px-6 py-2.5 flex items-center gap-2 text-xs text-foreground">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
+        <div
+          className="border-y"
+          style={{ backgroundColor: theme.surface, borderColor: theme.border }}
+        >
+          <div
+            className="max-w-[1200px] mx-auto px-6 py-2.5 flex items-center gap-2 text-xs"
+            style={{ color: theme.fg }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" style={{ color: theme.accent }}>
               <rect x="3" y="3" width="7" height="7" rx="1" />
               <rect x="14" y="3" width="7" height="7" rx="1" />
               <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -305,7 +360,7 @@ export default function ArtistProfileClient({
               <path d="M20 14v7M14 20h7" />
             </svg>
             <span>
-              Seen in <strong className="text-foreground">{qrVenueName}</strong>
+              Seen in <strong style={{ color: theme.fg }}>{qrVenueName}</strong>
             </span>
           </div>
         </div>
@@ -1117,6 +1172,6 @@ export default function ArtistProfileClient({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

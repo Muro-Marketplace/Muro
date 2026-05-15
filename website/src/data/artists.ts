@@ -109,6 +109,12 @@ export interface Artist {
   internationalShippingPrice?: number | null;
   /** True once the profile has been admin-approved (review_status === "approved"). */
   isVerified?: boolean;
+  /** Premium+ profile theme id from lib/profile-themes.ts. NULL/absent
+   *  → default light theme. Ignored for Core tier at render time. */
+  profileTheme?: string;
+  /** Premium+ QR label theme id from lib/profile-themes.ts. NULL/absent
+   *  → default classic label. Ignored for Core tier at render time. */
+  labelTheme?: string;
 }
 
 export const artists: Artist[] = [

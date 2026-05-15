@@ -228,6 +228,15 @@ export async function POST(request: Request) {
           ? session.payment_intent
           : session.payment_intent?.id || "";
 
+        // Collection (in-store) sales hand the artwork over at the
+        // point of purchase, so there's no shipping/processing/shipped
+        // lifecycle to track. Mark the order delivered straight away
+        // and pin delivered_at so refund-window logic still works.
+        const fulfilmentMethod = (savedShipping as { fulfilmentMethod?: string })?.fulfilmentMethod || session.metadata?.fulfilment_method || "ship";
+        const isCollection = fulfilmentMethod === "collection";
+        const initialStatus: "confirmed" | "delivered" = isCollection ? "delivered" : "confirmed";
+        const nowIso = new Date().toISOString();
+
         const orderRow: Record<string, unknown> = {
           id: orderId,
           stripe_payment_intent_id: paymentIntentId,
@@ -247,9 +256,17 @@ export async function POST(request: Request) {
           subtotal,
           shipping_cost: shippingCost,
           total,
-          status: "confirmed",
+          status: initialStatus,
           // jsonb column — store the array raw (Plan B Task 13).
-          status_history: [{ status: "confirmed", timestamp: new Date().toISOString() }],
+          // For collection orders we record the confirmed → delivered
+          // jump in one go so the customer-facing tracker reads cleanly
+          // ("Order placed · Delivered") without intermediate pips.
+          status_history: isCollection
+            ? [
+                { status: "confirmed", timestamp: nowIso },
+                { status: "delivered", timestamp: nowIso },
+              ]
+            : [{ status: "confirmed", timestamp: nowIso }],
           source,
           artist_slug: firstArtistSlug || null,
           artist_user_id: artistUserId,
@@ -260,9 +277,10 @@ export async function POST(request: Request) {
           platform_fee_percent: platformFeePct,
           platform_fee: platformFee,
           placement_id: placementId,
-          fulfilment_method: (savedShipping as { fulfilmentMethod?: string })?.fulfilmentMethod || session.metadata?.fulfilment_method || "ship",
+          fulfilment_method: fulfilmentMethod,
           collection_notes: (savedShipping as { collectionNotes?: string })?.collectionNotes || null,
-          created_at: new Date().toISOString(),
+          delivered_at: isCollection ? nowIso : null,
+          created_at: nowIso,
         };
 
         // F30, idempotency: skip if we've already processed this payment intent.
@@ -516,6 +534,10 @@ export async function POST(request: Request) {
           }
 
           // ─── Stripe Connect transfers ───
+          // Collection orders are paid out immediately, the work is
+          // handed over at the venue counter so there's no shipping
+          // risk to insure against. Shipped orders keep the 14-day
+          // hold (released early on delivery confirmation).
           // Transfer venue revenue share
           if (venueSlug && venueRevenue > 0) {
             try {
@@ -531,6 +553,7 @@ export async function POST(request: Request) {
                   recipientUserId: venueConnect.user_id,
                   connectAccountId: venueConnect.stripe_connect_account_id,
                   amountCents: Math.round(venueRevenue * 100),
+                  immediate: isCollection,
                 });
               }
             } catch (transferErr) {
@@ -553,6 +576,7 @@ export async function POST(request: Request) {
                   recipientUserId: artistUserId,
                   connectAccountId: artistConnect.stripe_connect_account_id,
                   amountCents: Math.round(artistRevenue * 100),
+                  immediate: isCollection,
                 });
               }
             } catch (transferErr) {

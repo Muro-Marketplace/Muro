@@ -67,14 +67,17 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   const db = getSupabaseAdmin();
   const to = input.to.trim().toLowerCase();
 
-  // 1. Idempotency, short-circuit if we've already sent this.
+  // 1. Idempotency, short-circuit if we've already sent or are mid-flight.
+  // Treating 'queued' as duplicate prevents the classic race where two
+  // concurrent callers both pass an "is it sent yet?" check and both go on
+  // to send. The atomic claim below catches anything that slips past here.
   {
     const { data: existing } = await db
       .from("email_events")
       .select("id, status, provider_message_id")
       .eq("idempotency_key", input.idempotencyKey)
       .maybeSingle();
-    if (existing && existing.status === "sent") {
+    if (existing && (existing.status === "sent" || existing.status === "queued")) {
       return { ok: true, skipped: true, reason: "duplicate" };
     }
   }
@@ -154,9 +157,13 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return { ok: true, skipped: true, reason: "no_api_key" };
   }
 
-  // Write a queued row first so we never lose the attempt even if the provider
-  // call hangs or the process dies mid-flight.
-  const { data: queuedRow } = await db
+  // Atomically claim the idempotency key. With ignoreDuplicates the insert
+  // becomes ON CONFLICT DO NOTHING, so two concurrent callers can't both
+  // win; the second gets an empty result and we abort with "duplicate".
+  // Previously this was a plain upsert, which let both callers pass and
+  // both call the provider, hence customers seeing multiple welcome
+  // emails after a single signup.
+  const { data: claimed } = await db
     .from("email_events")
     .upsert(
       {
@@ -169,10 +176,14 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         status: "queued",
         metadata: input.metadata ?? {},
       },
-      { onConflict: "idempotency_key" }
+      { onConflict: "idempotency_key", ignoreDuplicates: true }
     )
     .select("id")
-    .single();
+    .maybeSingle();
+  if (!claimed) {
+    return { ok: true, skipped: true, reason: "duplicate" };
+  }
+  const queuedRow = claimed;
 
   try {
     const res = await client.emails.send({

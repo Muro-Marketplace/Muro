@@ -9,6 +9,7 @@ import { uploadMessageAttachment, type MessageAttachment } from "@/lib/upload";
 import type { ArtistWork } from "@/data/artists";
 import PlacementContextPanel from "@/components/PlacementContextPanel";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
+import CounterOfferDialog from "@/components/CounterOfferDialog";
 
 interface Conversation {
   conversationId: string;
@@ -231,6 +232,14 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     revenue_share_percent?: number | null;
     qr_enabled?: boolean | null;
   } | undefined>(undefined);
+  // Same idea for purchase_offer cards, the Counter button used to
+  // bounce the user to the portal offers page. It now opens the same
+  // counter form inline so the negotiation stays in the thread.
+  const [counterOffer, setCounterOffer] = useState<{
+    offerId: string;
+    amountPence: number;
+    title: string;
+  } | null>(null);
   // Open the counter dialog for a placement by deriving current terms
   // from the most recent placement_request message on the thread.
   const openCounterDialog = useCallback((placementId: string) => {
@@ -1063,12 +1072,6 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                   const iAmSender = senderUserId === user?.id;
                   const open = !finalStatus || finalStatus === "pending" || finalStatus === "countered";
 
-                  // Where the Counter button should land. Errs to the
-                  // venue portal if we can't resolve it from metadata.
-                  const portalLink = recipientUserId === senderUserId
-                    ? "/venue-portal/offers"
-                    : "/artist-portal/offers";
-
                   return (
                     <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[80%] border rounded-lg overflow-hidden bg-white ${isCounter ? "border-amber-400" : "border-accent/30"}`}>
@@ -1110,12 +1113,24 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                             >
                               Accept
                             </button>
-                            <Link
-                              href={portalLink || (recipientUserId === senderUserId ? "/venue-portal/offers" : "/artist-portal/offers")}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!offerId) return;
+                                const amtPence =
+                                  typeof meta.offerAmountPence === "number"
+                                    ? (meta.offerAmountPence as number)
+                                    : 0;
+                                setCounterOffer({
+                                  offerId,
+                                  amountPence: amtPence,
+                                  title: primaryTitle,
+                                });
+                              }}
                               className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
                             >
                               Counter
-                            </Link>
+                            </button>
                             <button
                               onClick={() => handleOfferResponse(msg, "decline")}
                               className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 rounded-full transition-colors"
@@ -1541,6 +1556,22 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
           initial={counterInitial}
           onClose={() => { setCounteringId(null); setCounterInitial(undefined); }}
           onSuccess={() => { setCounteringId(null); setCounterInitial(undefined); if (selectedConv) loadThread(selectedConv); }}
+        />
+      )}
+
+      {/* Inline counter dialog for purchase_offer cards. Replaces the
+          earlier Link-out to /artist-portal/offers — feature parity
+          with that page so the counter flow stays in the thread. */}
+      {counterOffer && (
+        <CounterOfferDialog
+          offerId={counterOffer.offerId}
+          currentAmountPence={counterOffer.amountPence}
+          title={counterOffer.title}
+          onClose={() => setCounterOffer(null)}
+          onSuccess={() => {
+            setCounterOffer(null);
+            if (selectedConv) loadThread(selectedConv);
+          }}
         />
       )}
 

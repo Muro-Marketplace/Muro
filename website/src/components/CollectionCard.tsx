@@ -12,6 +12,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { ArtistCollection } from "@/data/collections";
 import SaveButton from "./SaveButton";
+import DistanceBadge from "./DistanceBadge";
 
 interface CollectionCardProps {
   collection: ArtistCollection;
@@ -52,16 +53,13 @@ export default function CollectionCard({ collection, distance }: CollectionCardP
         <div className="absolute top-3 right-3">
           <SaveButton type="collection" itemId={collection.id} />
         </div>
+        {/* Distance pill bottom-left on the image so it's visible at a
+            glance, matches the placement on BrowseArtistCard and the
+            artwork grid cards on /browse. */}
+        <DistanceBadge distance={distance ?? null} corner="bottom-left" />
       </div>
       <div className="p-4">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-xs text-muted mb-0.5 min-w-0 truncate">{collection.artistName}</p>
-          {distance != null && (
-            <span className="text-[10px] text-muted shrink-0">
-              {distance < 0.2 ? "< 0.2 mi" : `${distance.toFixed(1)} mi`}
-            </span>
-          )}
-        </div>
+        <p className="text-xs text-muted mb-0.5 min-w-0 truncate">{collection.artistName}</p>
         <h3 className="text-sm font-medium text-foreground mb-1">{collection.name}</h3>
         {collection.description && (
           <p className="text-xs text-muted line-clamp-2 mb-2">{collection.description}</p>

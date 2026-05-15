@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { notifyRefundDecision } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
+import { createNotification } from "@/lib/notifications";
 import { CustomerRefundConfirmation } from "@/emails/templates/orders/CustomerRefundConfirmation";
 import { ArtistRefundNotification } from "@/emails/templates/orders/ArtistRefundNotification";
 
@@ -225,6 +226,22 @@ export async function POST(request: Request) {
         amount: refundReq.amount,
       }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
 
+      // In-app bell for the buyer if they're an account holder. The
+      // refund_requests row carries the requester's user id, fall back
+      // to the order's buyer_user_id so we don't miss the cases where
+      // the buyer is the same person as the requester. Pure best
+      // effort, a missing bell shouldn't break the refund.
+      const buyerUserId = refundReq.requester_user_id || order.buyer_user_id || null;
+      if (buyerUserId) {
+        createNotification({
+          userId: buyerUserId,
+          kind: "refund_approved",
+          title: `Refund approved, £${Number(refundReq.amount).toFixed(2)}`,
+          body: `Your refund on ${order.id} has been processed and should arrive within 5 business days.`,
+          link: `/customer-portal/orders?id=${encodeURIComponent(order.id)}`,
+        }).catch((err) => { if (err) console.error("Buyer refund bell error:", err); });
+      }
+
       const buyerFirstName = (order.shipping?.fullName || "").split(" ")[0] || "there";
       await sendEmail({
         idempotencyKey: `customer_refund:${refundRequestId}`,
@@ -273,6 +290,19 @@ export async function POST(request: Request) {
       } catch (err) {
         console.error("Artist refund email error:", err);
       }
+
+      // In-app bell on the artist side mirroring the email, so the
+      // refund event surfaces in their notifications drawer instead
+      // of being email-only. ArtistRefundNotification's
+      // hasInAppEquivalent flag was already set; this is the missing
+      // half of that contract.
+      createNotification({
+        userId: order.artist_user_id,
+        kind: "refund_approved",
+        title: `Refund issued, £${Number(refundReq.amount).toFixed(2)}`,
+        body: `Order ${order.id} was refunded. Any payout already transferred will be reversed.`,
+        link: `/artist-portal/orders?id=${encodeURIComponent(order.id)}`,
+      }).catch((err) => { if (err) console.error("Artist refund bell error:", err); });
     }
 
     return NextResponse.json({

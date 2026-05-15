@@ -68,7 +68,14 @@ export default function ItemToolbar({
     <div
       role="toolbar"
       aria-label="Selected artwork"
-      className="flex items-center gap-2 px-2 py-1.5 rounded-full bg-white/95 backdrop-blur border border-black/10 shadow-md text-stone-700"
+      // Wrap to multiple rows on small viewports. The earlier single-row
+      // rounded-full pill ran off both edges of the screen on mobile so
+      // Size, Z-order, and Delete were unreachable. flex-wrap +
+      // justify-center lets the buttons stack into 2 to 3 rows on
+      // narrow widths while keeping the single-line desktop look.
+      // max-w bounds the toolbar to the canvas width on mobile so the
+      // wrap actually has a fixed line length to break against.
+      className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-3 py-1.5 rounded-2xl sm:rounded-full max-w-[calc(100vw-1.5rem)] sm:max-w-none bg-white/95 backdrop-blur border border-black/10 shadow-md text-stone-700"
     >
       {/* Size dropdown, only when the work has multiple listed sizes */}
       {sizes && sizes.length > 1 && (
@@ -100,7 +107,7 @@ export default function ItemToolbar({
               });
             }}
           />
-          <span className="h-4 w-px bg-black/10" />
+          <span className="hidden sm:inline-block h-4 w-px bg-black/10" />
         </>
       )}
 
@@ -129,7 +136,7 @@ export default function ItemToolbar({
       {/* Finish, only when style has finishes */}
       {styleDef.finishes.length > 0 && (
         <>
-          <span className="h-4 w-px bg-black/10" />
+          <span className="hidden sm:inline-block h-4 w-px bg-black/10" />
           <select
             aria-label="Frame finish"
             value={item.frame.finish}
@@ -145,7 +152,7 @@ export default function ItemToolbar({
         </>
       )}
 
-      <span className="h-4 w-px bg-black/10" />
+      <span className="hidden sm:inline-block h-4 w-px bg-black/10" />
 
       {/* Z-order */}
       <button
@@ -165,7 +172,7 @@ export default function ItemToolbar({
         ↓
       </button>
 
-      <span className="h-4 w-px bg-black/10" />
+      <span className="hidden sm:inline-block h-4 w-px bg-black/10" />
 
       {/* Duplicate / delete */}
       <button

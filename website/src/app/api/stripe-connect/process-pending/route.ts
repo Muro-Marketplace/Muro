@@ -1,30 +1,26 @@
 import { NextResponse } from "next/server";
 import { processPendingTransfers } from "@/lib/stripe-connect";
+import { requireCronAuth } from "@/app/api/cron/_auth";
 
 /**
- * POST /api/stripe-connect/process-pending
+ * /api/stripe-connect/process-pending
  *
- * Processes all pending transfers that have passed their 14-day hold period.
- * Call this via a cron job (e.g. Vercel Cron, daily) or manually from admin.
+ * Walks every `stripe_transfers` row in `status='pending'` whose
+ * `payout_after` has passed and fires the Stripe transfer. This is what
+ * actually moves the venue's revenue-share cut + the artist's net into
+ * their Connect accounts on shipped orders, the 14-day hold is just
+ * the `payout_after` timestamp; nothing pays anyone out until this
+ * endpoint runs.
  *
- * Protected by a simple secret token to prevent abuse.
+ * Wired into Vercel Cron via vercel.json. Vercel sends a GET request
+ * with `Authorization: Bearer ${CRON_SECRET}` attached automatically
+ * when the secret is set in the project env. We accept both GET (the
+ * cron path) and POST (admin / manual reprocessing) so the same handler
+ * services both.
  */
-export async function POST(request: Request) {
-  // Fail CLOSED, refuse the request if the cron secret isn't configured,
-  // otherwise the route was effectively unauthenticated in any environment
-  // that didn't set the env var (the old `if (cronSecret && …)` guard was
-  // skipped when cronSecret was falsy, so anyone could trigger a payout
-  // run). This now rejects both missing-secret and wrong-secret equally.
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret) {
-    console.error("CRON_SECRET not set, refusing process-pending request");
-    return NextResponse.json({ error: "Server misconfigured" }, { status: 503 });
-  }
-  if (authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+async function handle(request: Request) {
+  const authErr = requireCronAuth(request);
+  if (authErr) return authErr;
 
   try {
     const result = await processPendingTransfers();
@@ -41,3 +37,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const GET = handle;
+export const POST = handle;

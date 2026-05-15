@@ -147,8 +147,8 @@ const artistFaqs: FaqEntry[] = [
         </p>
         <p>
           If something happens, raise a case through{" "}
-          <Link href="/complaints">our complaints process</Link> and we&rsquo;ll
-          help broker a resolution.
+          <Link href="/complaints">our complaints process</Link>{" "}
+          and we&rsquo;ll help broker a resolution.
         </p>
       </>
     ),

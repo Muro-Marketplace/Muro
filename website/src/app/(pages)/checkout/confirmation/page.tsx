@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { labelForCountry } from "@/lib/iso-countries";
+import { clearQrContext } from "@/lib/qr-context";
 
 interface SavedShipping {
   fullName?: string;
@@ -57,6 +58,10 @@ function ConfirmationContent() {
   useEffect(() => {
     // Clear cart on successful checkout
     clearCart();
+    // Drop the QR attribution once the order is in. Otherwise a
+    // subsequent unrelated purchase from the same browser would keep
+    // crediting the original venue right up to the 24h TTL.
+    clearQrContext();
 
     async function fetchSession() {
       if (!sessionId) {
