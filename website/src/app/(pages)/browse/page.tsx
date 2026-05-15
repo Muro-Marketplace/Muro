@@ -1347,7 +1347,7 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8">
+              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pr-2 -mr-2">
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm font-medium text-foreground">
                     Filters
@@ -1686,7 +1686,7 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8">
+              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pr-2 -mr-2">
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm font-medium text-foreground">Filters</span>
                   {hasGalleryFilters && (
@@ -2466,7 +2466,7 @@ function BrowsePortfoliosPageInner() {
             </div>
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8">
+              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pr-2 -mr-2">
                 <div className="flex items-center justify-between mb-6">
                   <span className="text-sm font-medium text-foreground">Filters</span>
                   {hasCollectionsFilters && (

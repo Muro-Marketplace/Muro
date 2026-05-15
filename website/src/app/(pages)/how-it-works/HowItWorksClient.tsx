@@ -3,6 +3,9 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import VenueGuide from "@/components/marketing/VenueGuide";
+import ArtistGuide from "@/components/marketing/ArtistGuide";
+import CustomerGuide from "@/components/marketing/CustomerGuide";
 
 type Audience = "venue" | "artist" | "customer";
 
@@ -49,74 +52,6 @@ const tabContent: Record<Audience, {
     secondary: { href: "/customer", label: "Learn more for customers" },
   },
 };
-
-// Audience-by-audience deep-dive sections rendered below the hero.
-// Intentionally NOT a re-run of the 01/02/03 steps already in the hero;
-// these surface the extra value-props from the dedicated marketing pages
-// (/venues, /artists, /customer) so the visitor can keep scrolling
-// instead of immediately needing to jump to another page.
-const deepDive: {
-  id: Audience;
-  label: string;
-  title: string;
-  intro: string;
-  highlights: { title: string; description: string }[];
-  image: { src: string; alt: string };
-  primary: { href: string; label: string };
-  secondary: { href: string; label: string };
-}[] = [
-  {
-    id: "venue",
-    label: "For venues",
-    title: "Walls that work for you",
-    intro: "Bare walls earn you nothing today. Real art makes a space feel considered, gives customers something to look at, and quietly improves the experience of being in your venue.",
-    highlights: [
-      { title: "Atmosphere", description: "Curated work makes your space feel intentional, better photos, longer dwell times, customers who come back." },
-      { title: "Story", description: "Local artists give you something to talk about, a reason for regulars to bring friends and for press to cover you." },
-      { title: "Optional upside", description: "When a customer scans a QR and buys, you can take an agreed share of the sale. Typical: 10%. Off by default." },
-    ],
-    image: {
-      src: "https://images.unsplash.com/photo-1572947650440-e8a97ef053b2?w=1200&h=900&fit=crop&crop=center",
-      alt: "Art displayed on venue walls",
-    },
-    primary: { href: "/venues", label: "Full venue guide" },
-    secondary: { href: "/signup/venue", label: "Register your venue" },
-  },
-  {
-    id: "artist",
-    label: "For artists",
-    title: "Real venues. Real visibility. Fair fees.",
-    intro: "Wallplace is built for artists who want their work seen in the world, not just online. Display in cafés, restaurants, hotels and offices, and sell through your own storefront with QR support.",
-    highlights: [
-      { title: "High-intent venue demand", description: "Real venues actively looking for art, cafés, restaurants, hotels, galleries, offices, and salons." },
-      { title: "Your own online storefront", description: "Your Wallplace page is your shop. QR codes at venues drive customers straight to your store to browse and buy." },
-      { title: "Fair platform fees", description: "5 to 15% platform fee. No gallery taking half. You keep the majority of every sale." },
-    ],
-    image: {
-      src: "https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=1200&h=900&fit=crop&crop=center",
-      alt: "Artist studio with work in progress",
-    },
-    primary: { href: "/artists", label: "Full artist guide" },
-    secondary: { href: "/apply", label: "Apply to join" },
-  },
-  {
-    id: "customer",
-    label: "For customers",
-    title: "Buy art the way it should work",
-    intro: "Spot a piece you like on a wall somewhere, or skip the wall and browse online. Either way, you're buying direct from the artist, with a certificate of authenticity and secure escrow.",
-    highlights: [
-      { title: "Buy direct from the artist", description: "No gallery markup, no middleman. Your money goes to the person who made the work, less a small platform fee." },
-      { title: "Certificate of authenticity", description: "Every sale ships with a signed certificate from the artist. Provenance, dimensions, year, and edition (if any) on record." },
-      { title: "Secure payment", description: "Wallplace holds the funds until the artist confirms dispatch, so you're never out of pocket if something goes wrong." },
-    ],
-    image: {
-      src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=900&fit=crop&crop=center",
-      alt: "Original artwork on a curated gallery wall",
-    },
-    primary: { href: "/customer", label: "Full customer guide" },
-    secondary: { href: "/browse", label: "Browse artwork" },
-  },
-];
 
 export default function HowItWorksClient() {
   const [audience, setAudience] = useState<Audience>("venue");
@@ -246,72 +181,17 @@ export default function HowItWorksClient() {
         </div>
       </section>
 
-      {/* Audience deep-dive. Each section pulls highlights and a hero
-          image from its dedicated marketing page (/venues, /artists,
-          /customer), then sends interested visitors there for the full
-          read. The 01/02/03 steps live in the hero, so we deliberately
-          don't repeat them here. */}
+      {/* Audience-targeted scroll content. The selected tab drives
+          BOTH the hero's brief (01/02/03 steps) and the deep guide
+          below, so a visitor on the "For artists" tab sees only the
+          artist guide on scroll, not all three stacked. No transition
+          banner between hero and guide: the hero's tabbed eyebrow
+          already labels the audience, an extra band underneath read
+          as filler. */}
       <div id="hiw-detail">
-        {deepDive.map((section, index) => {
-          const reversed = index % 2 === 1;
-          return (
-            <section
-              key={section.id}
-              id={`hiw-${section.id}`}
-              className={`py-20 lg:py-28 ${index % 2 === 0 ? "bg-background" : "bg-surface"}`}
-            >
-              <div className="max-w-[1200px] mx-auto px-6">
-                <div className={`grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center ${reversed ? "lg:[&>div:first-child]:order-2" : ""}`}>
-                  <div>
-                    <p className="text-xs font-medium tracking-[0.25em] uppercase text-accent mb-3">
-                      {section.label}
-                    </p>
-                    <h2 className="font-serif text-3xl md:text-4xl mb-4">
-                      {section.title}
-                    </h2>
-                    <p className="text-muted leading-relaxed mb-8 max-w-lg">
-                      {section.intro}
-                    </p>
-                    <ul className="space-y-4 mb-8">
-                      {section.highlights.map((h) => (
-                        <li key={h.title} className="flex gap-3">
-                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
-                          <div>
-                            <p className="text-base font-medium text-foreground">{h.title}</p>
-                            <p className="text-sm text-muted leading-relaxed mt-0.5">{h.description}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <Link
-                        href={section.primary.href}
-                        className="inline-flex items-center justify-center px-6 py-3 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
-                      >
-                        {section.primary.label}
-                      </Link>
-                      <Link
-                        href={section.secondary.href}
-                        className="inline-flex items-center justify-center px-6 py-3 text-sm font-semibold tracking-wider uppercase border border-border text-foreground rounded-sm hover:bg-foreground/5 transition-colors"
-                      >
-                        {section.secondary.label}
-                      </Link>
-                    </div>
-                  </div>
-                  <div className="relative aspect-[4/3] rounded-sm overflow-hidden bg-foreground/5">
-                    <Image
-                      src={section.image.src}
-                      alt={section.image.alt}
-                      fill
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                      className="object-cover"
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-          );
-        })}
+        {audience === "venue" && <VenueGuide />}
+        {audience === "artist" && <ArtistGuide />}
+        {audience === "customer" && <CustomerGuide />}
       </div>
     </div>
   );
