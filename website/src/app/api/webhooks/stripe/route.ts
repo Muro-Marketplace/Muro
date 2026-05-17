@@ -369,7 +369,10 @@ export async function POST(request: Request) {
           ];
           const stripped = new Set<string>();
           let safeRow: Record<string, unknown> = { ...orderRow };
-          let lastError = error;
+          // PostgrestError | null, the loop nulls it on success to break out.
+          // Without the explicit union TS infers PostgrestError (the type of
+          // the initial value) and the `lastError = null` assignment errors.
+          let lastError: typeof error | null = error;
           while (lastError) {
             const msg = String(lastError.message || "").toLowerCase();
             const newStrip = optionalCols.filter(
