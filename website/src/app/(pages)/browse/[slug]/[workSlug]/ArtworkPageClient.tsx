@@ -150,11 +150,21 @@ export default function ArtworkPageClient({
     typeof selectedPricing?.shippingPrice === "number"
       ? selectedPricing.shippingPrice
       : (work.shippingPrice ?? undefined);
-  // In-store / pickup price for the selected size. We prefer the
-  // per-size `inStorePricing[]` array (current model) and fall back
-  // to the legacy work-level `inStorePrice` (single number) so older
-  // works without per-size data still surface a pickup CTA.
+  // In-store / pickup price for the selected size. Three sources, in
+  // priority order:
+  //   1. `pricing[i].inStorePrice` — current persisted location,
+  //      mirrors how per-size `shippingPrice` is stored.
+  //   2. `work.inStorePricing[]` — legacy top-level array, kept as a
+  //      fallback for any seed / in-memory data still using it.
+  //   3. `work.inStorePrice` — work-level single price, the original
+  //      shape from before per-size support.
   const selectedInStorePrice: number | null = (() => {
+    if (
+      typeof selectedPricing?.inStorePrice === "number" &&
+      selectedPricing.inStorePrice > 0
+    ) {
+      return selectedPricing.inStorePrice;
+    }
     if (Array.isArray(work.inStorePricing) && selectedPricing) {
       const match = work.inStorePricing.find(
         (p) =>
@@ -582,45 +592,49 @@ export default function ArtworkPageClient({
             size; for the legacy original-only flow it stays
             "Original". Shipping is £0 because the buyer collects in
             person, that's the entire point of the pickup option. */}
-        {work.available && selectedInStorePrice != null && (
-          <button
-            onClick={() => {
-              const isPerSize =
-                Array.isArray(work.inStorePricing) &&
-                work.inStorePricing.some(
-                  (p) =>
-                    p.label.toLowerCase() ===
-                    (selectedPricing?.label.toLowerCase() ?? ""),
-                );
-              addItem({
-                type: "work",
-                workId: work.id,
-                artistSlug,
-                artistName,
-                title:
-                  isPerSize && selectedPricing
-                    ? `${work.title} (Collect, ${selectedPricing.label})`
-                    : `${work.title} (Original)`,
-                image: work.image,
-                size: isPerSize && selectedPricing ? selectedPricing.label : "Original",
-                price: selectedInStorePrice,
-                quantity: 1,
-                shippingPrice: 0,
-              });
-              router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
-            }}
-            className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
-          >
-            {Array.isArray(work.inStorePricing) &&
-            work.inStorePricing.some(
-              (p) =>
-                p.label.toLowerCase() ===
-                (selectedPricing?.label.toLowerCase() ?? ""),
-            )
-              ? `Collect from venue, £${selectedInStorePrice}`
-              : `Buy Original, £${selectedInStorePrice}`}
-          </button>
-        )}
+        {work.available && selectedInStorePrice != null && (() => {
+          // Per-size CTA when either source resolves a size-specific
+          // price: the new `pricing[i].inStorePrice` field OR the
+          // legacy top-level `inStorePricing[]` array. Falls back to
+          // "Buy Original" wording when only the work-level
+          // `inStorePrice` is set, that's the single-original flow.
+          const isPerSize =
+            (typeof selectedPricing?.inStorePrice === "number" &&
+              selectedPricing.inStorePrice > 0) ||
+            (Array.isArray(work.inStorePricing) &&
+              work.inStorePricing.some(
+                (p) =>
+                  p.label.toLowerCase() ===
+                  (selectedPricing?.label.toLowerCase() ?? ""),
+              ));
+          return (
+            <button
+              onClick={() => {
+                addItem({
+                  type: "work",
+                  workId: work.id,
+                  artistSlug,
+                  artistName,
+                  title:
+                    isPerSize && selectedPricing
+                      ? `${work.title} (Collect, ${selectedPricing.label})`
+                      : `${work.title} (Original)`,
+                  image: work.image,
+                  size: isPerSize && selectedPricing ? selectedPricing.label : "Original",
+                  price: selectedInStorePrice,
+                  quantity: 1,
+                  shippingPrice: 0,
+                });
+                router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+              }}
+              className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
+            >
+              {isPerSize
+                ? `Collect from venue, £${selectedInStorePrice}`
+                : `Buy Original, £${selectedInStorePrice}`}
+            </button>
+          );
+        })()}
         {/* Venues see Make-an-Offer as a primary secondary CTA. Other
             user types still see the modal if they tap into it (it
             handles the non-venue explainer), but only venues get the

@@ -14,6 +14,14 @@ export interface SizePricing {
       work-level `shippingPrice`. Stored alongside `price` in the
       `artist_works.pricing` JSON column, no migration needed. */
   shippingPrice?: number | null;
+  /** Optional per-size in-store / pickup price. When set on at least
+      one size of a work, the artwork page surfaces a "Collect from
+      venue" CTA for that size. Stored alongside `price` in the
+      `artist_works.pricing` JSON column, same pattern as
+      `shippingPrice`, no migration needed. Replaces the old top-level
+      `inStorePricing[]` array that never persisted because the API
+      didn't accept it and the DB had no column for it. */
+  inStorePrice?: number | null;
 }
 
 export interface ArtistWork {

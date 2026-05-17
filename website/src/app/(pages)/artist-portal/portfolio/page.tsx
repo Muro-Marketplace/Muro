@@ -1369,14 +1369,25 @@ export default function PortfolioPage() {
       available: true,
       orientation: w.orientation || "landscape",
       sizes: w.pricing.map((p) => ({ label: p.label, price: p.price })),
-      shippingPrice: w.shippingPrice != null ? String(w.shippingPrice) : "",
-      inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
+      shippingPrice: w.shippingPrice != null ? w.shippingPrice.toFixed(2) : "",
+      inStorePrice: w.inStorePrice != null ? w.inStorePrice.toFixed(2) : "",
+      // Mirror the openEdit rehydration so duplicating a work copies
+      // its in-store prices from the persisted `pricing[i].inStorePrice`
+      // location, with legacy fallbacks.
       inStoreEnabled:
-        Array.isArray(w.inStorePricing) &&
-        w.inStorePricing.some((p) => p.price > 0),
-      inStorePricing: w.inStorePricing
-        ? w.inStorePricing.map((p) => String(p.price))
-        : [],
+        w.pricing.some(
+          (p) => typeof p.inStorePrice === "number" && p.inStorePrice > 0,
+        ) ||
+        (Array.isArray(w.inStorePricing) &&
+          w.inStorePricing.some((p) => p.price > 0)) ||
+        (typeof w.inStorePrice === "number" && w.inStorePrice > 0),
+      inStorePricing: w.pricing.map((p, i) => {
+        if (typeof p.inStorePrice === "number" && p.inStorePrice > 0) {
+          return p.inStorePrice.toFixed(2);
+        }
+        const legacy = w.inStorePricing?.[i];
+        return legacy && legacy.price > 0 ? legacy.price.toFixed(2) : "";
+      }),
       quantityAvailable:
         w.quantityAvailable != null ? String(w.quantityAvailable) : "",
       frameOptions: ((w as ArtistWork & {
@@ -1401,7 +1412,7 @@ export default function PortfolioPage() {
       available: w.available,
       orientation: w.orientation || "landscape",
       sizes: w.pricing.map((p) => ({ label: p.label, price: p.price })),
-      shippingPrice: w.shippingPrice != null ? String(w.shippingPrice) : "",
+      shippingPrice: w.shippingPrice != null ? w.shippingPrice.toFixed(2) : "",
       // Rehydrate per-size shipping. Previously hard-coded to `false`
       // / `[]` here, which meant opening a work that HAD per-size
       // shipping silently lost it: the toggle showed off, the column
@@ -1413,11 +1424,34 @@ export default function PortfolioPage() {
         (p) => typeof p.shippingPrice === "number",
       ),
       sizeShipping: w.pricing.map((p) =>
-        typeof p.shippingPrice === "number" ? String(p.shippingPrice) : "",
+        typeof p.shippingPrice === "number" ? p.shippingPrice.toFixed(2) : "",
       ),
-      inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
-      inStorePricing: w.inStorePricing ? w.inStorePricing.map((p) => String(p.price)) : [],
-      inStoreEnabled: Array.isArray(w.inStorePricing) && w.inStorePricing.some((p) => p.price > 0),
+      inStorePrice: w.inStorePrice != null ? w.inStorePrice.toFixed(2) : "",
+      // Rehydrate per-size in-store prices from `pricing[i].inStorePrice`
+      // (current persisted location). Fall back to the legacy top-level
+      // `inStorePricing[]` array for any in-memory or seed data that
+      // still uses it. Aligning by index matches how the form keeps
+      // `sizes` and `inStorePricing` parallel.
+      inStorePricing: w.pricing.map((p, i) => {
+        if (typeof p.inStorePrice === "number" && p.inStorePrice > 0) {
+          return p.inStorePrice.toFixed(2);
+        }
+        const legacy = w.inStorePricing?.[i];
+        return legacy && legacy.price > 0 ? legacy.price.toFixed(2) : "";
+      }),
+      // The toggle reflects ANY source of in-store data: per-size in
+      // `pricing`, legacy top-level `inStorePricing[]`, or the
+      // work-level `inStorePrice` single. Previously this only looked
+      // at `w.inStorePricing`, which was never loaded from the DB, so
+      // the checkbox flipped off on every reopen even when the artist
+      // had a valid `in_store_price` saved.
+      inStoreEnabled:
+        w.pricing.some(
+          (p) => typeof p.inStorePrice === "number" && p.inStorePrice > 0,
+        ) ||
+        (Array.isArray(w.inStorePricing) &&
+          w.inStorePricing.some((p) => p.price > 0)) ||
+        (typeof w.inStorePrice === "number" && w.inStorePrice > 0),
       // Rehydrate the per-size Qty column from each SizePricing's
       // optional quantityAvailable. If any size carries a number we
       // flip the toggle on so the column shows.
@@ -1684,6 +1718,7 @@ export default function PortfolioPage() {
           price: number;
           quantityAvailable?: number;
           shippingPrice?: number;
+          inStorePrice?: number;
         } = {
           label: s.label,
           price: s.price,
@@ -1707,6 +1742,18 @@ export default function PortfolioPage() {
           const raw = form.sizeShipping[formIdx];
           const n = raw === undefined || raw === "" ? NaN : Number(raw);
           if (Number.isFinite(n) && n >= 0) base.shippingPrice = n;
+        }
+        // Per-size in-store / pickup price, same fix as per-size
+        // shipping above. Previously the artist's per-size values
+        // landed on a top-level `inStorePricing[]` array that the API
+        // never accepted, so the whole "Also sold in-store at venues"
+        // toggle silently failed to persist. We now stash the price
+        // alongside `shippingPrice` in the `pricing` JSONB column,
+        // which DOES round-trip through the API and DB.
+        if (form.inStoreEnabled) {
+          const raw = form.inStorePricing[formIdx];
+          const n = raw === undefined || raw === "" ? NaN : Number(raw);
+          if (Number.isFinite(n) && n > 0) base.inStorePrice = n;
         }
         return base;
       }),
@@ -2437,6 +2484,19 @@ export default function PortfolioPage() {
                                       updated[i] = e.target.value;
                                       return { ...p, sizeShipping: updated };
                                     })}
+                                    onBlur={(e) => {
+                                      const raw = e.target.value.trim();
+                                      if (!raw) return;
+                                      const n = Number(raw);
+                                      if (!Number.isFinite(n)) return;
+                                      const formatted = n.toFixed(2);
+                                      if (formatted === raw) return;
+                                      setForm((p) => {
+                                        const updated = [...p.sizeShipping];
+                                        updated[i] = formatted;
+                                        return { ...p, sizeShipping: updated };
+                                      });
+                                    }}
                                     placeholder={shipEst ? shipEst.cost.toFixed(2) : (defaultShipping || "9.95")}
                                     className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                                   />
@@ -2470,6 +2530,19 @@ export default function PortfolioPage() {
                                     updated[i] = e.target.value;
                                     return { ...p, inStorePricing: updated };
                                   })}
+                                  onBlur={(e) => {
+                                    const raw = e.target.value.trim();
+                                    if (!raw) return;
+                                    const n = Number(raw);
+                                    if (!Number.isFinite(n)) return;
+                                    const formatted = n.toFixed(2);
+                                    if (formatted === raw) return;
+                                    setForm((p) => {
+                                      const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
+                                      updated[i] = formatted;
+                                      return { ...p, inStorePricing: updated };
+                                    });
+                                  }}
                                   placeholder="-"
                                   className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                                 />
@@ -2573,6 +2646,19 @@ export default function PortfolioPage() {
                                   updated[i] = e.target.value;
                                   return { ...p, sizeShipping: updated };
                                 })}
+                                onBlur={(e) => {
+                                  const raw = e.target.value.trim();
+                                  if (!raw) return;
+                                  const n = Number(raw);
+                                  if (!Number.isFinite(n)) return;
+                                  const formatted = n.toFixed(2);
+                                  if (formatted === raw) return;
+                                  setForm((p) => {
+                                    const updated = [...p.sizeShipping];
+                                    updated[i] = formatted;
+                                    return { ...p, sizeShipping: updated };
+                                  });
+                                }}
                                 placeholder={shipEst ? shipEst.cost.toFixed(2) : (defaultShipping || "9.95")}
                                 className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
                               />
@@ -2608,6 +2694,19 @@ export default function PortfolioPage() {
                                   updated[i] = e.target.value;
                                   return { ...p, inStorePricing: updated };
                                 })}
+                                onBlur={(e) => {
+                                  const raw = e.target.value.trim();
+                                  if (!raw) return;
+                                  const n = Number(raw);
+                                  if (!Number.isFinite(n)) return;
+                                  const formatted = n.toFixed(2);
+                                  if (formatted === raw) return;
+                                  setForm((p) => {
+                                    const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
+                                    updated[i] = formatted;
+                                    return { ...p, inStorePricing: updated };
+                                  });
+                                }}
                                 placeholder="-"
                                 className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
                               />
@@ -2639,6 +2738,15 @@ export default function PortfolioPage() {
                         step="0.01"
                         value={form.shippingPrice}
                         onChange={(e) => setForm((p) => ({ ...p, shippingPrice: e.target.value }))}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          if (!raw) return;
+                          const n = Number(raw);
+                          if (!Number.isFinite(n)) return;
+                          const formatted = n.toFixed(2);
+                          if (formatted === raw) return;
+                          setForm((p) => ({ ...p, shippingPrice: formatted }));
+                        }}
                         placeholder={defaultShipping || "9.95"}
                         className="w-32 bg-background border border-border rounded-sm px-3 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                       />
