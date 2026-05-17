@@ -6,10 +6,20 @@
 
 import { use, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import ImageWithFallback from "@/components/ImageWithFallback";
 import { authFetch } from "@/lib/api-client";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
+
+// Painterly backdrop, same texture treatment as the public marketing
+// pages (homepage hero, /login, /signup) to give artwork-request
+// briefs a "this is creative work" feel rather than the flat
+// office-portal grey. Abstract paint photograph + soft white wash
+// so form text stays readable. Sized 1920×1080 to match the other
+// hero backgrounds, lets Next/Image serve responsive variants.
+const PAINT_BACKDROP =
+  "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=1920&h=1080&fit=crop&crop=center";
 
 // Plan G2: dropped `existing_works` — it duplicated `offer` minus the
 // price field. Artists who want to surface portfolio works without a
@@ -200,8 +210,25 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/artwork-requests">
-      <div className="max-w-3xl px-4 sm:px-6 py-8">
-        <Link href="/artist-portal/artwork-requests" className="text-xs text-muted hover:text-accent inline-block mb-4">← All requests</Link>
+      {/* Painterly backdrop, mirrors the hero treatment on the homepage
+          and sign-in pages. Lives inside the layout's <main>, sized to
+          fill the visible content area and sit beneath the brief +
+          response form. The 90% white wash keeps the form copy
+          legible against the photograph, the bottom-fade lets the
+          texture peek through near the bottom of the page. */}
+      <div className="relative">
+        <div className="pointer-events-none absolute inset-0 -mx-4 sm:-mx-6 lg:-mx-8 -mt-4 overflow-hidden">
+          <Image
+            src={PAINT_BACKDROP}
+            alt=""
+            fill
+            className="object-cover opacity-90"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/95 via-background/90 to-background/80" />
+        </div>
+        <div className="relative max-w-3xl px-4 sm:px-6 py-8">
+          <Link href="/artist-portal/artwork-requests" className="text-xs text-muted hover:text-accent inline-block mb-4">← All requests</Link>
 
         <h1 className="text-2xl font-serif mb-2">{req.title}</h1>
         <p className="text-sm text-muted mb-2">From {req.venue_name || "Venue"}</p>
@@ -399,6 +426,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
             </p>
           </form>
         )}
+        </div>
       </div>
     </ArtistPortalLayout>
   );

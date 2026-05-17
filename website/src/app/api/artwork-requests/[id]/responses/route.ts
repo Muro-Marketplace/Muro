@@ -130,30 +130,79 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   // message rows makes the data easier to reason about downstream.
   const isPlacement = parsed.data.responseType === "placement";
 
-  const { data: inserted, error } = await db
-    .from("artwork_request_responses")
-    .insert({
-      request_id: id,
-      artist_user_id: auth.user!.id,
-      artist_slug: artist.slug,
-      response_type: parsed.data.responseType,
-      message: parsed.data.message.trim(),
-      work_ids: workIds,
-      // Size labels live in metadata jsonb to avoid a schema migration
-      // for a v1 nicety. Venue side reads work_size_labels[workId].
-      metadata: { work_size_labels: workSizeLabels },
-      proposed_offer_amount_pence: parsed.data.proposedOfferAmountPence ?? null,
-      proposed_commission_amount_pence: parsed.data.proposedCommissionAmountPence ?? null,
-      proposed_commission_timeline: parsed.data.proposedCommissionTimeline ?? null,
-      proposed_monthly_fee_pence: isPlacement ? parsed.data.proposedMonthlyFeePence ?? null : null,
-      proposed_qr_enabled: isPlacement ? parsed.data.proposedQrEnabled ?? null : null,
-      proposed_revenue_share_percent: isPlacement ? parsed.data.proposedRevenueSharePercent ?? null : null,
-    })
-    .select("id")
-    .single();
+  // Core columns that have existed since migration 046 — every prod DB
+  // is guaranteed to have these.
+  const coreRow = {
+    request_id: id,
+    artist_user_id: auth.user!.id,
+    artist_slug: artist.slug,
+    response_type: parsed.data.responseType,
+    message: parsed.data.message.trim(),
+    work_ids: workIds,
+    proposed_offer_amount_pence: parsed.data.proposedOfferAmountPence ?? null,
+    proposed_commission_amount_pence: parsed.data.proposedCommissionAmountPence ?? null,
+    proposed_commission_timeline: parsed.data.proposedCommissionTimeline ?? null,
+  };
+
+  // Extended columns added by later migrations (048 metadata, 054
+  // placement terms). If the prod DB hasn't been migrated yet, the full
+  // insert fails with "Could not find the X column of artwork_request_responses".
+  // We catch that and retry with just the core row so the artist's
+  // response still saves, then track which columns dropped so we can
+  // surface a warning to the artist + log it for the operator.
+  const extendedRow: Record<string, unknown> = {
+    metadata: { work_size_labels: workSizeLabels },
+    proposed_monthly_fee_pence: isPlacement ? parsed.data.proposedMonthlyFeePence ?? null : null,
+    proposed_qr_enabled: isPlacement ? parsed.data.proposedQrEnabled ?? null : null,
+    proposed_revenue_share_percent: isPlacement ? parsed.data.proposedRevenueSharePercent ?? null : null,
+  };
+
+  let inserted: { id: string } | null = null;
+  let error: { message: string; code?: string } | null = null;
+  const droppedColumns: string[] = [];
+
+  {
+    const res = await db
+      .from("artwork_request_responses")
+      .insert({ ...coreRow, ...extendedRow })
+      .select("id")
+      .single();
+    inserted = res.data as { id: string } | null;
+    error = res.error;
+  }
 
   if (error) {
-    console.error("[response POST]", error);
+    console.warn("[response POST] full insert failed, falling back to core columns:", error);
+    // Try a core-only insert. If THAT fails too the issue is fundamental
+    // (RLS, missing core column, FK violation) and we surface it.
+    const coreRes = await db
+      .from("artwork_request_responses")
+      .insert(coreRow)
+      .select("id")
+      .single();
+    if (coreRes.error) {
+      console.error("[response POST] core insert failed:", coreRes.error);
+      return NextResponse.json(
+        {
+          error: "Could not save response",
+          message: coreRes.error.message,
+        },
+        { status: 500 },
+      );
+    }
+    inserted = coreRes.data as { id: string } | null;
+    error = null;
+    // Note any extended columns that the artist tried to set but that
+    // didn't land. Operator log only — the response is saved.
+    droppedColumns.push(...Object.keys(extendedRow));
+    console.warn(
+      "[response POST] saved without extended columns:",
+      droppedColumns,
+      "(run pending migrations 048 + 054)",
+    );
+  }
+
+  if (error || !inserted) {
     return NextResponse.json({ error: "Could not save response" }, { status: 500 });
   }
 
