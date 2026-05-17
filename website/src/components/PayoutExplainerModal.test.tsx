@@ -27,14 +27,14 @@ describe("PayoutExplainerModal", () => {
     render(<PayoutExplainerModal audience="artist" userId="u1" active={true} />);
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(screen.getByText(/Payouts are set up/i)).toBeTruthy();
-    // Artist-specific phrasing on the in-store bullet.
-    expect(screen.getByText(/scans a QR at a venue/i)).toBeTruthy();
+    // Artist-specific phrasing: the artist marks orders delivered.
+    expect(screen.getByText(/once you mark them delivered/i)).toBeTruthy();
   });
 
   it("shows the venue copy when audience=venue", () => {
     render(<PayoutExplainerModal audience="venue" userId="u1" active={true} />);
-    expect(screen.getByText(/your revenue share/i)).toBeTruthy();
-    expect(screen.getByText(/collects the work from your venue counter/i)).toBeTruthy();
+    // Venue-specific phrasing: the artist (not the venue) marks delivered.
+    expect(screen.getByText(/once the artist marks them delivered/i)).toBeTruthy();
   });
 
   it("does not render when active=false", () => {
@@ -47,30 +47,30 @@ describe("PayoutExplainerModal", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("hides itself on I understand click and persists the dismiss in localStorage", () => {
+  it("hides itself on Got it click and persists the dismiss in localStorage", () => {
     const { unmount } = render(
       <PayoutExplainerModal audience="artist" userId="u1" active={true} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /i understand/i }));
+    fireEvent.click(screen.getByRole("button", { name: /got it/i }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(window.localStorage.getItem("wallplace:payout-explainer-seen:artist:u1")).toBeTruthy();
     unmount();
   });
 
-  it("exposes a View Agreement link to /artist-agreement and DOES NOT dismiss on click", () => {
+  it("exposes an artist-agreement link and DOES NOT dismiss on click", () => {
     render(<PayoutExplainerModal audience="artist" userId="u1" active={true} />);
     const artistLink = screen.getByRole("link", { name: /artist agreement/i }) as HTMLAnchorElement;
     expect(artistLink.getAttribute("href")).toBe("/artist-agreement");
     expect(artistLink.getAttribute("target")).toBe("_blank");
     // Reading the terms should leave the dialog open so the user can
-    // come back and explicitly tick "I understand"; only the I
-    // understand button writes the localStorage flag.
+    // come back and explicitly click "Got it"; only the Got it button
+    // writes the localStorage flag.
     fireEvent.click(artistLink);
     expect(screen.queryByRole("dialog")).toBeTruthy();
     expect(window.localStorage.getItem("wallplace:payout-explainer-seen:artist:u1")).toBeNull();
   });
 
-  it("points the View Agreement link to /venue-agreement when audience=venue", () => {
+  it("points the agreement link to /venue-agreement when audience=venue", () => {
     render(<PayoutExplainerModal audience="venue" userId="u2" active={true} />);
     const venueLink = screen.getByRole("link", { name: /venue agreement/i }) as HTMLAnchorElement;
     expect(venueLink.getAttribute("href")).toBe("/venue-agreement");

@@ -797,6 +797,38 @@ export async function POST(request: Request) {
     const subscription = event.data.object as Stripe.Subscription;
     const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
 
+    // Upgrade-race guard. When an artist upgrades from one plan to
+    // another, /api/subscribe stores the previous subscription id in
+    // metadata so the webhook handler can cancel it once the NEW
+    // subscription's `customer.subscription.created` lands and the
+    // profile has flipped to `active` on the new plan. Stripe then
+    // fires a `customer.subscription.deleted` for the OLD subscription
+    // shortly after. Without this guard, the handler would blindly
+    // overwrite `subscription_status` to `canceled` for the customer,
+    // wiping out the just-set active state, and the billing page
+    // would render "Your subscription has been canceled" right after
+    // a successful upgrade. The fix: only touch the profile if the
+    // deleted subscription is still the profile's current one.
+    const { data: profile } = await db
+      .from("artist_profiles")
+      .select("user_id, name, subscription_plan, stripe_subscription_id")
+      .eq("stripe_customer_id", customerId)
+      .maybeSingle<{
+        user_id: string | null;
+        name: string | null;
+        subscription_plan: string | null;
+        stripe_subscription_id: string | null;
+      }>();
+
+    const isStale = profile && profile.stripe_subscription_id && profile.stripe_subscription_id !== subscription.id;
+    if (isStale) {
+      // Old subscription being cancelled as part of an upgrade. The
+      // newer subscription has already been recorded against the
+      // profile; do nothing here. Skip the cancellation email too —
+      // the artist isn't really being cancelled.
+      return NextResponse.json({ received: true });
+    }
+
     const { error } = await db
       .from("artist_profiles")
       .update({ subscription_status: "canceled" })
@@ -806,11 +838,6 @@ export async function POST(request: Request) {
 
     // Cancellation confirmation email.
     try {
-      const { data: profile } = await db
-        .from("artist_profiles")
-        .select("user_id, name, subscription_plan")
-        .eq("stripe_customer_id", customerId)
-        .maybeSingle();
       if (profile?.user_id) {
         const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
         if (user?.email) {

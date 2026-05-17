@@ -62,12 +62,34 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Separate "load failed" from "still loading" so the page can break
+  // out of the "Loading…" hold state when the API returns 404 / 500 /
+  // a malformed body. Without this, any non-2xx response left `req`
+  // null while loading flipped to false — and the `if (loading || !req)`
+  // guard below kept showing the spinner forever.
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch(`/api/artwork-requests/${id}`);
-      const data = await res.json();
-      setReq(data.request);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.request) {
+        setLoadError(
+          typeof data?.error === "string" && data.error
+            ? data.error
+            : res.status === 404
+              ? "This request couldn't be found. It may have been closed or removed."
+              : "We couldn't load this request. Please try again.",
+        );
+        setReq(null);
+      } else {
+        setReq(data.request);
+      }
+    } catch {
+      setLoadError("Network error. Check your connection and try again.");
+      setReq(null);
     } finally {
       setLoading(false);
     }
@@ -147,10 +169,29 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
     }
   }
 
-  if (loading || !req) {
+  if (loading) {
     return (
       <ArtistPortalLayout activePath="/artist-portal/artwork-requests">
         <p className="text-sm text-muted py-12 text-center">Loading…</p>
+      </ArtistPortalLayout>
+    );
+  }
+
+  if (!req) {
+    return (
+      <ArtistPortalLayout activePath="/artist-portal/artwork-requests">
+        <div className="max-w-md mx-auto px-4 sm:px-6 py-16 text-center">
+          <h1 className="text-xl font-serif mb-2">Request unavailable</h1>
+          <p className="text-sm text-muted mb-6">
+            {loadError ?? "This request couldn't be loaded."}
+          </p>
+          <Link
+            href="/artist-portal/artwork-requests"
+            className="inline-block text-sm text-accent hover:underline"
+          >
+            ← Back to requests
+          </Link>
+        </div>
       </ArtistPortalLayout>
     );
   }
