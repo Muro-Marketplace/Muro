@@ -497,6 +497,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
               placement.status === "active" ? "bg-green-100 text-green-700" :
               placement.status === "pending" ? "bg-amber-100 text-amber-700" :
               placement.status === "declined" ? "bg-red-100 text-red-600" :
+              placement.status === "cancelled" ? "bg-red-100 text-red-600" :
               "bg-gray-100 text-gray-600"
             }`}>
               {placement.status.charAt(0).toUpperCase() + placement.status.slice(1)}
@@ -561,6 +562,9 @@ export default function PlacementDetailClient({ placementId }: Props) {
           )}
           {placement.status === "declined" && (
             <span className="text-[11px] text-red-600">Declined, counter with new terms to keep negotiating</span>
+          )}
+          {placement.status === "cancelled" && (
+            <span className="text-[11px] text-red-600">Cancelled, this placement is closed on both sides</span>
           )}
         </div>
         {(() => {

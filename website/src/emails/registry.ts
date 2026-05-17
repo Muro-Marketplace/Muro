@@ -45,6 +45,7 @@ import ArtistPlacementAccepted from "./templates/placements/ArtistPlacementAccep
 import VenuePlacementAcceptedConfirmation from "./templates/placements/VenuePlacementAcceptedConfirmation";
 import ArtistPlacementDeclined from "./templates/placements/ArtistPlacementDeclined";
 import PlacementVenueDeclinedArtistRequest from "./templates/placements/PlacementVenueDeclinedArtistRequest";
+import PlacementCancelled from "./templates/placements/PlacementCancelled";
 import PlacementCounterOfferReceived from "./templates/placements/PlacementCounterOfferReceived";
 import PlacementScheduled from "./templates/placements/PlacementScheduled";
 import PlacementArtworkInstalled from "./templates/placements/PlacementArtworkInstalled";
@@ -190,6 +191,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   VenuePlacementAcceptedConfirmation,
   ArtistPlacementDeclined,
   PlacementVenueDeclinedArtistRequest,
+  PlacementCancelled,
   PlacementCounterOfferReceived,
   PlacementScheduled,
   PlacementArtworkInstalled,

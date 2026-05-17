@@ -2303,10 +2303,17 @@ function BrowsePortfoliosPageInner() {
                                 work.openToOutrightPurchase ? "Purchase" : "",
                               ].filter(Boolean).join(" · ")}
                             </p>
-                            {work.openToRevenueShare && work.revenueSharePercent != null && work.revenueSharePercent > 0 && (
+                            {/* Reserve a row for the revenue-share line on every
+                                card so the masonry rows line up; works without a
+                                rev-share percent fall back to a transparent
+                                placeholder rather than collapsing the card height
+                                and visibly shrinking compared to neighbours. */}
+                            {work.openToRevenueShare && work.revenueSharePercent != null && work.revenueSharePercent > 0 ? (
                               <p className="text-[11px] text-accent font-medium mt-1">
                                 {work.revenueSharePercent}% Revenue Share
                               </p>
+                            ) : (
+                              <p className="text-[11px] mt-1" aria-hidden="true">&nbsp;</p>
                             )}
                           </div>
                         </div>
