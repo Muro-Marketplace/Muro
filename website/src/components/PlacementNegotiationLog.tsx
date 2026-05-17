@@ -16,7 +16,7 @@ interface LogEntry {
   content?: string | null;
   metadata?: {
     placementId?: string;
-    status?: "active" | "declined";
+    status?: "active" | "declined" | "cancelled";
     counter?: boolean;
     arrangementType?: string;
     revenueSharePercent?: number | null;
@@ -96,17 +96,20 @@ export default function PlacementNegotiationLog({ placementId }: Props) {
           const isResponse = entry.message_type === "placement_response";
           const isCounter = entry.metadata?.counter === true;
           const terms = describeTerms(entry.metadata);
+          const responseStatus = isResponse ? entry.metadata?.status : undefined;
           const accentColor = isResponse
-            ? entry.metadata?.status === "declined"
+            ? responseStatus === "declined" || responseStatus === "cancelled"
               ? "border-red-200 bg-red-50"
               : "border-emerald-200 bg-emerald-50"
             : isCounter
               ? "border-amber-200 bg-amber-50"
               : "border-border bg-surface";
           const title = isResponse
-            ? entry.metadata?.status === "declined"
-              ? "Declined"
-              : "Accepted"
+            ? responseStatus === "cancelled"
+              ? "Cancelled"
+              : responseStatus === "declined"
+                ? "Declined"
+                : "Accepted"
             : isCounter
               ? "Counter offer"
               : "Initial request";

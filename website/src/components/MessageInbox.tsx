@@ -1301,31 +1301,40 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           const latestResponseTs = latestResponse ? new Date(latestResponse.created_at).getTime() : 0;
                           const respondedToThis = !!latestResponse && latestResponseTs >= thisRequestTs;
                           if (respondedToThis && latestResponse) {
-                            const accepted = latestResponse.metadata?.status === "active";
+                            const responseStatus = latestResponse.metadata?.status;
+                            const accepted = responseStatus === "active";
+                            const cancelled = responseStatus === "cancelled";
                             // Gate for the Counter-on-declined button: the
                             // original offerer (requester) may revise terms;
-                            // the decliner waits for them.
+                            // the decliner waits for them. Cancellation is
+                            // terminal, no counter from either side.
                             const metaRequesterId = (meta.requesterUserId as string | undefined) || undefined;
                             const iAmOfferer = metaRequesterId
                               ? metaRequesterId === user?.id
                               : isMe;
+                            const label = cancelled
+                              ? "⊘ Cancelled"
+                              : accepted
+                                ? "✓ Accepted"
+                                : "✗ Declined";
+                            const showCounter = !accepted && !cancelled && iAmOfferer && typeof placementId === "string";
                             return (
                               <div className={`px-3.5 py-2 border-t ${accepted ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
                                   <p className={`text-xs font-medium ${accepted ? "text-green-700" : "text-red-600"}`}>
-                                    {accepted ? "✓ Accepted" : "✗ Declined"}
+                                    {label}
                                   </p>
-                                  {!accepted && iAmOfferer && typeof placementId === "string" && (
+                                  {showCounter && (
                                     <button
                                       type="button"
-                                      onClick={() => openCounterDialog(placementId)}
+                                      onClick={() => openCounterDialog(placementId as string)}
                                       className="px-2.5 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
                                     >
                                       Counter with new terms
                                     </button>
                                   )}
                                 </div>
-                                {!accepted && !iAmOfferer && (
+                                {!accepted && !cancelled && !iAmOfferer && (
                                   <p className="text-[11px] text-muted mt-1">You declined, the other party can come back with revised terms.</p>
                                 )}
                               </div>
@@ -1374,15 +1383,23 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 // Placement response card
                 if (msg.message_type === "placement_response") {
                   const accepted = meta.status === "active";
+                  const cancelled = meta.status === "cancelled";
+                  const label = accepted
+                    ? "Placement Accepted"
+                    : cancelled
+                      ? "Placement Cancelled"
+                      : "Placement Declined";
                   return (
                     <div key={msg.id} className="flex justify-center">
                       <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium ${accepted ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
                         {accepted ? (
                           <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
+                        ) : cancelled ? (
+                          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="7" cy="7" r="5.5" /><path d="M3 11L11 3" /></svg>
                         ) : (
                           <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
                         )}
-                        {accepted ? "Placement Accepted" : "Placement Declined"}
+                        {label}
                       </div>
                     </div>
                   );

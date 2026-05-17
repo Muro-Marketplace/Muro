@@ -83,6 +83,22 @@ export default function ArtistProfileClient({
     });
   }
 
+  // Theme-filtered works, declared up front so downstream computations
+  // (selectedWorks, handleBulkBuyNow, handleRequestPlacement) can read
+  // them without hitting a temporal dead zone when state changes. The
+  // earlier layout declared this further down the component, which
+  // worked while `selectedForPlacement` was empty (the .map callback
+  // never ran) but crashed the page the moment the first tick was
+  // ticked, surfacing as the "We couldn't load this artist's profile"
+  // error boundary.
+  const filteredWorks =
+    activeTheme === "All"
+      ? works
+      : works.filter((w) => {
+          const haystack = `${w.title} ${w.medium}`.toLowerCase();
+          return haystack.includes(activeTheme.toLowerCase());
+        });
+
   // Selected works as resolved ArtistWork records, in array order. Used
   // by the bulk Buy Now / Make Offer flows so we don't recompute the
   // map in three places.
@@ -190,14 +206,6 @@ export default function ArtistProfileClient({
   }, [searchParams, works, lightboxIndex, qrSize]);
 
   const allThemes = ["All", ...themes];
-
-  const filteredWorks =
-    activeTheme === "All"
-      ? works
-      : works.filter((w) => {
-          const haystack = `${w.title} ${w.medium}`.toLowerCase();
-          return haystack.includes(activeTheme.toLowerCase());
-        });
 
   // Keyboard navigation for lightbox
   const handleKeyDown = useCallback(
