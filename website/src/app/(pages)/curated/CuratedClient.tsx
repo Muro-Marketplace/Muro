@@ -281,12 +281,12 @@ export default function CuratedClient() {
       <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 overflow-hidden">
         <div className="absolute inset-0 -z-10">
           <Image
-            src="https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=1920&h=1080&fit=crop&crop=center"
-            alt="Abstract pour painting in yellow, ink and bone"
+            src="/images/auth-bg.jpg"
+            alt="Mt. Fitz Roy, Patagonia"
             fill
             className="object-cover"
             sizes="100vw"
-            preload
+            priority
           />
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/55 to-black/40" />
         </div>

@@ -122,11 +122,12 @@ export default function ArtistSignUpPage() {
     <div className="min-h-screen flex items-center justify-center relative">
       <div className="absolute inset-0 -z-10">
         <Image
-          src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop&crop=center"
-          alt="Mountain landscape"
+          src="https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=1920&h=1080&fit=crop&crop=center"
+          alt="Abstract pour painting in yellow, ink and bone"
           fill
           className="object-cover"
           priority
+          sizes="100vw"
         />
         <div className="absolute inset-0 bg-black/55" />
       </div>

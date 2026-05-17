@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   description: "Join Wallplace as an artist, venue, or customer.",
 };
 
+// Per-role accent palette, drawn from the brand palette so each
+// card has a distinct mood without inventing new colours. Stops the
+// terracotta from doing every job on the page. `circleClass` is the
+// pale wash behind the icon; `iconClass` is the icon stroke. Hover
+// state filled below in JSX.
 const options = [
   {
     label: "Artist",
@@ -17,6 +22,10 @@ const options = [
     // itself is auth-gated, anyone hitting /apply directly while
     // logged out is redirected here.
     href: "/signup/artist",
+    // Ochre — warm, painterly, suits the maker role.
+    circleClass: "bg-[#C8943820] text-[#8A6520]",
+    hoverCircleClass: "group-hover:bg-[#8A6520] group-hover:text-white",
+    chevronHoverClass: "group-hover:text-[#8A6520]",
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 19l7-7 3 3-7 7-3-3z" />
@@ -30,6 +39,10 @@ const options = [
     label: "Venue",
     description: "Find artwork for your space. Free to display, optional revenue share. Browse and connect instantly.",
     href: "/signup/venue",
+    // Deep ink — architectural, weighty, the role with a wall.
+    circleClass: "bg-foreground/10 text-foreground",
+    hoverCircleClass: "group-hover:bg-foreground group-hover:text-white",
+    chevronHoverClass: "group-hover:text-foreground",
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -41,6 +54,10 @@ const options = [
     label: "Customer",
     description: "Buy original artwork directly from independent artists. Track your orders and build your collection.",
     href: "/signup/customer",
+    // Stone — soft, neutral, the role just looking.
+    circleClass: "bg-[#9A8E7C26] text-[#5E544A]",
+    hoverCircleClass: "group-hover:bg-[#5E544A] group-hover:text-white",
+    chevronHoverClass: "group-hover:text-[#5E544A]",
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -57,11 +74,12 @@ export default function SignUpPage() {
       {/* Background, same as login */}
       <div className="absolute inset-0 -z-10">
         <Image
-          src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop&crop=center"
-          alt="Mountain landscape"
+          src="https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=1920&h=1080&fit=crop&crop=center"
+          alt="Abstract pour painting in yellow, ink and bone"
           fill
           className="object-cover"
           priority
+          sizes="100vw"
         />
         <div className="absolute inset-0 bg-black/55" />
       </div>
@@ -82,13 +100,13 @@ export default function SignUpPage() {
               className="group block bg-white/95 backdrop-blur-sm rounded-sm p-6 hover:bg-white hover:shadow-lg transition-all duration-200 min-h-[88px]"
             >
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center shrink-0 text-accent group-hover:bg-accent group-hover:text-white transition-colors">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-colors ${opt.circleClass} ${opt.hoverCircleClass}`}>
                   {opt.icon}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-medium text-foreground">{opt.label}</h2>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-muted group-hover:text-accent transition-colors shrink-0">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`text-muted transition-colors shrink-0 ${opt.chevronHoverClass}`}>
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
                   </div>
