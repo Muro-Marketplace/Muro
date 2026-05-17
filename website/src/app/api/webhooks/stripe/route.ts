@@ -332,7 +332,13 @@ export async function POST(request: Request) {
           }
         }
 
-        // Try full insert, fall back to base if new columns don't exist
+        // Try full insert. If the DB rejects an unknown column, strip
+        // ONLY the columns the error mentions and retry. The previous
+        // behaviour was to fall back to a minimal "base" row that
+        // dropped every attribution column (artist_slug, artist_user_id,
+        // venue_slug, placement_id, source, …) — orders saved fine but
+        // were invisible to the artist's GET because nothing pointed
+        // back to them. Pattern matches the placements POST retry.
         let { error } = await db.from("orders").insert(orderRow);
         if (error) {
           // Unique-constraint violation = another concurrent delivery won the race.
@@ -341,22 +347,54 @@ export async function POST(request: Request) {
             console.log("Order already exists (unique violation), treating webhook as processed");
             return NextResponse.json({ received: true, duplicate: true });
           }
-          console.warn("Full order insert failed, trying base:", error.message);
-          const baseRow = {
-            id: orderId,
-            stripe_payment_intent_id: paymentIntentId,
-            buyer_email: orderRow.buyer_email,
-            items: orderRow.items,
-            shipping: orderRow.shipping,
-            subtotal, shipping_cost: shippingCost, total,
-            status: "confirmed",
-            created_at: new Date().toISOString(),
-          };
-          const retry = await db.from("orders").insert(baseRow);
-          error = retry.error;
-          if (error && (error as { code?: string }).code === "23505") {
-            return NextResponse.json({ received: true, duplicate: true });
+          // Iterative strip-and-retry. Each loop drops only the columns
+          // the error specifically called out, keeping attribution intact
+          // for any column the DB does know about.
+          const optionalCols = [
+            "source",
+            "artist_slug",
+            "artist_user_id",
+            "venue_slug",
+            "venue_revenue_share_percent",
+            "venue_revenue",
+            "artist_revenue",
+            "platform_fee_percent",
+            "platform_fee",
+            "placement_id",
+            "fulfilment_method",
+            "collection_notes",
+            "delivered_at",
+            "status_history",
+            "stripe_payment_intent_id",
+          ];
+          const stripped = new Set<string>();
+          let safeRow: Record<string, unknown> = { ...orderRow };
+          let lastError = error;
+          while (lastError) {
+            const msg = String(lastError.message || "").toLowerCase();
+            const newStrip = optionalCols.filter(
+              (c) => !stripped.has(c) && new RegExp(`\\b${c}\\b`).test(msg),
+            );
+            if (newStrip.length === 0) break;
+            newStrip.forEach((c) => {
+              stripped.add(c);
+              delete safeRow[c];
+            });
+            console.warn(
+              `Order insert missing columns [${Array.from(stripped).join(", ")}], retrying:`,
+              lastError.message,
+            );
+            const retry = await db.from("orders").insert(safeRow);
+            if (!retry.error) {
+              lastError = null;
+              break;
+            }
+            if ((retry.error as { code?: string }).code === "23505") {
+              return NextResponse.json({ received: true, duplicate: true });
+            }
+            lastError = retry.error;
           }
+          error = lastError;
         }
 
         if (error) {
