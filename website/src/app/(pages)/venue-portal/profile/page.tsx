@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
+import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 
@@ -202,6 +203,7 @@ function TagPill({
 
 export default function VenueProfilePage() {
   const { venue, refetch } = useCurrentVenue();
+  const { showToast } = useToast();
   const [editing, setEditing] = useState<string | null>(null);
   const [freeLoan, setFreeLoan] = useState(true);
   const [revenueShare, setRevenueShare] = useState(true);
@@ -344,7 +346,7 @@ export default function VenueProfilePage() {
       });
 
       if (!res.ok) {
-        alert("Failed to save profile. Please try again.");
+        showToast("Failed to save profile. Please try again.", { variant: "error" });
         setSaving(false);
         return;
       }
@@ -355,7 +357,7 @@ export default function VenueProfilePage() {
       refetch();
       setTimeout(() => setSaved(false), 2500);
     } catch {
-      alert("Failed to save. Please check your connection.");
+      showToast("Failed to save. Please check your connection.", { variant: "error" });
     } finally {
       setSaving(false);
     }

@@ -6,6 +6,7 @@ import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
+import { useConfirm } from "@/context/ConfirmContext";
 
 interface CollectionForm {
   name: string;
@@ -46,6 +47,7 @@ const EMPTY_FORM: CollectionForm = {
 
 export default function CollectionsPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
+  const { confirm } = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
@@ -112,11 +114,11 @@ export default function CollectionsPage() {
     }, 0);
     if (individualTotal > 0 && bundleNum > individualTotal) {
       const overBy = (bundleNum - individualTotal).toFixed(0);
-      const ok = typeof window !== "undefined"
-        ? window.confirm(
-            `This bundle is £${overBy} more than buying the works individually. Publish anyway?`,
-          )
-        : false;
+      const ok = await confirm({
+        title: "Bundle priced above sum of works",
+        body: `This bundle is £${overBy} more than buying the works individually. Publish anyway?`,
+        confirmLabel: "Publish",
+      });
       if (!ok) {
         setFormError(
           `Bundle price is £${overBy} more than the sum of its works. Lower the bundle price, or confirm publish to override.`,
@@ -185,9 +187,12 @@ export default function CollectionsPage() {
     async (id: string) => {
       if (!artist) return;
       const collection = userCollections.find((c) => c.id === id);
-      const ok = window.confirm(
-        `Delete collection "${collection?.name || id}"? Works in it stay in your portfolio.`,
-      );
+      const ok = await confirm({
+        title: `Delete collection "${collection?.name || id}"?`,
+        body: "Works in it stay in your portfolio.",
+        confirmLabel: "Delete",
+        destructive: true,
+      });
       if (!ok) return;
       // Optimistic remove
       const prev = userCollections;

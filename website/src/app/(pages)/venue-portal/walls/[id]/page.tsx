@@ -25,6 +25,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { isFlagOn } from "@/lib/feature-flags";
 import type { Wall, WallLayout } from "@/lib/visualizer/types";
 
@@ -70,6 +71,7 @@ export default function VenueWallEditorPage({
   const requestedLayoutId = searchParams.get("lid");
 
   const { session, userType, loading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -193,12 +195,12 @@ export default function VenueWallEditorPage({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || `Could not delete (status ${res.status}).`);
+        showToast(data.error || `Could not delete (status ${res.status}).`, { variant: "error" });
         return;
       }
       router.push("/venue-portal/walls");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not delete wall");
+      showToast(err instanceof Error ? err.message : "Could not delete wall", { variant: "error" });
     } finally {
       setDeleting(false);
       setDeleteOpen(false);
