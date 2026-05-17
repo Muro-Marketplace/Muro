@@ -3,10 +3,31 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { labelForCountry } from "@/lib/iso-countries";
 import { clearQrContext } from "@/lib/qr-context";
+
+// Soft abstract painting underlay for the celebration moment. Sits at
+// low opacity so the order details still read cleanly, with a top
+// gradient that fades into the page background so cards float on the
+// brushwork without fighting it.
+function ConfirmationBackdrop() {
+  return (
+    <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none" aria-hidden="true">
+      <Image
+        src="https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=1920&h=1080&fit=crop&crop=center"
+        alt=""
+        fill
+        priority
+        className="object-cover opacity-30"
+        sizes="100vw"
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/75 to-background" />
+    </div>
+  );
+}
 
 interface SavedShipping {
   fullName?: string;
@@ -132,7 +153,9 @@ function ConfirmationContent() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-16 text-center">
+    <div className="relative min-h-screen">
+      <ConfirmationBackdrop />
+      <div className="max-w-2xl mx-auto px-6 py-16 text-center">
       {/* Success icon */}
       <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -225,6 +248,7 @@ function ConfirmationContent() {
             View My Orders
           </Link>
         )}
+      </div>
       </div>
     </div>
   );

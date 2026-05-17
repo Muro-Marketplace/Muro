@@ -67,7 +67,16 @@ export default function HowItWorksClient() {
           underneath it (and shows immediately, even before the image
           finishes loading or if it fails entirely). */}
       <section className="relative isolate -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 pb-24 text-white bg-foreground">
-        <div className="absolute inset-0 -z-10">
+        {/* The hero is min-h-screen so it grows when the selected
+            audience's copy runs longer (artist and customer tabs both
+            push past venue's). If the background image fills that
+            growing section, `object-cover` scales it up to keep
+            covering — so the artwork visibly zooms in the moment a
+            taller tab is selected. Pin the image container to exactly
+            100vh (h-screen) so the crop is identical for every tab;
+            any overflow below sits on the section's bg-foreground
+            base, which fades out the bottom gradient cleanly. */}
+        <div className="absolute inset-x-0 top-0 -z-10 h-screen overflow-hidden">
           <Image
             src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=1080&fit=crop&crop=center"
             alt="Curated gallery interior with framed artwork"
@@ -79,8 +88,8 @@ export default function HowItWorksClient() {
               parts of the image don't blow out the tab content, plus
               a vertical gradient to push extra contrast under the
               text block. */}
-          <div className="absolute inset-0 bg-black/75" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/80" />
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-black/70" />
         </div>
 
         <div className="flex-1 flex items-center">

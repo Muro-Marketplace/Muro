@@ -281,8 +281,8 @@ export default function CuratedClient() {
       <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 overflow-hidden">
         <div className="absolute inset-0 -z-10">
           <Image
-            src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=1080&fit=crop&crop=center"
-            alt="Curated gallery wall with framed artworks"
+            src="https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=1920&h=1080&fit=crop&crop=center"
+            alt="Abstract pour painting in yellow, ink and bone"
             fill
             className="object-cover"
             sizes="100vw"
