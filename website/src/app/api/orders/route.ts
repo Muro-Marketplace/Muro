@@ -28,8 +28,18 @@ export async function GET(request: Request) {
 
     let query;
     if (artistProfile) {
-      // Artist: orders for their work
-      query = db.from("orders").select("*").eq("artist_slug", artistProfile.slug);
+      // Artist: orders for their work. Match by EITHER artist_user_id
+      // OR artist_slug so an order that landed with only one of the
+      // two columns populated (e.g. webhook fallback insert that
+      // dropped attribution columns, slug renamed, casing drift)
+      // still surfaces in the artist's list. Without this, a guest
+      // QR-scan order whose webhook fallback stripped artist_slug
+      // would be invisible to the artist even though everything else
+      // about the order is intact.
+      query = db
+        .from("orders")
+        .select("*")
+        .or(`artist_user_id.eq.${userId},artist_slug.eq.${artistProfile.slug}`);
     } else if (venueProfile) {
       // Venue: orders from their venue + their own purchases
       query = db.from("orders").select("*").or(`venue_slug.eq.${venueProfile.slug},buyer_email.eq.${email}`);
