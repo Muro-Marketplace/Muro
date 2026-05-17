@@ -14,6 +14,9 @@ import { authFetch } from "@/lib/api-client";
 import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, arrangementLabel } from "@/lib/placements/status";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import { useToast } from "@/context/ToastContext";
+import { useConfirm } from "@/context/ConfirmContext";
 
 type FilterTab = "All" | "Pending" | "Active" | "Completed" | "Archived";
 // Display-only strings, arrangementLabel() can return combined values
@@ -129,6 +132,8 @@ function normaliseType(
 export default function PlacementsPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [responding, setResponding] = useState<string | null>(null);
   const [respondError, setRespondError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
@@ -148,6 +153,7 @@ export default function PlacementsPage() {
   const [placements, setPlacements] = useState<Placement[]>([]);
   // id of the placement currently being countered via the dialog. null = closed.
   const [counteringId, setCounteringId] = useState<string | null>(null);
+  const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [initialised, setInitialised] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -641,7 +647,11 @@ export default function PlacementsPage() {
     const ids = Array.from(selectedIds);
     const count = ids.length;
     const verb = showArchived ? "unarchive" : "archive";
-    if (!confirm(`${verb === "archive" ? "Archive" : "Unarchive"} ${count} placement${count === 1 ? "" : "s"}?`)) return;
+    const ok = await confirm({
+      title: `${verb === "archive" ? "Archive" : "Unarchive"} ${count} placement${count === 1 ? "" : "s"}?`,
+      confirmLabel: verb === "archive" ? "Archive" : "Unarchive",
+    });
+    if (!ok) return;
     setBulkBusy(true);
     const snapshot = placements;
     setPlacements((prev) => prev.filter((p) => !selectedIds.has(p.id)));
@@ -657,7 +667,7 @@ export default function PlacementsPage() {
     setBulkBusy(false);
     if (failed > 0) {
       setPlacements(snapshot);
-      alert(`Couldn't ${verb} ${failed} of ${count} placements. They've been put back on-screen.`);
+      showToast(`Couldn't ${verb} ${failed} of ${count} placements. They've been put back on-screen.`, { variant: "error" });
       return;
     }
     loadPlacements();
@@ -686,7 +696,7 @@ export default function PlacementsPage() {
       if (!res.ok) {
         setPlacements(snapshot);
         const body = await res.json().catch(() => ({}));
-        alert(body?.error || `Could not ${unarchive ? "unarchive" : "archive"} placement (HTTP ${res.status})`);
+        showToast(body?.error || `Could not ${unarchive ? "unarchive" : "archive"} placement (HTTP ${res.status})`, { variant: "error" });
         return;
       }
       loadPlacements();
@@ -694,7 +704,7 @@ export default function PlacementsPage() {
     } catch (err) {
       setPlacements(snapshot);
       console.error("Placement archive error:", err);
-      alert("Network error, placement not archived. Please try again.");
+      showToast("Network error, placement not archived. Please try again.", { variant: "error" });
     }
   }
 
@@ -711,7 +721,7 @@ export default function PlacementsPage() {
       if (!res.ok) {
         setPlacements(snapshot);
         const body = await res.json().catch(() => ({}));
-        alert(body?.error || `Could not cancel placement (HTTP ${res.status})`);
+        showToast(body?.error || `Could not cancel placement (HTTP ${res.status})`, { variant: "error" });
         return;
       }
       if (typeof window !== "undefined") {
@@ -721,7 +731,7 @@ export default function PlacementsPage() {
     } catch (err) {
       setPlacements(snapshot);
       console.error("Placement cancel error:", err);
-      alert("Network error, placement not cancelled. Please try again.");
+      showToast("Network error, placement not cancelled. Please try again.", { variant: "error" });
     }
   }
 
@@ -1347,7 +1357,7 @@ export default function PlacementsPage() {
                           (Message, Add Loan, Open full placement). */}
                       {(p.status === "Active" || p.status === "Pending") && (
                         <button
-                          onClick={() => { if (confirm("Cancel this placement? The other party will see it as cancelled.")) cancelPlacement(p.id); }}
+                          onClick={() => setPendingCancelId(p.id)}
                           className="px-2.5 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-sm transition-colors"
                           title="Cancel placement"
                         >
@@ -1355,7 +1365,17 @@ export default function PlacementsPage() {
                         </button>
                       )}
                       <button
-                        onClick={() => { const word = showArchived ? "Unarchive" : "Archive"; if (confirm(`${word} this placement? It ${showArchived ? "will return to your main list" : "moves to your archive and stays visible to the other party"}.`)) archivePlacement(p.id, showArchived); }}
+                        onClick={async () => {
+                          const word = showArchived ? "Unarchive" : "Archive";
+                          const ok = await confirm({
+                            title: `${word} this placement?`,
+                            body: showArchived
+                              ? "It will return to your main list."
+                              : "It moves to your archive and stays visible to the other party.",
+                            confirmLabel: word,
+                          });
+                          if (ok) archivePlacement(p.id, showArchived);
+                        }}
                         className="p-1.5 rounded-sm text-muted hover:text-accent hover:bg-accent/5 transition-colors"
                         aria-label={showArchived ? "Unarchive placement" : "Archive placement"}
                         title={showArchived ? "Unarchive placement" : "Archive placement"}
@@ -1878,6 +1898,20 @@ export default function PlacementsPage() {
           />
         );
       })()}
+
+      <ConfirmDialog
+        open={pendingCancelId !== null}
+        title="Cancel this placement?"
+        body="The other party will see it as cancelled."
+        confirmLabel="Cancel placement"
+        cancelLabel="Keep it"
+        destructive
+        onConfirm={() => {
+          if (pendingCancelId) cancelPlacement(pendingCancelId);
+          setPendingCancelId(null);
+        }}
+        onClose={() => setPendingCancelId(null)}
+      />
     </ArtistPortalLayout>
   );
 }

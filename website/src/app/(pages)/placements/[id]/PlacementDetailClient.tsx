@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
@@ -103,6 +104,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [placement, setPlacement] = useState<PlacementRow | null>(null);
   const [record, setRecord] = useState<PlacementRecord | null>(null);
   const [recordVersions, setRecordVersions] = useState<RecordVersion[]>([]);
@@ -313,7 +315,12 @@ export default function PlacementDetailClient({ placementId }: Props) {
 
   async function handleUndoStage(stage: "scheduled" | "installed" | "live" | "collected") {
     if (!placement) return;
-    if (!confirm(`Undo "${stage}"? You can restamp it later.`)) return;
+    const ok = await confirm({
+      title: `Undo "${stage}"?`,
+      body: "You can restamp it later.",
+      confirmLabel: "Undo",
+    });
+    if (!ok) return;
     try {
       const res = await authFetch("/api/placements", {
         method: "PATCH",
@@ -321,12 +328,12 @@ export default function PlacementDetailClient({ placementId }: Props) {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Could not undo stage.");
+        showToast(data.error || "Could not undo stage.", { variant: "error" });
         return;
       }
       await load({ silent: true });
     } catch {
-      alert("Network error. Please try again.");
+      showToast("Network error. Please try again.", { variant: "error" });
     }
   }
 
@@ -372,7 +379,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
       }
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Upload failed");
+      showToast(e instanceof Error ? e.message : "Upload failed", { variant: "error" });
     } finally {
       setUploading(false);
     }

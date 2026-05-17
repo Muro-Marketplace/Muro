@@ -6,6 +6,7 @@ import AccountDangerZone from "@/components/AccountDangerZone";
 import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 import {
   useNotificationPrefs,
@@ -80,6 +81,7 @@ interface ConnectStatus {
 export default function VenueSettingsPage() {
   const { venue, loading: venueLoading } = useCurrentVenue();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const { prefs, togglePref, error: prefsError } = useNotificationPrefs(user);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [connectLoading, setConnectLoading] = useState(true);
@@ -105,11 +107,11 @@ export default function VenueSettingsPage() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Failed to start payout setup");
+        showToast(data.error || "Failed to start payout setup", { variant: "error" });
         setConnectRedirecting(false);
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      showToast("Something went wrong. Please try again.", { variant: "error" });
       setConnectRedirecting(false);
     }
   }
@@ -122,11 +124,11 @@ export default function VenueSettingsPage() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Failed to open Stripe dashboard");
+        showToast(data.error || "Failed to open Stripe dashboard", { variant: "error" });
         setConnectRedirecting(false);
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      showToast("Something went wrong. Please try again.", { variant: "error" });
       setConnectRedirecting(false);
     }
   }

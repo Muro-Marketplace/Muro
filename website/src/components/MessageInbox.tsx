@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
+import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch } from "@/lib/api-client";
 import { uploadMessageAttachment, type MessageAttachment } from "@/lib/upload";
 import type { ArtistWork } from "@/data/artists";
@@ -98,6 +100,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   // real sender role from the user's profile, so this is a UI-only coercion.
   const portalRole: "artist" | "venue" = portalType === "artist" ? "artist" : "venue";
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -546,11 +550,11 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Could not delete conversation. Please try again.");
+        showToast(data.error || "Could not delete conversation. Please try again.", { variant: "error" });
       }
     } catch (err) {
       console.error("Delete failed:", err);
-      alert("Network error while deleting. Please try again.");
+      showToast("Network error while deleting. Please try again.", { variant: "error" });
     }
   }
 
@@ -568,7 +572,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         // Revert on failure so the UI doesn't lie about server state.
         setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, pinned_at: msg.pinned_at || null } : m));
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Could not pin message.");
+        showToast(data.error || "Could not pin message.", { variant: "error" });
       }
     } catch {
       setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, pinned_at: msg.pinned_at || null } : m));
@@ -578,7 +582,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   // Soft-delete an own message. Optimistic; server handles the
   // permission gate (only the sender can delete).
   async function handleDeleteMessage(msg: Message) {
-    if (!confirm("Delete this message? The other party will see 'Message deleted' in its place.")) return;
+    const ok = await confirm({
+      title: "Delete this message?",
+      body: "The other party will see 'Message deleted' in its place.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     const snapshot = msg;
     setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, deleted_at: new Date().toISOString(), content: "" } : m));
     try {
@@ -586,7 +596,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       if (!res.ok) {
         setMessages((prev) => prev.map((m) => m.id === snapshot.id ? snapshot : m));
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Could not delete message.");
+        showToast(data.error || "Could not delete message.", { variant: "error" });
       }
     } catch {
       setMessages((prev) => prev.map((m) => m.id === snapshot.id ? snapshot : m));
@@ -613,7 +623,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(data.error || "Could not update offer.");
+        showToast(data.error || "Could not update offer.", { variant: "error" });
         return;
       }
       // If the actor is the venue (buyer) and they accepted, fire
@@ -632,7 +642,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       }
     } catch (err) {
       console.error("Offer PATCH failed:", err);
-      alert("Network error. Please try again.");
+      showToast("Network error. Please try again.", { variant: "error" });
       return;
     }
     if (selectedConv) loadThread(selectedConv, true);
@@ -654,12 +664,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          alert(data.error || "Could not update placement. Please try again.");
+          showToast(data.error || "Could not update placement. Please try again.", { variant: "error" });
           return;
         }
       } catch (err) {
         console.error("Placement PATCH failed:", err);
-        alert("Network error. Please try again.");
+        showToast("Network error. Please try again.", { variant: "error" });
         return;
       }
     }
@@ -783,7 +793,15 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         <div className="flex flex-col items-end gap-1 shrink-0">
           <span className="text-[10px] text-muted">{timeAgo(conv.lastActivity)}</span>
           <button
-            onClick={(e) => { e.stopPropagation(); if (confirm("Delete this conversation?")) handleDeleteConversation(conv.conversationId); }}
+            onClick={async (e) => {
+              e.stopPropagation();
+              const ok = await confirm({
+                title: "Delete this conversation?",
+                confirmLabel: "Delete",
+                destructive: true,
+              });
+              if (ok) handleDeleteConversation(conv.conversationId);
+            }}
             className="text-muted/40 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
             title="Delete"
           >
@@ -1667,7 +1685,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     type="button"
                     disabled={flagSubmitting}
                     onClick={async () => {
-                      if (!confirm("Archive this conversation? It'll disappear from your inbox but can be restored by support if needed.")) return;
+                      const ok = await confirm({
+                        title: "Archive this conversation?",
+                        body: "It'll disappear from your inbox but can be restored by support if needed.",
+                        confirmLabel: "Archive",
+                      });
+                      if (!ok) return;
                       setFlagSubmitting(true);
                       try {
                         await authFetch("/api/messages", {
@@ -1689,7 +1712,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     type="button"
                     disabled={flagSubmitting}
                     onClick={async () => {
-                      if (!confirm(`Block ${selectedConvData?.otherPartyDisplayName || "this user"}? They won't be able to message you again.`)) return;
+                      const ok = await confirm({
+                        title: `Block ${selectedConvData?.otherPartyDisplayName || "this user"}?`,
+                        body: "They won't be able to message you again.",
+                        confirmLabel: "Block",
+                        destructive: true,
+                      });
+                      if (!ok) return;
                       setFlagSubmitting(true);
                       try {
                         await authFetch("/api/messages/block", {

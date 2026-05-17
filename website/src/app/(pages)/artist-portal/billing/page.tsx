@@ -5,6 +5,7 @@ import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
 import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 
 interface ProfileSubscription {
@@ -77,6 +78,7 @@ interface ConnectStatus {
 
 export default function BillingPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [sub, setSub] = useState<ProfileSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
@@ -193,11 +195,11 @@ export default function BillingPage() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Failed to start checkout");
+        showToast(data.error || "Failed to start checkout", { variant: "error" });
         setRedirecting(false);
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      showToast("Something went wrong. Please try again.", { variant: "error" });
       setRedirecting(false);
     }
   }
@@ -259,11 +261,11 @@ export default function BillingPage() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Failed to open billing portal");
+        showToast(data.error || "Failed to open billing portal", { variant: "error" });
         setRedirecting(false);
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      showToast("Something went wrong. Please try again.", { variant: "error" });
       setRedirecting(false);
     }
   }

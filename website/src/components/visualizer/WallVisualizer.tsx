@@ -912,39 +912,65 @@ function WallVisualizerInner(props: ExtendedProps) {
           <ViewModeToggle value={viewMode} onChange={setViewMode} />
         </div>
 
-        {/* Per-item toolbar, top centre when an item is selected */}
+        {/* Per-item toolbar, top centre when an item is selected.
+            Wrapper spans the full top band of the canvas and uses
+            flex justify-center to centre the pill. The older
+            `left-1/2 -translate-x-1/2` pattern constrained the
+            absolute element's shrink-to-fit width to 50% of the
+            canvas, forcing the toolbar to wrap onto two rows
+            (Delete spilled below) even when there was plenty of
+            horizontal room. pointer-events-none on the strip means
+            empty space still passes clicks through to the canvas. */}
         {selectedItem && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-auto">
-            <ItemToolbar
-              item={selectedItem}
-              sizes={workById[selectedItem.work_id]?.sizes}
-              orientation={workById[selectedItem.work_id]?.orientation}
-              onChange={(partial) => handleItemChange(selectedItem.id, partial)}
-              onBringForward={handleBringForward}
-              onSendBack={handleSendBack}
-              onDuplicate={handleDuplicate}
-              onDelete={handleDelete}
-            />
+          <div className="pointer-events-none absolute inset-x-3 top-3 flex justify-center">
+            <div className="pointer-events-auto">
+              <ItemToolbar
+                item={selectedItem}
+                sizes={workById[selectedItem.work_id]?.sizes}
+                orientation={workById[selectedItem.work_id]?.orientation}
+                onChange={(partial) => handleItemChange(selectedItem.id, partial)}
+                onBringForward={handleBringForward}
+                onSendBack={handleSendBack}
+                onDuplicate={handleDuplicate}
+                onDelete={handleDelete}
+              />
+            </div>
           </div>
         )}
 
         {/* Bottom-centre wall config bar — desktop only. On mobile this
             collapses into the "Wall" entry of the bottom toolbar,
-            which opens a slide-up sheet hosting the same controls. */}
+            which opens a slide-up sheet hosting the same controls.
+            Full-width-strip + flex justify-center, same fix as the
+            item toolbar above. The older `left-1/2 -translate-x-1/2`
+            constrained the bar's shrink-to-fit width to 50% of the
+            canvas, which forced Upload photo / Close onto a second
+            row even on wide screens. When the Render button is
+            visible at bottom-right we narrow the strip's right
+            boundary so the bar can't drift under it on tighter
+            viewports. */}
         {!isMobile && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[calc(100%-1.5rem)]">
-            <WallConfigBar
-              colorHex={
-                background.kind === "preset" ? background.color_hex : "FFFFFF"
-              }
-              widthCm={widthCm}
-              heightCm={heightCm}
-              onColorChange={handleColorChange}
-              onWidthChange={(v) => setWidthCm(clampDimension(v))}
-              onHeightChange={(v) => setHeightCm(clampDimension(v))}
-              onUploadPhoto={props.mode === "customer_artwork_page" ? handleUploadPhoto : undefined}
-              onClose={props.onClose}
-            />
+          <div
+            className={`pointer-events-none absolute bottom-3 flex justify-center ${
+              renderButtonVisible
+                ? "left-3 right-[8.5rem]"
+                : "inset-x-3"
+            }`}
+          >
+            <div className="pointer-events-auto max-w-full">
+              <WallConfigBar
+                colorHex={
+                  background.kind === "preset" ? background.color_hex : "FFFFFF"
+                }
+                widthCm={widthCm}
+                heightCm={heightCm}
+                onColorChange={handleColorChange}
+                onWidthChange={(v) => setWidthCm(clampDimension(v))}
+                onHeightChange={(v) => setHeightCm(clampDimension(v))}
+                onUploadPhoto={props.mode === "customer_artwork_page" ? handleUploadPhoto : undefined}
+                onClose={props.onClose}
+              />
+            </div>
           </div>
         )}
 

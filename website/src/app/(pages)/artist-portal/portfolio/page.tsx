@@ -9,6 +9,7 @@ import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
+import { useConfirm } from "@/context/ConfirmContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import Combobox from "@/components/Combobox";
@@ -204,6 +205,7 @@ const IMAGE_LIMITS: Record<string, number> = { core: 3, premium: 5, pro: 10 };
 export default function PortfolioPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [works, setWorks] = useState<ArtistWork[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -527,10 +529,16 @@ export default function PortfolioPage() {
   }
 
   /** Delete every selected work (with confirm). */
-  function bulkDelete() {
+  async function bulkDelete() {
     if (selectedIds.size === 0) return;
     const count = selectedIds.size;
-    if (!confirm(`Delete ${count} work${count === 1 ? "" : "s"}? This can't be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete ${count} work${count === 1 ? "" : "s"}?`,
+      body: "This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
 
     // Best-effort: fire the API delete for each. saveWorks(filtered)
     // also POSTs the remaining works which is harmless.
@@ -3114,7 +3122,14 @@ export default function PortfolioPage() {
                           Duplicate
                         </button>
                         <button
-                          onClick={() => { if (confirm("Remove this work?")) deleteWork(index); }}
+                          onClick={async () => {
+                            const ok = await confirm({
+                              title: "Remove this work?",
+                              confirmLabel: "Remove",
+                              destructive: true,
+                            });
+                            if (ok) deleteWork(index);
+                          }}
                           className="text-xs text-white/60 hover:text-red-400 transition-colors"
                         >
                           Remove

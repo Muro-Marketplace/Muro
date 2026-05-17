@@ -12,6 +12,7 @@ import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { useToast } from "@/context/ToastContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { slugify } from "@/lib/slugify";
 import { useSearchParams } from "next/navigation";
@@ -455,6 +456,7 @@ function initProfile(a: Artist): ProfileState {
 export default function ProfileEditorPage() {
   const { artist, loading: artistLoading, profileId, refetch } = useCurrentArtist();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const searchParams = useSearchParams();
   const isWelcome = searchParams?.get("welcome") === "1";
   const [profile, setProfile] = useState<ProfileState | null>(null);
@@ -647,8 +649,9 @@ export default function ProfileEditorPage() {
       postcodeRaw &&
       !/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(postcodeRaw)
     ) {
-      alert(
+      showToast(
         "Postcode doesn't look like a valid UK postcode (e.g. SW1A 1AA). Fix it or leave it blank.",
+        { variant: "warn" },
       );
       return;
     }
@@ -720,12 +723,12 @@ export default function ProfileEditorPage() {
       });
 
       if (!res.ok) {
-        alert("Failed to save profile. Please try again.");
+        showToast("Failed to save profile. Please try again.", { variant: "error" });
         return;
       }
     } catch (err) {
       console.error("Profile save error:", err);
-      alert("Failed to save profile. Please check your connection.");
+      showToast("Failed to save profile. Please check your connection.", { variant: "error" });
       return;
     }
 

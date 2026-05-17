@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/api-client";
+import { useConfirm } from "@/context/ConfirmContext";
 
 export interface PlacementStepperData {
   id: string;
@@ -70,6 +71,7 @@ interface Props {
  * the date can be edited via the same input.
  */
 export default function PlacementStepper({ placement, canAdvance = false, onChange }: Props) {
+  const { confirm } = useConfirm();
   const [busy, setBusy] = useState<Stage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [schedulePickerOpen, setSchedulePickerOpen] = useState(false);
@@ -152,7 +154,12 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
   const showUndo = canAdvance && !!lastReachedStage && (placement.status === "active" || placement.status === "completed");
 
   async function undoStage(stage: Stage) {
-    if (!confirm(`Undo "${stage}"? This clears the timestamp and lets you restamp it later.`)) return;
+    const ok = await confirm({
+      title: `Undo "${stage}"?`,
+      body: "This clears the timestamp and lets you restamp it later.",
+      confirmLabel: "Undo",
+    });
+    if (!ok) return;
     setBusy(stage);
     setError(null);
     try {

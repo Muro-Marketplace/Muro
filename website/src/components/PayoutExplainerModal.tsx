@@ -81,7 +81,7 @@ export default function PayoutExplainerModal({ audience, userId, active }: Props
         className="bg-background rounded-sm w-full max-w-lg p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start gap-3 mb-4">
+        <div className="flex items-start gap-3 mb-5">
           <div className="w-9 h-9 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
             <svg
               width="18"
@@ -98,89 +98,51 @@ export default function PayoutExplainerModal({ audience, userId, active }: Props
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
-          <div>
-            <h2 id="payout-explainer-title" className="text-lg font-medium">
-              Payouts are set up
-            </h2>
-            <p className="text-sm text-muted mt-0.5">
-              {isArtist
-                ? "Quick note on when you'll actually see the money."
-                : "Quick note on when your revenue share lands."}
-            </p>
-          </div>
+          <h2 id="payout-explainer-title" className="text-lg font-medium mt-1">
+            Payouts are set up
+          </h2>
         </div>
 
-        <ul className="space-y-4 mb-6 text-sm text-foreground">
+        {/* Two short lines, the only thing a new artist or venue really
+            needs to know on day one: when shipped orders pay out, when
+            QR/in-store sales pay out. Refund mechanics, fee splits, and
+            Stripe timing are in the agreement, not here. */}
+        <ul className="space-y-2.5 mb-5 text-sm text-foreground">
           <li className="flex gap-3">
-            <span className="mt-1 w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
-            <div>
-              <p className="font-medium">
-                {isArtist
-                  ? "Shipped orders, 14 days from purchase"
-                  : "Placement orders shipped to the customer, 14 days from purchase"}
-              </p>
-              <p className="text-muted mt-0.5 leading-relaxed">
-                {isArtist
-                  ? "Buyer has a 14-day window to flag a problem. Mark an order as Delivered earlier and Wallplace releases your payout right away, you don't have to wait the full window."
-                  : "Same 14-day buyer-protection window as the artist's share. Once the artist marks the order as delivered, your cut releases the same day."}
-              </p>
-            </div>
+            <span className="mt-2 w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
+            <p>
+              {isArtist
+                ? "Online orders pay out 14 days after purchase, or sooner once you mark them delivered."
+                : "Online placement orders pay out 14 days after purchase, or sooner once the artist marks them delivered."}
+            </p>
           </li>
           <li className="flex gap-3">
-            <span className="mt-1 w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
-            <div>
-              <p className="font-medium">
-                In-store sales at the venue, paid immediately
-              </p>
-              <p className="text-muted mt-0.5 leading-relaxed">
-                {isArtist
-                  ? "When a customer scans a QR at a venue and collects the work on the spot, you get paid at checkout. No hold."
-                  : "When a customer collects the work from your venue counter at the point of purchase, your share lands in your Stripe balance the same day."}
-              </p>
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <span className="mt-1 w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
-            <div>
-              <p className="font-medium">Refunds reverse the payout</p>
-              <p className="text-muted mt-0.5 leading-relaxed">
-                {isArtist
-                  ? "Within the buyer's 14-day refund window, a refund pulls the transfer back. After payout, refunds come out of your future earnings."
-                  : "If a refund happens after the customer's order, the venue cut is reversed alongside the artist's payout."}
-              </p>
-            </div>
+            <span className="mt-2 w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
+            <p>
+              In-store QR sales pay out the same day.
+            </p>
           </li>
         </ul>
 
         <p className="text-xs text-muted mb-5">
-          Wallplace takes its platform fee {isArtist ? "and any venue revenue share " : ""}
-          before transferring. Stripe usually clears the payout into your bank within 1 to 2 business days. Full terms are in your{" "}
-          {isArtist ? "artist" : "venue"} agreement.
-        </p>
-
-        {/* Two CTAs:
-            - "I understand" acknowledges + dismisses. localStorage flag
-              gets written so the modal doesn't surface again.
-            - "View {x} agreement" opens the long-form contract in a
-              new tab and deliberately does NOT dismiss, so the user
-              can read the terms and then come back to acknowledge
-              explicitly. Mirroring a real consent flow: read, then
-              tick the box. */}
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3">
+          Wallplace takes its platform fee before transferring. Refunds reverse the matching payout. Full terms are in your{" "}
           <a
             href={isArtist ? "/artist-agreement" : "/venue-agreement"}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium border border-border text-foreground rounded-sm hover:bg-foreground/5 transition-colors"
+            className="underline hover:text-foreground transition-colors"
           >
-            View {isArtist ? "Artist" : "Venue"} Agreement
-          </a>
+            {isArtist ? "artist" : "venue"} agreement
+          </a>.
+        </p>
+
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={dismiss}
             className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold tracking-wide bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
           >
-            I understand
+            Got it
           </button>
         </div>
       </div>

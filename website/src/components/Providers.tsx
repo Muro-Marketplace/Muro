@@ -5,6 +5,7 @@ import { CartProvider } from "@/context/CartContext";
 import { SavedProvider } from "@/context/SavedContext";
 import { CookieConsentProvider } from "@/context/CookieConsentContext";
 import { ToastProvider } from "@/context/ToastContext";
+import { ConfirmProvider } from "@/context/ConfirmContext";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +13,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         <CartProvider>
           <ToastProvider>
-            <SavedProvider>{children}</SavedProvider>
+            <ConfirmProvider>
+              <SavedProvider>{children}</SavedProvider>
+            </ConfirmProvider>
           </ToastProvider>
         </CartProvider>
       </AuthProvider>
