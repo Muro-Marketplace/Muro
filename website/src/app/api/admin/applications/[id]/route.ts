@@ -168,11 +168,39 @@ export async function PUT(
         available_sizes: [],
         referral_code: referralCode,
         referred_by_code: (app as Record<string, unknown>).referred_by_code as string | null || null,
+        // CRITICAL: mark the new profile as approved. Migration 036
+        // flipped the column default from 'approved' to 'pending', so
+        // a profile inserted without an explicit value lands at
+        // 'pending' and stays invisible to the public marketplace
+        // (anon RLS on artist_profiles only exposes 'approved' rows)
+        // and to /api/browse-artists (which filters on the same).
+        // Admin clicking Accept here is the gate, the row should
+        // be live the moment the gate opens.
+        review_status: "approved",
+        approved_at: new Date().toISOString(),
       });
 
     if (profileError) {
       console.error("Profile creation error:", profileError);
       // Don't fail the whole operation, user is created, profile can be fixed
+    }
+
+    // Belt-and-braces: ensure the artist's profile is marked approved
+    // even when the INSERT above didn't run (existing-user branch,
+    // unique-violation on a pre-existing row, or a later migration
+    // introducing a default that drifts back to 'pending'). Acceptance
+    // here is the single source of truth for "live on the marketplace".
+    {
+      const { error: approveErr } = await db
+        .from("artist_profiles")
+        .update({
+          review_status: "approved",
+          approved_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId);
+      if (approveErr) {
+        console.error("Approve update error:", approveErr);
+      }
     }
 
     // Mark application as accepted
