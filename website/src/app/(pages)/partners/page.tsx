@@ -104,7 +104,7 @@ export default function PartnersPage() {
               <ol className="list-decimal pl-6 text-muted leading-relaxed space-y-2 marker:text-accent">
                 <li>
                   We have a 30-minute call about what your sites look like,
-                  who visits, and what tone you're going for.
+                  who visits, and what tone you&rsquo;re going for.
                 </li>
                 <li>
                   We propose a shortlist of artists per site (or per scheme),
@@ -126,7 +126,7 @@ export default function PartnersPage() {
               Talk to the partnerships team
             </p>
             <p className="text-sm text-muted leading-relaxed mb-4">
-              Tell us about your portfolio of sites. We'll come back with a
+              Tell us about your portfolio of sites. We&rsquo;ll come back with a
               tailored shortlist within five working days.
             </p>
             <div className="flex flex-wrap gap-3">

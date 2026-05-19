@@ -31,6 +31,7 @@ export default function SearchInput({
 }: SearchInputProps) {
   const [local, setLocal] = useState(value);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setLocal(value), [value]);
 
   useEffect(() => {

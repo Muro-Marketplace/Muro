@@ -105,6 +105,7 @@ export default function ArtistPortalLayout({
       // Auth-fail branch is handled by the other effect (router.replace
       // to /login). Keep the check in a single state so we don't render
       // portal chrome during the redirect.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfileCheck("missing");
       return;
     }

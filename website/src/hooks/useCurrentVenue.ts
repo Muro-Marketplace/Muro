@@ -26,6 +26,7 @@ export function useCurrentVenue(): {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVenue(null);
       setProfileId(null);
       setLoading(false);

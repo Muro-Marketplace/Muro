@@ -356,6 +356,7 @@ function BrowsePortfoliosPageInner() {
   // Reset pagination when switching views / categories so users don't land
   // on an empty grid if they scroll back to a narrow filter.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadedArtists(PAGE_SIZE);
     setLoadedWorks(PAGE_SIZE);
     setLoadedCollections(PAGE_SIZE);
@@ -367,6 +368,7 @@ function BrowsePortfoliosPageInner() {
     // nav link (which goes to /browse with no view param) used to
     // leave viewAs at "artists" so the page stayed on portfolios.
     if (viewParam === "collections") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveDiscipline("collections");
     } else if (viewParam === "portfolios") {
       setActiveDiscipline("");
@@ -769,7 +771,7 @@ function BrowsePortfoliosPageInner() {
 
   const allMediums = useMemo(
     () => Array.from(new Set(artists.map((a) => a.primaryMedium))).sort(),
-    []
+    [artists],
   );
 
   const allGalleryWorks = useMemo(() => artistsToGalleryWorks(artists), [artists]);

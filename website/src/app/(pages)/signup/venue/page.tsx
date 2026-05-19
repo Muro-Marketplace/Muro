@@ -246,9 +246,9 @@ export default function RegisterVenuePage() {
             </p>
             <p className="mt-5 text-sm text-white/50">
               Want us to do the curation for you?{" "}
-              <a href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
+              <Link href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
                 Wallplace Curated
-              </a>{" "}
+              </Link>{" "}
              , paid shortlists from £49.
             </p>
           </div>

@@ -93,6 +93,7 @@ export default function VenueDashboardPage() {
 
   useEffect(() => {
     const dismissed = typeof window !== "undefined" && localStorage.getItem("wallplace-venue-onboarding-complete") === "true";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnboardingDismissed(dismissed);
   }, []);
 

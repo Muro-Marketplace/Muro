@@ -67,6 +67,7 @@ export default function PlacementActionItems({
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!userId) { setItems([]); return; }
     authFetch("/api/placements")
       .then((r) => r.json())

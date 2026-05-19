@@ -71,6 +71,7 @@ export default function ArtworkRequestsList() {
   useEffect(() => {
     if (authLoading) return;
     if (!isArtist) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }

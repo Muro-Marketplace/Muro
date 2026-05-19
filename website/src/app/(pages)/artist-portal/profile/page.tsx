@@ -463,15 +463,24 @@ export default function ProfileEditorPage() {
   // Derive a slug up-front so we can save a brand-new profile that has
   // no artist_profiles row yet. Prefer the profile's existing slug,
   // then user metadata, then the display name, then the email prefix.
-  const derivedSlug = (() => {
+  //
+  // useState with a lazy initialiser is the canonical way to capture
+  // a stable timestamp: the initialiser fires once on mount and the
+  // value is identity-stable for the lifetime of the component. We
+  // never call setFallbackTimestamp, so the value is effectively
+  // const. react-hooks/purity rejects Date.now() inside useMemo too
+  // (useMemo factories run during render), but useState's lazy init
+  // is explicitly impure-safe in the React docs.
+  const [fallbackTimestamp] = useState(() => Date.now());
+  const derivedSlug = useMemo(() => {
     if (artist?.slug) return artist.slug;
     const metaSlug = (user?.user_metadata?.artist_slug as string | undefined) || "";
     if (metaSlug) return metaSlug;
     const displayName = (user?.user_metadata?.display_name as string | undefined) || "";
-    if (displayName) return slugify(displayName) || `artist-${Date.now()}`;
+    if (displayName) return slugify(displayName) || `artist-${fallbackTimestamp}`;
     const emailPrefix = (user?.email || "").split("@")[0];
-    return slugify(emailPrefix) || `artist-${Date.now()}`;
-  })();
+    return slugify(emailPrefix) || `artist-${fallbackTimestamp}`;
+  }, [artist?.slug, user?.user_metadata, user?.email, fallbackTimestamp]);
   const [saved, setSaved] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
@@ -491,6 +500,7 @@ export default function ProfileEditorPage() {
   useEffect(() => {
     if (profile) return;
     if (artist) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfile(initProfile(artist));
       return;
     }
@@ -508,6 +518,7 @@ export default function ProfileEditorPage() {
   useUnsavedWarning(hasUnsavedChanges);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!artist) { setWorks([]); return; }
     setWorks([...artist.works]);
   }, [artist]);

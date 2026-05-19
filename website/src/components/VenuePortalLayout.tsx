@@ -122,7 +122,11 @@ export default function VenuePortalLayout({
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 
-  const NavContent = () => (
+  // Rendered as a JSX value (not a nested component) so we satisfy
+  // react-hooks/static-components: defining a component inside another
+  // component creates a fresh component identity on every render, which
+  // remounts the subtree and trashes any child state.
+  const navContent = (
     <nav className="flex flex-col h-full">
       <div className="px-4 py-5 border-b border-border">
         <p className="text-xs font-medium uppercase tracking-widest text-muted">
@@ -177,7 +181,7 @@ export default function VenuePortalLayout({
     <div className="flex flex-1 bg-background">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col w-56 shrink-0 bg-[#F5F3F0] border-r border-border sticky top-14 lg:top-16 self-start h-[calc(100vh-3.5rem)] lg:h-[calc(100vh-4rem)]">
-        <NavContent />
+        {navContent}
       </aside>
 
       {/* Mobile overlay */}
@@ -200,7 +204,7 @@ export default function VenuePortalLayout({
         }`}
         aria-hidden={!sidebarOpen}
       >
-        <NavContent />
+        {navContent}
       </aside>
 
       {/* Main content */}

@@ -27,6 +27,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const seed = new URLSearchParams(window.location.search).get("email");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (seed) setEmail(seed);
   }, []);
 

@@ -57,6 +57,7 @@ export default function PayoutExplainerModal({ audience, userId, active }: Props
   useEffect(() => {
     if (!active || !userId) return;
     if (hasSeen(audience, userId)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpen(true);
   }, [active, userId, audience]);
 

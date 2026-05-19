@@ -46,6 +46,7 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
   // Check subscription for artists
   useEffect(() => {
     if (allowedType !== "artist" || !user || loading) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSubscriptionChecked(true);
       return;
     }

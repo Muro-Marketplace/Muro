@@ -453,7 +453,7 @@ export default function PlacementContextPanel({
         <div className="px-5 py-6">
           <Header title="Placement" />
           <p className="text-xs text-muted mt-3">
-            Placements don't apply to this conversation.
+            Placements don&rsquo;t apply to this conversation.
           </p>
         </div>
       </aside>

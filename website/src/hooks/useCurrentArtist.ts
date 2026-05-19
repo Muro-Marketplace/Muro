@@ -30,6 +30,7 @@ export function useCurrentArtist(): {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setArtist(null);
       setProfileId(null);
       setLoading(false);

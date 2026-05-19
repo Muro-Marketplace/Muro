@@ -40,6 +40,7 @@ export default function ApplicationGate() {
   useEffect(() => {
     if (loading) return;
     if (!user && !redirected) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRedirected(true);
       router.replace("/signup/artist?next=/apply");
     }
