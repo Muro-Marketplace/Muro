@@ -194,6 +194,7 @@ export default function ArtistProfileClient({
     if (workParam && works.length > 0 && lightboxIndex === null) {
       const index = works.findIndex((w) => slugify(w.title) === workParam || w.id === workParam);
       if (index >= 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLightboxIndex(index);
         // Pre-select size if specified in URL
         if (qrSize) {
@@ -223,6 +224,7 @@ export default function ArtistProfileClient({
 
   // Reset fullscreen when lightbox closes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (lightboxIndex === null) setIsFullscreen(false);
   }, [lightboxIndex]);
 

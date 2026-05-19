@@ -67,6 +67,7 @@ export default function Dropdown<V extends string = string>({
   useEffect(() => {
     if (open) {
       const idx = options.findIndex((o) => o.value === value);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHighlightIdx(idx >= 0 ? idx : 0);
     }
   }, [open, options, value]);

@@ -282,3 +282,234 @@ describe("PUT /api/admin/applications/[id] sets review_status='approved' on acce
     expect(typeof payload.approved_at).toBe("string");
   });
 });
+
+describe("PUT /api/admin/applications/[id] missing reviewed_at column fallback", () => {
+  // Regression: migration 052 added reviewed_at + reviewed_by to
+  // artist_applications. Production envs that haven't run it yet would
+  // silently fail the .update() with a "column does not exist" PostgREST
+  // error and leave status='pending', so the admin list still showed the
+  // application as awaiting review even after Accept was clicked. The
+  // updateApplicationStatus helper now retries with the bare {status}
+  // payload when the failure mentions reviewed_at/reviewed_by, so the
+  // status flip survives a missing-migration deployment.
+  it("retries with status-only payload when reviewed_at column is missing on accept", async () => {
+    const calls: Record<string, unknown>[] = [];
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_applications") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: {
+                  id: "123",
+                  status: "pending",
+                  name: "Finlay",
+                  email: "finlay@example.com",
+                },
+                error: null,
+              }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            calls.push(payload);
+            return {
+              eq: async () => {
+                // First call carries reviewed_at, simulate the legacy
+                // schema rejecting it; second call should be a bare retry.
+                if (Object.keys(payload).includes("reviewed_at")) {
+                  return {
+                    error: {
+                      message:
+                        "column artist_applications.reviewed_at does not exist",
+                    },
+                  };
+                }
+                return { error: null };
+              },
+            };
+          },
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+          }),
+          insert: async () => ({ error: null }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      return {};
+    });
+    listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
+    inviteMock.mockResolvedValue({
+      data: { user: { id: "new-user-id" } },
+      error: null,
+    });
+
+    const res = await PUT(req({ action: "accept" }), {
+      params: Promise.resolve({ id: "123" }),
+    });
+    expect(res.status).toBe(200);
+
+    // First call carried the metadata, the retry stripped it down to
+    // {status: "accepted"} so the status flip lands even on the legacy
+    // schema.
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls[0]).toHaveProperty("reviewed_at");
+    expect(calls[calls.length - 1]).toEqual({ status: "accepted" });
+  });
+
+  it("returns 500 with a meaningful error when the application update fails for non-column reasons", async () => {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_applications") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: {
+                  id: "123",
+                  status: "pending",
+                  name: "Finlay",
+                  email: "finlay@example.com",
+                },
+                error: null,
+              }),
+            }),
+          }),
+          update: () => ({
+            eq: async () => ({
+              error: { message: "permission denied for table" },
+            }),
+          }),
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+          }),
+          insert: async () => ({ error: null }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      return {};
+    });
+    listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
+    inviteMock.mockResolvedValue({
+      data: { user: { id: "new-user-id" } },
+      error: null,
+    });
+
+    const res = await PUT(req({ action: "accept" }), {
+      params: Promise.resolve({ id: "123" }),
+    });
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toMatch(/failed/i);
+  });
+});
+
+describe("PUT /api/admin/applications/[id] reject also flips artist_profiles.review_status", () => {
+  // /api/apply now pre-creates an artist_profiles bridge row with
+  // review_status='pending'. Without this sync, a rejected applicant
+  // would still see the under-review banner on the artist portal
+  // (PortalGuard reads artist_profiles.review_status, not the
+  // artist_applications.status). Mirror the reject onto the profile so
+  // the portal lands on the "Application not approved" screen.
+  it("updates artist_profiles.review_status to 'rejected' when the user exists", async () => {
+    const profilesUpdatePayloads: Record<string, unknown>[] = [];
+    const profilesUpdateWhere: Record<string, unknown>[] = [];
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_applications") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: {
+                  id: "123",
+                  status: "pending",
+                  name: "Finlay",
+                  email: "finlay@example.com",
+                },
+                error: null,
+              }),
+            }),
+          }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          update: (payload: Record<string, unknown>) => {
+            profilesUpdatePayloads.push(payload);
+            return {
+              eq: async (col: string, val: unknown) => {
+                profilesUpdateWhere.push({ col, val });
+                return { error: null };
+              },
+            };
+          },
+        };
+      }
+      return {};
+    });
+
+    listUsersMock.mockResolvedValue({
+      data: { users: [{ id: "existing-user-id", email: "finlay@example.com" }] },
+      error: null,
+    });
+
+    const res = await PUT(req({ action: "reject" }), {
+      params: Promise.resolve({ id: "123" }),
+    });
+    expect(res.status).toBe(200);
+
+    expect(profilesUpdatePayloads).toContainEqual({ review_status: "rejected" });
+    expect(profilesUpdateWhere).toContainEqual({
+      col: "user_id",
+      val: "existing-user-id",
+    });
+  });
+
+  it("skips the profile sync gracefully when no auth user matches the application email", async () => {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_applications") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: {
+                  id: "123",
+                  status: "pending",
+                  name: "Finlay",
+                  email: "finlay@example.com",
+                },
+                error: null,
+              }),
+            }),
+          }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          update: () => ({
+            eq: async () => {
+              throw new Error("should not be called");
+            },
+          }),
+        };
+      }
+      return {};
+    });
+
+    listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
+
+    const res = await PUT(req({ action: "reject" }), {
+      params: Promise.resolve({ id: "123" }),
+    });
+    expect(res.status).toBe(200);
+  });
+});

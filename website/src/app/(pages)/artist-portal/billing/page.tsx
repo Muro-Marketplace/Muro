@@ -193,6 +193,9 @@ export default function BillingPage() {
       });
       const data = await res.json();
       if (data.url) {
+        // Full-page redirect to Stripe Checkout, mutating an external
+        // global from an event handler (not during render) is fine.
+        // eslint-disable-next-line react-hooks/immutability
         window.location.href = data.url;
       } else {
         showToast(data.error || "Failed to start checkout", { variant: "error" });

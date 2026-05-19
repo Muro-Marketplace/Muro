@@ -99,6 +99,7 @@ export default function ArtistPortalPage() {
   useEffect(() => {
     // Check if onboarding was previously dismissed
     const dismissed = typeof window !== "undefined" && localStorage.getItem("wallplace-onboarding-complete") === "true";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnboardingDismissed(dismissed);
   }, []);
 

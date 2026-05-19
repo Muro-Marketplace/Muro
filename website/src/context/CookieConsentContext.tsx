@@ -16,6 +16,7 @@ export function CookieConsentProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stored === "true") setConsentGiven(true);
     else if (stored === "false") setConsentGiven(false);
   }, []);

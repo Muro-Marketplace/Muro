@@ -620,6 +620,13 @@ async function CollectionsSection({
   artistSlug: string;
   artistName: string;
 }) {
+  // The data fetch is the only thing that throws; building JSX itself
+  // doesn't, so we only wrap the data step in try/catch. The
+  // react-hooks/error-boundaries rule (correctly) flags JSX-in-try
+  // because rendering errors from <CollectionCard /> are NOT caught by
+  // try/catch around the parent render, they need an error boundary up
+  // the tree. The catch here was always about the fetch.
+  let renderable: Awaited<ReturnType<typeof getCollectionsByArtistSlug>> = [];
   try {
     const collections = await getCollectionsByArtistSlug(
       artistSlug,
@@ -631,27 +638,28 @@ async function CollectionsSection({
     // (cover_image isn't even a real column on the table). One
     // image-less collection used to take the whole profile page
     // down to the global error boundary.
-    const renderable = collections.filter(
+    renderable = collections.filter(
       (c) => !!(c.thumbnail || c.bannerImage || c.coverImage),
-    );
-    if (renderable.length === 0) return null;
-    return (
-      <section className="py-10 lg:py-14 border-t border-border">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-2xl mb-6">Collections</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {renderable.map((col) => (
-              <CollectionCard key={col.id} collection={col} />
-            ))}
-          </div>
-        </div>
-      </section>
     );
   } catch (err) {
     console.warn(
-      "[CollectionsSection] render failed:",
+      "[CollectionsSection] data fetch failed:",
       err instanceof Error ? err.message : String(err),
     );
     return null;
   }
+
+  if (renderable.length === 0) return null;
+  return (
+    <section className="py-10 lg:py-14 border-t border-border">
+      <div className="max-w-[1200px] mx-auto px-6">
+        <h2 className="text-2xl mb-6">Collections</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {renderable.map((col) => (
+            <CollectionCard key={col.id} collection={col} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }

@@ -151,7 +151,7 @@ export default function OrderTrackPage() {
           </h1>
           <p className="text-muted leading-relaxed mb-10">
             Enter the order ID from your receipt email plus the email address
-            you used at checkout. Both have to match, we won't show order
+            you used at checkout. Both have to match, we won&rsquo;t show order
             details with the order ID alone.
           </p>
 
@@ -293,8 +293,8 @@ export default function OrderTrackPage() {
 
           {!order && !error && (
             <p className="text-xs text-muted">
-              Don't have an order ID? It's the alphanumeric ID at the top of
-              your receipt email. If you can't find your receipt, contact{" "}
+              Don&rsquo;t have an order ID? It&rsquo;s the alphanumeric ID at the top of
+              your receipt email. If you can&rsquo;t find your receipt, contact{" "}
               <Link href="/contact" className="text-accent hover:text-accent-hover">
                 our support team
               </Link>

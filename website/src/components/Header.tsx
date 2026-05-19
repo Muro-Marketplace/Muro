@@ -201,6 +201,7 @@ export default function Header() {
 
   // Resolve the user's actual slug from their profile (try both endpoints)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!user) { setResolvedSlug(""); return; }
     async function resolve() {
       // Try the expected endpoint first
@@ -240,6 +241,7 @@ export default function Header() {
   // email has both an artist + a customer account, etc.
   useEffect(() => {
     if (!user || !userType) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOtherRoles([]);
       return;
     }
@@ -302,6 +304,7 @@ export default function Header() {
   }, [msgDropdownOpen, notifDropdownOpen, moreDropdownOpen, portalDropdownOpen]);
 
   // Close dropdowns on route change
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); setMoreDropdownOpen(false); setPortalDropdownOpen(false); }, [pathname]);
 
   const isPortal = pathname.startsWith("/artist-portal") || pathname.startsWith("/venue-portal") || pathname.startsWith("/customer-portal");

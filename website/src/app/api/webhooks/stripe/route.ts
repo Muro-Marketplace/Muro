@@ -368,7 +368,7 @@ export async function POST(request: Request) {
             "stripe_payment_intent_id",
           ];
           const stripped = new Set<string>();
-          let safeRow: Record<string, unknown> = { ...orderRow };
+          const safeRow: Record<string, unknown> = { ...orderRow };
           // PostgrestError | null, the loop nulls it on success to break out.
           // Without the explicit union TS infers PostgrestError (the type of
           // the initial value) and the `lastError = null` assignment errors.

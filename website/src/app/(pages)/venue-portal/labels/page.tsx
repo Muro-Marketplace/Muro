@@ -295,7 +295,7 @@ export default function VenueLabelsPage() {
         ) : placements.length === 0 ? (
           <div className="bg-surface border border-border rounded-sm p-10 text-center">
             <p className="text-sm text-foreground font-medium mb-1">No active placements yet</p>
-            <p className="text-xs text-muted">Once an artist has accepted a placement for your venue, you'll be able to print QR labels for those works here.</p>
+            <p className="text-xs text-muted">Once an artist has accepted a placement for your venue, you&rsquo;ll be able to print QR labels for those works here.</p>
           </div>
         ) : (
           <>

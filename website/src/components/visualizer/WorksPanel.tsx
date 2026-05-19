@@ -24,7 +24,7 @@
  *     can place at drop coordinates.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   SizeVariant,
   WorkOrientation,
@@ -106,15 +106,18 @@ export default function WorksPanel({
     : list;
 
   // Reset the lazy-load window whenever the underlying list changes
-  // (tab switch, search input). useEffect would also work but
-  // computing the slice + reset in a single render keeps things
-  // simple and the count never lags by a frame.
+  // (tab switch, search input). useEffect runs after the commit so the
+  // first render after a tab switch shows whatever PAGE_SIZE was last
+  // set to, then resyncs on the next paint. That's a single frame of
+  // lag which is invisible at typical PAGE_SIZE values.
   const filteredKey = `${activeTab}|${filter}|${filtered.length}`;
-  const lastKeyRef = useRef(filteredKey);
-  if (lastKeyRef.current !== filteredKey) {
-    lastKeyRef.current = filteredKey;
+  useEffect(() => {
     if (visibleCount !== PAGE_SIZE) setVisibleCount(PAGE_SIZE);
-  }
+    // visibleCount intentionally omitted from deps: we only want to
+    // reset when the underlying filtered set changes, not every time
+    // the user clicks "Load more" and bumps visibleCount up.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredKey]);
   const visible = filtered.slice(0, visibleCount);
   const hasMore = filtered.length > visibleCount;
 

@@ -40,6 +40,7 @@ export default function VenueAnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     authFetch(`/api/analytics/venue?range=${dateRangeToParam(dateRange)}`)
       .then((r) => r.json())

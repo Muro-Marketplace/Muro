@@ -42,6 +42,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const raw = new URLSearchParams(window.location.search).get("backTo");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBackHref(safeRedirect(raw, "/browse"));
   }, []);
   // Cart-level error surfaced when the API rejects the cart at submit
@@ -99,6 +100,7 @@ export default function CheckoutPage() {
     if (typeof window === "undefined") return;
     const presetEmail = new URLSearchParams(window.location.search).get("email");
     if (presetEmail) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShipping((prev) => (prev.email ? prev : { ...prev, email: presetEmail }));
     }
   }, []);
@@ -110,6 +112,7 @@ export default function CheckoutPage() {
   // (one saved address, returning buyer) needs zero clicks.
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSavedAddresses([]);
       setSavedAddressId("");
       return;
@@ -147,6 +150,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     const slugs = Array.from(new Set(items.map((i) => i.artistSlug).filter(Boolean)));
     if (slugs.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPickupBySlug({});
       setPickupLoaded(true);
       return;
@@ -199,6 +203,7 @@ export default function CheckoutPage() {
   // can still be placed.
   useEffect(() => {
     if (pickupLoaded && !pickupAvailable && fulfilmentMethod === "collection") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFulfilmentMethod("ship");
     }
   }, [pickupLoaded, pickupAvailable, fulfilmentMethod]);

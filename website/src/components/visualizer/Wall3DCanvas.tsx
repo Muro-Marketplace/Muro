@@ -1137,8 +1137,15 @@ function ArtworkPlane({
 }) {
   const texture = useTexture(url);
   // Tag every freshly-loaded texture with the right colour space.
-  // useTexture caches per URL so this only runs once per image.
+  // useTexture caches per URL so this only runs once per image, and the
+  // mutation is the standard react-three-fiber pattern for forcing the
+  // sRGB pipeline on a Three.js Texture instance (which is an external
+  // resource, not React state). The react-hooks/immutability rule flags
+  // any field write to a hook return but for r3f textures this is the
+  // documented way.
+  // eslint-disable-next-line react-hooks/immutability
   texture.colorSpace = THREE.SRGBColorSpace;
+  // eslint-disable-next-line react-hooks/immutability
   texture.anisotropy = 8;
   // meshBasicMaterial + toneMapped:false renders the image at its
   // true colour values regardless of room lighting. Standard PBR
@@ -1166,7 +1173,10 @@ function TexturedWall({
   wallH: number;
 }) {
   const texture = useTexture(url);
+  // Same colour-space + anisotropy fixup as ArtworkPlate. r3f-idiomatic.
+  // eslint-disable-next-line react-hooks/immutability
   texture.colorSpace = THREE.SRGBColorSpace;
+  // eslint-disable-next-line react-hooks/immutability
   texture.anisotropy = 8;
   return (
     <mesh position={[0, wallH / 2, 0]} receiveShadow>
@@ -1253,6 +1263,7 @@ function useProceduralWoodTexture(): THREE.Texture | null {
     tex.repeat.set(3, 2);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTexture(tex);
 
     return () => {

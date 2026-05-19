@@ -71,6 +71,7 @@ export default function LabelsPage() {
     const paramWorks = searchParams.get("works");
     const paramSizes = searchParams.get("sizes");
     const paramSize = searchParams.get("size");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (paramVenue) setSelectedVenue(paramVenue);
     if (paramWorks && artist.works) {
       const workTitles = paramWorks.split(",").map((w) => w.trim());

@@ -180,6 +180,7 @@ export default function ApplicationForm() {
   // typed something else (preserves any partial draft).
   useEffect(() => {
     if (!user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm((prev) => ({
       ...prev,
       email: prev.email || user.email || "",
