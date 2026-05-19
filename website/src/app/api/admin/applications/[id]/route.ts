@@ -45,18 +45,35 @@ export async function PUT(
     }
 
     if (action === "reject") {
-      const { error: updateError } = await db
-        .from("artist_applications")
-        .update({
-          status: "rejected",
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: user!.id,
-        })
-        .eq("id", id);
-
-      if (updateError) {
-        console.error("Reject update error:", updateError);
+      const rejectErr = await updateApplicationStatus(db, id, "rejected", user!.id);
+      if (rejectErr) {
+        console.error("Reject update error:", rejectErr);
         return NextResponse.json({ error: "Failed to reject application" }, { status: 500 });
+      }
+
+      // Mirror the rejection onto the artist_profiles bridge row (created
+      // at /api/apply time) so the applicant's portal lands on the
+      // "Application not approved" screen rather than continuing to show
+      // the under-review banner. Best-effort, the application row is the
+      // source of truth for whether the applicant has been reviewed.
+      if (app.email) {
+        try {
+          const listed = await db.auth.admin.listUsers();
+          const existingUser = listed?.data?.users?.find(
+            (u) => u.email === app.email,
+          );
+          if (existingUser) {
+            const { error: profileErr } = await db
+              .from("artist_profiles")
+              .update({ review_status: "rejected" })
+              .eq("user_id", existingUser.id);
+            if (profileErr) {
+              console.error("Reject profile sync error:", profileErr);
+            }
+          }
+        } catch (syncErr) {
+          console.error("Reject profile sync threw:", syncErr);
+        }
       }
 
       // Rejection email, graceful decline with optional feedback.
@@ -203,15 +220,18 @@ export async function PUT(
       }
     }
 
-    // Mark application as accepted
-    await db
-      .from("artist_applications")
-      .update({
-        status: "accepted",
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: user!.id,
-      })
-      .eq("id", id);
+    // Mark application as accepted. Goes through the same helper as the
+    // reject path so a missing reviewed_at / reviewed_by column (migration
+    // 052 not yet deployed) doesn't silently swallow the status flip and
+    // leave the admin list showing "pending" forever.
+    const acceptErr = await updateApplicationStatus(db, id, "accepted", user!.id);
+    if (acceptErr) {
+      console.error("Accept update error:", acceptErr);
+      return NextResponse.json(
+        { error: "Failed to mark application accepted" },
+        { status: 500 },
+      );
+    }
 
     // Approved email. For new invited users, Supabase's invite email
     // already landed, this is the brand-polished follow-up.
@@ -243,4 +263,54 @@ export async function PUT(
     console.error("Accept/reject error:", err);
     return NextResponse.json({ error: "Operation failed" }, { status: 500 });
   }
+}
+
+type AdminDb = ReturnType<typeof getSupabaseAdmin>;
+
+/**
+ * Flip artist_applications.status with retry on missing reviewed_at /
+ * reviewed_by columns. Migration 052 added these and the original update
+ * here had no error check, so an env that hasn't run 052 yet would
+ * silently leave the row at status='pending' and the admin list would
+ * keep showing the applicant as awaiting review even after Accept was
+ * clicked. The retry path drops the optional columns and tries again
+ * with the bare status + best-effort logging.
+ */
+async function updateApplicationStatus(
+  db: AdminDb,
+  id: string,
+  status: "accepted" | "rejected",
+  reviewerId: string,
+): Promise<{ message: string } | null> {
+  const fullPayload = {
+    status,
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: reviewerId,
+  };
+
+  const { error } = await db
+    .from("artist_applications")
+    .update(fullPayload)
+    .eq("id", id);
+
+  if (!error) return null;
+
+  const msg = String(error.message || "").toLowerCase();
+  const missingMeta =
+    msg.includes("reviewed_at") || msg.includes("reviewed_by");
+  if (!missingMeta) {
+    return { message: error.message || "Unknown error" };
+  }
+
+  // Legacy schema, retry without the metadata columns. Status is the
+  // only column the admin list actually filters on, so dropping the
+  // others is acceptable for unblocking the gate.
+  const { error: retryError } = await db
+    .from("artist_applications")
+    .update({ status })
+    .eq("id", id);
+  if (retryError) {
+    return { message: retryError.message || "Unknown error" };
+  }
+  return null;
 }
