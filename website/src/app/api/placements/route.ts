@@ -286,6 +286,24 @@ export async function POST(request: Request) {
     let artistProfile: { user_id: string; slug: string; name: string } | null = null;
     let venueProfile: { user_id: string; slug: string; name: string } | null = null;
 
+    // A `fromVenue` caller whose role isn't "venue" almost always means
+    // their venue_profiles row is missing or unlinked (the registration
+    // race: row inserted with user_id=NULL, ensureProfile never ran).
+    // Returning the artist-branch's "Artist profile not found" here is
+    // actively misleading — the venue user has no idea what an artist
+    // profile has to do with their placement request. Surface a venue-
+    // specific error instead so the UI can hint at the actual fix
+    // (open Venue Profile, complete setup).
+    if (fromVenue && role?.type !== "venue") {
+      return NextResponse.json(
+        {
+          error: "Your venue profile isn't set up yet. Open Venue Profile, complete the details, then try again.",
+          code: "venue_profile_missing",
+        },
+        { status: 409 },
+      );
+    }
+
     if (fromVenue && role?.type === "venue") {
       // Venue-initiated request: look up artist from body.
       //

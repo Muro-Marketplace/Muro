@@ -44,14 +44,17 @@ export default function VenuePortalLayout({
     }
   }, [loading, user, userType, router]);
 
-  // One-time back-fill for venues registered after the email-verification
-  // gate landed: the profile was created server-side without a user_id
-  // because the user wasn't signed in yet.
+  // Self-heal the caller's venue_profiles row on first portal visit.
+  // The registration flow inserts the row with user_id=NULL (the user
+  // isn't signed in yet); ensureProfile links it, OR inserts a minimal
+  // row if the original orphan was never created / got lost. Without
+  // this, every venue-only API call (placements, offers, artwork
+  // requests) errors with a misleading "Artist profile not found".
   useEffect(() => {
     if (!user || !user.email_confirmed_at) return;
     authFetch("/api/venue-profile", {
       method: "PATCH",
-      body: JSON.stringify({ adoptIfOrphan: true }),
+      body: JSON.stringify({ ensureProfile: true }),
     }).catch(() => {});
   }, [user]);
 
