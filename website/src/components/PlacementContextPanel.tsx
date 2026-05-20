@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { authFetch } from "@/lib/api-client";
+import { useConfirm } from "@/context/ConfirmContext";
 import type { ArtistWork } from "@/data/artists";
 import {
   normaliseStatus,
@@ -92,6 +93,7 @@ export default function PlacementContextPanel({
   onRequestSent,
   onClose,
 }: PanelProps) {
+  const { confirm } = useConfirm();
   const [placements, setPlacements] = useState<RemotePlacement[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -258,7 +260,12 @@ export default function PlacementContextPanel({
 
   async function handleDecline() {
     if (!current) return;
-    if (!confirm("Decline this placement request?")) return;
+    const ok = await confirm({
+      title: "Decline this placement request?",
+      confirmLabel: "Decline",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusyAction("decline");
     setError(null);
     try {
@@ -276,7 +283,12 @@ export default function PlacementContextPanel({
 
   async function handleUndoStage(stage: "scheduled" | "installed" | "live" | "collected") {
     if (!current) return;
-    if (!confirm(`Undo "${stage}"? You can restamp it later.`)) return;
+    const ok = await confirm({
+      title: `Undo "${stage}"?`,
+      body: "You can restamp it later.",
+      confirmLabel: "Undo",
+    });
+    if (!ok) return;
     setBusyAction(`undo-${stage}`);
     setError(null);
     try {
@@ -441,7 +453,7 @@ export default function PlacementContextPanel({
         <div className="px-5 py-6">
           <Header title="Placement" />
           <p className="text-xs text-muted mt-3">
-            Placements don't apply to this conversation.
+            Placements don&rsquo;t apply to this conversation.
           </p>
         </div>
       </aside>

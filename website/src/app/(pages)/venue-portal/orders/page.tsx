@@ -4,14 +4,21 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch } from "@/lib/api-client";
+import { detectCarrierUrl } from "@/lib/carrier-tracking";
 
 interface Order {
   id: string;
   items: { title: string; qty: number; price: number; artistSlug?: string }[];
   shipping: { fullName: string; addressLine1: string; city: string; postcode: string };
   total: number;
+  /** Server-provided shipping cost when available. Older orders may
+   *  not carry this; the UI derives it from `total - subtotal` as a
+   *  fallback so the breakdown still adds up. */
+  shipping_amount?: number;
+  shipping_cost?: number;
   venue_revenue: number;
   venue_revenue_share_percent: number;
   artist_slug?: string;
@@ -138,23 +145,91 @@ function VenueOrdersContent() {
 
           <OrderStatusTracker currentStatus={selected.status || "confirmed"} statusHistory={selected.status_history || []} />
 
-          {selected.tracking_number && (
-            <p className="text-sm text-muted mt-4">Tracking: <span className="text-foreground font-medium">{selected.tracking_number}</span></p>
-          )}
+          {selected.tracking_number && (() => {
+            const url = detectCarrierUrl(selected.tracking_number);
+            return (
+              <p className="text-sm text-muted mt-4">
+                Tracking:{" "}
+                {url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-accent font-medium hover:underline"
+                  >
+                    {selected.tracking_number} ↗
+                  </a>
+                ) : (
+                  <span className="text-foreground font-medium">{selected.tracking_number}</span>
+                )}
+              </p>
+            );
+          })()}
 
-          <div className="mt-6 space-y-2">
-            <p className="text-xs text-muted uppercase tracking-wider">Items</p>
-            {(selected.items || []).map((item, i) => {
-              const qty = item?.qty ?? 1;
-              const price = typeof item?.price === "number" ? item.price : 0;
-              return (
-                <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
-                  <span>{item?.title || "Item"} &times; {qty}</span>
-                  <span className="font-medium">&pound;{(price * qty).toFixed(2)}</span>
+          {(() => {
+            // Compute the order breakdown so items + shipping = total
+            // is visible. QA flagged that the items list summed to a
+            // different number than `total` (e.g. items £150 vs total
+            // £169.90) with no shipping line in between — so the user
+            // couldn't reconcile the maths. We always derive shipping
+            // from the residual when the server hasn't supplied an
+            // explicit value, that keeps the columns honest even on
+            // legacy orders.
+            const items = selected.items || [];
+            const subtotal = items.reduce(
+              (sum, it) =>
+                sum +
+                (typeof it?.price === "number" ? it.price : 0) *
+                  (typeof it?.qty === "number" ? it.qty : 1),
+              0,
+            );
+            const total = typeof selected.total === "number" ? selected.total : 0;
+            const serverShipping =
+              typeof selected.shipping_amount === "number"
+                ? selected.shipping_amount
+                : typeof selected.shipping_cost === "number"
+                  ? selected.shipping_cost
+                  : null;
+            const derivedShipping = total - subtotal;
+            const shipping = serverShipping ?? (Math.abs(derivedShipping) > 0.005 ? derivedShipping : 0);
+            const showShippingRow = Math.abs(shipping) > 0.005;
+            return (
+              <div className="mt-6 space-y-2">
+                <p className="text-xs text-muted uppercase tracking-wider">Items</p>
+                {items.map((item, i) => {
+                  const qty = item?.qty ?? 1;
+                  const price = typeof item?.price === "number" ? item.price : 0;
+                  return (
+                    <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
+                      <span>{item?.title || "Item"} &times; {qty}</span>
+                      <span className="font-medium">&pound;{(price * qty).toFixed(2)}</span>
+                    </div>
+                  );
+                })}
+                {items.length > 0 && showShippingRow && (
+                  <>
+                    <div className="flex justify-between text-sm pt-1">
+                      <span className="text-muted">Subtotal</span>
+                      <span className="text-muted tabular-nums">&pound;{subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">
+                        Shipping
+                        {serverShipping == null && (
+                          <span className="ml-1 text-[10px] text-muted/70">(derived)</span>
+                        )}
+                      </span>
+                      <span className="text-muted tabular-nums">&pound;{shipping.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between text-sm pt-2 border-t border-border">
+                  <span className="font-medium">Total</span>
+                  <span className="font-medium tabular-nums">&pound;{total.toFixed(2)}</span>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })()}
 
           {(() => {
             const venueRev = typeof selected.venue_revenue === "number" ? selected.venue_revenue : 0;
@@ -201,13 +276,15 @@ function VenueOrdersContent() {
       {loading ? (
         <p className="text-muted text-sm py-12 text-center">Loading orders...</p>
       ) : visibleOrders.length === 0 ? (
-        <div className="bg-surface border border-border rounded-sm px-6 py-12 text-center">
-          <p className="text-muted text-sm">
-            {tab === "sales"
-              ? "No placement sales yet. Sales attributed to your venue will appear here."
-              : "You haven't purchased anything yet. Art you buy will appear here."}
-          </p>
-        </div>
+        <EmptyState
+          title={tab === "sales" ? "No placement sales yet" : "Nothing purchased yet"}
+          hint={
+            tab === "sales"
+              ? "Sales attributed to your venue will appear here."
+              : "Art you buy will appear here."
+          }
+          cta={{ label: "Discover art", href: "/browse" }}
+        />
       ) : (
         <div className="space-y-3">
           {visibleOrders.map((order) => (

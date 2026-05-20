@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
+import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 
@@ -33,8 +34,8 @@ const THEME_TAGS = [
 
 const SIZE_OPTIONS = [
   "Small (up to 40cm)",
-  "Medium (40–80cm)",
-  "Large (80–120cm)",
+  "Medium (40 to 80cm)",
+  "Large (80 to 120cm)",
   "Oversized (120cm+)",
 ];
 
@@ -202,6 +203,7 @@ function TagPill({
 
 export default function VenueProfilePage() {
   const { venue, refetch } = useCurrentVenue();
+  const { showToast } = useToast();
   const [editing, setEditing] = useState<string | null>(null);
   const [freeLoan, setFreeLoan] = useState(true);
   const [revenueShare, setRevenueShare] = useState(true);
@@ -246,7 +248,7 @@ export default function VenueProfilePage() {
       setLocalArtists(venue.interestedInLocalArtists ?? false);
       setStyles(venue.preferredStyles?.length ? venue.preferredStyles : ["Contemporary", "Minimal", "Photography"]);
       setThemes(venue.preferredThemes?.length ? venue.preferredThemes : ["Nature", "City", "Architecture"]);
-      setSizes(["Medium (40–80cm)", "Large (80–120cm)"]);
+      setSizes(["Medium (40 to 80cm)", "Large (80 to 120cm)"]);
       setDetailName(venue.name || "");
       setDetailType(venue.type || "");
       setDetailLocation(venue.location || "");
@@ -344,7 +346,7 @@ export default function VenueProfilePage() {
       });
 
       if (!res.ok) {
-        alert("Failed to save profile. Please try again.");
+        showToast("Failed to save profile. Please try again.", { variant: "error" });
         setSaving(false);
         return;
       }
@@ -355,7 +357,7 @@ export default function VenueProfilePage() {
       refetch();
       setTimeout(() => setSaved(false), 2500);
     } catch {
-      alert("Failed to save. Please check your connection.");
+      showToast("Failed to save. Please check your connection.", { variant: "error" });
     } finally {
       setSaving(false);
     }
@@ -419,20 +421,34 @@ export default function VenueProfilePage() {
           </div>
           <div className="p-5 space-y-4">
             {([
-              { label: "Venue Name", value: detailName || venue?.name || "Your Venue", setter: setDetailName, placeholder: "" },
-              { label: "Venue Type", value: detailType || venue?.type || "Not set", setter: setDetailType, placeholder: "" },
-              { label: "Location", value: detailLocation || venue?.location || "Not set", setter: setDetailLocation, placeholder: "" },
-              { label: "Wall Space", value: detailWallSpace || venue?.wallSpace || "Not set", setter: setDetailWallSpace, placeholder: "" },
-              { label: "Visitors per day (approx.)", value: detailFootfall || venue?.approximateFootfall || "Not set", setter: setDetailFootfall, placeholder: "e.g. 250" },
-            ] as const).map(({ label, value, setter, placeholder }) => (
+              { label: "Venue Name", value: detailName || venue?.name || "Your Venue", setter: setDetailName, placeholder: "", inputType: "text" as const },
+              { label: "Venue Type", value: detailType || venue?.type || "Not set", setter: setDetailType, placeholder: "", inputType: "text" as const },
+              { label: "Location", value: detailLocation || venue?.location || "Not set", setter: setDetailLocation, placeholder: "", inputType: "text" as const },
+              { label: "Wall Space", value: detailWallSpace || venue?.wallSpace || "Not set", setter: setDetailWallSpace, placeholder: "", inputType: "text" as const },
+              { label: "Visitors per day (approx.)", value: detailFootfall || venue?.approximateFootfall || "Not set", setter: setDetailFootfall, placeholder: "e.g. 250", inputType: "number" as const },
+            ] as const).map(({ label, value, setter, placeholder, inputType }) => (
               <div key={label}>
                 <p className="text-xs font-medium text-muted mb-1">{label}</p>
                 {editing === "details" ? (
                   <input
-                    type="text"
+                    type={inputType}
+                    inputMode={inputType === "number" ? "numeric" : undefined}
+                    min={inputType === "number" ? 0 : undefined}
+                    step={inputType === "number" ? 1 : undefined}
                     value={value}
                     placeholder={placeholder}
-                    onChange={(e) => { setter(e.target.value); markDirty(); }}
+                    onChange={(e) => {
+                      // For numeric fields, strip non-digit characters so a
+                      // paste of "1,200 (avg)" or stray letters doesn't
+                      // persist. Empty string is allowed so the field can
+                      // be cleared while editing.
+                      const raw = e.target.value;
+                      const next = inputType === "number"
+                        ? raw.replace(/[^\d]/g, "")
+                        : raw;
+                      setter(next);
+                      markDirty();
+                    }}
                     className="w-full px-3 py-2 border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 bg-background"
                   />
                 ) : (

@@ -29,16 +29,29 @@ export async function GET(request: Request) {
     if (artistProfile) {
       // Artist dashboard, fetch placements, orders, messages, works count in parallel
       const slug = artistProfile.slug;
-      const [placementsRes, ordersRes, messagesRes, worksCountRes] = await Promise.all([
+      const [placementsRes, ordersRes, messagesRes, worksCountRes, refundsRes] = await Promise.all([
         db.from("placements").select("*").eq("artist_user_id", userId).order("created_at", { ascending: false }),
         db.from("orders").select("*").eq("artist_slug", slug).order("created_at", { ascending: false }),
         db.from("messages").select("*").or(`recipient_slug.eq.${slug},sender_name.eq.${slug}`).order("created_at", { ascending: false }).limit(50),
         db.from("artist_works").select("id", { count: "exact", head: true }).eq("artist_id", artistProfile.id),
+        // Refund requests on this artist's orders. Fetched via a join
+        // through orders so we don't have to widen refund_requests with
+        // a denormalised artist_slug. Limited to 20 since the dashboard
+        // only surfaces the most recent few.
+        db
+          .from("refund_requests")
+          .select("id, order_id, status, type, amount, reason, requester_type, created_at, orders!inner(artist_slug)")
+          .eq("orders.artist_slug", slug)
+          .order("created_at", { ascending: false })
+          .limit(20),
       ]);
 
       const placements = placementsRes.data || [];
       const orders = ordersRes.data || [];
       const messages = messagesRes.data || [];
+      // refund_requests may not exist in every environment, fall back to
+      // an empty list rather than 500ing the whole dashboard.
+      const refundRequests = refundsRes.error ? [] : (refundsRes.data || []);
 
       // Group messages into conversations. latestSender is carried so the
       // dashboard activity feed can filter out messages the user sent.
@@ -56,16 +69,42 @@ export async function GET(request: Request) {
         .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime())
         .slice(0, 5);
 
+      // Dashboard counts must exclude rows the artist has archived,
+      // otherwise the dashboard ("26 Active Placements") and the
+      // placements page ("Active 0") tell two different stories. QA
+      // flagged that the dashboard happily counts hidden_for_artist
+      // rows while the placements page filters them out.
+      const visiblePlacements = placements.filter(
+        (p) => (p as { hidden_for_artist?: boolean }).hidden_for_artist !== true,
+      );
+
+      // Total revenue uses the artist's payout (artist_revenue), not
+      // the buyer-side total, so the dashboard number matches what
+      // the artist actually receives and what the per-order revenue
+      // breakdown shows. The previous `o.total` summed the gross
+      // (buyer-paid) figure which didn't reconcile with the per-row
+      // payouts on the Orders page.
+      const totalRevenue = orders.reduce((sum, o) => {
+        const payout =
+          typeof (o as { artist_revenue?: number | null }).artist_revenue === "number"
+            ? (o as { artist_revenue?: number | null }).artist_revenue!
+            : typeof (o as { total?: number | null }).total === "number"
+              ? (o as { total: number }).total
+              : 0;
+        return sum + (Number.isFinite(payout) ? payout : 0);
+      }, 0);
+
       return NextResponse.json({
         userType: "artist",
         profile: artistProfile,
-        placements,
+        refundRequests,
+        placements: visiblePlacements,
         orders,
         conversations,
         worksCount: worksCountRes.count ?? 0,
         stats: {
-          activePlacements: placements.filter((p) => p.status === "active").length,
-          totalRevenue: orders.reduce((sum, o) => sum + (o.total || 0), 0),
+          activePlacements: visiblePlacements.filter((p) => p.status === "active").length,
+          totalRevenue,
           enquiries: artistProfile.total_enquiries || 0,
           views: artistProfile.total_views || 0,
         },

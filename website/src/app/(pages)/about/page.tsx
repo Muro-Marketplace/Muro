@@ -3,7 +3,7 @@ import Button from "@/components/Button";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "About – Wallplace",
+  title: "About Wallplace",
   description:
     "Wallplace exists to connect incredible artists with the bare walls of cafes, restaurants, and creative spaces.",
 };
@@ -46,31 +46,32 @@ export default function AboutPage() {
                 spaces and you will see one of two things: bare walls,
                 or mass-produced prints that could be in any city in the world.
                 Meanwhile, there are some of the most talented emerging
-                artists anywhere – people creating
+                artists anywhere, people creating
                 extraordinary work that deserves to be seen.
               </p>
               <p className="text-muted leading-relaxed">
                 The problem is not a lack of supply or demand. It is the gap
                 between them. Artists do not know which venues want art. Venues
                 do not know where to find artists. And even when they do connect,
-                the logistics of selecting, pricing, delivering, and managing
-                artwork can be overwhelming for both sides.
+                selecting work, agreeing terms, and keeping the relationship
+                healthy can be overwhelming for both sides.
               </p>
             </div>
             <div>
               <h2 className="text-3xl mb-5">What Wallplace Does</h2>
               <p className="text-muted leading-relaxed mb-4">
                 Wallplace is a curated art placement service. We review and
-                accept artists based on the quality of their work. We match them
-                with venues that suit their style. We handle the logistics of
-                getting art on walls and managing the relationship over time.
+                accept artists based on the quality of their work. We match
+                them with venues that suit their style and help both sides
+                agree on terms. Delivery and installation are arranged
+                directly between the artist and the venue.
               </p>
               <p className="text-muted leading-relaxed">
                 For artists, we provide exhibition space, exposure, and sales
                 opportunities without the cost or commitment of a traditional
                 gallery. For venues, we provide a rotating selection of original,
                 high-quality artwork that transforms their space and creates
-                talking points for their customers – all with no upfront
+                talking points for their customers, all with no upfront
                 cost and minimal effort.
               </p>
             </div>
@@ -134,7 +135,7 @@ export default function AboutPage() {
                 You should not need to visit a gallery to experience great art.
                 The cafe where you have your morning coffee, the restaurant
                 where you celebrate an anniversary, the office where you spend
-                your days – these spaces deserve beautiful, original work
+                your days. These spaces deserve beautiful, original work
                 on their walls.
               </p>
             </div>
@@ -195,8 +196,9 @@ export default function AboutPage() {
               <h2 className="text-2xl mb-3">For Venues</h2>
               <p className="text-muted leading-relaxed mb-6">
                 Transform your space with original artwork at no upfront cost.
-                We handle everything – selection, delivery, installation,
-                and rotation.
+                We curate the artists, match them to your venue, and help you
+                agree the terms. You and the artist arrange delivery and
+                installation together.
               </p>
               <Button href="/venues" variant="secondary" size="md">
                 Get Art for Your Space

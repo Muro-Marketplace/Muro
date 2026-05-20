@@ -9,6 +9,7 @@ import type { LabelData } from "@/components/labels/LabelSheet";
 import { LABEL_SIZES, LABEL_STYLES, type LabelSize, type LabelStyle } from "@/components/labels/QRLabel";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
+import { canCustomiseTheme } from "@/lib/profile-themes";
 
 interface LabelOptions {
   showMedium: boolean;
@@ -70,6 +71,7 @@ export default function LabelsPage() {
     const paramWorks = searchParams.get("works");
     const paramSizes = searchParams.get("sizes");
     const paramSize = searchParams.get("size");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (paramVenue) setSelectedVenue(paramVenue);
     if (paramWorks && artist.works) {
       const workTitles = paramWorks.split(",").map((w) => w.trim());
@@ -218,6 +220,19 @@ export default function LabelsPage() {
           <p className="text-sm text-muted mt-1">
             Generate printable labels with QR codes. Visitors scan to view your profile and enquire.
           </p>
+          {!canCustomiseTheme(currentArtist.subscriptionPlan) && (
+            <div className="mt-4 flex items-center justify-between gap-3 px-4 py-3 bg-accent/5 border border-accent/20 rounded-sm">
+              <p className="text-xs text-foreground/80 leading-relaxed">
+                <strong className="text-foreground">Want coloured labels?</strong> Premium artists can pick from four label themes (dark, warm, accent and classic) and a matching public-profile colour scheme. Visible to scanners + readable in low light venues.
+              </p>
+              <a
+                href="/artist-portal/billing"
+                className="inline-flex items-center justify-center px-3 py-2 text-[11px] font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors shrink-0"
+              >
+                Upgrade
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Customisation + Venue + Portfolio row */}
@@ -278,14 +293,21 @@ export default function LabelsPage() {
               </div>
             )}
 
-            {/* Field toggles — only meaningful for Editorial style. */}
+            {/* Field toggles - only meaningful for Editorial style. */}
             {labelStyle === "editorial" && (
-              <div className="flex flex-wrap gap-x-5 gap-y-2">
-                {([
-                  { key: "showMedium" as const, label: "Medium" },
-                  { key: "showDimensions" as const, label: "Dimensions" },
-                  { key: "showPrice" as const, label: "Price" },
-                ]).map(({ key, label }) => (
+              <>
+                <p className="text-[11px] text-muted leading-relaxed mb-2">
+                  Hide a row from the printed label without removing the
+                  underlying data. Toggles only affect what shows up on
+                  the printed card - the QR code itself always points to
+                  the work.
+                </p>
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  {([
+                    { key: "showMedium" as const, label: "Medium" },
+                    { key: "showDimensions" as const, label: "Dimensions" },
+                    { key: "showPrice" as const, label: "Price" },
+                  ]).map(({ key, label }) => (
                   <label key={key} className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
                     <button
                       onClick={() => setOptions((prev) => ({ ...prev, [key]: !prev[key] }))}
@@ -299,8 +321,9 @@ export default function LabelsPage() {
                     </button>
                     {label}
                   </label>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
@@ -519,6 +542,15 @@ export default function LabelsPage() {
           labels={previewLabels}
           initialVisibility={buildVisibility(previewLabels)}
           availableSizes={currentArtist.availableSizes}
+          labelTheme={
+            // Premium+ gate. Core artists keep the classic palette
+            // even if they somehow have a labelTheme saved (a tier
+            // downgrade, say) so they don't carry premium styling
+            // they're no longer paying for.
+            canCustomiseTheme(currentArtist.subscriptionPlan)
+              ? currentArtist.labelTheme
+              : undefined
+          }
           onClose={() => setShowPreview(false)}
         />
       )}

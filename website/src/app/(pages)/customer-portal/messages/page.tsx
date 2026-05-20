@@ -23,7 +23,7 @@ function CustomerMessagesContent() {
       </div>
       <MessageInbox
         userSlug={userSlug}
-        portalType="venue"
+        portalType="customer"
         initialArtistSlug={initialArtistSlug}
         initialArtistName={initialArtistName}
       />

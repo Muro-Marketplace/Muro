@@ -25,8 +25,22 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { isFlagOn } from "@/lib/feature-flags";
 import type { Wall, WallLayout } from "@/lib/visualizer/types";
+
+/**
+ * Render fallback for wall names. Mirrors the helper in walls/page.tsx
+ * so the editor title bar reads coherently when a legacy row carries
+ * an empty or punctuation-only name.
+ */
+function displayWallName(name: string | null | undefined): string {
+  if (typeof name !== "string") return "Untitled wall";
+  const trimmed = name.trim();
+  if (!trimmed) return "Untitled wall";
+  if (!/[\p{L}\p{N}]/u.test(trimmed)) return "Untitled wall";
+  return trimmed;
+}
 
 // Visualizer is client-only and pulls in Konva, dynamic-load.
 const WallVisualizer = dynamic(
@@ -57,6 +71,7 @@ export default function VenueWallEditorPage({
   const requestedLayoutId = searchParams.get("lid");
 
   const { session, userType, loading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -178,12 +193,15 @@ export default function VenueWallEditorPage({
         method: "DELETE",
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      if (!res.ok && res.status !== 204) {
-        throw new Error(`Delete failed (${res.status})`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || `Could not delete (status ${res.status}).`, { variant: "error" });
+        return;
       }
       router.push("/venue-portal/walls");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not delete wall");
+      showToast(err instanceof Error ? err.message : "Could not delete wall", { variant: "error" });
+    } finally {
       setDeleting(false);
       setDeleteOpen(false);
     }
@@ -253,7 +271,7 @@ export default function VenueWallEditorPage({
           </Link>
           <span className="h-4 w-px bg-black/10 mx-1 shrink-0" />
           <p className="text-sm font-medium text-foreground truncate">
-            {ready ? state.wall.name : "Loading…"}
+            {ready ? displayWallName(state.wall.name) : "Loading…"}
           </p>
           {ready && (
             <span className="text-xs text-muted tabular-nums shrink-0">

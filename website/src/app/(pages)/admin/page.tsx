@@ -225,7 +225,7 @@ export default function AdminDashboard() {
                           <p className="font-medium text-foreground">{app.name}</p>
                           <p className="text-xs text-muted">{app.email}</p>
                         </td>
-                        <td className="py-3 px-4 text-muted">{app.primary_medium || "–"}</td>
+                        <td className="py-3 px-4 text-muted">{app.primary_medium || "-"}</td>
                         <td className="py-3 px-4 text-muted">
                           {new Date(app.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                         </td>

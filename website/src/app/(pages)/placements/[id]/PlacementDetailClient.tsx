@@ -5,11 +5,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
+import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import PlacementLoanForm from "./PlacementLoanForm";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 
 interface PlacementRow {
@@ -100,6 +103,8 @@ interface Props {
 export default function PlacementDetailClient({ placementId }: Props) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [placement, setPlacement] = useState<PlacementRow | null>(null);
   const [record, setRecord] = useState<PlacementRecord | null>(null);
   const [recordVersions, setRecordVersions] = useState<RecordVersion[]>([]);
@@ -193,6 +198,32 @@ export default function PlacementDetailClient({ placementId }: Props) {
     };
   }, [user, load]);
 
+  // Background refresh diff toast (Plan F Task 8). The silent refetch
+  // above keeps the page in sync, but if the placement transitions or
+  // a new photo lands while the user was on another tab, there's no
+  // visible signal — they just see different data. Track the previous
+  // status + photo count between fetches and surface a toast when
+  // something material moved. We deliberately use a ref (not state)
+  // so the comparison doesn't itself trigger another render.
+  const lastSeenRef = useRef<{ status: string; photoCount: number } | null>(null);
+  useEffect(() => {
+    if (!placement) return;
+    const next = { status: placement.status, photoCount: photos.length };
+    const prev = lastSeenRef.current;
+    lastSeenRef.current = next;
+    if (!prev) return; // first render after load — nothing to diff
+    if (prev.status !== next.status) {
+      showToast(`Status changed: ${prev.status} → ${next.status}`, {
+        durationMs: 4000,
+      });
+    } else if (next.photoCount > prev.photoCount) {
+      const delta = next.photoCount - prev.photoCount;
+      showToast(`${delta} new photo${delta === 1 ? "" : "s"} added`, {
+        durationMs: 3000,
+      });
+    }
+  }, [placement, photos.length, showToast]);
+
   // Auto-open the loan record drawer the first time a record turns up,
   // so users don't have to expand it manually. Won't reopen if the user
   // has since collapsed it.
@@ -284,7 +315,12 @@ export default function PlacementDetailClient({ placementId }: Props) {
 
   async function handleUndoStage(stage: "scheduled" | "installed" | "live" | "collected") {
     if (!placement) return;
-    if (!confirm(`Undo "${stage}"? You can restamp it later.`)) return;
+    const ok = await confirm({
+      title: `Undo "${stage}"?`,
+      body: "You can restamp it later.",
+      confirmLabel: "Undo",
+    });
+    if (!ok) return;
     try {
       const res = await authFetch("/api/placements", {
         method: "PATCH",
@@ -292,12 +328,12 @@ export default function PlacementDetailClient({ placementId }: Props) {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Could not undo stage.");
+        showToast(data.error || "Could not undo stage.", { variant: "error" });
         return;
       }
       await load({ silent: true });
     } catch {
-      alert("Network error. Please try again.");
+      showToast("Network error. Please try again.", { variant: "error" });
     }
   }
 
@@ -343,7 +379,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
       }
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Upload failed");
+      showToast(e instanceof Error ? e.message : "Upload failed", { variant: "error" });
     } finally {
       setUploading(false);
     }
@@ -409,15 +445,28 @@ export default function PlacementDetailClient({ placementId }: Props) {
   };
 
   return (
-    <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-8 lg:py-12">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-muted mb-6">
-        <Link href={`${portalBase}/placements`} className="hover:text-foreground transition-colors">
-          Placements
-        </Link>
-        <span>/</span>
-        <span className="text-foreground truncate max-w-[200px]">{placement.work_title}</span>
-      </nav>
+    <div>
+      {/* Sticky breadcrumb so the back link is always reachable on long
+          placement records without scrolling to the top. Includes the
+          portal root as the first crumb so the user can see at a glance
+          that they're still in the venue / artist portal context, this
+          detail page lives at /placements/[id] (top-level), without the
+          crumb the page reads like a separate destination. */}
+      <div className="sticky top-14 lg:top-16 bg-background border-b border-border z-10 px-4 sm:px-6 py-2">
+        <div className="max-w-[1100px] mx-auto">
+          <Breadcrumbs
+            items={[
+              {
+                label: viewerRole === "venue" ? "Venue portal" : "Artist portal",
+                href: portalBase,
+              },
+              { label: "Placements", href: `${portalBase}/placements` },
+              { label: placement.work_title || "Placement" },
+            ]}
+          />
+        </div>
+      </div>
+      <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-8 lg:py-12">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6 mb-6">
@@ -448,6 +497,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
               placement.status === "active" ? "bg-green-100 text-green-700" :
               placement.status === "pending" ? "bg-amber-100 text-amber-700" :
               placement.status === "declined" ? "bg-red-100 text-red-600" :
+              placement.status === "cancelled" ? "bg-red-100 text-red-600" :
               "bg-gray-100 text-gray-600"
             }`}>
               {placement.status.charAt(0).toUpperCase() + placement.status.slice(1)}
@@ -477,6 +527,24 @@ export default function PlacementDetailClient({ placementId }: Props) {
                 </Link>
               );
             })()}
+            {/* Venue-side shortcut: once an active placement exists, the
+                venue can jump straight to their wall visualiser with this
+                work pre-loaded in "My Works". /venue-portal/walls picks
+                the active placements up via /api/walls/my-works, so the
+                artwork is available to drag onto any wall. */}
+            {viewerRole === "venue" && placement.status === "active" && (
+              <Link
+                href="/venue-portal/walls"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/5 border border-accent/30 hover:bg-accent/10 rounded-sm px-2.5 py-1 transition-colors"
+                title="Place on a wall in your visualiser"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <rect x="7" y="7" width="6" height="6" />
+                </svg>
+                Place on a wall
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -494,6 +562,9 @@ export default function PlacementDetailClient({ placementId }: Props) {
           )}
           {placement.status === "declined" && (
             <span className="text-[11px] text-red-600">Declined, counter with new terms to keep negotiating</span>
+          )}
+          {placement.status === "cancelled" && (
+            <span className="text-[11px] text-red-600">Cancelled, this placement is closed on both sides</span>
           )}
         </div>
         {(() => {
@@ -545,7 +616,16 @@ export default function PlacementDetailClient({ placementId }: Props) {
                         <p className={`text-[10px] font-medium ${reached ? "text-foreground" : "text-muted"}`}>{s.label}</p>
                         {s.ts && (
                           <p className="text-[9px] text-muted">
-                            {new Date(s.ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                            {(() => {
+                              const d = new Date(s.ts);
+                              // Show year for any date outside the current
+                              // calendar year so a backdated stage can't be
+                              // visually confused with one set this year.
+                              const sameYear = d.getFullYear() === new Date().getFullYear();
+                              return d.toLocaleDateString("en-GB", sameYear
+                                ? { day: "numeric", month: "short" }
+                                : { day: "numeric", month: "short", year: "numeric" });
+                            })()}
                           </p>
                         )}
                       </div>
@@ -840,7 +920,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
               <p className="text-lg font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
                 {placement.qr_enabled && placement.revenue_share_percent != null && placement.revenue_share_percent > 0 && (
-                  <> &mdash; {placement.revenue_share_percent}% share on QR sales</>
+                  <>, {placement.revenue_share_percent}% share on QR sales</>
                 )}
               </p>
             </div>
@@ -850,7 +930,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Direct purchase</p>
               <p className="text-lg font-medium text-foreground">Venue owns the work</p>
-              <p className="text-[11px] text-muted mt-1">Outright sale &mdash; no ongoing split</p>
+              <p className="text-[11px] text-muted mt-1">Outright sale, no ongoing split</p>
             </div>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">QR display</p>
@@ -1133,6 +1213,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

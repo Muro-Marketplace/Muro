@@ -60,6 +60,15 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 2592000, // 30 days
+    // Dev-only escape hatch: the Next.js image proxy uses Node's
+    // native fetch to download upstream images. On macOS + Node 25,
+    // that fetch can't find the system CA bundle and every
+    // unsplash/picsum URL fails with UNABLE_TO_GET_ISSUER_CERT_LOCALLY,
+    // so dev previews show empty image areas. `unoptimized` in dev
+    // makes the browser load the source URL directly, which uses the
+    // OS's TLS stack and doesn't trip the issue. Production deploys
+    // (NODE_ENV=production) keep the optimised pipeline.
+    unoptimized: process.env.NODE_ENV !== "production",
   },
   async headers() {
     return [
@@ -68,6 +77,26 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: SECURITY_HEADERS,
       },
+    ];
+  },
+  async redirects() {
+    return [
+      // /spaces is the new canonical URL for the "venues looking for art"
+      // listing; keep the old path working with a permanent redirect so
+      // bookmarks + indexed links still land in the right place.
+      { source: "/spaces-looking-for-art", destination: "/spaces", permanent: true },
+      // QR Labels lives at /venue-portal/labels in the codebase, but
+      // the sidebar label reads "QR Labels" so users (and anyone who
+      // bookmarks from the page title) reasonably guess the URL
+      // /venue-portal/qr-labels. Redirect it so the guess works.
+      { source: "/venue-portal/qr-labels", destination: "/venue-portal/labels", permanent: true },
+      // Same affordance for the artist portal: sidebar label is "QR
+      // Labels" but the route is /artist-portal/labels. Catch the
+      // obvious guess so the URL isn't a dead-end.
+      { source: "/artist-portal/qr-labels", destination: "/artist-portal/labels", permanent: true },
+      // And "Social Posts" in the sidebar lives at /artist-portal/posts.
+      // Catch the /social guess for the same reason.
+      { source: "/artist-portal/social", destination: "/artist-portal/posts", permanent: true },
     ];
   },
 };

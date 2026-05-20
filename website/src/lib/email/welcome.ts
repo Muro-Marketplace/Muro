@@ -143,16 +143,24 @@ async function sendCustomerWelcome(
   if (rawWorks && rawWorks.length > 0) {
     // Join artist names + slugs in a second round-trip rather than a foreign-table
     // select (Supabase REST joins need the FK relationship registered).
+    // Only surface artists the admin has approved, otherwise we'd
+    // recommend pending applicants to brand-new customers (which leaks
+    // un-reviewed portfolios into a public-facing email).
     const artistIds = Array.from(new Set(rawWorks.map((w) => w.artist_id))).slice(0, 12);
     const { data: artists } = await db
       .from("artist_profiles")
-      .select("id, name, slug")
-      .in("id", artistIds);
+      .select("id, name, slug, review_status")
+      .in("id", artistIds)
+      .eq("review_status", "approved");
     const artistById = new Map((artists || []).map((a) => [a.id, a] as const));
 
     for (const w of rawWorks) {
       if (featuredWorks.length >= 3) break;
       const a = artistById.get(w.artist_id);
+      // No matching approved artist → skip the work entirely. The
+      // earlier behaviour also skipped on missing artist, but it didn't
+      // distinguish "unknown artist row" from "pending review", which
+      // let pending work through whenever the join returned all rows.
       if (!a) continue;
       featuredWorks.push({
         id: w.id,

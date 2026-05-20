@@ -24,6 +24,21 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { safeHexBackground } from "@/lib/hex-color";
+
+/**
+ * Render fallback for wall names. Mirrors the helper used in
+ * /venue-portal/walls so blank or punctuation-only names land as
+ * "Untitled wall" instead of an empty span / stray comma on the
+ * public profile too.
+ */
+function displayWallName(name: string | null | undefined): string {
+  if (typeof name !== "string") return "Untitled wall";
+  const trimmed = name.trim();
+  if (!trimmed) return "Untitled wall";
+  if (!/[\p{L}\p{N}]/u.test(trimmed)) return "Untitled wall";
+  return trimmed;
+}
 
 export interface VenueWallCardProps {
   wall: {
@@ -95,7 +110,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
               <div
                 className="rounded shadow-inner"
                 style={{
-                  backgroundColor: `#${wall.wall_color_hex}`,
+                  backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA"),
                   width: `${Math.min(100, (wall.width_cm / wall.height_cm) * 60)}%`,
                   aspectRatio: `${wall.width_cm} / ${wall.height_cm}`,
                   maxHeight: "100%",
@@ -114,7 +129,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
         </div>
         <div className="px-3 py-2.5 flex items-center justify-between">
           <p className="text-sm font-medium text-foreground truncate">
-            {wall.name}
+            {displayWallName(wall.name)}
           </p>
           <p className="text-[11px] text-muted tabular-nums shrink-0 ml-3">
             {wallDims}
@@ -168,7 +183,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
                   <div
                     className="rounded shadow-inner"
                     style={{
-                      backgroundColor: `#${wall.wall_color_hex}`,
+                      backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA"),
                       width: `${Math.min(80, (wall.width_cm / wall.height_cm) * 50)}%`,
                       aspectRatio: `${wall.width_cm} / ${wall.height_cm}`,
                       maxHeight: "70vh",
@@ -182,7 +197,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
             <div className="px-5 sm:px-6 py-4 sm:py-5 border-t border-border bg-white flex flex-col gap-3">
               <div className="flex items-baseline justify-between gap-3 flex-wrap">
                 <h3 className="font-serif text-xl text-foreground">
-                  {wall.name}
+                  {displayWallName(wall.name)}
                 </h3>
                 <p className="text-sm text-muted tabular-nums">{wallDims}</p>
               </div>

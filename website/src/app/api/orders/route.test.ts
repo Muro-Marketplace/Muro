@@ -55,7 +55,19 @@ describe("PATCH /api/orders state machine", () => {
     expect(body.error).toMatch(/cannot move to delivered/);
   });
 
-  it("allows confirmed → processing", async () => {
+  it("allows confirmed → artist_notified", async () => {
+    fromMock.mockImplementation(() =>
+      chainSelectSingle({
+        artist_user_id: "u-artist",
+        status: "confirmed",
+        status_history: [],
+      }),
+    );
+    const res = await PATCH(req({ orderId: "o1", status: "artist_notified" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("allows confirmed → processing (skip-ahead, used by artist portal)", async () => {
     fromMock.mockImplementation(() =>
       chainSelectSingle({
         artist_user_id: "u-artist",

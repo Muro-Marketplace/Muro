@@ -20,7 +20,7 @@ export interface VenueWeeklyDigestProps {
 
 export function VenueWeeklyDigest({ firstName, venueName, weekStart, weekEnd, profileViews, artistMatches, placementRequests, activePlacements, suggestedArtists, dashboardUrl }: VenueWeeklyDigestProps) {
   return (
-    <EmailShell stream="notify" persona="venue" category="digests" preview={`${venueName}'s week on Wallplace (${weekStart}–${weekEnd})`}>
+    <EmailShell stream="notify" persona="venue" category="digests" preview={`${venueName}'s week on Wallplace (${weekStart} - ${weekEnd})`}>
       <H1>{venueName}&rsquo;s week</H1>
       <P>Hi {firstName}, from {weekStart} to {weekEnd}.</P>
       <StatBlock stats={[

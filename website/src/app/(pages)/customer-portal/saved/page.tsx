@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
+import EmptyState from "@/components/EmptyState";
 import { authFetch } from "@/lib/api-client";
 import { slugify } from "@/lib/slugify";
+import { useUrlState } from "@/lib/use-url-state";
 
 type ItemType = "work" | "artist" | "collection";
 
@@ -31,7 +33,7 @@ function linkForItem(type: ItemType, itemId: string): string {
     case "artist":
       return `/browse/${itemId}`;
     case "collection":
-      return `/browse?view=collections`;
+      return `/browse/collections/${encodeURIComponent(itemId)}`;
   }
 }
 
@@ -45,10 +47,28 @@ interface ArtistWork { id: string; title: string; image: string; }
 interface ArtistData { slug: string; name: string; image: string; works: ArtistWork[]; }
 
 export default function CustomerSavedPage() {
+  // useUrlState transitively calls useSearchParams, which forces the
+  // Client Component subtree to bail out of static prerender. Suspense
+  // wrapping is the documented Next 16 fix (see customer-portal/messages
+  // for the same pattern).
+  return (
+    <Suspense
+      fallback={
+        <CustomerPortalLayout>
+          <p className="text-muted text-sm py-12 text-center">Loading saved items...</p>
+        </CustomerPortalLayout>
+      }
+    >
+      <CustomerSavedContent />
+    </Suspense>
+  );
+}
+
+function CustomerSavedContent() {
   const [items, setItems] = useState<SavedItemRow[]>([]);
   const [allArtists, setAllArtists] = useState<ArtistData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ItemType>("work");
+  const [activeTab, setActiveTab] = useUrlState<ItemType>("tab", "work");
   const [removing, setRemoving] = useState<string | null>(null);
 
   const workMap = useMemo(() => {
@@ -123,14 +143,23 @@ export default function CustomerSavedPage() {
       {loading ? (
         <p className="text-muted text-sm py-12 text-center">Loading saved items...</p>
       ) : filtered.length === 0 ? (
-        <div className="bg-surface border border-border rounded-sm px-6 py-12 text-center">
-          <p className="text-muted text-sm mb-2">
-            No saved {activeTab === "work" ? "works" : activeTab === "artist" ? "artists" : "collections"} yet.
-          </p>
-          <Link href="/browse" className="text-sm text-accent hover:text-accent-hover transition-colors">
-            Browse the marketplace to start saving
-          </Link>
-        </div>
+        <EmptyState
+          title={
+            activeTab === "work"
+              ? "No saved works yet"
+              : activeTab === "artist"
+                ? "No saved artists yet"
+                : "No saved collections yet"
+          }
+          hint="Tap the heart icon on anything you like and it'll appear here."
+          cta={
+            activeTab === "work"
+              ? { label: "Browse galleries", href: "/browse" }
+              : activeTab === "artist"
+                ? { label: "Browse portfolios", href: "/browse?view=portfolios" }
+                : { label: "Browse collections", href: "/browse?view=collections" }
+          }
+        />
       ) : (
         <div className="space-y-3">
           {filtered.map((item) => (

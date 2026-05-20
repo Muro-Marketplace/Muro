@@ -6,6 +6,7 @@ import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
+import { useConfirm } from "@/context/ConfirmContext";
 
 interface CollectionForm {
   name: string;
@@ -46,6 +47,7 @@ const EMPTY_FORM: CollectionForm = {
 
 export default function CollectionsPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
+  const { confirm } = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
@@ -90,6 +92,40 @@ export default function CollectionsPage() {
 
   const handleSave = useCallback(async () => {
     if (!artist || !form.name || form.workIds.length < 2 || !form.bundlePrice) return;
+
+    const bundleNum = parseFloat(form.bundlePrice);
+    if (!Number.isFinite(bundleNum) || bundleNum <= 0) {
+      setFormError("Bundle price must be a positive number.");
+      return;
+    }
+
+    // A collection priced higher than the sum of its parts gives the
+    // buyer no reason to bundle. QA flagged a "Landscapes" collection
+    // saved at £300 against £180 of individual works. The form already
+    // warns inline, but nothing blocked publish. Require the artist to
+    // explicitly confirm before sending an overpriced bundle live.
+    const individualTotal = form.workIds.reduce((sum, wid) => {
+      const work = artist.works.find((w) => w.id === wid);
+      if (!work) return sum;
+      const sizeLabel = form.workSizes[wid] || work.pricing?.[0]?.label;
+      const sizeEntry = work.pricing?.find((p) => p.label === sizeLabel) || work.pricing?.[0];
+      const sizePrice = typeof sizeEntry?.price === "number" ? sizeEntry.price : 0;
+      return sum + sizePrice;
+    }, 0);
+    if (individualTotal > 0 && bundleNum > individualTotal) {
+      const overBy = (bundleNum - individualTotal).toFixed(0);
+      const ok = await confirm({
+        title: "Bundle priced above sum of works",
+        body: `This bundle is £${overBy} more than buying the works individually. Publish anyway?`,
+        confirmLabel: "Publish",
+      });
+      if (!ok) {
+        setFormError(
+          `Bundle price is £${overBy} more than the sum of its works. Lower the bundle price, or confirm publish to override.`,
+        );
+        return;
+      }
+    }
 
     // Convert workSizes record -> array. For works with no explicit choice,
     // fall back to the first pricing entry (if any).
@@ -150,6 +186,14 @@ export default function CollectionsPage() {
   const handleDelete = useCallback(
     async (id: string) => {
       if (!artist) return;
+      const collection = userCollections.find((c) => c.id === id);
+      const ok = await confirm({
+        title: `Delete collection "${collection?.name || id}"?`,
+        body: "Works in it stay in your portfolio.",
+        confirmLabel: "Delete",
+        destructive: true,
+      });
+      if (!ok) return;
       // Optimistic remove
       const prev = userCollections;
       setUserCollections(prev.filter((c) => c.id !== id));
@@ -619,7 +663,25 @@ export default function CollectionsPage() {
                   <div className="space-y-2">
                     {form.workIds.map((wid) => {
                       const work = artist.works.find((w) => w.id === wid);
-                      if (!work) return null;
+                      if (!work) {
+                        return (
+                          <div
+                            key={wid}
+                            className="flex items-center justify-between py-2 border-b border-border/40 last:border-b-0"
+                          >
+                            <p className="text-xs text-muted italic">
+                              Work removed from portfolio
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => toggleWork(wid)}
+                              className="text-[11px] text-muted hover:text-red-600 transition-colors"
+                            >
+                              Remove from collection
+                            </button>
+                          </div>
+                        );
+                      }
                       const pricing = work.pricing || [];
                       const selected = form.workSizes[wid] || pricing[0]?.label || "";
                       return (

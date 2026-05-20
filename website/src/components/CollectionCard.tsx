@@ -12,6 +12,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { ArtistCollection } from "@/data/collections";
 import SaveButton from "./SaveButton";
+import DistanceBadge from "./DistanceBadge";
 
 interface CollectionCardProps {
   collection: ArtistCollection;
@@ -52,26 +53,36 @@ export default function CollectionCard({ collection, distance }: CollectionCardP
         <div className="absolute top-3 right-3">
           <SaveButton type="collection" itemId={collection.id} />
         </div>
-        <div className="absolute bottom-3 left-3">
-          <span className="text-[10px] font-medium px-2 py-0.5 bg-white/90 text-foreground rounded-sm backdrop-blur-sm">
-            {collection.workIds.length} works
-          </span>
-        </div>
       </div>
-      <div className="p-4">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-xs text-muted mb-0.5 min-w-0 truncate">{collection.artistName}</p>
-          {distance != null && (
-            <span className="text-[10px] text-muted shrink-0">
-              {distance < 0.2 ? "< 0.2 mi" : `${distance.toFixed(1)} mi`}
-            </span>
-          )}
-        </div>
-        <h3 className="text-sm font-medium text-foreground mb-1">{collection.name}</h3>
+      {/* Distance pill lives in the info section, top-right, so it
+          doesn't sit over the collection thumbnail. Right-padding on
+          the artist + title rows keeps long names from running under
+          the pill. */}
+      <div className="p-4 relative">
+        <DistanceBadge distance={distance ?? null} corner="top-right" />
+        <p className="text-xs text-muted mb-0.5 min-w-0 truncate pr-16">{collection.artistName}</p>
+        <h3 className="text-sm font-medium text-foreground mb-1 pr-16">{collection.name}</h3>
         {collection.description && (
           <p className="text-xs text-muted line-clamp-2 mb-2">{collection.description}</p>
         )}
-        <p className="text-sm font-medium text-accent">{collection.bundlePriceBand}</p>
+        {/* Plan F #11: collapse the count + price band into one
+            metadata line so both are visible at a glance. The count
+            previously sat as an image-overlay pill, which faded
+            against bright collection thumbnails. */}
+        <p className="text-xs text-muted">
+          <span>
+            {collection.workIds.length} work
+            {collection.workIds.length === 1 ? "" : "s"}
+          </span>
+          {collection.bundlePriceBand && (
+            <>
+              {" · "}
+              <span className="text-accent font-medium">
+                {collection.bundlePriceBand}
+              </span>
+            </>
+          )}
+        </p>
       </div>
     </Link>
   );

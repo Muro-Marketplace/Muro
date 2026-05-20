@@ -41,10 +41,11 @@ type DbWorkRow = {
 /**
  * Compute the "asking price" used to enforce the 60% offer floor.
  * For works: sum of the largest size price per work. For collections:
- * sum of all collection items' largest sizes.
+ * the artist's declared bundle_price when set (matches the headline
+ * Buy CTA the venue sees), otherwise sum of each work's largest size.
  *
  * Returns `null` if we can't determine a price (in which case the
- * caller should let the offer through — the artist can still decline).
+ * caller should let the offer through, the artist can still decline).
  */
 async function computeAskingPricePence(
   db: ReturnType<typeof getSupabaseAdmin>,
@@ -54,10 +55,20 @@ async function computeAskingPricePence(
   if (target.collectionId) {
     const { data: collection } = await db
       .from("artist_collections")
-      .select("work_ids")
+      .select("work_ids, bundle_price")
       .eq("id", target.collectionId)
-      .maybeSingle<{ work_ids: string[] | null }>();
+      .maybeSingle<{ work_ids: string[] | null; bundle_price: number | null }>();
     if (!collection?.work_ids?.length) return null;
+    // Pin the floor to the artist's declared bundle price when set;
+    // otherwise fall through to summing the works below. Stored as
+    // pounds (NUMERIC), convert to pence here.
+    if (
+      typeof collection.bundle_price === "number" &&
+      Number.isFinite(collection.bundle_price) &&
+      collection.bundle_price > 0
+    ) {
+      return Math.round(collection.bundle_price * 100);
+    }
     workIds = collection.work_ids;
   }
   if (workIds.length === 0) return null;
@@ -275,7 +286,7 @@ export async function POST(request: Request) {
   if (parentOfferId) {
     const { data: parent } = await db
       .from("purchase_offers")
-      .select("buyer_user_id, buyer_type, buyer_email, artist_user_id, artist_slug, status")
+      .select("buyer_user_id, buyer_type, buyer_email, artist_user_id, artist_slug, status, created_by_user_id")
       .eq("id", parentOfferId)
       .maybeSingle();
     if (!parent || (parent.buyer_user_id !== buyerId && parent.artist_user_id !== buyerId)) {
@@ -283,6 +294,20 @@ export async function POST(request: Request) {
     }
     if (parent.status !== "pending" && parent.status !== "countered") {
       return NextResponse.json({ error: "Offer is no longer open" }, { status: 409 });
+    }
+    // The actor must be the *recipient* of the parent, not its sender.
+    // Otherwise users can counter their own counter and the negotiation
+    // never reaches the other side.
+    const parentSenderId = parent.created_by_user_id || parent.buyer_user_id;
+    if (parentSenderId === buyerId) {
+      return NextResponse.json(
+        {
+          error: "self_counter",
+          message:
+            "You can't counter an offer you sent. Wait for the other side to respond, or withdraw and start again.",
+        },
+        { status: 403 },
+      );
     }
     parentRow = parent;
     // Mark the parent as countered. The new row becomes the live one.
@@ -350,7 +375,7 @@ export async function POST(request: Request) {
       createNotification({
         userId: recipient,
         kind: parentOfferId ? "offer_counter" : "offer_received",
-        title: parentOfferId ? `Counter offer — ${formatted}` : `New offer — ${formatted}`,
+        title: parentOfferId ? `Counter offer, ${formatted}` : `New offer, ${formatted}`,
         body: message ? message.slice(0, 140) : "Tap to review",
         link,
       }).catch((err) => console.warn("[offers] bell failed:", err));
@@ -399,7 +424,7 @@ export async function POST(request: Request) {
           const primary = workDetails[0];
           const summary = parentOfferId
             ? `Sent a counter offer of ${formatted}.`
-            : `Made an offer of ${formatted}${message ? ` — "${message.slice(0, 200)}"` : ""}.`;
+            : `Made an offer of ${formatted}${message ? `: "${message.slice(0, 200)}"` : ""}.`;
 
           await db.from("messages").insert({
             conversation_id: conversationId,

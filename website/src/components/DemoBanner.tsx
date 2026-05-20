@@ -38,7 +38,7 @@ export default function DemoBanner() {
   const [hidden, setHidden] = useState(false);
   const pathname = usePathname();
 
-  const demoIds = useMemo(readDemoIdsFromEnv, []);
+  const demoIds = useMemo(() => readDemoIdsFromEnv(), []);
   const isDemo = !!user?.id && demoIds.has(user.id);
 
   if (!isDemo || hidden) return null;

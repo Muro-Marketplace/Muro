@@ -28,8 +28,18 @@ export async function GET(request: Request) {
 
     let query;
     if (artistProfile) {
-      // Artist: orders for their work
-      query = db.from("orders").select("*").eq("artist_slug", artistProfile.slug);
+      // Artist: orders for their work. Match by EITHER artist_user_id
+      // OR artist_slug so an order that landed with only one of the
+      // two columns populated (e.g. webhook fallback insert that
+      // dropped attribution columns, slug renamed, casing drift)
+      // still surfaces in the artist's list. Without this, a guest
+      // QR-scan order whose webhook fallback stripped artist_slug
+      // would be invisible to the artist even though everything else
+      // about the order is intact.
+      query = db
+        .from("orders")
+        .select("*")
+        .or(`artist_user_id.eq.${userId},artist_slug.eq.${artistProfile.slug}`);
     } else if (venueProfile) {
       // Venue: orders from their venue + their own purchases
       query = db.from("orders").select("*").or(`venue_slug.eq.${venueProfile.slug},buyer_email.eq.${email}`);
@@ -107,7 +117,7 @@ export async function PATCH(request: Request) {
     // aren't locked out of the status transitions.
     const { data: order } = await db
       .from("orders")
-      .select("artist_user_id, artist_slug, buyer_email, status, status_history, placement_id, venue_revenue, shipping")
+      .select("artist_user_id, artist_slug, buyer_email, status, status_history, placement_id, venue_revenue, shipping, items")
       .eq("id", orderId)
       .single();
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -162,6 +172,22 @@ export async function PATCH(request: Request) {
       const firstName = (shippingBlob.fullName || order.buyer_email.split("@")[0]).split(" ")[0];
       const orderUrl = `${SITE}/customer-portal/orders`;
 
+      // Pull the first line item off the persisted `items` blob so the
+      // shipping / delivery templates can render the artwork thumbnail.
+      // The blob is written in the webhook after checkout, so by the
+      // time we hit this status transition the row should have it.
+      // Falls back to undefined → template hides the thumbnail block
+      // gracefully (no broken-image icon).
+      const orderItems = Array.isArray(order.items) ? (order.items as Array<{
+        title?: string; artistName?: string; image?: string;
+      }>) : [];
+      const firstItem = orderItems[0];
+      const workTitle = firstItem?.title;
+      const workImage = firstItem?.image && !firstItem.image.startsWith("data:")
+        ? firstItem.image
+        : undefined;
+      const artistName = firstItem?.artistName;
+
       if (status === "shipped") {
         await sendEmail({
           idempotencyKey: `customer_shipping_confirmation:${orderId}`,
@@ -176,6 +202,9 @@ export async function PATCH(request: Request) {
             carrier: trackingNumber ? `tracking ${trackingNumber}` : "the courier",
             estimatedDelivery: "in the next few days",
             orderUrl,
+            workTitle,
+            workImage,
+            artistName,
           }),
           metadata: { trackingNumber: trackingNumber ?? null },
         });
@@ -192,6 +221,9 @@ export async function PATCH(request: Request) {
             deliveredAt: new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
             careGuideUrl: `${SITE}/care`,
             reviewUrl: `${SITE}/customer-portal/orders`,
+            workTitle,
+            workImage,
+            artistName,
           }),
         });
       } else {

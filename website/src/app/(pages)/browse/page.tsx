@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -10,47 +10,26 @@ import { artistsToGalleryWorks } from "@/data/galleries";
 import { collections as staticCollections, type ArtistCollection } from "@/data/collections";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, resolveDiscipline, disciplineLabel } from "@/data/categories";
 import { slugify } from "@/lib/slugify";
+import { formatPriceRange } from "@/lib/format-currency";
 import { geocodePostcode } from "@/lib/geocode";
-import { parseDimensions } from "@/lib/shipping-calculator";
+import { useAuth } from "@/context/AuthContext";
+import { bandsForWork } from "@/components/browse/SizeBands";
 import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
 import CollectionCard from "@/components/CollectionCard";
+import SubscriptionUpsellBanner from "@/components/SubscriptionUpsellBanner";
 import ArtworkThumb from "@/components/ArtworkThumb";
-import SearchBar from "@/components/SearchBar";
+import DistanceBadge from "@/components/DistanceBadge";
+import SaveButton from "@/components/SaveButton";
+import SearchInput from "@/components/SearchInput";
 import PostcodeInput, { readPersistedCoords, clearPersistedLocation } from "@/components/PostcodeInput";
-
-/** Map the largest dimension in cm to a size band id. */
-function bandForCm(largestCm: number): "small" | "medium" | "large" | "xl" {
-  if (largestCm <= 30) return "small";
-  if (largestCm <= 60) return "medium";
-  if (largestCm <= 100) return "large";
-  return "xl";
-}
-
-/** Return the set of size bands a work matches across ALL of its
- *  pricing options + the work-level dimensions. A work that ships in
- *  A4, A2, A0 should match Small, Medium AND Extra-large filters,
- *  not just whichever size happens to be biggest. Work-level
- *  dimensions are also added so legacy single-size works still
- *  classify correctly. Empty result = unparseable, falls back to
- *  "medium" (matches just the medium filter, generous default).
- */
-function bandsForWork(work: { dimensions: string; pricing: { label: string }[] }): Set<"small" | "medium" | "large" | "xl"> {
-  const bands = new Set<"small" | "medium" | "large" | "xl">();
-  const candidates: string[] = [];
-  if (work.dimensions) candidates.push(work.dimensions);
-  for (const p of work.pricing || []) {
-    if (p?.label) candidates.push(p.label);
-  }
-  for (const c of candidates) {
-    const d = parseDimensions(c);
-    if (!d) continue;
-    const largest = Math.max(d.widthCm, d.heightCm);
-    bands.add(bandForCm(largest));
-  }
-  if (bands.size === 0) bands.add("medium");
-  return bands;
-}
+import {
+  ANY_DISTANCE,
+  DEFAULT_MAX_DISTANCE,
+  parseLocationParams,
+  serializeLocationParams,
+  type ParsedLocation,
+} from "./locationParams";
 
 /** Haversine great-circle distance in miles */
 function calcDistance(
@@ -91,7 +70,6 @@ const DISTANCE_OPTIONS = [
 
 interface Filters {
   mode: "local" | "global";
-  maxDistance: number;
   themes: string[];
   originals: boolean;
   prints: boolean;
@@ -115,11 +93,9 @@ const DEFAULT_FILTERS: Filters = {
   // a location; without a location, the filter logic bails out so
   // results are still global until a postcode/geo lands.
   //
-  // Default distance is 25 miles, once a buyer's set their
-  // location they almost always want a near-only first result set,
-  // and the slider goes up to "Anywhere" if they want more.
+  // `maxDistance` lives in the URL (loc params) so it survives the
+  // view-switch links, see locationParams.ts and Plan C Task 8.
   mode: "local",
-  maxDistance: 25,
   themes: [],
   originals: false,
   prints: false,
@@ -177,6 +153,115 @@ function CheckPill({
   );
 }
 
+/**
+ * Self-contained distance slider with a debounced URL commit.
+ *
+ * The "stuck slider" bug had three flavours, fixed in three commits:
+ *   1. Controlled value lived in the URL → router.replace lag → thumb
+ *      snapped back during fast drags. Solved with local draft state.
+ *   2. onMouseUp on the slider misses the common "release outside the
+ *      thumb" case → draft never committed. Solved with a 250ms idle
+ *      debounce that fires regardless of release location.
+ *   3. Safari/WebKit fights React-controlled <input type="range"> even
+ *      with local state. Solved with `defaultValue` + a `key` keyed to
+ *      the URL value (so external commits remount, internal drag
+ *      doesn't).
+ *
+ * Even with all three, on Safari the page felt "rate limited" after a
+ * few drags because the draft state lived at the *page* level — every
+ * input event re-rendered the entire portfolio grid (30+ artist cards,
+ * no React.memo). Lifting the draft into this child component means
+ * a drag re-renders ~one slider's worth of JSX, not the whole page.
+ *
+ * The component is intentionally render-prop-light: `numberInputSuffix`
+ * lets each call site drop in its own trailing element ("mi" label vs
+ * "Change postcode" button) without forking the component.
+ */
+function DistanceSliderControl({
+  value,
+  onCommit,
+  labelClassName,
+  shortAny = false,
+  withNumberInput = false,
+  numberInputRowClassName = "flex items-center gap-2",
+  numberInputSuffix,
+  sliderClassName = "w-full accent-accent h-1.5 cursor-pointer",
+}: {
+  value: number;
+  onCommit: (n: number) => void;
+  labelClassName: string;
+  shortAny?: boolean;
+  withNumberInput?: boolean;
+  numberInputRowClassName?: string;
+  numberInputSuffix?: ReactNode;
+  sliderClassName?: string;
+}) {
+  const [draft, setDraft] = useState<number | null>(null);
+  const display = draft ?? value;
+  const isAny = display >= 9999;
+  const labelText = isAny
+    ? `Within ${shortAny ? "any" : "any distance"}`
+    : `Within ${display} mi`;
+
+  // Debounced commit — handles every release scenario (mouseup outside,
+  // touchend on a different element, blur from number input). 250ms idle
+  // is long enough to avoid mid-drag commits but short enough not to
+  // feel sluggish.
+  useEffect(() => {
+    if (draft == null) return;
+    const t = setTimeout(() => {
+      onCommit(draft);
+      setDraft(null);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [draft, onCommit]);
+
+  const slider = (
+    <input
+      type="range"
+      min={0}
+      max={200}
+      step={1}
+      key={`maxd-${value}`}
+      defaultValue={isAny ? 200 : display}
+      onChange={(e) => {
+        const v = Number(e.target.value);
+        setDraft(v >= 200 ? ANY_DISTANCE : v);
+      }}
+      className={sliderClassName}
+    />
+  );
+
+  return (
+    <>
+      <p className={labelClassName}>{labelText}</p>
+      {withNumberInput ? (
+        <div className="space-y-2.5">
+          {slider}
+          <div className={numberInputRowClassName}>
+            <input
+              type="number"
+              min={0}
+              max={9999}
+              value={isAny ? "" : display}
+              placeholder="Any"
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") { setDraft(ANY_DISTANCE); return; }
+                setDraft(Math.max(0, Number(raw) || 0));
+              }}
+              className="w-20 px-2 py-1 text-xs bg-surface border border-border rounded-sm text-foreground focus:outline-none focus:border-accent/50"
+            />
+            {numberInputSuffix}
+          </div>
+        </div>
+      ) : (
+        slider
+      )}
+    </>
+  );
+}
+
 // Wrap the real page body in <Suspense> so useSearchParams doesn't deopt the
 // entire route tree and blow up the static prerender during `next build`.
 export default function BrowsePortfoliosPage() {
@@ -187,9 +272,20 @@ export default function BrowsePortfoliosPage() {
   );
 }
 
-const PAGE_SIZE = 20;
+// 21, not 20, so the xl:grid-cols-3 layout always fills cleanly:
+// 7 full rows × 3 cards. With 20 a single orphan card sat on the
+// last row beside an empty cell, which read as a broken page.
+// Stays sensible for sm:grid-cols-2 (10 rows + 1 orphan) and
+// grid-cols-1 (no orphan possible) too.
+const PAGE_SIZE = 21;
 
 function BrowsePortfoliosPageInner() {
+  // Audience-acquisition CTAs at the bottom of /browse only make sense
+  // for signed-out visitors. Signed-in artists / venues / customers
+  // already have an account, so showing the "Apply to Join" or
+  // "Register Your Venue" cards reads as marketing noise the user
+  // can't act on. Read auth here and gate the section below.
+  const { user: viewerUser, loading: viewerAuthLoading } = useAuth();
   // activeDiscipline stores either:
   //   - a discipline id (e.g. "photography")
   //   - "" for All
@@ -218,6 +314,28 @@ function BrowsePortfoliosPageInner() {
   // viewAs / activeDiscipline state. Without it the marketplace nav
   // tabs (which key off `?view=`) didn't update when the user
   // switched via the in-page pills.
+  //
+  // Plan C #2.8: merge the new `view` into the existing search
+  // params so location filter params (loc_lat / loc_lng / etc.)
+  // survive a view switch. Previously this overwrote the whole
+  // query string, so setting "Within 10km" on Galleries and tabbing
+  // to Collections wiped the filter.
+  // Search query, mirrored to ?q= so the filter persists across reloads
+  // and shows up in shared links. Read directly from the URL on every
+  // render so SearchInput's debounced setter (Plan F #4) stays the only
+  // owner of the value — no extra useState to keep in sync.
+  const searchQuery = searchParams?.get("q") || "";
+  const setSearchQuery = useCallback(
+    (next: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      if (next) params.set("q", next);
+      else params.delete("q");
+      const qs = params.toString();
+      router.replace(`/browse${qs ? `?${qs}` : ""}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
   const switchView = useCallback((target: "gallery" | "portfolios" | "collections") => {
     if (target === "gallery") {
       setViewAs("works");
@@ -228,13 +346,17 @@ function BrowsePortfoliosPageInner() {
     } else {
       setActiveDiscipline("collections");
     }
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    if (target === "gallery") params.delete("view");
+    else params.set("view", target);
+    const qs = params.toString();
     // replace (not push) so toggling doesn't bloat the back-stack.
-    const target_qs = target === "gallery" ? "" : `?view=${target}`;
-    router.replace(`/browse${target_qs}`, { scroll: false });
-  }, [router]);
+    router.replace(`/browse${qs ? `?${qs}` : ""}`, { scroll: false });
+  }, [router, searchParams]);
   // Reset pagination when switching views / categories so users don't land
   // on an empty grid if they scroll back to a narrow filter.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadedArtists(PAGE_SIZE);
     setLoadedWorks(PAGE_SIZE);
     setLoadedCollections(PAGE_SIZE);
@@ -246,6 +368,7 @@ function BrowsePortfoliosPageInner() {
     // nav link (which goes to /browse with no view param) used to
     // leave viewAs at "artists" so the page stayed on portfolios.
     if (viewParam === "collections") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveDiscipline("collections");
     } else if (viewParam === "portfolios") {
       setActiveDiscipline("");
@@ -284,21 +407,89 @@ function BrowsePortfoliosPageInner() {
   // DB fetch lands a moment later.
   const [dataReady, setDataReady] = useState(false);
 
-  // User location state. Hydrated from localStorage on mount via
-  // useEffect (kept out of the lazy initialiser so we don't
-  // hydrate-mismatch SSR + client). Without this, navigating away
-  // from /browse and back wiped the user's location every time.
-  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // User location state. Lives in the URL (loc_lat / loc_lng /
+  // loc_label / maxDistance) so it survives the `?view=` switch
+  // links and is shareable / back-forward friendly. See
+  // Plan C #2.8 + locationParams.ts.
+  //
+  // localStorage is still used as a one-time hydration source: if a
+  // user lands on /browse with no location params but had one stored
+  // last visit, we re-write it to the URL on mount. Subsequent
+  // changes are URL-driven.
+  const parsedLocation = useMemo(
+    () => parseLocationParams(searchParams),
+    [searchParams],
+  );
+  const userCoords = parsedLocation.coords;
+  const postcodeInput = parsedLocation.label;
+  const maxDistance = parsedLocation.maxDistance;
+
   const [geoRequesting, setGeoRequesting] = useState(false);
-  const [postcodeInput, setPostcodeInput] = useState("");
   const [postcodeError, setPostcodeError] = useState(false);
+
+  /** Write the desired location into the URL, merging with any
+   *  non-location params already there (`view`, etc.). */
+  const setLocation = useCallback(
+    (next: ParsedLocation) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      const merged = serializeLocationParams(next, params);
+      const qs = merged.toString();
+      router.replace(qs ? `?${qs}` : "/browse", { scroll: false });
+    },
+    [searchParams, router],
+  );
+
+  // Helper for the common "user just resolved a location" path
+  // (postcode geocode or geolocation success). Keeps maxDistance
+  // intact so a buyer that had set "Within 10mi" doesn't see it
+  // jump back to the default when they re-enter their postcode.
+  const updateLocationCoords = useCallback(
+    (coords: { lat: number; lng: number }, label: string) => {
+      setLocation({ coords, label, maxDistance: parsedLocation.maxDistance });
+    },
+    [setLocation, parsedLocation.maxDistance],
+  );
+
+  /** Drop location entirely. Mirrors the "change postcode" UI. */
+  const clearLocation = useCallback(() => {
+    setLocation({ coords: null, label: "", maxDistance: DEFAULT_MAX_DISTANCE });
+    clearPersistedLocation();
+  }, [setLocation]);
+
+  /** Just the maxDistance dimension. Coords + label stay put. */
+  const setMaxDistance = useCallback(
+    (n: number) => {
+      // No-op if no location is set, the slider isn't visible in
+      // that state but this guards against e.g. a deep link writing
+      // a stale maxDistance into a no-coords URL.
+      if (!parsedLocation.coords) return;
+      setLocation({ ...parsedLocation, maxDistance: Math.max(0, n) });
+    },
+    [parsedLocation, setLocation],
+  );
+
+  // Distance slider's draft state lives in the <DistanceSliderControl>
+  // child component now — see the doc comment on that component for the
+  // full bug-fix history. Lifting it down means a drag only re-renders
+  // the slider, not the entire portfolio grid.
+
+  // Hydrate from localStorage whenever the URL has no coords but
+  // storage does. Runs on first mount AND on any subsequent navigation
+  // that drops the loc_* params (e.g. the top-nav "Galleries /
+  // Portfolios / Collections" links route to /browse without query),
+  // so a returning visitor keeps their location for the whole session.
+  // No re-entry loop: explicit clearLocation() also wipes storage, so
+  // readPersistedCoords() returns null on the next pass.
   useEffect(() => {
+    if (parsedLocation.coords) return; // URL is the source of truth
     const stored = readPersistedCoords();
-    if (stored) {
-      setUserCoords(stored.coords);
-      if (stored.label) setPostcodeInput(stored.label);
-    }
-  }, []);
+    if (!stored) return;
+    setLocation({
+      coords: stored.coords,
+      label: stored.label ?? "",
+      maxDistance: parsedLocation.maxDistance,
+    });
+  }, [parsedLocation.coords, parsedLocation.maxDistance, setLocation]);
 
   // Fetch merged artists (static + database) on mount.
   //
@@ -394,7 +585,15 @@ function BrowsePortfoliosPageInner() {
     }));
   }
 
-  const clearAll = () => setFilters(DEFAULT_FILTERS);
+  const clearAll = () => {
+    setFilters(DEFAULT_FILTERS);
+    // Match the pre-Plan-C behaviour: clear-all resets the distance
+    // slider back to the default but keeps the user's coords (so a
+    // postcode they typed once doesn't get wiped on a single click).
+    if (parsedLocation.coords && parsedLocation.maxDistance !== DEFAULT_MAX_DISTANCE) {
+      setMaxDistance(DEFAULT_MAX_DISTANCE);
+    }
+  };
 
   const requestGeolocation = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -403,7 +602,10 @@ function BrowsePortfoliosPageInner() {
     setGeoRequesting(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        updateLocationCoords(
+          { lat: pos.coords.latitude, lng: pos.coords.longitude },
+          "Current location",
+        );
         setGeoRequesting(false);
       },
       () => {
@@ -411,25 +613,7 @@ function BrowsePortfoliosPageInner() {
       },
       { timeout: 10000 }
     );
-  }, []);
-
-  function handleModeChange(newMode: "local" | "global") {
-    setFilter("mode", newMode);
-    if (newMode === "local" && !userCoords && !geoRequesting) {
-      requestGeolocation();
-    }
-  }
-
-  async function handlePostcodeSubmit() {
-    if (!postcodeInput.trim()) return;
-    const coords = await geocodePostcode(postcodeInput);
-    if (coords) {
-      setUserCoords(coords);
-      setPostcodeError(false);
-    } else {
-      setPostcodeError(true);
-    }
-  }
+  }, [updateLocationCoords]);
 
   const hasActiveFilters =
     // mode is permanently "local" now (toggle removed); the actual
@@ -474,9 +658,24 @@ function BrowsePortfoliosPageInner() {
   }, [activeDisciplineObj, artists]);
 
   const filteredArtists = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return artists.filter((artist) => {
       // Must have at least one artwork to appear in marketplace
       if (!artist.works || artist.works.length === 0) return false;
+      // Free-text search across name + medium + bio + tags. Plan F Task 4.
+      if (q) {
+        const haystack = [
+          artist.name,
+          artist.primaryMedium,
+          artist.shortBio,
+          artist.location,
+          ...(artist.styleTags || []),
+          ...(artist.themes || []),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       // Discipline filter, fall back to inferring from primary medium
       // so seed artists (without an explicit discipline field) and older
       // DB rows that missed the backfill still match the right category.
@@ -501,7 +700,7 @@ function BrowsePortfoliosPageInner() {
           artist.coordinates.lat,
           artist.coordinates.lng
         );
-        if (dist > filters.maxDistance) return false;
+        if (dist > maxDistance) return false;
       }
       if (
         filters.themes.length > 0 &&
@@ -568,11 +767,11 @@ function BrowsePortfoliosPageInner() {
       if (!a.isFoundingArtist && b.isFoundingArtist) return 1;
       return 0;
     });
-  }, [artists, filters, userCoords, activeDisciplineObj, activeSubStyles, artistSort]);
+  }, [artists, filters, userCoords, maxDistance, activeDisciplineObj, activeSubStyles, artistSort, searchQuery]);
 
   const allMediums = useMemo(
     () => Array.from(new Set(artists.map((a) => a.primaryMedium))).sort(),
-    []
+    [artists],
   );
 
   const allGalleryWorks = useMemo(() => artistsToGalleryWorks(artists), [artists]);
@@ -583,7 +782,21 @@ function BrowsePortfoliosPageInner() {
   );
 
   const filteredGalleryWorks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return allGalleryWorks.filter((work) => {
+      // Free-text search, Plan F Task 4. Match on title / artist name /
+      // medium so works AND their authors are findable from one input.
+      if (q) {
+        const haystack = [
+          work.title,
+          work.artistName,
+          work.medium,
+          work.artistPrimaryMedium,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       // Discipline filter
       if (activeDisciplineObj && work.artistDiscipline !== activeDisciplineObj.id) return false;
       // Sub-style filter, work's artist must have at least one matching sub-style
@@ -596,11 +809,14 @@ function BrowsePortfoliosPageInner() {
       if (galleryStyle && work.artistPrimaryMedium !== galleryStyle) return false;
       // Availability
       if (galleryAvailableOnly && !work.available) return false;
-      // Price range
+      // Price range. Reads from the authoritative numeric pricing
+      // array rather than the priceBand string, which only matched
+      // integer pounds and silently dropped the fractional part of
+      // values like "From £29.99".
       if (galleryPriceMin > 0 || galleryPriceMax < 1000) {
-        const match = work.priceBand.replace(/[£,]/g, "").match(/\d+/);
-        if (match) {
-          const low = parseInt(match[0], 10);
+        const prices = work.pricing.map((p) => p.price).filter((n) => n > 0);
+        if (prices.length > 0) {
+          const low = Math.min(...prices);
           if (low < galleryPriceMin) return false;
           if (galleryPriceMax < 1000 && low > galleryPriceMax) return false;
         }
@@ -629,7 +845,7 @@ function BrowsePortfoliosPageInner() {
       // Location
       if (galleryLocationMode === "local" && userCoords && work.artistCoordinates) {
         const dist = calcDistance(userCoords.lat, userCoords.lng, work.artistCoordinates.lat, work.artistCoordinates.lng);
-        if (dist > filters.maxDistance) return false;
+        if (dist > maxDistance) return false;
       }
       return true;
     }).sort((a, b) => {
@@ -642,14 +858,21 @@ function BrowsePortfoliosPageInner() {
       }
       if (gallerySort === "az") return a.title.localeCompare(b.title);
       if (gallerySort === "price_low") {
-        const aPrice = a.pricing[0]?.price ?? 0;
-        const bPrice = b.pricing[0]?.price ?? 0;
-        return aPrice - bPrice;
+        // pricing[0] isn't guaranteed to be the cheapest size, the
+        // array is sorted by the artist's entry order. Take the min
+        // so "low to high" reflects the lowest entry price for the work.
+        const aPrices = a.pricing.map((p) => p.price).filter((n) => n > 0);
+        const bPrices = b.pricing.map((p) => p.price).filter((n) => n > 0);
+        const aMin = aPrices.length > 0 ? Math.min(...aPrices) : Infinity;
+        const bMin = bPrices.length > 0 ? Math.min(...bPrices) : Infinity;
+        return aMin - bMin;
       }
       if (gallerySort === "price_high") {
-        const aPrice = a.pricing[0]?.price ?? 0;
-        const bPrice = b.pricing[0]?.price ?? 0;
-        return bPrice - aPrice;
+        const aPrices = a.pricing.map((p) => p.price).filter((n) => n > 0);
+        const bPrices = b.pricing.map((p) => p.price).filter((n) => n > 0);
+        const aMax = aPrices.length > 0 ? Math.max(...aPrices) : -Infinity;
+        const bMax = bPrices.length > 0 ? Math.max(...bPrices) : -Infinity;
+        return bMax - aMax;
       }
       if (gallerySort === "revenue_share") return (b.revenueSharePercent || 0) - (a.revenueSharePercent || 0);
       if (gallerySort === "distance" && userCoords) {
@@ -675,7 +898,7 @@ function BrowsePortfoliosPageInner() {
       if (!a.artistIsFounding && b.artistIsFounding) return 1;
       return 0;
     });
-  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, gallerySizes, galleryLocationMode, userCoords, filters.maxDistance, activeDisciplineObj, activeSubStyles, gallerySort]);
+  }, [allGalleryWorks, galleryTheme, galleryMedium, galleryStyle, galleryAvailableOnly, galleryPriceMin, galleryPriceMax, galleryOriginals, galleryPrints, galleryFraming, galleryFreeLoan, galleryRevenueShare, galleryRevenueShareMin, galleryPurchase, gallerySizes, galleryLocationMode, userCoords, maxDistance, activeDisciplineObj, activeSubStyles, gallerySort, searchQuery]);
 
   const hasGalleryFilters =
     !!galleryTheme || !!galleryMedium || !!galleryStyle || galleryAvailableOnly || galleryPriceMin > 0 || galleryPriceMax < 1000 || galleryOriginals || galleryPrints || galleryFraming || galleryFreeLoan || galleryRevenueShare || galleryPurchase || !!userCoords || gallerySizes.size > 0;
@@ -685,14 +908,32 @@ function BrowsePortfoliosPageInner() {
   // that collections only had location filtering vs portfolios/galleries
   // which had the full set).
   const filteredCollections = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return collections.filter((c) => {
       if (!c.available) return false;
+      // Free-text search, Plan F Task 4. Collections inherit search
+      // matching against their own name + description and the underlying
+      // artist's name so a search for the artist still surfaces their
+      // bundles.
+      if (q) {
+        const collectionArtist = artists.find((a) => a.slug === c.artistSlug);
+        const haystack = [
+          c.name,
+          c.description,
+          c.artistName,
+          collectionArtist?.primaryMedium,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       // Distance, only when the user has set a location.
       if (collectionsLocationMode === "local" && userCoords) {
         const artist = artists.find((a) => a.slug === c.artistSlug);
         if (!artist?.coordinates) return false;
         const dist = calcDistance(userCoords.lat, userCoords.lng, artist.coordinates.lat, artist.coordinates.lng);
-        if (dist > filters.maxDistance) return false;
+        if (dist > maxDistance) return false;
       }
       // Bundle price.
       if (collectionsPriceMin > 0 && (c.bundlePrice || 0) < collectionsPriceMin) return false;
@@ -708,7 +949,7 @@ function BrowsePortfoliosPageInner() {
       }
       return true;
     });
-  }, [collections, collectionsLocationMode, userCoords, artists, filters.maxDistance, collectionsPriceMin, collectionsPriceMax, collectionsFreeLoan, collectionsRevShare, collectionsPurchase]);
+  }, [collections, collectionsLocationMode, userCoords, artists, maxDistance, collectionsPriceMin, collectionsPriceMax, collectionsFreeLoan, collectionsRevShare, collectionsPurchase, searchQuery]);
 
   const hasCollectionsFilters =
     collectionsLocationMode === "local" ||
@@ -744,20 +985,20 @@ function BrowsePortfoliosPageInner() {
     });
   }
   const SIZE_BANDS: { id: SizeBand; label: string; sub: string }[] = [
-    { id: "small", label: "Small", sub: "≤30cm" },
-    { id: "medium", label: "Medium", sub: "30–60cm" },
-    { id: "large", label: "Large", sub: "60–100cm" },
+    { id: "small", label: "Small", sub: "up to 30cm" },
+    { id: "medium", label: "Medium", sub: "30 to 60cm" },
+    { id: "large", label: "Large", sub: "60 to 100cm" },
     { id: "xl", label: "Extra-large", sub: "100cm+" },
   ];
 
   const filterPanel = (
-    <div className="space-y-7">
+    <div className="space-y-5">
       {/* Location (#9), the Local/Global toggle was removed; the
           slider is the only location control now. Default 25mi when
           a location is set. Drag to the right edge to switch back to
           "Anywhere". */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Location
         </p>
         {(() => {
@@ -779,7 +1020,7 @@ function BrowsePortfoliosPageInner() {
                 Location set
                 <button
                   type="button"
-                  onClick={() => { clearPersistedLocation(); setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
+                  onClick={() => { clearLocation(); setPostcodeError(false); }}
                   className="ml-1 text-[10px] text-muted underline cursor-pointer"
                 >
                   change
@@ -792,8 +1033,7 @@ function BrowsePortfoliosPageInner() {
                 <PostcodeInput
                   initial={postcodeInput}
                   onGeocoded={(coords, pc) => {
-                    setUserCoords(coords);
-                    setPostcodeInput(pc);
+                    updateLocationCoords(coords, pc);
                     setPostcodeError(false);
                   }}
                   onError={(failed) => setPostcodeError(failed)}
@@ -806,39 +1046,13 @@ function BrowsePortfoliosPageInner() {
             {/* Distance, max only, once we have a location (F48) */}
             {userCoords && (
               <div>
-                <p className="text-xs text-muted mb-2">
-                  Within {filters.maxDistance >= 9999 ? "any distance" : `${filters.maxDistance} mi`}
-                </p>
-                <div className="space-y-2.5">
-                  <input
-                    type="range"
-                    min={0}
-                    max={200}
-                    step={1}
-                    value={filters.maxDistance >= 9999 ? 200 : filters.maxDistance}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setFilter("maxDistance", v >= 200 ? 9999 : v);
-                    }}
-                    className="w-full accent-accent h-1.5 cursor-pointer"
-                  />
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={9999}
-                      value={filters.maxDistance >= 9999 ? "" : filters.maxDistance}
-                      placeholder="Any"
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        if (raw === "") { setFilter("maxDistance", 9999); return; }
-                        setFilter("maxDistance", Math.max(0, Number(raw) || 0));
-                      }}
-                      className="w-20 px-2 py-1 text-xs bg-surface border border-border rounded-sm text-foreground focus:outline-none focus:border-accent/50"
-                    />
-                    <span className="text-xs text-muted">mi</span>
-                  </div>
-                </div>
+                <DistanceSliderControl
+                  value={maxDistance}
+                  onCommit={setMaxDistance}
+                  labelClassName="text-xs text-muted mb-2"
+                  withNumberInput
+                  numberInputSuffix={<span className="text-xs text-muted">mi</span>}
+                />
               </div>
             )}
           </div>
@@ -850,7 +1064,7 @@ function BrowsePortfoliosPageInner() {
           models: Revenue Share, Paid Loan, Direct Purchase. Rev share min
           % shows as a slider beneath the Revenue Share tile when active. */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Arrangement
         </p>
         <div className="space-y-2">
@@ -858,7 +1072,8 @@ function BrowsePortfoliosPageInner() {
           <button
             type="button"
             onClick={() => setFilter("revenueShare", !filters.revenueShare)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
+            aria-pressed={filters.revenueShare}
+            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.revenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
@@ -906,7 +1121,8 @@ function BrowsePortfoliosPageInner() {
           <button
             type="button"
             onClick={() => setFilter("paidLoan", !filters.paidLoan)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
+            aria-pressed={filters.paidLoan}
+            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.paidLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
@@ -921,7 +1137,8 @@ function BrowsePortfoliosPageInner() {
           <button
             type="button"
             onClick={() => setFilter("outrightPurchase", !filters.outrightPurchase)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors cursor-pointer ${
+            aria-pressed={filters.outrightPurchase}
+            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors cursor-pointer ${
               filters.outrightPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
             }`}
           >
@@ -938,7 +1155,7 @@ function BrowsePortfoliosPageInner() {
 
       {/* Availability – commissions removed */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Availability
         </p>
         <div className="space-y-2.5">
@@ -962,7 +1179,7 @@ function BrowsePortfoliosPageInner() {
 
       {/* Venue Suitability */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Venue Type
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -988,7 +1205,7 @@ function BrowsePortfoliosPageInner() {
           arrangement, availability, venue type) so the high-priority
           options stay above the fold. */}
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Style
         </p>
         <select
@@ -1006,7 +1223,7 @@ function BrowsePortfoliosPageInner() {
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
           Theme
         </p>
         <select
@@ -1037,7 +1254,7 @@ function BrowsePortfoliosPageInner() {
   );
 
   return (
-    <div className="bg-background">
+    <div className="bg-background min-h-screen">
 
       {/* Discipline tabs */}
       <div className="border-b border-border bg-[#FAF8F5]">
@@ -1131,8 +1348,8 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto overflow-x-visible pr-2 -mr-2 scrollbar-thin">
-                <div className="flex items-center justify-between mb-6">
+              <aside className="hidden lg:block w-60 shrink-0 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 -mr-2">
+                <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">
                     Filters
                   </span>
@@ -1242,15 +1459,25 @@ function BrowsePortfoliosPageInner() {
                 {/* Search + count + view toggle – desktop */}
                 <div className="hidden lg:flex items-center justify-between mb-6 gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-56">
-                      <SearchBar variant="light" mode="desktop" placeholder="Search artists..." />
+                    <div className="w-64">
+                      <SearchInput
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        // Trimmed from "Search artists, themes, mediums",
+                        // the longer text clipped at "Search artists,
+                        // themes, m…" in the 256px (w-64) field on the
+                        // portfolios tab. Two-noun version reads the
+                        // same and parallels the works tab's "Search
+                        // works or artists".
+                        placeholder="Search artists or themes"
+                      />
                     </div>
                     <p className="text-sm text-muted whitespace-nowrap">
                       {dataReady ? (
                         <>
                           {filteredArtists.length} artist
                           {filteredArtists.length !== 1 ? "s" : ""}
-                          {hasActiveFilters && " matching"}
+                          {(hasActiveFilters || searchQuery) && " matching"}
                         </>
                       ) : (
                         "…"
@@ -1460,8 +1687,8 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-56 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto overflow-x-visible pr-2 -mr-2 scrollbar-thin">
-                <div className="flex items-center justify-between mb-6">
+              <aside className="hidden lg:block w-60 shrink-0 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 -mr-2">
+                <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">Filters</span>
                   {hasGalleryFilters && (
                     <button type="button" onClick={clearGalleryFilters} className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">
@@ -1469,53 +1696,30 @@ function BrowsePortfoliosPageInner() {
                     </button>
                   )}
                 </div>
-                <div className="space-y-7">
+                <div className="space-y-5">
                   {/* Location (#9), toggle removed; the slider is the
                       only control. Postcode entry shows when no location
                       is set; slider shows once it is. */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Location</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Location</p>
                     {userCoords && (
                       <div>
-                        <p className="text-xs text-muted mb-2">
-                          Within {filters.maxDistance >= 9999 ? "any distance" : `${filters.maxDistance} mi`}
-                        </p>
-                        <div className="space-y-2.5">
-                          <input
-                            type="range"
-                            min={0}
-                            max={200}
-                            step={1}
-                            value={filters.maxDistance >= 9999 ? 200 : filters.maxDistance}
-                            onChange={(e) => {
-                              const v = Number(e.target.value);
-                              setFilter("maxDistance", v >= 200 ? 9999 : v);
-                            }}
-                            className="w-full accent-accent h-1.5 cursor-pointer"
-                          />
-                          <div className="flex items-center justify-between gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={9999}
-                              value={filters.maxDistance >= 9999 ? "" : filters.maxDistance}
-                              placeholder="Any"
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                if (raw === "") { setFilter("maxDistance", 9999); return; }
-                                setFilter("maxDistance", Math.max(0, Number(raw) || 0));
-                              }}
-                              className="w-20 px-2 py-1 text-xs bg-surface border border-border rounded-sm text-foreground focus:outline-none focus:border-accent/50"
-                            />
+                        <DistanceSliderControl
+                          value={maxDistance}
+                          onCommit={setMaxDistance}
+                          labelClassName="text-xs text-muted mb-2"
+                          withNumberInput
+                          numberInputRowClassName="flex items-center justify-between gap-2"
+                          numberInputSuffix={
                             <button
                               type="button"
-                              onClick={() => { clearPersistedLocation(); setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
+                              onClick={() => { clearLocation(); setPostcodeError(false); }}
                               className="text-[11px] text-muted underline hover:text-foreground"
                             >
                               Change postcode
                             </button>
-                          </div>
-                        </div>
+                          }
+                        />
                       </div>
                     )}
                     {!userCoords && !geoRequesting && (
@@ -1524,8 +1728,7 @@ function BrowsePortfoliosPageInner() {
                         <PostcodeInput
                           initial={postcodeInput}
                           onGeocoded={(coords, pc) => {
-                            setUserCoords(coords);
-                            setPostcodeInput(pc);
+                            updateLocationCoords(coords, pc);
                             setPostcodeError(false);
                           }}
                           onError={(failed) => setPostcodeError(failed)}
@@ -1540,13 +1743,14 @@ function BrowsePortfoliosPageInner() {
                       Direct Purchase). Rev share slider appears under the
                       Revenue Share tile when active. */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Arrangement</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Arrangement</p>
                     <div className="space-y-2">
                       {/* Revenue Share */}
                       <button
                         type="button"
                         onClick={() => setGalleryRevenueShare(!galleryRevenueShare)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                        aria-pressed={galleryRevenueShare}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
                           galleryRevenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
                       >
@@ -1590,7 +1794,8 @@ function BrowsePortfoliosPageInner() {
                       <button
                         type="button"
                         onClick={() => setGalleryFreeLoan(!galleryFreeLoan)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                        aria-pressed={galleryFreeLoan}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
                           galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
                       >
@@ -1605,7 +1810,8 @@ function BrowsePortfoliosPageInner() {
                       <button
                         type="button"
                         onClick={() => setGalleryPurchase(!galleryPurchase)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm border text-left transition-colors ${
+                        aria-pressed={galleryPurchase}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
                           galleryPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                         }`}
                       >
@@ -1622,7 +1828,7 @@ function BrowsePortfoliosPageInner() {
 
                   {/* Availability */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Availability</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Availability</p>
                     <div className="space-y-1.5">
                       <CheckPill checked={galleryOriginals} onChange={setGalleryOriginals} label="Originals available" />
                       <CheckPill checked={galleryPrints} onChange={setGalleryPrints} label="Prints available" />
@@ -1634,8 +1840,8 @@ function BrowsePortfoliosPageInner() {
                       pass: smaller padding, smaller label so the row
                       doesn't dominate the panel. */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Size</p>
-                    <div className="grid grid-cols-2 gap-1">
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Size</p>
+                    <div className="grid grid-cols-2 gap-1.5">
                       {SIZE_BANDS.map((b) => {
                         const active = gallerySizes.has(b.id);
                         return (
@@ -1643,11 +1849,11 @@ function BrowsePortfoliosPageInner() {
                             key={b.id}
                             type="button"
                             onClick={() => toggleSize(b.id)}
-                            className={`px-2 py-1 rounded-sm border text-left transition-colors ${
+                            className={`px-2 py-1.5 rounded-sm border text-left transition-colors ${
                               active ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                             }`}
                           >
-                            <span className="flex items-center justify-between gap-2">
+                            <span className="flex flex-col items-start gap-0.5">
                               <span className="text-[11px] font-medium leading-tight">{b.label}</span>
                               <span className="text-[9px] text-muted leading-tight tabular-nums">{b.sub}</span>
                             </span>
@@ -1659,8 +1865,8 @@ function BrowsePortfoliosPageInner() {
 
                   {/* Price Range */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">
-                      Price: £{galleryPriceMin} – {galleryPriceMax >= 1000 ? "£1000+" : `£${galleryPriceMax}`}
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
+                      Price: £{galleryPriceMin} to {galleryPriceMax >= 1000 ? "£1000+" : `£${galleryPriceMax}`}
                     </p>
                     <div className="space-y-3 px-1">
                       <div>
@@ -1679,7 +1885,7 @@ function BrowsePortfoliosPageInner() {
                       availability / size / price for buyers, so
                       they sit below the high-priority filters. */}
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Style</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Style</p>
                     <select value={galleryStyle} onChange={(e) => setGalleryStyle(e.target.value)} className="w-full px-3 py-2 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer">
                       <option value="">All styles</option>
                       {allMediums.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -1687,7 +1893,7 @@ function BrowsePortfoliosPageInner() {
                   </div>
 
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Theme</p>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Theme</p>
                     <select value={galleryTheme} onChange={(e) => setGalleryTheme(e.target.value)} className="w-full px-3 py-2 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer">
                       <option value="">All themes</option>
                       {themes.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -1762,26 +1968,16 @@ function BrowsePortfoliosPageInner() {
                             Location set
                             <button
                               type="button"
-                              onClick={() => { clearPersistedLocation(); setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
+                              onClick={() => { clearLocation(); setPostcodeError(false); }}
                               className="ml-1 text-[10px] text-muted underline cursor-pointer"
                             >
                               change
                             </button>
                           </p>
-                          <p className="text-[10px] text-muted mb-1.5">
-                            Within {filters.maxDistance >= 9999 ? "any distance" : `${filters.maxDistance} mi`}
-                          </p>
-                          <input
-                            type="range"
-                            min={0}
-                            max={200}
-                            step={1}
-                            value={filters.maxDistance >= 9999 ? 200 : filters.maxDistance}
-                            onChange={(e) => {
-                              const v = Number(e.target.value);
-                              setFilter("maxDistance", v >= 200 ? 9999 : v);
-                            }}
-                            className="w-full accent-accent h-1.5 cursor-pointer"
+                          <DistanceSliderControl
+                            value={maxDistance}
+                            onCommit={setMaxDistance}
+                            labelClassName="text-[10px] text-muted mb-1.5"
                           />
                         </>
                       )}
@@ -1791,8 +1987,7 @@ function BrowsePortfoliosPageInner() {
                           <PostcodeInput
                             initial={postcodeInput}
                             onGeocoded={(coords, pc) => {
-                              setUserCoords(coords);
-                              setPostcodeInput(pc);
+                              updateLocationCoords(coords, pc);
                               setPostcodeError(false);
                             }}
                             onError={(failed) => setPostcodeError(failed)}
@@ -1804,22 +1999,28 @@ function BrowsePortfoliosPageInner() {
                     <div>
                       <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">Arrangement</p>
                       <div className="space-y-2">
+                        {/* Revenue Share */}
                         <button
                           type="button"
-                          onClick={() => { setGalleryFreeLoan(!galleryFreeLoan); if (!galleryFreeLoan) setGalleryRevenueShare(true); }}
+                          onClick={() => setGalleryRevenueShare(!galleryRevenueShare)}
+                          aria-pressed={galleryRevenueShare}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm border text-left transition-colors ${
-                            galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                            galleryRevenueShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                           }`}
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={galleryFreeLoan ? "text-accent" : "text-muted"}>
-                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={galleryRevenueShare ? "text-accent" : "text-muted"}>
+                            <path d="m11 17 2 2a1 1 0 1 0 3-3" />
+                            <path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" />
+                            <path d="m21 3 1 11h-2" />
+                            <path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3" />
+                            <path d="M3 4h8" />
                           </svg>
                           <div>
-                            <p className="text-xs font-medium">Display</p>
-                            <p className="text-[10px] text-muted">Revenue share or paid loan</p>
+                            <p className="text-xs font-medium">Revenue Share</p>
+                            <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
                           </div>
                         </button>
-                        {galleryFreeLoan && (
+                        {galleryRevenueShare && (
                           <div className="flex items-center gap-2 pl-3 py-0.5">
                             <span className="text-[10px] text-muted">Min rev share</span>
                             <input
@@ -1830,13 +2031,33 @@ function BrowsePortfoliosPageInner() {
                               onChange={(e) => setGalleryRevenueShareMin(e.target.value === "" ? 0 : Number(e.target.value))}
                               placeholder="Any"
                               className="w-14 px-2 py-1 bg-surface border border-border rounded-sm text-xs text-foreground text-center focus:outline-none focus:border-accent/50"
+                              aria-label="Minimum revenue share"
                             />
                             <span className="text-[10px] text-muted">%</span>
                           </div>
                         )}
+
+                        {/* Paid Loan */}
+                        <button
+                          type="button"
+                          onClick={() => setGalleryFreeLoan(!galleryFreeLoan)}
+                          aria-pressed={galleryFreeLoan}
+                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm border text-left transition-colors ${
+                            galleryFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                          }`}
+                        >
+                          <span className={`text-base font-serif font-semibold leading-none w-4 text-center ${galleryFreeLoan ? "text-accent" : "text-muted"}`}>&pound;</span>
+                          <div>
+                            <p className="text-xs font-medium">Paid Loan</p>
+                            <p className="text-[10px] text-muted">Monthly fee to display the work</p>
+                          </div>
+                        </button>
+
+                        {/* Direct Purchase */}
                         <button
                           type="button"
                           onClick={() => setGalleryPurchase(!galleryPurchase)}
+                          aria-pressed={galleryPurchase}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-sm border text-left transition-colors ${
                             galleryPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
                           }`}
@@ -1845,7 +2066,7 @@ function BrowsePortfoliosPageInner() {
                             <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
                           </svg>
                           <div>
-                            <p className="text-xs font-medium">Purchase</p>
+                            <p className="text-xs font-medium">Direct Purchase</p>
                             <p className="text-[10px] text-muted">Buy artwork outright</p>
                           </div>
                         </button>
@@ -1884,7 +2105,7 @@ function BrowsePortfoliosPageInner() {
                     </div>
                     <div>
                       <p className="text-xs font-medium uppercase tracking-widest text-muted mb-2">
-                        Price: £{galleryPriceMin} – {galleryPriceMax >= 1000 ? "£1000+" : `£${galleryPriceMax}`}
+                        Price: £{galleryPriceMin} to {galleryPriceMax >= 1000 ? "£1000+" : `£${galleryPriceMax}`}
                       </p>
                       <div className="space-y-2 px-1">
                         <input type="range" min={0} max={1000} step={50} value={galleryPriceMin} onChange={(e) => { const v = Number(e.target.value); setGalleryPriceMin(Math.min(v, galleryPriceMax)); }} className="w-full accent-accent h-1.5" />
@@ -1915,8 +2136,12 @@ function BrowsePortfoliosPageInner() {
                 {/* Search + count + toggle – desktop */}
                 <div className="hidden lg:flex items-center justify-between mb-6 gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-56">
-                      <SearchBar variant="light" mode="desktop" placeholder="Search artworks..." />
+                    <div className="w-64">
+                      <SearchInput
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        placeholder="Search works or artists"
+                      />
                     </div>
                     <p className="text-sm text-muted whitespace-nowrap">
                       {dataReady
@@ -2004,6 +2229,13 @@ function BrowsePortfoliosPageInner() {
                               </span>
                             )}
                             {/* Hover action buttons */}
+                            {/* Plan G #11: hover-revealed save heart on
+                                desktop, always-visible on mobile (since
+                                hover doesn't fire on touch). SaveButton
+                                handles the auth gate + toast. */}
+                            <div className="absolute top-3 left-3 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity duration-200">
+                              <SaveButton type="work" itemId={work.id} size="sm" />
+                            </div>
                             <div className="absolute top-3 right-3 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                               <Link
                                 href={quickLookHref}
@@ -2031,27 +2263,19 @@ function BrowsePortfoliosPageInner() {
                             </div>
                           </div>
 
-                          {/* Info — type sized down a notch per design
-                              feedback. Distance from you sits on the
-                              right of the title row on web; on mobile it
-                              wraps below to keep the title readable. */}
-                          <div className="px-4 py-3 flex-1 flex flex-col">
-                            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                              <a href={fullPageHref} target="_blank" rel="noopener noreferrer" className="block group/title min-w-0 flex-1">
-                                <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate">
-                                  {work.title}
-                                </h3>
-                              </a>
-                              {workDistance !== null && (
-                                <span className="text-[10px] text-muted shrink-0 inline-flex items-center gap-0.5 order-3 sm:order-none w-full sm:w-auto mt-0.5 sm:mt-0">
-                                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                                    <circle cx="12" cy="10" r="3" />
-                                  </svg>
-                                  {workDistance < 0.2 ? "< 0.2 mi" : `${workDistance.toFixed(1)} mi`}
-                                </span>
-                              )}
-                            </div>
+                          {/* Info — distance pill floats at the
+                              top-right corner of this section (below
+                              the image, not over the artwork), so
+                              the piece itself stays visually clean.
+                              `relative` is required so DistanceBadge's
+                              absolute positioning anchors here. */}
+                          <div className="px-4 py-3 flex-1 flex flex-col relative">
+                            <DistanceBadge distance={workDistance} corner="top-right" />
+                            <a href={fullPageHref} target="_blank" rel="noopener noreferrer" className="block group/title min-w-0">
+                              <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate pr-16">
+                                {work.title}
+                              </h3>
+                            </a>
                             <p className="text-[11px] text-muted mt-0.5">
                               <Link
                                 href={`/browse/${work.artistSlug}`}
@@ -2064,15 +2288,34 @@ function BrowsePortfoliosPageInner() {
                               {work.medium}
                             </p>
                             <p className="text-[11px] text-foreground/80 mt-1 font-medium">
-                              {work.priceBand}
+                              {formatPriceRange(work.pricing) || work.priceBand}
                             </p>
                             <p className="text-[11px] text-muted/70 mt-1">
-                              {[work.openToFreeLoan ? "Display" : "", work.openToOutrightPurchase ? "Purchase" : ""].filter(Boolean).join(" · ")}
+                              {/* Match the three canonical arrangement
+                                  labels used everywhere else (artist
+                                  card offers list, placement requests).
+                                  The previous "Display · Purchase" gloss
+                                  hid the difference between a paid-loan
+                                  arrangement and a revenue-share one,
+                                  which are the two paths a venue cares
+                                  most about. */}
+                              {[
+                                work.openToRevenueShare ? "Revenue Share" : "",
+                                work.openToFreeLoan ? "Paid Loan" : "",
+                                work.openToOutrightPurchase ? "Purchase" : "",
+                              ].filter(Boolean).join(" · ")}
                             </p>
-                            {work.openToRevenueShare && work.revenueSharePercent != null && work.revenueSharePercent > 0 && (
+                            {/* Reserve a row for the revenue-share line on every
+                                card so the masonry rows line up; works without a
+                                rev-share percent fall back to a transparent
+                                placeholder rather than collapsing the card height
+                                and visibly shrinking compared to neighbours. */}
+                            {work.openToRevenueShare && work.revenueSharePercent != null && work.revenueSharePercent > 0 ? (
                               <p className="text-[11px] text-accent font-medium mt-1">
                                 {work.revenueSharePercent}% Revenue Share
                               </p>
+                            ) : (
+                              <p className="text-[11px] mt-1" aria-hidden="true">&nbsp;</p>
                             )}
                           </div>
                         </div>
@@ -2104,80 +2347,41 @@ function BrowsePortfoliosPageInner() {
         </section>
       )}
 
-      {activeDiscipline === "collections" && (
-        <section className="py-10 lg:py-14">
-          <div className="max-w-[1400px] mx-auto px-6">
-            {/* Mobile toolbar, view pill-dropdown + Global/Local pills + slider */}
-            <div className="lg:hidden mb-6 space-y-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative">
-                  <select
-                    value="collections"
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "gallery") { switchView("gallery"); }
-                      else if (v === "portfolios") { switchView("portfolios"); }
-                    }}
-                    className="appearance-none pl-3 pr-7 py-1.5 text-[11px] rounded-full border border-border bg-white text-foreground font-medium cursor-pointer focus:outline-none focus:border-foreground/50"
-                  >
-                    <option value="gallery">Galleries</option>
-                    <option value="portfolios">Portfolios</option>
-                    <option value="collections">Collections</option>
-                  </select>
-                  <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <polyline points="2 4 6 8 10 4" />
-                  </svg>
-                </div>
-              </div>
-              {/* Location handling matches the gallery + portfolio
-                  views: toggle removed (#9), slider when a location
-                  is set, dynamic PostcodeInput + use-my-location
-                  fallback when not. */}
+      {activeDiscipline === "collections" && (() => {
+        // Sidebar filter panel reused on desktop sidebar + mobile drawer
+        // so collections matches the galleries/portfolios layout pattern.
+        const collectionsFilterPanel = (
+          <div className="space-y-7">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Location</p>
               {geoRequesting && (
                 <p className="text-xs text-muted animate-pulse">Detecting your location…</p>
               )}
               {!geoRequesting && userCoords && (
-                <>
-                  <p className="text-xs text-accent flex items-center gap-1.5">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                    </svg>
-                    Location set
+                <DistanceSliderControl
+                  value={maxDistance}
+                  onCommit={setMaxDistance}
+                  labelClassName="text-xs text-muted mb-2"
+                  withNumberInput
+                  numberInputRowClassName="flex items-center justify-between gap-2"
+                  numberInputSuffix={
                     <button
                       type="button"
-                      onClick={() => { clearPersistedLocation(); setUserCoords(null); setPostcodeInput(""); setPostcodeError(false); }}
-                      className="ml-1 text-[10px] text-muted underline cursor-pointer"
+                      onClick={() => { clearLocation(); setPostcodeError(false); }}
+                      className="text-[11px] text-muted underline hover:text-foreground"
                     >
-                      change
+                      Change postcode
                     </button>
-                  </p>
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">
-                      Within {filters.maxDistance >= 9999 ? "any distance" : `${filters.maxDistance} mi`}
-                    </p>
-                    <input
-                      type="range"
-                      min={0}
-                      max={200}
-                      step={1}
-                      value={filters.maxDistance >= 9999 ? 200 : filters.maxDistance}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setFilter("maxDistance", v >= 200 ? 9999 : v);
-                      }}
-                      className="w-full accent-accent h-1.5 cursor-pointer"
-                    />
-                  </div>
-                </>
+                  }
+                />
               )}
               {!userCoords && !geoRequesting && (
                 <div>
-                  <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">Postcode</p>
+                  <p className="text-xs text-muted mb-1.5">Enter your postcode to filter by distance</p>
                   <PostcodeInput
                     initial={postcodeInput}
                     onGeocoded={(coords, pc) => {
-                      setUserCoords(coords);
-                      setPostcodeInput(pc);
+                      updateLocationCoords(coords, pc);
                       setPostcodeError(false);
                     }}
                     onError={(failed) => setPostcodeError(failed)}
@@ -2186,185 +2390,276 @@ function BrowsePortfoliosPageInner() {
                 </div>
               )}
             </div>
-            {/* Desktop view toggle, 3-way pill group, right-aligned.
-                Order matches the rest of the marketplace: Galleries
-                first, then Portfolios, then Collections. */}
-            <div className="hidden lg:flex mb-6 items-center justify-end">
-              <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5">
-                <button type="button" onClick={() => { switchView("gallery"); }} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
-                  Galleries
+
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">Arrangement</p>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setCollectionsRevShare(!collectionsRevShare)}
+                  aria-pressed={collectionsRevShare}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
+                    collectionsRevShare ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={collectionsRevShare ? "text-accent" : "text-muted"}>
+                    <path d="m11 17 2 2a1 1 0 1 0 3-3" />
+                    <path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" />
+                    <path d="m21 3 1 11h-2" />
+                    <path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3" />
+                    <path d="M3 4h8" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium">Revenue Share</p>
+                    <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
+                  </div>
                 </button>
-                <button type="button" onClick={() => { switchView("portfolios"); }} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
-                  Portfolios
+                <button
+                  type="button"
+                  onClick={() => setCollectionsFreeLoan(!collectionsFreeLoan)}
+                  aria-pressed={collectionsFreeLoan}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
+                    collectionsFreeLoan ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  <span className={`text-base font-serif font-semibold leading-none w-4 text-center ${collectionsFreeLoan ? "text-accent" : "text-muted"}`}>&pound;</span>
+                  <div>
+                    <p className="text-sm font-medium">Paid Loan</p>
+                    <p className="text-[10px] text-muted">Monthly fee to display the work</p>
+                  </div>
                 </button>
-                <button type="button" onClick={() => switchView("collections")} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer bg-white text-foreground shadow-sm">
-                  Collections
+                <button
+                  type="button"
+                  onClick={() => setCollectionsPurchase(!collectionsPurchase)}
+                  aria-pressed={collectionsPurchase}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm border text-left transition-colors ${
+                    collectionsPurchase ? "border-accent bg-accent/5 text-foreground" : "border-border bg-[#F8F6F2] lg:bg-white text-muted hover:border-foreground/30"
+                  }`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={collectionsPurchase ? "text-accent" : "text-muted"}>
+                    <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 10h20" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium">Direct Purchase</p>
+                    <p className="text-[10px] text-muted">Buy artwork outright</p>
+                  </div>
                 </button>
               </div>
             </div>
-            <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <h2 className="text-2xl font-serif mb-2">Curated Collections</h2>
-                <p className="text-sm text-muted">Themed bundles of artwork at a set price. Ready to transform your space.</p>
-              </div>
-              <div className="flex flex-wrap items-end gap-4">
-                {/* Desktop location, toggle removed (#9). Slider when
-                    a postcode is set, dynamic PostcodeInput +
-                    use-my-location otherwise. */}
-                {userCoords && (
-                  <div className="hidden lg:block min-w-[180px]">
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">
-                      Within {filters.maxDistance >= 9999 ? "any" : `${filters.maxDistance} mi`}
-                    </p>
-                    <input
-                      type="range"
-                      min={0}
-                      max={200}
-                      step={1}
-                      value={filters.maxDistance >= 9999 ? 200 : filters.maxDistance}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setFilter("maxDistance", v >= 200 ? 9999 : v);
-                      }}
-                      className="w-full accent-accent h-1.5 cursor-pointer"
-                    />
-                  </div>
-                )}
-                {!userCoords && !geoRequesting && (
-                  <div className="hidden lg:block min-w-[200px]">
-                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">Postcode</p>
-                    <PostcodeInput
-                      initial={postcodeInput}
-                      onGeocoded={(coords, pc) => {
-                        setUserCoords(coords);
-                        setPostcodeInput(pc);
-                        setPostcodeError(false);
-                      }}
-                      onError={(failed) => setPostcodeError(failed)}
-                    />
-                    {postcodeError && <p className="text-[10px] text-red-400 mt-1">Postcode not found</p>}
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Collections filter row (#42), bundle price + arrangement
-                chips, in parity with the gallery / portfolio filter
-                pattern but trimmed to filters that actually apply at
-                the collection level. */}
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-5">
-              <div className="sm:max-w-xs sm:flex-1">
-                <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-1.5">
-                  Bundle price: £{collectionsPriceMin} – {collectionsPriceMax >= 2000 ? "£2000+" : `£${collectionsPriceMax}`}
-                </p>
-                <div className="space-y-2 px-1">
+
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
+                Bundle price: £{collectionsPriceMin} {collectionsPriceMax >= 2000 ? "and £2000+" : `and £${collectionsPriceMax}`}
+              </p>
+              <div className="space-y-3 px-1">
+                <div>
+                  <label className="text-[10px] text-muted">Min</label>
                   <input type="range" min={0} max={2000} step={50} value={collectionsPriceMin} onChange={(e) => { const v = Number(e.target.value); setCollectionsPriceMin(Math.min(v, collectionsPriceMax)); }} className="w-full accent-accent h-1.5 cursor-pointer" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted">Max</label>
                   <input type="range" min={0} max={2000} step={50} value={collectionsPriceMax} onChange={(e) => { const v = Number(e.target.value); setCollectionsPriceMax(Math.max(v, collectionsPriceMin)); }} className="w-full accent-accent h-1.5 cursor-pointer" />
                 </div>
               </div>
-              <div className="flex flex-wrap items-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCollectionsFreeLoan((v) => !v)}
-                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
-                    collectionsFreeLoan ? "border-accent bg-accent/5 text-accent" : "border-border bg-white text-muted hover:border-foreground/30"
-                  }`}
-                >
-                  Display
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCollectionsRevShare((v) => !v)}
-                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
-                    collectionsRevShare ? "border-accent bg-accent/5 text-accent" : "border-border bg-white text-muted hover:border-foreground/30"
-                  }`}
-                >
-                  Rev share
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCollectionsPurchase((v) => !v)}
-                  className={`px-3 py-1.5 text-xs rounded-sm border transition-colors cursor-pointer ${
-                    collectionsPurchase ? "border-accent bg-accent/5 text-accent" : "border-border bg-white text-muted hover:border-foreground/30"
-                  }`}
-                >
-                  Purchase
-                </button>
-                {hasCollectionsFilters && (
-                  <button
-                    type="button"
-                    onClick={clearCollectionsFilters}
-                    className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer"
-                  >
-                    Clear
-                  </button>
+            </div>
+          </div>
+        );
+
+        return (
+        <section className="pt-5 pb-10 lg:pt-8 lg:pb-14">
+          <div className="max-w-[1400px] mx-auto px-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-serif mb-1">Curated Collections</h2>
+              <p className="text-sm text-muted">Themed bundles of artwork at a set price. Ready to transform your space.</p>
+            </div>
+            <div className="flex gap-10 lg:gap-14 items-start">
+              {/* Sidebar – desktop */}
+              <aside className="hidden lg:block w-60 shrink-0 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 -mr-2">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-medium text-foreground">Filters</span>
+                  {hasCollectionsFilters && (
+                    <button type="button" onClick={clearCollectionsFilters} className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">
+                      Clear all
+                    </button>
+                  )}
+                </div>
+                {collectionsFilterPanel}
+              </aside>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                {/* Mobile filter toggle */}
+                <div className="lg:hidden mb-4 flex items-center justify-between">
+                  <p className="text-sm text-muted">
+                    {dataReady
+                      ? `${filteredCollections.length} collection${filteredCollections.length !== 1 ? "s" : ""}`
+                      : "…"}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <select
+                        value="collections"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "gallery") switchView("gallery");
+                          else if (v === "portfolios") switchView("portfolios");
+                        }}
+                        className="appearance-none pl-3 pr-7 py-1.5 text-[11px] rounded-full border border-border bg-white text-foreground font-medium cursor-pointer focus:outline-none focus:border-foreground/50"
+                      >
+                        <option value="gallery">Galleries</option>
+                        <option value="portfolios">Portfolios</option>
+                        <option value="collections">Collections</option>
+                      </select>
+                      <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                        <polyline points="2 4 6 8 10 4" />
+                      </svg>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSidebarOpen(!sidebarOpen)}
+                      className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-sm text-sm text-foreground hover:bg-surface transition-colors cursor-pointer"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="16" y2="12" /><line x1="4" y1="17" x2="12" y2="17" /></svg>
+                      Filters
+                      {hasCollectionsFilters && <span className="text-xs text-white bg-accent rounded-full w-4 h-4 flex items-center justify-center">!</span>}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mobile filter drawer */}
+                {sidebarOpen && (
+                  <div className="lg:hidden mb-6 bg-surface border border-border rounded-sm p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm font-medium">Filters</span>
+                      <button type="button" onClick={() => setSidebarOpen(false)} className="text-xs text-muted hover:text-foreground cursor-pointer">Close</button>
+                    </div>
+                    {collectionsFilterPanel}
+                    {hasCollectionsFilters && (
+                      <button type="button" onClick={clearCollectionsFilters} className="mt-4 text-sm text-accent hover:text-accent-hover transition-colors cursor-pointer">Clear all filters</button>
+                    )}
+                  </div>
+                )}
+
+                {/* Search + count + view toggle – desktop */}
+                <div className="hidden lg:flex items-center justify-between mb-6 gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-64">
+                      <SearchInput
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        placeholder="Search collections, artists"
+                      />
+                    </div>
+                    <p className="text-sm text-muted whitespace-nowrap">
+                      {dataReady
+                        ? `${filteredCollections.length} collection${filteredCollections.length !== 1 ? "s" : ""}`
+                        : "…"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-0.5 bg-border/30 rounded-sm p-0.5 mr-1">
+                      <button type="button" onClick={() => switchView("gallery")} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
+                        Galleries
+                      </button>
+                      <button type="button" onClick={() => switchView("portfolios")} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer text-muted hover:text-foreground">
+                        Portfolios
+                      </button>
+                      <button type="button" onClick={() => switchView("collections")} className="px-3 py-1 text-xs rounded-sm transition-colors cursor-pointer bg-white text-foreground shadow-sm">
+                        Collections
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {filteredCollections.length > 0 ? (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+                      {filteredCollections.slice(0, loadedCollections).map((col) => {
+                        const collectionArtist = artists.find((a) => a.slug === col.artistSlug);
+                        const colDistance = userCoords && collectionArtist?.coordinates
+                          ? calcDistance(userCoords.lat, userCoords.lng, collectionArtist.coordinates.lat, collectionArtist.coordinates.lng)
+                          : null;
+                        return <CollectionCard key={col.id} collection={col} distance={colDistance} />;
+                      })}
+                    </div>
+                    {filteredCollections.length > loadedCollections && (
+                      <div className="mt-10 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setLoadedCollections((n) => n + PAGE_SIZE)}
+                          className="px-6 py-2.5 text-sm font-medium text-foreground border border-foreground/30 rounded-sm hover:border-foreground hover:bg-surface transition-colors cursor-pointer"
+                        >
+                          Show {Math.min(PAGE_SIZE, filteredCollections.length - loadedCollections)} more
+                        </button>
+                        <p className="text-xs text-muted mt-2">
+                          Showing {loadedCollections} of {filteredCollections.length}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="py-20 text-center">
+                    <p className="text-muted mb-3">
+                      {collections.filter((c) => c.available).length === 0
+                        ? "No collections available yet."
+                        : "No collections match these filters."}
+                    </p>
+                    {hasCollectionsFilters && (
+                      <button type="button" onClick={clearCollectionsFilters} className="text-sm text-accent hover:text-accent-hover transition-colors cursor-pointer">Clear all filters</button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
-            {filteredCollections.length > 0 ? (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {filteredCollections.slice(0, loadedCollections).map((col) => {
-                    const collectionArtist = artists.find((a) => a.slug === col.artistSlug);
-                    const colDistance = userCoords && collectionArtist?.coordinates
-                      ? calcDistance(userCoords.lat, userCoords.lng, collectionArtist.coordinates.lat, collectionArtist.coordinates.lng)
-                      : null;
-                    return <CollectionCard key={col.id} collection={col} distance={colDistance} />;
-                  })}
-                </div>
-                {filteredCollections.length > loadedCollections && (
-                  <div className="mt-10 text-center">
-                    <button
-                      type="button"
-                      onClick={() => setLoadedCollections((n) => n + PAGE_SIZE)}
-                      className="px-6 py-2.5 text-sm font-medium text-foreground border border-foreground/30 rounded-sm hover:border-foreground hover:bg-surface transition-colors cursor-pointer"
-                    >
-                      Show {Math.min(PAGE_SIZE, filteredCollections.length - loadedCollections)} more
-                    </button>
-                    <p className="text-xs text-muted mt-2">
-                      Showing {loadedCollections} of {filteredCollections.length}
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-muted text-center py-16">
-                {collections.filter((c) => c.available).length === 0
-                  ? "No collections available yet."
-                  : "No collections match this filter."}
-              </p>
-            )}
+          </div>
+        </section>
+        );
+      })()}
+
+      {/* Subscription CTA for logged-in artists who haven't subscribed.
+          The component is a noop for everyone else (loading, anonymous,
+          venues, customers, already-subscribed), so it lives inline. */}
+      <section className="px-6">
+        <div className="max-w-[1400px] mx-auto pb-6">
+          <SubscriptionUpsellBanner variant="compact" />
+        </div>
+      </section>
+
+      {/* CTAs. Acquisition funnel for signed-out visitors only. Each
+          card pushes a different audience into signup, so leaving them
+          on for already-signed-in users (especially artists who would
+          read "Apply to Join Wallplace" as a stale prompt) muddies the
+          page. Render nothing while auth is loading so the cards
+          don't flash for returning users on a slow auth round-trip. */}
+      {!viewerAuthLoading && !viewerUser && (
+        <section className="py-20 lg:py-24 border-t border-border">
+          <div className="max-w-[1400px] mx-auto px-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
+                <h2 className="text-2xl mb-3">Are you an artist?</h2>
+                <p className="text-muted leading-relaxed mb-6">
+                  We are always looking for talented artists to
+                  join our curated roster. Apply today and get your work seen in
+                  venues across the UK.
+                </p>
+                <Button href="/apply" variant="primary" size="md">
+                  Apply to Join Wallplace
+                </Button>
+              </div>
+              <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
+                <h2 className="text-2xl mb-3">Looking for art?</h2>
+                <p className="text-muted leading-relaxed mb-6">
+                  Whether you run a café, restaurant, coworking space, or office,
+                  we can help you find the right artwork for your walls.
+                </p>
+                <Button href="/signup/venue" variant="secondary" size="md">
+                  Register Your Venue
+                </Button>
+              </div>
+            </div>
           </div>
         </section>
       )}
-
-      {/* CTAs */}
-      <section className="py-20 lg:py-24 border-t border-border">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
-              <h2 className="text-2xl mb-3">Are you an artist?</h2>
-              <p className="text-muted leading-relaxed mb-6">
-                We are always looking for talented artists to
-                join our curated roster. Apply today and get your work seen in
-                venues across the UK.
-              </p>
-              <Button href="/apply" variant="primary" size="md">
-                Apply to Join Wallplace
-              </Button>
-            </div>
-            <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
-              <h2 className="text-2xl mb-3">Looking for art?</h2>
-              <p className="text-muted leading-relaxed mb-6">
-                Whether you run a café, restaurant, coworking space, or office,
-                we can help you find the right artwork for your walls.
-              </p>
-              <Button href="/register-venue" variant="secondary" size="md">
-                Register Your Venue
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

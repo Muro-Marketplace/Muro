@@ -42,6 +42,7 @@ import { supabase } from "@/lib/supabase";
 import { isFlagOn } from "@/lib/feature-flags";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
+import Turnstile from "@/components/Turnstile";
 
 export default function ArtistSignUpPage() {
   const router = useRouter();
@@ -51,6 +52,7 @@ export default function ArtistSignUpPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [agreedToTos, setAgreedToTos] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +65,25 @@ export default function ArtistSignUpPage() {
       return;
     }
 
+    if (!turnstileToken) {
+      setError("Please complete the verification challenge.");
+      setLoading(false);
+      return;
+    }
+
     try {
+      const verifyRes = await fetch("/api/auth/verify-turnstile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: turnstileToken }),
+      });
+      const verifyData = (await verifyRes.json().catch(() => ({}))) as { ok?: boolean };
+      if (!verifyRes.ok || !verifyData.ok) {
+        setError("Verification failed. Refresh and try again.");
+        setLoading(false);
+        return;
+      }
+
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -102,11 +122,12 @@ export default function ArtistSignUpPage() {
     <div className="min-h-screen flex items-center justify-center relative">
       <div className="absolute inset-0 -z-10">
         <Image
-          src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop&crop=center"
-          alt="Mountain landscape"
+          src="https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=1920&h=1080&fit=crop&crop=center"
+          alt="Abstract pour painting in yellow, ink and bone"
           fill
           className="object-cover"
           priority
+          sizes="100vw"
         />
         <div className="absolute inset-0 bg-black/55" />
       </div>
@@ -170,6 +191,11 @@ export default function ArtistSignUpPage() {
             {/* OAuth (Google / Apple), hidden until providers are enabled in
                 Supabase. Flip NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE=1 in
                 Vercel once both providers are configured. */}
+            {!isFlagOn("OAUTH_GOOGLE_APPLE") && (
+              <p className="text-[11px] text-muted text-center mt-3">
+                Email + password only for now. Google and Apple sign-in coming soon.
+              </p>
+            )}
             {isFlagOn("OAUTH_GOOGLE_APPLE") && (
               <>
                 <div className="flex items-center gap-3 my-2">
@@ -250,9 +276,11 @@ export default function ArtistSignUpPage() {
               />
             </div>
 
+            <Turnstile onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
+
             <button
               type="submit"
-              disabled={loading || !agreedToTos}
+              disabled={loading || !agreedToTos || !turnstileToken}
               className="w-full px-6 py-3 bg-accent text-white text-sm font-semibold uppercase tracking-wider rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {loading ? "Creating Account..." : "Continue to Application"}

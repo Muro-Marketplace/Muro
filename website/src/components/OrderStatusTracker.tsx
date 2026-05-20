@@ -1,16 +1,16 @@
 "use client";
 
-interface StatusStep {
-  key: string;
-  label: string;
-}
+import { ORDER_STEPS, labelForStatus } from "@/lib/order-status-labels";
 
-const STEPS: StatusStep[] = [
-  { key: "confirmed", label: "Confirmed" },
-  { key: "processing", label: "Processing" },
-  { key: "shipped", label: "Shipped" },
-  { key: "delivered", label: "Delivered" },
-];
+const OFF_PIPELINE = ["cancelled", "refunded", "disputed"] as const;
+type OffPipelineStatus = (typeof OFF_PIPELINE)[number];
+
+function offPipelineToneClass(status: OffPipelineStatus): string {
+  // cancelled is hard-stop red; refunded and disputed are amber (the order
+  // existed and ran into trouble, but money/dispute resolution is in flight).
+  if (status === "cancelled") return "bg-red-100 text-red-700";
+  return "bg-amber-100 text-amber-700";
+}
 
 interface StatusHistoryEntry {
   status: string;
@@ -24,14 +24,15 @@ interface OrderStatusTrackerProps {
 }
 
 export default function OrderStatusTracker({ currentStatus, statusHistory = [], compact = false }: OrderStatusTrackerProps) {
-  const currentIdx = STEPS.findIndex((s) => s.key === currentStatus);
-  const isCancelled = currentStatus === "cancelled" || currentStatus === "refunded";
+  const currentIdx = ORDER_STEPS.findIndex((s) => s.key === currentStatus);
+  const isOffPipeline = (OFF_PIPELINE as readonly string[]).includes(currentStatus);
 
-  if (isCancelled) {
+  if (isOffPipeline) {
+    const status = currentStatus as OffPipelineStatus;
     return (
-      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${currentStatus === "cancelled" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${offPipelineToneClass(status)}`}>
         <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
-        {currentStatus === "cancelled" ? "Cancelled" : "Refunded"}
+        {labelForStatus(status)}
       </div>
     );
   }
@@ -44,24 +45,26 @@ export default function OrderStatusTracker({ currentStatus, statusHistory = [], 
   if (compact) {
     return (
       <div className="flex items-center gap-1.5">
-        {STEPS.map((step, i) => {
+        {ORDER_STEPS.map((step, i) => {
           const isComplete = i <= currentIdx;
           const isCurrent = i === currentIdx;
           return (
             <div key={step.key} className="flex items-center gap-1.5">
               <div className={`w-2.5 h-2.5 rounded-full ${isComplete ? "bg-accent" : "bg-border"} ${isCurrent ? "ring-2 ring-accent/30" : ""}`} />
-              {i < STEPS.length - 1 && <div className={`w-4 h-0.5 ${i < currentIdx ? "bg-accent" : "bg-border"}`} />}
+              {i < ORDER_STEPS.length - 1 && <div className={`w-4 h-0.5 ${i < currentIdx ? "bg-accent" : "bg-border"}`} />}
             </div>
           );
         })}
-        <span className="text-xs font-medium text-foreground ml-2">{STEPS[currentIdx]?.label || currentStatus}</span>
+        {/* Defensive fallback: this only fires when currentStatus is unknown to
+            the system entirely. Off-pipeline statuses already returned above. */}
+        <span className="text-xs font-medium text-foreground ml-2">{ORDER_STEPS[currentIdx]?.label ?? labelForStatus(currentStatus)}</span>
       </div>
     );
   }
 
   return (
     <div className="flex items-start gap-0">
-      {STEPS.map((step, i) => {
+      {ORDER_STEPS.map((step, i) => {
         const isComplete = i < currentIdx;
         const isCurrent = i === currentIdx;
         const isPending = i > currentIdx;

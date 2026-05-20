@@ -24,6 +24,15 @@ export interface CustomerOrderReceiptProps {
 }
 
 export function CustomerOrderReceipt(p: CustomerOrderReceiptProps) {
+  // Plan F #17: when the webhook mints a tracking token, route the
+  // primary 'View order' button through /orders/track?t=... so the
+  // buyer lands directly on their order without needing to sign in.
+  // Without the token (legacy / token-secret missing) we fall back to
+  // the sign-in-required orderUrl so the button still works for
+  // signed-in customers.
+  const primaryHref = p.trackingToken
+    ? `https://wallplace.co.uk/orders/track?t=${encodeURIComponent(p.trackingToken)}`
+    : p.orderUrl;
   return (
     <EmailShell stream="tx" persona="customer" preview={`Your Wallplace order ${p.orderNumber}`}>
       <H1>Thanks, {p.firstName}</H1>
@@ -34,28 +43,20 @@ export function CustomerOrderReceipt(p: CustomerOrderReceiptProps) {
         <AddressBlock label="Billing" address={p.billingAddress} />
         <AddressBlock label="Shipping" address={p.shippingAddress} />
       </div>
-      <Button href={p.orderUrl} persona="customer">View order</Button>
+      <Button href={primaryHref} persona="customer">Track your order</Button>
       <Small>Ordered {p.orderDate}.</Small>
-      {/* Guest buyers (#3), they can re-look up the order any time
-          with this order ID + the email this receipt came to. The
-          View order button above only works for buyers signed in
-          with a Wallplace account. */}
-      <Small>
-        Don&rsquo;t have a Wallplace account? Track this order any time at{" "}
-        <a
-          href={
-            p.trackingToken
-              ? `https://wallplace.co.uk/orders/track?t=${encodeURIComponent(p.trackingToken)}`
-              : "https://wallplace.co.uk/orders/track"
-          }
-          style={{ color: "#9b6b3f" }}
-        >
-          wallplace.co.uk/orders/track
-        </a>
-        {p.trackingToken
-          ? "."
-          : <> using order ID <strong>{p.orderNumber}</strong>.</>}
-      </Small>
+      {!p.trackingToken && (
+        <Small>
+          Don&rsquo;t have a Wallplace account? Track this order any time at{" "}
+          <a
+            href="https://wallplace.co.uk/orders/track"
+            style={{ color: "#9b6b3f" }}
+          >
+            wallplace.co.uk/orders/track
+          </a>
+          {" "}using order ID <strong>{p.orderNumber}</strong>.
+        </Small>
+      )}
       <SupportBlock supportUrl={p.supportUrl} />
     </EmailShell>
   );

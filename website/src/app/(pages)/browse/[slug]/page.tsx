@@ -5,10 +5,12 @@ import { notFound } from "next/navigation";
 import { artists } from "@/data/artists";
 import { getDisciplineById, resolveDiscipline, formatSubStyleLabel, disciplineLabel } from "@/data/categories";
 import { getCollectionsByArtistSlug } from "@/lib/db/artist-collections";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import Button from "@/components/Button";
 import CollectionCard from "@/components/CollectionCard";
 import MessageArtistButton from "@/components/MessageArtistButton";
 import SaveButton from "@/components/SaveButton";
+import VerifiedBadge from "@/components/VerifiedBadge";
 import { PlacementButton, PlacementCTASection } from "@/components/PlacementCTA";
 import ArtistProfileClient from "./ArtistProfileClient";
 import { getArtistBySlug } from "@/lib/db/merged-data";
@@ -42,7 +44,7 @@ export async function generateMetadata({
     const artist = await getArtistBySlug(slug);
 
     if (!artist) {
-      return { title: "Artist Not Found – Wallplace" };
+      return { title: "Artist not found" };
     }
 
     // Defensive coercions, anything missing or malformed flows
@@ -64,18 +66,23 @@ export async function generateMetadata({
       }
     }
 
+    // Match the suffix used on artwork detail pages so every public
+    // artist page reads "<Name> | Wallplace" in the tab title. The
+    // earlier title was just the bare name, which made the tab look
+    // like a stray browser bookmark instead of a Wallplace page.
+    const tabTitle = `${safeName} | Wallplace`;
     return {
-      title: `${safeName} – Wallplace`,
+      title: tabTitle,
       description: safeBio,
       openGraph: {
-        title: `${safeName} – Wallplace`,
+        title: tabTitle,
         description: safeBio,
         images: ogImage ? [ogImage] : [],
         type: "profile",
       },
       twitter: {
         card: "summary",
-        title: `${safeName} – Wallplace`,
+        title: tabTitle,
         description: safeBio,
       },
     };
@@ -84,7 +91,7 @@ export async function generateMetadata({
       "[browse/[slug] metadata] crashed:",
       err instanceof Error ? err.message : String(err),
     );
-    return { title: "Wallplace artist" };
+    return { title: "Artist | Wallplace" };
   }
 }
 
@@ -187,6 +194,12 @@ export default async function ArtistProfilePage({
           desktop renders the three-column grid. */}
       <section className="pt-6 lg:pt-12 pb-2">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
+          <Breadcrumbs
+            items={[
+              { label: "Portfolios", href: "/browse?view=portfolios" },
+              { label: artist.name },
+            ]}
+          />
           <Link
             href="/browse"
             className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground mb-5 lg:mb-8"
@@ -219,7 +232,7 @@ export default async function ArtistProfilePage({
                 <p className="text-[11px] text-muted uppercase tracking-[0.18em] mb-1.5">
                   {disciplineLabel(artist.primaryMedium, artist.discipline)}
                 </p>
-                <div className="flex items-start gap-3 mb-1.5">
+                <div className="flex items-start gap-3 mb-1.5 flex-wrap">
                   <h1 className="font-serif text-3xl text-foreground leading-tight tracking-tight">
                     {artist.name}
                   </h1>
@@ -229,6 +242,9 @@ export default async function ArtistProfilePage({
                       back to them, same affordance as Saatchi /
                       Vinted. */}
                   <SaveButton type="artist" itemId={artist.slug} size="sm" />
+                  {artist.isVerified && (
+                    <VerifiedBadge className="self-center" />
+                  )}
                 </div>
                 <p className="text-muted text-sm">{artist.location}</p>
                 {artist.instagram && (
@@ -236,7 +252,7 @@ export default async function ArtistProfilePage({
                     href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors mt-1.5"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground hover:underline transition-colors mt-1.5"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
                     {artist.instagram}
@@ -299,7 +315,7 @@ export default async function ArtistProfilePage({
             <div className="border-t border-border pt-4 grid grid-cols-2 gap-x-4 gap-y-3">
               <div>
                 <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Delivery</p>
-                <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "–"}</p>
+                <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "-"}</p>
               </div>
               <div>
                 <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Suited for</p>
@@ -415,7 +431,7 @@ export default async function ArtistProfilePage({
                       href={`https://instagram.com/${artist.instagram.replace("@", "")}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground hover:underline transition-colors"
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
                       {artist.instagram}
@@ -465,11 +481,11 @@ export default async function ArtistProfilePage({
               <div className="grid grid-cols-1 gap-y-3">
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Location</p>
-                  <p className="text-sm font-medium text-foreground">{artist.location || "–"}</p>
+                  <p className="text-sm font-medium text-foreground">{artist.location || "-"}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Delivery</p>
-                  <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "–"}</p>
+                  <p className="text-sm font-medium text-foreground">{artist.deliveryRadius || "-"}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Suited for</p>
@@ -552,6 +568,8 @@ export default async function ArtistProfilePage({
               )
             : []
         }
+        profileTheme={artist.profileTheme}
+        subscriptionPlan={artist.subscriptionPlan}
       />
 
       {/* Collections, pulled from the DB by artist slug. The seed
@@ -602,6 +620,13 @@ async function CollectionsSection({
   artistSlug: string;
   artistName: string;
 }) {
+  // The data fetch is the only thing that throws; building JSX itself
+  // doesn't, so we only wrap the data step in try/catch. The
+  // react-hooks/error-boundaries rule (correctly) flags JSX-in-try
+  // because rendering errors from <CollectionCard /> are NOT caught by
+  // try/catch around the parent render, they need an error boundary up
+  // the tree. The catch here was always about the fetch.
+  let renderable: Awaited<ReturnType<typeof getCollectionsByArtistSlug>> = [];
   try {
     const collections = await getCollectionsByArtistSlug(
       artistSlug,
@@ -613,27 +638,28 @@ async function CollectionsSection({
     // (cover_image isn't even a real column on the table). One
     // image-less collection used to take the whole profile page
     // down to the global error boundary.
-    const renderable = collections.filter(
+    renderable = collections.filter(
       (c) => !!(c.thumbnail || c.bannerImage || c.coverImage),
-    );
-    if (renderable.length === 0) return null;
-    return (
-      <section className="py-10 lg:py-14 border-t border-border">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <h2 className="text-2xl mb-6">Collections</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {renderable.map((col) => (
-              <CollectionCard key={col.id} collection={col} />
-            ))}
-          </div>
-        </div>
-      </section>
     );
   } catch (err) {
     console.warn(
-      "[CollectionsSection] render failed:",
+      "[CollectionsSection] data fetch failed:",
       err instanceof Error ? err.message : String(err),
     );
     return null;
   }
+
+  if (renderable.length === 0) return null;
+  return (
+    <section className="py-10 lg:py-14 border-t border-border">
+      <div className="max-w-[1200px] mx-auto px-6">
+        <h2 className="text-2xl mb-6">Collections</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {renderable.map((col) => (
+            <CollectionCard key={col.id} collection={col} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }

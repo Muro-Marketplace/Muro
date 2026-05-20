@@ -1,16 +1,33 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getAuthenticatedUser } from "@/lib/api-auth";
 import { applySchema } from "@/lib/validations";
 import { notifyAdminNewApplication } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistApplicationSubmitted } from "@/emails/templates/artist-additions/ArtistApplicationSubmitted";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { slugify } from "@/lib/slugify";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, 5, 60000);
   if (limited) return limited;
+
+  // /signup/artist always lands the visitor here as an authenticated user
+  // (the page redirects unauthenticated visitors to signup first). Tying
+  // the application to the auth user lets us also create the matching
+  // artist_profiles row in lockstep, which is what allows a pending
+  // applicant to log in to the artist portal and upload work for admin
+  // review BEFORE the admin accepts them.
+  //
+  // Authentication is optional only for legacy clients; without an auth
+  // user we still write the application row but skip the profile bridge,
+  // and rely on the admin accept route to create the profile later.
+  const auth = await getAuthenticatedUser(request);
+  const authedUser = auth.error ? null : auth.user;
+
   try {
     const body = await request.json();
     const parsed = applySchema.safeParse(body);
@@ -121,10 +138,77 @@ export async function POST(request: Request) {
       );
     }
 
+    // Bridge to artist_profiles. Without this row the artist portal's
+    // artwork upload endpoint returns 404 ("No artist profile found")
+    // because it keys on artist_profiles.user_id. Creating the row at
+    // application time, with review_status='pending', lets the artist
+    // start uploading work for admin review immediately. The public
+    // marketplace and outbound actions (placements, sales) stay gated
+    // by review_status='approved' so a pending profile doesn't leak
+    // onto /browse or send placement requests.
+    if (authedUser) {
+      try {
+        const db = getSupabaseAdmin();
+        const { data: existingProfile } = await db
+          .from("artist_profiles")
+          .select("id, review_status")
+          .eq("user_id", authedUser.id)
+          .maybeSingle();
+
+        if (!existingProfile) {
+          // Slug is derived from the application name. Collide-and-retry
+          // with a numeric suffix because the table enforces UNIQUE(slug)
+          // and the marketplace deep-links on the slug.
+          const baseSlug = slugify(d.name) || "artist";
+          let candidateSlug = baseSlug;
+          for (let attempt = 2; attempt < 50; attempt++) {
+            const { data: clash } = await db
+              .from("artist_profiles")
+              .select("id")
+              .eq("slug", candidateSlug)
+              .maybeSingle();
+            if (!clash) break;
+            candidateSlug = `${baseSlug}-${attempt}`;
+          }
+
+          await db.from("artist_profiles").insert({
+            user_id: authedUser.id,
+            slug: candidateSlug,
+            name: d.name,
+            location: d.location || "",
+            primary_medium: d.primaryMedium || "",
+            discipline: d.discipline || null,
+            sub_styles: d.subStyles || [],
+            short_bio: d.artistStatement?.slice(0, 200) || "",
+            extended_bio: d.artistStatement || "",
+            instagram: d.instagram || "",
+            website: d.website || "",
+            offers_originals: d.offersOriginals || false,
+            offers_prints: d.offersPrints || false,
+            offers_framed: d.offersFramed || false,
+            open_to_free_loan: d.openToFreeLoan || false,
+            open_to_revenue_share: d.openToRevenueShare || false,
+            open_to_outright_purchase: d.openToPurchase || false,
+            delivery_radius: d.deliveryRadius || "Greater London",
+            venue_types_suited_for: d.venueTypes || [],
+            themes: d.themes || [],
+            style_tags: [],
+            available_sizes: [],
+            review_status: "pending",
+          });
+        }
+      } catch (profileErr) {
+        // Profile bridge is best-effort. The admin accept route will
+        // create the profile too, so a failure here doesn't strand the
+        // applicant; it only delays their ability to upload pre-review.
+        console.error("Profile bridge insert failed:", profileErr);
+      }
+    }
+
     // Admin ping, keep the legacy helper, it's internal only.
     // primaryMedium is optional now; fall back to a placeholder so
     // the admin notification helper's required-string contract holds.
-    notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium || "–" });
+    notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium || "-" });
 
     // Applicant receipt via the new pipeline (polished template, logged,
     // preference-aware). We key idempotency off the email address so a

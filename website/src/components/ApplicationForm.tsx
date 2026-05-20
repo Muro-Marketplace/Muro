@@ -5,6 +5,7 @@ import Link from "next/link";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import { useAuth } from "@/context/AuthContext";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 const primaryMediums = [
   "Oil Painting",
@@ -179,6 +180,7 @@ export default function ApplicationForm() {
   // typed something else (preserves any partial draft).
   useEffect(() => {
     if (!user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm((prev) => ({
       ...prev,
       email: prev.email || user.email || "",
@@ -739,9 +741,9 @@ export default function ApplicationForm() {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
-                { name: "openToRevenueShare", label: "Revenue share (QR-enabled loan)" },
-                { name: "openToFreeLoan", label: "Paid loan (monthly fee)" },
-                { name: "openToPurchase", label: "Direct purchase" },
+                { name: "openToRevenueShare", label: ARRANGEMENT_LABEL.revenue_share },
+                { name: "openToFreeLoan", label: ARRANGEMENT_LABEL.paid_loan },
+                { name: "openToPurchase", label: ARRANGEMENT_LABEL.purchase },
               ].map(({ name, label }) => (
                 <label key={name} className={checkboxLabelClass}>
                   <input

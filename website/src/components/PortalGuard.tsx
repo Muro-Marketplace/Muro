@@ -4,36 +4,49 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
+import { portalPathForRole, parseRole } from "@/lib/auth-roles";
 
 interface PortalGuardProps {
-  allowedType: "artist" | "venue" | "admin";
+  allowedType: "artist" | "venue" | "admin" | "customer";
   children: React.ReactNode;
 }
+
+const PORTAL_LABELS: Record<string, string> = {
+  artist: "artist",
+  venue: "venue",
+  customer: "customer",
+  admin: "admin",
+};
 
 export default function PortalGuard({ allowedType, children }: PortalGuardProps) {
   const { user, loading, userType } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const { showToast } = useToast();
   const [subscriptionChecked, setSubscriptionChecked] = useState(false);
   const [subscriptionOk, setSubscriptionOk] = useState(true);
   const [reviewStatus, setReviewStatus] = useState<"approved" | "pending" | "rejected" | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/login");
     } else if (!loading && user && userType && userType !== allowedType) {
-      router.replace(
-        userType === "admin" ? "/admin" :
-        userType === "artist" ? "/artist-portal" :
-        "/venue-portal"
+      const theirRole = PORTAL_LABELS[userType] ?? userType;
+      showToast(
+        `This is the ${allowedType} portal. Redirecting to your ${theirRole} portal.`,
+        { variant: "info", durationMs: 4000 },
       );
+      router.replace(portalPathForRole(parseRole(userType)));
     }
-  }, [user, loading, userType, allowedType, router]);
+  }, [user, loading, userType, allowedType, router, showToast]);
 
   // Check subscription for artists
   useEffect(() => {
     if (allowedType !== "artist" || !user || loading) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSubscriptionChecked(true);
       return;
     }
@@ -63,6 +76,7 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
         }
 
         const status = profile.subscription_status || "none";
+        setSubscriptionStatus(status);
 
         // Pending artists haven't finished review yet, don't force them
         // to subscribe. Billing flow opens once they're approved.
@@ -71,15 +85,19 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
           return;
         }
 
-        if (status === "active" || status === "trialing") {
-          // Paid or trialing, full access
-          setSubscriptionOk(true);
-        } else if (status === "none") {
-          // No subscription yet, redirect to billing to pick a plan
+        // Approved artists keep portal access regardless of subscription
+        // state so they can keep building out their profile, uploading
+        // work, and tidying drafts before they pay. The features that
+        // genuinely require a paid plan (going live on the marketplace,
+        // sending placement requests, sales) gate themselves at the
+        // action level or via review_status. The only hard gate left
+        // here is for the bad states where an existing subscription has
+        // lapsed; we want those users to fix billing before they keep
+        // racking up actions.
+        if (status === "past_due" || status === "canceled") {
           setSubscriptionOk(false);
         } else {
-          // past_due, canceled, blocked
-          setSubscriptionOk(false);
+          setSubscriptionOk(true);
         }
       })
       .catch(() => {
@@ -122,7 +140,7 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
             Pick a plan to get started. All plans include a free trial, and you won&rsquo;t be charged until it ends.
           </p>
           <p className="text-xs text-muted mb-6">
-            All plans include a 30-day free trial.
+            All plans include a first month free.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
@@ -181,6 +199,36 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
           </p>
         </div>
       </div>
+    );
+  }
+
+  // Approved but not yet on a paid plan. They can use the portal (profile
+  // edits, uploads, drafts), they just need to subscribe before going
+  // live on the marketplace or sending placement requests. A banner
+  // nudges them; outbound monetised actions block themselves server-side.
+  if (
+    allowedType === "artist" &&
+    reviewStatus === "approved" &&
+    (subscriptionStatus === "none" || subscriptionStatus === "incomplete")
+  ) {
+    return (
+      <>
+        <div className="bg-accent/5 border-b border-accent/20">
+          <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-3 flex items-center gap-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
+              <circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 2" />
+            </svg>
+            <p className="text-xs sm:text-sm text-foreground flex-1">
+              <span className="font-medium">You&rsquo;re approved.</span>{" "}
+              Pick a plan to go live on the marketplace and start sending placement requests. Your first month is free.
+            </p>
+            <Link href="/artist-portal/billing" className="hidden sm:inline-flex text-xs font-medium text-accent underline hover:no-underline">
+              Choose plan
+            </Link>
+          </div>
+        </div>
+        {children}
+      </>
     );
   }
 

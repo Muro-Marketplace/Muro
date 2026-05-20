@@ -8,7 +8,7 @@ import CartIndicator from "./CartIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
-// When the user is inside the marketplace area (/browse or /spaces-looking-for-art)
+// When the user is inside the marketplace area (/browse or /spaces)
 // the top-level "Marketplace" link is replaced by these inline tabs.
 // Galleries is the default landing view (#4), order in the nav now
 // reflects that, with Galleries first and the default empty view
@@ -18,7 +18,7 @@ const marketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces", match: (p: string) => p === "/spaces" },
 ];
 
 // Public (logged-out) variant: keeps How It Works + Blog inline on the
@@ -28,7 +28,7 @@ const publicMarketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Spaces", href: "/spaces-looking-for-art", match: (p: string) => p === "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces", match: (p: string) => p === "/spaces" },
   { label: "How It Works", href: "/how-it-works", match: (p: string) => p === "/how-it-works" },
   { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
 ];
@@ -50,7 +50,10 @@ const publicNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
-  { label: "Spaces", href: "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces" },
+  // "For Venues" used to live here but the venue value-prop is already
+  // covered by /spaces and the homepage; the dedicated
+  // /venues page is kept reachable from the footer + any deep links.
   // Waitlist (#18), page kept live for warm prospects we already
   // sent the link to, but unsurfaced from the nav. Also gated from
   // search via robots metadata in the page itself.
@@ -58,7 +61,7 @@ const publicNavLinks: NavLink[] = [
 
 const loggedInNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
-  { label: "Spaces", href: "/spaces-looking-for-art" },
+  { label: "Spaces", href: "/spaces" },
 ];
 
 // Venues don't need the "Spaces" (venues browsing venues) link, they
@@ -80,7 +83,11 @@ const moreLinks = [
   { label: "Pricing", href: "/pricing" },
 ];
 
-const immersiveRoutes = ["/", "/venues", "/artists", "/about", "/how-it-works"];
+// /how-it-works has a plain light-coloured top section (no dark hero),
+// so the immersive transparent header was effectively invisible against
+// the page background. Keep it out of the immersive list so the solid
+// header renders by default.
+const immersiveRoutes = ["/", "/venues", "/artists", "/about"];
 
 // Marketplace tabs pulled into their own component so the useSearchParams call
 // is isolated behind a <Suspense> boundary. Without that, every page that
@@ -146,8 +153,9 @@ export default function Header() {
   const marketplaceDropdownRef = useRef<HTMLDivElement>(null);
   const [portalDropdownOpen, setPortalDropdownOpen] = useState(false);
   const portalDropdownRef = useRef<HTMLDivElement>(null);
+  const [otherRoles, setOtherRoles] = useState<string[]>([]);
 
-  const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces-looking-for-art";
+  const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces";
 
   const portalBase = userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal";
   const [resolvedSlug, setResolvedSlug] = useState("");
@@ -193,6 +201,7 @@ export default function Header() {
 
   // Resolve the user's actual slug from their profile (try both endpoints)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!user) { setResolvedSlug(""); return; }
     async function resolve() {
       // Try the expected endpoint first
@@ -227,9 +236,37 @@ export default function Header() {
     if (!msgDropdownOpen && user) fetchUnread();
   }, [msgDropdownOpen, user, fetchUnread]);
 
-  // Load notifications from the persistent notifications table, with a fallback
-  // to derived placements/messages data for environments where the table
-  // does not yet exist or has no rows.
+  // Load the set of other roles this email is registered under, so the
+  // portal dropdown can offer "Switch to X portal" entries when the same
+  // email has both an artist + a customer account, etc.
+  useEffect(() => {
+    if (!user || !userType) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOtherRoles([]);
+      return;
+    }
+    let cancelled = false;
+    authFetch("/api/account/roles")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const roles = Array.isArray(data.roles) ? data.roles : [];
+        setOtherRoles(roles.filter((r: string) => r !== userType));
+      })
+      .catch(() => {
+        if (!cancelled) setOtherRoles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, userType]);
+
+  // Load notifications from the persistent notifications table.
+  // The legacy fallback that derived rows from /api/placements + /api/messages
+  // was removed because it could fabricate notifications that aren't in the
+  // DB and link to stale ids. The placement/message endpoints now write
+  // proper notification rows; an empty table is a real "no notifications"
+  // state.
   useEffect(() => {
     if (!notifDropdownOpen || !user) return;
     async function loadNotifs() {
@@ -237,47 +274,13 @@ export default function Header() {
         const res = await authFetch("/api/notifications");
         const data = await res.json();
         const rows = Array.isArray(data.notifications) ? data.notifications : [];
-        if (rows.length > 0) {
-          setNotifications(rows.slice(0, 12));
-          return;
-        }
-      } catch { /* fall through to derived */ }
-
-      if (!resolvedSlug) return;
-      const notifs: typeof notifications = [];
-      try {
-        const placementsRes = await authFetch("/api/placements");
-        const placementsData = await placementsRes.json();
-        for (const p of (placementsData.placements || []).slice(0, 10)) {
-          // Suppress notifications for placement requests *this user sent*
-          //, they already know they sent it. Same applies to accept /
-          // decline actions they performed themselves.
-          const iAmRequester = p.requester_user_id && p.requester_user_id === user?.id;
-          // Deep-link each placement-related notification to the full
-          // placement page so clicking it lands on the specific deal.
-          const placementLink = `/placements/${encodeURIComponent(p.id)}`;
-          if (p.status === "pending" && !iAmRequester) {
-            notifs.push({ id: p.id, type: "placement", title: "Placement Request", description: `${p.work_title || "Artwork"}, ${p.venue || p.artist_slug || ""}`, time: p.created_at, link: placementLink });
-          } else if (p.status === "active" && p.responded_at && iAmRequester) {
-            // Requester hears back on their request being accepted.
-            notifs.push({ id: p.id + "-a", type: "placement_accepted", title: "Placement Accepted", description: `${p.work_title || "Artwork"}, ${p.venue || p.artist_slug || ""}`, time: p.responded_at, link: placementLink });
-          } else if (p.status === "declined" && p.responded_at && iAmRequester) {
-            notifs.push({ id: p.id + "-d", type: "placement_declined", title: "Placement Declined", description: `${p.work_title || "Artwork"}, ${p.venue || p.artist_slug || ""}`, time: p.responded_at, link: placementLink });
-          }
-        }
-        const msgsRes = await authFetch(`/api/messages?slug=${resolvedSlug}`);
-        const msgsData = await msgsRes.json();
-        for (const c of (msgsData.conversations || []).slice(0, 5)) {
-          if (c.unreadCount > 0) {
-            notifs.push({ id: "msg-" + c.conversationId, type: "message", title: "New Message", description: `${c.otherPartyDisplayName || c.otherParty}: ${c.latestMessage}`.slice(0, 80), time: c.lastActivity, link: `${portalBase}/messages` });
-          }
-        }
-      } catch { /* empty */ }
-      notifs.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      setNotifications(notifs.slice(0, 12));
+        setNotifications(rows.slice(0, 12));
+      } catch {
+        setNotifications([]);
+      }
     }
     loadNotifs();
-  }, [notifDropdownOpen, user, resolvedSlug, portalBase]);
+  }, [notifDropdownOpen, user]);
 
   // Close dropdowns on click outside
   useEffect(() => {
@@ -301,11 +304,12 @@ export default function Header() {
   }, [msgDropdownOpen, notifDropdownOpen, moreDropdownOpen, portalDropdownOpen]);
 
   // Close dropdowns on route change
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); setMoreDropdownOpen(false); setPortalDropdownOpen(false); }, [pathname]);
 
   const isPortal = pathname.startsWith("/artist-portal") || pathname.startsWith("/venue-portal") || pathname.startsWith("/customer-portal");
   const isBrowsePage = pathname === "/browse";
-  const isSpacesPage = pathname === "/spaces-looking-for-art";
+  const isSpacesPage = pathname === "/spaces";
   const showSolid = !isImmersive || scrolled;
 
   return (
@@ -336,7 +340,7 @@ export default function Header() {
           {/* Desktop Navigation, centered on page */}
           <nav className="hidden lg:flex items-center gap-7 absolute left-1/2 -translate-x-1/2" role="navigation" aria-label="Main navigation">
             {isMarketplaceArea ? (
-              // F47, marketplace tabs replace the normal nav while inside /browse or /spaces-looking-for-art
+              // F47, marketplace tabs replace the normal nav while inside /browse or /spaces
               <Suspense fallback={null}>
                 <MarketplaceTabsNav
                   pathname={pathname}
@@ -777,6 +781,30 @@ export default function Header() {
                               </Link>
                             </li>
                           ))}
+                          {otherRoles.length > 0 && (
+                            <li className="border-t border-border mt-1 pt-1">
+                              <p className="px-4 py-1 text-[10px] uppercase tracking-wider text-muted">
+                                Other accounts
+                              </p>
+                              {otherRoles.map((r) => (
+                                <button
+                                  key={r}
+                                  type="button"
+                                  onClick={async () => {
+                                    setPortalDropdownOpen(false);
+                                    const email = user?.email ?? "";
+                                    await signOut();
+                                    router.push(
+                                      `/login?email=${encodeURIComponent(email)}&hint=${encodeURIComponent(r)}`,
+                                    );
+                                  }}
+                                  className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors"
+                                >
+                                  Switch to {r} portal
+                                </button>
+                              ))}
+                            </li>
+                          )}
                         </ul>
                       </div>
                     );
@@ -860,10 +888,13 @@ export default function Header() {
           <div className="mx-auto max-w-[1400px] px-6 py-6 space-y-6">
             {/* Primary nav links, when inside the marketplace area, swap in
                 the marketplace tabs (Portfolios/Galleries/Collections/Spaces)
-                so the mobile nav matches the desktop top-nav. */}
+                so the mobile nav matches the desktop top-nav. Venues get
+                their own marketplace tab list (drops Spaces, adds Wallplace
+                Curated + Blog) so the mobile dropdown mirrors the desktop
+                venue nav. */}
             <nav className="flex flex-col gap-4">
               {isMarketplaceArea ? (
-                marketplaceTabs.map((tab) => (
+                (userType === "venue" ? venueMarketplaceTabs : marketplaceTabs).map((tab) => (
                   <Link
                     key={tab.href}
                     href={tab.href}

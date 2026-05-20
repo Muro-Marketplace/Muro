@@ -1,23 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import AccountDangerZone from "@/components/AccountDangerZone";
 import Button from "@/components/Button";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { authFetch } from "@/lib/api-client";
+import {
+  useNotificationPrefs,
+  type NotificationPrefField,
+} from "@/lib/use-notification-prefs";
 
-const notifications = [
-  { id: "new_enquiry", label: "New enquiries", description: "When a venue enquires about your work" },
-  { id: "placement_update", label: "Placement updates", description: "When a placement status changes" },
-  { id: "sale", label: "Sales", description: "When a piece is sold" },
-  { id: "payout", label: "Payout notifications", description: "When a payout is processed" },
-  { id: "newsletter", label: "Wallplace newsletter", description: "Monthly updates and artist features" },
-  { id: "tips", label: "Tips & resources", description: "Advice on growing your presence" },
+const NOTIF_ROWS: { id: NotificationPrefField; label: string; description: string }[] = [
+  {
+    id: "order_notifications_enabled",
+    label: "Order & sale notifications",
+    description: "When a piece sells or an order ships",
+  },
+  {
+    id: "message_notifications_enabled",
+    label: "Message notifications",
+    description: "Email when you receive a new message",
+  },
+  {
+    id: "email_digest_enabled",
+    label: "Email digest",
+    description: "Newsletter, tips and Wallplace updates",
+  },
 ];
 
 export default function SettingsPage() {
   const { user, displayName } = useAuth();
+  const { prefs, togglePref, error: prefsError } = useNotificationPrefs(user);
+
   const [name, setName] = useState(displayName || "");
   const [email, setEmail] = useState(user?.email || "");
   const [accountSaved, setAccountSaved] = useState(false);
@@ -28,36 +43,6 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [passwordError, setPasswordError] = useState("");
-
-  const [notifState, setNotifState] = useState<Record<string, boolean>>({
-    new_enquiry: true,
-    placement_update: true,
-    sale: true,
-    payout: true,
-    newsletter: false,
-    tips: false,
-  });
-  const [notifSaved, setNotifSaved] = useState(false);
-
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [messageNotifsEnabled, setMessageNotifsEnabled] = useState(true);
-
-  // Load message notification preference from DB
-  useEffect(() => {
-    authFetch("/api/artist-profile")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.profile?.message_notifications_enabled !== undefined) {
-          setMessageNotifsEnabled(data.profile.message_notifications_enabled);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const toggleNotif = (id: string) => {
-    setNotifState((prev) => ({ ...prev, [id]: !prev[id] }));
-    setNotifSaved(false);
-  };
 
   async function handleAccountSave(e: React.FormEvent) {
     e.preventDefault();
@@ -105,17 +90,6 @@ export default function SettingsPage() {
     setTimeout(() => setPasswordSaved(false), 3000);
   }
 
-  function handleNotifSave() {
-    localStorage.setItem("wallplace-notif-prefs", JSON.stringify(notifState));
-    // Persist message notification preference to DB
-    authFetch("/api/artist-profile", {
-      method: "PUT",
-      body: JSON.stringify({ message_notifications_enabled: messageNotifsEnabled }),
-    }).catch(() => {});
-    setNotifSaved(true);
-    setTimeout(() => setNotifSaved(false), 3000);
-  }
-
   return (
     <ArtistPortalLayout activePath="/artist-portal/settings">
       <div className="mb-8">
@@ -146,6 +120,7 @@ export default function SettingsPage() {
               value={email}
               disabled
               className="w-full border border-border rounded-sm px-3 py-2 text-sm text-muted bg-background/50 cursor-not-allowed"
+              onChange={(e) => setEmail(e.target.value)}
             />
             <p className="text-xs text-muted mt-1">Contact support to change your email.</p>
           </div>
@@ -163,28 +138,7 @@ export default function SettingsPage() {
           <h2 className="text-base font-medium">Notification Preferences</h2>
         </div>
         <div className="space-y-4">
-          {/* Message notifications, persisted to DB */}
-          <div className="flex items-start justify-between gap-4 py-1">
-            <div>
-              <p className="text-sm font-medium text-foreground leading-snug">Message notifications</p>
-              <p className="text-xs text-muted mt-0.5">Email when you receive a new message</p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={messageNotifsEnabled}
-              onClick={() => { setMessageNotifsEnabled(!messageNotifsEnabled); setNotifSaved(false); }}
-              className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200 focus:outline-none mt-0.5 ${
-                messageNotifsEnabled ? "bg-accent" : "bg-border"
-              }`}
-            >
-              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 mt-0.5 ${
-                messageNotifsEnabled ? "translate-x-4" : "translate-x-0.5"
-              }`} />
-            </button>
-          </div>
-          <div className="border-t border-border" />
-          {notifications.map((notif) => (
+          {NOTIF_ROWS.map((notif) => (
             <div key={notif.id} className="flex items-start justify-between gap-4 py-1">
               <div>
                 <p className="text-sm font-medium text-foreground leading-snug">{notif.label}</p>
@@ -193,23 +147,23 @@ export default function SettingsPage() {
               <button
                 type="button"
                 role="switch"
-                aria-checked={notifState[notif.id]}
-                onClick={() => toggleNotif(notif.id)}
+                aria-checked={prefs[notif.id]}
+                onClick={() => togglePref(notif.id)}
                 className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200 focus:outline-none mt-0.5 ${
-                  notifState[notif.id] ? "bg-accent" : "bg-border"
+                  prefs[notif.id] ? "bg-accent" : "bg-border"
                 }`}
               >
                 <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 mt-0.5 ${
-                  notifState[notif.id] ? "translate-x-4" : "translate-x-0.5"
+                  prefs[notif.id] ? "translate-x-4" : "translate-x-0.5"
                 }`} />
               </button>
             </div>
           ))}
         </div>
-        <div className="pt-5 border-t border-border mt-5 flex items-center gap-3">
-          <Button type="button" variant="primary" size="sm" onClick={handleNotifSave}>Save Preferences</Button>
-          {notifSaved && <span className="text-sm text-green-600">Saved!</span>}
-        </div>
+        {prefsError && (
+          <p className="text-xs text-red-500 mt-4">{prefsError}</p>
+        )}
+        <p className="text-xs text-muted mt-4">Changes save automatically.</p>
       </div>
 
       {/* Password Change */}
@@ -239,32 +193,7 @@ export default function SettingsPage() {
         </form>
       </div>
 
-      {/* Danger zone */}
-      <div className="bg-surface border border-red-200 rounded-sm p-6">
-        <h2 className="text-base font-medium text-red-700 mb-2">Danger Zone</h2>
-        <p className="text-sm text-muted mb-5 max-w-md">
-          Permanently delete your account and all associated data. This action cannot be undone.
-        </p>
-        {!showDeleteConfirm ? (
-          <button type="button" onClick={() => setShowDeleteConfirm(true)}
-            className="text-sm font-medium text-red-600 border border-red-200 rounded-sm px-4 py-2 hover:bg-red-50 transition-colors">
-            Delete Account
-          </button>
-        ) : (
-          <div className="max-w-sm border border-red-200 rounded-sm p-4 bg-red-50">
-            <p className="text-sm font-medium text-red-700 mb-3">Are you sure? This cannot be undone.</p>
-            <div className="flex gap-3">
-              <button type="button" className="text-sm font-medium text-white bg-red-600 rounded-sm px-4 py-2 hover:bg-red-700 transition-colors">
-                Yes, delete my account
-              </button>
-              <button type="button" onClick={() => setShowDeleteConfirm(false)}
-                className="text-sm font-medium text-foreground border border-border rounded-sm px-4 py-2 hover:bg-background transition-colors">
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <AccountDangerZone />
     </ArtistPortalLayout>
   );
 }

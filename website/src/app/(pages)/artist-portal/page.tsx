@@ -99,6 +99,7 @@ export default function ArtistPortalPage() {
   useEffect(() => {
     // Check if onboarding was previously dismissed
     const dismissed = typeof window !== "undefined" && localStorage.getItem("wallplace-onboarding-complete") === "true";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnboardingDismissed(dismissed);
   }, []);
 
@@ -153,9 +154,77 @@ export default function ArtistPortalPage() {
       // Build activity from dashboard data
       const activityItems: ActivityItem[] = [];
       const conversations = data.conversations || [];
+      const orders = data.orders || [];
+      const refundRequests = data.refundRequests || [];
 
       const mySlug = profile.slug || "";
       const myUserId = profile.user_id || "";
+
+      // Refund requests. Each pending request is an action item the
+      // artist needs to deal with, and the previous feed never surfaced
+      // them. Sorted with the most recent first below, alongside sales
+      // and placements.
+      type DashRefund = {
+        id?: string;
+        order_id?: string;
+        status?: string;
+        type?: string;
+        amount?: number | string;
+        reason?: string;
+        requester_type?: string;
+        created_at?: string;
+      };
+      for (const r of (refundRequests as DashRefund[]).slice(0, 10)) {
+        if (!r.created_at || r.requester_type === "artist") continue;
+        const amt = Number(r.amount);
+        const amtLabel = Number.isFinite(amt) ? `£${amt.toFixed(2)}` : "";
+        const text = r.status === "pending"
+          ? `Refund requested${amtLabel ? `, ${amtLabel}` : ""}${r.order_id ? ` on ${r.order_id}` : ""}`
+          : `Refund ${r.status}${amtLabel ? `, ${amtLabel}` : ""}${r.order_id ? ` on ${r.order_id}` : ""}`;
+        activityItems.push({
+          id: "r-" + (r.id || r.order_id || r.created_at),
+          text,
+          time: formatRelativeTime(r.created_at),
+          sortTime: new Date(r.created_at).getTime(),
+          type: "enquiry",
+          link: r.order_id ? `/artist-portal/orders?id=${encodeURIComponent(r.order_id)}` : "/artist-portal/orders",
+        });
+      }
+
+      // Sales activity. The dashboard API returns the artist's full
+      // orders list but the feed below was only reading placements +
+      // conversations, so a sale never appeared as recent activity even
+      // though the order was in the DB. Surface it here so the feed
+      // matches the email + bell notification fired by the webhook.
+      type DashboardOrder = {
+        id?: string;
+        created_at?: string;
+        paid_at?: string;
+        artist_revenue?: number | null;
+        total?: number | null;
+        items?: Array<{ title?: string }>;
+        status?: string;
+      };
+      for (const o of (orders as DashboardOrder[]).slice(0, 10)) {
+        const time = o.paid_at || o.created_at;
+        if (!time) continue;
+        const firstTitle = o.items?.[0]?.title || "Artwork";
+        const payout =
+          typeof o.artist_revenue === "number" && Number.isFinite(o.artist_revenue)
+            ? o.artist_revenue
+            : typeof o.total === "number" && Number.isFinite(o.total)
+              ? o.total
+              : 0;
+        activityItems.push({
+          id: "o-" + (o.id || time),
+          text: `Sale: ${firstTitle}, £${payout.toFixed(2)} to you${o.id ? ` (${o.id})` : ""}`,
+          time: formatRelativeTime(time),
+          sortTime: new Date(time).getTime(),
+          type: "sale",
+          link: o.id ? `/artist-portal/orders?id=${encodeURIComponent(o.id)}` : "/artist-portal/orders",
+        });
+      }
+
       for (const p of placements.slice(0, 10)) {
         const time = p.responded_at || p.created_at;
         const venueName = formatName(p.venue);
@@ -226,7 +295,7 @@ export default function ArtistPortalPage() {
         <div className="mb-6 bg-accent/5 border border-accent/20 rounded-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-foreground">Choose a plan to unlock your full portal</p>
-            <p className="text-xs text-muted mt-0.5">All plans include a 30-day free trial.</p>
+            <p className="text-xs text-muted mt-0.5">All plans include a first month free.</p>
           </div>
           <Button href="/artist-portal/billing" variant="accent" size="sm">Choose a Plan</Button>
         </div>

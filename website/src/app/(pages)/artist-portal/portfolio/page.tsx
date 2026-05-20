@@ -9,6 +9,7 @@ import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
+import { useConfirm } from "@/context/ConfirmContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import Combobox from "@/components/Combobox";
@@ -204,6 +205,7 @@ const IMAGE_LIMITS: Record<string, number> = { core: 3, premium: 5, pro: 10 };
 export default function PortfolioPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [works, setWorks] = useState<ArtistWork[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -527,10 +529,16 @@ export default function PortfolioPage() {
   }
 
   /** Delete every selected work (with confirm). */
-  function bulkDelete() {
+  async function bulkDelete() {
     if (selectedIds.size === 0) return;
     const count = selectedIds.size;
-    if (!confirm(`Delete ${count} work${count === 1 ? "" : "s"}? This can't be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete ${count} work${count === 1 ? "" : "s"}?`,
+      body: "This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
 
     // Best-effort: fire the API delete for each. saveWorks(filtered)
     // also POSTs the remaining works which is harmless.
@@ -1314,10 +1322,23 @@ export default function PortfolioPage() {
     // `seed` lets the Duplicate flow preload everything except the
     // title + image, those should be unique per work so the artist
     // doesn't accidentally publish two artworks with the same headline.
+    //
+    // shippingPrice inherits the account-level default when no per-
+    // size shipping is on. QA flagged the new-work form ignoring the
+    // artist's saved default (e.g. £9.95), leaving the field empty so
+    // new works didn't pick up the account-level setting. Pre-fill so
+    // "default" actually means default for new works too.
+    const seededShipping =
+      seed?.shippingPrice !== undefined
+        ? seed.shippingPrice
+        : defaultShipping && defaultShipping.trim()
+          ? defaultShipping
+          : "";
     const fresh: WorkFormState = {
       ...emptyWork,
       sizes: [...defaultSizes],
       ...seed,
+      shippingPrice: seededShipping,
       title: "",
       imagePreview: "",
       additionalImages: [],
@@ -1348,14 +1369,25 @@ export default function PortfolioPage() {
       available: true,
       orientation: w.orientation || "landscape",
       sizes: w.pricing.map((p) => ({ label: p.label, price: p.price })),
-      shippingPrice: w.shippingPrice != null ? String(w.shippingPrice) : "",
-      inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
+      shippingPrice: w.shippingPrice != null ? w.shippingPrice.toFixed(2) : "",
+      inStorePrice: w.inStorePrice != null ? w.inStorePrice.toFixed(2) : "",
+      // Mirror the openEdit rehydration so duplicating a work copies
+      // its in-store prices from the persisted `pricing[i].inStorePrice`
+      // location, with legacy fallbacks.
       inStoreEnabled:
-        Array.isArray(w.inStorePricing) &&
-        w.inStorePricing.some((p) => p.price > 0),
-      inStorePricing: w.inStorePricing
-        ? w.inStorePricing.map((p) => String(p.price))
-        : [],
+        w.pricing.some(
+          (p) => typeof p.inStorePrice === "number" && p.inStorePrice > 0,
+        ) ||
+        (Array.isArray(w.inStorePricing) &&
+          w.inStorePricing.some((p) => p.price > 0)) ||
+        (typeof w.inStorePrice === "number" && w.inStorePrice > 0),
+      inStorePricing: w.pricing.map((p, i) => {
+        if (typeof p.inStorePrice === "number" && p.inStorePrice > 0) {
+          return p.inStorePrice.toFixed(2);
+        }
+        const legacy = w.inStorePricing?.[i];
+        return legacy && legacy.price > 0 ? legacy.price.toFixed(2) : "";
+      }),
       quantityAvailable:
         w.quantityAvailable != null ? String(w.quantityAvailable) : "",
       frameOptions: ((w as ArtistWork & {
@@ -1380,7 +1412,7 @@ export default function PortfolioPage() {
       available: w.available,
       orientation: w.orientation || "landscape",
       sizes: w.pricing.map((p) => ({ label: p.label, price: p.price })),
-      shippingPrice: w.shippingPrice != null ? String(w.shippingPrice) : "",
+      shippingPrice: w.shippingPrice != null ? w.shippingPrice.toFixed(2) : "",
       // Rehydrate per-size shipping. Previously hard-coded to `false`
       // / `[]` here, which meant opening a work that HAD per-size
       // shipping silently lost it: the toggle showed off, the column
@@ -1392,11 +1424,34 @@ export default function PortfolioPage() {
         (p) => typeof p.shippingPrice === "number",
       ),
       sizeShipping: w.pricing.map((p) =>
-        typeof p.shippingPrice === "number" ? String(p.shippingPrice) : "",
+        typeof p.shippingPrice === "number" ? p.shippingPrice.toFixed(2) : "",
       ),
-      inStorePrice: w.inStorePrice != null ? String(w.inStorePrice) : "",
-      inStorePricing: w.inStorePricing ? w.inStorePricing.map((p) => String(p.price)) : [],
-      inStoreEnabled: Array.isArray(w.inStorePricing) && w.inStorePricing.some((p) => p.price > 0),
+      inStorePrice: w.inStorePrice != null ? w.inStorePrice.toFixed(2) : "",
+      // Rehydrate per-size in-store prices from `pricing[i].inStorePrice`
+      // (current persisted location). Fall back to the legacy top-level
+      // `inStorePricing[]` array for any in-memory or seed data that
+      // still uses it. Aligning by index matches how the form keeps
+      // `sizes` and `inStorePricing` parallel.
+      inStorePricing: w.pricing.map((p, i) => {
+        if (typeof p.inStorePrice === "number" && p.inStorePrice > 0) {
+          return p.inStorePrice.toFixed(2);
+        }
+        const legacy = w.inStorePricing?.[i];
+        return legacy && legacy.price > 0 ? legacy.price.toFixed(2) : "";
+      }),
+      // The toggle reflects ANY source of in-store data: per-size in
+      // `pricing`, legacy top-level `inStorePricing[]`, or the
+      // work-level `inStorePrice` single. Previously this only looked
+      // at `w.inStorePricing`, which was never loaded from the DB, so
+      // the checkbox flipped off on every reopen even when the artist
+      // had a valid `in_store_price` saved.
+      inStoreEnabled:
+        w.pricing.some(
+          (p) => typeof p.inStorePrice === "number" && p.inStorePrice > 0,
+        ) ||
+        (Array.isArray(w.inStorePricing) &&
+          w.inStorePricing.some((p) => p.price > 0)) ||
+        (typeof w.inStorePrice === "number" && w.inStorePrice > 0),
       // Rehydrate the per-size Qty column from each SizePricing's
       // optional quantityAvailable. If any size carries a number we
       // flip the toggle on so the column shows.
@@ -1663,6 +1718,7 @@ export default function PortfolioPage() {
           price: number;
           quantityAvailable?: number;
           shippingPrice?: number;
+          inStorePrice?: number;
         } = {
           label: s.label,
           price: s.price,
@@ -1686,6 +1742,18 @@ export default function PortfolioPage() {
           const raw = form.sizeShipping[formIdx];
           const n = raw === undefined || raw === "" ? NaN : Number(raw);
           if (Number.isFinite(n) && n >= 0) base.shippingPrice = n;
+        }
+        // Per-size in-store / pickup price, same fix as per-size
+        // shipping above. Previously the artist's per-size values
+        // landed on a top-level `inStorePricing[]` array that the API
+        // never accepted, so the whole "Also sold in-store at venues"
+        // toggle silently failed to persist. We now stash the price
+        // alongside `shippingPrice` in the `pricing` JSONB column,
+        // which DOES round-trip through the API and DB.
+        if (form.inStoreEnabled) {
+          const raw = form.inStorePricing[formIdx];
+          const n = raw === undefined || raw === "" ? NaN : Number(raw);
+          if (Number.isFinite(n) && n > 0) base.inStorePrice = n;
         }
         return base;
       }),
@@ -1768,7 +1836,15 @@ export default function PortfolioPage() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <span className="text-xs text-muted">{works.length}/{limit} works</span>
+                {/* Pro tier is effectively unlimited (limit = 9999),
+                    which surfaced as "15/9999 works" in QA, looking
+                    like an arbitrary 4-digit cap. Drop the denominator
+                    on tiers that don't have a meaningful ceiling and
+                    just show the live count, the upgrade message
+                    branch above continues to handle Core/Premium. */}
+                <span className="text-xs text-muted">
+                  {limit >= 1000 ? `${works.length} works` : `${works.length}/${limit} works`}
+                </span>
                 <button onClick={() => openAdd()} className="px-4 py-1.5 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors">
                   + Add New Work
                 </button>
@@ -1844,26 +1920,43 @@ export default function PortfolioPage() {
 
         {/* Save all shipping settings */}
         <div className="border-t border-border pt-4">
-          <button
-            onClick={async () => {
-              setSavingDefault(true);
-              const ukVal = defaultShipping.trim() ? parseFloat(defaultShipping) : null;
-              const intlVal = internationalShipping.trim() ? parseFloat(internationalShipping) : null;
-              await authFetch("/api/artist-profile", {
-                method: "PUT",
-                body: JSON.stringify({
-                  default_shipping_price: ukVal,
-                  ships_internationally: shipsInternationally,
-                  international_shipping_price: intlVal,
-                }),
-              }).catch(() => {});
-              setSavingDefault(false);
-            }}
-            disabled={savingDefault}
-            className="px-4 py-2 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-50"
-          >
-            {savingDefault ? "Saving..." : "Save Shipping Settings"}
-          </button>
+          {(() => {
+            // Inline guard, surfaces what the save handler will reject
+            // so the artist sees the problem before clicking Save.
+            const ukVal = defaultShipping.trim() ? parseFloat(defaultShipping) : null;
+            const intlVal = internationalShipping.trim() ? parseFloat(internationalShipping) : null;
+            const ukInvalid = ukVal !== null && (!Number.isFinite(ukVal) || ukVal < 0);
+            const intlInvalid = intlVal !== null && (!Number.isFinite(intlVal) || intlVal < 0);
+            const hasError = ukInvalid || intlInvalid;
+            return (
+              <>
+                {hasError && (
+                  <p className="text-xs text-red-600 mb-2">
+                    Shipping prices must be zero or greater. Leave blank to use the system default.
+                  </p>
+                )}
+                <button
+                  onClick={async () => {
+                    if (hasError) return;
+                    setSavingDefault(true);
+                    await authFetch("/api/artist-profile", {
+                      method: "PUT",
+                      body: JSON.stringify({
+                        default_shipping_price: ukVal,
+                        ships_internationally: shipsInternationally,
+                        international_shipping_price: intlVal,
+                      }),
+                    }).catch(() => {});
+                    setSavingDefault(false);
+                  }}
+                  disabled={savingDefault || hasError}
+                  className="px-4 py-2 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingDefault ? "Saving..." : "Save Shipping Settings"}
+                </button>
+              </>
+            );
+          })()}
         </div>
       </div>
       )}
@@ -2368,10 +2461,12 @@ export default function PortfolioPage() {
                               <span className="text-xs text-muted">£</span>
                               <input
                                 type="number"
-                                min={0}
+                                min={0.01}
+                                step="0.01"
+                                required
                                 value={size.price || ""}
                                 onChange={(e) => updateSize(i, "price", Number(e.target.value) || 0)}
-                                placeholder="0"
+                                placeholder="Price"
                                 className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                               />
                             </div>
@@ -2389,6 +2484,19 @@ export default function PortfolioPage() {
                                       updated[i] = e.target.value;
                                       return { ...p, sizeShipping: updated };
                                     })}
+                                    onBlur={(e) => {
+                                      const raw = e.target.value.trim();
+                                      if (!raw) return;
+                                      const n = Number(raw);
+                                      if (!Number.isFinite(n)) return;
+                                      const formatted = n.toFixed(2);
+                                      if (formatted === raw) return;
+                                      setForm((p) => {
+                                        const updated = [...p.sizeShipping];
+                                        updated[i] = formatted;
+                                        return { ...p, sizeShipping: updated };
+                                      });
+                                    }}
                                     placeholder={shipEst ? shipEst.cost.toFixed(2) : (defaultShipping || "9.95")}
                                     className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                                   />
@@ -2422,7 +2530,20 @@ export default function PortfolioPage() {
                                     updated[i] = e.target.value;
                                     return { ...p, inStorePricing: updated };
                                   })}
-                                  placeholder="–"
+                                  onBlur={(e) => {
+                                    const raw = e.target.value.trim();
+                                    if (!raw) return;
+                                    const n = Number(raw);
+                                    if (!Number.isFinite(n)) return;
+                                    const formatted = n.toFixed(2);
+                                    if (formatted === raw) return;
+                                    setForm((p) => {
+                                      const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
+                                      updated[i] = formatted;
+                                      return { ...p, inStorePricing: updated };
+                                    });
+                                  }}
+                                  placeholder="-"
                                   className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                                 />
                               </div>
@@ -2495,12 +2616,14 @@ export default function PortfolioPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-2 mt-2">
                         <label className="flex flex-col gap-1">
-                          <span className="text-[10px] text-muted uppercase tracking-wider">Price</span>
+                          <span className="text-[10px] text-muted uppercase tracking-wider">Price <span className="text-accent">*</span></span>
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-muted">£</span>
                             <input
                               type="number"
-                              min={0}
+                              min={0.01}
+                              step="0.01"
+                              required
                               value={size.price || ""}
                               onChange={(e) => updateSize(i, "price", Number(e.target.value) || 0)}
                               placeholder="Price"
@@ -2523,6 +2646,19 @@ export default function PortfolioPage() {
                                   updated[i] = e.target.value;
                                   return { ...p, sizeShipping: updated };
                                 })}
+                                onBlur={(e) => {
+                                  const raw = e.target.value.trim();
+                                  if (!raw) return;
+                                  const n = Number(raw);
+                                  if (!Number.isFinite(n)) return;
+                                  const formatted = n.toFixed(2);
+                                  if (formatted === raw) return;
+                                  setForm((p) => {
+                                    const updated = [...p.sizeShipping];
+                                    updated[i] = formatted;
+                                    return { ...p, sizeShipping: updated };
+                                  });
+                                }}
                                 placeholder={shipEst ? shipEst.cost.toFixed(2) : (defaultShipping || "9.95")}
                                 className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
                               />
@@ -2558,7 +2694,20 @@ export default function PortfolioPage() {
                                   updated[i] = e.target.value;
                                   return { ...p, inStorePricing: updated };
                                 })}
-                                placeholder="–"
+                                onBlur={(e) => {
+                                  const raw = e.target.value.trim();
+                                  if (!raw) return;
+                                  const n = Number(raw);
+                                  if (!Number.isFinite(n)) return;
+                                  const formatted = n.toFixed(2);
+                                  if (formatted === raw) return;
+                                  setForm((p) => {
+                                    const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
+                                    updated[i] = formatted;
+                                    return { ...p, inStorePricing: updated };
+                                  });
+                                }}
+                                placeholder="-"
                                 className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
                               />
                             </div>
@@ -2589,6 +2738,15 @@ export default function PortfolioPage() {
                         step="0.01"
                         value={form.shippingPrice}
                         onChange={(e) => setForm((p) => ({ ...p, shippingPrice: e.target.value }))}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          if (!raw) return;
+                          const n = Number(raw);
+                          if (!Number.isFinite(n)) return;
+                          const formatted = n.toFixed(2);
+                          if (formatted === raw) return;
+                          setForm((p) => ({ ...p, shippingPrice: formatted }));
+                        }}
                         placeholder={defaultShipping || "9.95"}
                         className="w-32 bg-background border border-border rounded-sm px-3 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                       />
@@ -2934,14 +3092,22 @@ export default function PortfolioPage() {
         </div>
 
         {works.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-muted mb-4">No works yet. Add your first piece to get started.</p>
+          <div className="text-center py-16 px-6">
+            <h3 className="text-base font-medium text-foreground mb-2">No works yet</h3>
+            <p className="text-sm text-muted leading-relaxed max-w-sm mx-auto mb-6">
+              Add your first piece, venues find your work through your portfolio.
+            </p>
             <div className="flex items-center justify-center gap-3">
-              <button onClick={() => openAdd()} className="text-sm text-accent hover:text-accent-hover transition-colors">
-                + Add your first work
+              <button
+                onClick={() => openAdd()}
+                className="inline-block px-5 py-2.5 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+              >
+                Add your first work
               </button>
-              <span className="text-border">·</span>
-              <button onClick={openBulkAdd} className="text-sm text-stone-700 hover:text-foreground transition-colors">
+              <button
+                onClick={openBulkAdd}
+                className="text-sm text-stone-700 hover:text-foreground transition-colors"
+              >
                 Bulk add multiple
               </button>
             </div>
@@ -2949,7 +3115,7 @@ export default function PortfolioPage() {
         ) : (
           <>
             <p className="text-[11px] text-muted mb-3">
-              Drag cards to reorder &mdash; the order here is what
+              Drag cards to reorder. The order here is what
               venues see on your public profile.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -3064,7 +3230,14 @@ export default function PortfolioPage() {
                           Duplicate
                         </button>
                         <button
-                          onClick={() => { if (confirm("Remove this work?")) deleteWork(index); }}
+                          onClick={async () => {
+                            const ok = await confirm({
+                              title: "Remove this work?",
+                              confirmLabel: "Remove",
+                              destructive: true,
+                            });
+                            if (ok) deleteWork(index);
+                          }}
                           className="text-xs text-white/60 hover:text-red-400 transition-colors"
                         >
                           Remove
@@ -3087,10 +3260,12 @@ export default function PortfolioPage() {
                   </div>
                 );
               })}
-              {/* In-grid "+ Add new work" tile so the artist doesn't
+              {/* In-grid "+ Add New Work" tile so the artist doesn't
                   have to scroll to the top to add another. Hidden in
                   select-mode where the focus is on the existing
-                  selection. */}
+                  selection. Capitalisation matches the top-of-page
+                  primary button + the form header so the two add
+                  affordances read as the same action. */}
               {!selectMode && (
                 <button
                   type="button"
@@ -3098,7 +3273,7 @@ export default function PortfolioPage() {
                   className="aspect-square flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-sm text-muted hover:border-accent hover:text-accent hover:bg-accent/5 transition-colors"
                 >
                   <span className="text-2xl leading-none">+</span>
-                  <span className="text-xs font-medium">Add new work</span>
+                  <span className="text-xs font-medium">Add New Work</span>
                 </button>
               )}
             </div>

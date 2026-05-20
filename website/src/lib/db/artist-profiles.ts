@@ -2,6 +2,9 @@ import { supabase } from "@/lib/supabase";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { Artist, ArtistWork, SizePricing } from "@/data/artists";
 import type { DisciplineId } from "@/data/categories";
+import { normalisePriceBand } from "./normalise-price-band";
+
+export { normalisePriceBand };
 
 export interface DbArtistProfile {
   id: string;
@@ -30,6 +33,9 @@ export interface DbArtistProfile {
   open_to_revenue_share: boolean;
   revenue_share_percent: number;
   open_to_outright_purchase: boolean;
+  /** Migration 055: artist has opted in to in-person collection.
+   *  Drives the "Collect from artist" fulfilment option at checkout. */
+  offers_pickup?: boolean | null;
   can_provide_frames: boolean;
   can_arrange_framing: boolean;
   delivery_radius: string;
@@ -51,6 +57,11 @@ export interface DbArtistProfile {
   /** "pending" for new claim-flow profiles; "approved" once admin reviews. */
   review_status?: "pending" | "approved" | "rejected";
   approved_at?: string | null;
+  /** Migration 056: optional theme overrides for the public profile and
+   *  QR labels. Premium+ artists set them via the portal; for Core
+   *  they're ignored at render time and defaults are used. */
+  profile_theme?: string | null;
+  label_theme?: string | null;
 }
 
 export interface DbArtistWork {
@@ -113,6 +124,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
     openToRevenueShare: profile.open_to_revenue_share ?? true,
     revenueSharePercent: profile.revenue_share_percent,
     openToOutrightPurchase: profile.open_to_outright_purchase ?? true,
+    offersPickup: profile.offers_pickup ?? false,
     canProvideFrames: profile.can_provide_frames,
     canArrangeFraming: profile.can_arrange_framing,
     venueTypesSuitedFor: profile.venue_types_suited_for || [],
@@ -130,12 +142,25 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
     subscriptionPlan: profile.subscription_plan || undefined,
     shipsInternationally: profile.ships_internationally || false,
     internationalShippingPrice: profile.international_shipping_price ?? undefined,
+    // Plan F #12: a profile reaches the public app only after
+    // review_status flips to "approved" (legacy rows without the
+    // column are treated as approved by getAllDatabaseArtists).
+    // Either path means the artist passed admin review, so surface
+    // that as a Verified trust signal on the public profile.
+    isVerified:
+      profile.review_status === "approved" || profile.review_status == null,
+    profileTheme: profile.profile_theme || undefined,
+    labelTheme: profile.label_theme || undefined,
     works: works.map((w) => ({
       id: w.id,
       title: w.title,
       medium: w.medium,
       dimensions: w.dimensions,
-      priceBand: w.price_band,
+      // Some DB rows store price_band as a bare "180 – 320" without
+      // the currency symbol, which surfaced for artists like Maya Chen
+      // as a stripped-looking price. Normalise here so the public
+      // surfaces always show the £ even when the source is missing it.
+      priceBand: normalisePriceBand(w.price_band),
       pricing: w.pricing || [],
       available: w.available,
       color: w.color,

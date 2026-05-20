@@ -46,9 +46,13 @@ interface LabelSheetProps {
   labels: LabelData[];
   labelVisibility?: LabelVisibility[];
   pageIndex?: number; // If provided, render only this page (0-based)
+  /** Optional Premium+ theme id, applied to every label on the sheet.
+   *  Caller (the labels page) reads it off the artist profile and
+   *  passes it through; left undefined for Core (default classic). */
+  labelTheme?: string;
 }
 
-export default function LabelSheet({ labels, labelVisibility, pageIndex }: LabelSheetProps) {
+export default function LabelSheet({ labels, labelVisibility, pageIndex, labelTheme }: LabelSheetProps) {
   const [qrUrls, setQrUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -162,6 +166,7 @@ export default function LabelSheet({ labels, labelVisibility, pageIndex }: Label
                   showMedium={vis ? vis.medium : true}
                   showDimensions={vis ? vis.dimensions : true}
                   showPrice={vis ? vis.price : true}
+                  labelTheme={labelTheme}
                 />
               );
             })}

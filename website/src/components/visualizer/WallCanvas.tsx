@@ -185,8 +185,13 @@ export default function WallCanvas({
         // Click-on-empty-area to deselect (only if not consumed by a Konva node).
         if (e.target === containerRef.current) onSelectItem(null);
       }}
-      className="relative w-full h-full bg-stone-100"
-      style={{ overflow: "hidden" }}
+      className="relative w-full h-full bg-stone-100 touch-none"
+      // touchAction: "none" prevents iOS Safari from scrolling the
+      // surrounding page when a one-finger drag starts on an artwork
+      // (Konva owns the gesture instead). The wall is fit-to-container
+      // here, so we don't need pinch-zoom on the canvas itself, but
+      // page scroll-trap is the headline mobile bug.
+      style={{ overflow: "hidden", touchAction: "none" }}
     >
       {pxPerCm > 0 && (
         <Stage
@@ -206,14 +211,17 @@ export default function WallCanvas({
               onSelectItem(null);
               return;
             }
-            // Walk up to see if any ancestor is an "item" Group.
-            // We tag those with a `name` attr so we can detect them
-            // here without a parent ref. If none, treat as empty
-            // background and deselect. Typed as Konva Node so
+            // Walk up to see if any ancestor is an "item" Group or a
+            // Transformer (whose anchor nodes live as children of
+            // the Transformer, NOT inside the wall-item Group). We
+            // tag items with a `name` attr; Transformer is detected
+            // by Konva class name. If none of the above, treat as
+            // empty background and deselect. Typed as Konva Node so
             // getParent()'s Container return type fits.
             let node: import("konva/lib/Node").Node | null = target;
             while (node && node !== stage) {
               if (node.attrs?.name === "wall-item") return;
+              if (node.getClassName?.() === "Transformer") return;
               node = node.getParent();
             }
             onSelectItem(null);

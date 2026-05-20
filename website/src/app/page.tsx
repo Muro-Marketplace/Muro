@@ -13,6 +13,24 @@ import { useAuth } from "@/context/AuthContext";
 
 const featuredArtists = artists.slice(0, 6);
 
+// Rounded-down totals for the homepage trust bar. We deliberately
+// floor to a tens/hundreds bucket so the hero counts read as
+// confident estimates rather than precise inventory: "40+ artists"
+// feels stable, "43 artists" reads like a thin catalogue. Sources
+// are the static seed (`artists.ts`, `venues.ts`); DB additions
+// don't show up here, but the homepage isn't a real-time scoreboard.
+const TOTAL_ARTISTS = artists.length;
+const TOTAL_WORKS = artists.reduce((acc, a) => acc + a.works.length, 0);
+const TOTAL_VENUES = venues.length;
+function roundDown(n: number): number {
+  if (n >= 100) return Math.floor(n / 10) * 10;
+  if (n >= 20) return Math.floor(n / 10) * 10;
+  return Math.floor(n / 5) * 5;
+}
+const ARTISTS_BUCKET = roundDown(TOTAL_ARTISTS);
+const WORKS_BUCKET = roundDown(TOTAL_WORKS);
+const VENUES_BUCKET = roundDown(TOTAL_VENUES);
+
 export default function Home() {
   const contentRef = useRef<HTMLDivElement>(null);
   const { user, userType } = useAuth();
@@ -97,12 +115,12 @@ export default function Home() {
                   noise. */}
               {!user && (
                 <p className="mt-7 sm:mt-6 sm:absolute sm:left-0 sm:right-0 sm:top-full text-sm text-white/60">
-                  Just looking? See it as{" "}
+                  Just looking? Browse{" "}
                   <Link
                     href="/demo"
                     className="text-white/90 hover:text-white underline underline-offset-4 decoration-white/30 hover:decoration-white transition-colors font-medium"
                   >
-                    a demo artist or venue
+                    a demo artist or venue account
                   </Link>
                   .
                 </p>
@@ -133,11 +151,11 @@ export default function Home() {
           <div className="hidden sm:block border-t border-white/10 bg-black/50 backdrop-blur-sm">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-4 text-sm">
-                <span className="text-white/60">Curated Artists</span>
+                <span className="text-white/60"><span className="text-white/90 font-medium">{ARTISTS_BUCKET}+</span> Curated Artists</span>
                 <span className="w-1 h-1 rounded-full bg-white/30" />
-                <span className="text-white/60">Original Artworks</span>
+                <span className="text-white/60"><span className="text-white/90 font-medium">{WORKS_BUCKET}+</span> Original Artworks</span>
                 <span className="w-1 h-1 rounded-full bg-white/30" />
-                <span className="text-white/60">Active Venues</span>
+                <span className="text-white/60"><span className="text-white/90 font-medium">{VENUES_BUCKET}+</span> Active Venues</span>
               </div>
               <div className="hidden sm:flex items-center gap-4 text-xs text-white/40 tracking-widest uppercase">
                 <span>No AI art</span>
@@ -210,7 +228,7 @@ export default function Home() {
                     <Link href="/browse" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Discover Art
                     </Link>
-                    <Link href="/register-venue" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                    <Link href="/signup/venue" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
                       REGISTER YOUR VENUE
                     </Link>
                   </div>
@@ -275,7 +293,7 @@ export default function Home() {
                   <ul className="space-y-3 mb-10">
                     <BulletPoint text="Get displayed in cafés, restaurants, hotels, and offices" />
                     <BulletPoint text="Sell directly online, every QR scan leads to your store" />
-                    <BulletPoint text="5–15% platform fee. No gallery taking 50%." />
+                    <BulletPoint text="5 to 15% platform fee. No gallery taking 50%." />
                   </ul>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -308,7 +326,7 @@ export default function Home() {
                     <Step dark number="03" title="Arrange" description="Display art for free with optional revenue share, or purchase outright." />
                   </div>
                   <div className="mt-10">
-                    <Link href="/register-venue" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                    <Link href="/signup/venue" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Register Your Venue
                     </Link>
                   </div>
@@ -409,7 +427,7 @@ export default function Home() {
                 Cafés, restaurants, hotels, and offices actively seeking artwork to display. See what&rsquo;s available near you.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Link href="/spaces-looking-for-art" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                <Link href="/spaces" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                   See Venue Demand
                 </Link>
                 <Link href="/apply" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
@@ -435,7 +453,7 @@ export default function Home() {
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Venues</p>
                   <h3 className="font-serif text-xl mb-3">Source artwork risk-free</h3>
                   <p className="text-sm text-muted mb-6 flex-1">Free to browse and enquire. No contracts.</p>
-                  <Link href="/register-venue" className="inline-flex items-center justify-center w-full px-4 py-3.5 bg-accent text-white text-xs font-semibold tracking-wide uppercase rounded-sm hover:bg-accent-hover transition-colors whitespace-nowrap">
+                  <Link href="/signup/venue" className="inline-flex items-center justify-center w-full px-4 py-3.5 bg-accent text-white text-xs font-semibold tracking-wide uppercase rounded-sm hover:bg-accent-hover transition-colors whitespace-nowrap">
                     Register Your Venue
                   </Link>
                 </div>

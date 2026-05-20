@@ -18,7 +18,7 @@ export function VenueRegistrationConfirmation({
   return (
     <EmailShell stream="tx" persona="venue" preview={`We've received the application for ${venueName}`}>
       <H1>Application received</H1>
-      <P>Thanks {contactFirstName} — your application for <strong>{venueName}</strong> is in.</P>
+      <P>Thanks {contactFirstName} - your application for <strong>{venueName}</strong> is in.</P>
       <P>Our team reviews each space personally to make sure Wallplace stays a good fit for the artists we work with. You&rsquo;ll hear back within {reviewTimelineDays} working days.</P>
       <Small>No action needed from you in the meantime. We&rsquo;ll reach out if anything is unclear.</Small>
     </EmailShell>
@@ -39,7 +39,7 @@ const entry: TemplateEntry<VenueRegistrationConfirmationProps> = {
   persona: "venue",
   category: "security",
   subject: "We've received your Wallplace application",
-  previewText: "Application received — we'll be in touch within a few days.",
+  previewText: "Application received - we'll be in touch within a few days.",
   component: VenueRegistrationConfirmation,
   mock,
   canUnsubscribe: false,

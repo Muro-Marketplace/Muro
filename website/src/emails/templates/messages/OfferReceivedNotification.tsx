@@ -50,10 +50,10 @@ export function OfferReceivedNotification({
       stream="notify"
       persona={recipientRole}
       category="placements"
-      preview={`${venueName} — ${formattedAmount}`}
+      preview={`${venueName} - ${formattedAmount}`}
     >
       <H1>{headline}</H1>
-      <P>Hi {firstName} — {intro}</P>
+      <P>Hi {firstName} - {intro}</P>
       {message && (
         <P style={{ fontStyle: "italic", color: "#6B6760", borderLeft: "2px solid #D8D3CC", paddingLeft: 12 }}>
           &ldquo;{message}&rdquo;
@@ -74,7 +74,7 @@ export const mock: OfferReceivedNotificationProps = {
   firstName: "Maya",
   venueName: "The Curzon",
   formattedAmount: "£1,250.00",
-  message: "We love this piece for our reception wall — would £1,250 work?",
+  message: "We love this piece for our reception wall - would £1,250 work?",
   isCounter: false,
   offersUrl: "https://wallplace.co.uk/artist-portal/offers",
   recipientRole: "artist",

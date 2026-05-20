@@ -1,19 +1,13 @@
-import Accordion from "@/components/Accordion";
 import Button from "@/components/Button";
 import Link from "next/link";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import FaqsClient, { type FaqEntry } from "./FaqsClient";
 
 export const metadata: Metadata = {
-  title: "FAQs – Wallplace",
+  title: "FAQs",
   description:
     "Frequently asked questions about Wallplace for artists, venues, and buyers.",
 };
-
-interface FaqEntry {
-  question: string;
-  answer: ReactNode;
-}
 
 const generalFaqs: FaqEntry[] = [
   {
@@ -27,7 +21,7 @@ const generalFaqs: FaqEntry[] = [
       <>
         <p>
           Wallplace earns through artist membership plans (from £9.99/month)
-          and a platform fee on artwork sales (5–15% depending on the artist&rsquo;s
+          and a platform fee on artwork sales (5 to 15% depending on the artist&rsquo;s
           plan). When a piece sells, the artist keeps the majority. Venues
           never pay a platform fee.
         </p>
@@ -80,7 +74,7 @@ const artistFaqs: FaqEntry[] = [
         </p>
         <p>
           Once your portfolio is live, venues can start enquiring immediately,
-          most artists see their first venue interest in the first 2–3 weeks.
+          most artists see their first venue interest in the first 2 to 3 weeks.
           You can read more about{" "}
           <Link href="/how-it-works">how the platform works end-to-end</Link>{" "}
           or check the <Link href="/artist-agreement">artist agreement</Link>.
@@ -97,7 +91,7 @@ const artistFaqs: FaqEntry[] = [
           held until the artwork has been confirmed delivered (or 14 days
           have passed without a buyer dispute, whichever comes first). At
           that point we transfer your share, sale price minus our platform
-          fee (5–15% depending on plan) and any agreed venue revenue share,
+          fee (5 to 15% depending on plan) and any agreed venue revenue share,
           straight to your linked bank account. You&rsquo;ll see every
           payout itemised in <Link href="/artist-portal/billing">your billing page</Link>.
         </p>
@@ -153,8 +147,8 @@ const artistFaqs: FaqEntry[] = [
         </p>
         <p>
           If something happens, raise a case through{" "}
-          <Link href="/complaints">our complaints process</Link> and we&rsquo;ll
-          help broker a resolution.
+          <Link href="/complaints">our complaints process</Link>{" "}
+          and we&rsquo;ll help broker a resolution.
         </p>
       </>
     ),
@@ -201,7 +195,7 @@ const venueFaqs: FaqEntry[] = [
         <p>
           Your enquiry lands in the artist&rsquo;s Wallplace inbox + email.
           Most artists reply within 48 hours. From there you agree the
-          arrangement (display loan, paid loan, or outright purchase),
+          arrangement (paid loans, revenue-share loans, and direct purchases),
           confirm dates and conditions, and the artist confirms the
           placement on the platform, that creates the loan record both
           parties countersign before the work is dispatched. You can track
@@ -216,9 +210,9 @@ const venueFaqs: FaqEntry[] = [
       <>
         <p>
           For an off-the-shelf placement (i.e. the work already exists),
-          most arrangements go from first message to installed in 2–3 weeks.
-          Roughly 3–5 days of conversation + agreement, then 5–10 days for
-          dispatch + install scheduling. Bespoke commissions take longer,
+          most arrangements go from first message to installed in 2 to 3 weeks.
+          Roughly 3 to 5 days of conversation plus agreement, then 5 to 10 days for
+          dispatch and install scheduling. Bespoke commissions take longer,
           weeks to months depending on the artist.
         </p>
         <p>
@@ -300,7 +294,7 @@ const venueFaqs: FaqEntry[] = [
   {
     question: "What happens when a customer wants to buy a piece?",
     answer:
-      "Each artwork on display includes a discreet label with the artist name, title, and a QR code or URL linking to the piece on Wallplace. Customers can enquire or purchase directly through us. Your staff do not need to handle any sales – they just point customers to the label.",
+      "Each artwork on display includes a discreet label with the artist name, title, and a QR code or URL linking to the piece on Wallplace. Customers can enquire or purchase directly through us. Your staff do not need to handle any sales, they just point customers to the label.",
   },
   {
     question: "Do our staff need to do anything?",
@@ -310,7 +304,7 @@ const venueFaqs: FaqEntry[] = [
   {
     question: "How often does the artwork change?",
     answer:
-      "That depends on your arrangement with the artist. Some venues prefer a rotation every 2–3 months to keep the space feeling fresh. Others prefer to keep pieces longer. You agree this directly with the artist when arranging the placement.",
+      "That depends on your arrangement with the artist. Some venues prefer a rotation every 2 to 3 months to keep the space feeling fresh. Others prefer to keep pieces longer. You agree this directly with the artist when arranging the placement.",
   },
   {
     question: "Can we buy the artwork ourselves?",
@@ -319,101 +313,61 @@ const venueFaqs: FaqEntry[] = [
   },
 ];
 
+const buyerFaqs: FaqEntry[] = [
+  {
+    question: "How does buying through Wallplace work?",
+    answer: (
+      <p>
+        Buying through Wallplace is the same as buying from any reputable
+        online shop. Every piece is sold by the artist directly. We
+        process the payment and coordinate the transaction. See our{" "}
+        <Link href="/terms" className="text-accent hover:underline">Terms of Sale</Link>,{" "}
+        <Link href="/returns" className="text-accent hover:underline">Returns Policy</Link>, and{" "}
+        <Link href="/complaints" className="text-accent hover:underline">Complaints Policy</Link>{" "}
+        for the full answers to delivery, refunds, damage, and dispute questions.
+      </p>
+    ),
+  },
+  {
+    question: "Can I track an order without a Wallplace account?",
+    answer: (
+      <p>
+        Yes. You can{" "}
+        <Link href="/orders/track" className="text-accent hover:underline">
+          track an order
+        </Link>{" "}
+        using the order ID and email from your receipt. No account
+        required.
+      </p>
+    ),
+  },
+  {
+    question: "Who do I contact if something goes wrong with my order?",
+    answer: (
+      <p>
+        Email{" "}
+        <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">
+          hello@wallplace.co.uk
+        </a>{" "}
+        and we&rsquo;ll sort it. For formal disputes, use our{" "}
+        <Link href="/complaints" className="text-accent hover:underline">
+          complaints process
+        </Link>
+        .
+      </p>
+    ),
+  },
+];
+
 export default function FaqsPage() {
   return (
     <div className="bg-background">
-      {/* Header */}
-      <section className="py-20 lg:py-24">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-2xl">
-            <h1 className="text-4xl lg:text-5xl mb-5">
-              Frequently Asked Questions
-            </h1>
-            <p className="text-lg text-muted leading-relaxed">
-              Everything you need to know about how Wallplace works for artists,
-              venues, and art lovers.
-            </p>
-          </div>
-
-          {/* Role quick-nav, jump to the right FAQ section. Anchor links
-              are plain <a>s so deep-links work (#artists, #venues, #buyers). */}
-          <div className="mt-8 flex flex-wrap gap-2">
-            <a href="#artists" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full border border-border bg-surface text-foreground hover:border-foreground/40 transition-colors">
-              I&rsquo;m an artist
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 6h6M6 3l3 3-3 3" /></svg>
-            </a>
-            <a href="#venues" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full border border-border bg-surface text-foreground hover:border-foreground/40 transition-colors">
-              I&rsquo;m a venue
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 6h6M6 3l3 3-3 3" /></svg>
-            </a>
-            <a href="#buyers" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full border border-border bg-surface text-foreground hover:border-foreground/40 transition-colors">
-              I&rsquo;m a buyer
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 6h6M6 3l3 3-3 3" /></svg>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* General */}
-      <section className="pb-16 lg:pb-20 scroll-mt-24" id="general">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl mb-6">General</h2>
-            <Accordion items={generalFaqs} />
-          </div>
-        </div>
-      </section>
-
-      {/* For Artists */}
-      <section className="pb-16 lg:pb-20 scroll-mt-24" id="artists">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl mb-6">For Artists</h2>
-            <Accordion items={artistFaqs} />
-          </div>
-        </div>
-      </section>
-
-      {/* For Venues */}
-      <section className="pb-16 lg:pb-20 scroll-mt-24" id="venues">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl mb-6">For Venues</h2>
-            <Accordion items={venueFaqs} />
-          </div>
-        </div>
-      </section>
-
-      {/* For Buyers, point at external pages for full policy answers */}
-      <section className="pb-16 lg:pb-20 scroll-mt-24" id="buyers">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl mb-6">For Buyers</h2>
-            <div className="space-y-4 text-muted leading-relaxed">
-              <p>
-                Buying through Wallplace is the same as buying from any reputable online shop.
-                See our <Link href="/terms" className="text-accent hover:underline">Terms of Sale</Link>,{" "}
-                <Link href="/returns" className="text-accent hover:underline">Returns Policy</Link>, and{" "}
-                <Link href="/complaints" className="text-accent hover:underline">Complaints Policy</Link>{" "}
-                for the full answers to delivery, refunds, damage, and dispute questions.
-              </p>
-              <p>
-                Don&rsquo;t have a Wallplace account? You can still{" "}
-                <Link href="/orders/track" className="text-accent hover:underline">
-                  track an order
-                </Link>{" "}
-                using the order ID + email from your receipt.
-              </p>
-              <p>
-                Every piece on Wallplace is sold by the artist directly, we process the payment
-                and coordinate the transaction. If anything goes wrong, email{" "}
-                <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a>{" "}
-                and we&rsquo;ll sort it.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <FaqsClient
+        general={generalFaqs}
+        artist={artistFaqs}
+        venue={venueFaqs}
+        buyer={buyerFaqs}
+      />
 
       {/* CTA */}
       <section className="py-20 lg:py-24 border-t border-border">

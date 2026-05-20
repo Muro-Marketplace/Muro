@@ -201,32 +201,77 @@ export async function POST(request: Request) {
           }
         }
 
-        // Look up venue placement for revenue share
-        if (venueSlug && firstArtistSlug) {
-          const { data: placement } = await db.from("placements")
-            .select("id, revenue_share_percent")
-            .eq("artist_slug", firstArtistSlug)
+        // Per-line venue revenue share. Multi-artist carts can mix
+        // placements at the same venue with different revenue_share_percent
+        // values, so we look up every artist's placement at this venue in
+        // one round-trip and apply each rate to its own line. Shipping is
+        // exempt; only artwork value contributes to the venue cut.
+        const lineArtistSlugs = (cartItems as Array<{ artistSlug?: string }>)
+          .map((i) => i.artistSlug || "")
+          .filter(Boolean);
+        const uniqueLineSlugs = Array.from(new Set(lineArtistSlugs));
+        const placementByArtistSlug = new Map<string, { id: string; revenue_share_percent: number }>();
+        if (venueSlug && uniqueLineSlugs.length > 0) {
+          const { data: rows } = await db.from("placements")
+            .select("id, artist_slug, revenue_share_percent")
+            .in("artist_slug", uniqueLineSlugs)
             .eq("venue_slug", venueSlug)
-            .eq("status", "active")
-            .limit(1)
-            .single();
-          if (placement) {
-            placementId = placement.id;
-            venueRevSharePct = placement.revenue_share_percent || 0;
+            .eq("status", "active");
+          for (const row of (rows || []) as Array<{ id: string; artist_slug: string; revenue_share_percent: number | null }>) {
+            placementByArtistSlug.set(row.artist_slug, {
+              id: row.id,
+              revenue_share_percent: row.revenue_share_percent || 0,
+            });
+          }
+          // Schema still records a single placement_id per order. Pick the
+          // first cart line whose artist has a placement so the choice is
+          // deterministic across replayed webhook deliveries.
+          for (const item of cartItems as Array<{ artistSlug?: string }>) {
+            const slug = item.artistSlug || "";
+            const place = placementByArtistSlug.get(slug);
+            if (place) {
+              placementId = place.id;
+              break;
+            }
           }
         }
 
-        // Calculate splits. Platform fee and venue revenue are computed on
-        // the subtotal (artwork value only), shipping is not subject to
-        // the cut and flows straight through to the artist, who pays the
+        // Sum the per-line venue cut. Lines whose artist has no placement
+        // at the venue contribute 0.
+        venueRevenue = (cartItems as Array<{ artistSlug?: string; price?: number; qty?: number; quantity?: number }>).reduce((sum, item) => {
+          const slug = item.artistSlug || "";
+          const pct = placementByArtistSlug.get(slug)?.revenue_share_percent ?? 0;
+          const lineValue = (item.price || 0) * Number(item.qty ?? item.quantity ?? 1);
+          return sum + lineValue * (pct / 100);
+        }, 0);
+        venueRevenue = Math.round(venueRevenue * 100) / 100;
+        // Blended effective rate against the subtotal, stored on the
+        // order for dashboard / receipt display. Equals the single-rate
+        // value when every line shares the same placement.
+        venueRevSharePct = subtotal > 0
+          ? Math.round((venueRevenue / subtotal) * 100 * 100) / 100
+          : 0;
+
+        // Platform fee stays at a single rate against subtotal (the
+        // first-artist plan). Multi-artist fee splitting is a separate
+        // concern from the venue split. Shipping is not subject to the
+        // cut and flows straight through to the artist, who pays the
         // courier out of pocket.
-        venueRevenue = Math.round(subtotal * (venueRevSharePct / 100) * 100) / 100;
         platformFee = Math.round(subtotal * (platformFeePct / 100) * 100) / 100;
         artistRevenue = Math.round((subtotal - venueRevenue - platformFee + shippingCost) * 100) / 100;
 
         const paymentIntentId = typeof session.payment_intent === "string"
           ? session.payment_intent
           : session.payment_intent?.id || "";
+
+        // Collection (in-store) sales hand the artwork over at the
+        // point of purchase, so there's no shipping/processing/shipped
+        // lifecycle to track. Mark the order delivered straight away
+        // and pin delivered_at so refund-window logic still works.
+        const fulfilmentMethod = (savedShipping as { fulfilmentMethod?: string })?.fulfilmentMethod || session.metadata?.fulfilment_method || "ship";
+        const isCollection = fulfilmentMethod === "collection";
+        const initialStatus: "confirmed" | "delivered" = isCollection ? "delivered" : "confirmed";
+        const nowIso = new Date().toISOString();
 
         const orderRow: Record<string, unknown> = {
           id: orderId,
@@ -247,9 +292,17 @@ export async function POST(request: Request) {
           subtotal,
           shipping_cost: shippingCost,
           total,
-          status: "confirmed",
+          status: initialStatus,
           // jsonb column — store the array raw (Plan B Task 13).
-          status_history: [{ status: "confirmed", timestamp: new Date().toISOString() }],
+          // For collection orders we record the confirmed → delivered
+          // jump in one go so the customer-facing tracker reads cleanly
+          // ("Order placed · Delivered") without intermediate pips.
+          status_history: isCollection
+            ? [
+                { status: "confirmed", timestamp: nowIso },
+                { status: "delivered", timestamp: nowIso },
+              ]
+            : [{ status: "confirmed", timestamp: nowIso }],
           source,
           artist_slug: firstArtistSlug || null,
           artist_user_id: artistUserId,
@@ -260,9 +313,10 @@ export async function POST(request: Request) {
           platform_fee_percent: platformFeePct,
           platform_fee: platformFee,
           placement_id: placementId,
-          fulfilment_method: (savedShipping as { fulfilmentMethod?: string })?.fulfilmentMethod || session.metadata?.fulfilment_method || "ship",
+          fulfilment_method: fulfilmentMethod,
           collection_notes: (savedShipping as { collectionNotes?: string })?.collectionNotes || null,
-          created_at: new Date().toISOString(),
+          delivered_at: isCollection ? nowIso : null,
+          created_at: nowIso,
         };
 
         // F30, idempotency: skip if we've already processed this payment intent.
@@ -278,7 +332,13 @@ export async function POST(request: Request) {
           }
         }
 
-        // Try full insert, fall back to base if new columns don't exist
+        // Try full insert. If the DB rejects an unknown column, strip
+        // ONLY the columns the error mentions and retry. The previous
+        // behaviour was to fall back to a minimal "base" row that
+        // dropped every attribution column (artist_slug, artist_user_id,
+        // venue_slug, placement_id, source, …) — orders saved fine but
+        // were invisible to the artist's GET because nothing pointed
+        // back to them. Pattern matches the placements POST retry.
         let { error } = await db.from("orders").insert(orderRow);
         if (error) {
           // Unique-constraint violation = another concurrent delivery won the race.
@@ -287,22 +347,57 @@ export async function POST(request: Request) {
             console.log("Order already exists (unique violation), treating webhook as processed");
             return NextResponse.json({ received: true, duplicate: true });
           }
-          console.warn("Full order insert failed, trying base:", error.message);
-          const baseRow = {
-            id: orderId,
-            stripe_payment_intent_id: paymentIntentId,
-            buyer_email: orderRow.buyer_email,
-            items: orderRow.items,
-            shipping: orderRow.shipping,
-            subtotal, shipping_cost: shippingCost, total,
-            status: "confirmed",
-            created_at: new Date().toISOString(),
-          };
-          const retry = await db.from("orders").insert(baseRow);
-          error = retry.error;
-          if (error && (error as { code?: string }).code === "23505") {
-            return NextResponse.json({ received: true, duplicate: true });
+          // Iterative strip-and-retry. Each loop drops only the columns
+          // the error specifically called out, keeping attribution intact
+          // for any column the DB does know about.
+          const optionalCols = [
+            "source",
+            "artist_slug",
+            "artist_user_id",
+            "venue_slug",
+            "venue_revenue_share_percent",
+            "venue_revenue",
+            "artist_revenue",
+            "platform_fee_percent",
+            "platform_fee",
+            "placement_id",
+            "fulfilment_method",
+            "collection_notes",
+            "delivered_at",
+            "status_history",
+            "stripe_payment_intent_id",
+          ];
+          const stripped = new Set<string>();
+          const safeRow: Record<string, unknown> = { ...orderRow };
+          // PostgrestError | null, the loop nulls it on success to break out.
+          // Without the explicit union TS infers PostgrestError (the type of
+          // the initial value) and the `lastError = null` assignment errors.
+          let lastError: typeof error | null = error;
+          while (lastError) {
+            const msg = String(lastError.message || "").toLowerCase();
+            const newStrip = optionalCols.filter(
+              (c) => !stripped.has(c) && new RegExp(`\\b${c}\\b`).test(msg),
+            );
+            if (newStrip.length === 0) break;
+            newStrip.forEach((c) => {
+              stripped.add(c);
+              delete safeRow[c];
+            });
+            console.warn(
+              `Order insert missing columns [${Array.from(stripped).join(", ")}], retrying:`,
+              lastError.message,
+            );
+            const retry = await db.from("orders").insert(safeRow);
+            if (!retry.error) {
+              lastError = null;
+              break;
+            }
+            if ((retry.error as { code?: string }).code === "23505") {
+              return NextResponse.json({ received: true, duplicate: true });
+            }
+            lastError = retry.error;
           }
+          error = lastError;
         }
 
         if (error) {
@@ -516,6 +611,10 @@ export async function POST(request: Request) {
           }
 
           // ─── Stripe Connect transfers ───
+          // Collection orders are paid out immediately, the work is
+          // handed over at the venue counter so there's no shipping
+          // risk to insure against. Shipped orders keep the 14-day
+          // hold (released early on delivery confirmation).
           // Transfer venue revenue share
           if (venueSlug && venueRevenue > 0) {
             try {
@@ -531,6 +630,7 @@ export async function POST(request: Request) {
                   recipientUserId: venueConnect.user_id,
                   connectAccountId: venueConnect.stripe_connect_account_id,
                   amountCents: Math.round(venueRevenue * 100),
+                  immediate: isCollection,
                 });
               }
             } catch (transferErr) {
@@ -553,6 +653,7 @@ export async function POST(request: Request) {
                   recipientUserId: artistUserId,
                   connectAccountId: artistConnect.stripe_connect_account_id,
                   amountCents: Math.round(artistRevenue * 100),
+                  immediate: isCollection,
                 });
               }
             } catch (transferErr) {
@@ -737,6 +838,38 @@ export async function POST(request: Request) {
     const subscription = event.data.object as Stripe.Subscription;
     const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
 
+    // Upgrade-race guard. When an artist upgrades from one plan to
+    // another, /api/subscribe stores the previous subscription id in
+    // metadata so the webhook handler can cancel it once the NEW
+    // subscription's `customer.subscription.created` lands and the
+    // profile has flipped to `active` on the new plan. Stripe then
+    // fires a `customer.subscription.deleted` for the OLD subscription
+    // shortly after. Without this guard, the handler would blindly
+    // overwrite `subscription_status` to `canceled` for the customer,
+    // wiping out the just-set active state, and the billing page
+    // would render "Your subscription has been canceled" right after
+    // a successful upgrade. The fix: only touch the profile if the
+    // deleted subscription is still the profile's current one.
+    const { data: profile } = await db
+      .from("artist_profiles")
+      .select("user_id, name, subscription_plan, stripe_subscription_id")
+      .eq("stripe_customer_id", customerId)
+      .maybeSingle<{
+        user_id: string | null;
+        name: string | null;
+        subscription_plan: string | null;
+        stripe_subscription_id: string | null;
+      }>();
+
+    const isStale = profile && profile.stripe_subscription_id && profile.stripe_subscription_id !== subscription.id;
+    if (isStale) {
+      // Old subscription being cancelled as part of an upgrade. The
+      // newer subscription has already been recorded against the
+      // profile; do nothing here. Skip the cancellation email too —
+      // the artist isn't really being cancelled.
+      return NextResponse.json({ received: true });
+    }
+
     const { error } = await db
       .from("artist_profiles")
       .update({ subscription_status: "canceled" })
@@ -746,11 +879,6 @@ export async function POST(request: Request) {
 
     // Cancellation confirmation email.
     try {
-      const { data: profile } = await db
-        .from("artist_profiles")
-        .select("user_id, name, subscription_plan")
-        .eq("stripe_customer_id", customerId)
-        .maybeSingle();
       if (profile?.user_id) {
         const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
         if (user?.email) {

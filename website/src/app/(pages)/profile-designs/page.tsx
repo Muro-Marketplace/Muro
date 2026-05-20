@@ -22,6 +22,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { artists } from "@/data/artists";
 import { disciplineLabel, formatSubStyleLabel } from "@/data/categories";
 import type { Artist } from "@/data/artists";
@@ -65,6 +66,8 @@ export default async function ProfileDesignsPage({
 }: {
   searchParams: Promise<{ slug?: string }>;
 }) {
+  // Dev preview route — production gets a 404.
+  if (process.env.NODE_ENV === "production") notFound();
   const params = await searchParams;
   // Pick the first artist that has at least one work (so the banner
   // image fallback resolves). Optional ?slug= lets the user switch.
@@ -433,7 +436,7 @@ function VariantC({ artist }: { artist: Artist }) {
           <Fact label="Suited for" value={artist.venueTypesSuitedFor.slice(0, 2).join(", ") || "Any venue"} />
           <div>
             <p className="text-[10px] text-muted uppercase tracking-wider mb-1.5">Instagram</p>
-            <p className="text-sm font-medium text-foreground">{artist.instagram || "–"}</p>
+            <p className="text-sm font-medium text-foreground">{artist.instagram || "-"}</p>
           </div>
         </div>
         {(offerings.length > 0 || terms.length > 0) && (
@@ -546,7 +549,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-[10px] text-muted uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-sm font-medium text-foreground">{value || "–"}</p>
+      <p className="text-sm font-medium text-foreground">{value || "-"}</p>
     </div>
   );
 }

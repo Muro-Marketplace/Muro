@@ -19,7 +19,7 @@ const dmSerifDisplay = DM_Serif_Display({
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk").replace(/\/$/, "");
 
-const SITE_TITLE = "Wallplace – Curated Art for Commercial Spaces";
+const SITE_TITLE = "Wallplace | Curated Art for Commercial Spaces";
 const SITE_DESCRIPTION =
   "Wallplace is a curated art marketplace connecting independent venues with emerging artists. Source artwork risk-free. Get discovered by commercial spaces.";
 
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: SITE_TITLE,
-    template: "%s – Wallplace",
+    template: "%s | Wallplace",
   },
   description: SITE_DESCRIPTION,
   applicationName: "Wallplace",
@@ -41,11 +41,23 @@ export const metadata: Metadata = {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
     locale: "en_GB",
+    // TODO(brand): drop a 1200x630 PNG at /public/og-image.png. Until
+    // it lands, social cards will 404 the image and fall back to the
+    // text-only embed.
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Wallplace",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,

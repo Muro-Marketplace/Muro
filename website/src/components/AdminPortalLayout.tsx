@@ -37,9 +37,23 @@ export default function AdminPortalLayout({
   }, [loading, user, userType, router]);
 
   if (loading) {
+    // Plan F #14: match the animated bar that ArtistPortalLayout and
+    // VenuePortalLayout already render so the three portals share the
+    // same loading affordance. Plain "Loading..." text was the
+    // odd one out.
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted text-sm">Loading...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <div className="w-48 h-1 bg-border rounded-full overflow-hidden">
+          <div className="h-full bg-accent rounded-full animate-[loading_1.5s_ease-in-out_infinite]" />
+        </div>
+        <p className="text-muted text-xs">Loading admin portal...</p>
+        <style>{`
+          @keyframes loading {
+            0% { width: 0%; margin-left: 0; }
+            50% { width: 60%; margin-left: 20%; }
+            100% { width: 0%; margin-left: 100%; }
+          }
+        `}</style>
       </div>
     );
   }

@@ -33,6 +33,11 @@ export async function GET(
   const venueNameRaw = request.nextUrl.searchParams.get("v");
   const size = request.nextUrl.searchParams.get("size");
 
+  // Resolved venue context, declared at the outer scope so the redirect
+  // builder below can read the canonical name (from venue_profiles) and
+  // not just whatever was baked into the printed QR.
+  let venueName: string | undefined = venueNameRaw || undefined;
+
   // Best-effort venue user_id resolution + analytics insert.
   // Fire-and-forget, the redirect should never block on telemetry.
   try {
@@ -43,7 +48,6 @@ export async function GET(
     const ctx = extractTrackingContext(request.headers);
 
     let venueUserId: string | undefined;
-    let venueName = venueNameRaw || undefined;
     if (venueSlug) {
       try {
         const db = getSupabaseAdmin();
@@ -82,11 +86,19 @@ export async function GET(
   }
 
   // Build redirect URL. Always carries `?ref=qr` for downstream
-  // social-proof attribution + the venue display name so the artwork
-  // page can show "Seen in [venue name]".
+  // social-proof attribution. `venue` carries the SLUG (drives the
+  // placement lookup at checkout); `venueName` carries the display
+  // string for the "Seen in" banner. Pre-2026-05 the redirect put the
+  // display name in `venue`, which broke the slug-based placement
+  // lookup in the Stripe webhook and silently zeroed every venue
+  // revenue-share payout.
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
   const redirectParams = new URLSearchParams({ ref: "qr" });
-  if (venueNameRaw) redirectParams.set("venue", venueNameRaw);
+  if (venueSlug) redirectParams.set("venue", venueSlug);
+  // Display name resolved from venue_profiles above (line 58) takes
+  // precedence over the raw `v=` value baked into the printed label,
+  // so a venue that renamed itself doesn't have to reprint.
+  if (venueName) redirectParams.set("venueName", venueName);
   if (workTitle) redirectParams.set("work", slugify(workTitle));
   if (size) redirectParams.set("size", size);
   const qs = redirectParams.toString();

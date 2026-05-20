@@ -3,9 +3,12 @@
   "configurations": [
     {
       "name": "wallplace-dev",
-      "runtimeExecutable": "/opt/homebrew/Cellar/node/25.8.2/bin/node",
-      "runtimeArgs": ["/Users/finlaycoles/Wallplace/Wallplace/website/node_modules/.bin/next", "dev", "--cwd", "/Users/finlaycoles/Wallplace/Wallplace/website"],
-      "port": 3000
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "env": {
+        "NODE_EXTRA_CA_CERTS": "/etc/ssl/cert.pem"
+      }
     }
   ]
 }

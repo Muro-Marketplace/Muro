@@ -5,15 +5,56 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import type { ShippingInfo } from "@/lib/types";
 import { COUNTRIES, regionForCountry } from "@/lib/iso-countries";
 import { SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
 import { calculateOrderShipping } from "@/lib/shipping-checkout";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
+import { safeRedirect } from "@/lib/safe-redirect";
+import { isValidPostcode } from "@/lib/postcode";
+import { authFetch } from "@/lib/api-client";
+import { readQrContext } from "@/lib/qr-context";
+
+interface SavedAddressRow {
+  id: string;
+  full_name: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  postcode: string;
+  country: string;
+  is_default: boolean;
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, removeItem, updateQuantity, subtotal, ready } = useCart();
+  const { user } = useAuth();
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddressRow[]>([]);
+  // "" = picker not chosen yet; "__new" = "Use new address" picked.
+  const [savedAddressId, setSavedAddressId] = useState<string>("");
+  // Plan G #1: explicit back link, callers append ?backTo= to ensure
+  // browser-back has a known-good destination even if the history
+  // entry has been replaced (e.g. offer-accept flows that redirect
+  // through several intermediate routes).
+  const [backHref, setBackHref] = useState<string>("/browse");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = new URLSearchParams(window.location.search).get("backTo");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBackHref(safeRedirect(raw, "/browse"));
+  }, []);
+  // Cart-level error surfaced when the API rejects the cart at submit
+  // time (G2-15: a line points at a sold/deleted/re-priced work). We
+  // remove the offending line from the cart and show this banner so
+  // the buyer doesn't bounce off a generic toast and lose context.
+  const [cartError, setCartError] = useState<string | null>(null);
+  // In-flight flag on the Proceed-to-Payment button. Prevents the user
+  // from rage-clicking the button while we wait on /api/checkout, and
+  // gives the button a "Redirecting..." state so a slow Stripe round
+  // trip doesn't look like the page is hung.
+  const [submitting, setSubmitting] = useState(false);
   const [shipping, setShipping] = useState<ShippingInfo>({
     fullName: "",
     email: "",
@@ -26,11 +67,28 @@ export default function CheckoutPage() {
     notes: "",
   });
   const [errors, setErrors] = useState<Record<string, boolean>>({});
-  // Fulfilment method — buyer chooses ship (default), collection from
-  // the artist (drop-off), or digital (rare). Collection skips shipping
-  // costs and the address requirement.
+  // Fulfilment method — buyer chooses ship (default) or collection from
+  // the artist (drop-off). Collection skips shipping costs and the
+  // address requirement.
   const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection">("ship");
   const [collectionNotes, setCollectionNotes] = useState("");
+  // Buyer's preferred pickup window. Captured separately from the free
+  // notes so the artist can see a concrete day + time on the order
+  // detail page rather than digging through prose. Stored as plain
+  // strings (HTML date + time inputs) and serialised into the
+  // collection_notes string we send to the API so we don't need a
+  // migration to land this v1.
+  const [collectionDate, setCollectionDate] = useState("");
+  const [collectionTimeWindow, setCollectionTimeWindow] = useState<
+    "morning" | "afternoon" | "evening" | ""
+  >("");
+  // Per-artist "Collect from artist" availability. Buyers can only pick
+  // the collection option when every artist in the cart has opted in
+  // (artist_profiles.offers_pickup). Map is keyed by artistSlug. Starts
+  // empty; the fetch below populates it. Until it resolves we render the
+  // option but disable it, so a determined click can't beat the lookup.
+  const [pickupBySlug, setPickupBySlug] = useState<Record<string, boolean>>({});
+  const [pickupLoaded, setPickupLoaded] = useState(false);
 
   // Pre-fill the email from a QR-scan ref so the buyer doesn't have to
   // re-type it. ?ref=qr&email=foo@bar.com is the canonical form; we
@@ -42,9 +100,147 @@ export default function CheckoutPage() {
     if (typeof window === "undefined") return;
     const presetEmail = new URLSearchParams(window.location.search).get("email");
     if (presetEmail) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShipping((prev) => (prev.email ? prev : { ...prev, email: presetEmail }));
     }
   }, []);
+
+  // Saved-address book (G2-21): when the buyer is signed in, fetch their
+  // address book so the form can offer a one-click pre-fill. Guests get
+  // the original blank form. We also auto-pick the default if there is
+  // one and the address fields are still empty, so the most common case
+  // (one saved address, returning buyer) needs zero clicks.
+  useEffect(() => {
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSavedAddresses([]);
+      setSavedAddressId("");
+      return;
+    }
+    let cancelled = false;
+    authFetch("/api/customer-addresses")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const list: SavedAddressRow[] = Array.isArray(data?.addresses) ? data.addresses : [];
+        setSavedAddresses(list);
+        const def = list.find((a) => a.is_default) || list[0];
+        if (def) {
+          setSavedAddressId(def.id);
+          setShipping((prev) => (prev.addressLine1 ? prev : {
+            ...prev,
+            fullName: prev.fullName || def.full_name,
+            addressLine1: def.line1,
+            addressLine2: def.line2 || "",
+            city: def.city,
+            postcode: def.postcode,
+            country: def.country,
+          }));
+        }
+      })
+      .catch(() => { /* guest path / network blip — silently fall back to blank form */ });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Resolve which artists in the current cart offer in-person pickup.
+  // Uses the public /api/browse-artists feed (server-cached) so we don't
+  // need a bespoke lookup endpoint. Re-runs whenever the cart changes
+  // so adding a second artist mid-flow correctly hides the option if
+  // the new artist hasn't opted in.
+  useEffect(() => {
+    const slugs = Array.from(new Set(items.map((i) => i.artistSlug).filter(Boolean)));
+    if (slugs.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPickupBySlug({});
+      setPickupLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    setPickupLoaded(false);
+    fetch("/api/browse-artists", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const artists: Array<{ slug?: string; offersPickup?: boolean }> = Array.isArray(data?.artists) ? data.artists : [];
+        const next: Record<string, boolean> = {};
+        for (const slug of slugs) {
+          const match = artists.find((a) => a.slug === slug);
+          next[slug] = match?.offersPickup === true;
+        }
+        setPickupBySlug(next);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Network failure means we can't confirm consent. Default to
+        // "no pickup available" so we never accidentally book a buyer
+        // into a collection arrangement the artist hasn't agreed to.
+        const next: Record<string, boolean> = {};
+        for (const slug of slugs) next[slug] = false;
+        setPickupBySlug(next);
+      })
+      .finally(() => {
+        if (!cancelled) setPickupLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
+
+  // Pickup is offered to the buyer only when every artist in the cart
+  // has explicitly opted in. Mixed carts get shipping only — we don't
+  // try to split fulfilment per line in v1.
+  const cartArtistSlugs = useMemo(
+    () => Array.from(new Set(items.map((i) => i.artistSlug).filter(Boolean))),
+    [items],
+  );
+  const pickupAvailable =
+    pickupLoaded &&
+    cartArtistSlugs.length > 0 &&
+    cartArtistSlugs.every((s) => pickupBySlug[s] === true);
+
+  // If the user had collection selected and the cart changes such that
+  // it's no longer available, snap them back to shipping so the order
+  // can still be placed.
+  useEffect(() => {
+    if (pickupLoaded && !pickupAvailable && fulfilmentMethod === "collection") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFulfilmentMethod("ship");
+    }
+  }, [pickupLoaded, pickupAvailable, fulfilmentMethod]);
+
+  function applySavedAddress(id: string) {
+    setSavedAddressId(id);
+    if (id === "__new") {
+      setShipping((prev) => ({
+        ...prev,
+        addressLine1: "",
+        addressLine2: "",
+        city: "",
+        postcode: "",
+        country: "GB",
+      }));
+      setErrors((prev) => ({ ...prev, postcodeFormat: false }));
+      return;
+    }
+    const picked = savedAddresses.find((a) => a.id === id);
+    if (!picked) return;
+    setShipping((prev) => ({
+      ...prev,
+      fullName: picked.full_name,
+      addressLine1: picked.line1,
+      addressLine2: picked.line2 || "",
+      city: picked.city,
+      postcode: picked.postcode,
+      country: picked.country,
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      addressLine1: false,
+      city: false,
+      postcode: false,
+      postcodeFormat: false,
+    }));
+  }
 
   const region = regionForCountry(shipping.country);
 
@@ -101,12 +297,35 @@ export default function CheckoutPage() {
   const shippingCost = fulfilmentMethod === "collection" ? 0 : totalShipping;
   const total = subtotal + shippingCost;
 
+  // Pick the slowest tier across all artist groups so the static
+  // "ships within X" copy reflects the real wait. Calculator-provided
+  // estimatedDays strings already include "working days" (e.g.
+  // "2 to 3 working days"), so the surrounding template appends
+  // nothing — and the fallback is the full phrase too. We take the
+  // lexically largest as a proxy for slowest.
+  const aggregatedEstimatedDays = useMemo(() => {
+    const all = artistGroupsArr
+      .map((g) => g.estimatedDays)
+      .filter((d): d is string => !!d);
+    if (all.length === 0) return "5 to 7 working days";
+    return all.sort().slice(-1)[0];
+  }, [artistGroupsArr]);
+
   function updateField(field: keyof ShippingInfo, value: string) {
     setShipping((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => ({ ...prev, [field]: false }));
+    setErrors((prev) => {
+      const next = { ...prev, [field]: false };
+      // Editing postcode OR country should clear the format error so the
+      // user isn't stuck on a stale "wrong format" once they fix it.
+      if (field === "postcode" || field === "country") {
+        next.postcodeFormat = false;
+      }
+      return next;
+    });
   }
 
   async function handleSubmit() {
+    if (submitting) return;
     // Collection only needs name + contact; addressLine/postcode/city
     // are skipped because the artist supplies the location.
     const required: (keyof ShippingInfo)[] = fulfilmentMethod === "collection"
@@ -128,6 +347,44 @@ export default function CheckoutPage() {
       return;
     }
 
+    setCartError(null);
+    setSubmitting(true);
+
+    // For collection orders, fold the proposed date + time window into
+    // the free-text notes so the existing `collection_notes` column
+    // carries everything the artist needs. Avoids a schema migration
+    // for v1; we can promote these to dedicated columns later if the
+    // dashboard wants to surface them in a more structured way.
+    const composedCollectionNotes = (() => {
+      if (fulfilmentMethod !== "collection") return collectionNotes;
+      const lines: string[] = [];
+      if (collectionDate) {
+        const formatted = (() => {
+          try {
+            return new Date(collectionDate + "T00:00:00").toLocaleDateString(
+              "en-GB",
+              { weekday: "long", day: "numeric", month: "long", year: "numeric" },
+            );
+          } catch {
+            return collectionDate;
+          }
+        })();
+        lines.push(`Preferred date: ${formatted}`);
+      }
+      if (collectionTimeWindow) {
+        const label =
+          collectionTimeWindow === "morning"
+            ? "Morning (9am to 12pm)"
+            : collectionTimeWindow === "afternoon"
+              ? "Afternoon (12pm to 5pm)"
+              : "Evening (5pm to 8pm)";
+        lines.push(`Time of day: ${label}`);
+      }
+      const trimmed = collectionNotes.trim();
+      if (trimmed) lines.push(`Notes: ${trimmed}`);
+      return lines.join("\n");
+    })();
+
     // Create Stripe Checkout Session and redirect
     try {
       const res = await fetch("/api/checkout", {
@@ -141,23 +398,77 @@ export default function CheckoutPage() {
           // (and trusts its own number).
           expectedShippingCost: shippingCost,
           expectedSubtotal: subtotal,
-          source: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ref") || "direct" : "direct",
-          venueSlug: typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("venue") || "" : "",
+          // Read QR attribution from localStorage first (set on the
+          // artist page when the visitor arrived via /api/qr). The
+          // current URL is /checkout?backTo=…, the original `?venue=`
+          // and `?ref=` query params from the QR redirect are no longer
+          // present on this page. Falling back to URL params keeps
+          // legacy/non-QR direct deep-links working.
+          source: (typeof window !== "undefined" && (readQrContext()?.source || new URLSearchParams(window.location.search).get("ref"))) || "direct",
+          venueSlug: (typeof window !== "undefined" && (readQrContext()?.venueSlug || new URLSearchParams(window.location.search).get("venue"))) || "",
           fulfilmentMethod,
-          collectionNotes,
+          collectionNotes: composedCollectionNotes,
         }),
       });
+
+      // 409 = cart re-validation failed (G2-15). The API returns a
+      // human-readable error and the offending workId; we drop that
+      // line from the cart and surface the message rather than redirect
+      // to Stripe with a stale price.
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        const offendingId = typeof data?.workId === "string" ? data.workId : null;
+        if (offendingId) {
+          // Match by workId rather than cart-line id (CartContext
+          // generates a random "cart-..." id on add). One artwork can
+          // appear as multiple lines (different sizes / framed), drop
+          // them all so the buyer doesn't keep bouncing off the same
+          // unavailable work.
+          for (const line of items) {
+            if (line.workId === offendingId) removeItem(line.id);
+          }
+        }
+        setCartError(
+          typeof data?.error === "string"
+            ? data.error
+            : "One of the works in your cart is no longer available.",
+        );
+        setSubmitting(false);
+        return;
+      }
+
+      // Any non-2xx that isn't the 409 special-case path. The route
+      // returns a JSON `{ error }` for these (4xx schema rejections,
+      // self-purchase guard, Stripe blow-ups). Surface the message
+      // so the buyer can act on it instead of clicking a silent
+      // button repeatedly.
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setCartError(
+          typeof data?.error === "string"
+            ? data.error
+            : "Couldn't start checkout. Please try again, or get in touch if it keeps happening.",
+        );
+        setSubmitting(false);
+        return;
+      }
+
       const data = await res.json();
 
       if (data.url) {
         // Save shipping to localStorage for confirmation fallback
         localStorage.setItem("wallplace-last-shipping", JSON.stringify(shipping));
         window.location.href = data.url;
+        // Leave `submitting` true so the button stays disabled while
+        // the browser navigates to Stripe. Resetting it here flickers
+        // the label back to "Proceed to Payment" mid-redirect.
       } else {
-        setErrors({ submit: true } as Record<string, boolean>);
+        setCartError("Couldn't start checkout. Please try again, or get in touch if it keeps happening.");
+        setSubmitting(false);
       }
     } catch {
-      setErrors({ submit: true } as Record<string, boolean>);
+      setCartError("Network error. Check your connection and try again.");
+      setSubmitting(false);
     }
   }
 
@@ -222,15 +533,29 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 sm:py-10">
+      <Link
+        href={backHref}
+        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors mb-4"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <line x1="19" y1="12" x2="5" y2="12" />
+          <polyline points="12 19 5 12 12 5" />
+        </svg>
+        Back
+      </Link>
       <h1 className="text-2xl sm:text-3xl font-serif mb-6 sm:mb-8">Checkout</h1>
 
       <div className="grid lg:grid-cols-5 gap-6 sm:gap-8 lg:gap-10">
         {/* Form – 3 cols */}
         <div className="lg:col-span-3 space-y-8">
-          {/* Delivery method selector */}
+          {/* Delivery method selector. The "Collect from artist" tile is
+              only rendered when every artist in the cart has opted in
+              (artist_profiles.offers_pickup). If they haven't, we just
+              show "Ship to me" — quieter than a disabled tile that
+              advertises an unavailable option. */}
           <div>
             <h2 className="text-lg font-medium mb-4">Delivery Method</h2>
-            <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className={`grid gap-3 mb-6 ${pickupAvailable ? "grid-cols-2" : "grid-cols-1"}`}>
               <button
                 type="button"
                 onClick={() => setFulfilmentMethod("ship")}
@@ -248,26 +573,28 @@ export default function CheckoutPage() {
                   </svg>
                   <p className="text-sm font-medium">Ship to me</p>
                 </div>
-                <p className="text-xs text-muted leading-snug">Tracked delivery from the artist. 7 working days.</p>
+                <p className="text-xs text-muted leading-snug">Tracked delivery from the artist. {aggregatedEstimatedDays}.</p>
               </button>
-              <button
-                type="button"
-                onClick={() => setFulfilmentMethod("collection")}
-                className={`text-left p-4 rounded-sm border transition-colors ${
-                  fulfilmentMethod === "collection"
-                    ? "border-accent bg-accent/5"
-                    : "border-border hover:border-accent/50"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={fulfilmentMethod === "collection" ? "text-accent" : "text-muted"}>
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                    <circle cx="12" cy="10" r="3" />
-                  </svg>
-                  <p className="text-sm font-medium">Collect from artist</p>
-                </div>
-                <p className="text-xs text-muted leading-snug">No shipping costs. Arrange a pickup time after payment.</p>
-              </button>
+              {pickupAvailable && (
+                <button
+                  type="button"
+                  onClick={() => setFulfilmentMethod("collection")}
+                  className={`text-left p-4 rounded-sm border transition-colors ${
+                    fulfilmentMethod === "collection"
+                      ? "border-accent bg-accent/5"
+                      : "border-border hover:border-accent/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={fulfilmentMethod === "collection" ? "text-accent" : "text-muted"}>
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                      <circle cx="12" cy="10" r="3" />
+                    </svg>
+                    <p className="text-sm font-medium">Collect from artist</p>
+                  </div>
+                  <p className="text-xs text-muted leading-snug">No shipping costs. Arrange a pickup time after payment.</p>
+                </button>
+              )}
             </div>
           </div>
 
@@ -280,6 +607,24 @@ export default function CheckoutPage() {
                 {renderInput("email", "Email address *", "email")}
                 {renderInput("phone", "Phone number *", "tel")}
               </div>
+              {fulfilmentMethod === "ship" && savedAddresses.length > 0 && (
+                <div>
+                  <label className="block text-xs text-muted mb-1">Use a saved address</label>
+                  <select
+                    value={savedAddressId}
+                    onChange={(e) => applySavedAddress(e.target.value)}
+                    className={inputClass("savedAddress")}
+                  >
+                    {savedAddresses.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.full_name}, {a.line1}, {a.postcode}
+                        {a.is_default ? " (default)" : ""}
+                      </option>
+                    ))}
+                    <option value="__new">Use a new address</option>
+                  </select>
+                </div>
+              )}
               {fulfilmentMethod === "ship" && (
                 <>
                   {renderInput("addressLine1", "Address line 1 *")}
@@ -292,7 +637,43 @@ export default function CheckoutPage() {
                   />
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {renderInput("city", "City *")}
-                    {renderInput("postcode", "Postcode *")}
+                    {/* Postcode gets a country-aware format check on blur
+                        (G2-20). The generic required-error from renderInput
+                        is replaced inline so we can show either "required"
+                        OR "format wrong" without fighting the renderInput
+                        helper's single-error contract. */}
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="Postcode *"
+                        value={shipping.postcode || ""}
+                        onChange={(e) => updateField("postcode", e.target.value)}
+                        onBlur={() => {
+                          if (
+                            shipping.postcode &&
+                            !isValidPostcode(shipping.postcode, shipping.country)
+                          ) {
+                            setErrors((prev) => ({ ...prev, postcodeFormat: true }));
+                          } else {
+                            setErrors((prev) => ({ ...prev, postcodeFormat: false }));
+                          }
+                        }}
+                        className={inputClass(
+                          errors.postcodeFormat ? "postcodeFormat" : "postcode",
+                        )}
+                      />
+                      {errors.postcode && !errors.postcodeFormat && (
+                        <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          Postcode is required
+                        </p>
+                      )}
+                      {errors.postcodeFormat && (
+                        <p className="text-xs text-red-700 mt-1">
+                          Postcode doesn&apos;t look right for {shipping.country}. Double-check it.
+                        </p>
+                      )}
+                    </div>
                     <select
                       value={shipping.country}
                       onChange={(e) => updateField("country", e.target.value)}
@@ -315,13 +696,50 @@ export default function CheckoutPage() {
                 </>
               )}
               {fulfilmentMethod === "collection" && (
-                <textarea
-                  placeholder="Pickup notes — when works for you, anyone we should ask for? (optional)"
-                  value={collectionNotes}
-                  onChange={(e) => setCollectionNotes(e.target.value)}
-                  rows={3}
-                  className={inputClass("collectionNotes")}
-                />
+                <>
+                  <p className="text-xs text-muted -mt-1">
+                    Suggest a pickup time, the artist will confirm or
+                    propose a different one by message.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-muted mb-1">
+                        Preferred date
+                      </label>
+                      <input
+                        type="date"
+                        value={collectionDate}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => setCollectionDate(e.target.value)}
+                        className={inputClass("collectionDate")}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-muted mb-1">
+                        Time of day
+                      </label>
+                      <select
+                        value={collectionTimeWindow}
+                        onChange={(e) =>
+                          setCollectionTimeWindow(e.target.value as typeof collectionTimeWindow)
+                        }
+                        className={inputClass("collectionTimeWindow")}
+                      >
+                        <option value="">Any time</option>
+                        <option value="morning">Morning (9am to 12pm)</option>
+                        <option value="afternoon">Afternoon (12pm to 5pm)</option>
+                        <option value="evening">Evening (5pm to 8pm)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <textarea
+                    placeholder="Anything else the artist should know? (optional)"
+                    value={collectionNotes}
+                    onChange={(e) => setCollectionNotes(e.target.value)}
+                    rows={3}
+                    className={inputClass("collectionNotes")}
+                  />
+                </>
               )}
             </div>
           </div>
@@ -338,6 +756,20 @@ export default function CheckoutPage() {
             <p className="text-sm text-muted leading-relaxed">
               You&apos;ll be redirected to Stripe&apos;s secure checkout to complete your payment. We never see or store your card details.
             </p>
+            {/* Plan F #20: surface the supported payment methods at a
+                glance so buyers know they can use Apple Pay / Google Pay
+                rather than reaching for a card. Stripe Checkout itself
+                still drives the actual selection. */}
+            <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Supported payment methods">
+              {["Visa", "Mastercard", "Amex", "Apple Pay", "Google Pay"].map((method) => (
+                <span
+                  key={method}
+                  className="inline-flex items-center px-2 py-1 text-[10px] font-medium tracking-wide text-foreground/70 bg-white border border-border rounded-sm"
+                >
+                  {method}
+                </span>
+              ))}
+            </div>
           </div>
 
           {/* Artist fulfilment notice */}
@@ -348,16 +780,35 @@ export default function CheckoutPage() {
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
             <p className="text-sm text-foreground/70">
-              Your order will be fulfilled directly by the artist. They&apos;ll pack and ship your artwork within 7 working days.
+              Your order will be fulfilled directly by the artist. They&apos;ll pack and ship your artwork within {aggregatedEstimatedDays}.
             </p>
           </div>
+
+          {/* Cart-error banner (G2-15: API rejected cart because a
+              work was sold/deleted/re-priced). The offending line is
+              already removed from the cart at this point — this is
+              the user-facing breadcrumb explaining why. */}
+          {cartError && (
+            <div
+              role="alert"
+              className="bg-amber-50 border border-amber-300 rounded-sm p-4 flex gap-3"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <p className="text-sm text-amber-900">{cartError}</p>
+            </div>
+          )}
 
           {/* Submit */}
           <button
             onClick={handleSubmit}
-            className="w-full px-6 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors"
+            disabled={submitting}
+            className="w-full px-6 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:bg-accent/60 disabled:cursor-not-allowed"
           >
-            Proceed to Payment – £{total.toFixed(2)}
+            {submitting ? "Redirecting to Stripe..." : `Proceed to Payment, £${total.toFixed(2)}`}
           </button>
         </div>
 
@@ -376,7 +827,9 @@ export default function CheckoutPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
                     <p className="text-xs text-muted">{item.artistName}</p>
-                    {item.size && <p className="text-xs text-muted">{formatSizeLabelForDisplay(item.size)}</p>}
+                    {item.size && formatSizeLabelForDisplay(item.size) && (
+                      <p className="text-xs text-muted">{formatSizeLabelForDisplay(item.size)}</p>
+                    )}
                     <div className="flex items-center justify-between mt-1.5 gap-2 flex-wrap">
                       {/* Per-line quantity stepper so buyers can grab
                           N of a specific size without going back to
@@ -433,7 +886,7 @@ export default function CheckoutPage() {
                 <span>{shippingCost === 0 ? "Free" : `£${shippingCost.toFixed(2)}`}</span>
               </div>
               {shippingCost > 0 && (
-                <div className="space-y-1 pl-2">
+                <div className="space-y-2 pl-2">
                   {Object.values(artistGroups).map((group) => (
                     <div key={group.artistName} className="text-[10px] text-muted">
                       <div className="flex justify-between">
@@ -448,6 +901,9 @@ export default function CheckoutPage() {
                           {group.needsSignature ? " · Signed-for" : ""}
                         </p>
                       )}
+                      <p className="text-[11px] text-muted mt-1">
+                        {group.artistName} ships within {group.estimatedDays || "5 to 7 working days"}.
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -461,20 +917,13 @@ export default function CheckoutPage() {
                 <span>Total</span>
                 <span>£{total.toFixed(2)}</span>
               </div>
-              {/* Handling time expectation, artists are expected to dispatch
-                  within 7 days. Sets buyer expectation pre-purchase so they
-                  don't message at day 3 worrying the order is lost. */}
-              <div className="pt-3 mt-2 border-t border-border">
-                <div className="flex items-start gap-2 text-[11px] text-muted">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5 text-accent">
-                    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  <div>
-                    <span className="text-foreground font-medium">Dispatched within 7 days.</span>{" "}
-                    Most orders arrive within 5&ndash;10 working days once dispatched. Orders of &pound;{SIGNATURE_THRESHOLD_GBP}+ are sent signed-for.
-                  </div>
-                </div>
-              </div>
+              {/* Per-artist fulfilment time replaces the misleading single
+                  notice. Signature note kept here as it's order-wide. */}
+              {shippingCost > 0 && (
+                <p className="text-[10px] text-muted pt-2 mt-1 border-t border-border">
+                  Orders of &pound;{SIGNATURE_THRESHOLD_GBP}+ are sent signed-for.
+                </p>
+              )}
             </div>
           </div>
         </div>

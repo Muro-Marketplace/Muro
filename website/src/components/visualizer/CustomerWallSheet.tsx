@@ -26,7 +26,8 @@
  *   This component assumes it's reachable.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
 import type { PanelWork } from "./WorksPanel";
@@ -46,6 +47,17 @@ interface Props {
 
 export default function CustomerWallSheet({ open, onClose, work }: Props) {
   const { session } = useAuth();
+  // Portal target. The sheet's mount point (ArtworkPageClient) lives
+  // inside a `lg:sticky` ancestor, and `position: sticky` creates a
+  // stacking context — so a `position: fixed z-[120]` child rendered
+  // inline still ends up *under* the global header (z-100 at root).
+  // Rendering into document.body via a portal escapes that and lets
+  // the sheet sit above the rest of the page predictably.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   // Esc to close + body-scroll lock.
   useEffect(() => {
@@ -62,21 +74,22 @@ export default function CustomerWallSheet({ open, onClose, work }: Props) {
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={`View ${work.title} on a wall`}
-      // pt-14/lg:pt-20 keeps the modal header clear of the global
-      // nav bar (which is sticky at h-14 lg:h-16). Without this the
-      // sheet's "View on a wall" title gets clipped by the nav.
-      className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-stretch sm:items-start justify-center pt-14 sm:pt-20 sm:px-6 sm:pb-6"
+      // Sheet covers the viewport edge-to-edge so the underlying
+      // artwork page (image, "More by this artist" grid, etc.) can't
+      // bleed through. Sits above the global nav (z-100) at z-[120];
+      // closing restores the nav.
+      className="fixed inset-0 z-[120] bg-stone-50 flex items-stretch justify-center"
       onClick={onClose}
     >
       <div
-        className="relative w-full sm:max-w-6xl bg-stone-50 sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col h-full sm:h-[calc(100vh-100px)]"
+        className="relative w-full bg-stone-50 shadow-2xl overflow-hidden flex flex-col h-full"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -115,6 +128,7 @@ export default function CustomerWallSheet({ open, onClose, work }: Props) {
           />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

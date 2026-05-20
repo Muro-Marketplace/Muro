@@ -10,6 +10,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { authFetch } from "@/lib/api-client";
+import { displayPhysicalDimensions } from "@/lib/dimensions";
 
 interface EnrichedWork {
   id: string;
@@ -264,7 +265,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
     <div className="space-y-3">
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {offers.map((o) => {
+      {offers.map((o, offerIndex) => {
         const iAmBuyer = o.buyer_user_id === viewerUserId;
         const iAmArtist = o.artist_user_id === viewerUserId;
         // Sender = whoever made *this* offer/counter. Falls back to
@@ -301,6 +302,9 @@ export default function OffersList({ viewerUserId, filter }: Props) {
             <div className="flex flex-col sm:flex-row">
               {primaryWork?.image && (
                 <div className="relative w-full sm:w-32 h-32 shrink-0 bg-foreground/5">
+                  {/* Above-fold offers (first few cards) load eagerly
+                      so the visible row isn't blank when the user
+                      lands. Anything below the fold stays lazy. */}
                   <Image
                     src={primaryWork.image}
                     alt={primaryWork.title}
@@ -308,6 +312,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                     className="object-cover"
                     sizes="128px"
                     unoptimized
+                    priority={offerIndex < 3}
                   />
                   {works.length > 1 && (
                     <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/65 text-white rounded-sm text-[10px]">
@@ -340,34 +345,56 @@ export default function OffersList({ viewerUserId, filter }: Props) {
 
                 {works.length > 0 && (
                   <ul className="space-y-0.5 mb-3">
-                    {works.map((w) => (
-                      <li key={w.id} className="text-[11px] text-muted">
-                        <span className="text-foreground/80 font-medium">{w.title}</span>
-                        {w.dimensions ? ` · ${w.dimensions}` : ""}
-                        {w.medium ? ` · ${w.medium}` : ""}
-                      </li>
-                    ))}
+                    {works.map((w) => {
+                      // displayPhysicalDimensions strips pixel-format
+                      // dimensions ("2420 × 3632 px") that came from
+                      // the uploaded image rather than a physical-size
+                      // field, those are useless to a venue choosing
+                      // a print. Cm / inch / A-sized labels pass
+                      // through unchanged.
+                      const dims = displayPhysicalDimensions(w.dimensions);
+                      return (
+                        <li key={w.id} className="text-[11px] text-muted">
+                          <span className="text-foreground/80 font-medium">{w.title}</span>
+                          {dims ? ` · ${dims}` : ""}
+                          {w.medium ? ` · ${w.medium}` : ""}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
 
                 {o.message && (
-                  <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap mb-3">
-                    &ldquo;{o.message}&rdquo;
-                  </p>
+                  <div className="mb-3">
+                    {/* Label the quote so a stale message left behind
+                        by an earlier counter doesn't read as the
+                        latest position. QA flagged a card showing
+                        "come on pls its only 8p" next to an £18.02
+                        offer, the message was from a previous round.
+                        Tagging it as "Original message" gives the
+                        reader the right frame: this is what was said
+                        when, not what the offer means now. */}
+                    <p className="text-[10px] uppercase tracking-wider text-muted mb-1">
+                      Original message
+                    </p>
+                    <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                      &ldquo;{o.message}&rdquo;
+                    </p>
+                  </div>
                 )}
 
                 <footer className="flex flex-wrap gap-2 pt-2 border-t border-border">
-                  {/* Recipient of an open offer: accept, counter, or
-                      decline. "Recipient" is the side that did not
-                      create this row — derived from created_by_user_id.
-                      Both venue and artist see the full trio when
-                      they're the recipient: a venue receiving an
-                      artist's counter needs Accept and Decline as
-                      much as the artist does on the original offer.
-                      Earlier we restricted Accept/Decline to the
-                      artist, which broke counter negotiation entirely
-                      from the venue's side. */}
-                  {iAmRecipient && (o.status === "pending" || o.status === "countered") && (
+                  {/* Action buttons only fire on the LIVE offer row,
+                      status="pending". A "countered" row is the prior
+                      offer that's been superseded by a newer counter,
+                      so any action on it is stale. QA flagged the
+                      same offer in a chain showing Accept/Counter/
+                      Decline on the live child plus Withdraw on the
+                      countered parent, which let users withdraw a
+                      counter that had already been replied to. The
+                      live child carries the actionable state; the
+                      parent is history. */}
+                  {iAmRecipient && o.status === "pending" && (
                     <>
                       <button
                         type="button"
@@ -395,11 +422,11 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                       </button>
                     </>
                   )}
-                  {/* Sender of an open offer: just withdraw. Lets
-                      either side pull their own offer/counter without
-                      the API rejecting an artist trying to withdraw
-                      their own counter. */}
-                  {iAmSender && (o.status === "pending" || o.status === "countered") && (
+                  {/* Sender of an open offer: just withdraw. Only on
+                      pending rows; a "countered" row has already been
+                      responded to and the sender's pull-back path is
+                      now to withdraw the live counter row instead. */}
+                  {iAmSender && o.status === "pending" && (
                     <button
                       type="button"
                       onClick={() => act(o.id, "withdraw")}
@@ -416,7 +443,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                       disabled={busyId === o.id}
                       className="px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent/90 rounded-sm transition-colors disabled:opacity-60"
                     >
-                      Complete payment — {formatted}
+                      Complete payment, {formatted}
                     </button>
                   )}
                   {o.status === "paid" && (
@@ -447,12 +474,28 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                 type="number"
                 inputMode="decimal"
                 step="0.01"
+                min="0.01"
                 value={counterAmount}
                 onChange={(e) => setCounterAmount(e.target.value)}
                 className="w-full pl-7 pr-3 py-3 bg-background border border-border rounded-sm text-base focus:outline-none focus:border-accent/60"
                 autoFocus
               />
             </div>
+            {(() => {
+              // Lightweight inline guard so the artist sees a hint
+              // before tapping Send (the button is also disabled below
+              // when the value isn't positive). Keeps the bug "Counter
+              // accepted negative price" from sneaking past the keypad.
+              const amt = parseFloat(counterAmount);
+              if (counterAmount && (!Number.isFinite(amt) || amt <= 0)) {
+                return (
+                  <p className="text-xs text-red-600 mt-1.5">
+                    Counter price must be greater than zero.
+                  </p>
+                );
+              }
+              return null;
+            })()}
             <label htmlFor="counter-message" className="block text-xs uppercase tracking-wider text-muted mb-1.5 mt-4">Message <span className="normal-case text-muted/70">(optional)</span></label>
             <textarea
               id="counter-message"
@@ -463,14 +506,20 @@ export default function OffersList({ viewerUserId, filter }: Props) {
               className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60 resize-y"
             />
             <div className="flex gap-2 mt-5">
-              <button
-                type="button"
-                onClick={submitCounter}
-                disabled={busyId === counterFor.id}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent/90 rounded-sm transition-colors disabled:opacity-60"
-              >
-                {busyId === counterFor.id ? "Sending…" : "Send counter"}
-              </button>
+              {(() => {
+                const amt = parseFloat(counterAmount);
+                const validAmount = Number.isFinite(amt) && amt > 0;
+                return (
+                  <button
+                    type="button"
+                    onClick={submitCounter}
+                    disabled={busyId === counterFor.id || !validAmount}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent/90 rounded-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {busyId === counterFor.id ? "Sending…" : "Send counter"}
+                  </button>
+                );
+              })()}
               <button
                 type="button"
                 onClick={() => setCounterFor(null)}

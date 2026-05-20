@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch } from "@/lib/api-client";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import { useToast } from "@/context/ToastContext";
+import { useConfirm } from "@/context/ConfirmContext";
 
 interface Application {
   id: string;
@@ -46,6 +49,8 @@ export default function AdminApplicationsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState("");
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
 
   async function loadApplications() {
     setLoading(true);
@@ -70,8 +75,22 @@ export default function AdminApplicationsPage() {
   }, [activeTab]);
 
   async function handleAction(id: string, action: "accept" | "reject") {
-    if (action === "accept" && !confirm("Accept this artist? An invite email will be sent.")) return;
-    if (action === "reject" && !confirm("Reject this application?")) return;
+    if (action === "accept") {
+      const ok = await confirm({
+        title: "Accept this artist?",
+        body: "An invite email will be sent.",
+        confirmLabel: "Accept",
+      });
+      if (!ok) return;
+    }
+    if (action === "reject") {
+      const ok = await confirm({
+        title: "Reject this application?",
+        confirmLabel: "Reject",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
 
     setActionLoading(id);
     try {
@@ -91,10 +110,10 @@ export default function AdminApplicationsPage() {
         loadApplications();
         setExpandedId(null);
       } else {
-        alert(data.error || "Action failed");
+        showToast(data.error || "Action failed", { variant: "error" });
       }
     } catch {
-      alert("Network error");
+      showToast("Network error", { variant: "error" });
     }
     setActionLoading(null);
   }
@@ -247,9 +266,9 @@ export default function AdminApplicationsPage() {
                         <p className="text-xs text-muted uppercase tracking-wider mb-1">Arrangements</p>
                         <div className="flex flex-wrap gap-1.5">
                           {[
-                            app.open_to_free_loan && "Paid Loan",
-                            app.open_to_revenue_share && "Revenue Share",
-                            app.open_to_purchase && "Purchase",
+                            app.open_to_free_loan && ARRANGEMENT_LABEL.paid_loan,
+                            app.open_to_revenue_share && ARRANGEMENT_LABEL.revenue_share,
+                            app.open_to_purchase && ARRANGEMENT_LABEL.purchase,
                           ].filter(Boolean).map((o) => (
                             <span key={o as string} className="px-2 py-0.5 text-[10px] bg-surface text-muted border border-border rounded-sm">{o}</span>
                           ))}

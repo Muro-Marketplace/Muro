@@ -7,7 +7,9 @@ const footerColumns = [
     links: [
       { label: "Apply to Join", href: "/apply" },
       { label: "Pricing", href: "/pricing" },
-      { label: "Venue Demand", href: "/spaces-looking-for-art" },
+      { label: "Venue Demand", href: "/spaces" },
+      { label: "Artwork Requests", href: "/artwork-requests" },
+      { label: "Browse Venues", href: "/venues" },
       { label: "FAQs", href: "/faqs" },
     ],
   },
@@ -15,7 +17,7 @@ const footerColumns = [
     title: "For Venues",
     links: [
       { label: "Discover Art", href: "/browse" },
-      { label: "Register Your Venue", href: "/register-venue" },
+      { label: "Register Your Venue", href: "/signup/venue" },
       { label: "Wallplace Curated", href: "/curated" },
       { label: "How It Works", href: "/how-it-works" },
       { label: "FAQs", href: "/faqs" },
@@ -30,6 +32,7 @@ const footerColumns = [
       { label: "Sustainability", href: "/sustainability" },
       { label: "Partner with us", href: "/partners" },
       { label: "Contact", href: "/contact" },
+      { label: "Complaints", href: "/complaints" },
       { label: "Terms", href: "/terms" },
       { label: "Artist Agreement", href: "/artist-agreement" },
       { label: "Venue Agreement", href: "/venue-agreement" },

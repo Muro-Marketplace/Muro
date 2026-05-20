@@ -11,6 +11,10 @@ interface LabelPreviewProps {
   /** Initial per-label show flags. Index-parallel to `labels`. If
    *  omitted, defaults are derived from each label's data presence. */
   initialVisibility?: LabelVisibility[];
+  /** Premium+ colour theme id from the artist's profile. Passed
+   *  straight through to LabelSheet → QRLabel. Falls back to default
+   *  classic when undefined. */
+  labelTheme?: string;
   onClose: () => void;
 }
 
@@ -18,6 +22,7 @@ export default function LabelPreview({
   labels: initialLabels,
   availableSizes = [],
   initialVisibility,
+  labelTheme,
   onClose,
 }: LabelPreviewProps) {
   const [labels, setLabels] = useState<LabelData[]>(initialLabels);
@@ -68,7 +73,7 @@ export default function LabelPreview({
       <div className="label-preview-toolbar no-print border-b border-border bg-surface px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-sm font-medium text-foreground">
-            Print Preview – {totalCount} label{totalCount !== 1 ? "s" : ""}
+            Print Preview, {totalCount} label{totalCount !== 1 ? "s" : ""}
           </h2>
           {/* Style + size pills so the venue/artist can verify what
               they're about to send to the printer at a glance. The
@@ -246,7 +251,7 @@ export default function LabelPreview({
               ))}
 
               {labels.length === 0 && (
-                <p className="text-sm text-muted text-center py-8">No labels – close and select some works.</p>
+                <p className="text-sm text-muted text-center py-8">No labels. Close and select some works.</p>
               )}
             </div>
           )}
@@ -273,7 +278,7 @@ export default function LabelPreview({
                   <div className="no-print absolute top-2 right-3 text-[10px] text-muted/50">
                     Page {pageIdx + 1} of {pageCount}
                   </div>
-                  <LabelSheet labels={labels} labelVisibility={labelVisibility} pageIndex={pageIdx} />
+                  <LabelSheet labels={labels} labelVisibility={labelVisibility} pageIndex={pageIdx} labelTheme={labelTheme} />
                 </div>
                 </div>
               ))}

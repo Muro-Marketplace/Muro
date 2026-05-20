@@ -111,8 +111,12 @@ describe("placementSchema", () => {
     expect(placementSchema.safeParse(base).success).toBe(true);
   });
 
-  it("rejects unknown type (only free_loan/revenue_share/purchase)", () => {
+  it("rejects unknown type (only free_loan/paid_loan/revenue_share/purchase)", () => {
     expect(placementSchema.safeParse({ ...base, type: "gift" }).success).toBe(false);
+  });
+
+  it("accepts type=paid_loan", () => {
+    expect(placementSchema.safeParse({ ...base, type: "paid_loan" }).success).toBe(true);
   });
 
   it("revenueSharePercent must be 0–100", () => {
@@ -151,6 +155,20 @@ describe("placementUpdateSchema", () => {
 
   it("counter.revenueSharePercent still 0–100", () => {
     expect(placementUpdateSchema.safeParse({ id: "p1", counter: { revenueSharePercent: 150 } }).success).toBe(false);
+  });
+
+  it("counter.arrangementType=paid_loan is accepted", () => {
+    const r = placementUpdateSchema.safeParse({
+      id: "p1",
+      counter: { arrangementType: "paid_loan", monthlyFeeGbp: 50 },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("counter.arrangementType rejects unknown values", () => {
+    expect(
+      placementUpdateSchema.safeParse({ id: "p1", counter: { arrangementType: "barter" } }).success,
+    ).toBe(false);
   });
 });
 
@@ -213,6 +231,125 @@ describe("checkoutSchema", () => {
     const { email: _, ...noEmail } = validShipping;
     void _;
     expect(checkoutSchema.safeParse({ items: [validItem], shipping: noEmail }).success).toBe(false);
+  });
+});
+
+describe("checkoutSchema fulfilment branches", () => {
+  // Collection fulfilment ("Collect from artist") skips delivery — buyer
+  // picks up in person, so the address fields are NOT required server-side.
+  // Without this branch the schema rejects the legitimate POST and the
+  // page shows a generic "Cart items and shipping required" toast.
+  const validItem = {
+    title: "Print",
+    artistName: "Maya",
+    size: "A3",
+    price: 100,
+    quantity: 1,
+  };
+  const fullShipping = {
+    fullName: "Oliver Grant",
+    email: "oliver@x.com",
+    phone: "07700900000",
+    addressLine1: "42 Calvert Ave",
+    city: "London",
+    postcode: "E2 7JP",
+    country: "United Kingdom",
+  };
+  const collectionContact = {
+    fullName: "Oliver Grant",
+    email: "oliver@x.com",
+    phone: "07700900000",
+    country: "United Kingdom",
+  };
+
+  it("requires address fields when fulfilmentMethod is ship", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "ship",
+      shipping: { ...collectionContact }, // no addressLine1/city/postcode
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("does NOT require address fields when fulfilmentMethod is collection", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "collection",
+      shipping: { ...collectionContact }, // no address — should still pass
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects collection with garbage address (still validates if provided)", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "collection",
+      shipping: { ...collectionContact, addressLine1: "x".repeat(600) },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("defaults to ship when fulfilmentMethod is omitted (back-compat)", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      shipping: fullShipping,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("ship branch still requires email + name + phone", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "ship",
+      shipping: { ...fullShipping, email: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("collection branch still requires email + name + phone", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "collection",
+      shipping: { ...collectionContact, email: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts collectionNotes on the collection branch", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "collection",
+      shipping: collectionContact,
+      collectionNotes: "Available weekday evenings",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("ship branch enforces addressLine1 length cap", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "ship",
+      shipping: { ...fullShipping, addressLine1: "x".repeat(600) },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("ship branch rejects garbage postcode for GB country", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "ship",
+      shipping: { ...fullShipping, postcode: "ab", country: "GB" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("ship branch accepts valid postcode for GB country", () => {
+    const result = checkoutSchema.safeParse({
+      items: [validItem],
+      fulfilmentMethod: "ship",
+      shipping: { ...fullShipping, postcode: "SW1A 1AA", country: "GB" },
+    });
+    expect(result.success).toBe(true);
   });
 });
 

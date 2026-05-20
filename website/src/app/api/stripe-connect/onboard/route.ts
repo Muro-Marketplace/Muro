@@ -14,7 +14,26 @@ export async function POST(request: Request) {
 
   const db = getSupabaseAdmin();
   const table = accountType === "venue" ? "venue_profiles" : "artist_profiles";
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
+  // Prefer the configured public URL, fall back to the request origin
+  // so onboarding still works in preview deploys / environments where
+  // NEXT_PUBLIC_SITE_URL hasn't been wired up. Stripe rejects account
+  // links with non-https URLs, so we strip any trailing slash and drop
+  // through to the request origin if the env var is empty or malformed.
+  const envSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
+  const requestOrigin = (() => {
+    try {
+      return new URL(request.url).origin;
+    } catch {
+      return "";
+    }
+  })();
+  const siteUrl = /^https?:\/\//.test(envSiteUrl) ? envSiteUrl : requestOrigin;
+  if (!siteUrl) {
+    return NextResponse.json(
+      { error: "Site URL not configured. Contact support so we can finish setting up payouts." },
+      { status: 500 },
+    );
+  }
 
   // Look up the profile for this user
   const { data: profile, error: profileError } = await db
@@ -31,29 +50,43 @@ export async function POST(request: Request) {
 
   // Create Express account if one doesn't exist yet
   if (!accountId) {
-    const account = await stripe.accounts.create({
-      type: "express",
-      country: "GB",
-      email: user.email,
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_profile: {
-        name: "Wallplace",
-        product_description:
-          accountType === "venue"
-            ? "Venue receiving artwork sales via Wallplace marketplace"
-            : "Artist selling original artwork via Wallplace marketplace",
-        url: process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.art",
-      },
-      settings: {
-        payouts: { statement_descriptor: "WALLPLACE" },
-      },
-      metadata: { user_id: user.id, account_type: accountType, platform: "wallplace" },
-    });
+    try {
+      const account = await stripe.accounts.create({
+        type: "express",
+        country: "GB",
+        email: user.email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_profile: {
+          name: "Wallplace",
+          product_description:
+            accountType === "venue"
+              ? "Venue receiving artwork sales via Wallplace marketplace"
+              : "Artist selling original artwork via Wallplace marketplace",
+          url: siteUrl,
+        },
+        settings: {
+          payouts: { statement_descriptor: "WALLPLACE" },
+        },
+        metadata: { user_id: user.id, account_type: accountType, platform: "wallplace" },
+      });
 
-    accountId = account.id;
+      accountId = account.id;
+    } catch (err) {
+      // Common cause: Stripe Connect isn't enabled on the platform
+      // account, or the requested capabilities aren't available. Without
+      // this catch the route 500s and the client shows a generic alert
+      // with no explanation. Surface Stripe's message verbatim so the
+      // operator can act.
+      console.error("Stripe accounts.create error:", err);
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Couldn't create Stripe Connect account. Contact support.";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
 
     // Store the account ID on the profile
     const { error: updateErr } = await db

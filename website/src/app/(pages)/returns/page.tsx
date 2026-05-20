@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Returns & Refunds – Wallplace",
+  title: "Returns and Refunds",
   description:
     "Wallplace Returns & Refunds Policy. Your rights, how to return artwork, and how refunds are processed.",
 };
@@ -60,7 +60,7 @@ export default function ReturnsPage() {
                 <div className="text-muted leading-relaxed">
                   <ul className="list-disc pl-6 space-y-2">
                     <li>Refund requests are typically reviewed within 5 business days</li>
-                    <li>Approved refunds are processed via Stripe and appear on your statement within 5&ndash;10 business days</li>
+                    <li>Approved refunds are processed via Stripe and appear on your statement within 5 to 10 business days</li>
                     <li>If a refund request is rejected, you will receive a reason and can escalate via our <a href="/complaints" className="text-accent hover:underline">dispute resolution process</a></li>
                   </ul>
                 </div>

@@ -40,6 +40,7 @@ export default function VenueAnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     authFetch(`/api/analytics/venue?range=${dateRangeToParam(dateRange)}`)
       .then((r) => r.json())
@@ -124,24 +125,55 @@ export default function VenueAnalyticsPage() {
             <p className="text-sm text-muted">No scans yet. Print QR labels for your placements and we&rsquo;ll start tracking them here.</p>
           ) : (
             <div className="bg-surface border border-border rounded-sm divide-y divide-border">
-              {data.top_works.map((w) => (
-                <div key={w.work_id} className="px-4 py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-foreground truncate">{w.title}</p>
-                    {w.artist_slug && (
-                      <Link
-                        href={`/browse/${w.artist_slug}`}
-                        className="text-xs text-accent hover:text-accent-hover"
+              {data.top_works.map((w) => {
+                // The analytics API sometimes returns rows whose work_id
+                // no longer joins back to a current artist_works row
+                // (work deleted, or the scan was logged before the work
+                // existed). Showing "Unknown work" reads as a bug to
+                // the venue, so swap in clearer copy and drop the
+                // "View artist" link when we don't have a slug either.
+                const titleRaw = (w.title || "").trim();
+                const looksMissing =
+                  !titleRaw ||
+                  titleRaw.toLowerCase() === "unknown work" ||
+                  titleRaw.toLowerCase() === "unknown";
+                const displayTitle = looksMissing
+                  ? "Artwork no longer available"
+                  : titleRaw;
+                return (
+                  <div
+                    key={w.work_id}
+                    className="px-4 py-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p
+                        className={`text-sm truncate ${
+                          looksMissing ? "text-muted italic" : "text-foreground"
+                        }`}
                       >
-                        View artist →
-                      </Link>
-                    )}
+                        {displayTitle}
+                      </p>
+                      {!looksMissing && w.artist_slug && (
+                        <Link
+                          href={`/browse/${w.artist_slug}`}
+                          className="text-xs text-accent hover:text-accent-hover"
+                        >
+                          View artist →
+                        </Link>
+                      )}
+                      {looksMissing && (
+                        <p className="text-[11px] text-muted/80 mt-0.5">
+                          Scans recorded against a work that has since
+                          been removed or reassigned.
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-foreground shrink-0">
+                      {w.scans} scan{w.scans === 1 ? "" : "s"}
+                    </p>
                   </div>
-                  <p className="text-sm font-medium text-foreground shrink-0">
-                    {w.scans} scan{w.scans === 1 ? "" : "s"}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

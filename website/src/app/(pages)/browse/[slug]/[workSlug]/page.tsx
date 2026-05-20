@@ -6,6 +6,7 @@ import { slugify } from "@/lib/slugify";
 import { getArtistBySlug } from "@/lib/db/merged-data";
 import ArtworkPageClient from "./ArtworkPageClient";
 import ArtworkImageViewer from "@/components/ArtworkImageViewer";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import type { Metadata } from "next";
 
 // Static params for seed artists, database artists use dynamic fallback
@@ -32,17 +33,17 @@ export async function generateMetadata({
   try {
     artist = await getArtistBySlug(slug);
   } catch {
-    return { title: "Artwork – Wallplace" };
+    return { title: "Artwork" };
   }
 
   if (!artist) {
-    return { title: "Artwork Not Found – Wallplace" };
+    return { title: "Artwork not found" };
   }
 
   const work = artist.works.find((w) => slugify(w.title) === workSlug);
 
   if (!work) {
-    return { title: "Artwork Not Found – Wallplace" };
+    return { title: "Artwork not found" };
   }
 
   const description = work.description && work.description.trim()
@@ -50,17 +51,17 @@ export async function generateMetadata({
     : `${work.title}, ${work.medium}, ${work.dimensions}. ${work.available ? "Available" : "Sold"}. By ${artist.name} on Wallplace.`;
 
   return {
-    title: `${work.title} by ${artist.name} – Wallplace`,
+    title: `${work.title} by ${artist.name} | Wallplace`,
     description,
     openGraph: {
-      title: `${work.title} by ${artist.name} – Wallplace`,
+      title: `${work.title} by ${artist.name} | Wallplace`,
       description,
       images: work.image ? [{ url: work.image, width: 800, height: 800 }] : [],
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: `${work.title} by ${artist.name} – Wallplace`,
+      title: `${work.title} by ${artist.name} | Wallplace`,
       description,
       images: work.image ? [work.image] : [],
     },
@@ -72,7 +73,7 @@ export default async function ArtworkPage({
   searchParams,
 }: {
   params: Promise<{ slug: string; workSlug: string }>;
-  searchParams: Promise<{ ref?: string; venue?: string }>;
+  searchParams: Promise<{ ref?: string; venue?: string; from?: string }>;
 }) {
   const { slug, workSlug } = await params;
   const query = await searchParams;
@@ -140,20 +141,27 @@ export default async function ArtworkPage({
 
   return (
     <div className="bg-background">
-      {/* Breadcrumb */}
+      {/* Breadcrumb. Reflect the tab the visitor came from when we
+          know it (Galleries/Portfolios/Collections from `?from=`); the
+          neutral "Artists" label is the default because a portfolio
+          artist landing on "Galleries › Maya Chen" reads as wrong.
+          Honouring `?from=` keeps the back-link visually consistent
+          with where they actually came from. */}
       <section className="pt-5 pb-1">
         <div className="max-w-[1240px] mx-auto px-6">
-          <nav className="flex items-center gap-1.5 text-[11px] text-muted uppercase tracking-wider">
-            <Link href="/browse" className="hover:text-foreground transition-colors">
-              Browse
-            </Link>
-            <span className="opacity-50">/</span>
-            <Link href={`/browse/${slug}`} className="hover:text-foreground transition-colors">
-              {artist.name}
-            </Link>
-            <span className="opacity-50">/</span>
-            <span className="text-foreground normal-case tracking-normal font-serif">{work.title}</span>
-          </nav>
+          <Breadcrumbs
+            items={[
+              query.from === "portfolios"
+                ? { label: "Portfolios", href: "/browse?view=portfolios" }
+                : query.from === "collections"
+                  ? { label: "Collections", href: "/browse?view=collections" }
+                  : query.from === "galleries"
+                    ? { label: "Galleries", href: "/browse" }
+                    : { label: "Artists", href: "/browse" },
+              { label: artist.name, href: `/browse/${slug}` },
+              { label: work.title },
+            ]}
+          />
         </div>
       </section>
 

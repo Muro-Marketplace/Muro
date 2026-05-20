@@ -13,6 +13,8 @@ import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
 import ArtworkThumb from "@/components/ArtworkThumb";
 import MakeOfferModal from "@/components/offers/MakeOfferModal";
+import { saveQrContext } from "@/lib/qr-context";
+import { getProfileTheme, themeCssVars, canCustomiseTheme, DEFAULT_PROFILE_THEME } from "@/lib/profile-themes";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 
@@ -22,6 +24,10 @@ interface ArtistProfileClientProps {
   extendedBio: string;
   themes: string[];
   works: ArtistWork[];
+  /** Premium+ profile theme id. Ignored if the artist is on Core. */
+  profileTheme?: string;
+  /** Subscription tier, drives the Premium+ theming gate. */
+  subscriptionPlan?: string;
 }
 
 export default function ArtistProfileClient({
@@ -30,6 +36,8 @@ export default function ArtistProfileClient({
   extendedBio,
   themes,
   works,
+  profileTheme,
+  subscriptionPlan,
 }: ArtistProfileClientProps) {
   const router = useRouter();
   const { addItem } = useCart();
@@ -75,6 +83,22 @@ export default function ArtistProfileClient({
     });
   }
 
+  // Theme-filtered works, declared up front so downstream computations
+  // (selectedWorks, handleBulkBuyNow, handleRequestPlacement) can read
+  // them without hitting a temporal dead zone when state changes. The
+  // earlier layout declared this further down the component, which
+  // worked while `selectedForPlacement` was empty (the .map callback
+  // never ran) but crashed the page the moment the first tick was
+  // ticked, surfacing as the "We couldn't load this artist's profile"
+  // error boundary.
+  const filteredWorks =
+    activeTheme === "All"
+      ? works
+      : works.filter((w) => {
+          const haystack = `${w.title} ${w.medium}`.toLowerCase();
+          return haystack.includes(activeTheme.toLowerCase());
+        });
+
   // Selected works as resolved ArtistWork records, in array order. Used
   // by the bulk Buy Now / Make Offer flows so we don't recompute the
   // map in three places.
@@ -119,7 +143,7 @@ export default function ArtistProfileClient({
       if (result.ok) okCount++;
     }
     if (okCount > 0) {
-      router.push("/checkout");
+      router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
     } else {
       showToast("Couldn't add any of these works to the cart.");
     }
@@ -170,6 +194,7 @@ export default function ArtistProfileClient({
     if (workParam && works.length > 0 && lightboxIndex === null) {
       const index = works.findIndex((w) => slugify(w.title) === workParam || w.id === workParam);
       if (index >= 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLightboxIndex(index);
         // Pre-select size if specified in URL
         if (qrSize) {
@@ -182,14 +207,6 @@ export default function ArtistProfileClient({
   }, [searchParams, works, lightboxIndex, qrSize]);
 
   const allThemes = ["All", ...themes];
-
-  const filteredWorks =
-    activeTheme === "All"
-      ? works
-      : works.filter((w) => {
-          const haystack = `${w.title} ${w.medium}`.toLowerCase();
-          return haystack.includes(activeTheme.toLowerCase());
-        });
 
   // Keyboard navigation for lightbox
   const handleKeyDown = useCallback(
@@ -207,6 +224,7 @@ export default function ArtistProfileClient({
 
   // Reset fullscreen when lightbox closes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (lightboxIndex === null) setIsFullscreen(false);
   }, [lightboxIndex]);
 
@@ -285,19 +303,66 @@ export default function ArtistProfileClient({
   const currentWork = lightboxIndex !== null ? filteredWorks[lightboxIndex] : null;
 
   // QR-scan venue banner (#8). When the visitor has just scanned a
-  // QR code at a venue, the redirect carries `?ref=qr&venue=…`. We
-  // show a small "Seen in [venue name]" line at the top of the
-  // portfolio so the visitor has the context the physical scan
-  // gives them, and the venue gets a soft brand mention on the
-  // page that landed them here.
-  const qrVenueName = isQrScan ? searchParams.get("venue") : null;
+  // QR code at a venue, the redirect carries `?ref=qr&venue=<slug>
+  // &venueName=<display>`. We show a small "Seen in [venue name]"
+  // line at the top of the portfolio so the visitor has the context
+  // the physical scan gives them, and the venue gets a soft brand
+  // mention on the page that landed them here.
+  //
+  // Legacy fallback: older QR redirects put the display name in the
+  // `venue` slot. If `venueName` is missing we use whatever's there
+  // so the banner still reads sensibly. The slug-vs-name split is
+  // necessary because the checkout API needs the slug to credit the
+  // venue's revenue-share cut.
+  const qrVenueSlug = isQrScan ? searchParams.get("venue") : null;
+  const qrVenueNameParam = isQrScan ? searchParams.get("venueName") : null;
+  const qrVenueName = qrVenueNameParam || qrVenueSlug;
+
+  // Stash the QR context in localStorage so the venue attribution
+  // survives the navigation away from this page (buy buttons push
+  // `/checkout?backTo=…` which strips the `?venue=` param). The
+  // checkout page reads this back to pass venueSlug to the API.
+  useEffect(() => {
+    if (!isQrScan || !qrVenueSlug) return;
+    saveQrContext({
+      venueSlug: qrVenueSlug,
+      venueName: qrVenueNameParam || undefined,
+      source: "qr",
+    });
+  }, [isQrScan, qrVenueSlug, qrVenueNameParam]);
+
+  // Premium+ artists pick a profile theme via the artist portal; Core
+  // artists see the picker locked behind an upsell, so render-side we
+  // ignore any saved theme for Core and fall through to the default
+  // light scheme. canCustomiseTheme keeps the gate in one place.
+  const themeId =
+    profileTheme && canCustomiseTheme(subscriptionPlan)
+      ? profileTheme
+      : DEFAULT_PROFILE_THEME;
+  const theme = getProfileTheme(themeId);
+  const themeStyle = {
+    ...themeCssVars(theme),
+    backgroundColor: theme.bg,
+    color: theme.fg,
+  } as React.CSSProperties;
 
   return (
-    <>
+    <div
+      style={themeStyle}
+      data-theme={theme.id}
+      data-theme-dark={theme.isDark ? "true" : "false"}
+      className="min-h-screen"
+    >
       {qrVenueName && (
-        <div className="bg-accent/5 border-y border-accent/20">
-          <div className="max-w-[1200px] mx-auto px-6 py-2.5 flex items-center gap-2 text-xs text-foreground">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
+        <div
+          className="border-y"
+          style={{ backgroundColor: theme.surface, borderColor: theme.border }}
+        >
+          <div
+            className="max-w-[1200px] mx-auto px-6 py-2.5 flex items-center gap-2 text-xs"
+            style={{ color: theme.fg }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" style={{ color: theme.accent }}>
               <rect x="3" y="3" width="7" height="7" rx="1" />
               <rect x="14" y="3" width="7" height="7" rx="1" />
               <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -305,7 +370,7 @@ export default function ArtistProfileClient({
               <path d="M20 14v7M14 20h7" />
             </svg>
             <span>
-              Seen in <strong className="text-foreground">{qrVenueName}</strong>
+              Seen in <strong style={{ color: theme.fg }}>{qrVenueName}</strong>
             </span>
           </div>
         </div>
@@ -472,7 +537,7 @@ export default function ArtistProfileClient({
                                     dimensions: sp.label || work.dimensions,
                                     framed: false,
                                   });
-                                  router.push("/checkout");
+                                  router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                                 }}
                                 className="px-2 py-1 text-[10px] bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
                               >
@@ -554,6 +619,44 @@ export default function ArtistProfileClient({
                       </svg>
                     </Link>
                   </div>
+                </div>
+
+                {/* Always-visible caption beneath the thumbnail. QA
+                    flagged /browse/fin-coles cards showing only an
+                    "Available" pill, the title + medium + price band
+                    were hidden inside the hover overlay so visitors on
+                    touch (or anyone who didn't hover) had to tap the
+                    card just to see what the artwork was. Pulling the
+                    label down here keeps the hover overlay for the
+                    quick-view + buy buttons but gives every visitor
+                    the basic context up front. Mirrors how the other
+                    demo artist pages already render their grid. */}
+                <div className="px-1 pt-2 pb-1">
+                  <p className="text-sm font-medium text-foreground line-clamp-1">
+                    {work.title}
+                  </p>
+                  {(() => {
+                    const sizesText =
+                      work.pricing.length === 0
+                        ? null
+                        : work.pricing.length === 1
+                          ? formatSizeLabelForDisplay(work.pricing[0].label)
+                          : `${work.pricing.length} sizes`;
+                    const subtitleParts = [work.medium, sizesText].filter(
+                      (p): p is string => Boolean(p),
+                    );
+                    if (subtitleParts.length === 0) return null;
+                    return (
+                      <p className="text-xs text-muted line-clamp-1">
+                        {subtitleParts.join(" · ")}
+                      </p>
+                    );
+                  })()}
+                  {work.priceBand && (
+                    <p className="text-xs text-foreground/80 mt-0.5">
+                      {work.priceBand}
+                    </p>
+                  )}
                 </div>
               </div>
             );
@@ -723,16 +826,26 @@ export default function ArtistProfileClient({
                 {currentWork.title}
               </h3>
 
-              {/* Details */}
+              {/* Details. Dimensions row is suppressed entirely when
+                  formatDimensionsForDisplay returns empty so a row
+                  with an empty value (which is what happens when the
+                  stored dimensions are implausibly large) doesn't
+                  render. */}
               <div className="space-y-1.5 sm:space-y-2 mb-3 sm:mb-5">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted">Medium</span>
                   <span className="text-foreground font-medium">{currentWork.medium}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted">Dimensions</span>
-                  <span className="text-foreground font-medium">{formatDimensionsForDisplay(currentWork.dimensions)}</span>
-                </div>
+                {(() => {
+                  const dims = formatDimensionsForDisplay(currentWork.dimensions);
+                  if (!dims) return null;
+                  return (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">Dimensions</span>
+                      <span className="text-foreground font-medium">{dims}</span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Availability + Save */}
@@ -863,11 +976,11 @@ export default function ArtistProfileClient({
                           }
                           navigatingAway.current = true;
                           setLightboxIndex(null);
-                          router.push("/checkout");
+                          router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                         }}
                         className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {soldOut ? "Sold out" : `Buy Now – £${totalPrice}`}
+                        {soldOut ? "Sold out" : `Buy Now, £${totalPrice}`}
                       </button>
                       <button
                         disabled={soldOut}
@@ -1011,6 +1124,15 @@ export default function ArtistProfileClient({
                     const data = new FormData(form);
                     const senderName = (data.get("senderName") as string) || authDisplayName || "Anonymous";
                     try {
+                      // The enquiry type used to live as a [bracket]
+                      // tag at the start of the content, which then
+                      // surfaced in inbox previews ("[venue_looking] Re:
+                      // Last Light o…"). The tag is for internal
+                      // routing only, the artist shouldn't see the raw
+                      // enum value. Now we tuck the type into metadata
+                      // so the messaging UI can read it without
+                      // contaminating the human-readable content.
+                      const enquiryType = (data.get("enquiryType") as string) || "general";
                       await authFetch("/api/messages", {
                         method: "POST",
                         body: JSON.stringify({
@@ -1018,7 +1140,8 @@ export default function ArtistProfileClient({
                           senderName,
                           senderType: userType || "anonymous",
                           recipientSlug: artistSlug,
-                          content: `[${data.get("enquiryType")}] ${currentWork ? `Re: ${currentWork.title} – ` : ""}${data.get("message")}`,
+                          content: `${currentWork ? `Re: ${currentWork.title}\n\n` : ""}${data.get("message")}`,
+                          metadata: { enquiryType },
                         }),
                       });
                       // Also save to enquiries table for backward compatibility
@@ -1059,6 +1182,6 @@ export default function ArtistProfileClient({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -150,11 +150,21 @@ export default function ArtworkPageClient({
     typeof selectedPricing?.shippingPrice === "number"
       ? selectedPricing.shippingPrice
       : (work.shippingPrice ?? undefined);
-  // In-store / pickup price for the selected size. We prefer the
-  // per-size `inStorePricing[]` array (current model) and fall back
-  // to the legacy work-level `inStorePrice` (single number) so older
-  // works without per-size data still surface a pickup CTA.
+  // In-store / pickup price for the selected size. Three sources, in
+  // priority order:
+  //   1. `pricing[i].inStorePrice` — current persisted location,
+  //      mirrors how per-size `shippingPrice` is stored.
+  //   2. `work.inStorePricing[]` — legacy top-level array, kept as a
+  //      fallback for any seed / in-memory data still using it.
+  //   3. `work.inStorePrice` — work-level single price, the original
+  //      shape from before per-size support.
   const selectedInStorePrice: number | null = (() => {
+    if (
+      typeof selectedPricing?.inStorePrice === "number" &&
+      selectedPricing.inStorePrice > 0
+    ) {
+      return selectedPricing.inStorePrice;
+    }
     if (Array.isArray(work.inStorePricing) && selectedPricing) {
       const match = work.inStorePricing.find(
         (p) =>
@@ -230,11 +240,11 @@ export default function ArtworkPageClient({
 
       {/* Views this week (#6). Real analytics_events count, computed
           in the parent server component from `artwork_view` events
-          over the last 7 days. Hidden for brand-new works with no
-          views yet so we don't show "0 views this week". The
-          venues-looking-for-similar chip was removed in favour of
-          this single live signal. */}
-      {typeof viewsThisWeek === "number" && viewsThisWeek > 0 && (
+          over the last 7 days. Hidden below a small threshold (3)
+          because "1 view this week" or "2 views this week" reads as
+          tumbleweed next to a 4,000-total-views work, the chip should
+          signal momentum, not draw attention to its absence. */}
+      {typeof viewsThisWeek === "number" && viewsThisWeek >= 3 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6 text-[11px] text-muted">
           <span className="inline-flex items-center gap-1.5">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -262,12 +272,21 @@ export default function ArtworkPageClient({
           <dt className="text-muted uppercase tracking-wider text-[10px]">Medium</dt>
           <dd className="text-foreground text-right">{work.medium}</dd>
         </div>
-        {work.dimensions && (
-          <div className="flex justify-between items-baseline">
-            <dt className="text-muted uppercase tracking-wider text-[10px]">Dimensions</dt>
-            <dd className="text-foreground text-right">{formatDimensionsForDisplay(work.dimensions)}</dd>
-          </div>
-        )}
+        {(() => {
+          // Check the formatted output, not the raw field: a raw
+          // string like "325 × 487 cm" is truthy but
+          // formatDimensionsForDisplay rejects it as implausible and
+          // returns empty. Without this we render an empty <dd> next
+          // to the "Dimensions" label.
+          const dims = work.dimensions ? formatDimensionsForDisplay(work.dimensions) : "";
+          if (!dims) return null;
+          return (
+            <div className="flex justify-between items-baseline">
+              <dt className="text-muted uppercase tracking-wider text-[10px]">Dimensions</dt>
+              <dd className="text-foreground text-right">{dims}</dd>
+            </div>
+          );
+        })()}
       </dl>
 
       {/* Size & Price */}
@@ -290,9 +309,16 @@ export default function ArtworkPageClient({
                 onChange={(v) => setSelectedSizeIdx(Number(v))}
                 options={work.pricing.map((sp, i) => {
                   const stock = sp.quantityAvailable;
+                  // Some DB rows have an empty `label` on the pricing
+                  // option, which used to render ", £160" with an
+                  // orphaned comma. Fall back to the work's own
+                  // dimensions; if that's also missing, just show
+                  // the price unprefixed.
+                  const sizeText = formatSizeLabelForDisplay(sp.label) ||
+                    formatDimensionsForDisplay(work.dimensions);
                   return {
                     value: String(i),
-                    label: `${formatSizeLabelForDisplay(sp.label)}, £${sp.price}`,
+                    label: sizeText ? `${sizeText}, £${sp.price}` : `£${sp.price}`,
                     description: typeof stock === "number"
                       ? (stock <= 0 ? "Sold out" : `${stock} available`)
                       : undefined,
@@ -309,7 +335,7 @@ export default function ArtworkPageClient({
                   {work.pricing.map((sp) => {
                     const stock = sp.quantityAvailable;
                     const label = typeof stock !== "number"
-                      ? "–"
+                      ? "-"
                       : stock <= 0
                         ? "Sold out"
                         : `${stock} available`;
@@ -508,7 +534,7 @@ export default function ArtworkPageClient({
                     showToast(r.reason === "out-of-stock" ? "This size is sold out" : `Only ${r.available} left at this size`);
                     return;
                   }
-                  router.push("/checkout");
+                  router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                 }}
                 className="flex-1 px-5 py-3.5 text-[13px] font-medium tracking-wider uppercase text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
               >
@@ -566,45 +592,49 @@ export default function ArtworkPageClient({
             size; for the legacy original-only flow it stays
             "Original". Shipping is £0 because the buyer collects in
             person, that's the entire point of the pickup option. */}
-        {work.available && selectedInStorePrice != null && (
-          <button
-            onClick={() => {
-              const isPerSize =
-                Array.isArray(work.inStorePricing) &&
-                work.inStorePricing.some(
-                  (p) =>
-                    p.label.toLowerCase() ===
-                    (selectedPricing?.label.toLowerCase() ?? ""),
-                );
-              addItem({
-                type: "work",
-                workId: work.id,
-                artistSlug,
-                artistName,
-                title:
-                  isPerSize && selectedPricing
-                    ? `${work.title} (Collect, ${selectedPricing.label})`
-                    : `${work.title} (Original)`,
-                image: work.image,
-                size: isPerSize && selectedPricing ? selectedPricing.label : "Original",
-                price: selectedInStorePrice,
-                quantity: 1,
-                shippingPrice: 0,
-              });
-              router.push("/checkout");
-            }}
-            className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
-          >
-            {Array.isArray(work.inStorePricing) &&
-            work.inStorePricing.some(
-              (p) =>
-                p.label.toLowerCase() ===
-                (selectedPricing?.label.toLowerCase() ?? ""),
-            )
-              ? `Collect from venue, £${selectedInStorePrice}`
-              : `Buy Original, £${selectedInStorePrice}`}
-          </button>
-        )}
+        {work.available && selectedInStorePrice != null && (() => {
+          // Per-size CTA when either source resolves a size-specific
+          // price: the new `pricing[i].inStorePrice` field OR the
+          // legacy top-level `inStorePricing[]` array. Falls back to
+          // "Buy Original" wording when only the work-level
+          // `inStorePrice` is set, that's the single-original flow.
+          const isPerSize =
+            (typeof selectedPricing?.inStorePrice === "number" &&
+              selectedPricing.inStorePrice > 0) ||
+            (Array.isArray(work.inStorePricing) &&
+              work.inStorePricing.some(
+                (p) =>
+                  p.label.toLowerCase() ===
+                  (selectedPricing?.label.toLowerCase() ?? ""),
+              ));
+          return (
+            <button
+              onClick={() => {
+                addItem({
+                  type: "work",
+                  workId: work.id,
+                  artistSlug,
+                  artistName,
+                  title:
+                    isPerSize && selectedPricing
+                      ? `${work.title} (Collect, ${selectedPricing.label})`
+                      : `${work.title} (Original)`,
+                  image: work.image,
+                  size: isPerSize && selectedPricing ? selectedPricing.label : "Original",
+                  price: selectedInStorePrice,
+                  quantity: 1,
+                  shippingPrice: 0,
+                });
+                router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+              }}
+              className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
+            >
+              {isPerSize
+                ? `Collect from venue, £${selectedInStorePrice}`
+                : `Buy Original, £${selectedInStorePrice}`}
+            </button>
+          );
+        })()}
         {/* Venues see Make-an-Offer as a primary secondary CTA. Other
             user types still see the modal if they tap into it (it
             handles the non-venue explainer), but only venues get the

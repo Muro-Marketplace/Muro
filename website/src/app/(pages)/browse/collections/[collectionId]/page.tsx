@@ -8,11 +8,11 @@ import type { ArtistCollection } from "@/data/collections";
 import type { ArtistWork } from "@/data/artists";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import SaveButton from "@/components/SaveButton";
 import MakeOfferModal from "@/components/offers/MakeOfferModal";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
-import { SIZE_BANDS, bandForCm, type SizeBandKey } from "@/components/browse/SizeBands";
-import { parseDimensions } from "@/lib/shipping-calculator";
+import { SIZE_BANDS, bandsForWork, type SizeBandKey } from "@/components/browse/SizeBands";
 
 type CollectionWork = ArtistWork & {
   selectedSize?: string;
@@ -132,11 +132,19 @@ export default function CollectionDetailPage() {
       price: collection.bundlePrice,
       quantity: 1,
     });
-    router.push("/checkout");
+    router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
   }
 
   return (
     <div>
+      <div className="max-w-[1200px] mx-auto px-6 pt-5">
+        <Breadcrumbs
+          items={[
+            { label: "Collections", href: "/browse?view=collections" },
+            { label: collection.name },
+          ]}
+        />
+      </div>
       {/* Banner */}
       <section className="relative h-64 lg:h-80 overflow-hidden">
         <Image
@@ -218,12 +226,21 @@ export default function CollectionDetailPage() {
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {(() => {
+                // Match the /browse surface: a work passes if ANY of
+                // its sizes (work-level dimensions, the artist-selected
+                // collection size, or any pricing tier label) lands in
+                // an active band. Previously this page only inspected
+                // `w.dimensions` and a collection where the artist
+                // had set per-bundle sizes but left dimensions blank
+                // would render an empty grid under any active filter.
                 const visible = activeSizes.size === 0
                   ? works
                   : works.filter((w) => {
-                      const dims = parseDimensions(w.dimensions);
-                      if (!dims) return false;
-                      return activeSizes.has(bandForCm(Math.max(dims.widthCm, dims.heightCm)));
+                      const bands = bandsForWork(w);
+                      for (const b of bands) {
+                        if (activeSizes.has(b)) return true;
+                      }
+                      return false;
                     });
                 if (visible.length === 0) {
                   return (
@@ -308,7 +325,7 @@ export default function CollectionDetailPage() {
                                   dimensions: work.selectedSize || work.dimensions,
                                   framed: false,
                                 });
-                                router.push("/checkout");
+                                router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                               }}
                               className="px-2 py-1 text-[10px] bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
                             >
@@ -323,7 +340,16 @@ export default function CollectionDetailPage() {
                     <h3 className="text-sm font-medium">{work.title}</h3>
                     <p className="text-xs text-muted">
                       {work.medium}
-                      {work.dimensions ? ` · ${formatDimensionsForDisplay(work.dimensions)}` : ""}
+                      {(() => {
+                        // Check the formatted value not the raw field:
+                        // implausibly large stored dims (e.g.
+                        // "325 × 487 cm") would render an orphan " · "
+                        // separator with an empty trailing value.
+                        const dims = work.dimensions
+                          ? formatDimensionsForDisplay(work.dimensions)
+                          : "";
+                        return dims ? ` · ${dims}` : "";
+                      })()}
                     </p>
                     {work.placed_at_venue && (
                       <p className="text-[10px] text-muted mt-1 inline-flex items-center gap-1.5">
@@ -403,7 +429,7 @@ export default function CollectionDetailPage() {
                     >
                       <span className="truncate pr-2">{w.title}</span>
                       <span className="shrink-0">
-                        {w.selectedSize || "–"}
+                        {w.selectedSize || "-"}
                         {w.selectedSizePrice != null ? ` · £${w.selectedSizePrice}` : ""}
                       </span>
                     </div>
@@ -417,7 +443,7 @@ export default function CollectionDetailPage() {
                     onClick={handleBuyCollection}
                     className="w-full px-5 py-3 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
                   >
-                    Buy Collection – {collection.bundlePriceBand}
+                    Buy Collection, {collection.bundlePriceBand}
                   </button>
                 )}
                 {/* Request placement (#41). Always shown when the
@@ -495,7 +521,13 @@ export default function CollectionDetailPage() {
                   collectionId={collection.id}
                   collectionTitle={collection.name}
                   askingPriceGbp={(() => {
-                    // Sum the largest size price per work, in pounds.
+                    // Prefer the artist's declared bundle price, the
+                    // headline figure on the Buy CTA. Falls back to the
+                    // sum of each work's selected-size price (the
+                    // "buy individually" line), and finally to the sum
+                    // of largest-size prices if neither is available.
+                    if (collection.bundlePrice > 0) return collection.bundlePrice;
+                    if (individualTotal > 0) return individualTotal;
                     const total = works.reduce((sum, w) => {
                       const tiers = w.pricing || [];
                       if (tiers.length === 0) return sum;

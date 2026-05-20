@@ -33,8 +33,25 @@ const patchSchema = z.object({
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const db = getSupabaseAdmin();
-  const { data: req } = await db.from("artwork_requests").select("*").eq("id", id).maybeSingle();
+  // Plan G2 #4: surface the venue's NAME alongside the slug for the
+  // artist-portal detail page. Done as a separate lookup, not an
+  // embedded PostgREST join, because there's no FK between
+  // artwork_requests.venue_user_id and venue_profiles.user_id (both
+  // reference auth.users.id) — the embed silently 500s and breaks
+  // the whole endpoint.
+  const { data: req } = await db
+    .from("artwork_requests")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
   if (!req) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const venueUserId = (req as { venue_user_id: string }).venue_user_id;
+  const { data: venueRow } = await db
+    .from("venue_profiles")
+    .select("name")
+    .eq("user_id", venueUserId)
+    .maybeSingle<{ name: string | null }>();
 
   // Pull responses (artist replies) too.
   const { data: responses } = await db
@@ -43,7 +60,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     .eq("request_id", id)
     .order("created_at", { ascending: false });
 
-  return NextResponse.json({ request: req, responses: responses || [] });
+  const requestRow = { ...req, venue_name: venueRow?.name ?? null };
+
+  return NextResponse.json({ request: requestRow, responses: responses || [] });
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {

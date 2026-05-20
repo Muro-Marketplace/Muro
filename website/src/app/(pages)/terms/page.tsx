@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service – Wallplace",
+  title: "Terms of Service",
   description:
     "Wallplace Platform Terms of Service. The rules and obligations governing use of the Wallplace marketplace.",
 };
@@ -214,7 +214,7 @@ export default function TermsPage() {
                   </ul>
                   <p><strong className="text-foreground">For business users:</strong> Total aggregate liability is capped at the greater of (a) fees you have paid to Wallplace in the prior 12 months, or (b) &pound;100.</p>
                   <p><strong className="text-foreground">For consumer buyers:</strong> Where you are a consumer under the Consumer Rights Act 2015, our liability to you in relation to any order is limited to the amount you paid for that order. Nothing in this section reduces or limits your non-excludable statutory consumer rights.</p>
-                  <p>Nothing in these terms excludes or limits liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of terms implied by section 12 of the Sale of Goods Act 1979 or sections 9&ndash;11 of the Consumer Rights Act 2015, or any other liability that cannot be excluded or limited by law.</p>
+                  <p>Nothing in these terms excludes or limits liability for death or personal injury caused by negligence, fraud or fraudulent misrepresentation, breach of terms implied by section 12 of the Sale of Goods Act 1979 or sections 9 to 11 of the Consumer Rights Act 2015, or any other liability that cannot be excluded or limited by law.</p>
                 </div>
               </div>
 

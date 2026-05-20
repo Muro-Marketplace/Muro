@@ -24,13 +24,14 @@
  *     can place at drop coordinates.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   SizeVariant,
   WorkOrientation,
 } from "@/lib/visualizer/dimensions";
 import type { VisualizerMode } from "@/lib/visualizer/types";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
+import ImageWithFallback from "@/components/ImageWithFallback";
 
 export interface PanelWork {
   id: string;
@@ -105,15 +106,18 @@ export default function WorksPanel({
     : list;
 
   // Reset the lazy-load window whenever the underlying list changes
-  // (tab switch, search input). useEffect would also work but
-  // computing the slice + reset in a single render keeps things
-  // simple and the count never lags by a frame.
+  // (tab switch, search input). useEffect runs after the commit so the
+  // first render after a tab switch shows whatever PAGE_SIZE was last
+  // set to, then resyncs on the next paint. That's a single frame of
+  // lag which is invisible at typical PAGE_SIZE values.
   const filteredKey = `${activeTab}|${filter}|${filtered.length}`;
-  const lastKeyRef = useRef(filteredKey);
-  if (lastKeyRef.current !== filteredKey) {
-    lastKeyRef.current = filteredKey;
+  useEffect(() => {
     if (visibleCount !== PAGE_SIZE) setVisibleCount(PAGE_SIZE);
-  }
+    // visibleCount intentionally omitted from deps: we only want to
+    // reset when the underlying filtered set changes, not every time
+    // the user clicks "Load more" and bumps visibleCount up.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredKey]);
   const visible = filtered.slice(0, visibleCount);
   const hasMore = filtered.length > visibleCount;
 
@@ -199,27 +203,34 @@ export default function WorksPanel({
                 className="group block w-full text-left rounded overflow-hidden border border-black/5 bg-white hover:border-black/20 transition cursor-grab active:cursor-grabbing"
                 title={dragHint(w)}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <ImageWithFallback
                   src={w.imageUrl}
                   alt={w.title}
                   className="block w-full aspect-square object-cover"
-                  loading="lazy"
+                  placeholderClassName="block w-full aspect-square bg-accent/10 text-accent flex items-center justify-center text-xl font-medium"
                 />
                 <div className="px-2 py-1.5">
                   <p className="text-[11px] font-medium text-stone-800 truncate">
                     {w.title}
                   </p>
-                  {w.dimensions && (
-                    <p className="text-[10px] text-stone-500 truncate">
-                      {formatDimensionsForDisplay(w.dimensions)}
-                      {w.sizes && w.sizes.length > 1 && (
-                        <span className="ml-1 text-stone-400">
-                          · {w.sizes.length} sizes
-                        </span>
-                      )}
-                    </p>
-                  )}
+                  {(() => {
+                    // Empty-formatted check covers both "no dimensions"
+                    // and "dimensions present but failed the plausibility
+                    // cap in formatDimensionsForDisplay".
+                    const dims = w.dimensions ? formatDimensionsForDisplay(w.dimensions) : "";
+                    const hasSizes = !!(w.sizes && w.sizes.length > 1);
+                    if (!dims && !hasSizes) return null;
+                    return (
+                      <p className="text-[10px] text-stone-500 truncate">
+                        {dims}
+                        {hasSizes && (
+                          <span className={dims ? "ml-1 text-stone-400" : "text-stone-400"}>
+                            {dims ? "· " : ""}{w.sizes!.length} sizes
+                          </span>
+                        )}
+                      </p>
+                    );
+                  })()}
                 </div>
               </button>
             </li>
@@ -301,10 +312,12 @@ function EmptyTab({ tab, mode }: { tab: Tab | null; mode: VisualizerMode }) {
     return (
       <div className="px-2 py-3 space-y-1.5">
         <p className="text-xs text-stone-600">
-          No artworks on display yet.
+          No accepted placements yet.
         </p>
         <p className="text-[11px] text-stone-500 leading-snug">
-          Once a placement is accepted, the artwork shows up here automatically.
+          Decor pieces already on the wall are preset visuals to show
+          scale. Once you accept a placement, the real artwork shows up
+          here so you can drop it in.
         </p>
       </div>
     );

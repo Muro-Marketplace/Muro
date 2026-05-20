@@ -6,8 +6,9 @@ import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
 import type { LabelData } from "@/components/labels/LabelSheet";
-import { LABEL_SIZES, type LabelSize } from "@/components/labels/QRLabel";
+import { LABEL_SIZES, LABEL_STYLES, type LabelSize, type LabelStyle } from "@/components/labels/QRLabel";
 import { authFetch } from "@/lib/api-client";
+import { displayPhysicalDimensions } from "@/lib/dimensions";
 
 interface LabelOptions {
   showMedium: boolean;
@@ -62,11 +63,25 @@ export default function VenueLabelsPage() {
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [labelSize, setLabelSize] = useState<LabelSize>("medium");
   const [tagline, setTagline] = useState("");
+  // Plan G #7: parity with the artist side. The high-level style
+  // preset drives the default field-toggle set; users can still
+  // override toggles individually below.
+  const [labelStyle, setLabelStyle] = useState<LabelStyle>("minimal");
   const [options, setOptions] = useState<LabelOptions>({
     showMedium: false,
     showDimensions: false,
     showPrice: false,
   });
+  function applyStyle(style: LabelStyle) {
+    setLabelStyle(style);
+    const cfg = LABEL_STYLES.find((s) => s.key === style);
+    if (cfg) setLabelSize(cfg.defaultSize);
+    if (style === "editorial") {
+      setOptions({ showMedium: true, showDimensions: true, showPrice: true });
+    } else if (style === "minimal") {
+      setOptions({ showMedium: false, showDimensions: false, showPrice: false });
+    }
+  }
   const [showPreview, setShowPreview] = useState(false);
   const [previewLabels, setPreviewLabels] = useState<LabelData[]>([]);
 
@@ -217,8 +232,11 @@ export default function VenueLabelsPage() {
       // Prefer the size the venue / artist agreed on in the placement
       // itself, that's what's actually on the wall, over the artist's
       // generic published dimensions. Falls back cleanly if no specific
-      // size was picked.
-      const effectiveDimensions = p.work_size || work?.dimensions;
+      // size was picked. The helper additionally strips pixel-format
+      // dimensions (e.g. "4869 × 3246 px") that came from the image
+      // upload, those should never appear on a printed label.
+      const effectiveDimensions =
+        displayPhysicalDimensions(p.work_size) ?? displayPhysicalDimensions(work?.dimensions) ?? undefined;
       return {
         artistName: formatArtistName(p.artist_slug),
         artistSlug: p.artist_slug,
@@ -239,7 +257,11 @@ export default function VenueLabelsPage() {
         _sourceDimensions: effectiveDimensions,
         quantity: getQty(i),
         labelSize,
-        tagline: (labelSize === "large" || labelSize === "xlarge") ? tagline || undefined : undefined,
+        labelStyle,
+        tagline:
+          (labelSize === "large" || labelSize === "xlarge") && labelStyle !== "qr_only"
+            ? tagline || undefined
+            : undefined,
       };
     });
   }
@@ -273,14 +295,33 @@ export default function VenueLabelsPage() {
         ) : placements.length === 0 ? (
           <div className="bg-surface border border-border rounded-sm p-10 text-center">
             <p className="text-sm text-foreground font-medium mb-1">No active placements yet</p>
-            <p className="text-xs text-muted">Once an artist has accepted a placement for your venue, you'll be able to print QR labels for those works here.</p>
+            <p className="text-xs text-muted">Once an artist has accepted a placement for your venue, you&rsquo;ll be able to print QR labels for those works here.</p>
           </div>
         ) : (
           <>
             {/* Options row */}
             <div className="flex flex-col lg:flex-row gap-4 mb-6">
               <div className="flex-1 bg-surface border border-border rounded-sm p-4">
-                <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-3">Label Options</h3>
+                <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-3">Label Style</h3>
+
+                {/* Plan G #7: high-level style picker (parity with the
+                    artist label editor). Pre-fills the default size +
+                    field toggles for the selected style. */}
+                <div className="grid sm:grid-cols-3 gap-2 mb-4">
+                  {LABEL_STYLES.map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => applyStyle(s.key)}
+                      className={`text-left p-3 rounded-sm border transition-colors ${
+                        labelStyle === s.key ? "border-accent bg-accent/5" : "border-border hover:border-accent/40"
+                      }`}
+                    >
+                      <p className="text-sm font-medium text-foreground mb-0.5">{s.name}</p>
+                      <p className="text-[11px] text-muted leading-snug">{s.description}</p>
+                    </button>
+                  ))}
+                </div>
 
                 <div className="mb-3">
                   <p className="text-xs text-muted mb-1.5">Label Size</p>
@@ -313,6 +354,12 @@ export default function VenueLabelsPage() {
                   </div>
                 )}
 
+                <p className="text-[11px] text-muted leading-relaxed mb-2">
+                  Hide a row from the printed label without removing the
+                  underlying data. Toggles only affect what shows up on
+                  the printed card - the QR code itself always points to
+                  the work.
+                </p>
                 <div className="flex flex-wrap gap-x-5 gap-y-2">
                   {([
                     { key: "showMedium" as const, label: "Medium" },
@@ -356,11 +403,35 @@ export default function VenueLabelsPage() {
 
             {/* Placements grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {placements.map((p, index) => {
-                const isSelected = selected.has(index);
-                const qty = getQty(index);
-                const artistName = formatArtistName(p.artist_slug);
-                return (
+              {(() => {
+                // Build a map of how many times each work title appears,
+                // and assign each appearance a 1-based index. When the
+                // same work is on two different placements, both cards
+                // get a "1 of 2" / "2 of 2" badge so the venue can tell
+                // them apart, the cards are otherwise visually identical
+                // (same thumbnail, same title) and printing the wrong
+                // QR would attribute scans to the wrong placement.
+                const titleCounts: Record<string, number> = {};
+                const indexInGroup: number[] = [];
+                placements.forEach((p) => {
+                  const key = p.work_title || "(untitled)";
+                  titleCounts[key] = (titleCounts[key] || 0) + 1;
+                });
+                const seen: Record<string, number> = {};
+                placements.forEach((p, i) => {
+                  const key = p.work_title || "(untitled)";
+                  seen[key] = (seen[key] || 0) + 1;
+                  indexInGroup[i] = seen[key];
+                });
+                return placements.map((p, index) => {
+                  const isSelected = selected.has(index);
+                  const qty = getQty(index);
+                  const artistName = formatArtistName(p.artist_slug);
+                  const titleKey = p.work_title || "(untitled)";
+                  const totalForTitle = titleCounts[titleKey] || 1;
+                  const showDuplicateBadge = totalForTitle > 1;
+                  const duplicateBadgeLabel = `${indexInGroup[index]} of ${totalForTitle}`;
+                  return (
                   <div
                     // Composite key, multiple expanded entries share
                     // p.id, so we use the per-entry _key to keep
@@ -383,7 +454,17 @@ export default function VenueLabelsPage() {
 
                     <div className="aspect-[4/3] relative bg-border/20 cursor-pointer" onClick={() => toggleWork(index)}>
                       {p.work_image ? (
-                        <Image src={p.work_image} alt={p.work_title} fill className="object-cover" sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" />
+                        // Above-fold cards (first row at typical grid sizes
+                        // is ≤4 cards) load eagerly so the page doesn't
+                        // briefly show a row of empty placeholders.
+                        <Image
+                          src={p.work_image}
+                          alt={p.work_title}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          priority={index < 4}
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-xs text-muted">No image</div>
                       )}
@@ -391,7 +472,14 @@ export default function VenueLabelsPage() {
 
                     <div className="p-3">
                       <h3 className="text-sm font-medium text-foreground leading-snug line-clamp-1">{p.work_title}</h3>
-                      <p className="text-xs text-muted mt-0.5 line-clamp-1">{artistName}</p>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className="text-xs text-muted line-clamp-1">{artistName}</p>
+                        {p.work_size && (
+                          <span className="text-[10px] text-muted/80 tabular-nums shrink-0">
+                            {p.work_size}
+                          </span>
+                        )}
+                      </div>
 
                       <div className="flex items-center justify-between mt-2">
                         {isSelected ? (
@@ -422,9 +510,18 @@ export default function VenueLabelsPage() {
                         </button>
                       </div>
                     </div>
+                    {showDuplicateBadge && (
+                      <span
+                        className="absolute bottom-2 left-2 text-[9px] font-medium px-1.5 py-0.5 rounded-sm bg-foreground/85 text-white tabular-nums"
+                        title={`This work appears in ${totalForTitle} placements. Each card prints labels for a different placement, scans are attributed separately.`}
+                      >
+                        Placement {duplicateBadgeLabel}
+                      </span>
+                    )}
                   </div>
                 );
-              })}
+              });
+              })()}
             </div>
           </>
         )}

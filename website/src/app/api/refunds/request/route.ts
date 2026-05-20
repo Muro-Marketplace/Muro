@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { notifyRefundRequested } from "@/lib/email";
+import { createNotification } from "@/lib/notifications";
 import { verifyOrderToken } from "@/lib/order-tracking-token";
 
 export async function POST(request: Request) {
@@ -137,7 +138,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to create refund request" }, { status: 500 });
     }
 
-    // Notify artist and admin (fire-and-forget)
+    // Notify artist and admin. Email is the legacy channel; we also fire
+    // an in-app bell notification so the artist sees it on the dashboard
+    // even if Resend is misconfigured or the email lands in spam. The
+    // previous flow was email-only and silently failed when the request
+    // didn't get through.
     if (order.artist_user_id) {
       const { data: { user: artistUser } } = await db.auth.admin.getUserById(order.artist_user_id);
       const { data: artistProfile } = await db
@@ -156,8 +161,24 @@ export async function POST(request: Request) {
         amount: refundAmount,
         type,
       }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+
+      // In-app bell. Deep-link to the orders page so the artist can
+      // approve / reject directly. The buyer's identity (not the
+      // artist's own) is the actor here, hence the user_id is the
+      // artist's. Skip when the requester IS the artist (artists can
+      // self-cancel pre-fulfilment) so we don't notify them about
+      // their own action.
+      if (requesterType !== "artist") {
+        await createNotification({
+          userId: order.artist_user_id,
+          kind: "refund_request",
+          title: `Refund request, £${Number(refundAmount).toFixed(2)}`,
+          body: `${type === "full" ? "Full" : "Partial"} refund requested on ${orderId}, "${reason.slice(0, 80)}${reason.length > 80 ? "…" : ""}"`,
+          link: `/artist-portal/orders?id=${encodeURIComponent(orderId)}`,
+        });
+      }
     } else {
-      // No artist, still notify admin
+      // No artist, still notify admin via the email pipeline.
       notifyRefundRequested({
         requesterName: userEmail,
         requesterType,

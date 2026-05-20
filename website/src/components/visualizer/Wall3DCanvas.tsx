@@ -140,8 +140,14 @@ export default function Wall3DCanvas({
     <div
       onDrop={handleDrop}
       onDragOver={handleDragOver}
-      className="relative w-full h-full bg-stone-100"
-      style={{ overflow: "hidden" }}
+      className="relative w-full h-full bg-stone-100 touch-none"
+      // touchAction: "none" stops iOS Safari's pan-y / pinch-zoom from
+      // hijacking touches before OrbitControls sees them. Without this
+      // a one-finger drag scrolls the page and pinch zooms the page,
+      // not the scene. The `touch-none` Tailwind class is the same
+      // declaration; we set the inline style as well so it survives
+      // any utility-class purge.
+      style={{ overflow: "hidden", touchAction: "none" }}
     >
       <Canvas
         shadows="soft"
@@ -198,18 +204,32 @@ export default function Wall3DCanvas({
             intensity={0.25}
             color="#FFFFFF"
           />
-          <Environment preset="apartment" />
+          {/* Environment HDR loads from drei's CDN. Quarantine in its own
+              Suspense so a slow/blocked HDR fetch doesn't gate the wall +
+              lights + artwork from appearing. Previously the outer
+              Suspense had fallback={null}, which meant a stuck HDR fetch
+              made the entire scene render as blank (the bug behind the
+              "3D shows nothing" report). The directional lights alone give
+              the scene a sensible look without the HDR. */}
+          <Suspense fallback={null}>
+            <Environment preset="apartment" />
+          </Suspense>
 
-          <Room
-            wallW={wallW}
-            wallH={wallH}
-            wallColor={wallColor}
-            wallImageUrl={
-              bgImageUrl ??
-              (background.kind === "uploaded" ? background.image_path : null)
-            }
-            kind={background.kind}
-          />
+          {/* Room (back wall + side wall + floor). Wrapped in its own
+              Suspense, the wall image is via useTexture and if the URL
+              is unreachable it would otherwise blank the whole scene. */}
+          <Suspense fallback={null}>
+            <Room
+              wallW={wallW}
+              wallH={wallH}
+              wallColor={wallColor}
+              wallImageUrl={
+                bgImageUrl ??
+                (background.kind === "uploaded" ? background.image_path : null)
+              }
+              kind={background.kind}
+            />
+          </Suspense>
 
           {/* Venue dressing, café/gallery furniture so the scene reads
               as somewhere a customer might actually see the artwork. */}
@@ -219,26 +239,32 @@ export default function Wall3DCanvas({
             .slice()
             .sort((a, b) => a.z_index - b.z_index)
             .map((item) => (
-              <ArtworkMesh
-                key={item.id}
-                item={item}
-                wallW={wallW}
-                wallH={wallH}
-                imageUrl={workById[item.work_id]?.imageUrl}
-                selected={item.id === selectedItemId}
-                onSelect={() => onSelectItem(item.id)}
-                onMove={(xCm, yCm) =>
-                  onItemChange(item.id, { x_cm: xCm, y_cm: yCm })
-                }
-                onResize={(widthCm, heightCm) =>
-                  onItemChange(item.id, {
-                    width_cm: widthCm,
-                    height_cm: heightCm,
-                  })
-                }
-                onDragStart={() => setDraggingItem(true)}
-                onDragEnd={() => setDraggingItem(false)}
-              />
+              // Per-item Suspense, isolates a single failing artwork
+              // texture so it doesn't blank every other item plus the
+              // wall + lights. The fallback is null because an empty
+              // item slot reads as "this image is loading" without
+              // any visible scaffolding.
+              <Suspense key={item.id} fallback={null}>
+                <ArtworkMesh
+                  item={item}
+                  wallW={wallW}
+                  wallH={wallH}
+                  imageUrl={workById[item.work_id]?.imageUrl}
+                  selected={item.id === selectedItemId}
+                  onSelect={() => onSelectItem(item.id)}
+                  onMove={(xCm, yCm) =>
+                    onItemChange(item.id, { x_cm: xCm, y_cm: yCm })
+                  }
+                  onResize={(widthCm, heightCm) =>
+                    onItemChange(item.id, {
+                      width_cm: widthCm,
+                      height_cm: heightCm,
+                    })
+                  }
+                  onDragStart={() => setDraggingItem(true)}
+                  onDragEnd={() => setDraggingItem(false)}
+                />
+              </Suspense>
             ))}
 
           <DropBridge
@@ -266,6 +292,18 @@ export default function Wall3DCanvas({
             minAzimuthAngle={-Math.PI / 2.3}
             maxAzimuthAngle={Math.PI / 2.3}
             target={[0, wallH * 0.5, 0]}
+            // Touch gestures: one-finger ROTATE (the headline 3D
+            // feature, lets users orbit the room), two-finger DOLLY_PAN
+            // (pinch-to-zoom). DOLLY_PAN's pan component is ignored
+            // because enablePan={false}, so two-finger gestures
+            // effectively become pinch-zoom only — which is what we
+            // want on mobile. These match three.js's defaults for a
+            // perspective camera but we set them explicitly so the
+            // behaviour can't drift if upstream defaults change.
+            touches={{
+              ONE: THREE.TOUCH.ROTATE,
+              TWO: THREE.TOUCH.DOLLY_PAN,
+            }}
           />
         </Suspense>
       </Canvas>
@@ -1099,8 +1137,15 @@ function ArtworkPlane({
 }) {
   const texture = useTexture(url);
   // Tag every freshly-loaded texture with the right colour space.
-  // useTexture caches per URL so this only runs once per image.
+  // useTexture caches per URL so this only runs once per image, and the
+  // mutation is the standard react-three-fiber pattern for forcing the
+  // sRGB pipeline on a Three.js Texture instance (which is an external
+  // resource, not React state). The react-hooks/immutability rule flags
+  // any field write to a hook return but for r3f textures this is the
+  // documented way.
+  // eslint-disable-next-line react-hooks/immutability
   texture.colorSpace = THREE.SRGBColorSpace;
+  // eslint-disable-next-line react-hooks/immutability
   texture.anisotropy = 8;
   // meshBasicMaterial + toneMapped:false renders the image at its
   // true colour values regardless of room lighting. Standard PBR
@@ -1128,7 +1173,10 @@ function TexturedWall({
   wallH: number;
 }) {
   const texture = useTexture(url);
+  // Same colour-space + anisotropy fixup as ArtworkPlate. r3f-idiomatic.
+  // eslint-disable-next-line react-hooks/immutability
   texture.colorSpace = THREE.SRGBColorSpace;
+  // eslint-disable-next-line react-hooks/immutability
   texture.anisotropy = 8;
   return (
     <mesh position={[0, wallH / 2, 0]} receiveShadow>
@@ -1215,6 +1263,7 @@ function useProceduralWoodTexture(): THREE.Texture | null {
     tex.repeat.set(3, 2);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTexture(tex);
 
     return () => {

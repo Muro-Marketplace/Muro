@@ -66,10 +66,28 @@ const UK_POSTCODE = /^[A-Z]{1,2}\d[A-Z\d]?\s\d[A-Z]{2}$/;
 const STORAGE_KEY = "wallplace-postcode";
 const COORDS_STORAGE_KEY = "wallplace-coords";
 
-function persistLocation(coords: { lat: number; lng: number }, label: string): void {
+/** Loose pre-format check, anything that contains only postcode-y
+ *  characters (letters + digits + at most one space) so we don't
+ *  persist things like "Current location" into the postcode input
+ *  storage. The strict UK_POSTCODE check runs after `formatPostcode`. */
+const POSTCODE_LIKE = /^[A-Za-z0-9\s]{2,10}$/;
+
+/** Write the resolved coords + label so other pages can hydrate. Exported
+ *  so non-PostcodeInput surfaces (e.g. /spaces hero) can share the same
+ *  storage and a location set on one page persists on the others. */
+export function persistLocation(coords: { lat: number; lng: number }, label: string): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, label);
+    // Only write to STORAGE_KEY when the label looks like a postcode.
+    // Geolocation hits ("Current location") still get the coords stored
+    // for the chip via COORDS_STORAGE_KEY, but they must not pre-fill
+    // the input, otherwise the next mount re-formats "Current location"
+    // into "CURRENTLOCAT ION" and shows that to the user.
+    if (POSTCODE_LIKE.test(label)) {
+      window.localStorage.setItem(STORAGE_KEY, label);
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
     window.localStorage.setItem(
       COORDS_STORAGE_KEY,
       JSON.stringify({ lat: coords.lat, lng: coords.lng, label }),
@@ -124,11 +142,20 @@ export default function PostcodeInput({
   // per browser. Falls back to the `initial` prop if storage is empty
   // or unreadable (Safari private mode).
   const [value, setValue] = useState(() => {
-    if (initial) return formatPostcode(initial);
+    if (initial && POSTCODE_LIKE.test(initial)) return formatPostcode(initial);
     if (typeof window !== "undefined") {
       try {
         const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (stored) return formatPostcode(stored);
+        // Refuse stale junk like "Current location" written by an
+        // older build, otherwise formatPostcode mangles it into
+        // "CURRENTLOCAT ION" and shows that to the user. Clear it
+        // out so future mounts don't keep falling into the same trap.
+        if (stored) {
+          if (POSTCODE_LIKE.test(stored)) return formatPostcode(stored);
+          try {
+            window.localStorage.removeItem(STORAGE_KEY);
+          } catch { /* ignore */ }
+        }
       } catch { /* ignore */ }
     }
     return "";

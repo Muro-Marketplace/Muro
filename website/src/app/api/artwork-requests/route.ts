@@ -39,6 +39,29 @@ const createSchema = z.object({
   visibility: z.enum(["semi_public", "private"]).default("semi_public"),
   invitedArtistSlugs: z.array(z.string().min(1).max(100)).max(50).optional().default([]),
   wallId: z.string().uuid().optional(),
+}).superRefine((data, ctx) => {
+  if (
+    typeof data.budgetMinPence === "number" &&
+    typeof data.budgetMaxPence === "number" &&
+    data.budgetMaxPence < data.budgetMinPence
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["budgetMaxPence"],
+      message: "Budget max must be greater than or equal to budget min.",
+    });
+  }
+  if (
+    typeof data.minDimensionCm === "number" &&
+    typeof data.maxDimensionCm === "number" &&
+    data.maxDimensionCm < data.minDimensionCm
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["maxDimensionCm"],
+      message: "Max dimension must be greater than or equal to min dimension.",
+    });
+  }
 });
 
 export async function GET(request: Request) {
@@ -51,13 +74,35 @@ export async function GET(request: Request) {
   if (mine) {
     const auth = await getAuthenticatedUser(request);
     if (auth.error) return auth.error;
+    // No FK between artwork_requests.venue_user_id and
+    // venue_profiles.user_id (both reference auth.users.id), so
+    // PostgREST's `venue:venue_profiles!venue_user_id(name)` embed
+    // silently 500s here. That dropped the list to empty, the page's
+    // local-cache fallback kicked in for every just-submitted row,
+    // and every row showed a "Syncing" badge forever. We don't need
+    // the venue name on a venue looking at their own list — drop the
+    // join and just fan in the venue's own name below.
     const { data, error } = await db
       .from("artwork_requests")
       .select("*")
       .eq("venue_user_id", auth.user!.id)
       .order("created_at", { ascending: false });
-    if (error) return NextResponse.json({ error: "Could not load requests" }, { status: 500 });
-    return NextResponse.json({ requests: data || [] });
+    if (error) {
+      console.error("[artwork-requests GET mine]", error);
+      return NextResponse.json({ error: "Could not load requests" }, { status: 500 });
+    }
+    const { data: venueRow } = await db
+      .from("venue_profiles")
+      .select("name")
+      .eq("user_id", auth.user!.id)
+      .maybeSingle<{ name: string | null }>();
+    const venueName = venueRow?.name ?? null;
+    return NextResponse.json({
+      requests: (data || []).map((r) => ({
+        ...r,
+        venue_name: venueName,
+      })),
+    });
   }
 
   // Browse — verified-artist requests for everyone, plus any private
@@ -96,7 +141,31 @@ export async function GET(request: Request) {
     console.error("[artwork-requests GET]", error);
     return NextResponse.json({ error: "Could not load requests" }, { status: 500 });
   }
-  return NextResponse.json({ requests: data || [] });
+  // Fan in venue names with a batch lookup. There's no FK between
+  // artwork_requests and venue_profiles (both reference auth.users)
+  // so PostgREST can't embed venue_profiles directly — when we tried,
+  // the whole list endpoint returned 500. Doing the join in the app
+  // layer keeps the list working and still surfaces the name.
+  const venueIds = [...new Set((data || []).map((r) => (r as { venue_user_id: string }).venue_user_id))];
+  const venueNameById = new Map<string, string>();
+  if (venueIds.length > 0) {
+    const { data: venueRows } = await db
+      .from("venue_profiles")
+      .select("user_id, name")
+      .in("user_id", venueIds);
+    for (const v of (venueRows || []) as Array<{ user_id: string; name: string | null }>) {
+      if (v.name) venueNameById.set(v.user_id, v.name);
+    }
+  }
+  // Plan G #3: surface the resolved venue name alongside the slug so
+  // the artist-portal list shows "Copper Kettle" instead of a slug or
+  // bare uuid.
+  return NextResponse.json({
+    requests: (data || []).map((r) => ({
+      ...r,
+      venue_name: venueNameById.get((r as { venue_user_id: string }).venue_user_id) ?? null,
+    })),
+  });
 }
 
 export async function POST(request: Request) {

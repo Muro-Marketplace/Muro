@@ -85,6 +85,7 @@ export default function RenderPreview({
       saveToArtwork.preferredWorkId ??
       saveToArtwork.works[0]?.id ??
       "";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPickedWorkId(initial);
   }, [saveToArtwork, open]);
 

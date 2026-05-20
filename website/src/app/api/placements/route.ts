@@ -11,6 +11,7 @@ import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPla
 import { ArtistPlacementRequestSent } from "@/emails/templates/placements/ArtistPlacementRequestSent";
 import { VenuePlacementAcceptedConfirmation } from "@/emails/templates/placements/VenuePlacementAcceptedConfirmation";
 import { PlacementVenueDeclinedArtistRequest } from "@/emails/templates/placements/PlacementVenueDeclinedArtistRequest";
+import { PlacementCancelled } from "@/emails/templates/placements/PlacementCancelled";
 import { PlacementCounterOfferReceived } from "@/emails/templates/placements/PlacementCounterOfferReceived";
 import { PlacementScheduled } from "@/emails/templates/placements/PlacementScheduled";
 import { PlacementArtworkInstalled } from "@/emails/templates/placements/PlacementArtworkInstalled";
@@ -79,6 +80,17 @@ export async function GET(request: Request) {
       query = db.from("placements").select("*").eq("venue_user_id", auth.user!.id);
     }
 
+    // ?engaged=true used to drop pending venue-initiated requests the
+    // artist hadn't opened yet, the idea being that "discovery" lives
+    // on /artwork-requests and the portal stays focused on engaged
+    // rows. In practice it caused two failure modes: an unarchived
+    // pending row never re-appeared on the portal because the filter
+    // dropped it server-side, and incoming requests were invisible
+    // from the portal even though the same row was listed as Pending
+    // in the bell + Messages. The artist portal already has a Pending
+    // tab that makes this surface useful as an inbox, so the filter
+    // is now a no-op. The query param is kept so callers don't break.
+
     let { data, error } = await query.order("created_at", { ascending: false });
 
     // Retry without any envs where the hidden_for_* columns don't exist
@@ -122,9 +134,24 @@ export async function GET(request: Request) {
     } catch { /* table may not exist, treat as empty */ }
 
     const placements = (data || []).filter((p) => {
-      const columnHidden = (p as Record<string, unknown>)[hiddenFlag] === true;
-      const tableHidden = typeof p.id === "string" && fallbackArchivedIds.has(p.id);
-      const hidden = columnHidden || tableHidden;
+      // Source-of-truth precedence:
+      //   1. If the placements row has the hidden_for_* column populated
+      //      (true or false), trust it. This is the modern path post-026.
+      //   2. Only fall back to placement_archives when the column is
+      //      undefined on the row (i.e. migration 026 hasn't been applied
+      //      on this env yet).
+      // Previously these were OR'd together, which meant a stale
+      // placement_archives row from an early environment (or an aborted
+      // archive) could keep a placement permanently "hidden" even after
+      // the user explicitly unarchived it via the column. Symptom: the
+      // artist's All tab is empty but every placement sits under
+      // Archived with no visible way to recover them.
+      const columnValue = (p as Record<string, unknown>)[hiddenFlag];
+      const hidden = columnValue === true
+        ? true
+        : columnValue === false
+          ? false
+          : (typeof p.id === "string" && fallbackArchivedIds.has(p.id));
       if (archivedMode === "all") return true;
       if (archivedMode === "1" || archivedMode === "true") return hidden;
       return !hidden;
@@ -898,6 +925,11 @@ export async function PATCH(request: Request) {
       if (existing.status === "declined") {
         termsUpdates.status = "pending";
       }
+      // Sending a counter is an engaging action — unarchive the row for
+      // the counter sender so it shows up in their main list again.
+      // (See the same-named block in the accept/decline path below.)
+      if (isArtist) termsUpdates.hidden_for_artist = false;
+      if (isVenue) termsUpdates.hidden_for_venue = false;
 
       let termsSaved = false;
       {
@@ -913,6 +945,8 @@ export async function PATCH(request: Request) {
           if (msg.includes("qr_enabled")) delete safe.qr_enabled;
           if (msg.includes("monthly_fee_gbp")) delete safe.monthly_fee_gbp;
           if (msg.includes("arrangement_type")) delete safe.arrangement_type;
+          if (msg.includes("hidden_for_artist")) delete safe.hidden_for_artist;
+          if (msg.includes("hidden_for_venue")) delete safe.hidden_for_venue;
           if (Object.keys(safe).length > 0) {
             const retry = await db.from("placements").update(safe).eq("id", id).select("id");
             if (!retry.error && Array.isArray(retry.data) && retry.data.length > 0) termsSaved = true;
@@ -973,8 +1007,10 @@ export async function PATCH(request: Request) {
           const terms: string[] = [];
           if (counter.arrangementType === "revenue_share" && counter.revenueSharePercent !== undefined) {
             terms.push(`Revenue share: ${counter.revenueSharePercent}% to the venue`);
-          } else if (counter.arrangementType === "free_loan") {
+          } else if (counter.arrangementType === "paid_loan") {
             terms.push("Paid loan arrangement");
+          } else if (counter.arrangementType === "free_loan") {
+            terms.push("Free loan arrangement");
           } else if (counter.arrangementType === "purchase") {
             terms.push("Purchase arrangement");
           } else if (counter.revenueSharePercent !== undefined) {
@@ -1086,6 +1122,33 @@ export async function PATCH(request: Request) {
       if (status === "active") updates.accepted_at = now;
     }
 
+    // Auto-unarchive on any engaging action. If a user previously
+    // archived a placement (e.g. archived a pending request before
+    // deciding) and now accepts / declines / advances it, treat that
+    // engagement as implicit unarchive — otherwise the row would stay
+    // hidden from their main list even after they've committed to it.
+    // Cancellation is explicitly excluded: a user cancelling typically
+    // wants the row out of sight, so don't fight their archive state.
+    const isEngagingAction =
+      status === "active" ||
+      status === "declined" ||
+      !!stage ||
+      !!unsetStage;
+    if (isEngagingAction) {
+      if (isArtist) updates.hidden_for_artist = false;
+      if (isVenue) updates.hidden_for_venue = false;
+      // Also clear any legacy placement_archives row for this
+      // (placement, user) pair. The GET filter prefers the column when
+      // it's populated, but keeping the two stores in sync avoids
+      // surprises on envs where the column is missing or where other
+      // code paths still read the table directly. Fire-and-forget.
+      db.from("placement_archives")
+        .delete()
+        .eq("placement_id", id)
+        .eq("user_id", auth.user!.id)
+        .then(() => {}, () => {});
+    }
+
     // Stage transitions, once the placement is active, either party can
     // advance any stage in one click. The earlier bilateral-confirmation
     // flow (propose → other side confirms) was more friction than value
@@ -1099,8 +1162,20 @@ export async function PATCH(request: Request) {
 
       // Use the explicit stageDate when the caller supplied one (e.g.
       // the Schedule date picker on the progress bar), otherwise fall
-      // back to the current timestamp. Accepts any ISO 8601 string;
-      // future dates are fine so venues can pre-schedule installs.
+      // back to the current timestamp. Future dates are fine so venues
+      // can pre-schedule installs, but reject dates in the past for the
+      // `scheduled` stage so a typo (or a paste-bypass of the date
+      // picker's `min` attribute) can't backdate an install.
+      if (stage === "scheduled" && stageDate) {
+        const draftDay = stageDate.slice(0, 10);
+        const todayDay = new Date(now).toISOString().slice(0, 10);
+        if (draftDay < todayDay) {
+          return NextResponse.json(
+            { error: "Install date can't be in the past." },
+            { status: 400 },
+          );
+        }
+      }
       const ts = stageDate || now;
       if (stage === "scheduled") updates.scheduled_for = ts;
       if (stage === "installed") updates.installed_at = ts;
@@ -1133,8 +1208,8 @@ export async function PATCH(request: Request) {
 
     let { error } = await db.from("placements").update(updates).eq("id", id);
 
-    // Retry without the new lifecycle / proposal columns if the DB isn't
-    // migrated yet (pre-024).
+    // Retry without the new lifecycle / proposal / archive columns if the
+    // DB isn't migrated yet (pre-024 lifecycle, pre-026 archive).
     if (error) {
       const {
         accepted_at: _a,
@@ -1145,6 +1220,8 @@ export async function PATCH(request: Request) {
         proposed_stage: _ps,
         proposed_by_user_id: _pbu,
         proposed_at: _pa,
+        hidden_for_artist: _ha,
+        hidden_for_venue: _hv,
         ...safe
       } = updates as Record<string, unknown>;
       const retry = await db.from("placements").update(safe).eq("id", id);
@@ -1554,7 +1631,7 @@ export async function PATCH(request: Request) {
                 react: ArtistPlacementDeclined({
                   firstName: requesterFirstName,
                   venueName,
-                  discoverMoreVenuesUrl: `${SITE}/spaces-looking-for-art`,
+                  discoverMoreVenuesUrl: `${SITE}/spaces`,
                 }),
                 metadata: { placementId: id },
               });
@@ -1668,6 +1745,138 @@ export async function PATCH(request: Request) {
         }
       } catch (err) {
         console.warn("Placement response message skipped:", err);
+      }
+    }
+
+    // ─── Cancellation fan-out ──────────────────────────────────────────
+    // Either side can cancel a pending or active placement. The DB row
+    // is already updated above, but without a notification + email +
+    // in-thread message the OTHER party has no signal anything changed.
+    // Mirrors the accept/decline fan-out so a cancellation reaches the
+    // counterparty the same way a decline would.
+    if (
+      status === "cancelled" &&
+      existing.status !== "cancelled" &&
+      existing.artist_user_id &&
+      existing.venue_user_id
+    ) {
+      const cancellerIsArtist = auth.user!.id === existing.artist_user_id;
+      const otherPartyUserId = cancellerIsArtist
+        ? existing.venue_user_id
+        : existing.artist_user_id;
+      const otherPartyPersona: "artist" | "venue" = cancellerIsArtist ? "venue" : "artist";
+
+      try {
+        const [{ data: artistProfile }, { data: venueProfile }] = await Promise.all([
+          db.from("artist_profiles").select("slug, name").eq("user_id", existing.artist_user_id).maybeSingle(),
+          db.from("venue_profiles").select("slug, name").eq("user_id", existing.venue_user_id).maybeSingle(),
+        ]);
+        const artistName = artistProfile?.name || "The artist";
+        const venueName = venueProfile?.name || existing.venue || "The venue";
+        const cancellerName = cancellerIsArtist ? artistName : venueName;
+        const otherPartyName = cancellerIsArtist ? venueName : artistName;
+        const placementUrl = `${SITE}/placements/${encodeURIComponent(id)}`;
+
+        // Bell notification. Fire first, independent of email, so a
+        // flaky email service can't drop the in-app signal too.
+        createNotification({
+          userId: otherPartyUserId,
+          kind: "placement_cancelled",
+          title: "Placement cancelled",
+          body: `${cancellerName} cancelled the placement`,
+          link: `/placements/${encodeURIComponent(id)}`,
+        }).catch((err) => console.warn("[placements] cancel notification failed:", err));
+
+        // Email the other party. Idempotency keyed by id alone, the row
+        // can only transition into cancelled once (the gate above blocks
+        // re-fires).
+        try {
+          const { data: { user: otherPartyUser } } = await db.auth.admin.getUserById(otherPartyUserId);
+          if (otherPartyUser?.email) {
+            const firstName = otherPartyUser.user_metadata?.first_name
+              || (otherPartyName || "there").split(" ")[0];
+            const nextStepUrl = otherPartyPersona === "artist"
+              ? `${SITE}/spaces`
+              : `${SITE}/browse`;
+            await sendEmail({
+              idempotencyKey: `placement_cancelled:${id}`,
+              template: "placement_cancelled",
+              category: "placements",
+              to: otherPartyUser.email,
+              subject: `${cancellerName} cancelled the placement`,
+              userId: otherPartyUserId,
+              react: PlacementCancelled({
+                firstName,
+                cancelledByName: cancellerName,
+                recipientPersona: otherPartyPersona,
+                placementUrl,
+                nextStepUrl,
+              }),
+              metadata: { placementId: id },
+            });
+          }
+        } catch (err) {
+          console.warn("Cancellation email skipped:", err);
+        }
+
+        // Post a placement_response message into the conversation so the
+        // chat reflects the cancellation. Reuses placement_response so
+        // existing message_type filters / queries keep working; the
+        // metadata.status field carries the "cancelled" signal that the
+        // MessageInbox renders as its own pill.
+        try {
+          const artistSlug = artistProfile?.slug || existing.artist_slug;
+          const venueSlug = venueProfile?.slug || existing.venue_slug;
+          if (artistSlug && venueSlug) {
+            const senderSlug = cancellerIsArtist ? artistSlug : venueSlug;
+            const recipientSlug = cancellerIsArtist ? venueSlug : artistSlug;
+            const senderType = cancellerIsArtist ? "artist" : "venue";
+
+            const { data: originalMsg } = await db
+              .from("messages")
+              .select("conversation_id")
+              .eq("message_type", "placement_request")
+              .contains("metadata", { placementId: id })
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const [a, b] = [senderSlug, recipientSlug].sort();
+            const conversationId = originalMsg?.conversation_id
+              || deterministicConversationId(senderSlug, recipientSlug)
+              || `dm-${a}__${b}`;
+
+            const baseMsg = {
+              conversation_id: conversationId,
+              sender_id: auth.user!.id,
+              sender_name: senderSlug,
+              sender_type: senderType,
+              recipient_slug: recipientSlug,
+              recipient_user_id: otherPartyUserId,
+              content: `${cancellerName} cancelled the placement.`,
+              // Pre-read like the accept/decline auto-messages so the
+              // bell only bumps once (notification, not message).
+              is_read: true,
+              created_at: new Date().toISOString(),
+            };
+            const extendedMsg = {
+              ...baseMsg,
+              message_type: "placement_response",
+              metadata: { placementId: id, status: "cancelled" },
+            };
+            let { error: msgErr } = await db.from("messages").insert(extendedMsg);
+            if (msgErr) {
+              const retry = await db.from("messages").insert(baseMsg);
+              msgErr = retry.error;
+            }
+            if (msgErr) {
+              console.warn("Auto cancellation message failed:", msgErr.message);
+            }
+          }
+        } catch (err) {
+          console.warn("Cancellation thread message skipped:", err);
+        }
+      } catch (err) {
+        console.warn("Cancellation fan-out failed:", err);
       }
     }
 
@@ -1792,6 +2001,20 @@ export async function DELETE(request: Request) {
         { error: softErr?.message || "Could not archive the placement" },
         { status: 500 },
       );
+    }
+
+    // Clean up any legacy placement_archives row for this (placement, user)
+    // pair when the caller unarchives. The GET filter now prefers the column
+    // over the table, but deleting the stale row keeps the two sources in
+    // sync so other places that still hit placement_archives directly don't
+    // see a phantom archive entry.
+    if (unarchive) {
+      await db
+        .from("placement_archives")
+        .delete()
+        .eq("placement_id", id)
+        .eq("user_id", auth.user!.id)
+        .then(() => {}, () => {});
     }
 
     return NextResponse.json({

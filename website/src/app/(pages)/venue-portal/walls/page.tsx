@@ -12,14 +12,29 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import EmptyState from "@/components/EmptyState";
+import ImageWithFallback from "@/components/ImageWithFallback";
+import { safeHexBackground } from "@/lib/hex-color";
 import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
 import type { Wall } from "@/lib/visualizer/types";
 
+/**
+ * Render fallback for wall names. Legacy rows can be saved with empty
+ * strings or stray punctuation (".", ",", "..."), surfaced in QA as a
+ * card displaying just a comma. Any name that lacks a letter or number
+ * is replaced with "Untitled wall" so cards always read coherently.
+ */
+function displayWallName(name: string | null | undefined): string {
+  if (typeof name !== "string") return "Untitled wall";
+  const trimmed = name.trim();
+  if (!trimmed) return "Untitled wall";
+  if (!/[\p{L}\p{N}]/u.test(trimmed)) return "Untitled wall";
+  return trimmed;
+}
+
 export default function VenueWallsPage() {
-  const router = useRouter();
   const { session, loading: authLoading } = useAuth();
   const [walls, setWalls] = useState<Wall[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -100,7 +115,9 @@ export default function VenueWallsPage() {
         <LoadingGrid />
       ) : walls.length === 0 ? (
         <EmptyState
-          onCreate={() => router.push("/venue-portal/walls/new")}
+          title="Build your first wall"
+          hint="Pick a preset, dial in your wall's real-world dimensions, then drag in artworks to see how they'd look."
+          cta={{ label: "Add your first wall", href: "/venue-portal/walls/new" }}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -120,7 +137,18 @@ function WallCard({ wall }: { wall: Wall }) {
   const aspect = wall.width_cm / wall.height_cm;
   const cardHeight = aspect >= 1 ? 140 : 200;
   const cardWidth = cardHeight * aspect;
-  const photoUrl = wall.kind === "uploaded" ? wall.source_image_url : null;
+  // Only use the photo path when the wall is actually an uploaded
+  // type AND the signed URL is non-empty. Some legacy uploaded rows
+  // exist with `source_image_url = null` (failed upload finalise,
+  // bucket cleared); without this guard those cards fell through to
+  // ImageWithFallback's broken-image placeholder, which renders an
+  // empty box. Falling back to the colour swatch keeps every card
+  // visually filled.
+  const photoUrl =
+    wall.kind === "uploaded" && typeof wall.source_image_url === "string" && wall.source_image_url.length > 0
+      ? wall.source_image_url
+      : null;
+  const nameForFallback = displayWallName(wall.name);
 
   return (
     <Link
@@ -129,22 +157,25 @@ function WallCard({ wall }: { wall: Wall }) {
     >
       <div className="bg-stone-100 grid place-items-center p-6" style={{ minHeight: 160 }}>
         {photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photoUrl}
-            alt={wall.name}
-            className="rounded shadow-inner object-cover"
+          <div
             style={{
               width: cardWidth,
               height: cardHeight,
               maxWidth: "100%",
             }}
-          />
+          >
+            <ImageWithFallback
+              src={photoUrl}
+              alt={nameForFallback}
+              className="rounded shadow-inner object-cover w-full h-full"
+              placeholderClassName="rounded shadow-inner bg-accent/10 text-accent flex items-center justify-center text-xl font-medium w-full h-full"
+            />
+          </div>
         ) : (
           <div
             className="rounded shadow-inner"
             style={{
-              backgroundColor: `#${wall.wall_color_hex}`,
+              backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA"),
               width: cardWidth,
               height: cardHeight,
               maxWidth: "100%",
@@ -154,34 +185,13 @@ function WallCard({ wall }: { wall: Wall }) {
       </div>
       <div className="px-4 py-3">
         <p className="font-medium text-sm text-foreground truncate group-hover:text-accent transition-colors">
-          {wall.name}
+          {displayWallName(wall.name)}
         </p>
         <p className="text-xs text-muted mt-0.5 tabular-nums">
           {wall.width_cm} × {wall.height_cm} cm · {wall.kind}
         </p>
       </div>
     </Link>
-  );
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="py-16 text-center border border-dashed border-border rounded-2xl bg-white">
-      <h2 className="font-serif text-xl text-foreground mb-2">
-        Build your first wall
-      </h2>
-      <p className="text-sm text-muted mb-5 max-w-md mx-auto">
-        Pick a preset, dial in your wall&apos;s real-world dimensions, then
-        drag in artworks to see how they&apos;d look in your space.
-      </p>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-medium hover:bg-stone-800"
-      >
-        + New Wall
-      </button>
-    </div>
   );
 }
 

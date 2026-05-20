@@ -31,8 +31,10 @@ test.describe("smoke", () => {
 
   test("/email-preview lists the template library", async ({ page }) => {
     await page.goto("/email-preview");
-    // The header row states the count explicitly.
-    await expect(page.getByText(/113 templates/i)).toBeVisible();
+    // The header row states the count. Pinning to a specific number
+    // breaks every time a template is added/removed; assert the
+    // shape ("N templates · …") instead.
+    await expect(page.getByText(/\d+ templates/i)).toBeVisible();
   });
 
   test("/email-preview/customer_order_receipt renders the template", async ({ page }) => {

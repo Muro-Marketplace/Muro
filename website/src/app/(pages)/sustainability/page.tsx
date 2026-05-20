@@ -8,7 +8,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Sustainability, Wallplace",
+  title: "Sustainability",
   description:
     "How Wallplace makes the way the UK consumes wall art more sustainable: real artists, real spaces, no shipping-once-displayed-once cycle, and an alternative to landfill prints.",
 };
@@ -39,7 +39,7 @@ export default function SustainabilityPage() {
               <p className="text-sm text-foreground/85 leading-relaxed">
                 Every work on Wallplace is made by a named, living artist,
                 no anonymous mass-printing, no warehouse stock, no algorithmic
-                "trending decor". Originals and small editions, with
+                &ldquo;trending decor&rdquo;. Originals and small editions, with
                 provenance.
               </p>
             </div>
@@ -49,7 +49,7 @@ export default function SustainabilityPage() {
               </p>
               <p className="text-sm text-foreground/85 leading-relaxed">
                 A piece on loan to a venue typically stays up for months,
-                rotated rather than replaced. That's a fundamentally lower
+                rotated rather than replaced. That&rsquo;s a fundamentally lower
                 footprint than the print-buy-bin cycle of high-street decor.
               </p>
             </div>
@@ -60,7 +60,7 @@ export default function SustainabilityPage() {
               <p className="text-sm text-foreground/85 leading-relaxed">
                 Direct artist-to-venue or artist-to-buyer dispatch. No
                 third-party fulfilment hops, no overseas warehouses, no
-                stock destroyed when it doesn't sell.
+                stock destroyed when it doesn&rsquo;t sell.
               </p>
             </div>
           </div>
@@ -86,7 +86,7 @@ export default function SustainabilityPage() {
                 Local first
               </h2>
               <p className="text-muted leading-relaxed">
-                Our location filters and "Spaces near me" surfaces nudge
+                Our location filters and &ldquo;Spaces near me&rdquo; surfaces nudge
                 venues toward artists in the same city. Less freight, more
                 local cultural ecosystem. Artists who live ten minutes from
                 the venue can install in person, swap in new work without
@@ -96,20 +96,20 @@ export default function SustainabilityPage() {
 
             <div>
               <h2 className="text-2xl font-serif text-foreground mb-3">
-                What we don't do
+                What we don&rsquo;t do
               </h2>
               <ul className="list-disc pl-6 text-muted leading-relaxed space-y-2 marker:text-accent">
-                <li>We don't drop-ship anonymous mass-print decor.</li>
+                <li>We don&rsquo;t drop-ship anonymous mass-print decor.</li>
                 <li>
-                  We don't run a print-on-demand warehouse, every original
-                  comes from the artist's studio.
+                  We don&rsquo;t run a print-on-demand warehouse, every original
+                  comes from the artist&rsquo;s studio.
                 </li>
                 <li>
-                  We don't add &ldquo;new collections&rdquo; on a fashion
+                  We don&rsquo;t add &ldquo;new collections&rdquo; on a fashion
                   cycle to manufacture replacement demand.
                 </li>
                 <li>
-                  We don't charge venues a platform fee, so there's no
+                  We don&rsquo;t charge venues a platform fee, so there&rsquo;s no
                   pressure to over-stock walls just to justify a subscription.
                 </li>
               </ul>
@@ -117,14 +117,14 @@ export default function SustainabilityPage() {
 
             <div>
               <h2 className="text-2xl font-serif text-foreground mb-3">
-                Where we're going
+                Where we&rsquo;re going
               </h2>
               <p className="text-muted leading-relaxed">
-                We're working toward giving every artist + venue a
+                We&rsquo;re working toward giving every artist + venue a
                 placement-history record so the lifetime journey of a work
                , first studio, first wall, first buyer, future loans, is
                 tracked. The longer a piece stays in circulation, the better
-                it is for the planet and for the artist's residual income.
+                it is for the planet and for the artist&rsquo;s residual income.
               </p>
             </div>
           </div>
@@ -137,7 +137,7 @@ export default function SustainabilityPage() {
               Apply as an artist
             </Link>
             <Link
-              href="/register-venue"
+              href="/signup/venue"
               className="inline-flex items-center justify-center px-6 py-3 border border-border text-foreground text-sm font-medium rounded-sm hover:border-foreground/40 transition-colors"
             >
               Register your venue

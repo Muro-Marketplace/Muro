@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Artist Agreement – Wallplace",
+  title: "Artist Agreement",
   description: "The agreement between Wallplace and artists accepted onto the platform.",
 };
 

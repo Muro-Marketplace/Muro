@@ -12,9 +12,19 @@ import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { useToast } from "@/context/ToastContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { slugify } from "@/lib/slugify";
 import { useSearchParams } from "next/navigation";
+import {
+  PROFILE_THEMES,
+  LABEL_THEMES,
+  canCustomiseTheme,
+  DEFAULT_PROFILE_THEME,
+  DEFAULT_LABEL_THEME,
+  type ProfileTheme,
+  type LabelTheme,
+} from "@/lib/profile-themes";
 
 // Catalogue of common artwork mediums for the per-work Combobox. The
 // list is intentionally permissive, artists almost always have edge
@@ -332,6 +342,10 @@ interface ProfileState {
   openToRevenueShare: boolean;
   revenueSharePercent: number;
   openToOutrightPurchase: boolean;
+  /** Migration 055: opt-in to "Collect from artist" at checkout. Default
+   *  false so existing artists don't start receiving pickup requests
+   *  until they've explicitly enabled it. */
+  offersPickup: boolean;
   /**
    * Single "can provide framing" flag. Replaces the previous pair
    * (`canProvideFrames` + `canArrangeFraming`) which were confusingly
@@ -348,6 +362,10 @@ interface ProfileState {
   availableSizes: string[];
   deliveryRadius: string;
   venueTypesSuitedFor: string[];
+  /** Premium+ public-profile theme id. NULL/empty -> default light. */
+  profileTheme: string;
+  /** Premium+ QR-label theme id. NULL/empty -> default classic. */
+  labelTheme: string;
 }
 
 /** Empty profile state for a brand-new artist who has just completed
@@ -375,10 +393,13 @@ function emptyProfile(nameSeed: string): ProfileState {
     openToRevenueShare: false,
     revenueSharePercent: 10,
     openToOutrightPurchase: false,
+    offersPickup: false,
     canProvideFraming: false,
     availableSizes: [],
     deliveryRadius: "",
     venueTypesSuitedFor: [],
+    profileTheme: "",
+    labelTheme: "",
   };
 }
 
@@ -420,33 +441,46 @@ function initProfile(a: Artist): ProfileState {
     openToRevenueShare: a.openToRevenueShare,
     revenueSharePercent: a.revenueSharePercent || 10,
     openToOutrightPurchase: a.openToOutrightPurchase,
+    offersPickup: a.offersPickup ?? false,
     // Treat the legacy pair as "either provides framing", collapse to
     // the new single flag.
     canProvideFraming: a.canProvideFrames || a.canArrangeFraming,
     availableSizes: [...a.availableSizes],
     deliveryRadius: a.deliveryRadius,
     venueTypesSuitedFor: [...a.venueTypesSuitedFor],
+    profileTheme: a.profileTheme || "",
+    labelTheme: a.labelTheme || "",
   };
 }
 
 export default function ProfileEditorPage() {
   const { artist, loading: artistLoading, profileId, refetch } = useCurrentArtist();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const searchParams = useSearchParams();
   const isWelcome = searchParams?.get("welcome") === "1";
   const [profile, setProfile] = useState<ProfileState | null>(null);
   // Derive a slug up-front so we can save a brand-new profile that has
   // no artist_profiles row yet. Prefer the profile's existing slug,
   // then user metadata, then the display name, then the email prefix.
-  const derivedSlug = (() => {
+  //
+  // useState with a lazy initialiser is the canonical way to capture
+  // a stable timestamp: the initialiser fires once on mount and the
+  // value is identity-stable for the lifetime of the component. We
+  // never call setFallbackTimestamp, so the value is effectively
+  // const. react-hooks/purity rejects Date.now() inside useMemo too
+  // (useMemo factories run during render), but useState's lazy init
+  // is explicitly impure-safe in the React docs.
+  const [fallbackTimestamp] = useState(() => Date.now());
+  const derivedSlug = useMemo(() => {
     if (artist?.slug) return artist.slug;
     const metaSlug = (user?.user_metadata?.artist_slug as string | undefined) || "";
     if (metaSlug) return metaSlug;
     const displayName = (user?.user_metadata?.display_name as string | undefined) || "";
-    if (displayName) return slugify(displayName) || `artist-${Date.now()}`;
+    if (displayName) return slugify(displayName) || `artist-${fallbackTimestamp}`;
     const emailPrefix = (user?.email || "").split("@")[0];
-    return slugify(emailPrefix) || `artist-${Date.now()}`;
-  })();
+    return slugify(emailPrefix) || `artist-${fallbackTimestamp}`;
+  }, [artist?.slug, user?.user_metadata, user?.email, fallbackTimestamp]);
   const [saved, setSaved] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
@@ -466,6 +500,7 @@ export default function ProfileEditorPage() {
   useEffect(() => {
     if (profile) return;
     if (artist) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfile(initProfile(artist));
       return;
     }
@@ -483,6 +518,7 @@ export default function ProfileEditorPage() {
   useUnsavedWarning(hasUnsavedChanges);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!artist) { setWorks([]); return; }
     setWorks([...artist.works]);
   }, [artist]);
@@ -616,6 +652,21 @@ export default function ProfileEditorPage() {
   async function handleSave() {
     if (!profile) return;
 
+    // Postcode is freeform but flagged in the label as "used for
+    // distance search". Garbage values silently never match anything,
+    // catch them before they hit the geocode round-trip.
+    const postcodeRaw = profile.postcode.trim();
+    if (
+      postcodeRaw &&
+      !/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(postcodeRaw)
+    ) {
+      showToast(
+        "Postcode doesn't look like a valid UK postcode (e.g. SW1A 1AA). Fix it or leave it blank.",
+        { variant: "warn" },
+      );
+      return;
+    }
+
     // Save to Supabase. upsertArtistProfile handles both "first save for
     // a freshly-claimed account" (no existing row yet) and "update
     // existing profile", so we don't need a separate path for new users.
@@ -665,22 +716,30 @@ export default function ProfileEditorPage() {
           open_to_revenue_share: profile.openToRevenueShare,
           revenue_share_percent: profile.revenueSharePercent,
           open_to_outright_purchase: profile.openToOutrightPurchase,
+          offers_pickup: profile.offersPickup,
           // Single framing flag drives both legacy columns so existing
           // search filters keep matching.
           can_provide_frames: profile.canProvideFraming,
           can_arrange_framing: profile.canProvideFraming,
           delivery_radius: profile.deliveryRadius,
           venue_types_suited_for: profile.venueTypesSuitedFor,
+          // Premium+ theme selections. Sent for everyone so the API
+          // doesn't have to reach back into the user's plan; the
+          // server-side tier check in /api/artist-profile drops them
+          // for Core artists so a downgraded user can't keep a paid
+          // theme live by editing other fields.
+          profile_theme: profile.profileTheme || null,
+          label_theme: profile.labelTheme || null,
         }),
       });
 
       if (!res.ok) {
-        alert("Failed to save profile. Please try again.");
+        showToast("Failed to save profile. Please try again.", { variant: "error" });
         return;
       }
     } catch (err) {
       console.error("Profile save error:", err);
-      alert("Failed to save profile. Please check your connection.");
+      showToast("Failed to save profile. Please check your connection.", { variant: "error" });
       return;
     }
 
@@ -821,7 +880,29 @@ export default function ProfileEditorPage() {
                   onChange={(e) => update("postcode", e.target.value.toUpperCase())}
                   placeholder="e.g. E8 1DY"
                   className={inputClass}
+                  aria-invalid={
+                    profile.postcode.trim().length > 0 &&
+                    !/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(
+                      profile.postcode.trim(),
+                    )
+                  }
                 />
+                {(() => {
+                  // Same regex the server uses, mirrored client-side so
+                  // the artist sees the problem before they hit Save and
+                  // the bad value never gets posted. Distance search
+                  // silently never matches anything when the postcode
+                  // can't geocode, so the validation is meaningful.
+                  const v = profile.postcode.trim();
+                  if (!v) return null;
+                  const valid = /^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(v);
+                  if (valid) return null;
+                  return (
+                    <p className="text-xs text-red-600 mt-1">
+                      Enter a valid UK postcode (e.g. SW1A 1AA), or leave blank.
+                    </p>
+                  );
+                })()}
               </div>
             </div>
             {/*
@@ -968,6 +1049,7 @@ export default function ProfileEditorPage() {
                 // "can provide frames" + "can arrange framing" pair,
                 // which were saying nearly the same thing in two ways.
                 { key: "canProvideFraming" as const, label: "Can provide framing" },
+                { key: "offersPickup" as const, label: "Collect from artist (in person)" },
               ]).map(({ key, label }) => (
                 <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
                   <button
@@ -983,6 +1065,9 @@ export default function ProfileEditorPage() {
                 </label>
               ))}
             </div>
+            <p className="text-xs text-muted mt-2 leading-relaxed">
+              &ldquo;Collect from artist&rdquo; lets buyers pick orders up in person at checkout instead of paying for shipping. Leave it off if you&rsquo;d rather only ship.
+            </p>
           </div>
 
           {/* Deal types */}
@@ -1209,6 +1294,17 @@ export default function ProfileEditorPage() {
           </Link>
         </div>
 
+        <div className={sectionClass}>
+          <ThemePickerSection
+            profile={profile}
+            subscriptionPlan={artist?.subscriptionPlan}
+            onChange={(partial) => {
+              setProfile({ ...profile, ...partial });
+              setHasUnsavedChanges(true);
+            }}
+          />
+        </div>
+
         {/*
          * Bottom Save Changes, duplicates the top button so users on
          * a long edit page don't have to scroll back up after filling
@@ -1232,5 +1328,163 @@ export default function ProfileEditorPage() {
 
       </div>
     </ArtistPortalLayout>
+  );
+}
+
+interface ThemePickerSectionProps {
+  profile: ProfileState;
+  subscriptionPlan: string | null | undefined;
+  onChange: (partial: Partial<ProfileState>) => void;
+}
+
+function ThemePickerSection({ profile, subscriptionPlan, onChange }: ThemePickerSectionProps) {
+  const unlocked = canCustomiseTheme(subscriptionPlan);
+  const currentProfileTheme = profile.profileTheme || DEFAULT_PROFILE_THEME;
+  const currentLabelTheme = profile.labelTheme || DEFAULT_LABEL_THEME;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-medium">Profile & label theme</h2>
+          <p className="text-sm text-muted mt-1 max-w-xl">
+            Pick a colour scheme for your public profile and your QR labels.{" "}
+            {unlocked ? (
+              <>Changes apply on save.</>
+            ) : (
+              <>This is a Premium feature, you&rsquo;ll see a preview here but the public profile stays on the default scheme until you upgrade.</>
+            )}
+          </p>
+        </div>
+        {!unlocked && (
+          <Link
+            href="/artist-portal/billing"
+            className="inline-flex items-center justify-center px-4 py-2 text-xs font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors shrink-0"
+          >
+            Upgrade to Premium
+          </Link>
+        )}
+      </div>
+
+      <div className="mb-8">
+        <p className="text-xs uppercase tracking-wider text-muted mb-3">Public profile background</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {PROFILE_THEMES.map((t) => (
+            <ProfileThemeCard
+              key={t.id}
+              theme={t}
+              selected={currentProfileTheme === t.id}
+              disabled={!unlocked}
+              onPick={() => unlocked && onChange({ profileTheme: t.id })}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs uppercase tracking-wider text-muted mb-3">QR label colour</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {LABEL_THEMES.map((t) => (
+            <LabelThemeCard
+              key={t.id}
+              theme={t}
+              selected={currentLabelTheme === t.id}
+              disabled={!unlocked}
+              onPick={() => unlocked && onChange({ labelTheme: t.id })}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileThemeCard({
+  theme,
+  selected,
+  disabled,
+  onPick,
+}: {
+  theme: ProfileTheme;
+  selected: boolean;
+  disabled: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={`text-left rounded-sm border transition-colors ${
+        selected ? "border-accent ring-1 ring-accent/40" : "border-border hover:border-foreground/30"
+      } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+    >
+      {/* Mini preview, paints the actual bg + accent + text colours
+          so the artist can see what the theme will look like on the
+          public page before committing. */}
+      <div
+        className="aspect-[4/3] p-3 rounded-t-sm flex flex-col justify-between"
+        style={{ backgroundColor: theme.bg, color: theme.fg }}
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="block w-3 h-3 rounded-full" style={{ backgroundColor: theme.accent }} />
+          <span className="text-[10px] font-medium tracking-wide" style={{ color: theme.muted }}>
+            Aa
+          </span>
+        </div>
+        <p className="text-xs font-medium leading-tight">{theme.label}</p>
+      </div>
+      <div className="px-3 py-2 border-t border-border bg-surface">
+        <p className="text-[11px] text-muted leading-snug">{theme.description}</p>
+      </div>
+    </button>
+  );
+}
+
+function LabelThemeCard({
+  theme,
+  selected,
+  disabled,
+  onPick,
+}: {
+  theme: LabelTheme;
+  selected: boolean;
+  disabled: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={`text-left rounded-sm border transition-colors ${
+        selected ? "border-accent ring-1 ring-accent/40" : "border-border hover:border-foreground/30"
+      } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+    >
+      <div
+        className="aspect-square p-3 rounded-t-sm flex flex-col items-center justify-center gap-1.5"
+        style={{ backgroundColor: theme.bg, color: theme.fg, borderColor: theme.border }}
+      >
+        {/* Minimal QR stand-in, enough to read the contrast at a glance */}
+        <div
+          className="w-8 h-8 grid grid-cols-3 gap-0.5"
+          aria-hidden
+        >
+          {Array.from({ length: 9 }).map((_, i) => (
+            <span
+              key={i}
+              className="block"
+              style={{ backgroundColor: i % 2 === 0 ? theme.fg : theme.bg }}
+            />
+          ))}
+        </div>
+        <p className="text-[10px] font-medium" style={{ color: theme.subtle }}>By Artist</p>
+      </div>
+      <div className="px-2 py-1.5 border-t border-border bg-surface text-center">
+        <p className="text-[11px] text-foreground">{theme.label}</p>
+      </div>
+    </button>
   );
 }

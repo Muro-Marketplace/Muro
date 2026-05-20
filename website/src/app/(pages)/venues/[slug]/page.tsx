@@ -1,9 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { venues as staticVenues } from "@/data/venues";
 import VenueWallCard from "@/components/VenueWallCard";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import VenueProfileApplyCta from "@/components/VenueProfileApplyCta";
 
 interface VenueShape {
   slug: string;
@@ -37,6 +40,39 @@ interface PublicWall {
   kind: "preset" | "uploaded";
   wall_color_hex: string;
   source_image_url?: string;
+}
+
+interface PublicArtworkRequest {
+  id: string;
+  title: string;
+  description: string | null;
+  intent: string[] | null;
+  budget_min_pence: number | null;
+  budget_max_pence: number | null;
+  created_at: string;
+}
+
+async function loadPublicArtworkRequests(
+  venueUserId: string,
+): Promise<PublicArtworkRequest[]> {
+  // Plan G #6b: surface a venue's own open artwork-requests on their
+  // public profile so visiting artists can see what they're calling
+  // for without bouncing off to /artwork-requests.
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
+      .from("artwork_requests")
+      .select("id, title, description, intent, budget_min_pence, budget_max_pence, created_at")
+      .eq("venue_user_id", venueUserId)
+      .eq("status", "open")
+      .eq("visibility", "semi_public")
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (error) return [];
+    return (data || []) as PublicArtworkRequest[];
+  } catch {
+    return [];
+  }
 }
 
 async function loadPublicWalls(venueUserId: string): Promise<PublicWall[]> {
@@ -143,6 +179,27 @@ async function loadVenue(slug: string): Promise<{ venue: VenueShape; userId: str
   };
 }
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  try {
+    const { slug } = await params;
+    const loaded = await loadVenue(slug);
+    if (!loaded) return { title: "Space not found" };
+    const { venue } = loaded;
+    const subtitle = [venue.type, venue.city || venue.location]
+      .filter(Boolean)
+      .join(", ");
+    const desc = (venue.description || "").trim().slice(0, 160) ||
+      (subtitle ? `${venue.name}, ${subtitle}.` : venue.name);
+    return { title: venue.name, description: desc };
+  } catch {
+    return { title: "Space" };
+  }
+}
+
 export default async function VenueDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const loaded = await loadVenue(slug);
@@ -155,6 +212,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
   // Pulled in parallel with the gallery render, empty array
   // gracefully hides the section.
   const publicWalls = userId ? await loadPublicWalls(userId) : [];
+  const openRequests = userId ? await loadPublicArtworkRequests(userId) : [];
   const arrangements = [
     venue.interested_in_free_loan && "Paid loan",
     venue.interested_in_revenue_share && "Revenue share",
@@ -163,6 +221,14 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
 
   return (
     <div className="bg-background min-h-screen">
+      <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-5">
+        <Breadcrumbs
+          items={[
+            { label: "Spaces", href: "/spaces" },
+            { label: venue.name },
+          ]}
+        />
+      </div>
       {/* Hero */}
       <div className="relative h-[280px] sm:h-[360px] bg-border/20">
         {hero && (
@@ -181,11 +247,26 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70" />
         <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 text-white">
-          <div className="max-w-[1100px] mx-auto">
-            <p className="text-[10px] font-medium uppercase tracking-[0.18em] opacity-80">
-              {[venue.type, venue.city || venue.location].filter(Boolean).join(" · ")}
-            </p>
-            <h1 className="font-serif text-3xl sm:text-4xl mt-1">{venue.name}</h1>
+          <div className="max-w-[1100px] mx-auto flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] opacity-80">
+                {[venue.type, venue.city || venue.location].filter(Boolean).join(" · ")}
+              </p>
+              <h1 className="font-serif text-3xl sm:text-4xl mt-1">{venue.name}</h1>
+            </div>
+            {/* Primary CTA. Auth-aware: signed-out visitors see
+                "Apply to be displayed here" into the artist signup
+                flow; signed-in artists see "Message this venue"
+                because they're already on the platform; non-artists
+                see no CTA (the apply prompt was rendering even when
+                viewers were already logged in, which read as a stale
+                marketing nudge). Anchored to the open-requests
+                section whenever a venue has live calls. */}
+            <VenueProfileApplyCta
+              venueSlug={venue.slug}
+              venueName={venue.name}
+              hasOpenRequests={openRequests.length > 0}
+            />
           </div>
         </div>
       </div>
@@ -197,6 +278,62 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
             <section>
               <h2 className="font-serif text-lg text-foreground mb-3">About the space</h2>
               <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{venue.description}</p>
+            </section>
+          )}
+
+          {openRequests.length > 0 && (
+            <section id="open-requests" className="scroll-mt-24">
+              <h2 className="font-serif text-lg text-foreground mb-1">Open artwork requests</h2>
+              <p className="text-xs text-muted mb-3">
+                What this venue is calling for right now. Submit work that
+                fits the brief and they&rsquo;ll see it in their inbox.
+              </p>
+              <ul className="space-y-2">
+                {openRequests.map((r) => {
+                  const rawMin = r.budget_min_pence ?? null;
+                  const rawMax = r.budget_max_pence ?? null;
+                  // Defensive: legacy rows may have been saved with min > max
+                  // before validation existed. Swap on render so the chip
+                  // always reads as an ascending range.
+                  const min =
+                    rawMin != null && rawMax != null && rawMin > rawMax ? rawMax : rawMin;
+                  const max =
+                    rawMin != null && rawMax != null && rawMin > rawMax ? rawMin : rawMax;
+                  const budget =
+                    min != null && max != null
+                      ? `£${(min / 100).toFixed(0)} to £${(max / 100).toFixed(0)}`
+                      : min != null
+                      ? `from £${(min / 100).toFixed(0)}`
+                      : max != null
+                      ? `up to £${(max / 100).toFixed(0)}`
+                      : null;
+                  return (
+                    <li key={r.id} className="border border-border rounded-sm p-4 hover:border-accent/40 transition-colors">
+                      <Link
+                        href={`/artist-portal/artwork-requests/${r.id}`}
+                        className="block"
+                      >
+                        <p className="text-sm font-medium text-foreground mb-1">{r.title}</p>
+                        {r.description && (
+                          <p className="text-xs text-muted line-clamp-2">{r.description}</p>
+                        )}
+                        <div className="flex flex-wrap gap-2 mt-2 text-[10px]">
+                          {(r.intent || []).map((i) => (
+                            <span key={i} className="px-1.5 py-0.5 bg-accent/5 text-accent rounded-sm capitalize">
+                              {i}
+                            </span>
+                          ))}
+                          {budget && (
+                            <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">
+                              {budget}
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
             </section>
           )}
 
@@ -274,12 +411,18 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
           {((venue.preferred_styles || []).length > 0 || (venue.preferred_themes || []).length > 0) && (
             <section>
               <h2 className="font-serif text-lg text-foreground mb-3">What the venue looks for</h2>
+              {/* Both rows render with the same chip style now, the
+                  Styles row used to be filled accent while Themes
+                  used a grey outline, the inconsistency made the two
+                  read as different categories of thing. Unified on
+                  the outlined-surface style so the heading hierarchy
+                  carries the meaning, not the chip styling. */}
               {(venue.preferred_styles || []).length > 0 && (
                 <div className="mb-3">
                   <p className="text-[10px] uppercase tracking-wider text-muted mb-1.5">Styles</p>
                   <div className="flex flex-wrap gap-1.5">
                     {(venue.preferred_styles || []).map((s) => (
-                      <span key={s} className="text-xs px-2 py-1 bg-accent/5 text-accent border border-accent/20 rounded-full">{s}</span>
+                      <span key={s} className="text-xs px-2 py-1 bg-surface text-foreground border border-border rounded-full">{s}</span>
                     ))}
                   </div>
                 </div>
@@ -325,7 +468,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ sl
             )}
           </div>
           <Link
-            href="/spaces-looking-for-art"
+            href="/spaces"
             className="inline-flex items-center gap-1 mt-4 text-xs text-accent hover:underline"
           >
             &larr; All spaces

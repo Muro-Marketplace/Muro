@@ -31,6 +31,16 @@ interface Placement {
   revenue: string | null;
 }
 
+/** Per-order artist payout. Mirrors the dashboard's calculation
+ *  (/api/dashboard/route.ts → totalRevenue) so Analytics and Dashboard
+ *  show the same number. Falls back to the buyer-side `total` only for
+ *  legacy rows that pre-date the `artist_revenue` column. */
+function orderPayout(o: { total?: number; artist_revenue?: number | null }): number {
+  if (typeof o.artist_revenue === "number" && Number.isFinite(o.artist_revenue)) return o.artist_revenue;
+  if (typeof o.total === "number" && Number.isFinite(o.total)) return o.total;
+  return 0;
+}
+
 interface AnalyticsData {
   totals: {
     profile_views: number;
@@ -51,7 +61,7 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState("Last 30 days");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [placements, setPlacements] = useState<Placement[]>([]);
-  const [orders, setOrders] = useState<{ total?: number; created_at?: string }[]>([]);
+  const [orders, setOrders] = useState<{ total?: number; artist_revenue?: number | null; created_at?: string }[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
@@ -89,6 +99,7 @@ export default function AnalyticsPage() {
 
   // Fetch engagement analytics (reacts to date range changes)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAnalyticsLoading(true);
     authFetch(`/api/analytics/artist?range=${dateRangeToParam(dateRange)}`)
       .then((r) => r.json())
@@ -102,7 +113,12 @@ export default function AnalyticsPage() {
   const activePlacements = placements.filter((p) => p.status === "Active").length;
   const pendingPlacements = placements.filter((p) => p.status === "Pending").length;
   const completedPlacements = placements.filter((p) => p.status === "Completed" || p.status === "Sold").length;
-  const totalEarnings = orders.reduce((sum: number, o: { total?: number }) => sum + (o.total || 0), 0);
+  // Use the artist's net payout (artist_revenue) rather than the
+  // buyer-paid gross (total) so this figure matches the dashboard's
+  // "Total Sales" tile and the per-row payouts on the Orders page.
+  // Falls back to `total` for legacy rows pre-dating the artist_revenue
+  // column so we don't silently zero them out.
+  const totalEarnings = orders.reduce((sum: number, o) => sum + orderPayout(o), 0);
   const uniqueVenues = new Set(placements.map((p) => p.venue)).size;
 
   const venuePerformance = useMemo(() => {
@@ -133,7 +149,7 @@ export default function AnalyticsPage() {
       });
       data.push({
         month: monthStr,
-        earnings: monthOrders.reduce((s: number, o: { total?: number }) => s + (o.total || 0), 0),
+        earnings: monthOrders.reduce((s: number, o) => s + orderPayout(o), 0),
         sales: monthOrders.length,
       });
     }
@@ -305,25 +321,17 @@ export default function AnalyticsPage() {
             </div>
           )
         ) : (
-          <div className="px-6 py-8 text-center relative">
-            {/* Blurred preview */}
-            <div className="space-y-3 opacity-30 blur-sm pointer-events-none select-none">
-              <div className="flex items-center justify-between"><span className="text-sm">The Coffee House</span><span className="text-xs text-muted">2 Apr</span></div>
-              <div className="flex items-center justify-between"><span className="text-sm">Bloom Hotel</span><span className="text-xs text-muted">28 Mar</span></div>
-              <div className="flex items-center justify-between"><span className="text-sm">Studio Works</span><span className="text-xs text-muted">25 Mar</span></div>
-            </div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <p className="text-sm text-foreground font-medium mb-1">
-                {analytics?.venue_viewer_count ?? 0} venue{(analytics?.venue_viewer_count ?? 0) !== 1 ? "s" : ""} viewed your profile
-              </p>
-              <p className="text-xs text-muted mb-3">Upgrade to Premium to see which venues are looking at your work</p>
-              <Link
-                href="/artist-portal/billing"
-                className="px-4 py-2 text-xs font-medium text-white bg-accent rounded-sm hover:bg-accent/90 transition-colors"
-              >
-                Upgrade to Premium
-              </Link>
-            </div>
+          <div className="px-6 py-8 text-center">
+            <p className="text-sm text-foreground font-medium mb-1">
+              {analytics?.venue_viewer_count ?? 0} venue{(analytics?.venue_viewer_count ?? 0) !== 1 ? "s" : ""} viewed your profile
+            </p>
+            <p className="text-xs text-muted mb-3">Upgrade to Premium to see which venues are looking at your work</p>
+            <Link
+              href="/artist-portal/billing"
+              className="px-4 py-2 text-xs font-medium text-white bg-accent rounded-sm hover:bg-accent/90 transition-colors inline-block"
+            >
+              Upgrade to Premium
+            </Link>
           </div>
         )}
       </div>
@@ -331,9 +339,9 @@ export default function AnalyticsPage() {
       {/* ── EXISTING: Revenue metrics ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-surface border border-border rounded-sm p-5">
-          <p className="text-sm text-muted mb-1">Total Earnings</p>
+          <p className="text-sm text-muted mb-1">Total Sales</p>
           <p className="text-2xl font-medium">£{totalEarnings.toLocaleString()}</p>
-          <p className="text-xs text-muted mt-1">All time</p>
+          <p className="text-xs text-muted mt-1">All time, your share after fees</p>
         </div>
         <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Pieces Placed</p>
@@ -408,7 +416,7 @@ export default function AnalyticsPage() {
                         "bg-gray-100 text-gray-600"
                       }`}>{p.status}</span>
                     </td>
-                    <td className="px-6 py-3.5 text-right font-medium text-foreground">{p.revenue ?? "–"}</td>
+                    <td className="px-6 py-3.5 text-right font-medium text-foreground">{p.revenue ?? "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -517,17 +525,23 @@ function ViewsChart({ data }: { data: { date: string; profile_views: number; art
   const labelEvery = Math.max(1, Math.ceil(data.length / 14));
 
   return (
-    <div ref={containerRef} className="w-full">
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-3">
-        {lines.map((line) => (
-          <div key={line.key} className="flex items-center gap-1.5">
-            <div className="w-3 h-[2px] rounded-full" style={{ backgroundColor: line.color }} />
-            <span className="text-[10px] text-muted">{line.label}</span>
-          </div>
-        ))}
-      </div>
-      <svg width={width} height={chartHeight}>
+    // Plan F #13: scroll horizontally if the viewport is narrower
+    // than the minimum legible chart width (400px). Inside the scroll
+    // wrapper the SVG keeps its measured-width responsive behaviour;
+    // the min-width clamp on the inner div prevents legend collapse
+    // and unreadable axis labels on iPhone SE-sized screens.
+    <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div ref={containerRef} className="min-w-[400px]">
+        {/* Legend */}
+        <div className="flex items-center gap-4 mb-3">
+          {lines.map((line) => (
+            <div key={line.key} className="flex items-center gap-1.5">
+              <div className="w-3 h-[2px] rounded-full" style={{ backgroundColor: line.color }} />
+              <span className="text-[10px] text-muted">{line.label}</span>
+            </div>
+          ))}
+        </div>
+        <svg width={width} height={chartHeight}>
         {yTicks.map((tick) => {
           const y = padding.top + innerHeight - (tick / maxVal) * innerHeight;
           return (
@@ -596,7 +610,8 @@ function ViewsChart({ data }: { data: { date: string; profile_views: number; art
             </g>
           );
         })}
-      </svg>
+        </svg>
+      </div>
     </div>
   );
 }
@@ -612,7 +627,9 @@ function niceMax(val: number): number {
   return 10 * mag;
 }
 
-function formatPounds(val: number): string {
+// Compact format for chart axis labels: "£12k" / "£500". For full
+// currency strings (£12,345.67) use formatPounds from @/lib/format-currency.
+function formatPoundsCompact(val: number): string {
   if (val >= 1000) return `£${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
   return `£${val.toLocaleString()}`;
 }
@@ -651,15 +668,18 @@ function EarningsChart({ data }: { data: { month: string; earnings: number; sale
   const yTicks = [0, maxEarnings * 0.25, maxEarnings * 0.5, maxEarnings * 0.75, maxEarnings];
 
   return (
-    <div ref={containerRef} className="w-full">
-      <svg width={width} height={chartHeight}>
+    // Plan F #13: same horizontal-scroll pattern as the views chart so
+    // the earnings line stays legible on phones.
+    <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div ref={containerRef} className="min-w-[400px]">
+        <svg width={width} height={chartHeight}>
         {yTicks.map((tick) => {
           const y = padding.top + innerHeight - (tick / maxEarnings) * innerHeight;
           return (
             <g key={tick}>
               <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#E5E2DD" strokeWidth="0.5" />
               <text x={padding.left - 8} y={y + 4} textAnchor="end" className="fill-muted" fontSize="10">
-                {formatPounds(Math.round(tick))}
+                {formatPoundsCompact(Math.round(tick))}
               </text>
             </g>
           );
@@ -693,7 +713,8 @@ function EarningsChart({ data }: { data: { month: string; earnings: number; sale
             </text>
           </g>
         ))}
-      </svg>
+        </svg>
+      </div>
     </div>
   );
 }

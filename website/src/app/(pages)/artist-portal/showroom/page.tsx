@@ -20,14 +20,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import EmptyState from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
+import { safeHexBackground } from "@/lib/hex-color";
 import type { Wall } from "@/lib/visualizer/types";
 
 export default function ArtistShowroomPage() {
-  const router = useRouter();
   const { session, loading: authLoading } = useAuth();
   const [walls, setWalls] = useState<Wall[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -112,7 +112,9 @@ export default function ArtistShowroomPage() {
         <LoadingGrid />
       ) : walls.length === 0 ? (
         <EmptyState
-          onCreate={() => router.push("/artist-portal/showroom/new")}
+          title="No showrooms yet"
+          hint="A showroom lets venues see your work hanging on real walls. It takes about 5 minutes."
+          cta={{ label: "Create your first showroom", href: "/artist-portal/showroom/new" }}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -159,7 +161,7 @@ function WallCard({ wall }: { wall: Wall }) {
           <div
             className="rounded shadow-inner"
             style={{
-              backgroundColor: `#${wall.wall_color_hex}`,
+              backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA"),
               width: cardWidth,
               height: cardHeight,
               maxWidth: "100%",
@@ -176,28 +178,6 @@ function WallCard({ wall }: { wall: Wall }) {
         </p>
       </div>
     </Link>
-  );
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="py-16 text-center border border-dashed border-border rounded-2xl bg-white">
-      <h2 className="font-serif text-xl text-foreground mb-2">
-        Build your first scene
-      </h2>
-      <p className="text-sm text-muted mb-5 max-w-md mx-auto">
-        Pick a preset wall or upload a photo of a real space, then drag
-        your work onto it. Use the saved scene as Instagram-ready imagery
-        or attach it to a listing as a buyer-facing mockup.
-      </p>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-medium hover:bg-stone-800"
-      >
-        + New Scene
-      </button>
-    </div>
   );
 }
 

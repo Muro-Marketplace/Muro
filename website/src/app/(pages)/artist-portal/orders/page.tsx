@@ -2,13 +2,21 @@
 
 import { useState, useEffect } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch } from "@/lib/api-client";
+import { detectCarrierUrl } from "@/lib/carrier-tracking";
 
 interface Order {
   id: string;
   items: { title: string; qty: number; price: number }[];
   shipping: { fullName: string; email: string; phone: string; addressLine1: string; addressLine2?: string; city: string; postcode: string; country: string };
+  // Subtotal and shipping_cost expose the split that makes up `total`,
+  // so the revenue breakdown can show how the items-line and "Sale
+  // total" tie together. Optional because older order rows may not
+  // have these columns populated.
+  subtotal?: number;
+  shipping_cost?: number;
   total: number;
   artist_revenue: number;
   venue_revenue: number;
@@ -20,6 +28,12 @@ interface Order {
   tracking_number?: string;
   venue_slug?: string;
   source?: string;
+  // "ship" (default) or "collection" — set by the checkout flow. When
+  // collection, the buyer's proposed pickup window is folded into
+  // collection_notes and we render it prominently with a CTA to email
+  // the buyer back so they can agree on a final time.
+  fulfilment_method?: "ship" | "collection";
+  collection_notes?: string | null;
   created_at: string;
 }
 
@@ -203,9 +217,26 @@ export default function ArtistOrdersPage() {
 
           <OrderStatusTracker currentStatus={selected.status} statusHistory={selected.status_history || []} />
 
-          {selected.tracking_number && (
-            <p className="text-sm text-muted mt-4">Tracking: <span className="text-foreground font-medium">{selected.tracking_number}</span></p>
-          )}
+          {selected.tracking_number && (() => {
+            const url = detectCarrierUrl(selected.tracking_number);
+            return (
+              <p className="text-sm text-muted mt-4">
+                Tracking:{" "}
+                {url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-accent font-medium hover:underline"
+                  >
+                    {selected.tracking_number} ↗
+                  </a>
+                ) : (
+                  <span className="text-foreground font-medium">{selected.tracking_number}</span>
+                )}
+              </p>
+            );
+          })()}
 
           {/* Status action */}
           {statusActions[selected.status] && (
@@ -230,35 +261,144 @@ export default function ArtistOrdersPage() {
             </div>
           )}
 
-          {/* Items */}
+          {/* Items. The webhook overwrites orders.items with an
+              enriched shape (`quantity`, `lineTotal: {amount,currency}`)
+              once the receipt email is built; legacy rows persisted
+              before that overwrite still carry the cart shape (`qty`,
+              `price`). Read both so the breakdown never renders £NaN
+              on either generation. */}
           <div className="mt-6 space-y-2">
             <p className="text-xs text-muted uppercase tracking-wider">Items</p>
-            {(selected.items || []).map((item: { title: string; qty: number; price: number }, i: number) => (
-              <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
-                <span>{item.title} &times; {item.qty}</span>
-                <span className="font-medium">&pound;{(item.price * item.qty).toFixed(2)}</span>
-              </div>
-            ))}
+            {(selected.items || []).map(
+              (
+                item: {
+                  title?: string;
+                  qty?: number;
+                  quantity?: number;
+                  price?: number;
+                  lineTotal?: { amount?: number; currency?: string };
+                },
+                i: number,
+              ) => {
+                const qty = Number(item.quantity ?? item.qty ?? 1);
+                // Prefer lineTotal.amount (pence) when present; fall
+                // back to price * qty (pounds) for legacy rows.
+                const lineTotalPounds = (() => {
+                  const amt = item.lineTotal?.amount;
+                  if (typeof amt === "number" && Number.isFinite(amt)) return amt / 100;
+                  const price = Number(item.price);
+                  if (Number.isFinite(price) && Number.isFinite(qty)) return price * qty;
+                  return 0;
+                })();
+                return (
+                  <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
+                    <span>
+                      {item.title || "Artwork"} &times; {qty}
+                    </span>
+                    <span className="font-medium">&pound;{lineTotalPounds.toFixed(2)}</span>
+                  </div>
+                );
+              },
+            )}
           </div>
 
           {/* Revenue breakdown */}
           <div className="mt-5 p-4 bg-background rounded-sm border border-border space-y-2">
             <p className="text-xs text-muted uppercase tracking-wider mb-2">Revenue Breakdown</p>
+            {/* Items subtotal is the sum of the line items so the
+                breakdown reconciles cleanly with the Items rows above.
+                QA flagged that the breakdown jumped straight from the
+                items row (£69.99) to "Sale total £79.94" without
+                explaining the £9.95 shipping line, which is what makes
+                up the gap. */}
+            {typeof selected.subtotal === "number" && (
+              <div className="flex justify-between text-sm">
+                <span>Items subtotal</span>
+                <span className="font-medium">&pound;{selected.subtotal.toFixed(2)}</span>
+              </div>
+            )}
+            {typeof selected.shipping_cost === "number" && selected.shipping_cost > 0 && (
+              <div className="flex justify-between text-sm text-muted">
+                <span>Shipping</span>
+                <span>+&pound;{selected.shipping_cost.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm"><span>Sale total</span><span className="font-medium">&pound;{selected.total?.toFixed(2)}</span></div>
             {selected.venue_revenue > 0 && (
               <div className="flex justify-between text-sm text-muted"><span>Venue share ({selected.venue_revenue_share_percent}%)</span><span>-&pound;{selected.venue_revenue.toFixed(2)}</span></div>
             )}
             <div className="flex justify-between text-sm text-muted"><span>Platform fee ({selected.platform_fee_percent}%)</span><span>-&pound;{selected.platform_fee?.toFixed(2)}</span></div>
             <div className="flex justify-between text-sm font-medium pt-2 border-t border-border"><span>Your revenue</span><span className="text-accent">&pound;{selected.artist_revenue?.toFixed(2)}</span></div>
+            {/* Footnote: the fee % is whatever the artist's plan was
+                when the sale settled, NOT their current plan. QA
+                flagged a Pro artist seeing "Platform fee (15%)" on an
+                older order even though their billing page reads "5%
+                platform fee on sales", the two are both correct but
+                read as a contradiction without this note. */}
+            <p className="text-[10px] text-muted pt-2 border-t border-border">
+              Platform fee reflects your subscription plan at the time of sale. New sales use your current plan rate.
+            </p>
           </div>
 
-          {/* Shipping */}
-          <div className="mt-5">
-            <p className="text-xs text-muted uppercase tracking-wider mb-2">Ship to</p>
-            <p className="text-sm font-medium">{selected.shipping?.fullName}</p>
-            <p className="text-sm text-muted">{selected.shipping?.addressLine1}{selected.shipping?.addressLine2 ? `, ${selected.shipping.addressLine2}` : ""}</p>
-            <p className="text-sm text-muted">{selected.shipping?.city}, {selected.shipping?.postcode}</p>
-          </div>
+          {/* Collection details. For "Collect from artist" orders the
+              buyer proposes a date + time window at checkout. Render
+              both prominently with the buyer's contact details and a
+              one-click mailto so the artist can confirm or counter-
+              propose without leaving the page. The email subject and
+              body are prefilled with the order context so the reply
+              thread reads sensibly in both inboxes. */}
+          {selected.fulfilment_method === "collection" ? (
+            <div className="mt-5 p-4 bg-[#FAF8F5] border border-border rounded-sm">
+              <p className="text-xs text-muted uppercase tracking-wider mb-2">
+                Pickup proposed by buyer
+              </p>
+              {selected.collection_notes ? (
+                <p className="text-sm text-foreground whitespace-pre-wrap mb-3">
+                  {selected.collection_notes}
+                </p>
+              ) : (
+                <p className="text-sm text-muted mb-3">
+                  No specific time given. Reach out to the buyer to agree on a pickup window.
+                </p>
+              )}
+              <div className="border-t border-border pt-3 space-y-1">
+                <p className="text-xs text-muted uppercase tracking-wider mb-1">Buyer contact</p>
+                <p className="text-sm font-medium">{selected.shipping?.fullName}</p>
+                {selected.shipping?.email && (
+                  <p className="text-sm text-muted">{selected.shipping.email}</p>
+                )}
+                {selected.shipping?.phone && (
+                  <p className="text-sm text-muted">{selected.shipping.phone}</p>
+                )}
+              </div>
+              {selected.shipping?.email && (
+                <a
+                  href={(() => {
+                    const subject = `Pickup for order ${selected.id}`;
+                    const body =
+                      `Hi ${(selected.shipping?.fullName || "").split(" ")[0] || "there"},\n\n` +
+                      `Thanks for ordering ${selected.items?.[0]?.title || "your artwork"} (${selected.id}).\n\n` +
+                      (selected.collection_notes
+                        ? `You suggested:\n${selected.collection_notes}\n\n`
+                        : "") +
+                      `Let me know if this still works, or propose a different time and I'll confirm.\n\n` +
+                      `Best,\n`;
+                    return `mailto:${encodeURIComponent(selected.shipping.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                  })()}
+                  className="inline-block mt-3 px-3 py-2 text-sm font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
+                >
+                  Email buyer to confirm pickup
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="mt-5">
+              <p className="text-xs text-muted uppercase tracking-wider mb-2">Ship to</p>
+              <p className="text-sm font-medium">{selected.shipping?.fullName}</p>
+              <p className="text-sm text-muted">{selected.shipping?.addressLine1}{selected.shipping?.addressLine2 ? `, ${selected.shipping.addressLine2}` : ""}</p>
+              <p className="text-sm text-muted">{selected.shipping?.city}, {selected.shipping?.postcode}</p>
+            </div>
+          )}
 
           {/* Refund management */}
           {(() => {
@@ -422,9 +562,11 @@ export default function ArtistOrdersPage() {
       {loading ? (
         <p className="text-muted text-sm py-12 text-center">Loading orders...</p>
       ) : orders.length === 0 ? (
-        <div className="bg-surface border border-border rounded-sm px-6 py-12 text-center">
-          <p className="text-muted text-sm">No orders yet. When someone buys your work, orders will appear here.</p>
-        </div>
+        <EmptyState
+          title="No orders yet"
+          hint="When someone buys your work, orders will appear here."
+          cta={{ label: "Discover art", href: "/browse" }}
+        />
       ) : (
         <div className="space-y-3">
           {orders.map((order) => (

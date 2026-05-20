@@ -6,11 +6,25 @@
 
 import { use, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import ImageWithFallback from "@/components/ImageWithFallback";
 import { authFetch } from "@/lib/api-client";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 
-type ResponseType = "existing_works" | "placement" | "offer" | "commission" | "message";
+// Painterly backdrop, same texture treatment as the public marketing
+// pages (homepage hero, /login, /signup) to give artwork-request
+// briefs a "this is creative work" feel rather than the flat
+// office-portal grey. Abstract paint photograph + soft white wash
+// so form text stays readable. Sized 1920×1080 to match the other
+// hero backgrounds, lets Next/Image serve responsive variants.
+const PAINT_BACKDROP =
+  "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=1920&h=1080&fit=crop&crop=center";
+
+// Plan G2: dropped `existing_works` — it duplicated `offer` minus the
+// price field. Artists who want to surface portfolio works without a
+// price now use `placement` (work picker, no price) or `message`.
+type ResponseType = "placement" | "offer" | "commission" | "message";
 
 interface RequestRow {
   id: string;
@@ -24,15 +38,15 @@ interface RequestRow {
   location: string | null;
   timescale: string | null;
   venue_slug: string | null;
+  venue_name: string | null;
   status: string;
 }
 
 const TYPE_LABELS: Record<ResponseType, { name: string; tip: string }> = {
-  existing_works: { name: "Suggest existing works", tip: "Pick from your portfolio." },
-  placement: { name: "Propose a placement", tip: "Loan or revenue share — venue confirms terms next." },
+  placement: { name: "Request a placement", tip: "Loan or revenue share. Set the terms here, venue confirms." },
   offer: { name: "Quote a price", tip: "Name a price for one of your works." },
   commission: { name: "Suggest a commission", tip: "Custom-make something for this brief." },
-  message: { name: "Just a message", tip: "Open the conversation; no proposal yet." },
+  message: { name: "Just a message", tip: "Open the conversation, no proposal yet." },
 };
 
 export default function ArtistArtworkRequestRespondPage({ params }: { params: Promise<{ id: string }> }) {
@@ -49,16 +63,43 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
   const [offerAmount, setOfferAmount] = useState("");
   const [commissionAmount, setCommissionAmount] = useState("");
   const [commissionTimeline, setCommissionTimeline] = useState("");
+  // Plan G2: artist-proposed placement terms. These pre-populate the
+  // placements row the venue gets to confirm on accept.
+  const [proposedMonthlyFee, setProposedMonthlyFee] = useState("");
+  const [proposedRevSharePercent, setProposedRevSharePercent] = useState("");
+  const [proposedQrEnabled, setProposedQrEnabled] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Separate "load failed" from "still loading" so the page can break
+  // out of the "Loading…" hold state when the API returns 404 / 500 /
+  // a malformed body. Without this, any non-2xx response left `req`
+  // null while loading flipped to false — and the `if (loading || !req)`
+  // guard below kept showing the spinner forever.
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch(`/api/artwork-requests/${id}`);
-      const data = await res.json();
-      setReq(data.request);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.request) {
+        setLoadError(
+          typeof data?.error === "string" && data.error
+            ? data.error
+            : res.status === 404
+              ? "This request couldn't be found. It may have been closed or removed."
+              : "We couldn't load this request. Please try again.",
+        );
+        setReq(null);
+      } else {
+        setReq(data.request);
+      }
+    } catch {
+      setLoadError("Network error. Check your connection and try again.");
+      setReq(null);
     } finally {
       setLoading(false);
     }
@@ -81,7 +122,10 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
       setError("Add a short message explaining the fit.");
       return;
     }
-    if ((responseType === "existing_works" || responseType === "offer" || responseType === "placement") && selectedWorks.size === 0 && responseType !== "placement") {
+    // Offer requires a work to be picked (you can't quote a price on
+    // nothing). Placement work selection is optional — the artist may
+    // be proposing terms without committing to specific pieces yet.
+    if (responseType === "offer" && selectedWorks.size === 0) {
       setError("Pick at least one work.");
       return;
     }
@@ -106,6 +150,17 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
         body.proposedCommissionAmountPence = Math.round(parseFloat(commissionAmount) * 100);
         body.proposedCommissionTimeline = commissionTimeline.trim() || undefined;
       }
+      if (responseType === "placement") {
+        const feeNum = proposedMonthlyFee.trim() ? Number(proposedMonthlyFee) : null;
+        if (feeNum != null && Number.isFinite(feeNum) && feeNum >= 0) {
+          body.proposedMonthlyFeePence = Math.round(feeNum * 100);
+        }
+        const revNum = proposedRevSharePercent.trim() ? Number(proposedRevSharePercent) : null;
+        if (revNum != null && Number.isFinite(revNum) && revNum >= 0) {
+          body.proposedRevenueSharePercent = Math.round(revNum);
+        }
+        body.proposedQrEnabled = proposedQrEnabled;
+      }
       const res = await authFetch(`/api/artwork-requests/${id}/responses`, {
         method: "POST",
         body: JSON.stringify(body),
@@ -124,10 +179,29 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
     }
   }
 
-  if (loading || !req) {
+  if (loading) {
     return (
       <ArtistPortalLayout activePath="/artist-portal/artwork-requests">
         <p className="text-sm text-muted py-12 text-center">Loading…</p>
+      </ArtistPortalLayout>
+    );
+  }
+
+  if (!req) {
+    return (
+      <ArtistPortalLayout activePath="/artist-portal/artwork-requests">
+        <div className="max-w-md mx-auto px-4 sm:px-6 py-16 text-center">
+          <h1 className="text-xl font-serif mb-2">Request unavailable</h1>
+          <p className="text-sm text-muted mb-6">
+            {loadError ?? "This request couldn't be loaded."}
+          </p>
+          <Link
+            href="/artist-portal/artwork-requests"
+            className="inline-block text-sm text-accent hover:underline"
+          >
+            ← Back to requests
+          </Link>
+        </div>
       </ArtistPortalLayout>
     );
   }
@@ -136,17 +210,34 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/artwork-requests">
-      <div className="max-w-3xl px-4 sm:px-6 py-8">
-        <Link href="/artist-portal/artwork-requests" className="text-xs text-muted hover:text-accent inline-block mb-4">← All requests</Link>
+      {/* Painterly backdrop, mirrors the hero treatment on the homepage
+          and sign-in pages. Lives inside the layout's <main>, sized to
+          fill the visible content area and sit beneath the brief +
+          response form. The 90% white wash keeps the form copy
+          legible against the photograph, the bottom-fade lets the
+          texture peek through near the bottom of the page. */}
+      <div className="relative">
+        <div className="pointer-events-none absolute inset-0 -mx-4 sm:-mx-6 lg:-mx-8 -mt-4 overflow-hidden">
+          <Image
+            src={PAINT_BACKDROP}
+            alt=""
+            fill
+            className="object-cover opacity-90"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/95 via-background/90 to-background/80" />
+        </div>
+        <div className="relative max-w-3xl px-4 sm:px-6 py-8">
+          <Link href="/artist-portal/artwork-requests" className="text-xs text-muted hover:text-accent inline-block mb-4">← All requests</Link>
 
         <h1 className="text-2xl font-serif mb-2">{req.title}</h1>
-        <p className="text-sm text-muted mb-2">From {req.venue_slug}</p>
+        <p className="text-sm text-muted mb-2">From {req.venue_name || "Venue"}</p>
         <p className="text-sm text-foreground/80 leading-relaxed mb-4 whitespace-pre-wrap">{req.description}</p>
         <div className="flex flex-wrap gap-2 text-[10px] mb-8">
           {req.intent.map((i) => <span key={i} className="px-1.5 py-0.5 bg-accent/5 text-accent rounded-sm capitalize">{i}</span>)}
           {(req.budget_min_pence || req.budget_max_pence) && (
             <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">
-              £{((req.budget_min_pence || 0) / 100).toFixed(0)}–£{((req.budget_max_pence || 0) / 100).toFixed(0)}
+              £{((req.budget_min_pence || 0) / 100).toFixed(0)} to £{((req.budget_max_pence || 0) / 100).toFixed(0)}
             </span>
           )}
           {req.location && <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">{req.location}</span>}
@@ -164,7 +255,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
             <div>
               <p className="block text-xs uppercase tracking-wider text-muted mb-2">Response type</p>
               <div className="grid sm:grid-cols-2 gap-2">
-                {(["existing_works", "placement", "offer", "commission", "message"] as ResponseType[]).map((t) => (
+                {(["placement", "offer", "commission", "message"] as ResponseType[]).map((t) => (
                   <button key={t} type="button" onClick={() => setResponseType(t)} className={`text-left p-3 rounded-sm border transition-colors ${
                     responseType === t ? "border-accent bg-accent/5" : "border-border hover:border-accent/40"
                   }`}>
@@ -175,9 +266,11 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
               </div>
             </div>
 
-            {(responseType === "existing_works" || responseType === "offer") && works.length > 0 && (
+            {(responseType === "placement" || responseType === "offer") && works.length > 0 && (
               <div>
-                <p className="block text-xs uppercase tracking-wider text-muted mb-2">Pick works</p>
+                <p className="block text-xs uppercase tracking-wider text-muted mb-2">
+                  {responseType === "placement" ? "Pick the work(s) you're proposing (optional)" : "Pick works"}
+                </p>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {works.map((w) => (
                     <button
@@ -189,8 +282,12 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                       }`}
                     >
                       {w.image && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={w.image} alt={w.title} className="w-full h-full object-cover" />
+                        <ImageWithFallback
+                          src={w.image}
+                          alt={w.title}
+                          className="w-full h-full object-cover"
+                          placeholderClassName="w-full h-full bg-accent/10 text-accent flex items-center justify-center text-2xl font-medium"
+                        />
                       )}
                       <span className="absolute bottom-0 inset-x-0 px-1 py-0.5 bg-black/55 text-white text-[10px] truncate">{w.title}</span>
                     </button>
@@ -227,7 +324,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                             <option value="">Any size</option>
                             {tiers.map((t) => (
                               <option key={t.label} value={t.label}>
-                                {t.label} — £{t.price.toFixed(0)}
+                                {t.label}, £{t.price.toFixed(0)}
                               </option>
                             ))}
                           </select>
@@ -236,6 +333,61 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                     })}
                   </div>
                 )}
+              </div>
+            )}
+
+            {responseType === "placement" && (
+              <div className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="placement-fee" className="block text-xs uppercase tracking-wider text-muted mb-1.5">
+                      Monthly fee (£)
+                    </label>
+                    <input
+                      id="placement-fee"
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={proposedMonthlyFee}
+                      onChange={(e) => setProposedMonthlyFee(e.target.value)}
+                      placeholder="0 for free loan"
+                      className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60"
+                    />
+                    <p className="text-[11px] text-muted mt-1">Leave 0 if you&rsquo;re proposing a free display.</p>
+                  </div>
+                  <div>
+                    <label htmlFor="placement-rev" className="block text-xs uppercase tracking-wider text-muted mb-1.5">
+                      Revenue share (%)
+                    </label>
+                    <input
+                      id="placement-rev"
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="50"
+                      value={proposedRevSharePercent}
+                      onChange={(e) => setProposedRevSharePercent(e.target.value)}
+                      placeholder="0 to 50"
+                      className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60"
+                    />
+                    <p className="text-[11px] text-muted mt-1">Max 50% to the venue.</p>
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={proposedQrEnabled}
+                    onChange={(e) => setProposedQrEnabled(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    QR enabled
+                    <span className="block text-[11px] text-muted">
+                      Customers can scan a label and buy the work directly. Required for revenue share.
+                    </span>
+                  </span>
+                </label>
               </div>
             )}
 
@@ -254,7 +406,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                 </div>
                 <div>
                   <label htmlFor="com-tl" className="block text-xs uppercase tracking-wider text-muted mb-1.5">Timeline</label>
-                  <input id="com-tl" type="text" value={commissionTimeline} onChange={(e) => setCommissionTimeline(e.target.value)} placeholder="6–8 weeks" className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60" />
+                  <input id="com-tl" type="text" value={commissionTimeline} onChange={(e) => setCommissionTimeline(e.target.value)} placeholder="6 to 8 weeks" className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60" />
                 </div>
               </div>
             )}
@@ -274,6 +426,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
             </p>
           </form>
         )}
+        </div>
       </div>
     </ArtistPortalLayout>
   );

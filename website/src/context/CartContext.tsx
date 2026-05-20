@@ -25,6 +25,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem("wallplace-cart");
     if (stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       try { setItems(JSON.parse(stored)); } catch { /* ignore */ }
     }
     hasMounted.current = true;

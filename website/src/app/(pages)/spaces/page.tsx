@@ -1,14 +1,21 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { geocodePostcode } from "@/lib/geocode";
 import { useAuth } from "@/context/AuthContext";
+import {
+  persistLocation,
+  readPersistedCoords,
+  clearPersistedLocation,
+} from "@/components/PostcodeInput";
 import SpacesPlacementRequestForm, {
   type SpacesVenueOption,
 } from "@/components/SpacesPlacementRequestForm";
+import ArtworkRequestsList from "@/components/ArtworkRequestsList";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 interface ArtistWorkLite {
   id: string;
@@ -59,6 +66,19 @@ function calcDistance(lat1: number, lng1: number, lat2: number, lng2: number): n
 const VENUE_TYPES = ["All", "Café", "Restaurant", "Hotel", "Office", "Salon", "Gallery", "Coworking", "Wine Bar"];
 
 export default function SpacesLookingForArtPage() {
+  // Suspense boundary for useSearchParams (the inner component reads
+  // ?view=) so the rest of the route stays statically prerenderable.
+  return (
+    <Suspense fallback={null}>
+      <SpacesPageContent />
+    </Suspense>
+  );
+}
+
+function SpacesPageContent() {
+  const searchParams = useSearchParams();
+  const view = searchParams?.get("view") === "requests" ? "requests" : "walls";
+
   const [venues, setVenues] = useState<DemandVenue[]>([]);
   const [stats, setStats] = useState<DemandStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,6 +119,17 @@ export default function SpacesLookingForArtPage() {
       .then((data) => { setVenues(data.venues || []); setStats(data.stats || null); })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  // Hydrate location from the shared localStorage keys (same ones
+  // /browse uses) so a postcode entered on /browse carries over here,
+  // and vice versa. Done in an effect rather than a useState initialiser
+  // to avoid SSR/CSR hydration mismatch.
+  useEffect(() => {
+    const stored = readPersistedCoords();
+    if (!stored) return;
+    setUserCoords(stored.coords);
+    if (stored.label) setPostcode(stored.label);
   }, []);
 
   // Venues shouldn't browse other venues, this page is for artists.
@@ -147,6 +178,12 @@ export default function SpacesLookingForArtPage() {
   // Venues are locked out of viewing other venues, this page is for artists/customers
   // discovering venue demand. Venues manage their own profile through /venue-portal.
   const canSeeDetails = userType !== "venue" && (isSubscribed || userType === "customer");
+  // Even when the gated details are hidden, the whole card should
+  // still navigate somewhere: logged-out and unsubscribed visitors
+  // get the public venue profile page (read-only summary). Without
+  // this the card was a dead click for everyone outside the
+  // subscribed/customer cohort.
+  const canClickThroughCard = userType !== "venue";
   const canMessageVenues = userType !== "venue" && (isSubscribed || userType === "customer");
   // Inline placement requests are artist-only. We don't gate on
   // subscription here, the underlying API enforces tier rules and
@@ -160,9 +197,11 @@ export default function SpacesLookingForArtPage() {
     if (!postcode.trim()) return;
     setSearching(true);
     setPostcodeError(false);
-    const coords = await geocodePostcode(postcode.trim());
+    const trimmed = postcode.trim();
+    const coords = await geocodePostcode(trimmed);
     if (coords) {
       setUserCoords(coords);
+      persistLocation(coords, trimmed);
     } else {
       setPostcodeError(true);
     }
@@ -226,7 +265,7 @@ export default function SpacesLookingForArtPage() {
               <p className="text-accent text-xs flex items-center justify-center gap-1.5">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
                 Showing venues near {postcode}
-                <button onClick={() => { setUserCoords(null); setPostcode(""); setMaxDistance(9999); }} className="ml-1 text-white/50 underline">clear</button>
+                <button onClick={() => { setUserCoords(null); setPostcode(""); setMaxDistance(9999); clearPersistedLocation(); }} className="ml-1 text-white/50 underline">clear</button>
               </p>
               {/* Distance toggle */}
               <div className="flex items-center justify-center gap-1.5">
@@ -247,6 +286,46 @@ export default function SpacesLookingForArtPage() {
         </div>
       </section>
 
+      {/* View toggle: Walls (venue listings) vs Open requests
+          (structured demand). Driven by ?view=requests. Lives outside
+          the conditional so the tab strip is always visible — users
+          can flip between both modes from either page. */}
+      <section className="border-b border-border bg-white">
+        <div className="max-w-[1200px] mx-auto px-6">
+          <div className="flex items-center gap-1">
+            <Link
+              href="/spaces"
+              className={`px-1 pt-3 pb-2.5 text-sm transition-colors border-b-2 -mb-px ${
+                view === "walls"
+                  ? "font-medium text-foreground border-accent"
+                  : "text-muted border-transparent hover:text-foreground"
+              }`}
+            >
+              Walls
+            </Link>
+            <span className="w-3" />
+            <Link
+              href="/spaces?view=requests"
+              className={`px-1 pt-3 pb-2.5 text-sm transition-colors border-b-2 -mb-px ${
+                view === "requests"
+                  ? "font-medium text-foreground border-accent"
+                  : "text-muted border-transparent hover:text-foreground"
+              }`}
+            >
+              Open requests
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {view === "requests" ? (
+        <section className="py-10 lg:py-14">
+          <div className="max-w-[1200px] mx-auto px-6">
+            <ArtworkRequestsList />
+          </div>
+        </section>
+      ) : (
+      <>
       {/* Stats, computed from filtered results */}
       <section className="border-b border-border">
         <div className="max-w-[1200px] mx-auto px-6 py-4">
@@ -360,14 +439,17 @@ export default function SpacesLookingForArtPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filtered.map((venue) => (
-                <div id={`venue-${venue.slug}`} key={venue.slug} className={`relative bg-surface border border-border rounded-sm overflow-hidden transition-all scroll-mt-24 target:ring-2 target:ring-accent ${canSeeDetails ? "hover:border-accent/30 hover:shadow-sm" : ""}`}>
+                <div id={`venue-${venue.slug}`} key={venue.slug} className={`relative bg-surface border border-border rounded-sm overflow-hidden transition-all scroll-mt-24 target:ring-2 target:ring-accent ${canClickThroughCard ? "hover:border-accent/30 hover:shadow-sm" : ""}`}>
                   {/* Whole-card link (#28). Sits at z-[1] above the
                       static image/title/description so clicks anywhere
                       "empty" navigate to the venue page. Action buttons
                       below are wrapped in `relative z-[2]` so they keep
-                      receiving clicks. Suppressed for locked cards
-                      where the venue identity is hidden anyway. */}
-                  {canSeeDetails && (
+                      receiving clicks. Visible for everyone except
+                      venues (who can't view other venues). Logged-out
+                      and unsubscribed visitors land on the read-only
+                      public profile, subscribed/customer users get the
+                      full version. */}
+                  {canClickThroughCard && (
                     <Link
                       href={`/venues/${venue.slug}`}
                       className="absolute inset-0 z-[1]"
@@ -432,13 +514,20 @@ export default function SpacesLookingForArtPage() {
 
                     {/* Arrangement badges */}
                     <div className="flex flex-wrap gap-1.5 mb-3">
-                      {(venue.interestedInFreeLoan || venue.interestedInRevenueShare) && (
+                      {venue.interestedInFreeLoan && (
                         <span className="text-[10px] px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-sm">
-                          Display{venue.interestedInRevenueShare ? " + Rev Share" : ""}
+                          {ARRANGEMENT_LABEL.paid_loan}
+                        </span>
+                      )}
+                      {venue.interestedInRevenueShare && (
+                        <span className="text-[10px] px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-sm">
+                          {ARRANGEMENT_LABEL.revenue_share}
                         </span>
                       )}
                       {venue.interestedInDirectPurchase && (
-                        <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-sm">Purchase</span>
+                        <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-sm">
+                          {ARRANGEMENT_LABEL.purchase}
+                        </span>
                       )}
                     </div>
 
@@ -620,6 +709,8 @@ export default function SpacesLookingForArtPage() {
           )}
         </div>
       </section>
+      </>
+      )}
     </div>
   );
 }

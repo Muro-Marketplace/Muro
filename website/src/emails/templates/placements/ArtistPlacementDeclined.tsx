@@ -25,7 +25,7 @@ export const mock: ArtistPlacementDeclinedProps = {
   firstName: "Maya",
   venueName: "The Curzon",
   reason: "Our wall is booked until September, but we'd love to revisit later in the year.",
-  discoverMoreVenuesUrl: "https://wallplace.co.uk/spaces-looking-for-art",
+  discoverMoreVenuesUrl: "https://wallplace.co.uk/spaces",
 };
 
 const entry: TemplateEntry<ArtistPlacementDeclinedProps> = {

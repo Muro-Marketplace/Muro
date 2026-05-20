@@ -7,6 +7,7 @@ import type { Artist } from "@/data/artists";
 import { useAuth } from "@/context/AuthContext";
 import { disciplineLabel } from "@/data/categories";
 import SaveButton from "@/components/SaveButton";
+import DistanceBadge from "@/components/DistanceBadge";
 
 interface BrowseArtistCardProps {
   artist: Artist;
@@ -17,6 +18,11 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
   const { userType } = useAuth();
   const [imgIndex, setImgIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState(0);
+  // Per-image "has loaded" flags so we can render a skeleton shimmer
+  // behind each slide until its `<Image>` actually paints. Previously
+  // the off-white matting sat blank for a beat before pop-in, which
+  // read as a broken card rather than a loading one.
+  const [imgLoaded, setImgLoaded] = useState<boolean[]>(() => artist.works.map(() => false));
   const images = artist.works.map((w) => w.image);
 
   // Build a clean one-line summary using the three core methods; the
@@ -61,15 +67,29 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
                 index === imgIndex ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
             >
+              {/* Loading shimmer behind the image. Animates while the
+                  Next/Image fetch + decode hasn't finished; flips to
+                  invisible the moment the image's onLoad fires. */}
+              {!imgLoaded[index] && (
+                <div className="absolute inset-4 sm:inset-6 bg-gradient-to-br from-[#E8E4DD] via-[#F0EDE8] to-[#E8E4DD] animate-pulse rounded-sm" />
+              )}
               <div className="absolute inset-4 sm:inset-6">
                 <Image
                   src={src}
                   alt={`${artist.works[index]?.title || "Artwork"} by ${artist.name}`}
                   fill
-                  className="object-contain group-hover:scale-[1.03] transition-transform duration-700 pointer-events-none select-none"
+                  className={`object-contain group-hover:scale-[1.03] transition-transform duration-700 pointer-events-none select-none ${
+                    imgLoaded[index] ? "opacity-100" : "opacity-0"
+                  }`}
                   sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
                   draggable={false}
                   onContextMenu={(e) => e.preventDefault()}
+                  onLoad={() => setImgLoaded((prev) => {
+                    if (prev[index]) return prev;
+                    const next = prev.slice();
+                    next[index] = true;
+                    return next;
+                  })}
                 />
               </div>
             </div>
@@ -136,18 +156,15 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
           )}
         </div>
 
-        {/* Info */}
-        <div className="px-4 py-3.5 flex-1">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-sm font-medium text-foreground leading-tight">
-              {artist.name}
-            </h2>
-            {distance !== null && (
-              <span className="text-[10px] text-muted shrink-0">
-                {distance < 0.2 ? "< 0.2 mi" : `${distance.toFixed(1)} mi`}
-              </span>
-            )}
-          </div>
+        {/* Info. Distance pill floats top-right of THIS section
+            (not on the artwork itself) so it doesn't obscure the
+            piece. Right-padding on the title row keeps the artist's
+            name from running into the pill on long names. */}
+        <div className="px-4 py-3.5 flex-1 relative">
+          <DistanceBadge distance={distance} corner="top-right" />
+          <h2 className="text-sm font-medium text-foreground leading-tight pr-16">
+            {artist.name}
+          </h2>
           <p className="text-xs text-muted mt-0.5">
             {disciplineLabel(artist.primaryMedium, artist.discipline)} · {artist.location}
           </p>

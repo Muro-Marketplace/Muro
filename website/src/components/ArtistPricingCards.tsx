@@ -114,7 +114,14 @@ export default function ArtistPricingCards({
           const isAnnual = cycle === "annual";
           const price = isAnnual ? plan.priceAnnual : plan.priceMonthly;
           const suffix = isAnnual ? "/year" : "/month";
-          const monthlyEq = isAnnual ? `\u00a3${(plan.priceAnnual / 12).toFixed(2)}/mo equivalent` : null;
+          // Floor-round (rather than toFixed which is round-half-up) so the
+          // displayed per-month figure \u00d7 12 never exceeds the billed
+          // annual. e.g. \u00a3499.99 / 12 = \u00a341.6583; toFixed gives \u00a341.67
+          // (\u00a3500.04 implied, 5p above the actual charge) so we'd be
+          // overstating the equivalent. Floor gives \u00a341.66 (\u00a3499.92
+          // implied, 7p under), keeping the equivalent honest.
+          const flooredPerMonth = Math.floor((plan.priceAnnual / 12) * 100) / 100;
+          const monthlyEq = isAnnual ? `\u00a3${flooredPerMonth.toFixed(2)}/mo equivalent` : null;
           const containerCls = plan.highlighted
             ? "bg-surface border-2 border-accent rounded-sm p-8 flex flex-col relative"
             : "bg-surface border border-border rounded-sm p-8 flex flex-col";
@@ -125,7 +132,7 @@ export default function ArtistPricingCards({
           // price. Prevents the "£119.88" sticker shock while making the
           // annual discount obvious.
           const primaryAmount = isAnnual
-            ? `\u00a3${(plan.priceAnnual / 12).toFixed(2)}`
+            ? `\u00a3${flooredPerMonth.toFixed(2)}`
             : `\u00a3${plan.priceMonthly}`;
           const secondaryLine = isAnnual
             ? `\u00a3${plan.priceAnnual.toFixed(2)} billed annually`

@@ -25,7 +25,10 @@ interface PlacementRow {
 interface ActionItem {
   id: string;
   title: string;
-  subtitle: string;
+  // Optional, the "Schedule installation" item now packs the work title
+  // into the main title so two simultaneous schedule rows against the
+  // same person look visually distinct without needing a separate line.
+  subtitle?: string;
   href: string;
   cta: string;
   severity: "todo" | "waiting" | "info";
@@ -64,6 +67,7 @@ export default function PlacementActionItems({
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!userId) { setItems([]); return; }
     authFetch("/api/placements")
       .then((r) => r.json())
@@ -96,10 +100,15 @@ export default function PlacementActionItems({
 
           if (status === "active") {
             if (!p.scheduled_for) {
+              // Include the work title in the title so two simultaneous
+              // schedule items against the same person don't render as
+              // visual duplicates. Previously both rows read "Schedule
+              // installation with Fin Coles" and only the (smaller)
+              // subtitle distinguished them.
               out.push({
                 id: `${p.id}-schedule`,
-                title: `Schedule installation with ${otherName}`,
-                subtitle: work,
+                title: `Schedule install of ${work} with ${otherName}`,
+                subtitle: undefined,
                 href,
                 cta: "Schedule",
                 severity: "todo",

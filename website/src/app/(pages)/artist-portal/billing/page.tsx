@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
+import PayoutExplainerModal from "@/components/PayoutExplainerModal";
+import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 
 interface ProfileSubscription {
@@ -23,7 +26,14 @@ const PLAN_DETAILS: Record<string, { name: string; priceMonthly: number; priceAn
 };
 
 function annualMonthlyEquivalent(priceAnnual: number): string {
-  return `\u00a3${(priceAnnual / 12).toFixed(2)}/mo`;
+  // Display the monthly equivalent with a leading "~" so the reader
+  // doesn't read it as "12 \u00d7 this = exactly the yearly". QA flagged
+  // earlier rounding (\u00a341.66/mo \u00d7 12 = \u00a3499.92 instead of \u00a3499.99,
+  // a 7p drift on Pro). Standard rounding (Math.round) gives the
+  // closest 2dp value; the tilde flags it as an approximation and
+  // the actual annual price is shown right next to it on the card.
+  const rounded = Math.round((priceAnnual / 12) * 100) / 100;
+  return `~\u00a3${rounded.toFixed(2)}/mo`;
 }
 
 function annualSavingsPercent(priceMonthly: number, priceAnnual: number): number {
@@ -67,6 +77,8 @@ interface ConnectStatus {
 }
 
 export default function BillingPage() {
+  const { user } = useAuth();
+  const { showToast } = useToast();
   const [sub, setSub] = useState<ProfileSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
@@ -75,6 +87,11 @@ export default function BillingPage() {
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [connectLoading, setConnectLoading] = useState(true);
   const [connectRedirecting, setConnectRedirecting] = useState(false);
+  // Inline error for the Set Up Payouts / Continue Setup / Open Stripe
+  // Dashboard buttons. Previously surfaced via window.alert which is
+  // easy to miss (and silently dropped by some pop-up blockers). Now
+  // renders right under the button so it's part of the page flow.
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   // Tracks "just came back from Stripe Checkout", used to poll the
   // profile until the webhook lands and the subscription_status flips
@@ -176,50 +193,65 @@ export default function BillingPage() {
       });
       const data = await res.json();
       if (data.url) {
+        // Full-page redirect to Stripe Checkout, mutating an external
+        // global from an event handler (not during render) is fine.
+        // eslint-disable-next-line react-hooks/immutability
         window.location.href = data.url;
       } else {
-        alert(data.error || "Failed to start checkout");
+        showToast(data.error || "Failed to start checkout", { variant: "error" });
         setRedirecting(false);
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      showToast("Something went wrong. Please try again.", { variant: "error" });
       setRedirecting(false);
     }
   }
 
   async function handleConnectOnboard() {
+    setConnectError(null);
     setConnectRedirecting(true);
     try {
       const res = await authFetch("/api/stripe-connect/onboard", {
         method: "POST",
         body: JSON.stringify({ accountType: "artist" }),
       });
-      const data = await res.json();
-      if (data.url) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) {
         window.location.href = data.url;
-      } else {
-        alert(data.error || "Failed to start payout setup");
-        setConnectRedirecting(false);
+        // Leave `connectRedirecting` true so the button stays in the
+        // "Redirecting..." state during the browser navigation.
+        return;
       }
+      setConnectError(
+        typeof data?.error === "string"
+          ? data.error
+          : "Couldn't start payout setup. Please try again.",
+      );
+      setConnectRedirecting(false);
     } catch {
-      alert("Something went wrong. Please try again.");
+      setConnectError("Network error. Check your connection and try again.");
       setConnectRedirecting(false);
     }
   }
 
   async function handleConnectDashboard() {
+    setConnectError(null);
     setConnectRedirecting(true);
     try {
       const res = await authFetch("/api/stripe-connect/dashboard", { method: "POST" });
-      const data = await res.json();
-      if (data.url) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) {
         window.location.href = data.url;
-      } else {
-        alert(data.error || "Failed to open Stripe dashboard");
-        setConnectRedirecting(false);
+        return;
       }
+      setConnectError(
+        typeof data?.error === "string"
+          ? data.error
+          : "Couldn't open Stripe dashboard. Please try again.",
+      );
+      setConnectRedirecting(false);
     } catch {
-      alert("Something went wrong. Please try again.");
+      setConnectError("Network error. Check your connection and try again.");
       setConnectRedirecting(false);
     }
   }
@@ -232,11 +264,11 @@ export default function BillingPage() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Failed to open billing portal");
+        showToast(data.error || "Failed to open billing portal", { variant: "error" });
         setRedirecting(false);
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      showToast("Something went wrong. Please try again.", { variant: "error" });
       setRedirecting(false);
     }
   }
@@ -390,7 +422,10 @@ export default function BillingPage() {
                     {isAnnual ? `\u00a3${d.priceAnnual}/yr` : `\u00a3${d.priceMonthly}/mo`}
                   </p>
                   {isAnnual ? (
-                    <p className="text-[11px] text-accent mb-3">{annualMonthlyEquivalent(d.priceAnnual)} &middot; save {saves}%</p>
+                    <p className="text-[11px] mb-3">
+                      <span className="text-muted">{annualMonthlyEquivalent(d.priceAnnual)} &middot; </span>
+                      <span className="inline-block px-1.5 py-0.5 bg-accent text-white font-bold uppercase tracking-wider text-[10px] rounded-sm">save {saves}%</span>
+                    </p>
                   ) : (
                     <p className="text-[11px] text-muted mb-3">billed monthly</p>
                   )}
@@ -408,7 +443,7 @@ export default function BillingPage() {
             })}
           </div>
           <p className="text-xs text-muted mt-3 text-center">
-            All plans include a 30-day free trial. Annual plans save ~17%.
+            All plans include a first month free. Annual plans save ~17%.
           </p>
         </div>
       )}
@@ -438,7 +473,10 @@ export default function BillingPage() {
                     {isAnnual ? `\u00a3${d.priceAnnual}/yr` : `\u00a3${d.priceMonthly}/mo`}
                   </p>
                   {isAnnual ? (
-                    <p className="text-[11px] text-accent mb-2">{annualMonthlyEquivalent(d.priceAnnual)} &middot; save {saves}%</p>
+                    <p className="text-[11px] mb-2">
+                      <span className="text-muted">{annualMonthlyEquivalent(d.priceAnnual)} &middot; </span>
+                      <span className="inline-block px-1.5 py-0.5 bg-accent text-white font-bold uppercase tracking-wider text-[10px] rounded-sm">save {saves}%</span>
+                    </p>
                   ) : (
                     <p className="text-[11px] text-muted mb-2">billed monthly</p>
                   )}
@@ -544,7 +582,26 @@ export default function BillingPage() {
             </button>
           </>
         )}
+        {connectError && !connectLoading && (
+          <div
+            role="alert"
+            className="mt-4 bg-red-50 border border-red-200 rounded-sm px-3 py-2.5 text-xs text-red-800 leading-relaxed"
+          >
+            {connectError}
+          </div>
+        )}
       </div>
+
+      {/* One-shot payout-timing explainer. Fires the first time the
+          artist's Stripe Connect onboarding flips to complete, so the
+          most common support ticket ("I sold a piece a week ago,
+          where's the money?") gets answered before it's asked.
+          Dismiss is persisted in localStorage. */}
+      <PayoutExplainerModal
+        audience="artist"
+        userId={user?.id}
+        active={!!connectStatus?.onboardingComplete}
+      />
     </ArtistPortalLayout>
   );
 }
@@ -575,8 +632,8 @@ function BillingCycleToggle({
         }`}
       >
         Annual
-        <span className={`px-1.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider ${
-          value === "annual" ? "bg-white/15 text-white" : "bg-accent/10 text-accent"
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+          value === "annual" ? "bg-white text-foreground" : "bg-accent text-white"
         }`}>
           Save 17%
         </span>

@@ -31,7 +31,7 @@ export const mock: CustomerPostPurchaseCareProps = {
   careTips: [
     "Keep out of direct sunlight to avoid fading",
     "Wipe the frame with a dry microfibre cloth, no sprays",
-    "Aim for steady humidity (40–60%) if possible",
+    "Aim for steady humidity (40-60%) if possible",
   ],
   orderUrl: "https://wallplace.co.uk/orders/WP-28473",
 };

@@ -4,11 +4,14 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
+import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch } from "@/lib/api-client";
 import { uploadMessageAttachment, type MessageAttachment } from "@/lib/upload";
 import type { ArtistWork } from "@/data/artists";
 import PlacementContextPanel from "@/components/PlacementContextPanel";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
+import CounterOfferDialog from "@/components/CounterOfferDialog";
 
 interface Conversation {
   conversationId: string;
@@ -53,10 +56,28 @@ interface Message {
 
 interface MessageInboxProps {
   userSlug: string;
-  portalType: "artist" | "venue";
+  // "customer" is treated as a non-artist outreach role — functionally
+  // identical to "venue" for thread/UI purposes (the customer initiates
+  // conversations with artists). The API still resolves the real sender
+  // role server-side from the user's profile, so this prop only affects
+  // client-side rendering and the (unused) hint passed in `senderType`.
+  portalType: "artist" | "venue" | "customer";
   initialArtistSlug?: string;
   initialArtistName?: string;
   works?: ArtistWork[];
+}
+
+/**
+ * Strip leading [enquiry_type] tags from a message preview. Legacy
+ * enquiry-form submissions stamped the type as a bracketed prefix
+ * (e.g. "[venue_looking] Re: Last Light"), which was meant for
+ * internal routing but ended up rendering in the inbox previews.
+ * Keep this on the display side so historical rows still read clean
+ * after the form started writing metadata instead of the prefix.
+ */
+function stripInternalTags(raw: string | null | undefined): string {
+  if (!raw) return "";
+  return raw.replace(/^\s*\[[a-z][a-z0-9_]*\]\s*/i, "");
 }
 
 function Avatar({ src, name, size = 36 }: { src?: string | null; name: string; size?: number }) {
@@ -73,7 +94,14 @@ function Avatar({ src, name, size = 36 }: { src?: string | null; name: string; s
 }
 
 export default function MessageInbox({ userSlug, portalType, initialArtistSlug, initialArtistName, works }: MessageInboxProps) {
+  // For sub-components and the messages API that only know "artist" | "venue",
+  // collapse "customer" into "venue" — customers behave like venues from the
+  // thread's perspective (non-artist outreach). The server still derives the
+  // real sender role from the user's profile, so this is a UI-only coercion.
+  const portalRole: "artist" | "venue" = portalType === "artist" ? "artist" : "venue";
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -208,6 +236,14 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     revenue_share_percent?: number | null;
     qr_enabled?: boolean | null;
   } | undefined>(undefined);
+  // Same idea for purchase_offer cards, the Counter button used to
+  // bounce the user to the portal offers page. It now opens the same
+  // counter form inline so the negotiation stays in the thread.
+  const [counterOffer, setCounterOffer] = useState<{
+    offerId: string;
+    amountPence: number;
+    title: string;
+  } | null>(null);
   // Open the counter dialog for a placement by deriving current terms
   // from the most recent placement_request message on the thread.
   const openCounterDialog = useCallback((placementId: string) => {
@@ -435,7 +471,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         body: JSON.stringify({
           conversationId: selectedConv,
           senderName: userSlug,
-          senderType: portalType,
+          senderType: portalRole,
           recipientSlug: selectedConvData.otherParty,
           content: trimmed,
           attachments: pendingAttachments,
@@ -452,7 +488,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         conversation_id: selectedConv,
         sender_id: user?.id || null,
         sender_name: userSlug,
-        sender_type: portalType,
+        sender_type: portalRole,
         recipient_slug: selectedConvData.otherParty,
         content: trimmed,
         attachments: pendingAttachments,
@@ -483,7 +519,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           senderName: userSlug,
-          senderType: portalType,
+          senderType: portalRole,
           recipientSlug: composeRecipient,
           content: composeMessage.trim(),
         }),
@@ -514,11 +550,11 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Could not delete conversation. Please try again.");
+        showToast(data.error || "Could not delete conversation. Please try again.", { variant: "error" });
       }
     } catch (err) {
       console.error("Delete failed:", err);
-      alert("Network error while deleting. Please try again.");
+      showToast("Network error while deleting. Please try again.", { variant: "error" });
     }
   }
 
@@ -536,7 +572,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         // Revert on failure so the UI doesn't lie about server state.
         setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, pinned_at: msg.pinned_at || null } : m));
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Could not pin message.");
+        showToast(data.error || "Could not pin message.", { variant: "error" });
       }
     } catch {
       setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, pinned_at: msg.pinned_at || null } : m));
@@ -546,7 +582,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   // Soft-delete an own message. Optimistic; server handles the
   // permission gate (only the sender can delete).
   async function handleDeleteMessage(msg: Message) {
-    if (!confirm("Delete this message? The other party will see 'Message deleted' in its place.")) return;
+    const ok = await confirm({
+      title: "Delete this message?",
+      body: "The other party will see 'Message deleted' in its place.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     const snapshot = msg;
     setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, deleted_at: new Date().toISOString(), content: "" } : m));
     try {
@@ -554,7 +596,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       if (!res.ok) {
         setMessages((prev) => prev.map((m) => m.id === snapshot.id ? snapshot : m));
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Could not delete message.");
+        showToast(data.error || "Could not delete message.", { variant: "error" });
       }
     } catch {
       setMessages((prev) => prev.map((m) => m.id === snapshot.id ? snapshot : m));
@@ -581,7 +623,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(data.error || "Could not update offer.");
+        showToast(data.error || "Could not update offer.", { variant: "error" });
         return;
       }
       // If the actor is the venue (buyer) and they accepted, fire
@@ -600,7 +642,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       }
     } catch (err) {
       console.error("Offer PATCH failed:", err);
-      alert("Network error. Please try again.");
+      showToast("Network error. Please try again.", { variant: "error" });
       return;
     }
     if (selectedConv) loadThread(selectedConv, true);
@@ -622,12 +664,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          alert(data.error || "Could not update placement. Please try again.");
+          showToast(data.error || "Could not update placement. Please try again.", { variant: "error" });
           return;
         }
       } catch (err) {
         console.error("Placement PATCH failed:", err);
-        alert("Network error. Please try again.");
+        showToast("Network error. Please try again.", { variant: "error" });
         return;
       }
     }
@@ -736,12 +778,30 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
               </span>
             )}
           </div>
-          <p className="text-xs text-muted truncate mt-0.5">{conv.latestMessage}</p>
+          {/* line-clamp-2 instead of truncate, single-line truncate
+              cut messages like "Sent a counter offer" at "Sent a counte"
+              because the row width is fairly narrow. Allowing two lines
+              gives the venue enough preview to recognise the message
+              without opening the thread.
+
+              stripInternalTags removes the leading [enquiry_type] tag
+              that legacy enquiry messages stamped onto the content
+              (e.g. "[venue_looking] Re: Last Light"). The tag is an
+              internal routing field, not for the artist to read. */}
+          <p className="text-xs text-muted mt-0.5 line-clamp-2 break-words">{stripInternalTags(conv.latestMessage)}</p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <span className="text-[10px] text-muted">{timeAgo(conv.lastActivity)}</span>
           <button
-            onClick={(e) => { e.stopPropagation(); if (confirm("Delete this conversation?")) handleDeleteConversation(conv.conversationId); }}
+            onClick={async (e) => {
+              e.stopPropagation();
+              const ok = await confirm({
+                title: "Delete this conversation?",
+                confirmLabel: "Delete",
+                destructive: true,
+              });
+              if (ok) handleDeleteConversation(conv.conversationId);
+            }}
             className="text-muted/40 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
             title="Delete"
           >
@@ -900,7 +960,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     {selectedConvData?.otherPartyType === "artist" ? (
                       <Link href={`/browse/${selectedConvData.otherParty}`} className="text-sm font-medium truncate hover:text-accent transition-colors">{selectedConvData.otherPartyDisplayName}</Link>
                     ) : selectedConvData?.otherPartyType === "venue" ? (
-                      <Link href="/spaces-looking-for-art" className="text-sm font-medium truncate hover:text-accent transition-colors">{selectedConvData.otherPartyDisplayName}</Link>
+                      <Link href="/spaces" className="text-sm font-medium truncate hover:text-accent transition-colors">{selectedConvData.otherPartyDisplayName}</Link>
                     ) : (
                       <p className="text-sm font-medium truncate">{selectedConvData?.otherPartyDisplayName}</p>
                     )}
@@ -932,7 +992,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     <Link href={`/browse/${selectedConvData.otherParty}`} className="text-xs text-accent hover:text-accent-hover transition-colors">View Portfolio</Link>
                   )}
                   {selectedConvData?.otherPartyType === "venue" && (
-                    <Link href="/spaces-looking-for-art" className="text-xs text-accent hover:text-accent-hover transition-colors">View Spaces</Link>
+                    <Link href="/spaces" className="text-xs text-accent hover:text-accent-hover transition-colors">View Spaces</Link>
                   )}
                   {/* Mobile-only placement status drawer toggle.
                       Rendered as an inline chevron link rather than a pill so
@@ -1030,12 +1090,6 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                   const iAmSender = senderUserId === user?.id;
                   const open = !finalStatus || finalStatus === "pending" || finalStatus === "countered";
 
-                  // Where the Counter button should land. Errs to the
-                  // venue portal if we can't resolve it from metadata.
-                  const portalLink = recipientUserId === senderUserId
-                    ? "/venue-portal/offers"
-                    : "/artist-portal/offers";
-
                   return (
                     <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[80%] border rounded-lg overflow-hidden bg-white ${isCounter ? "border-amber-400" : "border-accent/30"}`}>
@@ -1077,12 +1131,24 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                             >
                               Accept
                             </button>
-                            <Link
-                              href={portalLink || (recipientUserId === senderUserId ? "/venue-portal/offers" : "/artist-portal/offers")}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!offerId) return;
+                                const amtPence =
+                                  typeof meta.offerAmountPence === "number"
+                                    ? (meta.offerAmountPence as number)
+                                    : 0;
+                                setCounterOffer({
+                                  offerId,
+                                  amountPence: amtPence,
+                                  title: primaryTitle,
+                                });
+                              }}
                               className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
                             >
                               Counter
-                            </Link>
+                            </button>
                             <button
                               onClick={() => handleOfferResponse(msg, "decline")}
                               className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 rounded-full transition-colors"
@@ -1235,31 +1301,40 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           const latestResponseTs = latestResponse ? new Date(latestResponse.created_at).getTime() : 0;
                           const respondedToThis = !!latestResponse && latestResponseTs >= thisRequestTs;
                           if (respondedToThis && latestResponse) {
-                            const accepted = latestResponse.metadata?.status === "active";
+                            const responseStatus = latestResponse.metadata?.status;
+                            const accepted = responseStatus === "active";
+                            const cancelled = responseStatus === "cancelled";
                             // Gate for the Counter-on-declined button: the
                             // original offerer (requester) may revise terms;
-                            // the decliner waits for them.
+                            // the decliner waits for them. Cancellation is
+                            // terminal, no counter from either side.
                             const metaRequesterId = (meta.requesterUserId as string | undefined) || undefined;
                             const iAmOfferer = metaRequesterId
                               ? metaRequesterId === user?.id
                               : isMe;
+                            const label = cancelled
+                              ? "⊘ Cancelled"
+                              : accepted
+                                ? "✓ Accepted"
+                                : "✗ Declined";
+                            const showCounter = !accepted && !cancelled && iAmOfferer && typeof placementId === "string";
                             return (
                               <div className={`px-3.5 py-2 border-t ${accepted ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
                                   <p className={`text-xs font-medium ${accepted ? "text-green-700" : "text-red-600"}`}>
-                                    {accepted ? "✓ Accepted" : "✗ Declined"}
+                                    {label}
                                   </p>
-                                  {!accepted && iAmOfferer && typeof placementId === "string" && (
+                                  {showCounter && (
                                     <button
                                       type="button"
-                                      onClick={() => openCounterDialog(placementId)}
+                                      onClick={() => openCounterDialog(placementId as string)}
                                       className="px-2.5 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
                                     >
                                       Counter with new terms
                                     </button>
                                   )}
                                 </div>
-                                {!accepted && !iAmOfferer && (
+                                {!accepted && !cancelled && !iAmOfferer && (
                                   <p className="text-[11px] text-muted mt-1">You declined, the other party can come back with revised terms.</p>
                                 )}
                               </div>
@@ -1308,15 +1383,23 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 // Placement response card
                 if (msg.message_type === "placement_response") {
                   const accepted = meta.status === "active";
+                  const cancelled = meta.status === "cancelled";
+                  const label = accepted
+                    ? "Placement Accepted"
+                    : cancelled
+                      ? "Placement Cancelled"
+                      : "Placement Declined";
                   return (
                     <div key={msg.id} className="flex justify-center">
                       <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium ${accepted ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
                         {accepted ? (
                           <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
+                        ) : cancelled ? (
+                          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="7" cy="7" r="5.5" /><path d="M3 11L11 3" /></svg>
                         ) : (
                           <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
                         )}
-                        {accepted ? "Placement Accepted" : "Placement Declined"}
+                        {label}
                       </div>
                     </div>
                   );
@@ -1372,7 +1455,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           ))}
                         </div>
                       )}
-                      {msg.content && <p className="leading-relaxed">{msg.content}</p>}
+                      {msg.content && <p className="leading-relaxed">{stripInternalTags(msg.content)}</p>}
                       <p className={`text-[9px] mt-1 ${isMe ? "text-white/50" : "text-muted"} flex items-center gap-1`}>
                         {isPinned && (
                           <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z" /></svg>
@@ -1488,7 +1571,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 otherPartyName={selectedConvData.otherPartyDisplayName}
                 otherPartyType={selectedOtherPartyType}
                 otherPartyImage={selectedConvData.otherPartyImage}
-                portalType={portalType}
+                portalType={portalRole}
                 userId={user?.id}
                 otherPartyWorks={otherPartyWorks}
                 otherPartyWorksLoading={otherWorksLoading}
@@ -1508,6 +1591,22 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
           initial={counterInitial}
           onClose={() => { setCounteringId(null); setCounterInitial(undefined); }}
           onSuccess={() => { setCounteringId(null); setCounterInitial(undefined); if (selectedConv) loadThread(selectedConv); }}
+        />
+      )}
+
+      {/* Inline counter dialog for purchase_offer cards. Replaces the
+          earlier Link-out to /artist-portal/offers — feature parity
+          with that page so the counter flow stays in the thread. */}
+      {counterOffer && (
+        <CounterOfferDialog
+          offerId={counterOffer.offerId}
+          currentAmountPence={counterOffer.amountPence}
+          title={counterOffer.title}
+          onClose={() => setCounterOffer(null)}
+          onSuccess={() => {
+            setCounterOffer(null);
+            if (selectedConv) loadThread(selectedConv);
+          }}
         />
       )}
 
@@ -1603,7 +1702,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     type="button"
                     disabled={flagSubmitting}
                     onClick={async () => {
-                      if (!confirm("Archive this conversation? It'll disappear from your inbox but can be restored by support if needed.")) return;
+                      const ok = await confirm({
+                        title: "Archive this conversation?",
+                        body: "It'll disappear from your inbox but can be restored by support if needed.",
+                        confirmLabel: "Archive",
+                      });
+                      if (!ok) return;
                       setFlagSubmitting(true);
                       try {
                         await authFetch("/api/messages", {
@@ -1625,7 +1729,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     type="button"
                     disabled={flagSubmitting}
                     onClick={async () => {
-                      if (!confirm(`Block ${selectedConvData?.otherPartyDisplayName || "this user"}? They won't be able to message you again.`)) return;
+                      const ok = await confirm({
+                        title: `Block ${selectedConvData?.otherPartyDisplayName || "this user"}?`,
+                        body: "They won't be able to message you again.",
+                        confirmLabel: "Block",
+                        destructive: true,
+                      });
+                      if (!ok) return;
                       setFlagSubmitting(true);
                       try {
                         await authFetch("/api/messages/block", {

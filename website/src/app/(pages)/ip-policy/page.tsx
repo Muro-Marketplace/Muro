@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Intellectual Property & Takedown Policy – Wallplace",
+  title: "Intellectual Property and Takedown Policy",
   description:
     "Wallplace Intellectual Property & Takedown Policy. How to report infringement and our process for handling IP claims.",
 };
@@ -68,7 +68,7 @@ export default function IpPolicyPage() {
               </div>
 
               <div>
-                <h2 className="text-2xl mb-4">Repeat Infringers &mdash; Three-Strike Policy</h2>
+                <h2 className="text-2xl mb-4">Repeat Infringers, Three-Strike Policy</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Wallplace operates a formal three-strike policy to address repeat infringement:</p>
                   <ul className="list-disc pl-6 space-y-2">
