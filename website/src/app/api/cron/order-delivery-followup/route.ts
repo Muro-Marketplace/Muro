@@ -1,12 +1,18 @@
-// Phase 2.3 (J2). Hourly cron that nudges customers to confirm
-// delivery 48 hours after order.delivered fires, and auto-confirms
-// after 7 days of silence so the artist payout isn't blocked
-// forever.
+// Phase 2.3 (J2). Cron that nudges customers to confirm delivery
+// 48 hours after order.delivered fires, and auto-confirms after 7
+// days of silence so the artist payout isn't blocked forever.
 //
-// Scheduling: vercel.json runs this every hour. The job is idempotent
-// — re-running within the same hour won't double-send because every
-// nudge inserts a `48h_prompt` row into order_events with a unique
-// idempotency_key, and auto-confirm inserts `order.delivery_confirmed`.
+// Scheduling: vercel.json runs this twice daily (9am + 9pm UTC).
+// The original Phase 2.3 spec asked for hourly, but the hourly
+// schedule pushed Vercel cron usage past plan limits and broke
+// production deploys. Twice-daily keeps the 48h prompt within ~12h
+// of the spec target (so it fires 48-60h after delivery instead of
+// 48-49h) and leaves the 7-day auto-confirm window untouched.
+//
+// The job is idempotent: re-running on the next tick won't double-
+// send because every nudge inserts a `48h_prompt` row into
+// order_events with a unique idempotency_key, and auto-confirm
+// inserts `order.delivery_confirmed` with its own unique key.
 //
 // Why the prompt isn't a separate order_events.event_type:
 //   The Phase 1 CHECK constraint locks the event_type vocabulary to
