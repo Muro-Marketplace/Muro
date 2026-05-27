@@ -5,7 +5,9 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import UpgradePrompt from "@/components/UpgradePrompt";
 import { authFetch } from "@/lib/api-client";
+import { useSubscription } from "@/lib/use-subscription";
 
 interface RequestRow {
   id: string;
@@ -28,9 +30,22 @@ export default function ArtistArtworkRequestsPage() {
   const [loading, setLoading] = useState(true);
   // Phase 2.1 D1: default view shows only requests this artist has
   // engaged with (responded or saved a draft). The toggle flips to
-  // the full open-requests feed. Phase 2.5 (B1) will paywall the
-  // "All open requests" view behind subscription.
+  // the full open-requests feed. Phase 2.5 (B1) paywalls the toggle
+  // behind subscription, gated by GATING_V1.
   const [showAll, setShowAll] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const sub = useSubscription();
+  // Paywall the "All open" tab when subscription gating is on and
+  // the artist isn't currently subscribed.
+  const allOpenIsLocked = sub.gatingEnabled && !sub.active;
+
+  function handleToggle(target: boolean) {
+    if (target && allOpenIsLocked) {
+      setUpgradeOpen(true);
+      return;
+    }
+    setShowAll(target);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,7 +81,7 @@ export default function ArtistArtworkRequestsPage() {
 
         <div className="flex items-center gap-1 mb-6 border-b border-border" role="tablist">
           <button
-            onClick={() => setShowAll(false)}
+            onClick={() => handleToggle(false)}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               !showAll
                 ? "border-accent text-accent"
@@ -78,7 +93,7 @@ export default function ArtistArtworkRequestsPage() {
             My responses
           </button>
           <button
-            onClick={() => setShowAll(true)}
+            onClick={() => handleToggle(true)}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               showAll
                 ? "border-accent text-accent"
@@ -88,8 +103,18 @@ export default function ArtistArtworkRequestsPage() {
             aria-selected={showAll}
           >
             All open requests
+            {allOpenIsLocked && (
+              <span className="ml-1.5 text-[10px] text-muted/80">(Pro)</span>
+            )}
           </button>
         </div>
+
+        <UpgradePrompt
+          open={upgradeOpen}
+          onClose={() => setUpgradeOpen(false)}
+          title="Subscribe to see every open request"
+          message="The full feed of open venue requests is part of a paid Wallplace plan. Upgrade and you're back in."
+        />
 
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>

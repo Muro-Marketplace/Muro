@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { startPaidLoanBilling, cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
 import { deriveArrangementType } from "@/lib/placements/arrangement";
+import { isFlagOn } from "@/lib/feature-flags";
+import { isSubscribed } from "@/lib/subscriptions";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
 import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
@@ -311,6 +313,24 @@ export async function POST(request: Request) {
 
     const db = getSupabaseAdmin();
     const role = await getUserRole(auth.user!.id);
+
+    // B3 (Phase 2.5, gated by GATING_V1): non-subscribed artists can't
+    // send a placement request. Venues are always allowed to initiate
+    // — they're the paying customer surface, not the gated one. We
+    // gate the artist-initiated branch only.
+    if (isFlagOn("GATING_V1") && !fromVenue && role?.type === "artist") {
+      const sub = await isSubscribed(auth.user!.id);
+      if (!sub.active) {
+        return NextResponse.json(
+          {
+            error: "subscription_required",
+            message: "Sending placement requests requires an active Wallplace subscription.",
+            upgrade_url: "/artist-portal/billing",
+          },
+          { status: 402 },
+        );
+      }
+    }
 
     let artistProfile: { user_id: string; slug: string; name: string } | null = null;
     let venueProfile: { user_id: string; slug: string; name: string } | null = null;
@@ -795,6 +815,24 @@ export async function PATCH(request: Request) {
 
     if (!isArtist && !isVenue) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+    }
+
+    // B3 (Phase 2.5, gated by GATING_V1): non-subscribed artists can't
+    // respond to placement requests. Accepting an active arrangement is
+    // gated; declining + counters fall through so artists can still
+    // turn down requests they can't take on.
+    if (isFlagOn("GATING_V1") && isArtist && (status === "active" || counter)) {
+      const sub = await isSubscribed(auth.user!.id);
+      if (!sub.active) {
+        return NextResponse.json(
+          {
+            error: "subscription_required",
+            message: "Responding to placement requests requires an active Wallplace subscription.",
+            upgrade_url: "/artist-portal/billing",
+          },
+          { status: 402 },
+        );
+      }
     }
 
     // Block pending-review artists from accepting placements. They can

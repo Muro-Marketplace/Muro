@@ -128,6 +128,15 @@ export interface Artist {
    *  carries this flag so the homepage tour lands on a profile that
    *  doesn't accept real orders or messages. */
   isDemo?: boolean;
+  /** Phase 2.5 B4: seed-catalog artists stay visible on /browse
+   *  regardless of subscription_status. Set true on every entry in
+   *  this file by default at the merge boundary in merged-data.ts;
+   *  individual rows don't need to declare it. */
+  isSeedArtist?: boolean;
+  /** Phase 2.5 B4: surfaced from artist_profiles.subscription_status
+   *  for DB-backed artists so the gating filter can include
+   *  active / trialing rows. Undefined on static seed entries. */
+  subscriptionStatus?: string;
 }
 
 export const artists: Artist[] = [
