@@ -285,6 +285,25 @@ export async function POST(request: Request) {
       );
     }
 
+    // E1 (Phase 2.4): block artist-to-artist new messages. Existing
+    // threads remain readable (GET is unaffected); only the SEND is
+    // gated. Users with both an artist + venue profile can still
+    // message artists from their venue context — the resolvedSenderType
+    // above already prefers artist when both exist, so we need to
+    // additionally check if the caller also has a venue profile and
+    // surface that to the client so the UI can prompt them to switch
+    // portals. Today the check is unconditional: any artist context
+    // sending to an artist is rejected.
+    if (resolvedSenderType === "artist" && !!recipArtist) {
+      return NextResponse.json(
+        {
+          error: "Artist-to-artist messaging isn't supported. If you have a venue account, switch to your venue portal to message artists.",
+          code: "artist_to_artist_blocked",
+        },
+        { status: 403 },
+      );
+    }
+
     // If the client didn't pass a conversationId, try to find an existing
     // thread between these two slugs first, then fall back to the
     // deterministic id so both sides land on the same row.

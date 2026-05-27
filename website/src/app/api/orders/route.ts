@@ -37,10 +37,18 @@ export async function GET(request: Request) {
       // QR-scan order whose webhook fallback stripped artist_slug
       // would be invisible to the artist even though everything else
       // about the order is intact.
+      //
+      // E3 (Phase 2.4): also include orders where this artist is the
+      // BUYER (artist A purchasing from artist B). Before this clause
+      // those purchases lived nowhere in the artist's portal because
+      // the artist branch only checked seller-side keys. Match on
+      // buyer_email or buyer_user_id, mirroring the customer branch.
       query = db
         .from("orders")
         .select("*")
-        .or(`artist_user_id.eq.${userId},artist_slug.eq.${artistProfile.slug}`);
+        .or(
+          `artist_user_id.eq.${userId},artist_slug.eq.${artistProfile.slug},buyer_email.eq.${email},buyer_user_id.eq.${userId}`,
+        );
     } else if (venueProfile) {
       // Venue: orders from their venue + their own purchases
       query = db.from("orders").select("*").or(`venue_slug.eq.${venueProfile.slug},buyer_email.eq.${email}`);
