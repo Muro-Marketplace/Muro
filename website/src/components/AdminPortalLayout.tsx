@@ -11,6 +11,14 @@ const navItems = [
   { label: "Artists", href: "/admin/artists" },
   { label: "Venues", href: "/admin/venues" },
   { label: "Curation", href: "/admin/curation" },
+  // Phase 2.1 A5/A6: moderation panels for feature requests + feedback.
+  { label: "Feature requests", href: "/admin/feature-requests" },
+  { label: "Feedback", href: "/admin/feedback" },
+  // Phase 2.7 A4: blog moderation queue.
+  { label: "Blogs", href: "/admin/blogs" },
+  // Phase 2.8 A2/A3: dispute panel + read-only financials dashboard.
+  { label: "Disputes", href: "/admin/disputes" },
+  { label: "Financials", href: "/admin/financials" },
 ];
 
 const secondaryItems = [

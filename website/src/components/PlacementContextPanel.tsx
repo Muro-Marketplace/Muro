@@ -11,6 +11,7 @@ import {
   statusBadgeClass,
   nextAction,
   viewerRole,
+  arrangementLabel as sharedArrangementLabel,
   type DisplayStatus,
   type PlacementLifecycle,
 } from "@/lib/placements/status";
@@ -581,17 +582,24 @@ export default function PlacementContextPanel({
   // trusting the raw arrangement_type. For legacy rows where the fee was
   // dropped by an earlier insert retry, fall back to parsing £X/month out
   // of the request message so a paid loan isn't mislabelled.
+  // G1 (Phase 2.2): single source of truth via the shared
+  // arrangementLabel(), so this panel agrees with the
+  // /placements/[id] header and the placement-list rows. Still falls
+  // back to scanning the request message for "\u00a3X/month" via the
+  // helper, so legacy rows without a populated fee column don't
+  // mis-label as "Free display".
+  const arrangementLabel = sharedArrangementLabel({
+    arrangement_type: p.arrangement_type,
+    monthly_fee_gbp: p.monthly_fee_gbp,
+    qr_enabled: p.qr_enabled,
+    message: p.message,
+  });
+  // Same fee-derivation as the helper, but exposed locally for the
+  // conditional Monthly-fee + QR-code rows below.
   const msg = p.message || "";
   const msgFeeMatch = msg.match(/(?:\u00a3|gbp)\s?(\d{2,5})\s?(?:\/?\s?m|per\s*m|\/\s*mo|a\s*m)/i);
   const msgFee = msgFeeMatch ? parseFloat(msgFeeMatch[1]) : 0;
   const hasFee = (typeof p.monthly_fee_gbp === "number" && p.monthly_fee_gbp > 0) || msgFee > 0;
-  const arrangementLabel = hasFee
-    ? (p.qr_enabled ? "Paid loan + QR" : "Paid loan")
-    : p.arrangement_type === "purchase"
-      ? "Direct purchase"
-      : p.qr_enabled || p.arrangement_type === "revenue_share"
-        ? "Revenue share"
-        : "Free display";
 
   return (
     <aside className="w-full h-full bg-[#FAF8F5] border-l border-border flex flex-col overflow-y-auto">

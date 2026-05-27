@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { messageSchema } from "@/lib/validations";
 import { moderateMessage } from "@/lib/moderation";
+import { isFlagOn } from "@/lib/feature-flags";
 import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
 import { MessageUnreadNotification } from "@/emails/templates/messages/MessageUnreadNotification";
@@ -60,6 +61,52 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get("slug");
+    const disputeId = searchParams.get("dispute_id");
+
+    // A1 (Phase 2.8): admin chat access scoped to disputes. Admins can
+    // read the conversation tied to a specific dispute_id; without the
+    // param they fall through to the normal slug-owned view (which is
+    // empty for anyone who isn't in the thread).
+    if (disputeId) {
+      const dbAdmin = getSupabaseAdmin();
+      // Admin check via email allowlist — mirrors getAdminUser() in
+      // src/lib/admin-auth.ts. We don't call that helper directly
+      // because it returns a NextResponse and we want a boolean.
+      const adminEmail = (auth.user!.email ?? "").toLowerCase();
+      const allowed = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const isAdmin = adminEmail.length > 0 && allowed.includes(adminEmail);
+      if (!isAdmin) {
+        return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+      }
+      const { data: dispute } = await dbAdmin
+        .from("disputes")
+        .select("id, conversation_id")
+        .eq("id", disputeId)
+        .maybeSingle<{ id: string; conversation_id: string | null }>();
+      if (!dispute || !dispute.conversation_id) {
+        return NextResponse.json({ error: "Dispute / conversation not found" }, { status: 404 });
+      }
+      const { data: msgs } = await dbAdmin
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", dispute.conversation_id)
+        .order("created_at", { ascending: true });
+      // Audit the read.
+      const { recordAdminAction } = await import("@/lib/admin-audit");
+      await recordAdminAction({
+        adminUserId: auth.user!.id,
+        action: "messages.read.dispute_scoped",
+        context: { dispute_id: disputeId, conversation_id: dispute.conversation_id },
+      });
+      return NextResponse.json({
+        messages: msgs ?? [],
+        conversations: [],
+        adminScopedToDispute: true,
+      });
+    }
 
     if (!slug || slug.length > 100) {
       return NextResponse.json({ error: "slug parameter required" }, { status: 400 });
@@ -282,6 +329,22 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "We couldn't find that recipient on Wallplace. They may not have an account yet. If you want us to invite them, reply with their email and we'll send them an onboarding link." },
         { status: 404 },
+      );
+    }
+
+    // E1 (Phase 2.4): block artist-to-artist new messages, gated by
+    // GATING_V1 per the Phase 2 hard constraint "every behaviour-
+    // change milestone behind a feature flag". Existing threads stay
+    // readable (GET is unaffected). The dual-role case (artist with a
+    // venue account too) is asked to switch portals — resolvedSenderType
+    // already prefers artist over venue when both profiles exist.
+    if (isFlagOn("GATING_V1") && resolvedSenderType === "artist" && !!recipArtist) {
+      return NextResponse.json(
+        {
+          error: "Artist-to-artist messaging isn't supported. If you have a venue account, switch to your venue portal to message artists.",
+          code: "artist_to_artist_blocked",
+        },
+        { status: 403 },
       );
     }
 

@@ -115,27 +115,31 @@ describe("isSubscribed()", () => {
     expect(res).toEqual({ active: true, plan: "premium", user_type: "venue" });
   });
 
-  it("tolerates missing venue subscription columns and reports user_type='venue'", async () => {
-    let venueCall = 0;
-    fromMock.mockImplementation((table: string) => {
-      if (table === "artist_profiles") {
-        return chain({ data: null, error: null });
-      }
-      if (table === "venue_profiles") {
-        venueCall += 1;
-        if (venueCall === 1) {
-          return chain({
-            data: null,
-            error: { message: "column venue_profiles.subscription_status does not exist" },
-          });
-        }
-        return chain({ data: { user_id: "u1" }, error: null });
-      }
-      throw new Error(table);
+  it("returns null and warns when venue lookup errors (post mig 064 columns exist, hard fail surfaces)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setTables({
+      artist_profiles: "missing",
+      venue_profiles: {
+        data: null,
+        error: { message: "permission denied for table venue_profiles" },
+      },
     });
-    const res = await isSubscribed("u-venue-legacy");
+    const res = await isSubscribed("u-venue-err");
+    expect(res).toEqual({ active: false, plan: null, user_type: null });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("treats venue with default subscription_status='none' as inactive but identified", async () => {
+    setTables({
+      artist_profiles: "missing",
+      venue_profiles: {
+        data: { user_id: "u1", subscription_status: "none", subscription_plan: null },
+        error: null,
+      },
+    });
+    const res = await isSubscribed("u-venue-default");
     expect(res).toEqual({ active: false, plan: null, user_type: "venue" });
-    expect(venueCall).toBe(2);
   });
 
   it("returns user_type=null when neither profile exists", async () => {

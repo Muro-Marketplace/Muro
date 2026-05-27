@@ -141,6 +141,35 @@ export async function GET(request: Request) {
     console.error("[artwork-requests GET]", error);
     return NextResponse.json({ error: "Could not load requests" }, { status: 500 });
   }
+
+  // Phase 2.1 D1: when ?mine_only=1 is set and the caller is a signed-in
+  // artist, narrow the list to requests where they have a response (any
+  // status: sent, draft, etc.). The default artist-portal view passes
+  // this flag; the "All open requests" toggle drops it.
+  const mineOnly =
+    new URL(request.url).searchParams.get("mine_only") === "1" &&
+    !!auth.user;
+  let filteredRows = data || [];
+  if (mineOnly && auth.user) {
+    const requestIds = filteredRows.map((r) => (r as { id: string }).id);
+    if (requestIds.length === 0) {
+      filteredRows = [];
+    } else {
+      const { data: responseRows } = await db
+        .from("artwork_request_responses")
+        .select("request_id")
+        .eq("artist_user_id", auth.user.id)
+        .in("request_id", requestIds);
+      const responded = new Set(
+        (responseRows ?? []).map(
+          (r) => (r as { request_id: string }).request_id,
+        ),
+      );
+      filteredRows = filteredRows.filter((r) =>
+        responded.has((r as { id: string }).id),
+      );
+    }
+  }
   // Fan in venue names with a batch lookup. There's no FK between
   // artwork_requests and venue_profiles (both reference auth.users)
   // so PostgREST can't embed venue_profiles directly — when we tried,
@@ -161,7 +190,7 @@ export async function GET(request: Request) {
   // the artist-portal list shows "Copper Kettle" instead of a slug or
   // bare uuid.
   return NextResponse.json({
-    requests: (data || []).map((r) => ({
+    requests: filteredRows.map((r) => ({
       ...r,
       venue_name: venueNameById.get((r as { venue_user_id: string }).venue_user_id) ?? null,
     })),

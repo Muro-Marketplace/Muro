@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { notifyBuyerStatusUpdate } from "@/lib/email";
-import { sendEmail } from "@/lib/email/send";
-import { CustomerShippingConfirmation } from "@/emails/templates/orders/CustomerShippingConfirmation";
-import { CustomerDeliveryConfirmation } from "@/emails/templates/orders/CustomerDeliveryConfirmation";
+// Phase 2.3 J1 audit: legacy customer-side shipped/delivered emails
+// removed in favour of the dispatcher path (recordOrderEvent). The
+// templates themselves stay in the registry for the email-preview
+// route and any future legacy webhook fallback.
 import { executeTransfer } from "@/lib/stripe-connect";
 import { canTransition, type OrderStatus, ORDER_STATUSES } from "@/lib/order-state-machine";
+import { recordOrderEvent } from "@/lib/orders/lifecycle";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -26,26 +28,43 @@ export async function GET(request: Request) {
       ? await db.from("venue_profiles").select("slug").eq("user_id", userId).single()
       : { data: null };
 
+    // Sanitise the email used in the PostgREST .or() filter. The value
+    // comes from the authenticated session so it's already been
+    // RFC-validated at signup, but RFC 5322 technically allows commas
+    // and parens in quoted local-parts and those characters would
+    // break the .or() filter syntax. If we see anything unusual we
+    // skip the email branch rather than risk a malformed filter.
+    const emailSafe = /^[A-Za-z0-9_.+%-]+@[A-Za-z0-9.-]+$/.test(email) ? email : "";
+
     let query;
     if (artistProfile) {
       // Artist: orders for their work. Match by EITHER artist_user_id
       // OR artist_slug so an order that landed with only one of the
       // two columns populated (e.g. webhook fallback insert that
       // dropped attribution columns, slug renamed, casing drift)
-      // still surfaces in the artist's list. Without this, a guest
-      // QR-scan order whose webhook fallback stripped artist_slug
-      // would be invisible to the artist even though everything else
-      // about the order is intact.
-      query = db
-        .from("orders")
-        .select("*")
-        .or(`artist_user_id.eq.${userId},artist_slug.eq.${artistProfile.slug}`);
+      // still surfaces in the artist's list.
+      //
+      // E3 (Phase 2.4): also include orders where this artist is the
+      // BUYER (artist A purchasing from artist B). Before this clause
+      // those purchases lived nowhere in the artist's portal because
+      // the artist branch only checked seller-side keys.
+      const terms = [
+        `artist_user_id.eq.${userId}`,
+        `artist_slug.eq.${artistProfile.slug}`,
+        `buyer_user_id.eq.${userId}`,
+      ];
+      if (emailSafe) terms.push(`buyer_email.eq.${emailSafe}`);
+      query = db.from("orders").select("*").or(terms.join(","));
     } else if (venueProfile) {
       // Venue: orders from their venue + their own purchases
-      query = db.from("orders").select("*").or(`venue_slug.eq.${venueProfile.slug},buyer_email.eq.${email}`);
+      const terms = [`venue_slug.eq.${venueProfile.slug}`];
+      if (emailSafe) terms.push(`buyer_email.eq.${emailSafe}`);
+      query = db.from("orders").select("*").or(terms.join(","));
     } else {
       // Customer: orders by email or user ID
-      query = db.from("orders").select("*").or(`buyer_email.eq.${email},buyer_user_id.eq.${userId}`);
+      const terms = [`buyer_user_id.eq.${userId}`];
+      if (emailSafe) terms.push(`buyer_email.eq.${emailSafe}`);
+      query = db.from("orders").select("*").or(terms.join(","));
     }
 
     const { data, error } = await query.order("created_at", { ascending: false });
@@ -165,75 +184,65 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Failed to update status" }, { status: 500 });
     }
 
-    // Notify buyer. Branded React Email templates for shipped/delivered;
-    // legacy plain notifier for processing/cancelled (no template yet).
-    if (order.buyer_email) {
-      const shippingBlob = (order.shipping ?? {}) as { fullName?: string };
-      const firstName = (shippingBlob.fullName || order.buyer_email.split("@")[0]).split(" ")[0];
-      const orderUrl = `${SITE}/customer-portal/orders`;
-
-      // Pull the first line item off the persisted `items` blob so the
-      // shipping / delivery templates can render the artwork thumbnail.
-      // The blob is written in the webhook after checkout, so by the
-      // time we hit this status transition the row should have it.
-      // Falls back to undefined → template hides the thumbnail block
-      // gracefully (no broken-image icon).
-      const orderItems = Array.isArray(order.items) ? (order.items as Array<{
-        title?: string; artistName?: string; image?: string;
-      }>) : [];
-      const firstItem = orderItems[0];
-      const workTitle = firstItem?.title;
-      const workImage = firstItem?.image && !firstItem.image.startsWith("data:")
-        ? firstItem.image
-        : undefined;
-      const artistName = firstItem?.artistName;
-
-      if (status === "shipped") {
-        await sendEmail({
-          idempotencyKey: `customer_shipping_confirmation:${orderId}`,
-          template: "customer_shipping_confirmation",
-          category: "orders_and_payouts",
-          to: order.buyer_email,
-          subject: `Your order ${orderId} is on its way`,
-          react: CustomerShippingConfirmation({
-            firstName,
-            orderNumber: orderId,
-            trackingUrl: orderUrl,
-            carrier: trackingNumber ? `tracking ${trackingNumber}` : "the courier",
-            estimatedDelivery: "in the next few days",
-            orderUrl,
-            workTitle,
-            workImage,
-            artistName,
-          }),
-          metadata: { trackingNumber: trackingNumber ?? null },
-        });
-      } else if (status === "delivered") {
-        await sendEmail({
-          idempotencyKey: `customer_delivery_confirmation:${orderId}`,
-          template: "customer_delivery_confirmation",
-          category: "orders_and_payouts",
-          to: order.buyer_email,
-          subject: `Your order ${orderId} has arrived`,
-          react: CustomerDeliveryConfirmation({
-            firstName,
-            orderNumber: orderId,
-            deliveredAt: new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
-            careGuideUrl: `${SITE}/care`,
-            reviewUrl: `${SITE}/customer-portal/orders`,
-            workTitle,
-            workImage,
-            artistName,
-          }),
-        });
-      } else {
-        notifyBuyerStatusUpdate({
-          email: order.buyer_email,
-          orderId,
-          status,
-          trackingNumber,
-        }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+    // J1 (Phase 2.3): log the lifecycle event + fire the Phase 2.0c
+    // dispatcher templates. Best-effort. The original branded React
+    // Email templates below continue to fire so we don't lose the
+    // legacy artwork-thumbnail variant during the cut-over; the
+    // dispatcher uses purpose-built Phase 2 templates with a
+    // different `to` and idempotency-key shape, so the two paths
+    // don't double-charge or double-send.
+    try {
+      const shippingBlob0 = (order.shipping ?? {}) as { fullName?: string };
+      const firstName0 = order.buyer_email
+        ? (shippingBlob0.fullName || order.buyer_email.split("@")[0]).split(" ")[0]
+        : "there";
+      // Look up the artist contact email so order.placed can dispatch
+      // to the artist as well. Best-effort, no-op when there's no
+      // artist_user_id on the row (legacy / guest-QR orders) — the
+      // Supabase admin client throws "Expected parameter to be UUID"
+      // for empty strings, which clutters error logs for nothing.
+      let artistEmail: string | null = null;
+      const artistUserId = (order as { artist_user_id?: string }).artist_user_id ?? "";
+      if (artistUserId) {
+        try {
+          const { data: artist } = await db.auth.admin.getUserById(artistUserId);
+          artistEmail = artist?.user?.email ?? null;
+        } catch {
+          artistEmail = null;
+        }
       }
+      await recordOrderEvent({
+        orderId,
+        newStatus: status,
+        actorUserId: auth.user?.id ?? null,
+        buyerEmail: order.buyer_email ?? null,
+        artistEmail,
+        data: {
+          firstName: firstName0,
+          orderNumber: orderId,
+          orderUrl: `${SITE}/customer-portal/orders`,
+        },
+        metadata: { tracking_number: trackingNumber ?? null },
+      });
+    } catch (lifecycleErr) {
+      console.error("[orders PATCH] lifecycle hook:", lifecycleErr);
+    }
+
+    // Phase 2.3 J1 audit fix: the dispatcher above (recordOrderEvent)
+    // now owns shipped + delivered + processing customer emails via
+    // the Phase 2.0c templates. The old inline sendEmail calls used
+    // a different idempotency key shape, so both paths fired and the
+    // customer received duplicate messages for the same lifecycle
+    // event. We keep the legacy `notifyBuyerStatusUpdate` only for
+    // statuses the dispatcher doesn't cover (cancelled / disputed /
+    // refunded), so cancellation notes still go out today.
+    if (order.buyer_email && status !== "shipped" && status !== "delivered" && status !== "processing") {
+      notifyBuyerStatusUpdate({
+        email: order.buyer_email,
+        orderId,
+        status,
+        trackingNumber,
+      }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
     }
 
     // On delivery, release pending payouts immediately (instead of waiting 14 days)

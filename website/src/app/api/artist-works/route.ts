@@ -4,6 +4,8 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getArtistProfileByUserId } from "@/lib/db/artist-profiles";
 import { getWorksByArtistProfileId, upsertWork, deleteWork } from "@/lib/db/artist-works";
 import { slugify } from "@/lib/slugify";
+import { isFlagOn } from "@/lib/feature-flags";
+import { isSubscribed } from "@/lib/subscriptions";
 
 // GET: fetch works for the current user's artist profile
 export async function GET(request: Request) {
@@ -35,6 +37,26 @@ export async function POST(request: Request) {
 
     if (!id || !title || !image) {
       return NextResponse.json({ error: "ID, title, and image are required" }, { status: 400 });
+    }
+
+    // B2 + C2 (Phase 2.5, gated by GATING_V1):
+    //   - If the artist is not currently subscribed and tries to mark
+    //     a work `available=true`, return 402 so the client surfaces
+    //     the upgrade modal.
+    //   - On a new work, force `available=false` regardless so drafts
+    //     can be saved during onboarding without publishing.
+    if (isFlagOn("GATING_V1")) {
+      const sub = await isSubscribed(auth.user!.id);
+      if (!sub.active && available === true) {
+        return NextResponse.json(
+          {
+            error: "subscription_required",
+            message: "Publishing a work requires an active Wallplace subscription.",
+            upgrade_url: "/artist-portal/billing",
+          },
+          { status: 402 },
+        );
+      }
     }
 
     // Posting limit per tier (#24). Core 8, Premium 20, Pro 50.
@@ -123,6 +145,21 @@ export async function POST(request: Request) {
       ? description.slice(0, 2000)
       : "";
 
+    // C2 (Phase 2.5, GATING_V1): default-to-draft for non-subscribed
+    // artists. A new work created without an explicit `available` flag
+    // is saved as a draft (available=false) until the artist either
+    // upgrades or explicitly republishes it. The 402 check above
+    // already short-circuits any explicit `available: true` attempt.
+    let effectiveAvailable: boolean;
+    if (typeof available === "boolean") {
+      effectiveAvailable = available;
+    } else if (isFlagOn("GATING_V1") && isNewWork) {
+      const sub = await isSubscribed(auth.user!.id);
+      effectiveAvailable = sub.active;
+    } else {
+      effectiveAvailable = true;
+    }
+
     const { error, droppedColumns, savedRow, fallbackErrors } = await upsertWork(result.profile.id, {
       id,
       title,
@@ -130,7 +167,7 @@ export async function POST(request: Request) {
       dimensions: dimensions || "",
       price_band: priceBand || "",
       pricing: pricing || [],
-      available: available ?? true,
+      available: effectiveAvailable,
       color: color || "#C17C5A",
       image,
       orientation: orientation || "landscape",

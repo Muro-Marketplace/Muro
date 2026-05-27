@@ -97,6 +97,9 @@ const nextConfig: NextConfig = {
       // And "Social Posts" in the sidebar lives at /artist-portal/posts.
       // Catch the /social guess for the same reason.
       { source: "/artist-portal/social", destination: "/artist-portal/posts", permanent: true },
+      // Phase 2.1: phantom slug. /browse/finlay-coles is referenced in
+      // some early launch posts; the canonical slug is fin-coles.
+      { source: "/browse/finlay-coles", destination: "/browse/fin-coles", permanent: true },
     ];
   },
 };

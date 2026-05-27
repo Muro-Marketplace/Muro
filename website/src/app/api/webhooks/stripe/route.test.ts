@@ -86,6 +86,17 @@ vi.mock("@/emails/templates/payments/SubscriptionCancelled", () => ({ Subscripti
 vi.mock("@/emails/templates/payments/SubscriptionRenewalReceipt", () => ({ SubscriptionRenewalReceipt: () => null }));
 vi.mock("@/emails/templates/artist-additions/ArtistStripeKycNeeded", () => ({ ArtistStripeKycNeeded: () => null }));
 
+// Phase 2.3 + 2.2 imports get stubbed so the heavy dispatcher
+// registry isn't loaded during webhook tests.
+vi.mock("@/lib/orders/lifecycle", () => ({
+  recordOrderEvent: vi.fn(async () => ({ eventType: null, sent: 0, deduped: 0 })),
+}));
+vi.mock("@/lib/placements/paid-loan-billing", () => ({
+  handleInvoicePaid: vi.fn(async () => false),
+  handleInvoicePaymentFailed: vi.fn(async () => false),
+  handleSubscriptionDeleted: vi.fn(async () => false),
+}));
+
 import { POST } from "./route";
 
 type Placement = { id: string; artist_slug: string; revenue_share_percent: number };

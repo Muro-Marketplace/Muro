@@ -20,6 +20,12 @@ import { ArtistStripeKycNeeded } from "@/emails/templates/artist-additions/Artis
 import { platformFeePercentForArtist, DEFAULT_PLAN_FEE_PERCENT } from "@/lib/platform-fee";
 import { loadCartSession } from "@/lib/cart-sessions";
 import { signOrderToken } from "@/lib/order-tracking-token";
+import {
+  handleInvoicePaid as handleInvoicePaidPaidLoan,
+  handleInvoicePaymentFailed as handleInvoicePaymentFailedPaidLoan,
+  handleSubscriptionDeleted as handleSubscriptionDeletedPaidLoan,
+} from "@/lib/placements/paid-loan-billing";
+import { recordOrderEvent } from "@/lib/orders/lifecycle";
 import type Stripe from "stripe";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -405,6 +411,33 @@ export async function POST(request: Request) {
           console.error("Supabase order save error:", error);
           return NextResponse.json({ error: "DB save failed" }, { status: 500 });
         } else {
+          // J1 (Phase 2.3): log the initial order.placed event +
+          // dispatch the matching Phase 2.0c emails. Best-effort,
+          // legacy templates below continue to fire for backwards
+          // compatibility.
+          try {
+            const buyerEmail = orderRow.buyer_email as string | undefined;
+            const artistUserId = orderRow.artist_user_id as string | undefined;
+            let artistEmail: string | null = null;
+            if (artistUserId) {
+              const { data: artistAuth } = await db.auth.admin.getUserById(artistUserId);
+              artistEmail = artistAuth.user?.email ?? null;
+            }
+            await recordOrderEvent({
+              orderId: String(orderRow.id),
+              newStatus: "confirmed",
+              buyerEmail: buyerEmail ?? null,
+              artistEmail,
+              data: {
+                firstName: buyerEmail ? buyerEmail.split("@")[0] : "there",
+                orderNumber: String(orderRow.id),
+                orderUrl: `${SITE}/customer-portal/orders`,
+              },
+              metadata: { stripe_session_id: session.id },
+            });
+          } catch (lifecycleErr) {
+            console.error("[webhook checkout] lifecycle hook:", lifecycleErr);
+          }
           // Decrement per-work quantity (F10). Best-effort: swallow any errors
           // so a DB hiccup here doesn't abort the rest of the order flow.
           try {
@@ -959,6 +992,37 @@ export async function POST(request: Request) {
       } catch (err) {
         console.error("Payment-failed email error:", err);
       }
+    }
+  }
+
+  // ─── Phase 2.2 G3: paid-loan recurring billing ───
+  // Handled first so the artist-payout side fires before the generic
+  // subscription receipt path. Helper returns false when the
+  // invoice/subscription doesn't belong to a placement_recurring_billings
+  // row, so the original artist_profiles subscription handler still
+  // runs for SaaS subs.
+  if (event.type === "invoice.paid") {
+    const invoice = event.data.object as Stripe.Invoice;
+    try {
+      await handleInvoicePaidPaidLoan(invoice);
+    } catch (err) {
+      console.error("[stripe webhook] paid-loan invoice.paid:", err);
+    }
+  }
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as Stripe.Invoice;
+    try {
+      await handleInvoicePaymentFailedPaidLoan(invoice);
+    } catch (err) {
+      console.error("[stripe webhook] paid-loan invoice.payment_failed:", err);
+    }
+  }
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object as Stripe.Subscription;
+    try {
+      await handleSubscriptionDeletedPaidLoan(subscription);
+    } catch (err) {
+      console.error("[stripe webhook] paid-loan subscription.deleted:", err);
     }
   }
 

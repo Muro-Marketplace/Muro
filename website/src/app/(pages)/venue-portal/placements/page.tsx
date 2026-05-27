@@ -671,7 +671,13 @@ export default function VenuePlacementsPage() {
         artistSlug,
         workTitle: p.workTitle,
         workImage: p.workImage,
-        type: paidLoan ? "Paid Loan" as ArrangementType : "Revenue Share" as ArrangementType,
+        // P6 (Phase 2.1): use the shared helper to avoid label flicker
+        // between optimistic insert and server re-fetch.
+        type: normaliseType(paidLoan ? "paid_loan" : "revenue_share", {
+          monthly_fee_gbp: Number(monthlyFee) || 0,
+          qr_enabled: qrEnabled,
+          message: p.message,
+        }),
         revenueSharePercent: p.revenueSharePercent,
         status: "Pending",
         date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
@@ -1445,7 +1451,23 @@ export default function VenuePlacementsPage() {
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         {(() => {
                           const dir = directionFor({ requester_user_id: p.requesterUserId, artist_user_id: p.artistUserId, venue_user_id: p.venueUserId }, user?.id);
-                          return dir ? <PlacementDirectionTag direction={dir} /> : <span className="text-[11px] text-muted">-</span>;
+                          if (!dir) return <span className="text-[11px] text-muted">-</span>;
+                          return (
+                            <div className="flex flex-col gap-1 items-start">
+                              <PlacementDirectionTag direction={dir} />
+                              {/* P7 (Phase 2.1): direct Respond link
+                                  when it's the venue's turn. */}
+                              {dir === "received" && p.status === "Pending" && (
+                                <Link
+                                  href={`/placements/${p.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-[11px] text-accent hover:underline"
+                                >
+                                  Respond &rarr;
+                                </Link>
+                              )}
+                            </div>
+                          );
                         })()}
                       </td>
                       <td className="px-6 py-3.5 text-right">

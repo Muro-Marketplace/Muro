@@ -327,6 +327,10 @@ function BrowsePortfoliosPageInner() {
   // render so SearchInput's debounced setter (Plan F #4) stays the only
   // owner of the value — no extra useState to keep in sync.
   const searchQuery = searchParams?.get("q") || "";
+  // Phase 2.1 B5: ?featured=1 filter on /browse. Reads as truthy on
+  // "1", "true", and "yes" so the link is forgiving.
+  const featuredParam = searchParams?.get("featured") || "";
+  const featuredFilter = ["1", "true", "yes"].includes(featuredParam.toLowerCase());
   const setSearchQuery = useCallback(
     (next: string) => {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
@@ -785,6 +789,16 @@ function BrowsePortfoliosPageInner() {
         )
       )
         return false;
+      // Phase 2.1 B5: ?featured=1 narrows the grid to Pro + Premium
+      // (the artists wearing the Featured chip). Toggled via the URL
+      // so a shareable filter link works without UI plumbing.
+      if (
+        featuredFilter &&
+        artist.subscriptionPlan !== "pro" &&
+        artist.subscriptionPlan !== "premium"
+      ) {
+        return false;
+      }
       return true;
     }).sort((a, b) => {
       if (artistSort === "name") return a.name.localeCompare(b.name);
@@ -811,7 +825,7 @@ function BrowsePortfoliosPageInner() {
       if (!a.isFoundingArtist && b.isFoundingArtist) return 1;
       return 0;
     });
-  }, [artists, filters, userCoords, maxDistance, activeDisciplineObj, activeSubStyles, artistSort, searchQuery]);
+  }, [artists, filters, userCoords, maxDistance, activeDisciplineObj, activeSubStyles, artistSort, searchQuery, featuredFilter]);
 
   const allMediums = useMemo(
     () => Array.from(new Set(artists.map((a) => a.primaryMedium))).sort(),

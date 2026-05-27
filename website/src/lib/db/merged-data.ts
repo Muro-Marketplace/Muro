@@ -1,10 +1,18 @@
 import { artists as staticArtists } from "@/data/artists";
 import type { Artist } from "@/data/artists";
 import { getAllDatabaseArtists, getArtistProfileBySlug, dbProfileToArtist } from "./artist-profiles";
+import { isFlagOn } from "@/lib/feature-flags";
+
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
 /**
  * Returns all artists: static seed data + database artists.
  * Database artists override static if same slug exists.
+ *
+ * Phase 2.5 B4: when GATING_V1 is on, DB artists must have an active
+ * subscription to surface. Static seed-catalog entries always show
+ * (they don't carry subscription_status; they're hand-curated for the
+ * marketplace's first wave).
  */
 export async function getAllArtists(): Promise<Artist[]> {
   const dbArtists = await getAllDatabaseArtists();
@@ -16,9 +24,22 @@ export async function getAllArtists(): Promise<Artist[]> {
   // here for the static slice.
   const staticOnly = staticArtists
     .filter((a) => !dbSlugs.has(a.slug))
-    .map((a) => ({ ...a, isVerified: a.isVerified ?? true }));
+    .map((a) => ({
+      ...a,
+      isVerified: a.isVerified ?? true,
+      isSeedArtist: true,
+    }));
 
-  return [...dbArtists, ...staticOnly];
+  const merged = [...dbArtists, ...staticOnly];
+
+  if (!isFlagOn("GATING_V1")) {
+    return merged;
+  }
+
+  return merged.filter((a) => {
+    if (a.isSeedArtist) return true;
+    return ACTIVE_SUBSCRIPTION_STATUSES.has((a.subscriptionStatus ?? "").toLowerCase());
+  });
 }
 
 /**

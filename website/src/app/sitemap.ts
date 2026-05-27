@@ -73,6 +73,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const { data: dbWorks } = await db
       .from("artist_works")
       .select("title, updated_at, artist_profiles!inner(slug)");
+    // Phase 2.7: published blog posts in the sitemap so SEO crawls
+    // pick them up. Same source-of-truth as /blog.
+    const { data: dbBlogs } = await db
+      .from("blogs")
+      .select("slug, updated_at, published_at")
+      .eq("status", "published");
 
     for (const row of (dbArtists || [])) {
       const lastMod = row.updated_at ? new Date(row.updated_at) : now;
@@ -91,6 +97,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastModified: row.updated_at ? new Date(row.updated_at) : now,
         changeFrequency: "weekly",
         priority: 0.5,
+      });
+    }
+    for (const row of (dbBlogs || []) as Array<{
+      slug: string;
+      updated_at?: string;
+      published_at?: string | null;
+    }>) {
+      if (!row.slug) continue;
+      const lastModSource = row.updated_at || row.published_at || null;
+      dbEntries.push({
+        url: `${SITE_URL}/blog/${row.slug}`,
+        lastModified: lastModSource ? new Date(lastModSource) : now,
+        changeFrequency: "weekly",
+        priority: 0.6,
       });
     }
   } catch {

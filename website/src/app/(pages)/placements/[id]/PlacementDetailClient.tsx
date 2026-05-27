@@ -14,6 +14,7 @@ import PlacementLoanForm from "./PlacementLoanForm";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
+import { isFlagOn } from "@/lib/feature-flags";
 
 interface PlacementRow {
   id: string;
@@ -497,10 +498,41 @@ export default function PlacementDetailClient({ placementId }: Props) {
         )}
         <div className="flex-1 min-w-0">
           <p className="text-xs uppercase tracking-wider text-muted mb-1">
-            {placement.arrangement_type === "revenue_share"
-              ? `Revenue Share${placement.revenue_share_percent ? ` (${placement.revenue_share_percent}%)` : ""}`
-              : placement.arrangement_type === "free_loan" ? "Paid Loan" : "Purchase"}
+            {/* G1 (Phase 2.2): read placement.arrangement_type directly
+                so the header matches what was written. Gated by
+                PAID_LOAN_V2 per the spec's "with flag off: zero
+                behaviour change" requirement — when the flag is off
+                we keep the pre-Phase-2 mapping (free_loan → "Paid Loan").
+            */}
+            {isFlagOn("PAID_LOAN_V2")
+              ? (() => {
+                  const t = placement.arrangement_type;
+                  const pct = placement.revenue_share_percent
+                    ? ` (${placement.revenue_share_percent}%)`
+                    : "";
+                  if (t === "purchase") return "Purchase";
+                  if (t === "paid_loan") return "Paid Loan";
+                  if (t === "free_loan") return "Display";
+                  if (t === "revenue_share") return `Revenue Share${pct}`;
+                  if (t === "mixed") return `Paid Loan + Rev Share${pct}`;
+                  return "Placement";
+                })()
+              : placement.arrangement_type === "revenue_share"
+                ? `Revenue Share${placement.revenue_share_percent ? ` (${placement.revenue_share_percent}%)` : ""}`
+                : placement.arrangement_type === "free_loan"
+                  ? "Paid Loan"
+                  : "Purchase"}
           </p>
+          {/* G2 (Phase 2.2): "Venue owns the work" on purchase, else
+              "On loan from artist". Same flag-gate as G1 — pre-Phase-2
+              the page had no ownership text at all. */}
+          {isFlagOn("PAID_LOAN_V2") && (
+            <p className="text-[11px] text-muted mb-2">
+              {placement.arrangement_type === "purchase"
+                ? "Venue owns the work"
+                : "On loan from artist"}
+            </p>
+          )}
           <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-2">{placement.work_title}</h1>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             {artist && (

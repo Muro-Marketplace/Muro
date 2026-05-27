@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import DemoBanner from "@/components/DemoBanner";
+import FeedbackBubble from "@/components/FeedbackBubble";
 
 export default function PagesLayout({
   children,
@@ -29,6 +30,8 @@ export default function PagesLayout({
       <DemoBanner />
       <main id="main-content" className="flex-1 pt-14 lg:pt-16">{children}</main>
       {!isPortal && <Footer />}
+      {/* Phase 2.6: feedback bubble. Self-hides on legal pages. */}
+      <FeedbackBubble />
     </div>
   );
 }
