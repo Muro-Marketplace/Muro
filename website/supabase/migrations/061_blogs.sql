@@ -100,4 +100,18 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- Auto-bump updated_at on every UPDATE. Mirrors the walls/wall_layouts
+-- trigger pattern in mig 035 — Phase 2 editor saves shouldn't have to
+-- remember to touch this column.
+CREATE OR REPLACE FUNCTION blogs_set_updated_at() RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS blogs_updated_at ON blogs;
+CREATE TRIGGER blogs_updated_at BEFORE UPDATE ON blogs
+  FOR EACH ROW EXECUTE FUNCTION blogs_set_updated_at();
+
 NOTIFY pgrst, 'reload schema';

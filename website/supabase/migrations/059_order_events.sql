@@ -13,11 +13,10 @@
 -- - idempotency_key is UNIQUE so retries are no-ops. The backfill uses
 --   a deterministic key shape `backfill:<order_id>:<event_type>` per
 --   spec, which means re-running this migration is safe.
--- - Backfill is sparse on purpose: every row gets `order.placed`, plus
---   `order.processing` if currently in 'processing' and `order.delivered`
---   if currently in 'delivered'. Other states ('shipped', 'cancelled')
---   only emit the placed event because we don't have reliable historical
---   timestamps for the intermediate transitions.
+-- - Backfill timestamps come from orders.status_history (JSONB array of
+--   {status, timestamp} entries, mig 003) when present, so historical
+--   "processing" / "delivered" events keep their real transition times.
+--   Falls back to now() only when the history is missing or malformed.
 
 CREATE TABLE IF NOT EXISTS order_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,7 +39,19 @@ CREATE TABLE IF NOT EXISTS order_events (
 CREATE INDEX IF NOT EXISTS order_events_order_id_idx
   ON order_events(order_id, created_at);
 
+-- Phase 2 lifecycle emails will ask "has order.<type> already fired for
+-- this order?". The UNIQUE on idempotency_key answers a specific-key
+-- question; this index answers the broader "any event of this type for
+-- this order".
+CREATE INDEX IF NOT EXISTS order_events_type_order_idx
+  ON order_events(event_type, order_id);
+
 ALTER TABLE order_events ENABLE ROW LEVEL SECURITY;
+
+-- Helper: pull the earliest timestamp for a given status from
+-- orders.status_history, or NULL if the history is missing/malformed.
+-- Inlined here (not as a permanent function) because it's only used by
+-- this one-shot backfill.
 
 -- Backfill: every order gets a placed event at its original created_at.
 INSERT INTO order_events (order_id, event_type, idempotency_key, created_at)
@@ -52,24 +63,54 @@ SELECT
 FROM orders o
 ON CONFLICT (idempotency_key) DO NOTHING;
 
--- Backfill: any order currently 'processing' also gets a processing
--- event. created_at uses now() because we don't store the transition
--- time on the row.
-INSERT INTO order_events (order_id, event_type, idempotency_key)
+-- Backfill: every order currently 'processing' also gets a processing
+-- event, timestamped from status_history when available.
+INSERT INTO order_events (order_id, event_type, idempotency_key, created_at)
 SELECT
   o.id,
   'order.processing',
-  'backfill:' || o.id || ':order.processing'
+  'backfill:' || o.id || ':order.processing',
+  COALESCE(
+    (
+      SELECT (elem->>'timestamp')::timestamptz
+      FROM jsonb_array_elements(
+        CASE WHEN jsonb_typeof(o.status_history) = 'array'
+             THEN o.status_history
+             ELSE '[]'::jsonb
+        END
+      ) AS elem
+      WHERE elem->>'status' = 'processing'
+      ORDER BY (elem->>'timestamp')::timestamptz ASC
+      LIMIT 1
+    ),
+    o.created_at
+  )
 FROM orders o
 WHERE o.status = 'processing'
 ON CONFLICT (idempotency_key) DO NOTHING;
 
--- Backfill: any order currently 'delivered' also gets a delivered event.
-INSERT INTO order_events (order_id, event_type, idempotency_key)
+-- Backfill: every order currently 'delivered' also gets a delivered
+-- event, timestamped from status_history when available.
+INSERT INTO order_events (order_id, event_type, idempotency_key, created_at)
 SELECT
   o.id,
   'order.delivered',
-  'backfill:' || o.id || ':order.delivered'
+  'backfill:' || o.id || ':order.delivered',
+  COALESCE(
+    (
+      SELECT (elem->>'timestamp')::timestamptz
+      FROM jsonb_array_elements(
+        CASE WHEN jsonb_typeof(o.status_history) = 'array'
+             THEN o.status_history
+             ELSE '[]'::jsonb
+        END
+      ) AS elem
+      WHERE elem->>'status' = 'delivered'
+      ORDER BY (elem->>'timestamp')::timestamptz ASC
+      LIMIT 1
+    ),
+    o.created_at
+  )
 FROM orders o
 WHERE o.status = 'delivered'
 ON CONFLICT (idempotency_key) DO NOTHING;

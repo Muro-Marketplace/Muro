@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS placement_recurring_billings (
     CHECK (status IN ('active','past_due','paused','cancelled')),
   current_period_start TIMESTAMPTZ,
   current_period_end TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS placement_recurring_billings_placement_idx
@@ -47,5 +48,22 @@ DO $$ BEGIN
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- Auto-bump updated_at. Stripe webhooks will mutate status / period
+-- dates often; without this trigger we'd lose "when did Stripe last
+-- touch this row" signal for incident debugging.
+CREATE OR REPLACE FUNCTION placement_recurring_billings_set_updated_at()
+  RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS placement_recurring_billings_updated_at
+  ON placement_recurring_billings;
+CREATE TRIGGER placement_recurring_billings_updated_at
+  BEFORE UPDATE ON placement_recurring_billings
+  FOR EACH ROW EXECUTE FUNCTION placement_recurring_billings_set_updated_at();
 
 NOTIFY pgrst, 'reload schema';

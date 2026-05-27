@@ -8,14 +8,16 @@
 //
 // Wraps the existing sendEmail() pipeline (src/lib/email/send.ts), which
 // already does idempotency-keyed inserts into email_events. We reuse that
-// table rather than spinning up a parallel email_sends one — that's the
-// only deviation from the Phase 1 spec for 1c, captured in the migration
-// notes / Phase 2 readiness report.
+// table rather than spinning up a parallel email_sends one — captured as
+// a deviation in the Phase 2 readiness report.
 //
-// The mapping from spec template name → existing registry id is a best-
-// effort placeholder. Phase 2 may add purpose-built order_placed /
-// order_processing etc. templates and rebind these slots; the dispatcher
-// API stays the same.
+// Phase 2 will own writing purpose-built templates per spec name. Today
+// the four spec names bind to the closest existing registry entries.
+// Note: order_delivered and customer_confirm_delivery both bind to
+// customer_delivery_confirmation, so until Phase 2 splits them the
+// customer will receive two copies of the same email body (with
+// different idempotency keys, which is correct — they're distinct
+// logical events from the order_events log).
 
 import { findTemplate } from "@/emails/registry";
 import type { TemplateEntry } from "@/emails/registry-types";
@@ -51,6 +53,18 @@ const TEMPLATE_BINDINGS: Record<TransactionalTemplate, string> = {
   customer_confirm_delivery: "customer_delivery_confirmation",
 };
 
+// Registry subject lines use `{{tokenName}}` placeholders (see
+// registry-types.ts). Substitute against `data` before the wire so the
+// inbox doesn't show the literal token. Unmatched tokens are left in
+// place to surface the gap during testing rather than silently dropping.
+function substituteTokens(template: string, data: Record<string, unknown>): string {
+  return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, key) => {
+    const val = data[key];
+    if (val === undefined || val === null) return match;
+    return typeof val === "string" ? val : String(val);
+  });
+}
+
 /**
  * Send a transactional order email with idempotency. Returns `{sent, deduped}`
  * per the Phase 1 spec.
@@ -62,11 +76,23 @@ const TEMPLATE_BINDINGS: Record<TransactionalTemplate, string> = {
  *                                     calling Resend.
  *  - `sent: false, deduped: false`  → blocked or failed (suppressed,
  *                                     opted out, throttled, render/transport
- *                                     error, missing template).
+ *                                     error, missing template, missing
+ *                                     RESEND_API_KEY).
  *
  * Never throws. Email is best-effort, callers should not bubble up failures
  * to the user. The underlying sendEmail() pipeline writes every attempt to
  * email_events for audit/debug.
+ *
+ * Idempotency keys are suffixed with the spec template name before being
+ * passed to sendEmail. That way two spec templates that resolve to the
+ * same registry entry (e.g. order_delivered + customer_confirm_delivery
+ * both bound to customer_delivery_confirmation) don't dedupe against
+ * each other — each logical event gets its own record in email_events.
+ *
+ * Phase 2 note: `data` is intentionally untyped here so the spec template
+ * union stays narrow. Trigger sites should bind their data shape to the
+ * template's exported props interface (see e.g. CustomerOrderReceiptProps)
+ * before calling.
  */
 export async function sendTransactional(
   input: SendTransactionalInput,
@@ -74,10 +100,9 @@ export async function sendTransactional(
   const registryId = TEMPLATE_BINDINGS[input.template];
   const entry = findTemplate(registryId) as TemplateEntry<Record<string, unknown>> | undefined;
   if (!entry) {
-    // The binding points at a template that hasn't been imported into the
-    // registry yet. Treat it as a soft failure rather than throwing so
-    // callers don't 500 on an order webhook. The Phase 2 wiring step needs
-    // to ensure all four bindings resolve before flipping triggers on.
+    // Binding points at a template that hasn't been imported into the
+    // registry yet. Soft-fail so order webhooks don't 500. Phase 2 wiring
+    // must ensure all four bindings resolve before flipping triggers on.
     console.warn(
       `[email/dispatcher] template not in registry for "${input.template}" (binding=${registryId})`,
     );
@@ -86,11 +111,11 @@ export async function sendTransactional(
 
   const Component = entry.component;
   const result = await sendEmail({
-    idempotencyKey: input.idempotencyKey,
+    idempotencyKey: `${input.idempotencyKey}:${input.template}`,
     template: registryId,
     category: entry.category,
     to: input.to,
-    subject: entry.subject,
+    subject: substituteTokens(entry.subject, input.data),
     react: createElement(Component, input.data),
     userId: input.userId,
     metadata: { dispatcher: "transactional", template: input.template },
