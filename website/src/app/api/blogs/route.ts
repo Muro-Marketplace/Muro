@@ -15,10 +15,14 @@ import { isFlagOn } from "@/lib/feature-flags";
 
 export const runtime = "nodejs";
 
+// POST creates a draft. Drafts are intentionally loose: title can be a
+// one-letter stub, body can be empty placeholder, cover URL skipped.
+// The quality bar is enforced when the author transitions to
+// pending_review (see [id]/route.ts patchSchema refinement).
 const createSchema = z.object({
-  title: z.string().min(3).max(180),
-  body_markdown: z.string().min(20).max(50_000),
-  cover_image_url: z.string().url().optional(),
+  title: z.string().min(1).max(180),
+  body_markdown: z.string().max(50_000).optional().default(""),
+  cover_image_url: z.string().max(2000).optional(),
   featured_artwork_ids: z.array(z.string().min(1).max(80)).max(50).optional(),
 });
 
