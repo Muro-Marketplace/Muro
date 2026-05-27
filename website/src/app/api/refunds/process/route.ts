@@ -203,6 +203,33 @@ export async function POST(request: Request) {
       })
       .eq("id", order.id);
 
+    // Phase 2.3 J1: full refunds drop a lifecycle event so the K3
+    // stepper / future order-events consumers see the state change.
+    // Partial refunds don't currently produce a lifecycle event —
+    // there is no order.partially_refunded type. Best-effort, swallow
+    // errors so the refund itself isn't undone if logging fails.
+    if (isFullRefund) {
+      try {
+        const { recordOrderEvent } = await import("@/lib/orders/lifecycle");
+        await recordOrderEvent({
+          orderId: order.id,
+          newStatus: "refunded",
+          actorUserId: userId,
+          buyerEmail: order.buyer_email ?? null,
+          data: {
+            firstName: order.buyer_email
+              ? order.buyer_email.split("@")[0]
+              : "there",
+            orderNumber: order.id,
+            orderUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://wallplace.co.uk"}/orders/${order.id}`,
+          },
+          metadata: { refund_request_id: refundRequestId },
+        });
+      } catch (err) {
+        console.error("[refunds/process] lifecycle hook:", err);
+      }
+    }
+
     // 4. Update refund request status
     await db
       .from("refund_requests")

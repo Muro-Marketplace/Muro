@@ -127,9 +127,9 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await getAuthenticatedUser(request);
-  if (auth.error) return auth.error;
   const { id } = await context.params;
+  const url = new URL(request.url);
+  const token = url.searchParams.get("t");
   const body = await request.json().catch(() => null);
   if (!body || body.event_type !== "order.delivery_confirmed") {
     return NextResponse.json(
@@ -138,22 +138,42 @@ export async function POST(
     );
   }
 
+  // Guest path: signed token off the receipt email. Same verify
+  // shape as GET so guest buyers can confirm delivery without
+  // signing up. Without this, the K3 stepper's confirm button
+  // 401s for every guest order placed via QR scan.
+  let buyerEmail: string | null = null;
+  let actorUserId: string | null = null;
+  if (token) {
+    let claim: { orderId: string; email: string };
+    try {
+      claim = await verifyOrderToken(token);
+    } catch {
+      return NextResponse.json({ error: "Invalid or expired tracking link" }, { status: 401 });
+    }
+    if (claim.orderId !== id) {
+      return NextResponse.json({ error: "Token does not match order" }, { status: 403 });
+    }
+    buyerEmail = claim.email;
+  } else {
+    const auth = await getAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+    buyerEmail = auth.user!.email ?? null;
+    actorUserId = auth.user!.id;
+  }
+
   const db = getSupabaseAdmin();
   const { data: order } = await db
     .from("orders")
-    .select("id, buyer_email, artist_user_id, venue_user_id")
+    .select("id, buyer_email")
     .eq("id", id)
-    .maybeSingle<{
-      id: string;
-      buyer_email: string | null;
-      artist_user_id: string | null;
-      venue_user_id: string | null;
-    }>();
+    .maybeSingle<{ id: string; buyer_email: string | null }>();
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const userEmail = auth.user!.email ?? null;
   const isBuyer =
-    !!order.buyer_email && userEmail && order.buyer_email.toLowerCase() === userEmail.toLowerCase();
+    !!order.buyer_email &&
+    !!buyerEmail &&
+    order.buyer_email.toLowerCase() === buyerEmail.toLowerCase();
   if (!isBuyer) {
     return NextResponse.json({ error: "Only the buyer can confirm delivery" }, { status: 403 });
   }
@@ -162,7 +182,7 @@ export async function POST(
     {
       order_id: id,
       event_type: "order.delivery_confirmed",
-      actor_user_id: auth.user!.id,
+      actor_user_id: actorUserId,
       metadata: { kind: "manual_confirm" },
       idempotency_key: `${id}:order.delivery_confirmed`,
     },

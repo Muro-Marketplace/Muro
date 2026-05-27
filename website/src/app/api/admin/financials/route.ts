@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { recordAdminAction } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,14 @@ function startOfMonthYearAgo(date: Date): Date {
 export async function GET(request: Request) {
   const auth = await getAdminUser(request);
   if (auth.error) return auth.error;
+
+  // Audit each financials read. The dashboard exposes MRR + top
+  // venues/artists by spend, so reads are sensitive even though the
+  // page is read-only.
+  await recordAdminAction({
+    adminUserId: auth.user!.id,
+    action: "financials.read",
+  });
 
   const db = getSupabaseAdmin();
   const now = new Date();

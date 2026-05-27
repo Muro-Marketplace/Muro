@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { parsePayload } from "@/lib/moderation/types";
+import { recordAdminAction } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -71,6 +72,12 @@ export async function GET(request: Request) {
         r.payload,
       ),
     };
+  });
+
+  await recordAdminAction({
+    adminUserId: auth.user!.id,
+    action: "moderation.read",
+    context: { entity_type: entityType, status, row_count: rows.length },
   });
 
   return NextResponse.json({ rows });

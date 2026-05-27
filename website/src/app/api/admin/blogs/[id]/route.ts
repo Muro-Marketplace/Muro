@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminUser } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { recordAdminAction } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
@@ -62,6 +63,11 @@ export async function PATCH(
       })
       .eq("entity_type", "blog")
       .eq("entity_id", id);
+    await recordAdminAction({
+      adminUserId: auth.user!.id,
+      action: "blog.approve",
+      context: { blog_id: id },
+    });
     return NextResponse.json({ status: "approved" });
   }
 
@@ -81,6 +87,11 @@ export async function PATCH(
       })
       .eq("entity_type", "blog")
       .eq("entity_id", id);
+    await recordAdminAction({
+      adminUserId: auth.user!.id,
+      action: "blog.reject",
+      context: { blog_id: id, reason: parsed.data.reason },
+    });
     return NextResponse.json({ status: "rejected" });
   }
 
@@ -106,6 +117,11 @@ export async function PATCH(
     })
     .eq("entity_type", "blog")
     .eq("entity_id", id);
+  await recordAdminAction({
+    adminUserId: auth.user!.id,
+    action: "blog.edit",
+    context: { blog_id: id, fields: Object.keys(updates) },
+  });
 
   return NextResponse.json({ status: "edited" });
 }

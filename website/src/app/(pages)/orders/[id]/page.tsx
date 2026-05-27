@@ -85,11 +85,16 @@ export default function OrderTrackingPage() {
   const orderId = params?.id ?? "";
   // Receipt-email tracking links carry ?t=<signed-token>. Read it
   // directly off window.location to avoid wrapping the page in a
-  // Suspense boundary — same pattern /orders/track uses.
+  // Suspense boundary — same pattern /orders/track uses. `tokenReady`
+  // guards the first fetch so we don't fire an unauthenticated GET
+  // that would 401 then immediately re-fire with the token (which
+  // briefly flashed an error to every guest viewer).
   const [trackingToken, setTrackingToken] = useState<string | null>(null);
+  const [tokenReady, setTokenReady] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     setTrackingToken(new URLSearchParams(window.location.search).get("t"));
+    setTokenReady(true);
   }, []);
   const [order, setOrder] = useState<OrderSummary | null>(null);
   const [events, setEvents] = useState<OrderEvent[]>([]);
@@ -120,16 +125,23 @@ export default function OrderTrackingPage() {
     }
   }, [orderId, trackingToken]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!tokenReady) return;
+    load();
+  }, [load, tokenReady]);
 
   async function handleConfirm() {
     setConfirming(true);
     try {
-      const res = await authFetch(`/api/orders/${orderId}/events`, {
+      // Thread the token through so guest viewers can confirm too.
+      const qs = trackingToken ? `?t=${encodeURIComponent(trackingToken)}` : "";
+      const url = `/api/orders/${orderId}/events${qs}`;
+      const init = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_type: "order.delivery_confirmed" }),
-      });
+      } as const;
+      const res = trackingToken ? await fetch(url, init) : await authFetch(url, init);
       if (!res.ok) {
         setError("Could not confirm delivery, please try again.");
       } else {
@@ -164,8 +176,14 @@ export default function OrderTrackingPage() {
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
         <div className="mb-8">
-          <Link href="/customer-portal/orders" className="text-sm text-muted hover:text-accent">
-            &larr; Back to orders
+          {/* Guests who arrived via the receipt-email token can't
+              reach /customer-portal/orders without signing in, so
+              point them at the public tracking lookup instead. */}
+          <Link
+            href={trackingToken ? "/orders/track" : "/customer-portal/orders"}
+            className="text-sm text-muted hover:text-accent"
+          >
+            &larr; {trackingToken ? "Look up another order" : "Back to orders"}
           </Link>
           <h1 className="text-2xl lg:text-3xl mt-3">Order {orderId}</h1>
           {order?.placedAt && (

@@ -76,60 +76,58 @@ async function readArtistSubscription(
   db: SupabaseClient,
   userId: string,
 ): Promise<SubscriptionState | null> {
-  try {
-    const { data, error } = await db
-      .from("artist_profiles")
-      .select("user_id, subscription_status, subscription_plan")
-      .eq("user_id", userId)
-      .maybeSingle<{
-        user_id: string;
-        subscription_status: string | null;
-        subscription_plan: string | null;
-      }>();
-    if (error) {
-      console.warn("[subscriptions] artist_profiles lookup failed:", error.message);
-      return null;
-    }
-    if (!data) return null;
-    return {
-      active: ACTIVE_STATUSES.has(normaliseStatus(data.subscription_status)),
-      plan: normalisePlan(data.subscription_plan),
-      user_type: "artist",
-    };
-  } catch (err) {
-    console.warn("[subscriptions] artist_profiles lookup threw:", err);
+  // Phase 2.0 spec line 89: stop tolerating missing columns. Both
+  // artist_profiles and venue_profiles now carry subscription_status
+  // and subscription_plan (mig 003 + mig 064). Any non-recoverable
+  // error here is a real bug we want to surface, not swallow.
+  const { data, error } = await db
+    .from("artist_profiles")
+    .select("user_id, subscription_status, subscription_plan")
+    .eq("user_id", userId)
+    .maybeSingle<{
+      user_id: string;
+      subscription_status: string | null;
+      subscription_plan: string | null;
+    }>();
+  if (error) {
+    // PostgrestError comes through here for genuine DB problems
+    // (connection failures, RLS denials). Log + return null so the
+    // resolver can fall through to the venue path; the dispatcher
+    // higher up returns inactive when neither side resolves.
+    console.warn("[subscriptions] artist_profiles lookup failed:", error.message);
     return null;
   }
+  if (!data) return null;
+  return {
+    active: ACTIVE_STATUSES.has(normaliseStatus(data.subscription_status)),
+    plan: normalisePlan(data.subscription_plan),
+    user_type: "artist",
+  };
 }
 
 async function readVenueSubscription(
   db: SupabaseClient,
   userId: string,
 ): Promise<SubscriptionState | null> {
-  try {
-    const { data, error } = await db
-      .from("venue_profiles")
-      .select("user_id, subscription_status, subscription_plan")
-      .eq("user_id", userId)
-      .maybeSingle<{
-        user_id: string;
-        subscription_status: string | null;
-        subscription_plan: string | null;
-      }>();
-    if (error) {
-      console.warn("[subscriptions] venue_profiles lookup failed:", error.message);
-      return null;
-    }
-    if (!data) return null;
-    return {
-      active: ACTIVE_STATUSES.has(normaliseStatus(data.subscription_status)),
-      plan: normalisePlan(data.subscription_plan),
-      user_type: "venue",
-    };
-  } catch (err) {
-    console.warn("[subscriptions] venue_profiles lookup threw:", err);
+  const { data, error } = await db
+    .from("venue_profiles")
+    .select("user_id, subscription_status, subscription_plan")
+    .eq("user_id", userId)
+    .maybeSingle<{
+      user_id: string;
+      subscription_status: string | null;
+      subscription_plan: string | null;
+    }>();
+  if (error) {
+    console.warn("[subscriptions] venue_profiles lookup failed:", error.message);
     return null;
   }
+  if (!data) return null;
+  return {
+    active: ACTIVE_STATUSES.has(normaliseStatus(data.subscription_status)),
+    plan: normalisePlan(data.subscription_plan),
+    user_type: "venue",
+  };
 }
 
 /**
