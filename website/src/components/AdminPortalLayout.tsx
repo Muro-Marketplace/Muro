@@ -16,6 +16,9 @@ const navItems = [
   { label: "Feedback", href: "/admin/feedback" },
   // Phase 2.7 A4: blog moderation queue.
   { label: "Blogs", href: "/admin/blogs" },
+  // Phase 2.8 A2/A3: dispute panel + read-only financials dashboard.
+  { label: "Disputes", href: "/admin/disputes" },
+  { label: "Financials", href: "/admin/financials" },
 ];
 
 const secondaryItems = [

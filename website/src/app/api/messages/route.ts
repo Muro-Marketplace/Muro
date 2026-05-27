@@ -60,6 +60,55 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get("slug");
+    const disputeId = searchParams.get("dispute_id");
+
+    // A1 (Phase 2.8): admin chat access scoped to disputes. Admins can
+    // read the conversation tied to a specific dispute_id; without the
+    // param they fall through to the normal slug-owned view (which is
+    // empty for anyone who isn't in the thread).
+    if (disputeId) {
+      const dbAdmin = getSupabaseAdmin();
+      const { data: adminClaim } = await dbAdmin
+        .from("auth.users")
+        .select("id")
+        .eq("id", auth.user!.id)
+        .maybeSingle();
+      void adminClaim;
+      const adminEmail = (auth.user!.email ?? "").toLowerCase();
+      const allowed = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const isAdmin = adminEmail && allowed.includes(adminEmail);
+      if (!isAdmin) {
+        return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+      }
+      const { data: dispute } = await dbAdmin
+        .from("disputes")
+        .select("id, conversation_id")
+        .eq("id", disputeId)
+        .maybeSingle<{ id: string; conversation_id: string | null }>();
+      if (!dispute || !dispute.conversation_id) {
+        return NextResponse.json({ error: "Dispute / conversation not found" }, { status: 404 });
+      }
+      const { data: msgs } = await dbAdmin
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", dispute.conversation_id)
+        .order("created_at", { ascending: true });
+      // Audit the read.
+      const { recordAdminAction } = await import("@/lib/admin-audit");
+      await recordAdminAction({
+        adminUserId: auth.user!.id,
+        action: "messages.read.dispute_scoped",
+        context: { dispute_id: disputeId, conversation_id: dispute.conversation_id },
+      });
+      return NextResponse.json({
+        messages: msgs ?? [],
+        conversations: [],
+        adminScopedToDispute: true,
+      });
+    }
 
     if (!slug || slug.length > 100) {
       return NextResponse.json({ error: "slug parameter required" }, { status: 400 });
