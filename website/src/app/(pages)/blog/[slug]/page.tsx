@@ -3,6 +3,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { blogPosts } from "@/data/blog-posts";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { slugify } from "@/lib/slugify";
 import type { Metadata } from "next";
 
 // Phase 2.7: DB blogs are dynamic, so the page must allow params that
@@ -20,10 +21,99 @@ interface DbBlogRow {
   author_user_id: string;
 }
 
+interface FeaturedArtwork {
+  id: string;
+  title: string;
+  image: string;
+  available: boolean;
+  artistSlug: string | null;
+}
+
+async function loadFeaturedArtworks(blogId: string): Promise<FeaturedArtwork[]> {
+  // Phase 2.7 follow-up: the editor lets artists pin featured artworks
+  // to a blog, persisted to blog_featured_artworks. The public page
+  // never read them back, so the selection was silently dropped on the
+  // way to publish. This load joins:
+  //   blog_featured_artworks → artist_works → artist_profiles
+  // so the render can show the thumbnail, title and link to the
+  // artist's work page (/browse/<artist>/<work>).
+  try {
+    const db = getSupabaseAdmin();
+    const { data: rows, error } = await db
+      .from("blog_featured_artworks")
+      .select("artwork_id, position")
+      .eq("blog_id", blogId)
+      .order("position", { ascending: true });
+    if (error || !rows || rows.length === 0) return [];
+
+    const ids = (rows as Array<{ artwork_id: string }>).map((r) => r.artwork_id);
+    const { data: works } = await db
+      .from("artist_works")
+      .select("id, title, image, available, artist_id")
+      .in("id", ids);
+    if (!works || works.length === 0) return [];
+
+    const artistIds = Array.from(
+      new Set(
+        (works as Array<{ artist_id: string }>).map((w) => w.artist_id),
+      ),
+    );
+    const slugByArtistId = new Map<string, string>();
+    if (artistIds.length > 0) {
+      const { data: profiles } = await db
+        .from("artist_profiles")
+        .select("id, slug")
+        .in("id", artistIds);
+      for (const p of (profiles ?? []) as Array<{ id: string; slug: string }>) {
+        slugByArtistId.set(p.id, p.slug);
+      }
+    }
+
+    const worksById = new Map<
+      string,
+      { id: string; title: string; image: string; available: boolean; artist_id: string }
+    >();
+    for (const w of works as Array<{
+      id: string;
+      title: string;
+      image: string;
+      available: boolean | null;
+      artist_id: string;
+    }>) {
+      worksById.set(w.id, {
+        id: w.id,
+        title: w.title,
+        image: w.image,
+        available: !!w.available,
+        artist_id: w.artist_id,
+      });
+    }
+
+    // Preserve the editor's chosen order (position). Drop ids that no
+    // longer resolve (artwork deleted since the blog was authored).
+    const out: FeaturedArtwork[] = [];
+    for (const r of rows as Array<{ artwork_id: string }>) {
+      const w = worksById.get(r.artwork_id);
+      if (!w) continue;
+      out.push({
+        id: w.id,
+        title: w.title,
+        image: w.image,
+        available: w.available,
+        artistSlug: slugByArtistId.get(w.artist_id) ?? null,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 async function loadDbBlogBySlug(slug: string): Promise<{
   blog: DbBlogRow;
   authorSlug: string | null;
   authorName: string | null;
+  featured: FeaturedArtwork[];
 } | null> {
   const db = getSupabaseAdmin();
   const { data } = await db
@@ -35,15 +125,19 @@ async function loadDbBlogBySlug(slug: string): Promise<{
     .eq("status", "published")
     .maybeSingle<DbBlogRow & { status: string }>();
   if (!data) return null;
-  const { data: profile } = await db
-    .from("artist_profiles")
-    .select("slug, name")
-    .eq("user_id", data.author_user_id)
-    .maybeSingle<{ slug: string; name: string }>();
+  const [{ data: profile }, featured] = await Promise.all([
+    db
+      .from("artist_profiles")
+      .select("slug, name")
+      .eq("user_id", data.author_user_id)
+      .maybeSingle<{ slug: string; name: string }>(),
+    loadFeaturedArtworks(data.id),
+  ]);
   return {
     blog: data,
     authorSlug: profile?.slug ?? null,
     authorName: profile?.name ?? null,
+    featured,
   };
 }
 
@@ -161,9 +255,10 @@ function DbBlogView({
     blog: DbBlogRow;
     authorSlug: string | null;
     authorName: string | null;
+    featured: FeaturedArtwork[];
   };
 }) {
-  const { blog, authorSlug, authorName } = record;
+  const { blog, authorSlug, authorName, featured } = record;
   return (
     <div className="bg-background">
       {blog.cover_image_url && (
@@ -210,6 +305,51 @@ function DbBlogView({
               </p>
             ))}
           </div>
+
+          {featured.length > 0 && (
+            <section className="mt-12 pt-10 border-t border-border">
+              <h2 className="font-serif text-xl text-foreground mb-1">Featured works</h2>
+              <p className="text-sm text-muted mb-6">
+                Pieces from the artist that go with this piece of writing.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {featured.map((work) => {
+                  const href =
+                    work.artistSlug && work.title
+                      ? `/browse/${work.artistSlug}/${slugify(work.title)}`
+                      : null;
+                  const card = (
+                    <div className="group block">
+                      <div className="relative aspect-[4/5] rounded-sm overflow-hidden border border-border bg-background">
+                        <Image
+                          src={work.image}
+                          alt={work.title}
+                          fill
+                          className="object-cover group-hover:scale-[1.02] transition-transform duration-500"
+                          sizes="(max-width: 640px) 50vw, 33vw"
+                        />
+                        {!work.available && (
+                          <span className="absolute top-2 right-2 text-[10px] uppercase tracking-wider bg-foreground/90 text-white px-1.5 py-0.5 rounded-sm">
+                            Unavailable
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-2 text-sm text-foreground group-hover:text-accent transition-colors line-clamp-2">
+                        {work.title}
+                      </p>
+                    </div>
+                  );
+                  return href ? (
+                    <Link key={work.id} href={href}>
+                      {card}
+                    </Link>
+                  ) : (
+                    <div key={work.id}>{card}</div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
       </section>
     </div>
