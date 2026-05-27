@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/api-client";
+import Toggle from "@/components/Toggle";
 
 const NOTE_MAX = 600;
 
@@ -155,14 +156,7 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
               <p className="text-sm text-foreground">Paid loan</p>
               <p className="text-[11px] text-muted leading-snug">Venue pays the artist monthly to display the work.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setPaidLoan(!paidLoan)}
-              className={`relative shrink-0 w-10 h-5 rounded-full transition-colors ${paidLoan ? "bg-accent" : "bg-border"}`}
-              aria-pressed={paidLoan}
-            >
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${paidLoan ? "translate-x-[22px]" : "translate-x-0.5"}`} />
-            </button>
+            <Toggle checked={paidLoan} onChange={setPaidLoan} ariaLabel="Paid loan" />
           </label>
           {paidLoan && (
             <div className="flex items-center gap-2">
@@ -190,14 +184,7 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
               <p className="text-sm text-foreground">QR display</p>
               <p className="text-[11px] text-muted leading-snug">Let visitors buy via a QR code. Venue earns a share of sales.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setQr(!qr)}
-              className={`relative shrink-0 w-10 h-5 rounded-full transition-colors ${qr ? "bg-accent" : "bg-border"}`}
-              aria-pressed={qr}
-            >
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${qr ? "translate-x-[22px]" : "translate-x-0.5"}`} />
-            </button>
+            <Toggle checked={qr} onChange={setQr} ariaLabel="QR display" />
           </label>
           {qr && (
             <div>

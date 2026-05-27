@@ -27,14 +27,26 @@ export default function ContactForm() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSubmitting(true);
     setError("");
 
     const formData = new FormData(e.currentTarget);
+    const rawType = (formData.get("type") as string) || "";
+    // When messaging a specific artist the "I am a..." select is hidden
+    // and we route everything through the artist-message type. When the
+    // generic form is shown, the select is required and must be picked
+    // before submission. Surface the requirement inline rather than
+    // relying on the native browser tooltip, which is easy to miss.
+    if (!artistSlug && !rawType) {
+      setError("Please pick an option from \"I am a...\" before sending.");
+      return;
+    }
+
+    setSubmitting(true);
+
     const data = {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
-      type: (formData.get("type") as string) || (artistSlug ? "artist-message" : "other"),
+      type: rawType || (artistSlug ? "artist-message" : "other"),
       message: formData.get("message") as string,
     };
 

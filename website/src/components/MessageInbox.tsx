@@ -1088,7 +1088,14 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
 
                   const iAmRecipient = recipientUserId === user?.id;
                   const iAmSender = senderUserId === user?.id;
-                  const open = !finalStatus || finalStatus === "pending" || finalStatus === "countered";
+                  // An offer card stays "open" (Accept/Counter/Decline
+                  // still shown) only while it's the live offer. Once it's
+                  // been countered, declined, accepted, paid, withdrawn,
+                  // or expired, the actions on the stale card are hidden
+                  // so users can't act on a no-longer-valid state. The
+                  // counter creates its own new offer card further down
+                  // the thread that owns the live actions.
+                  const open = !finalStatus || finalStatus === "pending";
 
                   return (
                     <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>

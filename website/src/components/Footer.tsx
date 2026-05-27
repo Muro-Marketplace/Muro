@@ -9,7 +9,7 @@ const footerColumns = [
       { label: "Pricing", href: "/pricing" },
       { label: "Venue Demand", href: "/spaces" },
       { label: "Artwork Requests", href: "/artwork-requests" },
-      { label: "Browse Venues", href: "/venues" },
+      { label: "Browse Venues", href: "/spaces" },
       { label: "FAQs", href: "/faqs" },
     ],
   },
@@ -98,7 +98,11 @@ export default function Footer() {
               </h4>
               <ul className="space-y-3">
                 {column.links.map((link) => (
-                  <li key={link.href}>
+                  // Keyed on label, not href, because the For Artists
+                  // column intentionally has two links pointing to /spaces
+                  // (Venue Demand and Browse Venues) since the relink
+                  // and href-keyed list would collide.
+                  <li key={link.label}>
                     <Link
                       href={link.href}
                       className="text-sm text-foreground/70 hover:text-foreground transition-colors duration-200"

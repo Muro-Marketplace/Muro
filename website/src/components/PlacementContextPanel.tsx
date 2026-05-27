@@ -16,6 +16,7 @@ import {
 } from "@/lib/placements/status";
 import { canRespond } from "@/lib/placement-permissions";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
+import Toggle from "@/components/Toggle";
 import { useSearchParams } from "next/navigation";
 
 interface PanelProps {
@@ -550,14 +551,7 @@ export default function PlacementContextPanel({
                   <p className="text-xs text-foreground">Add a QR code</p>
                   <p className="text-[10px] text-muted leading-snug">Let visitors buy the piece. You&rsquo;ll split QR sales.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setReqPaidLoanQr(!reqPaidLoanQr)}
-                  className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${reqPaidLoanQr ? "bg-accent" : "bg-border"}`}
-                  aria-pressed={reqPaidLoanQr}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${reqPaidLoanQr ? "translate-x-[18px]" : "translate-x-0.5"}`} />
-                </button>
+                <Toggle checked={reqPaidLoanQr} onChange={setReqPaidLoanQr} ariaLabel="Add a QR code" size="compact" />
               </label>
               {reqPaidLoanQr && (
                 <div className="flex items-center gap-2 pl-0">
@@ -822,14 +816,7 @@ export default function PlacementContextPanel({
                 <p className="text-xs text-foreground">Paid loan</p>
                 <p className="text-[10px] text-muted leading-snug">Venue pays the artist monthly to display the work.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setCounterPaidLoan(!counterPaidLoan)}
-                className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${counterPaidLoan ? "bg-accent" : "bg-border"}`}
-                aria-pressed={counterPaidLoan}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${counterPaidLoan ? "translate-x-[18px]" : "translate-x-0.5"}`} />
-              </button>
+              <Toggle checked={counterPaidLoan} onChange={setCounterPaidLoan} ariaLabel="Paid loan" size="compact" />
             </label>
             {counterPaidLoan && (
               <div className="flex items-center gap-2 pl-0">
@@ -846,14 +833,7 @@ export default function PlacementContextPanel({
                 <p className="text-xs text-foreground">QR display</p>
                 <p className="text-[10px] text-muted leading-snug">Let visitors buy via a QR code. Venue earns a share of sales.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setCounterQr(!counterQr)}
-                className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${counterQr ? "bg-accent" : "bg-border"}`}
-                aria-pressed={counterQr}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${counterQr ? "translate-x-[18px]" : "translate-x-0.5"}`} />
-              </button>
+              <Toggle checked={counterQr} onChange={setCounterQr} ariaLabel="QR display" size="compact" />
             </label>
             {counterQr && (
               <div className="flex items-center gap-2 pl-0">

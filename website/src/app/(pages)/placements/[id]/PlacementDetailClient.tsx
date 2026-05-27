@@ -124,6 +124,9 @@ export default function PlacementDetailClient({ placementId }: Props) {
   const [responding, setResponding] = useState<"accept" | "decline" | null>(null);
   const [respondError, setRespondError] = useState<string | null>(null);
   const [counterOpen, setCounterOpen] = useState(false);
+  // Bumped after a successful counter so the negotiation log refetches
+  // and the new entry surfaces without a page reload.
+  const [negotiationKey, setNegotiationKey] = useState(0);
   // Schedule install: clicking "Mark scheduled" used to immediately
   // stamp the timestamp with `now`. The user wants the same date-picker
   // pattern as PlacementStepper (My Placements) so they can pick the
@@ -197,6 +200,23 @@ export default function PlacementDetailClient({ placementId }: Props) {
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [user, load]);
+
+  // Tab title reflects the placement once we know what it is. Until then
+  // we keep the generic site title (set by the route's `<Suspense>`
+  // fallback / Next.js default) so the page doesn't briefly read
+  // "Placement" before the data loads. Restore on unmount.
+  useEffect(() => {
+    if (!placement) return;
+    const work = placement.work_title || "Placement";
+    const counterparty = viewerRole === "venue" ? artist?.name : venue?.name;
+    const previous = document.title;
+    document.title = counterparty
+      ? `${work} · ${counterparty} | Wallplace`
+      : `${work} | Wallplace`;
+    return () => {
+      document.title = previous;
+    };
+  }, [placement, artist?.name, venue?.name, viewerRole]);
 
   // Background refresh diff toast (Plan F Task 8). The silent refetch
   // above keeps the page in sync, but if the placement transitions or
@@ -859,6 +879,13 @@ export default function PlacementDetailClient({ placementId }: Props) {
             } : prev);
             setCounterOpen(false);
             load();
+            setNegotiationKey((k) => k + 1);
+            // Counter-offer terms now render in the summary grid near
+            // the top of the page. Scroll up so the user sees the
+            // change instead of staring at where the dialog used to be.
+            if (typeof window !== "undefined") {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
           }}
         />
       )}
@@ -989,7 +1016,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
       {/* Negotiation log, every offer / counter / response that led
           to the current terms. Only rendered when there's something to
           show. */}
-      <PlacementNegotiationLog placementId={placementId} />
+      <PlacementNegotiationLog placementId={placementId} refreshKey={negotiationKey} />
 
       {/* Messages + notes */}
       {(placement.message || placement.notes) && (

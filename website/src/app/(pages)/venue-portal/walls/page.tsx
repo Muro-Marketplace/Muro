@@ -38,6 +38,9 @@ export default function VenueWallsPage() {
   const { session, loading: authLoading } = useAuth();
   const [walls, setWalls] = useState<Wall[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Tier cap on saved walls. -1 = unlimited, 0 = not allowed on this
+  // plan, positive number = the hard cap. null while loading.
+  const [cap, setCap] = useState<number | null>(null);
 
   // Feature-flag gate (front-end mirror of API gate)
   const flagOn = isFlagOn("WALL_VISUALIZER_V1");
@@ -56,9 +59,10 @@ export default function VenueWallsPage() {
         }
         return r.json();
       })
-      .then((data: { walls?: Wall[] }) => {
+      .then((data: { walls?: Wall[]; cap?: number }) => {
         if (cancelled) return;
         setWalls(data.walls ?? []);
+        if (typeof data.cap === "number") setCap(data.cap);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -69,6 +73,14 @@ export default function VenueWallsPage() {
       cancelled = true;
     };
   }, [session?.access_token, authLoading, flagOn]);
+
+  // Derive whether the cap is hit. Treat null cap (still loading) and
+  // -1 (unlimited) as "not capped" so the New Wall button stays usable
+  // by default; only flip to capped when we have both the wall list
+  // and a positive cap, and the list size has reached it.
+  const wallCount = walls?.length ?? 0;
+  const atCap = cap !== null && cap > 0 && wallCount >= cap;
+  const notAllowed = cap === 0;
 
   if (!flagOn) {
     return (
@@ -97,12 +109,36 @@ export default function VenueWallsPage() {
             committing to a placement.
           </p>
         </div>
-        <Link
-          href="/venue-portal/walls/new"
-          className="px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-medium hover:bg-stone-800"
-        >
-          + New Wall
-        </Link>
+        {atCap || notAllowed ? (
+          <div className="flex flex-col items-end gap-1">
+            <span
+              className="px-4 py-2 rounded-full bg-stone-900/30 text-white/80 text-sm font-medium cursor-not-allowed select-none"
+              aria-disabled="true"
+              title={
+                notAllowed
+                  ? "Saving walls isn't included on your plan."
+                  : `You've reached your ${cap} wall limit.`
+              }
+            >
+              + New Wall
+            </span>
+            <Link
+              href="/pricing"
+              className="text-xs text-accent hover:underline"
+            >
+              {notAllowed
+                ? "Upgrade your plan to save walls"
+                : `Upgrade to add more than ${cap} wall${cap === 1 ? "" : "s"}`}
+            </Link>
+          </div>
+        ) : (
+          <Link
+            href="/venue-portal/walls/new"
+            className="px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-medium hover:bg-stone-800"
+          >
+            + New Wall
+          </Link>
+        )}
       </div>
 
       {loadError && (

@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 
 interface Props {
@@ -49,6 +50,7 @@ function MakeOfferModalBody({
   onSubmitted,
 }: Props) {
   const { user, userType, loading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const [amount, setAmount] = useState<string>(
     askingPriceGbp ? String(Math.round(askingPriceGbp * 0.85)) : ""
@@ -137,6 +139,7 @@ function MakeOfferModalBody({
       }
       setSubmitted(true);
       onSubmitted?.();
+      showToast(`Offer sent to ${artistName}. They'll see it in their offers inbox.`, { durationMs: 5000 });
       setTimeout(() => {
         onClose();
         setSubmitted(false);

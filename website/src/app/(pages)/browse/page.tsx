@@ -309,6 +309,8 @@ function BrowsePortfoliosPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const viewParam = searchParams?.get("view") || "";
+  const disciplineParam = searchParams?.get("discipline") || "";
+  const subParam = searchParams?.get("sub") || "";
 
   // Pill toggles call this so the URL updates alongside the local
   // viewAs / activeDiscipline state. Without it the marketplace nav
@@ -367,18 +369,60 @@ function BrowsePortfoliosPageInner() {
     // the default branch, clicking Portfolios → then the Galleries
     // nav link (which goes to /browse with no view param) used to
     // leave viewAs at "artists" so the page stayed on portfolios.
+    //
+    // disciplineParam (?discipline=photography) wins over the view
+    // default for the All / single-discipline pills, so a shared link
+    // like /browse?discipline=photography lands the user with that
+    // pill active. Collections view ignores discipline since the pill
+    // row isn't shown.
     if (viewParam === "collections") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveDiscipline("collections");
     } else if (viewParam === "portfolios") {
-      setActiveDiscipline("");
+      setActiveDiscipline(disciplineParam || "");
       setViewAs("artists");
     } else {
       // viewParam === "gallery" or "" → Galleries is the default.
-      setActiveDiscipline("");
+      setActiveDiscipline(disciplineParam || "");
       setViewAs("works");
     }
-  }, [viewParam]);
+  }, [viewParam, disciplineParam]);
+
+  // Sub-style pills (?sub=street,colour) follow the same pattern.
+  // Parsed into a Set whenever the URL changes; the pill onClick
+  // handlers below mirror back to the URL. setState-in-effect is the
+  // existing pattern in this file for URL → state sync (see the
+  // viewParam effect a few lines up) so we mirror the disable.
+  useEffect(() => {
+    const next = new Set(
+      subParam
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveSubStyles(next);
+  }, [subParam]);
+
+  // Push the current discipline + sub-style picks into the URL. Kept
+  // as `router.replace` so toggling pills doesn't fill the back stack
+  // with intermediate filter states.
+  const pushFilterParams = useCallback(
+    (nextDiscipline: string, nextSubStyles: Set<string>) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      if (nextDiscipline && nextDiscipline !== "collections") {
+        params.set("discipline", nextDiscipline);
+      } else {
+        params.delete("discipline");
+      }
+      const subs = Array.from(nextSubStyles).filter(Boolean);
+      if (subs.length > 0) params.set("sub", subs.join(","));
+      else params.delete("sub");
+      const qs = params.toString();
+      router.replace(`/browse${qs ? `?${qs}` : ""}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
   const [artistSort, setArtistSort] = useState<"featured" | "name" | "revenue_share" | "distance">("featured");
   const [gallerySort, setGallerySort] = useState<"featured" | "recent" | "az" | "price_low" | "price_high" | "revenue_share" | "distance">("featured");
   // Gallery grid uses a JS-distributed masonry so images of varying heights
@@ -1263,7 +1307,11 @@ function BrowsePortfoliosPageInner() {
             {/* All */}
             <button
               type="button"
-              onClick={() => { setActiveDiscipline(""); setActiveSubStyles(new Set()); }}
+              onClick={() => {
+                setActiveDiscipline("");
+                setActiveSubStyles(new Set());
+                pushFilterParams("", new Set());
+              }}
               className={`py-4 px-3 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
                 activeDiscipline === ""
                   ? "border-foreground text-foreground"
@@ -1276,7 +1324,11 @@ function BrowsePortfoliosPageInner() {
               <button
                 key={d.id}
                 type="button"
-                onClick={() => { setActiveDiscipline(d.id); setActiveSubStyles(new Set()); }}
+                onClick={() => {
+                  setActiveDiscipline(d.id);
+                  setActiveSubStyles(new Set());
+                  pushFilterParams(d.id, new Set());
+                }}
                 className={`py-4 px-3 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
                   activeDiscipline === d.id
                     ? "border-foreground text-foreground"
@@ -1298,7 +1350,10 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center gap-2 overflow-x-auto scrollbar-none">
             <button
               type="button"
-              onClick={() => setActiveSubStyles(new Set())}
+              onClick={() => {
+                setActiveSubStyles(new Set());
+                pushFilterParams(activeDiscipline, new Set());
+              }}
               className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
                 activeSubStyles.size === 0
                   ? "bg-foreground text-white border-foreground"
@@ -1318,7 +1373,13 @@ function BrowsePortfoliosPageInner() {
                 <button
                   key={sub}
                   type="button"
-                  onClick={() => setActiveSubStyles((prev) => { const next = new Set(prev); if (next.has(sub)) next.delete(sub); else next.add(sub); return next; })}
+                  onClick={() => setActiveSubStyles((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(sub)) next.delete(sub);
+                    else next.add(sub);
+                    pushFilterParams(activeDiscipline, next);
+                    return next;
+                  })}
                   className={`px-3 py-1.5 text-xs rounded-full border transition-colors cursor-pointer whitespace-nowrap ${
                     active
                       ? "bg-foreground text-white border-foreground"
