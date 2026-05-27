@@ -91,15 +91,24 @@ export default function BlogEditor({
     }
   }, [currentId, title, body, cover, featured]);
 
-  // Debounced auto-save when editing an existing post.
+  // Debounced auto-save when editing an existing post. Skips when the
+  // post is past the author-editable state (pending_review, published,
+  // rejected, archived) so further keystrokes don't silently overwrite
+  // a post that's already in review or live. Audit follow-up.
+  const canAutoSave = status === "draft" || status === "rejected";
   useEffect(() => {
     if (!currentId) return;
+    if (!canAutoSave) return;
     if (!title.trim() || !body.trim()) return;
     const t = setTimeout(saveExisting, 800);
     return () => clearTimeout(t);
-  }, [currentId, title, body, cover, featured, saveExisting]);
+  }, [currentId, title, body, cover, featured, saveExisting, canAutoSave]);
 
-  async function handleCreate() {
+  // Returns the new blog id so callers awaiting create can chain a
+  // PATCH against the right URL — the React `currentId` state isn't
+  // updated synchronously, so reading it right after setCurrentId
+  // would still see the stale null. Audit follow-up.
+  async function handleCreate(): Promise<string | null> {
     setSaving("saving");
     setError(null);
     try {
@@ -117,28 +126,32 @@ export default function BlogEditor({
       if (!res.ok) {
         setError(data?.error || "Failed to create");
         setSaving("error");
-        return;
+        return null;
       }
       setCurrentId(data.blog.id);
       setSaving("saved");
       router.replace(`/artist-portal/blogs/${data.blog.id}/edit`);
+      return data.blog.id as string;
     } catch {
       setSaving("error");
       setError("Network error");
+      return null;
     }
   }
 
   async function handleSubmitForReview() {
-    if (!currentId) {
-      await handleCreate();
-    }
-    if (!currentId && !title.trim()) {
-      setError("Add a title before submitting for review");
+    if (!title.trim() || !body.trim()) {
+      setError("Add a title and body before submitting for review");
       return;
+    }
+    let id = currentId;
+    if (!id) {
+      id = await handleCreate();
+      if (!id) return; // create failed, error already set
     }
     setSaving("saving");
     try {
-      const res = await authFetch(`/api/blogs/${currentId}`, {
+      const res = await authFetch(`/api/blogs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

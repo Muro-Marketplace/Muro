@@ -4,6 +4,9 @@
 // stepper derived from order_events. The stepper lights up each step
 // once the matching event_type has fired; the "Confirm delivery" CTA
 // surfaces while the order is delivered but not yet confirmed.
+//
+// Auth: works for signed-in customers AND guest buyers who land via
+// the receipt email's `?t=<signed-token>` link.
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
@@ -80,6 +83,14 @@ function formatDate(iso: string): string {
 export default function OrderTrackingPage() {
   const params = useParams<{ id: string }>();
   const orderId = params?.id ?? "";
+  // Receipt-email tracking links carry ?t=<signed-token>. Read it
+  // directly off window.location to avoid wrapping the page in a
+  // Suspense boundary — same pattern /orders/track uses.
+  const [trackingToken, setTrackingToken] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setTrackingToken(new URLSearchParams(window.location.search).get("t"));
+  }, []);
   const [order, setOrder] = useState<OrderSummary | null>(null);
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,14 +101,16 @@ export default function OrderTrackingPage() {
     if (!orderId) return;
     setLoading(true);
     try {
-      const res = await authFetch(`/api/orders/${orderId}/events`);
+      const qs = trackingToken ? `?t=${encodeURIComponent(trackingToken)}` : "";
+      const url = `/api/orders/${orderId}/events${qs}`;
+      const res = trackingToken ? await fetch(url) : await authFetch(url);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body?.error || `Could not load order (HTTP ${res.status})`);
         return;
       }
       const data = await res.json();
-      setOrder(data.order);
+      setOrder(data.order ?? null);
       setEvents(data.events ?? []);
       setError(null);
     } catch {
@@ -105,7 +118,7 @@ export default function OrderTrackingPage() {
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, trackingToken]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -166,6 +179,17 @@ export default function OrderTrackingPage() {
           <p className="text-sm text-muted">Loading…</p>
         ) : error ? (
           <p className="text-sm text-red-600">{error}</p>
+        ) : !order ? (
+          <div className="rounded-sm border border-border bg-surface p-6">
+            <p className="text-sm text-foreground mb-2">Order not found.</p>
+            <p className="text-xs text-muted">
+              Double-check the order ID, or{" "}
+              <Link href="/orders/track" className="text-accent hover:underline">
+                use the order-tracking lookup
+              </Link>{" "}
+              with your email + order number.
+            </p>
+          </div>
         ) : (
           <>
             {cancelled && (

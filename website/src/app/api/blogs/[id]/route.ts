@@ -12,7 +12,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { sendTransactional } from "@/lib/email/dispatcher";
 import { isFlagOn } from "@/lib/feature-flags";
 
 export const runtime = "nodejs";
@@ -173,19 +172,11 @@ export async function PATCH(
         },
       });
     }
-    if (auth.user!.email) {
-      // The dispatcher doesn't have a blog-submission template yet; we
-      // intentionally call sendTransactional with the closest existing
-      // template (order_placed) just to confirm the wiring works in
-      // verification. Phase 3 will replace this with a purpose-built
-      // ArtistBlogSubmitted template.
-      void sendTransactional({
-        to: auth.user!.email,
-        template: "order_placed",
-        idempotencyKey: `blog_submit:${id}`,
-        data: { firstName: "there", orderNumber: id },
-      }).catch(() => {});
-    }
+    // Phase 2.7 follow-up: there is no purpose-built blog_submitted
+    // template yet. The previous fallback (firing the order_placed
+    // template at the artist on submit) was a misleading "Your order
+    // is on its way" email. Dropped; Phase 3 will add the right
+    // template and re-enable the notification.
   }
 
   return NextResponse.json({ status: "ok" });

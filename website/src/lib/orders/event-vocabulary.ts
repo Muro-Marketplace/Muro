@@ -28,7 +28,15 @@ export const ORDER_STATUS_TO_EVENT: Record<string, OrderEventType | null> = {
   shipped: "order.out_for_delivery",
   delivered: "order.delivered",
   cancelled: "order.cancelled",
+  // Audit follow-up: refunded transitions also drop a lifecycle event
+  // so the K3 stepper / payout reconciler see refund state.
+  refunded: "order.refunded",
+  // artist_notified and disputed are internal-only — no email surface
+  // yet, and `disputed` is opened via its own /api/disputes flow so
+  // the lifecycle log is owned there.
   artist_notified: null,
+  disputed: null,
+  awaiting_dispatch: null,
 };
 
 export function eventForStatus(status: string | null | undefined): OrderEventType | null {

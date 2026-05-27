@@ -56,6 +56,11 @@ beforeEach(() => {
   scheduleTransferMock.mockReset();
   platformFeePctMock.mockReset();
   getAdminMock.mockReset();
+  // The helper now hard-fails (returns "skipped") when this env is
+  // unset, so the start-billing tests need a value to even reach the
+  // Stripe.subscriptions.create path. Default to a stub product id;
+  // individual tests can unset it to exercise the missing-env path.
+  process.env.STRIPE_PAID_LOAN_PRODUCT_ID = "prod_test_stub";
 });
 
 // Build a chainable Supabase mock for the subset of methods this module
@@ -67,6 +72,9 @@ function buildDb(opts: {
   billingForSubscription?: unknown;
   venue?: unknown;
   artistConnect?: unknown;
+  /** Existing-transfer row keyed by (order_id, recipient_user_id) for
+   *  the idempotency pre-check in handleInvoicePaid. */
+  existingTransfer?: unknown;
 } = {}): { db: object; updates: unknown[]; upserts: unknown[] } {
   const updates: unknown[] = [];
   const upserts: unknown[] = [];
@@ -92,6 +100,23 @@ function buildDb(opts: {
                 updates.push({ table, row });
                 return { data: null, error: null };
               },
+            }),
+          };
+        }
+        if (table === "stripe_transfers") {
+          // Idempotency pre-check on handleInvoicePaid chains two
+          // .eq() calls before .maybeSingle(). Return the configured
+          // existingTransfer (or null) at the end of the chain.
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: opts.existingTransfer ?? null,
+                    error: null,
+                  }),
+                }),
+              }),
             }),
           };
         }
@@ -223,6 +248,35 @@ describe("startPaidLoanBilling()", () => {
     expect(subscriptionsCreateMock).not.toHaveBeenCalled();
   });
 
+  it("returns skipped with a warning when STRIPE_PAID_LOAN_PRODUCT_ID is unset", async () => {
+    isFlagOnMock.mockReturnValue(true);
+    paymentMethodsListMock.mockResolvedValue({ data: [{ id: "pm_card" }] });
+    delete process.env.STRIPE_PAID_LOAN_PRODUCT_ID;
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { db } = buildDb({
+      venue: {
+        user_id: "v1",
+        stripe_customer_id: "cus_existing",
+        contact_email: "v@e.com",
+        name: "Venue",
+      },
+    });
+    const res = await startPaidLoanBilling(
+      {
+        placementId: "p1",
+        venueUserId: "v1",
+        artistUserId: "a1",
+        arrangementType: "paid_loan",
+        monthlyFeePence: 5000,
+      },
+      db as Parameters<typeof startPaidLoanBilling>[1],
+    );
+    expect(res.status).toBe("skipped");
+    expect(subscriptionsCreateMock).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it("creates a Stripe subscription when card is on file and inserts the billing row", async () => {
     isFlagOnMock.mockReturnValue(true);
     paymentMethodsListMock.mockResolvedValue({ data: [{ id: "pm_card" }] });
@@ -334,6 +388,35 @@ describe("handleInvoicePaid()", () => {
       db as Parameters<typeof handleInvoicePaid>[1],
     );
     expect(handled).toBe(false);
+    expect(scheduleTransferMock).not.toHaveBeenCalled();
+  });
+
+  it("audit fix: skips scheduleTransfer on Stripe replay when transfer row already exists", async () => {
+    isFlagOnMock.mockReturnValue(true);
+    platformFeePctMock.mockReturnValue(15);
+    const { db } = buildDb({
+      billingForSubscription: {
+        id: "row1",
+        placement_id: "p1",
+        payer_user_id: "v1",
+        payee_user_id: "a1",
+        monthly_amount_pence: 10_000,
+        current_period_end: null,
+      },
+      artistConnect: { stripe_connect_account_id: "acct_artist" },
+      existingTransfer: { id: "tr_existing" },
+    });
+    const handled = await handleInvoicePaid(
+      {
+        id: "in_1",
+        subscription: "sub_111",
+        period_start: 1_700_000_000,
+        period_end: 1_702_500_000,
+        lines: { data: [{ period: { start: 1_700_000_000, end: 1_702_500_000 } }] },
+      } as unknown as Parameters<typeof handleInvoicePaid>[0],
+      db as Parameters<typeof handleInvoicePaid>[1],
+    );
+    expect(handled).toBe(true);
     expect(scheduleTransferMock).not.toHaveBeenCalled();
   });
 });

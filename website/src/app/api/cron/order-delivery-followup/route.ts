@@ -16,10 +16,11 @@
 //   distinct idempotency_key — the constraint accepts duplicates of
 //   the same event_type so long as idempotency_key is unique.
 //
-// Auto-confirm flips orders.status to "delivery_confirmed" (a column
-// already on the orders table for the existing manual flow) and writes
-// `order.delivery_confirmed` to the events log so the lifecycle
-// stepper renders correctly.
+// Auto-confirm writes `order.delivery_confirmed` to the events log so
+// the K3 lifecycle stepper renders the final tick. orders.status STAYS
+// at "delivered" because the legacy state machine doesn't carry a
+// terminal "delivery_confirmed" value (see order-state-machine.ts);
+// the event log is the only source of truth for buyer confirmation.
 
 import { NextResponse } from "next/server";
 import { requireCronAuth, runBatch } from "@/app/api/cron/_auth";
@@ -64,11 +65,14 @@ export async function GET(request: Request) {
   );
 
   // Pull every confirmation + prompt event for these orders in one go.
+  // PostgREST's `like` filter uses `*` as the wildcard (URL-encoded
+  // %2A). `%` in the value comes through as a literal percent sign,
+  // not a wildcard, so the original query never matched.
   const { data: closingEvents } = await db
     .from("order_events")
     .select("order_id, event_type, idempotency_key")
     .in("order_id", orderIds)
-    .or("event_type.eq.order.delivery_confirmed,idempotency_key.like.%:48h_prompt%");
+    .or("event_type.eq.order.delivery_confirmed,idempotency_key.like.*:48h_prompt*");
 
   const alreadyConfirmed = new Set<string>();
   const alreadyPrompted = new Set<string>();
@@ -168,7 +172,12 @@ export async function GET(request: Request) {
     );
   });
 
-  // Auto-confirm overdue orders.
+  // Auto-confirm overdue orders. The event log (order_events) is the
+  // source of truth for the K3 stepper; orders.status STAYS at
+  // "delivered" because the legacy state machine doesn't have a
+  // "delivery_confirmed" terminal value (see order-state-machine.ts).
+  // Anything downstream that needs to know "buyer confirmed receipt"
+  // reads from order_events.event_type='order.delivery_confirmed'.
   const confirmResult = await runBatch(toConfirm, async (c) => {
     await db.from("order_events").upsert(
       {

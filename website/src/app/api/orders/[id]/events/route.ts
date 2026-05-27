@@ -3,48 +3,84 @@
 // buyer email, items) so the customer tracking page can render a
 // stepper without two round-trips.
 //
-// Auth: same model as /api/orders/track — either the caller is the
-// buyer (matched by buyer_email on the row), the artist (matched by
-// artist_user_id), or the venue. We don't gate by a magic token here
-// because the page itself is wrapped in the customer portal layout,
-// which already requires signin.
+// Auth: either
+//   - the caller is signed in and is the buyer / artist / venue on
+//     the order (standard session auth via getAuthenticatedUser); OR
+//   - the request carries `?t=<token>` matching the signed token
+//     baked into the customer order-receipt email (guest checkout
+//     path; same mechanism /api/orders/track already uses).
 
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { verifyOrderToken } from "@/lib/order-tracking-token";
 
 export const runtime = "nodejs";
 
-export async function GET(
-  request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
-  const auth = await getAuthenticatedUser(request);
-  if (auth.error) return auth.error;
-  const { id } = await context.params;
-  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+interface OrderRow {
+  id: string;
+  status: string;
+  buyer_email: string | null;
+  artist_user_id: string | null;
+  venue_user_id: string | null;
+  items: unknown;
+  shipping: unknown;
+  total: number | null;
+  currency: string | null;
+  placed_at: string | null;
+  created_at: string;
+}
 
+async function loadOrder(id: string): Promise<OrderRow | null> {
   const db = getSupabaseAdmin();
-  const { data: order } = await db
+  const { data } = await db
     .from("orders")
     .select(
       "id, status, buyer_email, artist_user_id, venue_user_id, items, shipping, total, currency, placed_at, created_at",
     )
     .eq("id", id)
-    .maybeSingle<{
-      id: string;
-      status: string;
-      buyer_email: string | null;
-      artist_user_id: string | null;
-      venue_user_id: string | null;
-      items: unknown;
-      shipping: unknown;
-      total: number | null;
-      currency: string | null;
-      placed_at: string | null;
-      created_at: string;
-    }>();
+    .maybeSingle<OrderRow>();
+  return data ?? null;
+}
 
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id } = await context.params;
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const url = new URL(request.url);
+  const token = url.searchParams.get("t");
+
+  // Guest path: a signed token off the receipt email proves the
+  // bearer is the buyer. We still pull the order row through the
+  // admin client because the page itself doesn't require Supabase
+  // auth — same shape as /api/orders/track.
+  if (token) {
+    let claim: { orderId: string; email: string };
+    try {
+      claim = await verifyOrderToken(token);
+    } catch {
+      return NextResponse.json({ error: "Invalid or expired tracking link" }, { status: 401 });
+    }
+    if (claim.orderId !== id) {
+      return NextResponse.json({ error: "Token does not match order" }, { status: 403 });
+    }
+    const order = await loadOrder(id);
+    if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (
+      !order.buyer_email ||
+      order.buyer_email.toLowerCase() !== claim.email.toLowerCase()
+    ) {
+      return NextResponse.json({ error: "Token does not match order" }, { status: 403 });
+    }
+    return buildResponse(order);
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
+  const order = await loadOrder(id);
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const userEmail = auth.user!.email ?? null;
@@ -56,10 +92,15 @@ export async function GET(
     return NextResponse.json({ error: "Not authorised" }, { status: 403 });
   }
 
+  return buildResponse(order);
+}
+
+async function buildResponse(order: OrderRow): Promise<NextResponse> {
+  const db = getSupabaseAdmin();
   const { data: events } = await db
     .from("order_events")
     .select("event_type, created_at, metadata, actor_user_id")
-    .eq("order_id", id)
+    .eq("order_id", order.id)
     .order("created_at", { ascending: true });
 
   return NextResponse.json({

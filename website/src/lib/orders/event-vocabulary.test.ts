@@ -9,7 +9,10 @@ describe("ORDER_STATUS_TO_EVENT", () => {
       shipped: "order.out_for_delivery",
       delivered: "order.delivered",
       cancelled: "order.cancelled",
+      refunded: "order.refunded",
       artist_notified: null,
+      disputed: null,
+      awaiting_dispatch: null,
     });
   });
 });
@@ -23,8 +26,14 @@ describe("eventForStatus()", () => {
     expect(eventForStatus("cancelled")).toBe("order.cancelled");
   });
 
-  it("returns null for the internal artist_notified status", () => {
+  it("returns null for internal statuses (artist_notified, disputed, awaiting_dispatch)", () => {
     expect(eventForStatus("artist_notified")).toBeNull();
+    expect(eventForStatus("disputed")).toBeNull();
+    expect(eventForStatus("awaiting_dispatch")).toBeNull();
+  });
+
+  it("maps refunded to order.refunded", () => {
+    expect(eventForStatus("refunded")).toBe("order.refunded");
   });
 
   it("returns null for unknown / nullish input", () => {

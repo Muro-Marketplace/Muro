@@ -94,12 +94,9 @@ function readSubscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
   return null;
 }
 
-function nextFirstOfMonthUnix(now: Date): number {
-  const next = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0),
-  );
-  return Math.floor(next.getTime() / 1000);
-}
+// nextFirstOfMonthUnix was used by the previous billing_cycle_anchor
+// path; dropped during the audit. Phase 3 will bring back proper 1st-
+// of-month anchoring with an immediate proration invoice.
 
 /**
  * Resolve a Stripe customer for the venue, creating one if absent.
@@ -130,11 +127,17 @@ async function ensureVenueCustomer(
   }
 
   // Look up the auth user's email as a fallback. Resend / Stripe receipts
-  // both prefer the venue contact email when we have one.
+  // both prefer the venue contact email when we have one. Guarded
+  // against empty/invalid venueUserId so the admin client doesn't
+  // throw "Expected parameter to be UUID".
   let fallbackEmail = venue.contact_email;
-  if (!fallbackEmail) {
-    const { data: authUser } = await db.auth.admin.getUserById(venueUserId);
-    fallbackEmail = authUser.user?.email ?? null;
+  if (!fallbackEmail && venueUserId) {
+    try {
+      const { data: authUser } = await db.auth.admin.getUserById(venueUserId);
+      fallbackEmail = authUser.user?.email ?? null;
+    } catch {
+      fallbackEmail = null;
+    }
   }
 
   const customer = await stripe.customers.create({
@@ -232,14 +235,29 @@ export async function startPaidLoanBilling(
     };
   }
 
-  // Look up an on-the-fly price. Stripe lets you create an ad-hoc
-  // price for each subscription using `price_data`; one Stripe Price
-  // per placement would balloon the dashboard for no benefit.
-  //
-  // Note: the placement's title isn't stored on the Price; we set the
-  // subscription metadata instead so the placement-id is recoverable
-  // from the dashboard. The created Price defaults to an auto-named
-  // product on Stripe's side.
+  // Stripe SDK 22 requires a pre-existing product reference on
+  // price_data; we don't ship a fallback id because Stripe rejects
+  // unknown products with "No such product" and the catch upstream
+  // would swallow that into a silent "billing didn't start". Audit
+  // follow-up: hard-fail when the env is unset so the operator notices.
+  const productId = process.env.STRIPE_PAID_LOAN_PRODUCT_ID;
+  if (!productId) {
+    console.error(
+      "[paid-loan-billing] STRIPE_PAID_LOAN_PRODUCT_ID is not set; refusing to create subscription",
+    );
+    return { status: "skipped" };
+  }
+
+  // Audit follow-up on first-month proration: setting
+  // billing_cycle_anchor to a future date (next 1st of month) plus
+  // proration_behavior: "create_prorations" tells Stripe to wait
+  // until the anchor before issuing any invoice, so the venue would
+  // pay £0 between acceptance and the next month. The spec wants
+  // immediate proration, which requires an immediate first invoice
+  // via add_invoice_items + a one-off price; this is a Phase 3
+  // follow-up. For now we cycle billing from the acceptance date so
+  // the venue is actually charged. Renewals fall on the same day of
+  // each month rather than the 1st — acceptable for v1.
   const subscription = await stripe.subscriptions.create({
     customer: customer.customerId,
     items: [
@@ -248,16 +266,10 @@ export async function startPaidLoanBilling(
           currency: "gbp",
           recurring: { interval: "month" },
           unit_amount: input.monthlyFeePence,
-          // Stripe SDK 22 requires a pre-existing product reference;
-          // we tag with the placement-id metadata on the subscription
-          // itself, which Stripe surfaces alongside.
-          product: process.env.STRIPE_PAID_LOAN_PRODUCT_ID || "prod_wallplace_paid_loan",
+          product: productId,
         },
       },
     ],
-    // Pro-rate the first month from acceptance to the next 1st-of-month
-    // boundary. Subsequent renewals cycle on the 1st.
-    billing_cycle_anchor: nextFirstOfMonthUnix(new Date()),
     proration_behavior: "create_prorations",
     collection_method: "charge_automatically",
     metadata: {
@@ -415,10 +427,28 @@ export async function handleInvoicePaid(
     Math.round(billing.monthly_amount_pence * (1 - platformFeePct / 100)),
   );
 
+  // Audit fix: explicit idempotency check before scheduleTransfer.
+  // The Stripe webhook retries failed events up to 3 days; without
+  // this guard each retry inserts another pending transfer and the
+  // payout cron pays the artist multiple times. Migration 067 also
+  // adds a UNIQUE(order_id, recipient_user_id) index as belt-and-
+  // braces, but the soft check here avoids the noisy unique-violation
+  // error on a happy-path replay.
+  const transferOrderId = `placement:${billing.placement_id}:${invoice.id}`;
+  const { data: existingTransfer } = await db
+    .from("stripe_transfers")
+    .select("id")
+    .eq("order_id", transferOrderId)
+    .eq("recipient_user_id", billing.payee_user_id)
+    .maybeSingle<{ id: string }>();
+  if (existingTransfer) {
+    return true; // already scheduled, replay is a no-op
+  }
+
   const artistConnect = artistProfile;
   if (artistConnect?.stripe_connect_account_id && artistShareCents > 0) {
     await scheduleTransfer({
-      orderId: `placement:${billing.placement_id}:${invoice.id}`,
+      orderId: transferOrderId,
       recipientType: "artist",
       recipientUserId: billing.payee_user_id,
       connectAccountId: artistConnect.stripe_connect_account_id,

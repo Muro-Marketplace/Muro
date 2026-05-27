@@ -1289,11 +1289,24 @@ export async function PATCH(request: Request) {
     // monthly Stripe billing. Flag-gated inside the helper, so this is
     // a no-op when PAID_LOAN_V2 is off. On active → cancelled, stop the
     // Stripe sub at period-end (no current-month refund per spec).
+    //
+    // billingPrompt carries a setup-intent client secret back to the
+    // caller when the venue has no card on file yet — the venue UI
+    // mounts Stripe Elements with the secret and the venue completes
+    // card attach, after which a PATCH re-invocation actually creates
+    // the subscription. Without this, billing silently never started.
+    let billingPrompt: {
+      status: "missing_payment_method";
+      setupIntentClientSecret: string;
+      customerId: string;
+    } | null = null;
+    // Active→declined is dead code in the canonical state machine
+    // (decline is pending-only), but we keep the second branch
+    // defensive in case a malformed PATCH lands.
     try {
       const goingActive = existing.status === "pending" && status === "active";
       const goingCancelled =
-        existing.status === "active" &&
-        (status === "cancelled" || status === "declined");
+        existing.status === "active" && status === "cancelled";
       if (goingActive) {
         const { data: full } = await db
           .from("placements")
@@ -1309,13 +1322,24 @@ export async function PATCH(request: Request) {
             monthly_fee_gbp: number | null;
           }>();
         if (full?.artist_user_id && full?.venue_user_id) {
-          await startPaidLoanBilling({
+          const billingResult = await startPaidLoanBilling({
             placementId: full.id,
             artistUserId: full.artist_user_id,
             venueUserId: full.venue_user_id,
             arrangementType: full.arrangement_type ?? "",
             monthlyFeePence: Math.round((full.monthly_fee_gbp ?? 0) * 100),
           });
+          if (
+            billingResult.status === "missing_payment_method" &&
+            billingResult.setupIntentClientSecret &&
+            billingResult.customerId
+          ) {
+            billingPrompt = {
+              status: "missing_payment_method",
+              setupIntentClientSecret: billingResult.setupIntentClientSecret,
+              customerId: billingResult.customerId,
+            };
+          }
         }
       } else if (goingCancelled) {
         await cancelPaidLoanBilling(id);
@@ -1973,6 +1997,13 @@ export async function PATCH(request: Request) {
       }
     }
 
+    // Surface the Setup Intent if the venue needs to attach a card
+    // before paid-loan billing can begin. The client mounts Stripe
+    // Elements with this secret, the venue completes card attach, and
+    // a follow-up PATCH (re-attempt) actually creates the subscription.
+    if (billingPrompt) {
+      return NextResponse.json({ success: true, billingPrompt });
+    }
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
