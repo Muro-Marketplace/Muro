@@ -2,12 +2,18 @@
 // 48 hours after order.delivered fires, and auto-confirms after 7
 // days of silence so the artist payout isn't blocked forever.
 //
-// Scheduling: vercel.json runs this twice daily (9am + 9pm UTC).
-// The original Phase 2.3 spec asked for hourly, but the hourly
-// schedule pushed Vercel cron usage past plan limits and broke
-// production deploys. Twice-daily keeps the 48h prompt within ~12h
-// of the spec target (so it fires 48-60h after delivery instead of
-// 48-49h) and leaves the 7-day auto-confirm window untouched.
+// Scheduling: vercel.json runs this once daily at 12:00 UTC.
+// Vercel's Hobby tier rejects any cron with frequency < 24h, which
+// blocked the Phase 2 deploy when the spec's hourly schedule
+// landed. Daily is the smallest schedule Hobby accepts.
+//
+// Trade-off vs the original hourly spec: the 48h prompt fires
+// 48-72h after delivery instead of 48-49h, and the 7-day auto-
+// confirm fires 168-192h instead of 168-169h. Both still well
+// within the customer-experience target windows.
+//
+// If Wallplace upgrades to Vercel Pro, this can return to hourly
+// without other code changes.
 //
 // The job is idempotent: re-running on the next tick won't double-
 // send because every nudge inserts a `48h_prompt` row into
