@@ -174,6 +174,40 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
     } catch { /* swallow */ }
   }
 
+  // D3 (Phase 2.9): "Mark fulfilled" routes through the new fulfill
+  // API. The endpoint creates an order or placement per response_type
+  // and returns the next page to navigate to. `existing_works`
+  // responses surface a 2-button modal via existingWorksPrompt.
+  const [existingWorksPrompt, setExistingWorksPrompt] = useState<{ responseId: string } | null>(null);
+
+  async function fulfillResponse(
+    responseId: string,
+    action?: "order" | "placement",
+  ) {
+    setBusy(responseId);
+    setError(null);
+    try {
+      const res = await authFetch(`/api/artwork-requests/${id}/fulfill`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response_id: responseId, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Could not fulfil response.");
+      } else if (data.route_to) {
+        window.location.href = data.route_to;
+      } else {
+        await load();
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setBusy(null);
+      setExistingWorksPrompt(null);
+    }
+  }
+
   return (
     <VenuePortalLayout activePath="/venue-portal/artwork-requests">
       <div className="max-w-3xl px-4 sm:px-6 py-8">
@@ -280,6 +314,24 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                         {r.linked_placement_id && <Link href={`/placements/${r.linked_placement_id}`} className="hover:underline">View placement →</Link>}
                       </p>
                     )}
+                    {r.status === "accepted" && req?.status === "open" && (
+                      <div className="pt-2 border-t border-border mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (r.response_type === "existing_works") {
+                              setExistingWorksPrompt({ responseId: r.id });
+                            } else {
+                              fulfillResponse(r.id);
+                            }
+                          }}
+                          disabled={busy === r.id}
+                          className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-sm transition-colors disabled:opacity-60"
+                        >
+                          Mark fulfilled
+                        </button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -287,6 +339,45 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
           </>
         )}
       </div>
+      {existingWorksPrompt && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        >
+          <div className="bg-surface w-full max-w-md rounded-sm border border-border shadow-lg overflow-hidden">
+            <div className="px-6 pt-6 pb-2">
+              <h2 className="text-lg font-medium">Fulfil this existing-works response</h2>
+              <p className="text-sm text-muted mt-2 leading-relaxed">
+                The artist offered a piece they&rsquo;ve already made. Place it on
+                loan in your venue, or buy it outright?
+              </p>
+            </div>
+            <div className="px-6 py-5 flex flex-wrap justify-end gap-2 bg-background/40 border-t border-border">
+              <button
+                onClick={() => setExistingWorksPrompt(null)}
+                className="px-3 py-2 text-xs rounded-sm border border-border hover:border-accent/40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => fulfillResponse(existingWorksPrompt.responseId, "placement")}
+                disabled={busy === existingWorksPrompt.responseId}
+                className="px-3 py-2 text-xs rounded-sm border border-border hover:border-accent/40 disabled:opacity-60"
+              >
+                Place this work
+              </button>
+              <button
+                onClick={() => fulfillResponse(existingWorksPrompt.responseId, "order")}
+                disabled={busy === existingWorksPrompt.responseId}
+                className="px-3 py-2 text-xs rounded-sm bg-accent text-white hover:bg-accent-hover disabled:opacity-60"
+              >
+                Buy this work
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </VenuePortalLayout>
   );
 }
