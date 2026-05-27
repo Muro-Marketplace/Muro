@@ -31,6 +31,8 @@ const navItems = [
   { label: "Orders", href: "/artist-portal/orders" },
   { label: "QR Labels", href: "/artist-portal/labels" },
   { label: "Social Posts", href: "/artist-portal/posts" },
+  // Phase 2.7 I1: artist blog editor.
+  { label: "Blogs", href: "/artist-portal/blogs" },
   { label: "Analytics", href: "/artist-portal/analytics" },
   { label: "Billing", href: "/artist-portal/billing" },
 ];

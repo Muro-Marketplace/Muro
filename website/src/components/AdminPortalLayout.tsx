@@ -14,6 +14,8 @@ const navItems = [
   // Phase 2.1 A5/A6: moderation panels for feature requests + feedback.
   { label: "Feature requests", href: "/admin/feature-requests" },
   { label: "Feedback", href: "/admin/feedback" },
+  // Phase 2.7 A4: blog moderation queue.
+  { label: "Blogs", href: "/admin/blogs" },
 ];
 
 const secondaryItems = [

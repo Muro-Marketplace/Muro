@@ -2,7 +2,50 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { blogPosts } from "@/data/blog-posts";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { Metadata } from "next";
+
+// Phase 2.7: DB blogs are dynamic, so the page must allow params that
+// aren't in generateStaticParams.
+export const dynamicParams = true;
+export const dynamic = "force-dynamic";
+
+interface DbBlogRow {
+  id: string;
+  slug: string;
+  title: string;
+  body_markdown: string | null;
+  cover_image_url: string | null;
+  published_at: string | null;
+  author_user_id: string;
+}
+
+async function loadDbBlogBySlug(slug: string): Promise<{
+  blog: DbBlogRow;
+  authorSlug: string | null;
+  authorName: string | null;
+} | null> {
+  const db = getSupabaseAdmin();
+  const { data } = await db
+    .from("blogs")
+    .select(
+      "id, slug, title, body_markdown, cover_image_url, published_at, author_user_id, status",
+    )
+    .eq("slug", slug)
+    .eq("status", "published")
+    .maybeSingle<DbBlogRow & { status: string }>();
+  if (!data) return null;
+  const { data: profile } = await db
+    .from("artist_profiles")
+    .select("slug, name")
+    .eq("user_id", data.author_user_id)
+    .maybeSingle<{ slug: string; name: string }>();
+  return {
+    blog: data,
+    authorSlug: profile?.slug ?? null,
+    authorName: profile?.name ?? null,
+  };
+}
 
 export async function generateStaticParams() {
   return blogPosts.map((post) => ({ slug: post.slug }));
@@ -11,14 +54,25 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const post = blogPosts.find((p) => p.slug === slug);
-  if (!post) return { title: "Post not found" };
-  return { title: post.title, description: post.excerpt };
+  if (post) {
+    return { title: post.title, description: post.excerpt };
+  }
+  const dbRecord = await loadDbBlogBySlug(slug);
+  if (!dbRecord) return { title: "Post not found" };
+  return {
+    title: dbRecord.blog.title,
+    description: (dbRecord.blog.body_markdown ?? "").slice(0, 160),
+  };
 }
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const post = blogPosts.find((p) => p.slug === slug);
-  if (!post) notFound();
+  if (!post) {
+    const dbRecord = await loadDbBlogBySlug(slug);
+    if (!dbRecord) notFound();
+    return <DbBlogView record={dbRecord} />;
+  }
 
   const otherPosts = blogPosts.filter((p) => p.slug !== slug).slice(0, 2);
 
@@ -96,6 +150,68 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+function DbBlogView({
+  record,
+}: {
+  record: {
+    blog: DbBlogRow;
+    authorSlug: string | null;
+    authorName: string | null;
+  };
+}) {
+  const { blog, authorSlug, authorName } = record;
+  return (
+    <div className="bg-background">
+      {blog.cover_image_url && (
+        <div className="relative h-64 md:h-96">
+          <Image src={blog.cover_image_url} alt={blog.title} fill className="object-cover" sizes="100vw" priority />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
+            <div className="max-w-[800px] mx-auto">
+              <h1 className="font-serif text-3xl md:text-4xl text-white leading-tight">{blog.title}</h1>
+            </div>
+          </div>
+        </div>
+      )}
+      <section className="py-12 lg:py-16">
+        <div className="max-w-[800px] mx-auto px-6">
+          {!blog.cover_image_url && (
+            <h1 className="font-serif text-3xl md:text-4xl mb-8">{blog.title}</h1>
+          )}
+          <div className="flex items-center gap-4 text-sm text-muted mb-8 pb-6 border-b border-border">
+            {authorName && authorSlug ? (
+              <Link href={`/browse/${authorSlug}`} className="text-foreground hover:text-accent">
+                {authorName}
+              </Link>
+            ) : authorName ? (
+              <span>{authorName}</span>
+            ) : null}
+            {blog.published_at && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-border" />
+                <time>
+                  {new Date(blog.published_at).toLocaleDateString("en-GB", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </time>
+              </>
+            )}
+          </div>
+          <div className="prose prose-lg max-w-none">
+            {(blog.body_markdown ?? "").split("\n\n").map((paragraph, i) => (
+              <p key={i} className="text-foreground/80 leading-relaxed mb-6 text-base whitespace-pre-wrap">
+                {paragraph}
+              </p>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
