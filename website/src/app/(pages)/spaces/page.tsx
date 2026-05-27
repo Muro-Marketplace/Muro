@@ -178,12 +178,13 @@ function SpacesPageContent() {
   // Venues are locked out of viewing other venues, this page is for artists/customers
   // discovering venue demand. Venues manage their own profile through /venue-portal.
   const canSeeDetails = userType !== "venue" && (isSubscribed || userType === "customer");
-  // Even when the gated details are hidden, the whole card should
-  // still navigate somewhere: logged-out and unsubscribed visitors
-  // get the public venue profile page (read-only summary). Without
-  // this the card was a dead click for everyone outside the
-  // subscribed/customer cohort.
-  const canClickThroughCard = userType !== "venue";
+  // Click-through is gated on the same predicate as detail visibility,
+  // because /venues/[slug] now enforces the paywall server-side and a
+  // gated viewer hitting that route gets an upgrade screen. Letting the
+  // card link through for non-subscribers would just take them to the
+  // upgrade page; the paywall card on this listing already does that
+  // more clearly.
+  const canClickThroughCard = canSeeDetails;
   const canMessageVenues = userType !== "venue" && (isSubscribed || userType === "customer");
   // Inline placement requests are artist-only. We don't gate on
   // subscription here, the underlying API enforces tier rules and
