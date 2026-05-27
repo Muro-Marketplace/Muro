@@ -15,8 +15,8 @@
 //
 // Per-request memoisation: when called from an RSC / route handler this
 // is wrapped with React's `cache()` so repeated calls in the same render
-// hit the DB once. Outside React (e.g. webhook handlers, tests) we fall
-// back to a direct uncached lookup.
+// hit the DB once. Outside RSC the dedup window collapses to module
+// lifetime — fine for short-lived handlers, not a per-request guarantee.
 
 import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -47,25 +47,30 @@ function normalisePlan(p: string | null | undefined): SubscriptionPlan | null {
  * Resolve the subscription state for a Supabase auth user.
  *
  * Returns user_type=null when the user has no artist or venue profile
- * (treated as a customer-without-subscription i.e. the user_type below
- * is 'customer'). Never throws — DB errors fall through to inactive.
+ * (mid-signup race, unmapped account, etc.). Never throws — DB errors
+ * fall through to inactive.
+ *
+ * Artist and venue lookups run in parallel because the paywall hot path
+ * doesn't want to pay two sequential round-trips for venue users. Artist
+ * still wins if both exist (a single auth user being both is the legacy
+ * dual-identity case from the visualizer tier-resolver).
  */
-async function resolveSubscription(userId: string): Promise<SubscriptionState> {
+export async function resolveSubscription(
+  userId: string,
+  client?: SupabaseClient,
+): Promise<SubscriptionState> {
   const id = userId.trim();
   if (!id) return { active: false, plan: null, user_type: null };
 
-  const db = getSupabaseAdmin();
+  const db = client ?? getSupabaseAdmin();
 
-  // Artist first: most paid surface today.
-  const artist = await readArtistSubscription(db, id);
+  const [artist, venue] = await Promise.all([
+    readArtistSubscription(db, id),
+    readVenueSubscription(db, id),
+  ]);
   if (artist) return artist;
-
-  // Then venue.
-  const venue = await readVenueSubscription(db, id);
   if (venue) return venue;
-
-  // Otherwise the user is a customer (or a legacy unmapped account).
-  return { active: false, plan: null, user_type: "customer" };
+  return { active: false, plan: null, user_type: null };
 }
 
 async function readArtistSubscription(
@@ -115,7 +120,7 @@ async function readVenueSubscription(
     if (error) {
       // The venue subscription columns aren't required yet — fall back
       // to a column-less lookup so we can still report user_type='venue'.
-      const lacksColumn = /column.*subscription_(status|plan).*does not exist/i.test(
+      const lacksColumn = /column.*venue_profiles\.subscription_(status|plan).*does not exist/i.test(
         error.message,
       );
       if (!lacksColumn) {
@@ -146,9 +151,11 @@ async function readVenueSubscription(
  * Public entry point. Memoised per request via React.cache, so multiple
  * call sites in a single render dedupe to one DB round-trip.
  *
- * Outside the React render tree (webhook handlers, tests, scripts) the
- * cache wrapper falls back to the underlying function with no warning,
- * which is intentional.
+ * The cached binding only accepts a userId — the optional client
+ * parameter on `resolveSubscription` exists for tests and is bypassed
+ * by the cache wrapper here. Callers outside the React render tree
+ * (webhooks, scripts) can call `resolveSubscription` directly with a
+ * custom client if needed.
  */
 export const isSubscribed = cache(
   (userId: string): Promise<SubscriptionState> => resolveSubscription(userId),
