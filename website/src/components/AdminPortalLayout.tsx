@@ -11,6 +11,9 @@ const navItems = [
   { label: "Artists", href: "/admin/artists" },
   { label: "Venues", href: "/admin/venues" },
   { label: "Curation", href: "/admin/curation" },
+  // Phase 2.1 A5/A6: moderation panels for feature requests + feedback.
+  { label: "Feature requests", href: "/admin/feature-requests" },
+  { label: "Feedback", href: "/admin/feedback" },
 ];
 
 const secondaryItems = [

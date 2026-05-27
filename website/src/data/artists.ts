@@ -123,12 +123,18 @@ export interface Artist {
   /** Premium+ QR label theme id from lib/profile-themes.ts. NULL/absent
    *  → default classic label. Ignored for Core tier at render time. */
   labelTheme?: string;
+  /** Phase 2.1 P1: when true, the public profile renders a "Demo
+   *  profile" banner in place of the Message + Buy Now CTAs. Maya Chen
+   *  carries this flag so the homepage tour lands on a profile that
+   *  doesn't accept real orders or messages. */
+  isDemo?: boolean;
 }
 
 export const artists: Artist[] = [
   {
     slug: "maya-chen",
     name: "Maya Chen",
+    isDemo: true,
     profileColor: "#D4A574",
     shortBio:
       "Maya captures the raw energy of East London's streets, finding beauty in fleeting moments between strangers. Her warm, amber-toned work has been exhibited at The Photographers' Gallery and featured in British Journal of Photography.",

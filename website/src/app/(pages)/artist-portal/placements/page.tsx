@@ -586,7 +586,14 @@ export default function PlacementsPage() {
           workSize: newPlacement.workSize,
           venue: selectedVenue?.name || venueSlug,
           venueSlug: newPlacement.venueSlug,
-          type: rev > 0 ? "Revenue Share" as ArrangementType : "Paid Loan" as ArrangementType,
+          // P6 (Phase 2.1): use the same label helper that the server-
+          // response read path uses so the optimistic row doesn't flicker
+          // from "Revenue Share" → "Revenue share" on re-fetch.
+          type: normaliseType(rev > 0 ? "revenue_share" : "paid_loan", {
+            monthly_fee_gbp: Number(monthlyFee) || 0,
+            qr_enabled: qrEnabled,
+            message: newPlacement.message,
+          }) as ArrangementType,
           revenueSharePercent: newPlacement.revenueSharePercent,
           status: "Pending",
           date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
@@ -1344,9 +1351,26 @@ export default function PlacementsPage() {
                     {p.revenue ?? <span className="text-muted">-</span>}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap">
-                    {p.direction
-                      ? <PlacementDirectionTag direction={p.direction} />
-                      : <span className="text-[11px] text-muted">-</span>}
+                    {p.direction ? (
+                      <div className="flex flex-col gap-1 items-start">
+                        <PlacementDirectionTag direction={p.direction} />
+                        {/* P7 (Phase 2.1): when it's the artist's turn,
+                            surface a direct "Respond" link to the
+                            placement detail so they don't have to
+                            expand the row first. */}
+                        {p.direction === "received" && p.status === "Pending" && (
+                          <Link
+                            href={`/placements/${p.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[11px] text-accent hover:underline"
+                          >
+                            Respond &rarr;
+                          </Link>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-muted">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-3">

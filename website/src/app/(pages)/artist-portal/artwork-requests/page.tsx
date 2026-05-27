@@ -26,6 +26,11 @@ interface RequestRow {
 export default function ArtistArtworkRequestsPage() {
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // Phase 2.1 D1: default view shows only requests this artist has
+  // engaged with (responded or saved a draft). The toggle flips to
+  // the full open-requests feed. Phase 2.5 (B1) will paywall the
+  // "All open requests" view behind subscription.
+  const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,7 +41,8 @@ export default function ArtistArtworkRequestsPage() {
       // forward the token, so artists never saw their private
       // invitations and the inbox always read as "No open requests"
       // for accounts the venue had hand-picked.
-      const res = await authFetch("/api/artwork-requests?status=open");
+      const qs = showAll ? "status=open" : "status=open&mine_only=1";
+      const res = await authFetch(`/api/artwork-requests?${qs}`);
       const data = await res.json();
       setRows(data.requests || []);
     } catch {
@@ -44,24 +50,55 @@ export default function ArtistArtworkRequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showAll]);
 
   useEffect(() => { load(); }, [load]);
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/artwork-requests">
       <div className="max-w-3xl px-4 sm:px-6 py-8">
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-2xl font-serif">Artwork requests</h1>
           <p className="text-sm text-muted mt-1">
             Venues telling the platform what they&rsquo;re looking for. Each response counts towards your daily venue-outreach allowance.
           </p>
         </div>
 
+        <div className="flex items-center gap-1 mb-6 border-b border-border" role="tablist">
+          <button
+            onClick={() => setShowAll(false)}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              !showAll
+                ? "border-accent text-accent"
+                : "border-transparent text-muted hover:text-foreground"
+            }`}
+            role="tab"
+            aria-selected={!showAll}
+          >
+            My responses
+          </button>
+          <button
+            onClick={() => setShowAll(true)}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              showAll
+                ? "border-accent text-accent"
+                : "border-transparent text-muted hover:text-foreground"
+            }`}
+            role="tab"
+            aria-selected={showAll}
+          >
+            All open requests
+          </button>
+        </div>
+
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted">No open requests right now.</p>
+          <p className="text-sm text-muted">
+            {showAll
+              ? "No open requests right now."
+              : "You haven't responded to any requests yet. Tap \"All open requests\" to browse them."}
+          </p>
         ) : (
           <ul className="space-y-3">
             {rows.map((r) => (

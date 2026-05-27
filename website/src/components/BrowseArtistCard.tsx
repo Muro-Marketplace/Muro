@@ -105,15 +105,19 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             <SaveButton type="artist" itemId={artist.slug} size="sm" />
           </div>
 
-          {/* Featured chip for Pro-tier artists. Subtle accent pill
-              in the top-left so it's visible at a glance in the
-              marketplace grid without competing with the heart at
-              top-right. Pro tier earns this automatically, there's
-              no manual curation step, the chip is purely a
-              subscription-tier signal. */}
-          {artist.subscriptionPlan === "pro" && (
+          {/* Featured chip for Premium + Pro artists (Phase 2.1 B5).
+              Pro keeps the warmer accent fill; Premium uses a softer
+              outline so the two tiers are still distinguishable on a
+              grid of cards without dropping the chip from Premium. */}
+          {(artist.subscriptionPlan === "pro" || artist.subscriptionPlan === "premium") && (
             <div className="absolute top-2 left-2 z-10 pointer-events-none">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/95 text-white text-[10px] font-medium tracking-wide shadow-sm">
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide shadow-sm ${
+                  artist.subscriptionPlan === "pro"
+                    ? "bg-accent/95 text-white"
+                    : "bg-white/95 text-accent border border-accent/40"
+                }`}
+              >
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
