@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { startPaidLoanBilling, cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
+import { deriveArrangementType } from "@/lib/placements/arrangement";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
 import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
@@ -461,7 +463,18 @@ export async function POST(request: Request) {
         ? p.extraWorks.map((w) => ({ title: w.title, image: w.image || null, size: w.size || null }))
         : null,
       venue: venueProfile!.name,
-      arrangement_type: p.type,
+      // Phase 2.0e (G3 prereq): write the derived arrangement_type at
+      // the source so downstream label / billing reads agree with the
+      // economics (paid_loan + qr_enabled → mixed, etc.). Existing
+      // request still passes p.type so legacy clients work; we just
+      // canonicalise it here.
+      arrangement_type: deriveArrangementType({
+        monthly_fee_gbp: p.monthlyFeeGbp ?? null,
+        qr_enabled: p.qrEnabled ?? true,
+        revenue_share_percent: p.revenueSharePercent ?? null,
+        purchase_amount_pence:
+          p.type === "purchase" ? 1 : null,
+      }),
       revenue_share_percent: p.revenueSharePercent || null,
       monthly_fee_gbp: p.monthlyFeeGbp ?? null,
       qr_enabled: p.qrEnabled ?? true,
@@ -1231,6 +1244,48 @@ export async function PATCH(request: Request) {
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Failed to update placement" }, { status: 500 });
+    }
+
+    // ─── G3 (Phase 2.2): paid-loan recurring billing ───
+    // On pending → active for a paid_loan / mixed placement, kick off
+    // monthly Stripe billing. Flag-gated inside the helper, so this is
+    // a no-op when PAID_LOAN_V2 is off. On active → cancelled, stop the
+    // Stripe sub at period-end (no current-month refund per spec).
+    try {
+      const goingActive = existing.status === "pending" && status === "active";
+      const goingCancelled =
+        existing.status === "active" &&
+        (status === "cancelled" || status === "declined");
+      if (goingActive) {
+        const { data: full } = await db
+          .from("placements")
+          .select(
+            "id, artist_user_id, venue_user_id, arrangement_type, monthly_fee_gbp",
+          )
+          .eq("id", id)
+          .maybeSingle<{
+            id: string;
+            artist_user_id: string | null;
+            venue_user_id: string | null;
+            arrangement_type: string | null;
+            monthly_fee_gbp: number | null;
+          }>();
+        if (full?.artist_user_id && full?.venue_user_id) {
+          await startPaidLoanBilling({
+            placementId: full.id,
+            artistUserId: full.artist_user_id,
+            venueUserId: full.venue_user_id,
+            arrangementType: full.arrangement_type ?? "",
+            monthlyFeePence: Math.round((full.monthly_fee_gbp ?? 0) * 100),
+          });
+        }
+      } else if (goingCancelled) {
+        await cancelPaidLoanBilling(id);
+      }
+    } catch (billingErr) {
+      console.error("[placements PATCH] paid-loan billing hook failed:", billingErr);
+      // Don't fail the placement transition over a billing-side error;
+      // the webhook reconciler will catch up on the next invoice cycle.
     }
 
     // ─── Inventory + venue attribution on placement transitions ───

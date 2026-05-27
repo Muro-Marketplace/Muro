@@ -497,9 +497,30 @@ export default function PlacementDetailClient({ placementId }: Props) {
         )}
         <div className="flex-1 min-w-0">
           <p className="text-xs uppercase tracking-wider text-muted mb-1">
-            {placement.arrangement_type === "revenue_share"
-              ? `Revenue Share${placement.revenue_share_percent ? ` (${placement.revenue_share_percent}%)` : ""}`
-              : placement.arrangement_type === "free_loan" ? "Paid Loan" : "Purchase"}
+            {/* G1 (Phase 2.2): read placement.arrangement_type directly
+                so the header matches what was written, not what a
+                downstream heuristic re-derives. Includes the rev-share
+                percent suffix where relevant. */}
+            {(() => {
+              const t = placement.arrangement_type;
+              const pct = placement.revenue_share_percent
+                ? ` (${placement.revenue_share_percent}%)`
+                : "";
+              if (t === "purchase") return "Purchase";
+              if (t === "paid_loan") return "Paid Loan";
+              if (t === "free_loan") return "Display";
+              if (t === "revenue_share") return `Revenue Share${pct}`;
+              if (t === "mixed") return `Paid Loan + Rev Share${pct}`;
+              return "Placement";
+            })()}
+          </p>
+          {/* G2 (Phase 2.2): ownership-of-work text. Only "Venue owns
+              the work" on outright purchases; every other arrangement
+              type leaves the artwork on loan from the artist. */}
+          <p className="text-[11px] text-muted mb-2">
+            {placement.arrangement_type === "purchase"
+              ? "Venue owns the work"
+              : "On loan from artist"}
           </p>
           <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-2">{placement.work_title}</h1>
           <div className="flex flex-wrap items-center gap-3 text-sm">

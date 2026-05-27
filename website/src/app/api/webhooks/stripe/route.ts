@@ -20,6 +20,11 @@ import { ArtistStripeKycNeeded } from "@/emails/templates/artist-additions/Artis
 import { platformFeePercentForArtist, DEFAULT_PLAN_FEE_PERCENT } from "@/lib/platform-fee";
 import { loadCartSession } from "@/lib/cart-sessions";
 import { signOrderToken } from "@/lib/order-tracking-token";
+import {
+  handleInvoicePaid as handleInvoicePaidPaidLoan,
+  handleInvoicePaymentFailed as handleInvoicePaymentFailedPaidLoan,
+  handleSubscriptionDeleted as handleSubscriptionDeletedPaidLoan,
+} from "@/lib/placements/paid-loan-billing";
 import type Stripe from "stripe";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -959,6 +964,37 @@ export async function POST(request: Request) {
       } catch (err) {
         console.error("Payment-failed email error:", err);
       }
+    }
+  }
+
+  // ─── Phase 2.2 G3: paid-loan recurring billing ───
+  // Handled first so the artist-payout side fires before the generic
+  // subscription receipt path. Helper returns false when the
+  // invoice/subscription doesn't belong to a placement_recurring_billings
+  // row, so the original artist_profiles subscription handler still
+  // runs for SaaS subs.
+  if (event.type === "invoice.paid") {
+    const invoice = event.data.object as Stripe.Invoice;
+    try {
+      await handleInvoicePaidPaidLoan(invoice);
+    } catch (err) {
+      console.error("[stripe webhook] paid-loan invoice.paid:", err);
+    }
+  }
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as Stripe.Invoice;
+    try {
+      await handleInvoicePaymentFailedPaidLoan(invoice);
+    } catch (err) {
+      console.error("[stripe webhook] paid-loan invoice.payment_failed:", err);
+    }
+  }
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object as Stripe.Subscription;
+    try {
+      await handleSubscriptionDeletedPaidLoan(subscription);
+    } catch (err) {
+      console.error("[stripe webhook] paid-loan subscription.deleted:", err);
     }
   }
 
