@@ -13,6 +13,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/api-client";
+import { describeSaveError } from "@/lib/blogs/describe-save-error";
 
 interface BlogEditorProps {
   blogId?: string;
@@ -79,7 +80,7 @@ export default function BlogEditor({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data?.error || "Failed to save");
+        setError(describeSaveError(data));
         setSaving("error");
         return;
       }
@@ -124,7 +125,7 @@ export default function BlogEditor({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data?.error || "Failed to create");
+        setError(describeSaveError(data));
         setSaving("error");
         return null;
       }
@@ -164,7 +165,7 @@ export default function BlogEditor({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data?.error || "Failed to submit");
+        setError(describeSaveError(data));
         setSaving("error");
         return;
       }

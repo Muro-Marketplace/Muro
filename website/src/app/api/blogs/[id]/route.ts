@@ -16,11 +16,25 @@ import { isFlagOn } from "@/lib/feature-flags";
 
 export const runtime = "nodejs";
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+// Drafts stay loose; the quality bar applies only when the author hits
+// "Submit for review". The refine below enforces title >=3 and
+// body_markdown >=20 only when submit_for_review === true; merging
+// candidate values with the row's stored values is handled in the
+// handler after the parse.
 const patchSchema = z
   .object({
-    title: z.string().min(3).max(180).optional(),
-    body_markdown: z.string().min(20).max(50_000).optional(),
-    cover_image_url: z.string().url().nullable().optional(),
+    title: z.string().min(1).max(180).optional(),
+    body_markdown: z.string().max(50_000).optional(),
+    cover_image_url: z.string().max(2000).nullable().optional(),
     featured_artwork_ids: z.array(z.string().min(1).max(80)).max(50).optional(),
     submit_for_review: z.boolean().optional(),
   })
@@ -96,15 +110,25 @@ export async function PATCH(
   const body = await request.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Validation failed" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Validation failed", details: parsed.error.format() },
+      { status: 400 },
+    );
   }
 
   const db = getSupabaseAdmin();
   const { data: existing } = await db
     .from("blogs")
-    .select("id, author_user_id, status")
+    .select("id, author_user_id, status, title, body_markdown, cover_image_url")
     .eq("id", id)
-    .maybeSingle<{ id: string; author_user_id: string; status: string }>();
+    .maybeSingle<{
+      id: string;
+      author_user_id: string;
+      status: string;
+      title: string;
+      body_markdown: string | null;
+      cover_image_url: string | null;
+    }>();
 
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (existing.author_user_id !== auth.user!.id) {
@@ -124,6 +148,37 @@ export async function PATCH(
     if (existing.status !== "draft" && existing.status !== "rejected") {
       return NextResponse.json(
         { error: "Only drafts or rejected blogs can be submitted for review" },
+        { status: 422 },
+      );
+    }
+    // Submit-for-review quality bar. Validate against the merged values
+    // (existing row + incoming patch) so the author can submit without
+    // re-sending every field. The author-visible errors are bundled
+    // into `issues` so the editor can list every gap in one render.
+    const candidateTitle = parsed.data.title ?? existing.title ?? "";
+    const candidateBody = parsed.data.body_markdown ?? existing.body_markdown ?? "";
+    const candidateCover =
+      parsed.data.cover_image_url !== undefined
+        ? parsed.data.cover_image_url
+        : existing.cover_image_url;
+    const issues: string[] = [];
+    if (candidateTitle.trim().length < 3) {
+      issues.push("Title needs at least 3 characters before submitting.");
+    }
+    if (candidateBody.trim().length < 20) {
+      issues.push("Body needs at least 20 characters before submitting.");
+    }
+    if (
+      candidateCover !== null &&
+      candidateCover !== undefined &&
+      candidateCover !== "" &&
+      !isHttpUrl(candidateCover)
+    ) {
+      issues.push("Cover image URL must start with http:// or https://.");
+    }
+    if (issues.length > 0) {
+      return NextResponse.json(
+        { error: "Not ready for review", issues },
         { status: 422 },
       );
     }
