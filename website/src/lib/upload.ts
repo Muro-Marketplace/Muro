@@ -236,7 +236,22 @@ export async function uploadMessageAttachment(file: File): Promise<MessageAttach
       contentType: uploadBlob.type || file.type,
     });
   if (error) {
+    // E4 (Phase 2.3): surface the underlying Supabase error so a
+    // misconfigured bucket / missing storage policy doesn't read as
+    // a generic "try again". Migration 065 backfills the policies on
+    // message-attachments so this path returns clean in production.
     console.error("Attachment upload error:", error);
+    const message = String(error.message || "").toLowerCase();
+    if (message.includes("row-level security") || message.includes("rls")) {
+      throw new Error(
+        "Attachment upload was blocked by storage permissions. Try signing out and back in; if it persists, contact support.",
+      );
+    }
+    if (message.includes("not found") || message.includes("bucket")) {
+      throw new Error(
+        "Attachment storage isn't set up on this deployment yet. Send the message as text only for now.",
+      );
+    }
     throw new Error("Attachment upload failed. Please try again.");
   }
 

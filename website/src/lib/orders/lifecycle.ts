@@ -1,0 +1,124 @@
+// Phase 2.3 (J1). Single entry point for "the order's status just
+// changed, please write the matching order_events row and dispatch
+// the corresponding email". Pulls the event_type from the Phase 2.0b
+// vocabulary helper and the template / recipient logic from a tight
+// internal mapping below.
+//
+// Idempotency: order_events.idempotency_key is UNIQUE in the schema
+// (mig 059). We use `${order_id}:${event_type}` as the key, so the same
+// status flip retried by Stripe / a UI re-click doesn't double-fire
+// the email. The dispatcher then suffixes the key with the spec
+// template name, giving every (event_type, recipient_type) pair its
+// own email_events row.
+//
+// What this file does NOT own:
+//   - status validation (canTransition lives in order-state-machine.ts)
+//   - the PATCH / webhook orchestrator (callers stay in route handlers)
+
+import { sendTransactional, type TransactionalTemplate } from "@/lib/email/dispatcher";
+import { eventForStatus, type OrderEventType } from "@/lib/orders/event-vocabulary";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export interface OrderLifecycleInput {
+  orderId: string;
+  /** New legacy status that just landed. Drives the event_type. */
+  newStatus: string;
+  /** Optional user id that triggered the transition (artist / venue / admin). */
+  actorUserId?: string | null;
+  /** Customer email — receives all customer-facing templates. */
+  buyerEmail?: string | null;
+  /** Artist email — receives ArtistOrderReceived on order.placed only. */
+  artistEmail?: string | null;
+  /** Optional template props passed through to the email body. The
+   *  dispatcher already substitutes {{tokens}} in the registry subject,
+   *  the component reads everything else. Caller decides what to send
+   *  through (firstName, workTitle, orderUrl, ...). */
+  data: Record<string, unknown>;
+  /** Optional metadata stored on the order_events row. */
+  metadata?: Record<string, unknown>;
+}
+
+interface EmailTrigger {
+  to: string | null | undefined;
+  template: TransactionalTemplate;
+}
+
+/**
+ * Per event_type, which template(s) we fire and who to. Returns an
+ * empty array for events that have no email surface (cancel, refund —
+ * handled by existing legacy templates today; Phase 3 will tighten).
+ */
+function emailsForEvent(
+  event: OrderEventType,
+  input: OrderLifecycleInput,
+): EmailTrigger[] {
+  switch (event) {
+    case "order.placed":
+      return [
+        { to: input.artistEmail, template: "artist_order_received" },
+        { to: input.buyerEmail, template: "order_placed" },
+      ];
+    case "order.processing":
+      return [{ to: input.buyerEmail, template: "order_processing" }];
+    case "order.out_for_delivery":
+      return [{ to: input.buyerEmail, template: "order_out_for_delivery" }];
+    case "order.delivered":
+      return [{ to: input.buyerEmail, template: "order_delivered" }];
+    case "order.cancelled":
+    case "order.refunded":
+    case "order.delivery_confirmed":
+      // No purpose-built Phase 2.0c template for these yet; legacy
+      // inline copy continues to fire. Phase 3 will own consolidating.
+      return [];
+  }
+}
+
+/**
+ * Record the order_events row and fire the matching email(s).
+ * Returns the event_type that was logged (null when the source status
+ * has no mapped event).
+ */
+export async function recordOrderEvent(
+  input: OrderLifecycleInput,
+  client?: SupabaseClient,
+): Promise<{ eventType: OrderEventType | null; sent: number; deduped: number }> {
+  const event = eventForStatus(input.newStatus);
+  if (!event) return { eventType: null, sent: 0, deduped: 0 };
+
+  const db = client ?? getSupabaseAdmin();
+  const idempotencyKey = `${input.orderId}:${event}`;
+
+  // INSERT … ON CONFLICT(idempotency_key) DO NOTHING via Supabase
+  // .upsert(); we don't care what came back, just that the row is
+  // present exactly once.
+  await db
+    .from("order_events")
+    .upsert(
+      {
+        order_id: input.orderId,
+        event_type: event,
+        actor_user_id: input.actorUserId ?? null,
+        metadata: input.metadata ?? null,
+        idempotency_key: idempotencyKey,
+      },
+      { onConflict: "idempotency_key" },
+    );
+
+  let sent = 0;
+  let deduped = 0;
+  for (const trigger of emailsForEvent(event, input)) {
+    if (!trigger.to) continue;
+    const result = await sendTransactional({
+      to: trigger.to,
+      template: trigger.template,
+      data: input.data,
+      idempotencyKey,
+      userId: input.actorUserId ?? undefined,
+    });
+    if (result.sent && !result.deduped) sent++;
+    if (result.sent && result.deduped) deduped++;
+  }
+
+  return { eventType: event, sent, deduped };
+}

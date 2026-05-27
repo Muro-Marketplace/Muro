@@ -25,6 +25,7 @@ import {
   handleInvoicePaymentFailed as handleInvoicePaymentFailedPaidLoan,
   handleSubscriptionDeleted as handleSubscriptionDeletedPaidLoan,
 } from "@/lib/placements/paid-loan-billing";
+import { recordOrderEvent } from "@/lib/orders/lifecycle";
 import type Stripe from "stripe";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -410,6 +411,33 @@ export async function POST(request: Request) {
           console.error("Supabase order save error:", error);
           return NextResponse.json({ error: "DB save failed" }, { status: 500 });
         } else {
+          // J1 (Phase 2.3): log the initial order.placed event +
+          // dispatch the matching Phase 2.0c emails. Best-effort,
+          // legacy templates below continue to fire for backwards
+          // compatibility.
+          try {
+            const buyerEmail = orderRow.buyer_email as string | undefined;
+            const artistUserId = orderRow.artist_user_id as string | undefined;
+            let artistEmail: string | null = null;
+            if (artistUserId) {
+              const { data: artistAuth } = await db.auth.admin.getUserById(artistUserId);
+              artistEmail = artistAuth.user?.email ?? null;
+            }
+            await recordOrderEvent({
+              orderId: String(orderRow.id),
+              newStatus: "confirmed",
+              buyerEmail: buyerEmail ?? null,
+              artistEmail,
+              data: {
+                firstName: buyerEmail ? buyerEmail.split("@")[0] : "there",
+                orderNumber: String(orderRow.id),
+                orderUrl: `${SITE}/customer-portal/orders`,
+              },
+              metadata: { stripe_session_id: session.id },
+            });
+          } catch (lifecycleErr) {
+            console.error("[webhook checkout] lifecycle hook:", lifecycleErr);
+          }
           // Decrement per-work quantity (F10). Best-effort: swallow any errors
           // so a DB hiccup here doesn't abort the rest of the order flow.
           try {

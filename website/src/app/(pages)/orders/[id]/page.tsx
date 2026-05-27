@@ -1,0 +1,256 @@
+"use client";
+
+// Phase 2.3 K3. Customer order tracking page. Renders a vertical
+// stepper derived from order_events. The stepper lights up each step
+// once the matching event_type has fired; the "Confirm delivery" CTA
+// surfaces while the order is delivered but not yet confirmed.
+
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { authFetch } from "@/lib/api-client";
+
+interface OrderEvent {
+  event_type: string;
+  created_at: string;
+  metadata: Record<string, unknown> | null;
+  actor_user_id: string | null;
+}
+
+interface OrderSummary {
+  id: string;
+  status: string;
+  buyerEmail: string | null;
+  items: unknown;
+  total: number | null;
+  currency: string | null;
+  placedAt: string;
+}
+
+interface StepDef {
+  key: string;
+  label: string;
+  hint: string;
+}
+
+const STEPS: StepDef[] = [
+  { key: "order.placed", label: "Placed", hint: "We received your order." },
+  { key: "order.processing", label: "Processing", hint: "The artist is preparing your piece." },
+  { key: "order.out_for_delivery", label: "Out for delivery", hint: "On its way." },
+  { key: "order.delivered", label: "Delivered", hint: "Marked as arrived by the carrier." },
+  { key: "order.delivery_confirmed", label: "Confirmed", hint: "You confirmed receipt. Thank you." },
+];
+
+function StepIcon({ status }: { status: "done" | "current" | "pending" }) {
+  if (status === "done") {
+    return (
+      <div className="w-7 h-7 rounded-full bg-accent text-white flex items-center justify-center shrink-0">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="2 7 5.5 10.5 12 3.5" />
+        </svg>
+      </div>
+    );
+  }
+  if (status === "current") {
+    return (
+      <div className="w-7 h-7 rounded-full border-2 border-accent bg-white flex items-center justify-center shrink-0">
+        <div className="w-2 h-2 rounded-full bg-accent" />
+      </div>
+    );
+  }
+  return (
+    <div className="w-7 h-7 rounded-full border-2 border-border bg-white shrink-0" />
+  );
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+export default function OrderTrackingPage() {
+  const params = useParams<{ id: string }>();
+  const orderId = params?.id ?? "";
+  const [order, setOrder] = useState<OrderSummary | null>(null);
+  const [events, setEvents] = useState<OrderEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!orderId) return;
+    setLoading(true);
+    try {
+      const res = await authFetch(`/api/orders/${orderId}/events`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body?.error || `Could not load order (HTTP ${res.status})`);
+        return;
+      }
+      const data = await res.json();
+      setOrder(data.order);
+      setEvents(data.events ?? []);
+      setError(null);
+    } catch {
+      setError("Network error, please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleConfirm() {
+    setConfirming(true);
+    try {
+      const res = await authFetch(`/api/orders/${orderId}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_type: "order.delivery_confirmed" }),
+      });
+      if (!res.ok) {
+        setError("Could not confirm delivery, please try again.");
+      } else {
+        await load();
+      }
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  // Map event type → first event with that type so each step lights up
+  // on its earliest occurrence.
+  const eventByType = new Map<string, OrderEvent>();
+  for (const ev of events) {
+    if (!eventByType.has(ev.event_type)) eventByType.set(ev.event_type, ev);
+  }
+
+  // Cancelled / refunded short-circuit the stepper: any later step is
+  // moot once the order is dead.
+  const cancelled = eventByType.has("order.cancelled");
+
+  // Index of the latest step we've reached, for current/pending tinting.
+  const latestStepIndex = STEPS.reduce(
+    (acc, step, idx) => (eventByType.has(step.key) ? idx : acc),
+    -1,
+  );
+
+  const isDelivered = eventByType.has("order.delivered");
+  const isConfirmed = eventByType.has("order.delivery_confirmed");
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+        <div className="mb-8">
+          <Link href="/customer-portal/orders" className="text-sm text-muted hover:text-accent">
+            &larr; Back to orders
+          </Link>
+          <h1 className="text-2xl lg:text-3xl mt-3">Order {orderId}</h1>
+          {order?.placedAt && (
+            <p className="text-sm text-muted mt-1">
+              Placed {formatDate(order.placedAt)}
+            </p>
+          )}
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-muted">Loading…</p>
+        ) : error ? (
+          <p className="text-sm text-red-600">{error}</p>
+        ) : (
+          <>
+            {cancelled && (
+              <div className="mb-6 rounded-sm border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                This order was cancelled.
+                {eventByType.get("order.cancelled")?.created_at && (
+                  <> ({formatDate(eventByType.get("order.cancelled")!.created_at)})</>
+                )}
+              </div>
+            )}
+
+            <ol className="relative bg-surface border border-border rounded-sm divide-y divide-border">
+              {STEPS.map((step, idx) => {
+                const ev = eventByType.get(step.key);
+                const status: "done" | "current" | "pending" =
+                  ev != null
+                    ? "done"
+                    : idx === latestStepIndex + 1
+                      ? "current"
+                      : "pending";
+                return (
+                  <li key={step.key} className="flex items-start gap-4 px-5 py-4">
+                    <StepIcon status={status} />
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={`text-sm font-medium ${
+                          status === "pending" ? "text-muted" : "text-foreground"
+                        }`}
+                      >
+                        {step.label}
+                      </p>
+                      <p className="text-xs text-muted mt-0.5">{step.hint}</p>
+                      {ev && (
+                        <p className="text-[11px] text-muted mt-1">
+                          {formatDate(ev.created_at)}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+
+            {isDelivered && !isConfirmed && !cancelled && (
+              <div className="mt-6 rounded-sm border border-accent/30 bg-accent/5 px-5 py-5">
+                <p className="text-sm font-medium text-foreground mb-1">
+                  Did everything arrive in good order?
+                </p>
+                <p className="text-xs text-muted mb-4">
+                  Confirming delivery releases payment to the artist. We&rsquo;ll auto-confirm
+                  after 7 days if we don&rsquo;t hear from you.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleConfirm}
+                    disabled={confirming}
+                    className="px-4 py-2 text-sm rounded-sm bg-accent text-white hover:bg-accent-hover disabled:opacity-50"
+                  >
+                    {confirming ? "Confirming…" : "Confirm delivery"}
+                  </button>
+                  <Link
+                    href={`/contact?order=${orderId}`}
+                    className="px-4 py-2 text-sm rounded-sm border border-border hover:border-accent/40"
+                  >
+                    Report a problem
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {isConfirmed && (
+              <p className="mt-6 text-sm text-muted">
+                Confirmed on {formatDate(eventByType.get("order.delivery_confirmed")!.created_at)}.{" "}
+                <Link
+                  href={`/contact?order=${orderId}`}
+                  className="text-accent hover:underline"
+                >
+                  Report a problem
+                </Link>
+                .
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

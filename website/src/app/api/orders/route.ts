@@ -7,6 +7,7 @@ import { CustomerShippingConfirmation } from "@/emails/templates/orders/Customer
 import { CustomerDeliveryConfirmation } from "@/emails/templates/orders/CustomerDeliveryConfirmation";
 import { executeTransfer } from "@/lib/stripe-connect";
 import { canTransition, type OrderStatus, ORDER_STATUSES } from "@/lib/order-state-machine";
+import { recordOrderEvent } from "@/lib/orders/lifecycle";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -163,6 +164,46 @@ export async function PATCH(request: Request) {
     if (error) {
       console.error("Status update error:", error);
       return NextResponse.json({ error: "Failed to update status" }, { status: 500 });
+    }
+
+    // J1 (Phase 2.3): log the lifecycle event + fire the Phase 2.0c
+    // dispatcher templates. Best-effort. The original branded React
+    // Email templates below continue to fire so we don't lose the
+    // legacy artwork-thumbnail variant during the cut-over; the
+    // dispatcher uses purpose-built Phase 2 templates with a
+    // different `to` and idempotency-key shape, so the two paths
+    // don't double-charge or double-send.
+    try {
+      const shippingBlob0 = (order.shipping ?? {}) as { fullName?: string };
+      const firstName0 = order.buyer_email
+        ? (shippingBlob0.fullName || order.buyer_email.split("@")[0]).split(" ")[0]
+        : "there";
+      // Look up the artist contact email so order.placed can dispatch
+      // to the artist as well. Best-effort, no-op if missing.
+      let artistEmail: string | null = null;
+      try {
+        const { data: artist } = await db.auth.admin.getUserById(
+          (order as { artist_user_id?: string }).artist_user_id ?? "",
+        );
+        artistEmail = artist?.user?.email ?? null;
+      } catch {
+        artistEmail = null;
+      }
+      await recordOrderEvent({
+        orderId,
+        newStatus: status,
+        actorUserId: auth.user?.id ?? null,
+        buyerEmail: order.buyer_email ?? null,
+        artistEmail,
+        data: {
+          firstName: firstName0,
+          orderNumber: orderId,
+          orderUrl: `${SITE}/customer-portal/orders`,
+        },
+        metadata: { tracking_number: trackingNumber ?? null },
+      });
+    } catch (lifecycleErr) {
+      console.error("[orders PATCH] lifecycle hook:", lifecycleErr);
     }
 
     // Notify buyer. Branded React Email templates for shipped/delivered;
