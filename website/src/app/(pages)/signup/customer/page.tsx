@@ -228,6 +228,7 @@ export default function CustomerSignUpPage() {
                 termsType="platform_tos"
                 checked={agreedToTos}
                 onChange={setAgreedToTos}
+                required
               />
             </div>
 

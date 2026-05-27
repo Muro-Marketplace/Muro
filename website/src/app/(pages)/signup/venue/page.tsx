@@ -420,17 +420,21 @@ export default function RegisterVenuePage() {
                   termsType="platform_tos"
                   checked={agreedToTos}
                   onChange={setAgreedToTos}
+                  required
                 />
                 <TermsCheckbox
                   termsType="venue_agreement"
                   checked={agreedToVenueTerms}
                   onChange={setAgreedToVenueTerms}
+                  required
                 />
                 <label className="flex items-start gap-3 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={acknowledgedInsurance}
                     onChange={(e) => setAcknowledgedInsurance(e.target.checked)}
+                    required
+                    aria-required="true"
                     className="mt-0.5 w-4 h-4 rounded-sm border border-border bg-background checked:bg-accent checked:border-accent focus:outline-none cursor-pointer shrink-0"
                   />
                   <span className="text-sm text-foreground">

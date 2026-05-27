@@ -61,7 +61,17 @@ export async function GET(request: Request) {
     }),
   );
 
-  return NextResponse.json({ walls: enriched });
+  // Include tier-cap context so the client can disable the "+ New Wall"
+  // affordance once the user has hit their limit, rather than letting
+  // them navigate to the create form only to get a 402 back. -1 stays
+  // as "unlimited"; 0 means saving isn't included on the plan.
+  const tier = await resolveTier({ userId: auth.user!.id });
+  const limits = getTierLimits(tier);
+  return NextResponse.json({
+    walls: enriched,
+    tier,
+    cap: limits.saved_walls,
+  });
 }
 
 export async function POST(request: Request) {

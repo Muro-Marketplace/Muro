@@ -160,6 +160,20 @@ export default function Header() {
   const portalBase = userType === "venue" ? "/venue-portal" : userType === "customer" ? "/customer-portal" : "/artist-portal";
   const [resolvedSlug, setResolvedSlug] = useState("");
 
+  // Filter More-dropdown items to avoid duplicating links that already
+  // appear in the user's primary nav (venues already have Wallplace
+  // Curated and Blog as top-level entries, so they shouldn't repeat in
+  // the More dropdown).
+  const primaryNavHrefs = new Set(
+    (user
+      ? userType === "venue"
+        ? venueNavLinks
+        : loggedInNavLinks
+      : publicNavLinks
+    ).map((l) => l.href),
+  );
+  const filteredMoreLinks = moreLinks.filter((l) => !primaryNavHrefs.has(l.href));
+
   // Fetch unread message count when logged in
   const fetchUnread = useCallback(() => {
     if (!user) return;
@@ -432,7 +446,7 @@ export default function Header() {
                 </button>
                 {moreDropdownOpen && (
                   <div className="absolute top-full mt-2 right-0 w-48 bg-white border border-border rounded-sm shadow-lg py-2 z-50">
-                    {moreLinks.map((link) => (
+                    {filteredMoreLinks.map((link) => (
                       <Link
                         key={link.href}
                         href={link.href}
@@ -932,7 +946,7 @@ export default function Header() {
               <div className="pt-2 border-t border-border">
                 <p className="text-[10px] font-medium uppercase tracking-widest text-muted mb-2">More</p>
                 <div className="flex flex-col gap-2">
-                  {moreLinks.map((link) => (
+                  {filteredMoreLinks.map((link) => (
                     <Link key={link.href} href={link.href} className="text-sm text-muted hover:text-foreground transition-colors" onClick={() => setMobileMenuOpen(false)}>
                       {link.label}
                     </Link>

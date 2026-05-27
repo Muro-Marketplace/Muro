@@ -169,16 +169,18 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
   if (allowedType === "artist" && reviewStatus === "pending") {
     return (
       <>
-        <div className="bg-amber-50 border-b border-amber-200">
+        {/* See approved-not-paid banner above for the lg:ml-56 reasoning,
+            same fixed-sidebar collision. */}
+        <div className="bg-amber-50 border-b border-amber-200 lg:ml-56">
           <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-3 flex items-center gap-3">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-700 shrink-0">
               <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <p className="text-xs sm:text-sm text-amber-900 flex-1">
+            <p className="text-xs sm:text-sm text-amber-900 flex-1 min-w-0">
               <span className="font-medium">Your application is under review.</span>{" "}
               Your profile goes live as soon as we&rsquo;ve approved it. In the meantime, you can keep building it out.
             </p>
-            <Link href="/artist-portal/profile" className="hidden sm:inline-flex text-xs font-medium text-amber-900 underline hover:no-underline">
+            <Link href="/artist-portal/profile" className="hidden sm:inline-flex shrink-0 text-xs font-medium text-amber-900 underline hover:no-underline">
               Build profile
             </Link>
           </div>
@@ -213,16 +215,21 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
   ) {
     return (
       <>
-        <div className="bg-accent/5 border-b border-accent/20">
+        {/* The artist portal sidebar is `fixed left-0 w-56` on desktop,
+            so a full-width banner here would have its leading icon +
+            copy sitting underneath the sidebar. Match the layout's
+            `lg:ml-56` main-column offset so the banner sits inside the
+            content column. Mobile keeps the full width. */}
+        <div className="bg-accent/5 border-b border-accent/20 lg:ml-56">
           <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-3 flex items-center gap-3">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
               <circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 2" />
             </svg>
-            <p className="text-xs sm:text-sm text-foreground flex-1">
+            <p className="text-xs sm:text-sm text-foreground flex-1 min-w-0">
               <span className="font-medium">You&rsquo;re approved.</span>{" "}
               Pick a plan to go live on the marketplace and start sending placement requests. Your first month is free.
             </p>
-            <Link href="/artist-portal/billing" className="hidden sm:inline-flex text-xs font-medium text-accent underline hover:no-underline">
+            <Link href="/artist-portal/billing" className="hidden sm:inline-flex shrink-0 text-xs font-medium text-accent underline hover:no-underline">
               Choose plan
             </Link>
           </div>

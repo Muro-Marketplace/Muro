@@ -5,6 +5,9 @@ import { authFetch } from "@/lib/api-client";
 
 interface Props {
   placementId: string;
+  // Bumped by the parent after a successful counter so the log refetches
+  // and surfaces the new entry without a page reload.
+  refreshKey?: number;
 }
 
 interface LogEntry {
@@ -61,7 +64,7 @@ function describeTerms(meta: LogEntry["metadata"]): string | null {
  * placements have one exchange; the log is here for the hairy
  * back-and-forth cases where "what did we agree?" matters.
  */
-export default function PlacementNegotiationLog({ placementId }: Props) {
+export default function PlacementNegotiationLog({ placementId, refreshKey = 0 }: Props) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -78,7 +81,7 @@ export default function PlacementNegotiationLog({ placementId }: Props) {
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [placementId]);
+  }, [placementId, refreshKey]);
 
   if (loading) return null;
   if (entries.length === 0) return null;

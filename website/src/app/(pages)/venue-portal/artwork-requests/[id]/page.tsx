@@ -9,6 +9,21 @@ import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { authFetch } from "@/lib/api-client";
 import { getRecentRequestById } from "@/lib/recent-artwork-requests";
 
+// Display label for an artist response. The API returns the artist's
+// public slug ("fin-coles") rather than their display name; titlecasing
+// the slug gives us something venue-friendly ("Fin Coles") without
+// requiring an extra round-trip to /api/browse-artists. Hyphens and
+// underscores both round-trip back into spaces; missing or empty slug
+// degrades to the generic "Artist".
+function artistDisplayName(slug: string | null): string {
+  if (!slug) return "Artist";
+  return slug
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 interface RequestRow {
   id: string;
   title: string;
@@ -220,7 +235,7 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                       <div>
                         <p className="text-sm">
                           <Link href={`/browse/${r.artist_slug}`} className="font-medium text-foreground hover:text-accent">
-                            {r.artist_slug || "Artist"}
+                            {artistDisplayName(r.artist_slug)}
                           </Link>
                           <span className="text-muted capitalize"> · {r.response_type.replace("_", " ")}</span>
                         </p>

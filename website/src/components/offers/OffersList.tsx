@@ -11,6 +11,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { authFetch } from "@/lib/api-client";
 import { displayPhysicalDimensions } from "@/lib/dimensions";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import { useToast } from "@/context/ToastContext";
 
 interface EnrichedWork {
   id: string;
@@ -103,6 +105,11 @@ export default function OffersList({ viewerUserId, filter }: Props) {
   const [counterFor, setCounterFor] = useState<OfferRow | null>(null);
   const [counterAmount, setCounterAmount] = useState("");
   const [counterMessage, setCounterMessage] = useState("");
+  // Withdraw confirmation — destructive action, mirrors the Cancel
+  // Placement confirmation pattern. Holds the offer that the sender
+  // wants to pull back so the dialog can name it in the body copy.
+  const [withdrawFor, setWithdrawFor] = useState<OfferRow | null>(null);
+  const { showToast } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -429,7 +436,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                   {iAmSender && o.status === "pending" && (
                     <button
                       type="button"
-                      onClick={() => act(o.id, "withdraw")}
+                      onClick={() => setWithdrawFor(o)}
                       disabled={busyId === o.id}
                       className="px-3 py-1.5 text-xs font-medium text-muted bg-surface hover:bg-foreground/5 border border-border rounded-sm transition-colors disabled:opacity-60"
                     >
@@ -531,6 +538,29 @@ export default function OffersList({ viewerUserId, filter }: Props) {
           </div>
         </div>
       )}
+
+      {/* Withdraw confirmation. Mirrors the Cancel Placement pattern so
+          destructive offer actions are gated behind an explicit confirm. */}
+      <ConfirmDialog
+        open={withdrawFor !== null}
+        title="Withdraw this offer?"
+        body={
+          withdrawFor
+            ? `The artist will see this offer as withdrawn and won't be able to accept it.`
+            : undefined
+        }
+        confirmLabel="Withdraw offer"
+        cancelLabel="Keep it"
+        destructive
+        onConfirm={async () => {
+          if (!withdrawFor) return;
+          const target = withdrawFor;
+          setWithdrawFor(null);
+          await act(target.id, "withdraw");
+          showToast("Offer withdrawn.");
+        }}
+        onClose={() => setWithdrawFor(null)}
+      />
     </div>
   );
 }

@@ -273,6 +273,7 @@ export default function ArtistSignUpPage() {
                 termsType="platform_tos"
                 checked={agreedToTos}
                 onChange={setAgreedToTos}
+                required
               />
             </div>
 
