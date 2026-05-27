@@ -90,6 +90,15 @@ import ArtistRefundNotification from "./templates/orders/ArtistRefundNotificatio
 import OrderDisputeOpened from "./templates/orders/OrderDisputeOpened";
 import OrderDisputeResolved from "./templates/orders/OrderDisputeResolved";
 
+// Phase 2 lifecycle templates — purpose-built per Phase 2.0c so the J1
+// dispatcher binds one logical event to one template.
+import ArtistOrderReceived from "./templates/orders/ArtistOrderReceived";
+import CustomerOrderPlaced from "./templates/orders/CustomerOrderPlaced";
+import CustomerOrderProcessing from "./templates/orders/CustomerOrderProcessing";
+import CustomerOrderOutForDelivery from "./templates/orders/CustomerOrderOutForDelivery";
+import CustomerOrderDelivered from "./templates/orders/CustomerOrderDelivered";
+import CustomerConfirmDelivery48h from "./templates/orders/CustomerConfirmDelivery48h";
+
 // ── Payments ──────────────────────────────────────────────────────────────
 import ArtistPayoutSent from "./templates/payments/ArtistPayoutSent";
 import ArtistPayoutFailed from "./templates/payments/ArtistPayoutFailed";
@@ -235,6 +244,14 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   ArtistRefundNotification,
   OrderDisputeOpened,
   OrderDisputeResolved,
+
+  // Phase 2 lifecycle (Phase 2.0c)
+  ArtistOrderReceived,
+  CustomerOrderPlaced,
+  CustomerOrderProcessing,
+  CustomerOrderOutForDelivery,
+  CustomerOrderDelivered,
+  CustomerConfirmDelivery48h,
 
   // Payments
   ArtistPayoutSent,

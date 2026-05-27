@@ -1,23 +1,11 @@
-// Phase 1 chunk 1c. Single-purpose dispatcher for the four transactional
-// order-lifecycle templates the Phase 2 backfill triggers will fire:
-//
-//   - order_placed
-//   - order_processing
-//   - order_delivered
-//   - customer_confirm_delivery
+// Phase 1 chunk 1c, extended by Phase 2.0c. Single-purpose dispatcher
+// for the order-lifecycle templates that the J1/J2 paths fire. After
+// Phase 2.0c each spec name binds to a purpose-built template (no more
+// double-bindings to a shared body).
 //
 // Wraps the existing sendEmail() pipeline (src/lib/email/send.ts), which
 // already does idempotency-keyed inserts into email_events. We reuse that
-// table rather than spinning up a parallel email_sends one — captured as
-// a deviation in the Phase 2 readiness report.
-//
-// Phase 2 will own writing purpose-built templates per spec name. Today
-// the four spec names bind to the closest existing registry entries.
-// Note: order_delivered and customer_confirm_delivery both bind to
-// customer_delivery_confirmation, so until Phase 2 splits them the
-// customer will receive two copies of the same email body (with
-// different idempotency keys, which is correct — they're distinct
-// logical events from the order_events log).
+// table rather than spinning up a parallel email_sends one.
 
 import { findTemplate } from "@/emails/registry";
 import type { TemplateEntry } from "@/emails/registry-types";
@@ -25,8 +13,10 @@ import { sendEmail } from "@/lib/email/send";
 import { createElement } from "react";
 
 export type TransactionalTemplate =
+  | "artist_order_received"
   | "order_placed"
   | "order_processing"
+  | "order_out_for_delivery"
   | "order_delivered"
   | "customer_confirm_delivery";
 
@@ -44,13 +34,18 @@ export interface SendTransactionalResult {
   deduped: boolean;
 }
 
-// Each spec template name binds to the closest existing registry entry.
-// Phase 2 owns rewriting these to purpose-built templates if needed.
+// Each spec template name binds to its purpose-built Phase 2.0c entry.
+// Legacy IDs (customer_order_receipt, customer_shipping_confirmation,
+// customer_delivery_confirmation) remain in the registry for the
+// existing webhook paths and the email preview library; they are no
+// longer reached through this dispatcher.
 const TEMPLATE_BINDINGS: Record<TransactionalTemplate, string> = {
-  order_placed: "customer_order_receipt",
-  order_processing: "customer_shipping_confirmation",
-  order_delivered: "customer_delivery_confirmation",
-  customer_confirm_delivery: "customer_delivery_confirmation",
+  artist_order_received: "artist_order_received",
+  order_placed: "customer_order_placed",
+  order_processing: "customer_order_processing",
+  order_out_for_delivery: "customer_order_out_for_delivery",
+  order_delivered: "customer_order_delivered",
+  customer_confirm_delivery: "customer_confirm_delivery_48h",
 };
 
 // Registry subject lines use `{{tokenName}}` placeholders (see

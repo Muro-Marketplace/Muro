@@ -6,11 +6,11 @@
  *
  * Source of truth:
  *   - artist_profiles.subscription_plan ('core' | 'premium' | 'pro')
- *   - venue_profiles.subscription_plan  ('standard' | 'premium')   [future]
+ *   - venue_profiles.subscription_plan  ('standard' | 'premium')
  *
- *   The venue subscription system isn't built yet, so the resolver tolerates
- *   the column being absent and defaults all venues to 'venue_standard'.
- *   Adding 'premium' later is a no-code change, just populate the column.
+ *   Venues default to 'venue_standard' when the column is NULL (no
+ *   active subscription). Populating the column upgrades a venue to
+ *   'venue_premium' without a code change.
  *
  * Owner-type hint:
  *   A single auth user can be both an artist and a venue contact. We need

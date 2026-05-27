@@ -172,4 +172,21 @@ describe("sendTransactional()", () => {
 
     expect(sendEmailMock.mock.calls[0][0]).toMatchObject({ userId: "user_42" });
   });
+
+  it("accepts the Phase 2.0c lifecycle event names without falling through to a missing-template path", async () => {
+    sendEmailMock.mockResolvedValue({ ok: true, skipped: false, messageId: "msg_lifecycle" });
+    const names: Array<
+      | "artist_order_received"
+      | "order_out_for_delivery"
+    > = ["artist_order_received", "order_out_for_delivery"];
+    for (const name of names) {
+      await sendTransactional({
+        to: "buyer@example.com",
+        template: name,
+        data: {},
+        idempotencyKey: `${name}:order_lifecycle`,
+      });
+    }
+    expect(sendEmailMock).toHaveBeenCalledTimes(names.length);
+  });
 });

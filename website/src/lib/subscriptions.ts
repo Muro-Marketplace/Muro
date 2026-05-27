@@ -3,11 +3,10 @@
 //
 // Source of truth:
 //   - artist_profiles.subscription_status + .subscription_plan
-//   - venue_profiles.subscription_status  + .subscription_plan      [future]
-//     The venue subscription columns may not exist yet. We tolerate the
-//     "column does not exist" error and fall back to a column-less lookup
-//     so we can still tell whether the user IS a venue (returns
-//     {active:false, plan:null, user_type:'venue'}).
+//   - venue_profiles.subscription_status  + .subscription_plan
+//     Both column sets exist as of migration 064 (Phase 2 chunk 2.0a).
+//     If a venue row has no subscription_status, the column default
+//     'none' resolves to inactive.
 //
 // 'active' means subscription_status IS one of {'active','trialing'}.
 // Anything else ('none','cancelled','past_due','incomplete', NULL) is
@@ -114,26 +113,12 @@ async function readVenueSubscription(
       .eq("user_id", userId)
       .maybeSingle<{
         user_id: string;
-        subscription_status?: string | null;
-        subscription_plan?: string | null;
+        subscription_status: string | null;
+        subscription_plan: string | null;
       }>();
     if (error) {
-      // The venue subscription columns aren't required yet — fall back
-      // to a column-less lookup so we can still report user_type='venue'.
-      const lacksColumn = /column.*venue_profiles\.subscription_(status|plan).*does not exist/i.test(
-        error.message,
-      );
-      if (!lacksColumn) {
-        console.warn("[subscriptions] venue_profiles lookup failed:", error.message);
-        return null;
-      }
-      const { data: bare } = await db
-        .from("venue_profiles")
-        .select("user_id")
-        .eq("user_id", userId)
-        .maybeSingle<{ user_id: string }>();
-      if (!bare) return null;
-      return { active: false, plan: null, user_type: "venue" };
+      console.warn("[subscriptions] venue_profiles lookup failed:", error.message);
+      return null;
     }
     if (!data) return null;
     return {
