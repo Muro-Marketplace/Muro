@@ -2,17 +2,32 @@ import { NextResponse } from "next/server";
 import { venues as staticVenues } from "@/data/venues";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { resolveSpaceViewerAccess } from "@/lib/spaces/viewer-access";
+import { canViewSpaceDetails } from "@/lib/spaces/gating";
+import { redactVenueForListing } from "@/lib/spaces/redact-venue";
 
-export const revalidate = 300; // Cache 5 minutes
+// Listings are personalised by viewer access, so the long-lived 5-min
+// route cache that used to apply here would have leaked a subscribed
+// artist's full venue payload to the next anonymous visitor. No
+// revalidate export = no cache; the underlying DB query is cheap.
 
 /**
  * GET /api/venues/demand
- * Public, returns all venues with preferences for the demand tracker.
- * Merges static venues with database venue profiles.
+ * Returns all venues with preferences for the demand tracker. Protected
+ * fields (name, description, image gallery, display-needs notes) are
+ * redacted per-row when the caller can't view space details, so the
+ * paywall on /spaces is enforced at the wire, not just in the UI.
  */
 export async function GET(request: Request) {
   const limited = await checkRateLimit(request, 30, 60000);
   if (limited) return limited;
+  const viewer = await resolveSpaceViewerAccess(request);
+  // For the listing API there's no per-row owner check (we'd need to
+  // hit every row's venue_user_id), so isOwnVenue stays unset. Venues
+  // can still see their own card in redacted form alongside everyone
+  // else's; the venue-portal "preview my profile" link goes to the
+  // detail page which handles the owner case correctly.
+  const canSeeDetails = canViewSpaceDetails(viewer);
   try {
     const db = getSupabaseAdmin();
 
@@ -107,8 +122,23 @@ export async function GET(request: Request) {
       stats.byType[t] = (stats.byType[t] || 0) + 1;
     }
 
-    return NextResponse.json({ venues: allVenues, stats });
+    const safeVenues = canSeeDetails
+      ? allVenues
+      : allVenues.map(redactVenueForListing);
+
+    return NextResponse.json({
+      venues: safeVenues,
+      stats,
+      // Mirror the server's gate decision so the client renders the
+      // paywall affordance the moment the response lands, without a
+      // second round-trip to /api/me/subscription.
+      viewerCanSeeDetails: canSeeDetails,
+    });
   } catch {
-    return NextResponse.json({ venues: [], stats: { total: 0, openToDisplay: 0, openToPurchase: 0, openToRevenueShare: 0, byType: {} } });
+    return NextResponse.json({
+      venues: [],
+      stats: { total: 0, openToDisplay: 0, openToPurchase: 0, openToRevenueShare: 0, byType: {} },
+      viewerCanSeeDetails: canSeeDetails,
+    });
   }
 }
