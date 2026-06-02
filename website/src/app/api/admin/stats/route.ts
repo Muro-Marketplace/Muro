@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getAllArtists } from "@/lib/db/merged-data";
 
 /**
  * GET /api/admin/stats
@@ -44,10 +45,10 @@ export async function GET(request: Request) {
         // Orders, pull amount + status for the gross-revenue computation.
         // We restrict to paid statuses so refunded/abandoned orders don't
         // inflate the headline number on the dashboard.
-        db.from("orders").select("amount_cents, status, created_at"),
+        db.from("orders").select("total, amount_cents, status, created_at"),
         db
           .from("orders")
-          .select("amount_cents, status, created_at")
+          .select("total, amount_cents, status, created_at")
           .gte("created_at", thirtyDaysAgo),
       ]);
 
@@ -78,7 +79,7 @@ export async function GET(request: Request) {
     // varies (paid / shipped / delivered / etc.). Refunded / cancelled
     // are explicitly excluded.
     const PAID_EXCLUDE = new Set(["refunded", "cancelled", "failed", "void"]);
-    function sumPaid(rows: Array<{ amount_cents?: number | null; status?: string | null }>): {
+    function sumPaid(rows: Array<{ amount_cents?: number | null; total?: number | null; status?: string | null }>): {
       gross: number;
       count: number;
     } {
@@ -86,25 +87,40 @@ export async function GET(request: Request) {
       let count = 0;
       for (const row of rows) {
         if (PAID_EXCLUDE.has(((row.status as string) || "").toLowerCase())) continue;
-        gross += Number(row.amount_cents || 0);
+        // Orders are written by the Stripe webhook as `total` in pounds and
+        // never populated amount_cents, so the headline read £0. Prefer
+        // amount_cents when present (legacy rows) else convert pounds to pence.
+        const cents =
+          row.amount_cents != null
+            ? Number(row.amount_cents)
+            : Math.round(Number(row.total || 0) * 100);
+        gross += cents;
         count += 1;
       }
       return { gross, count };
     }
     const ordersAllRows = (ordersAll.data || []) as Array<{
       amount_cents?: number | null;
+      total?: number | null;
       status?: string | null;
     }>;
     const orders30dRows = (orders30d.data || []) as Array<{
       amount_cents?: number | null;
+      total?: number | null;
       status?: string | null;
     }>;
     const allTime = sumPaid(ordersAllRows);
     const last30 = sumPaid(orders30dRows);
 
+    // Bug 24: the public marketplace count (approved DB artists + static seed)
+    // so the admin "Registered Artists (DB)" number reconciles with the public
+    // figure instead of looking wrong. Resilient: falls back to 0 on error.
+    const artistsListed = await getAllArtists().then((a) => a.length).catch(() => 0);
+
     return NextResponse.json({
       applications: { total: applications.length, pending, accepted, rejected },
       artists: artists.data?.length || 0,
+      artistsListed,
       venues: venues.data?.length || 0,
       placements: placementsCounts,
       qrScans: {

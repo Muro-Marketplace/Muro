@@ -57,9 +57,12 @@ export async function GET(request: Request) {
   // MRR. Pull list prices from env so the dashboard doesn't ship a
   // hard-coded number that drifts when pricing changes.
   const PRICES_PENCE: Record<string, number> = {
-    core: Number(process.env.PRICE_CORE_PENCE ?? 2_900),
-    premium: Number(process.env.PRICE_PREMIUM_PENCE ?? 9_900),
-    pro: Number(process.env.PRICE_PRO_PENCE ?? 19_900),
+    // Bug 17: defaults must match the real plan prices (Core £9.99,
+    // Premium £24.99, Pro £49.99). The previous 2900/9900/19900 figures
+    // inflated MRR ~3x whenever the PRICE_*_PENCE env vars weren't set.
+    core: Number(process.env.PRICE_CORE_PENCE ?? 999),
+    premium: Number(process.env.PRICE_PREMIUM_PENCE ?? 2_499),
+    pro: Number(process.env.PRICE_PRO_PENCE ?? 4_999),
   };
   const mrrPence = Object.entries(subsByPlan).reduce(
     (sum, [plan, count]) => sum + (PRICES_PENCE[plan] ?? 0) * count,

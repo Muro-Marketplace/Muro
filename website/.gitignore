@@ -43,3 +43,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+scripts/audit/security-current.json
+scripts/audit/performance-current.json

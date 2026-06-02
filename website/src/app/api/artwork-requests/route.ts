@@ -189,12 +189,26 @@ export async function GET(request: Request) {
   // Plan G #3: surface the resolved venue name alongside the slug so
   // the artist-portal list shows "Copper Kettle" instead of a slug or
   // bare uuid.
-  return NextResponse.json({
-    requests: filteredRows.map((r) => ({
-      ...r,
-      venue_name: venueNameById.get((r as { venue_user_id: string }).venue_user_id) ?? null,
-    })),
-  });
+  const requests = filteredRows.map((r) => ({
+    ...r,
+    venue_name: venueNameById.get((r as { venue_user_id: string }).venue_user_id) ?? null,
+  }));
+
+  // Bug 2: this browse list is publicly reachable, so it must not hand an
+  // anonymous caller the venue owner's uuid, the private invite list, or
+  // the raw budget. Signed-in artists (who respond to requests) still get
+  // the full row including budgets.
+  if (!auth.user) {
+    const omit = ["venue_user_id", "invited_artist_slugs", "budget_min_pence", "budget_max_pence"];
+    const redacted = requests.map((r) => {
+      const row = { ...(r as Record<string, unknown>) };
+      for (const k of omit) delete row[k];
+      return row;
+    });
+    return NextResponse.json({ requests: redacted });
+  }
+
+  return NextResponse.json({ requests });
 }
 
 export async function POST(request: Request) {

@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 import { venues as staticVenues } from "@/data/venues";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { getOptionalUser } from "@/lib/api-auth";
+import { resolveSubscription } from "@/lib/subscriptions";
+import { canSeeVenueIdentity, redactDemandVenue } from "@/lib/venue-visibility";
 
-export const revalidate = 300; // Cache 5 minutes
+// Varies by viewer: venue identity (name, description, images, display
+// needs) is paywalled, so the response can't be a single cached payload.
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/venues/demand
@@ -107,7 +112,19 @@ export async function GET(request: Request) {
       stats.byType[t] = (stats.byType[t] || 0) + 1;
     }
 
-    return NextResponse.json({ venues: allVenues, stats });
+    // Paywall gate: only entitled viewers (subscribed artists, any
+    // customer) get venue identity. Anon and unsubscribed callers get the
+    // demand signal with the identity blanked, matching the /spaces UI.
+    const { user } = await getOptionalUser(request);
+    let entitled = false;
+    if (user) {
+      const role = (user.user_metadata?.user_type as string | undefined) ?? null;
+      const sub = await resolveSubscription(user.id);
+      entitled = canSeeVenueIdentity(role, sub.active);
+    }
+    const venues = allVenues.map((v) => redactDemandVenue(v, entitled));
+
+    return NextResponse.json({ venues, stats });
   } catch {
     return NextResponse.json({ venues: [], stats: { total: 0, openToDisplay: 0, openToPurchase: 0, openToRevenueShare: 0, byType: {} } });
   }

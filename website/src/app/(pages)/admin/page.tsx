@@ -8,6 +8,9 @@ import { authFetch } from "@/lib/api-client";
 interface Stats {
   applications: { total: number; pending: number; accepted: number; rejected: number };
   artists: number;
+  // Bug 24: the public marketplace count (approved DB artists + static seed),
+  // so admins can reconcile "Registered Artists (DB)" with the public number.
+  artistsListed: number;
   venues: number;
   // Added in /api/admin/stats expansion (item #23). All optional so old
   // deployments without these fields render gracefully.
@@ -90,7 +93,8 @@ export default function AdminDashboard() {
             {[
               { label: "Pending Applications", value: stats.applications.pending, accent: true },
               { label: "Total Applications", value: stats.applications.total },
-              { label: "Registered Artists", value: stats.artists },
+              { label: "Registered Artists (DB)", value: stats.artists },
+              { label: "Listed (marketplace)", value: stats.artistsListed },
               { label: "Registered Venues", value: stats.venues },
             ].map((card) => (
               <div key={card.label} className="bg-white border border-border rounded-sm p-5">

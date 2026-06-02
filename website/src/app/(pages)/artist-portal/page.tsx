@@ -89,7 +89,7 @@ interface OnboardingItem {
 }
 
 export default function ArtistPortalPage() {
-  const { displayName, user } = useAuth();
+  const { displayName, user, subscriptionStatus: authSubscriptionStatus, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({ placements: 0, sales: "£0", enquiries: 0, views: 0 });
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>("none");
@@ -291,7 +291,14 @@ export default function ArtistPortalPage() {
           follow, and outstanding to-dos sit just above the activity feed. */}
 
       {/* Subscription prompt */}
-      {subscriptionStatus === "none" && (
+      {/* Bug 11: the dashboard read subscription_status straight off the
+          profile row, which can be null even for a paid artist, so Pro
+          users saw "Choose a plan". Treat the AuthContext status (the same
+          source billing uses) as authoritative before showing the prompt. */}
+      {!authLoading &&
+        subscriptionStatus === "none" &&
+        authSubscriptionStatus !== "active" &&
+        authSubscriptionStatus !== "trialing" && (
         <div className="mb-6 bg-accent/5 border border-accent/20 rounded-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-foreground">Choose a plan to unlock your full portal</p>

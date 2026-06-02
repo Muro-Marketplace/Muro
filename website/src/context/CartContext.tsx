@@ -39,7 +39,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [items]);
 
-  const addItem = useCallback((item: Omit<CartItem, "id">) => {
+  const addItem = useCallback((rawItem: Omit<CartItem, "id">) => {
+    // Bug 9: a missing/blank size produced a cart line that rendered as
+    // "undefined" and broke dedup (two adds made two lines). Normalise to
+    // the no-variant label the rest of the app uses ("Original") so every
+    // line has a real size and dedups consistently.
+    const item: Omit<CartItem, "id"> = {
+      ...rawItem,
+      size: rawItem.size && rawItem.size.trim() ? rawItem.size : "Original",
+    };
     const want = item.quantity || 1;
     const cap = item.quantityAvailable;
 

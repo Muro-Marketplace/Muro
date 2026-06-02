@@ -114,12 +114,26 @@ function SpacesPageContent() {
   const [sentRequests, setSentRequests] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetch("/api/venues/demand")
-      .then((r) => r.json())
-      .then((data) => { setVenues(data.venues || []); setStats(data.stats || null); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    // authFetch so a subscribed viewer's token reaches the demand route,
+    // which now paywalls venue identity. Anon callers send no token and
+    // get the redacted payload the blurred cards already expect.
+    (async () => {
+      try {
+        const { authFetch } = await import("@/lib/api-client");
+        const res = await authFetch("/api/venues/demand", { cache: "no-store" });
+        const data = await res.json();
+        setVenues(data.venues || []);
+        setStats(data.stats || null);
+      } catch {
+        // ignore — the page falls back to its empty state
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // Re-fetch when the session resolves/changes: on a fresh load the token
+    // may not be ready at mount, so a subscriber would otherwise be stuck on
+    // the redacted (blurred) payload until a manual reload.
+  }, [session?.access_token]);
 
   // Hydrate location from the shared localStorage keys (same ones
   // /browse uses) so a postcode entered on /browse carries over here,

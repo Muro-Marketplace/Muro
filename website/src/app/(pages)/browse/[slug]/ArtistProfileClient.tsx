@@ -877,11 +877,17 @@ export default function ArtistProfileClient({
                     onChange={(e) => setSelectedSizeIdx(Number(e.target.value))}
                     className="w-full px-3 py-2.5 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
                   >
-                    {currentWork.pricing.map((sp, i) => (
-                      <option key={sp.label} value={i}>
-                        {sp.label}, £{sp.price}
-                      </option>
-                    ))}
+                    {currentWork.pricing.map((sp, i) => {
+                      // Mirror the detail page: some variants carry an empty
+                      // label, which rendered a bare ", £X". Fall back to a
+                      // formatted size and drop the comma when there's none.
+                      const sizeText = formatSizeLabelForDisplay(sp.label);
+                      return (
+                        <option key={sp.label || i} value={i}>
+                          {sizeText ? `${sizeText}, £${sp.price}` : `£${sp.price}`}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
