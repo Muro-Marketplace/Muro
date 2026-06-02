@@ -162,11 +162,11 @@ export async function PATCH(
         ? parsed.data.cover_image_url
         : existing.cover_image_url;
     const issues: string[] = [];
-    if (candidateTitle.trim().length < 3) {
-      issues.push("Title needs at least 3 characters before submitting.");
+    if (candidateTitle.trim().length < 5) {
+      issues.push("Title needs at least 5 characters before submitting.");
     }
-    if (candidateBody.trim().length < 20) {
-      issues.push("Body needs at least 20 characters before submitting.");
+    if (candidateBody.trim().length < 200) {
+      issues.push("Body needs at least 200 characters before submitting.");
     }
     if (
       candidateCover !== null &&

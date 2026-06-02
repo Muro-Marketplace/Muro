@@ -13,7 +13,10 @@
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "check": "npm run lint && npm run typecheck && npm run test"
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "audit:advisors": "tsx scripts/audit/snapshot-advisors.ts && tsx scripts/audit/check-regressions.ts",
+    "audit:e2e-security": "playwright test tests/e2e/security-no-leaks.spec.ts",
+    "audit:full": "npm run check && npm run audit:advisors && npm run audit:e2e-security"
   },
   "dependencies": {
     "@react-email/components": "^1.0.12",
@@ -53,6 +56,7 @@
     "eslint-config-next": "16.2.1",
     "jsdom": "^29.0.2",
     "tailwindcss": "^4",
+    "tsx": "^4.22.3",
     "typescript": "^5",
     "vitest": "^2.1.9"
   }

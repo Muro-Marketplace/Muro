@@ -2347,7 +2347,7 @@ function BrowsePortfoliosPageInner() {
                           <div className="px-4 py-3 flex-1 flex flex-col relative">
                             <DistanceBadge distance={workDistance} corner="top-right" />
                             <a href={fullPageHref} target="_blank" rel="noopener noreferrer" className="block group/title min-w-0">
-                              <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors truncate pr-16">
+                              <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors line-clamp-2 pr-16">
                                 {work.title}
                               </h3>
                             </a>
@@ -2524,7 +2524,7 @@ function BrowsePortfoliosPageInner() {
 
             <div>
               <p className="text-[11px] font-medium uppercase tracking-widest text-muted mb-2">
-                Bundle price: £{collectionsPriceMin} {collectionsPriceMax >= 2000 ? "and £2000+" : `and £${collectionsPriceMax}`}
+                Bundle price: £{collectionsPriceMin} {collectionsPriceMax >= 2000 ? "to £2000+" : `to £${collectionsPriceMax}`}
               </p>
               <div className="space-y-3 px-1">
                 <div>

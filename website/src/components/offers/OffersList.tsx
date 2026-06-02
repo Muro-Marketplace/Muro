@@ -294,6 +294,13 @@ export default function OffersList({ viewerUserId, filter }: Props) {
         const counterpartyName = iAmBuyer
           ? o.artist?.name || o.artist_slug || "Artist"
           : o.venue?.name || "Venue";
+        // "to Finlay Coles" alone is ambiguous when several artists share
+        // a display name. Append the @handle so the recipient is unique.
+        const artistHandle = iAmBuyer ? o.artist?.slug || o.artist_slug : undefined;
+        const counterpartyLabel =
+          artistHandle && artistHandle !== counterpartyName
+            ? `${counterpartyName} (@${artistHandle})`
+            : counterpartyName;
         const counterpartyHref = iAmBuyer && o.artist?.slug
           ? `/browse/${o.artist.slug}`
           : iAmArtist && o.venue?.slug
@@ -337,10 +344,10 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                       {targetTitle} ·{" "}
                       {counterpartyHref ? (
                         <Link href={counterpartyHref} className="hover:text-accent">
-                          {iAmBuyer ? `to ${counterpartyName}` : `from ${counterpartyName}`}
+                          {iAmBuyer ? `to ${counterpartyLabel}` : `from ${counterpartyLabel}`}
                         </Link>
                       ) : (
-                        <>{iAmBuyer ? `to ${counterpartyName}` : `from ${counterpartyName}`}</>
+                        <>{iAmBuyer ? `to ${counterpartyLabel}` : `from ${counterpartyLabel}`}</>
                       )}
                       {iAmArtist && o.venue?.location ? ` · ${o.venue.location}` : ""}
                     </p>

@@ -175,10 +175,10 @@ export default function VenueGuide() {
             alt=""
             fill
             sizes="100vw"
-            className="object-cover opacity-20"
+            className="object-cover opacity-50"
             aria-hidden
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-foreground via-foreground/85 to-foreground/50" />
+          <div className="absolute inset-0 bg-gradient-to-r from-foreground/80 via-foreground/60 to-foreground/30" />
         </div>
         <div className="max-w-[1200px] mx-auto px-6">
           <AnimateIn>

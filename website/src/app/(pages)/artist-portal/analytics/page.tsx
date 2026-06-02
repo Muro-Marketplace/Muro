@@ -110,9 +110,15 @@ export default function AnalyticsPage() {
       .finally(() => setAnalyticsLoading(false));
   }, [dateRange]);
 
-  const activePlacements = placements.filter((p) => p.status === "Active").length;
-  const pendingPlacements = placements.filter((p) => p.status === "Pending").length;
-  const completedPlacements = placements.filter((p) => p.status === "Completed" || p.status === "Sold").length;
+  // Placement status is stored lower-case ("active"/"pending"/...). The
+  // dashboard compares lower-case; this page compared title-case so every
+  // count came out 0 (bugs 12/13). Compare case-insensitively to match.
+  const activePlacements = placements.filter((p) => (p.status || "").toLowerCase() === "active").length;
+  const pendingPlacements = placements.filter((p) => (p.status || "").toLowerCase() === "pending").length;
+  const completedPlacements = placements.filter((p) => {
+    const s = (p.status || "").toLowerCase();
+    return s === "completed" || s === "sold";
+  }).length;
   // Use the artist's net payout (artist_revenue) rather than the
   // buyer-paid gross (total) so this figure matches the dashboard's
   // "Total Sales" tile and the per-row payouts on the Orders page.
@@ -126,11 +132,11 @@ export default function AnalyticsPage() {
     placements.forEach((p) => {
       if (!map[p.venue]) map[p.venue] = { venue: p.venue, pieces: 0, sales: 0, revenue: 0, status: "Active" };
       map[p.venue].pieces++;
-      if (p.status === "Sold" && p.revenue) {
+      if ((p.status || "").toLowerCase() === "sold" && p.revenue) {
         map[p.venue].sales++;
         map[p.venue].revenue += parseFloat(p.revenue.replace(/[^0-9.]/g, "")) || 0;
       }
-      if (p.status === "Completed") map[p.venue].status = "Completed";
+      if ((p.status || "").toLowerCase() === "completed") map[p.venue].status = "Completed";
     });
     return Object.values(map);
   }, [placements]);

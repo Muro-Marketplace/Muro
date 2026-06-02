@@ -20,6 +20,22 @@ export function PlacementButton({
 }) {
   const { userType } = useAuth();
   if (userType === "artist") return null;
+  // Guests and customers have no venue portal, so the deep link below
+  // bounced them to a login they couldn't satisfy. Point everyone who
+  // isn't a venue at venue registration instead; only venues get the
+  // working placement deep link.
+  if (userType !== "venue") {
+    return (
+      <Button
+        href="/register-venue"
+        variant={variant}
+        size={size}
+        className={fullWidth ? "w-full justify-center !py-2" : undefined}
+      >
+        Host this artist? Register your venue
+      </Button>
+    );
+  }
   return (
     <Button
       href={`/venue-portal/placements?artist=${artistSlug}&artistName=${encodeURIComponent(artistName)}`}

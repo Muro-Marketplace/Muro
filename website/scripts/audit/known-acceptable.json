@@ -1,0 +1,23 @@
+{
+  "_comment": "Bug 35: these tables have RLS enabled with no client policy on purpose. They are read/written only via API routes using the service role (which bypasses RLS). Adding client policies would open direct-write paths that bypass API business logic, so deny-all to clients is the correct secure state. The rls_enabled_no_policy INFO lints for them are therefore acceptable.",
+  "ignore_cache_keys": [
+    "rls_enabled_no_policy_public_admin_audit_log",
+    "rls_enabled_no_policy_public_analytics_events",
+    "rls_enabled_no_policy_public_artist_referrals",
+    "rls_enabled_no_policy_public_artwork_request_responses",
+    "rls_enabled_no_policy_public_artwork_requests",
+    "rls_enabled_no_policy_public_cart_sessions",
+    "rls_enabled_no_policy_public_commissions",
+    "rls_enabled_no_policy_public_email_events",
+    "rls_enabled_no_policy_public_email_preferences",
+    "rls_enabled_no_policy_public_email_suppressions",
+    "rls_enabled_no_policy_public_feature_request_upvotes",
+    "rls_enabled_no_policy_public_feature_requests",
+    "rls_enabled_no_policy_public_featured_artists",
+    "rls_enabled_no_policy_public_moderation_queue",
+    "rls_enabled_no_policy_public_order_events",
+    "rls_enabled_no_policy_public_placement_reviews",
+    "rls_enabled_no_policy_public_purchase_offers",
+    "rls_enabled_no_policy_public_visualizer_quota_overrides"
+  ]
+}
