@@ -1,70 +1,15 @@
+// Server-only venue-profile DB helpers (use the service-role admin client).
+// The pure transform helpers (DbVenueProfile, dbVenueToVenue) live in
+// venue-profiles-transform.ts so that client components can import them
+// without pulling the admin client into the browser bundle.
 import { supabase } from "@/lib/supabase";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { Venue } from "@/data/venues";
+import type { DbVenueProfile } from "./venue-profiles-transform";
 
-export interface DbVenueProfile {
-  id: string;
-  user_id: string;
-  slug: string;
-  name: string;
-  type: string;
-  location: string;
-  contact_name: string;
-  email: string;
-  phone: string;
-  address_line1: string;
-  address_line2: string;
-  city: string;
-  postcode: string;
-  wall_space: string;
-  description: string;
-  image: string;
-  /** Gallery of space photos uploaded by the venue. Added in migration 022. */
-  images?: string[] | null;
-  approximate_footfall: string;
-  audience_type: string;
-  interested_in_free_loan: boolean;
-  interested_in_revenue_share: boolean;
-  interested_in_direct_purchase: boolean;
-  interested_in_collections: boolean;
-  preferred_styles: string[];
-  preferred_themes: string[];
-  message_notifications_enabled?: boolean;
-  /** Display Needs, added in migration 028. All optional, nullable. */
-  display_wall_space?: string | null;
-  display_lighting?: string | null;
-  display_install_notes?: string | null;
-  display_rotation_frequency?: string | null;
-}
-
-export function dbVenueToVenue(v: DbVenueProfile): Venue {
-  return {
-    slug: v.slug,
-    name: v.name,
-    type: v.type,
-    location: v.location || v.city || "",
-    coordinates: { lat: 51.5074, lng: -0.1278 },
-    approximateFootfall: v.approximate_footfall || "50-100/day",
-    audienceType: v.audience_type || "",
-    interestedInFreeLoan: v.interested_in_free_loan,
-    interestedInRevenueShare: v.interested_in_revenue_share,
-    interestedInDirectPurchase: v.interested_in_direct_purchase,
-    interestedInCollections: v.interested_in_collections,
-    interestedInLocalArtists: true,
-    interestedInFramedWork: true,
-    interestedInRotatingArtwork: true,
-    wallSpace: v.wall_space,
-    preferredStyles: v.preferred_styles || [],
-    preferredThemes: v.preferred_themes || [],
-    description: v.description,
-    image: v.image || `https://picsum.photos/seed/${v.slug}/600/400`,
-    images: Array.isArray(v.images) ? v.images : [],
-    displayWallSpace: v.display_wall_space || "",
-    displayLighting: v.display_lighting || "",
-    displayInstallNotes: v.display_install_notes || "",
-    displayRotationFrequency: v.display_rotation_frequency || "",
-  };
-}
+// Re-export types and transform for server-side callers that used to import
+// everything from this single file.
+export type { DbVenueProfile } from "./venue-profiles-transform";
+export { dbVenueToVenue } from "./venue-profiles-transform";
 
 export async function getVenueProfileByUserId(userId: string) {
   const db = getSupabaseAdmin();
@@ -77,14 +22,22 @@ export async function getVenueProfileByUserId(userId: string) {
   return data as DbVenueProfile | null;
 }
 
+// Public, anon-readable venue lookup. Selects only non-PII columns because
+// migration 071 revokes anon SELECT on the contact-PII columns (email, phone,
+// address_line1/2, postcode, contact_name); a `select("*")` here as the anon
+// client would now be denied. Server callers that need PII use
+// getVenueProfileByUserId (service-role).
+const VENUE_PUBLIC_COLUMNS =
+  "id, user_id, slug, name, type, location, city, wall_space, description, image, images, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, interested_in_collections, preferred_styles, preferred_themes, message_notifications_enabled, display_wall_space, display_lighting, display_install_notes, display_rotation_frequency";
+
 export async function getVenueProfileBySlug(slug: string) {
   const { data } = await supabase
     .from("venue_profiles")
-    .select("*")
+    .select(VENUE_PUBLIC_COLUMNS)
     .eq("slug", slug)
     .single();
 
-  return data as DbVenueProfile | null;
+  return data as unknown as Partial<DbVenueProfile> | null;
 }
 
 export async function upsertVenueProfile(

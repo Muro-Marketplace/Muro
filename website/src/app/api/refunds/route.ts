@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { isAdminRequest } from "@/lib/admin-auth";
+import { orFilter } from "@/lib/db/safe-filter";
 
 export async function GET(request: Request) {
   const auth = await getAuthenticatedUser(request);
@@ -18,13 +20,7 @@ export async function GET(request: Request) {
       .eq("user_id", userId)
       .single();
 
-    const { data: adminProfile } = await db
-      .from("admin_users")
-      .select("id")
-      .eq("user_id", userId)
-      .limit(1);
-
-    const isAdmin = adminProfile && adminProfile.length > 0;
+    const isAdmin = await isAdminRequest(request);
 
     let query;
 
@@ -54,7 +50,7 @@ export async function GET(request: Request) {
       query = db
         .from("refund_requests")
         .select("*, orders(id, buyer_email, total, status, artist_slug, venue_slug)")
-        .or(`requester_user_id.eq.${userId},requester_email.eq.${email}`);
+        .or(orFilter([`requester_user_id.eq.${userId}`, `requester_email.eq.${email}`]));
     }
 
     const { data, error } = await query.order("created_at", { ascending: false });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { isAdminRequest } from "@/lib/admin-auth";
 import { notifyRefundDecision } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
 import { createNotification } from "@/lib/notifications";
@@ -55,17 +56,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    // Verify the user is the artist for this order, or an admin
+    // Verify the user is the artist for this order, or an admin (1.5).
     const isArtist = order.artist_user_id === userId;
-    const { data: adminProfile } = await db
-      .from("admin_users")
-      .select("id")
-      .eq("user_id", userId)
-      .limit(1);
-    const isAdmin = adminProfile && adminProfile.length > 0;
+    const admin = await isAdminRequest(request);
 
-    if (!isArtist && !isAdmin) {
+    if (!isArtist && !admin) {
       return NextResponse.json({ error: "Not authorised to process this refund" }, { status: 403 });
+    }
+
+    // 4.1: an artist-initiated refund can only be actioned by an admin, never by
+    // the artist (no self-approval). requester_type is a NOT NULL column on
+    // refund_requests; "artist" means the artist raised it.
+    if (!admin && refundReq.requester_type === "artist") {
+      return NextResponse.json({ error: "Artist-initiated refunds require admin approval" }, { status: 403 });
     }
 
     // ─── Reject ───

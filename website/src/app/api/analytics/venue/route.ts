@@ -12,6 +12,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { orFilter } from "@/lib/db/safe-filter";
 
 function getDateCutoff(range: string): string | null {
   const now = new Date();
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
     .from("analytics_events")
     .select("event_type, work_id, artist_slug, source, created_at, venue_user_id, venue_name")
     .eq("event_type", "qr_scan")
-    .or(`venue_user_id.eq.${profile.user_id},venue_name.eq.${profile.name}`);
+    .or(orFilter([`venue_user_id.eq.${profile.user_id}`, `venue_name.eq.${profile.name}`]));
   if (cutoff) query = query.gte("created_at", cutoff);
 
   const { data: events, error: queryError } = await query.order("created_at", { ascending: true });

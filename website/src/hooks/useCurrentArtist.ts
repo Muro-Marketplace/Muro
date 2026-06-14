@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { artists, type Artist } from "@/data/artists";
 import { slugify } from "@/lib/slugify";
 import { authFetch } from "@/lib/api-client";
-import { dbProfileToArtist, type DbArtistProfile, type DbArtistWork } from "@/lib/db/artist-profiles";
+import { dbProfileToArtist, type DbArtistProfile, type DbArtistWork } from "@/lib/db/artist-profiles-transform";
 
 /**
  * Returns the Artist record for the currently logged-in user.

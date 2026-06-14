@@ -1,3 +1,6 @@
+// Marks this module server-only: importing it into a client component is a build error.
+import "server-only";
+
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /**

@@ -16,8 +16,20 @@ const eslintConfig = defineConfig([
   ]),
   // Wallplace custom rules — populated per remediation phase.
   {
+    files: ["src/**/*.ts", "src/**/*.tsx"],
     plugins: { wallplace },
-    rules: {},
+    rules: {
+      "wallplace/no-raw-or-filter": "error",
+      "wallplace/no-inline-admin-check": "error",
+    },
+  },
+  // The eslint-rules/ plugin files are CommonJS by design — they cannot use
+  // ESM import syntax. Suppress the TypeScript no-require-imports rule there.
+  {
+    files: ["eslint-rules/**/*.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
   },
 ]);
 
