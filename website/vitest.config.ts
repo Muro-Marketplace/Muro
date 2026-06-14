@@ -34,6 +34,14 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Map `server-only` to its no-op empty.js so that server-side modules
+      // (API routes, Server Actions, lib) can be imported in the Node/vitest
+      // environment without throwing. Next.js does the same via the
+      // `react-server` export condition on server bundles.
+      "server-only": path.resolve(
+        __dirname,
+        "./node_modules/server-only/empty.js"
+      ),
     },
   },
 });

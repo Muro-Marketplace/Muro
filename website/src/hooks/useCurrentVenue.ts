@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { venues, type Venue } from "@/data/venues";
 import { slugify } from "@/lib/slugify";
 import { authFetch } from "@/lib/api-client";
-import { dbVenueToVenue, type DbVenueProfile } from "@/lib/db/venue-profiles";
+import { dbVenueToVenue, type DbVenueProfile } from "@/lib/db/venue-profiles-transform";
 
 /**
  * Returns the Venue record for the currently logged-in venue user.
