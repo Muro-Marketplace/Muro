@@ -3,6 +3,9 @@
 // reject the same send. Skips the rest of the handler's deep paths
 // because those are covered (indirectly) by the existing integration
 // flows.
+//
+// Also covers remediation findings 1.4 and 4.2: admin gate for
+// dispute-scoped reads and audit-before-return enforcement.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -11,14 +14,19 @@ const {
   fromMock,
   isFlagOnMock,
   sendEmailMock,
+  isAdminMock,
+  recordAdminActionMock,
 } = vi.hoisted(() => ({
   authMock: vi.fn(),
   fromMock: vi.fn(),
   isFlagOnMock: vi.fn(),
   sendEmailMock: vi.fn(async () => ({ ok: true })),
+  isAdminMock: vi.fn(),
+  recordAdminActionMock: vi.fn(),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
+vi.mock("@/lib/admin-auth", () => ({ isAdminRequest: isAdminMock }));
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ from: fromMock }),
 }));
@@ -41,8 +49,11 @@ vi.mock("@/lib/validations", () => ({
 }));
 vi.mock("@/data/artists", () => ({ artists: [] }));
 vi.mock("@/data/venues", () => ({ venues: [] }));
+vi.mock("@/lib/admin-audit", () => ({
+  recordAdminAction: recordAdminActionMock,
+}));
 
-import { POST } from "./route";
+import { POST, GET } from "./route";
 
 function chainSelectMaybe(row: unknown) {
   return {
@@ -59,6 +70,8 @@ beforeEach(() => {
   fromMock.mockReset();
   isFlagOnMock.mockReset();
   sendEmailMock.mockClear();
+  isAdminMock.mockReset();
+  recordAdminActionMock.mockReset();
   authMock.mockResolvedValue({ user: { id: "u-art-a", email: "a@example.com" }, error: null });
 });
 
@@ -122,5 +135,90 @@ describe("POST /api/messages — E1 artist-to-artist gating", () => {
       const body = await res.json();
       expect(body.code).not.toBe("artist_to_artist_blocked");
     }
+  });
+});
+
+// ── Dispute-scoped admin reads (findings 1.4 and 4.2) ──────────────────────
+
+function getReq(disputeId: string): Request {
+  return new Request(`http://localhost/api/messages?dispute_id=${disputeId}`, {
+    headers: { authorization: "Bearer valid" },
+  });
+}
+
+// Minimal fromMock setup for the dispute GET path.
+function setupDisputeDb(conversationId: string | null) {
+  fromMock.mockImplementation((table: string) => {
+    if (table === "disputes") {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: conversationId
+                ? { id: "d-1", conversation_id: conversationId }
+                : null,
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    if (table === "messages") {
+      return {
+        select: () => ({
+          eq: () => ({
+            order: async () => ({
+              data: [{ id: "m-1", content: "hello" }],
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    return {};
+  });
+}
+
+describe("GET /api/messages?dispute_id — admin gate (1.4, 4.2)", () => {
+  it("403 when isAdminRequest returns false", async () => {
+    isAdminMock.mockResolvedValue(false);
+    authMock.mockResolvedValue({ user: { id: "u-1", email: "x@x.com" }, error: null });
+    setupDisputeDb("conv-1");
+
+    const res = await GET(getReq("d-1"));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toMatch(/not authorised/i);
+  });
+
+  it("200 with messages when admin, and recordAdminAction is called", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    recordAdminActionMock.mockResolvedValue(undefined);
+    setupDisputeDb("conv-1");
+
+    const res = await GET(getReq("d-1"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.adminScopedToDispute).toBe(true);
+    expect(body.messages).toHaveLength(1);
+    expect(recordAdminActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "messages.read.dispute_scoped",
+        context: expect.objectContaining({ dispute_id: "d-1" }),
+      }),
+    );
+  });
+
+  it("500 when recordAdminAction rejects (audit-before-return, 4.2)", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    recordAdminActionMock.mockRejectedValue(new Error("DB down"));
+    setupDisputeDb("conv-1");
+
+    const res = await GET(getReq("d-1"));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toMatch(/audit log failed/i);
   });
 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { isAdminRequest } from "@/lib/admin-auth";
 import { messageSchema } from "@/lib/validations";
 import { orFilter } from "@/lib/db/safe-filter";
 import { moderateMessage } from "@/lib/moderation";
@@ -69,19 +70,10 @@ export async function GET(request: Request) {
     // param they fall through to the normal slug-owned view (which is
     // empty for anyone who isn't in the thread).
     if (disputeId) {
-      const dbAdmin = getSupabaseAdmin();
-      // Admin check via email allowlist — mirrors getAdminUser() in
-      // src/lib/admin-auth.ts. We don't call that helper directly
-      // because it returns a NextResponse and we want a boolean.
-      const adminEmail = (auth.user!.email ?? "").toLowerCase();
-      const allowed = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || "")
-        .split(",")
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean);
-      const isAdmin = adminEmail.length > 0 && allowed.includes(adminEmail);
-      if (!isAdmin) {
+      if (!(await isAdminRequest(request))) {
         return NextResponse.json({ error: "Not authorised" }, { status: 403 });
       }
+      const dbAdmin = getSupabaseAdmin();
       const { data: dispute } = await dbAdmin
         .from("disputes")
         .select("id, conversation_id")
@@ -95,13 +87,19 @@ export async function GET(request: Request) {
         .select("*")
         .eq("conversation_id", dispute.conversation_id)
         .order("created_at", { ascending: true });
-      // Audit the read.
+      // Audit the read. A failure blocks the response so the caller
+      // cannot silently bypass the audit trail (4.2).
       const { recordAdminAction } = await import("@/lib/admin-audit");
-      await recordAdminAction({
-        adminUserId: auth.user!.id,
-        action: "messages.read.dispute_scoped",
-        context: { dispute_id: disputeId, conversation_id: dispute.conversation_id },
-      });
+      try {
+        await recordAdminAction({
+          adminUserId: auth.user!.id,
+          action: "messages.read.dispute_scoped",
+          context: { dispute_id: disputeId, conversation_id: dispute.conversation_id },
+        });
+      } catch (e) {
+        console.error("[messages] dispute audit write failed:", e);
+        return NextResponse.json({ error: "Audit log failed" }, { status: 500 });
+      }
       return NextResponse.json({
         messages: msgs ?? [],
         conversations: [],

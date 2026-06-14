@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { isAdminRequest } from "@/lib/admin-auth";
 import { orFilter } from "@/lib/db/safe-filter";
 
 export async function GET(request: Request) {
@@ -19,13 +20,7 @@ export async function GET(request: Request) {
       .eq("user_id", userId)
       .single();
 
-    const { data: adminProfile } = await db
-      .from("admin_users")
-      .select("id")
-      .eq("user_id", userId)
-      .limit(1);
-
-    const isAdmin = adminProfile && adminProfile.length > 0;
+    const isAdmin = await isAdminRequest(request);
 
     let query;
 
