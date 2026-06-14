@@ -224,6 +224,29 @@ export async function POST(request: Request) {
     .eq("user_id", buyerId)
     .maybeSingle();
 
+  // 4.3: resolve the caller's artist profile so we can distinguish a
+  // genuine artist counter from a customer who appended parentOfferId.
+  const { data: callerArtistProfile } = await db
+    .from("artist_profiles")
+    .select("user_id")
+    .eq("user_id", buyerId)
+    .maybeSingle();
+
+  // 4.3: a caller who is neither a venue nor an artist cannot make or counter
+  // offers, regardless of any parentOfferId they attach. Customers buy via the
+  // standard purchase flow on the artwork page.
+  if (!venueProfile && !callerArtistProfile) {
+    return NextResponse.json(
+      {
+        error: "customer_cannot_make_offers",
+        message:
+          "Make-an-Offer is available to venues and artists only. " +
+          "If you're a customer, please complete a standard purchase via the artwork page.",
+      },
+      { status: 403 },
+    );
+  }
+
   // Allow the artist to counter their own thread (parentOfferId set), but
   // block any non-venue, non-artist initiator.
   const isArtistCountering = !!parentOfferId;
