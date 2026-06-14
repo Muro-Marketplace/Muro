@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { orFilter } from "@/lib/db/safe-filter";
 
 /**
  * GET /api/dashboard
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
       const [placementsRes, ordersRes, messagesRes, worksCountRes, refundsRes] = await Promise.all([
         db.from("placements").select("*").eq("artist_user_id", userId).order("created_at", { ascending: false }),
         db.from("orders").select("*").eq("artist_slug", slug).order("created_at", { ascending: false }),
-        db.from("messages").select("*").or(`recipient_slug.eq.${slug},sender_name.eq.${slug}`).order("created_at", { ascending: false }).limit(50),
+        db.from("messages").select("*").or(orFilter([`recipient_slug.eq.${slug}`, `sender_name.eq.${slug}`])).order("created_at", { ascending: false }).limit(50),
         db.from("artist_works").select("id", { count: "exact", head: true }).eq("artist_id", artistProfile.id),
         // Refund requests on this artist's orders. Fetched via a join
         // through orders so we don't have to widen refund_requests with
@@ -114,7 +115,7 @@ export async function GET(request: Request) {
     if (venueProfile) {
       const slug = venueProfile.slug;
       const [ordersRes, venueMessagesRes] = await Promise.all([
-        db.from("orders").select("*").or(`venue_slug.eq.${slug},buyer_email.eq.${auth.user!.email}`).order("created_at", { ascending: false }),
+        db.from("orders").select("*").or(orFilter([`venue_slug.eq.${slug}`, `buyer_email.eq.${auth.user!.email}`])).order("created_at", { ascending: false }),
         db.from("messages").select("id", { count: "exact", head: true }).eq("sender_name", slug),
       ]);
 

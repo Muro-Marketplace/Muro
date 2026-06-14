@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { orFilter } from "@/lib/db/safe-filter";
 
 /**
  * GET: return venues the authenticated artist has interacted with
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
     const { data: messages } = await db
       .from("messages")
       .select("sender_name, sender_type, recipient_slug")
-      .or(`recipient_slug.eq.${artistSlug},sender_name.eq.${artistSlug}`);
+      .or(orFilter([`recipient_slug.eq.${artistSlug}`, `sender_name.eq.${artistSlug}`]));
 
     if (messages) {
       for (const msg of messages) {

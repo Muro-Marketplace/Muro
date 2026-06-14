@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { messageSchema } from "@/lib/validations";
+import { orFilter } from "@/lib/db/safe-filter";
 import { moderateMessage } from "@/lib/moderation";
 import { isFlagOn } from "@/lib/feature-flags";
 import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
@@ -135,7 +136,7 @@ export async function GET(request: Request) {
     const { data, error } = await db
       .from("messages")
       .select("*")
-      .or(`recipient_slug.eq.${safeSlug},sender_name.eq.${safeSlug}`)
+      .or(orFilter([`recipient_slug.eq.${safeSlug}`, `sender_name.eq.${safeSlug}`]))
       .order("created_at", { ascending: false });
 
     if (error) {

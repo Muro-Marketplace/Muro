@@ -12,6 +12,7 @@ import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { createNotification } from "@/lib/notifications";
+import { orFilter } from "@/lib/db/safe-filter";
 import { sendEmail } from "@/lib/email/send";
 import { OfferReceivedNotification } from "@/emails/templates/messages/OfferReceivedNotification";
 
@@ -147,7 +148,7 @@ export async function GET(request: Request) {
   } else if (role === "artist") {
     query = query.eq("artist_user_id", userId);
   } else {
-    query = query.or(`buyer_user_id.eq.${userId},artist_user_id.eq.${userId}`);
+    query = query.or(orFilter([`buyer_user_id.eq.${userId}`, `artist_user_id.eq.${userId}`]));
   }
   const { data, error } = await query.limit(200);
   if (error) {
