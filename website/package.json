@@ -16,6 +16,7 @@
     "check": "npm run lint && npm run typecheck && npm run test",
     "audit:advisors": "tsx scripts/audit/snapshot-advisors.ts && tsx scripts/audit/check-regressions.ts",
     "audit:e2e-security": "playwright test tests/e2e/security-no-leaks.spec.ts",
+    "depcheck": "depcruise src --config .dependency-cruiser.cjs",
     "audit:full": "npm run check && npm run audit:advisors && npm run audit:e2e-security"
   },
   "dependencies": {
@@ -52,6 +53,7 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.184.0",
     "@vitest/ui": "^2.1.9",
+    "dependency-cruiser": "^17.4.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "jsdom": "^29.0.2",
