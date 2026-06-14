@@ -1,15 +1,42 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
+const { getUser, fromMock } = vi.hoisted(() => {
+  const fromMock = vi.fn();
+  return { getUser: vi.fn(), fromMock };
+});
 
 vi.mock("@/lib/supabase-admin", () => ({
-  getSupabaseAdmin: () => ({ auth: { getUser } }),
+  getSupabaseAdmin: () => ({ auth: { getUser }, from: fromMock }),
 }));
 
-import { getAdminUser } from "./admin-auth";
+import { getAdminUser, isAdminRequest } from "./admin-auth";
+
+// Default: user is NOT in admin_users table
+function mockAdminUsersEmpty() {
+  fromMock.mockReturnValue({
+    select: () => ({
+      eq: () => ({
+        limit: async () => ({ data: [] }),
+      }),
+    }),
+  });
+}
+
+// User IS in admin_users table
+function mockAdminUsersHit() {
+  fromMock.mockReturnValue({
+    select: () => ({
+      eq: () => ({
+        limit: async () => ({ data: [{ id: "row1" }] }),
+      }),
+    }),
+  });
+}
 
 beforeEach(() => {
   getUser.mockReset();
+  fromMock.mockReset();
+  mockAdminUsersEmpty();
   process.env.ADMIN_EMAILS = "boss@example.com";
 });
 
@@ -60,5 +87,64 @@ describe("getAdminUser()", () => {
     });
     const result = await getAdminUser(req());
     expect(result.error?.status).toBe(503);
+  });
+});
+
+describe("isAdminRequest()", () => {
+  it("returns false for valid user with user_type artist and email not allowlisted", async () => {
+    getUser.mockResolvedValue({
+      data: { user: { id: "u2", email: "artist@example.com", user_metadata: { user_type: "artist" } } },
+      error: null,
+    });
+    expect(await isAdminRequest(req())).toBe(false);
+  });
+
+  it("returns false when email is allowlisted but user_metadata lacks user_type admin", async () => {
+    getUser.mockResolvedValue({
+      data: { user: { id: "u3", email: "boss@example.com", user_metadata: { user_type: "artist" } } },
+      error: null,
+    });
+    expect(await isAdminRequest(req())).toBe(false);
+  });
+
+  it("returns true for allowlisted email with user_type admin, without querying admin_users", async () => {
+    getUser.mockResolvedValue({
+      data: { user: { id: "u4", email: "boss@example.com", user_metadata: { user_type: "admin" } } },
+      error: null,
+    });
+    const result = await isAdminRequest(req());
+    expect(result).toBe(true);
+    // Email short-circuits: DB should not have been queried
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("returns true for admin_users table hit with user_type admin but email not allowlisted", async () => {
+    getUser.mockResolvedValue({
+      data: { user: { id: "u5", email: "other@example.com", user_metadata: { user_type: "admin" } } },
+      error: null,
+    });
+    mockAdminUsersHit();
+    expect(await isAdminRequest(req())).toBe(true);
+  });
+
+  it("returns false when admin_users row exists but user_metadata lacks user_type admin", async () => {
+    getUser.mockResolvedValue({
+      data: { user: { id: "u6", email: "other@example.com", user_metadata: { user_type: "artist" } } },
+      error: null,
+    });
+    mockAdminUsersHit();
+    expect(await isAdminRequest(req())).toBe(false);
+  });
+
+  it("returns false for missing token", async () => {
+    expect(await isAdminRequest(req(null))).toBe(false);
+  });
+
+  it("returns false for invalid token", async () => {
+    getUser.mockResolvedValue({
+      data: { user: null },
+      error: new Error("invalid"),
+    });
+    expect(await isAdminRequest(req("Bearer bad"))).toBe(false);
   });
 });

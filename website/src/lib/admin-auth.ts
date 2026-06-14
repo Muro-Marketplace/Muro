@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import type { User } from "@supabase/supabase-js";
 
 // Admin emails are sourced only from env. Accepts either ADMIN_EMAILS
 // (comma-separated) or ADMIN_EMAIL (single). No hardcoded default, so a
@@ -11,26 +12,78 @@ function adminEmails(): string[] {
 }
 
 /**
- * Validate the request is from the admin user.
- * Returns the user or a 401/403 error response.
+ * Resolve the Bearer token from a request to a Supabase user.
+ * Returns null for missing, empty, or invalid tokens; never throws.
  */
-export async function getAdminUser(request: Request) {
+async function resolveUser(request: Request): Promise<User | null> {
   const authHeader = request.headers.get("authorization");
-  const token = authHeader?.replace("Bearer ", "");
-
-  if (!token) {
-    return {
-      user: null,
-      error: NextResponse.json({ error: "Authentication required" }, { status: 401 }),
-    };
-  }
+  const token = authHeader?.replace("Bearer ", "").trim();
+  if (!token) return null;
 
   const { data: { user }, error } = await getSupabaseAdmin().auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
 
-  if (error || !user) {
+/**
+ * The canonical admin predicate (ADR 0001).
+ *
+ * A user is an admin iff:
+ *   user_metadata.user_type === "admin"
+ *   AND (email in ADMIN_EMAILS env list OR user_id in admin_users table)
+ *
+ * The metadata check comes first so we never reach the DB for non-admin roles.
+ * The email allowlist short-circuits so allowlisted admins never hit the DB.
+ */
+async function userIsAdmin(user: User): Promise<boolean> {
+  const role = (user.user_metadata as { user_type?: unknown } | null)?.user_type;
+  if (role !== "admin") return false;
+
+  const email = user.email?.toLowerCase();
+  if (email && adminEmails().includes(email)) return true;
+
+  const { data } = await getSupabaseAdmin()
+    .from("admin_users")
+    .select("id")
+    .eq("user_id", user.id)
+    .limit(1);
+  return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * Returns true iff the request carries a valid token for a user who satisfies
+ * the admin predicate (ADR 0001). Never throws; auth failures return false.
+ *
+ * Use this for lightweight, non-response-producing admin checks (e.g. inside
+ * middleware or route handlers that want to branch on admin status without
+ * committing to a specific error response).
+ */
+export async function isAdminRequest(request: Request): Promise<boolean> {
+  const user = await resolveUser(request);
+  if (!user) return false;
+  return userIsAdmin(user);
+}
+
+/**
+ * Validate the request is from the admin user.
+ * Returns the user or a 401/403/503 error response.
+ *
+ * Preserves the 503 guard for when ADMIN_EMAILS is unset, which is
+ * intentionally not part of the shared predicate: the env list being empty
+ * is a deployment misconfiguration, not an authorisation failure.
+ */
+export async function getAdminUser(request: Request) {
+  const user = await resolveUser(request);
+
+  if (!user) {
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "").trim();
     return {
       user: null,
-      error: NextResponse.json({ error: "Invalid or expired token" }, { status: 401 }),
+      error: NextResponse.json(
+        { error: token ? "Invalid or expired token" : "Authentication required" },
+        { status: 401 },
+      ),
     };
   }
 
@@ -43,19 +96,7 @@ export async function getAdminUser(request: Request) {
     };
   }
 
-  if (!user.email || !allowed.includes(user.email.toLowerCase())) {
-    return {
-      user: null,
-      error: NextResponse.json({ error: "Admin access required" }, { status: 403 }),
-    };
-  }
-
-  // Defence in depth: even if the email is allowlisted, require
-  // user_metadata.user_type === "admin". Blocks an attacker who
-  // compromises an allowlisted email but cannot also set the metadata
-  // field through the admin API.
-  const role = (user.user_metadata as { user_type?: unknown } | null)?.user_type;
-  if (role !== "admin") {
+  if (!(await userIsAdmin(user))) {
     return {
       user: null,
       error: NextResponse.json({ error: "Admin access required" }, { status: 403 }),
