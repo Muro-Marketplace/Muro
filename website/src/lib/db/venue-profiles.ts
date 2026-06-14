@@ -22,14 +22,22 @@ export async function getVenueProfileByUserId(userId: string) {
   return data as DbVenueProfile | null;
 }
 
+// Public, anon-readable venue lookup. Selects only non-PII columns because
+// migration 071 revokes anon SELECT on the contact-PII columns (email, phone,
+// address_line1/2, postcode, contact_name); a `select("*")` here as the anon
+// client would now be denied. Server callers that need PII use
+// getVenueProfileByUserId (service-role).
+const VENUE_PUBLIC_COLUMNS =
+  "id, user_id, slug, name, type, location, city, wall_space, description, image, images, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, interested_in_collections, preferred_styles, preferred_themes, message_notifications_enabled, display_wall_space, display_lighting, display_install_notes, display_rotation_frequency";
+
 export async function getVenueProfileBySlug(slug: string) {
   const { data } = await supabase
     .from("venue_profiles")
-    .select("*")
+    .select(VENUE_PUBLIC_COLUMNS)
     .eq("slug", slug)
     .single();
 
-  return data as DbVenueProfile | null;
+  return data as unknown as Partial<DbVenueProfile> | null;
 }
 
 export async function upsertVenueProfile(
