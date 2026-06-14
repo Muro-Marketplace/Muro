@@ -236,19 +236,32 @@ export async function PATCH(request: Request) {
     // event. We keep the legacy `notifyBuyerStatusUpdate` only for
     // statuses the dispatcher doesn't cover (cancelled / disputed /
     // refunded), so cancellation notes still go out today.
+    //
+    // Finding 7.3: await the email so it completes before the function
+    // returns (Vercel serverless can freeze/kill unawaited promises).
+    // A failure is logged but does NOT fail the request — the status
+    // change already committed successfully above.
     if (order.buyer_email && status !== "shipped" && status !== "delivered" && status !== "processing") {
-      notifyBuyerStatusUpdate({
-        email: order.buyer_email,
-        orderId,
-        status,
-        trackingNumber,
-      }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+      try {
+        await notifyBuyerStatusUpdate({
+          email: order.buyer_email,
+          orderId,
+          status,
+          trackingNumber,
+        });
+      } catch (err) {
+        console.error("[orders PATCH] status email failed", { orderId, status, err });
+      }
     }
 
     // On delivery, release pending payouts immediately (instead of waiting 14 days)
     // and attribute the venue revenue back to the source placement so venue
     // dashboards see the linkage. Idempotent: status_history is checked before
     // the original update; if "delivered" was already there we skip the bump.
+    //
+    // Finding 2.2: declared here (outer scope) so the response builder below
+    // can read it regardless of whether status === "delivered".
+    let payoutFailures = 0;
     if (status === "delivered") {
       const { data: pendingTransfers } = await db
         .from("stripe_transfers")
@@ -256,9 +269,23 @@ export async function PATCH(request: Request) {
         .eq("order_id", orderId)
         .eq("status", "pending");
 
+      // Await each transfer individually so Vercel serverless cannot
+      // freeze/kill the payouts before they complete. Per-transfer
+      // try/catch means one Stripe failure does not abort remaining transfers.
+      // On failure: the row stays 'pending'. The cron processPendingTransfers
+      // picks up rows whose payout_after <= now(), so for shipped orders
+      // (payout_after is ~14 days out) a failed early payout is not retried
+      // promptly — it will be retried only once the original hold period
+      // expires (up to ~14 days later). Do NOT write any other status on
+      // failure — that would permanently block re-execution.
       if (pendingTransfers) {
         for (const t of pendingTransfers) {
-          executeTransfer(t.id).catch((err) => console.error("Early payout error:", err));
+          try {
+            await executeTransfer(t.id);
+          } catch (err) {
+            console.error("[orders PATCH] early payout failed", { transferId: t.id, orderId, err });
+            payoutFailures += 1;
+          }
         }
       }
 
@@ -286,7 +313,14 @@ export async function PATCH(request: Request) {
         .eq("status", "pending");
     }
 
-    return NextResponse.json({ success: true });
+    // Surface early-payout failures so callers and monitoring can see
+    // them. The order-status change itself succeeded (200), but include
+    // the count so dashboards/alerts can track partial payout failures.
+    // The field is omitted when payoutFailures is 0 to keep the common
+    // path response shape identical to the pre-fix shape.
+    const responseBody: { success: true; payoutFailures?: number } = { success: true };
+    if (payoutFailures > 0) responseBody.payoutFailures = payoutFailures;
+    return NextResponse.json(responseBody);
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
