@@ -8,6 +8,7 @@ import { sendEmail } from "@/lib/email/send";
 import { createNotification } from "@/lib/notifications";
 import { CustomerRefundConfirmation } from "@/emails/templates/orders/CustomerRefundConfirmation";
 import { ArtistRefundNotification } from "@/emails/templates/orders/ArtistRefundNotification";
+import { claimPending, releaseClaim } from "@/lib/api/idempotency";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -15,8 +16,22 @@ export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
 
+  // A malformed JSON body is the ONLY thing that should ever produce a 400 here.
+  // Parse it in isolation so a genuine downstream failure can't be misreported
+  // as "Invalid request".
+  let body: { refundRequestId?: string; action?: string; reason?: string };
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  // Hoisted out of the main try so the catch can release a claim it may have
+  // taken before throwing.
+  const db = getSupabaseAdmin();
+  let claimedRefundId: string | null = null;
+
+  try {
     const { refundRequestId, action, reason } = body;
 
     if (!refundRequestId || !action) {
@@ -27,29 +42,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "action must be 'approve' or 'reject'" }, { status: 400 });
     }
 
-    const db = getSupabaseAdmin();
     const userId = auth.user!.id;
 
-    // Fetch the refund request
-    const { data: refundReq, error: reqErr } = await db
+    // Fetch the refund request (read-only; needed for order_id / requester_type
+    // to run authorisation before we mutate anything).
+    const { data: refundReqRaw, error: refundReqErr } = await db
       .from("refund_requests")
       .select("*")
       .eq("id", refundRequestId)
       .single();
 
-    if (reqErr || !refundReq) {
-      return NextResponse.json({ error: "Refund request not found" }, { status: 404 });
+    if (refundReqErr || !refundReqRaw) {
+      return NextResponse.json(
+        { error: "Refund request not found" },
+        { status: 404 },
+      );
     }
 
-    if (refundReq.status !== "pending") {
-      return NextResponse.json({ error: "Refund request has already been processed" }, { status: 409 });
-    }
+    const refundReqForAuthz = refundReqRaw as Record<string, unknown>;
 
     // Fetch the order
     const { data: order, error: orderErr } = await db
       .from("orders")
       .select("*")
-      .eq("id", refundReq.order_id)
+      .eq("id", refundReqForAuthz.order_id)
       .single();
 
     if (orderErr || !order) {
@@ -67,9 +83,31 @@ export async function POST(request: Request) {
     // 4.1: an artist-initiated refund can only be actioned by an admin, never by
     // the artist (no self-approval). requester_type is a NOT NULL column on
     // refund_requests; "artist" means the artist raised it.
-    if (!admin && refundReq.requester_type === "artist") {
+    if (!admin && refundReqForAuthz.requester_type === "artist") {
       return NextResponse.json({ error: "Artist-initiated refunds require admin approval" }, { status: 403 });
     }
+
+    // ── 1.8 Atomic claim ────────────────────────────────────────────────────
+    // All authorisation checks have passed. Now flip status from
+    // 'pending' → 'processing' in a single conditional UPDATE.
+    // Only one concurrent caller will receive a row back; all others get null
+    // and must 409 without making any Stripe calls.
+    const refundReq = await claimPending<Record<string, unknown>>(
+      db,
+      "refund_requests",
+      refundRequestId,
+    );
+
+    if (!refundReq) {
+      return NextResponse.json(
+        { error: "Refund request has already been processed" },
+        { status: 409 },
+      );
+    }
+
+    // Claim succeeded — record the id so the catch can release it if anything
+    // after this point throws unexpectedly.
+    claimedRefundId = refundRequestId;
 
     // ─── Reject ───
     if (action === "reject") {
@@ -85,13 +123,16 @@ export async function POST(request: Request) {
 
       if (updateErr) {
         console.error("Refund reject update error:", updateErr);
+        await releaseClaim(db, "refund_requests", refundRequestId);
         return NextResponse.json({ error: "Failed to reject refund request" }, { status: 500 });
       }
 
       // Notify the requester (fire-and-forget)
-      if (refundReq.requester_email || order.buyer_email) {
+      const requesterEmail = refundReq.requester_email as string | null | undefined;
+      const buyerEmailFallback = order.buyer_email as string | null | undefined;
+      if (requesterEmail || buyerEmailFallback) {
         notifyRefundDecision({
-          buyerEmail: refundReq.requester_email || order.buyer_email,
+          buyerEmail: (requesterEmail || buyerEmailFallback) as string,
           orderId: order.id,
           approved: false,
           reason: reason || undefined,
@@ -104,13 +145,14 @@ export async function POST(request: Request) {
     // ─── Approve ───
     const paymentIntentId = order.stripe_payment_intent_id;
     if (!paymentIntentId) {
+      await releaseClaim(db, "refund_requests", refundRequestId);
       return NextResponse.json(
         { error: "No payment intent found for this order. Refund cannot be processed automatically." },
         { status: 422 },
       );
     }
 
-    const refundAmountCents = Math.round(refundReq.amount * 100);
+    const refundAmountCents = Math.round((refundReq.amount as number) * 100);
     const isFullRefund = refundReq.type === "full";
 
     // Look up transfers for this order
@@ -121,7 +163,7 @@ export async function POST(request: Request) {
       .in("status", ["pending", "paid"]);
 
     // 1. Cancel or reverse transfers
-    // F32, if a transfer reversal fails we must NOT proceed to refund the
+    // F32: if a transfer reversal fails we must NOT proceed to refund the
     // buyer, because then the platform eats the difference. Abort with 502
     // so the admin can investigate manually.
     const failedReversals: string[] = [];
@@ -140,9 +182,12 @@ export async function POST(request: Request) {
               ? transfer.amount_cents
               : Math.round(transfer.amount_cents * (refundAmountCents / Math.round(order.total * 100)));
 
-            await stripe.transfers.createReversal(transfer.stripe_transfer_id, {
-              amount: reverseAmount,
-            });
+            // Idempotency key scoped per transfer so retries dedupe safely.
+            await stripe.transfers.createReversal(
+              transfer.stripe_transfer_id,
+              { amount: reverseAmount },
+              { idempotencyKey: `refund:${refundRequestId}:reversal:${transfer.id}` },
+            );
 
             await db
               .from("stripe_transfers")
@@ -150,13 +195,14 @@ export async function POST(request: Request) {
               .eq("id", transfer.id);
           } catch (reverseErr) {
             console.error(`Transfer reversal error for ${transfer.stripe_transfer_id}:`, reverseErr);
-            failedReversals.push(transfer.stripe_transfer_id);
+            failedReversals.push(transfer.stripe_transfer_id as string);
           }
         }
       }
     }
 
     if (failedReversals.length > 0) {
+      await releaseClaim(db, "refund_requests", refundRequestId);
       return NextResponse.json(
         {
           error: "Could not reverse one or more artist/venue transfers. Refund aborted to avoid negative platform balance. Investigate in Stripe dashboard.",
@@ -170,15 +216,20 @@ export async function POST(request: Request) {
     let stripeRefund;
     try {
       const refundParams: { payment_intent: string; amount?: number } = {
-        payment_intent: paymentIntentId,
+        payment_intent: paymentIntentId as string,
       };
-      // For partial refunds, specify the amount; for full, let Stripe handle it
+      // For partial refunds, specify the amount; for full, let Stripe handle it.
       if (!isFullRefund) {
         refundParams.amount = refundAmountCents;
       }
-      stripeRefund = await stripe.refunds.create(refundParams);
+      // Idempotency key scoped to this refund request so retries dedupe safely.
+      stripeRefund = await stripe.refunds.create(
+        refundParams,
+        { idempotencyKey: `refund:${refundRequestId}:refund` },
+      );
     } catch (stripeErr) {
       console.error("Stripe refund error:", stripeErr);
+      await releaseClaim(db, "refund_requests", refundRequestId);
       return NextResponse.json(
         { error: "Stripe refund failed. The transfers may have been cancelled/reversed, check manually." },
         { status: 502 },
@@ -221,7 +272,7 @@ export async function POST(request: Request) {
           buyerEmail: order.buyer_email ?? null,
           data: {
             firstName: order.buyer_email
-              ? order.buyer_email.split("@")[0]
+              ? (order.buyer_email as string).split("@")[0]
               : "there",
             orderNumber: order.id,
             orderUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://wallplace.co.uk"}/orders/${order.id}`,
@@ -233,7 +284,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Update refund request status
+    // 4. Update refund request status (terminal — claim becomes 'approved')
     await db
       .from("refund_requests")
       .update({
@@ -247,13 +298,15 @@ export async function POST(request: Request) {
     // 5. Notify the buyer (legacy helper, retained as safety net) + send
     // the polished CustomerRefundConfirmation via the new pipeline so the
     // email lands in email_events and respects preferences.
-    if (refundReq.requester_email || order.buyer_email) {
-      const buyerEmail = refundReq.requester_email || order.buyer_email;
+    const refundRequesterEmail = refundReq.requester_email as string | null | undefined;
+    const orderBuyerEmail = order.buyer_email as string | null | undefined;
+    if (refundRequesterEmail || orderBuyerEmail) {
+      const buyerEmail = (refundRequesterEmail || orderBuyerEmail) as string;
       notifyRefundDecision({
         buyerEmail,
         orderId: order.id,
         approved: true,
-        amount: refundReq.amount,
+        amount: refundReq.amount as number,
       }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
 
       // In-app bell for the buyer if they're an account holder. The
@@ -261,18 +314,19 @@ export async function POST(request: Request) {
       // to the order's buyer_user_id so we don't miss the cases where
       // the buyer is the same person as the requester. Pure best
       // effort, a missing bell shouldn't break the refund.
-      const buyerUserId = refundReq.requester_user_id || order.buyer_user_id || null;
+      const buyerUserId = (refundReq.requester_user_id || order.buyer_user_id) as string | null ?? null;
       if (buyerUserId) {
         createNotification({
           userId: buyerUserId,
           kind: "refund_approved",
           title: `Refund approved, £${Number(refundReq.amount).toFixed(2)}`,
           body: `Your refund on ${order.id} has been processed and should arrive within 5 business days.`,
-          link: `/customer-portal/orders?id=${encodeURIComponent(order.id)}`,
+          link: `/customer-portal/orders?id=${encodeURIComponent(order.id as string)}`,
         }).catch((err) => { if (err) console.error("Buyer refund bell error:", err); });
       }
 
-      const buyerFirstName = (order.shipping?.fullName || "").split(" ")[0] || "there";
+      const shippingFullName = (order.shipping as { fullName?: string } | null)?.fullName || "";
+      const buyerFirstName = shippingFullName.split(" ")[0] || "there";
       await sendEmail({
         idempotencyKey: `customer_refund:${refundRequestId}`,
         template: "customer_refund_confirmation",
@@ -281,7 +335,7 @@ export async function POST(request: Request) {
         subject: `Refund on the way for order ${order.id}`,
         react: CustomerRefundConfirmation({
           firstName: buyerFirstName,
-          orderNumber: order.id,
+          orderNumber: order.id as string,
           refundAmount: { amount: refundAmountCents, currency: "GBP" },
           refundReason: (refundReq.reason as string | undefined) || undefined,
           expectedArrival: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
@@ -294,7 +348,7 @@ export async function POST(request: Request) {
     // Artist-side refund notification, so they can track what's owed back.
     if (order.artist_user_id) {
       try {
-        const { data: { user: artistUser } } = await db.auth.admin.getUserById(order.artist_user_id);
+        const { data: { user: artistUser } } = await db.auth.admin.getUserById(order.artist_user_id as string);
         const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", order.artist_user_id).single();
         if (artistUser?.email) {
           const items = Array.isArray(order.items) ? order.items : [];
@@ -305,10 +359,10 @@ export async function POST(request: Request) {
             category: "orders_and_payouts",
             to: artistUser.email,
             subject: `Refund issued on order ${order.id}`,
-            userId: order.artist_user_id,
+            userId: order.artist_user_id as string,
             react: ArtistRefundNotification({
-              firstName: (artistProfile?.name || "there").split(" ")[0],
-              orderNumber: order.id,
+              firstName: ((artistProfile?.name as string | null | undefined) || "there").split(" ")[0],
+              orderNumber: order.id as string,
               workTitle,
               refundAmount: { amount: refundAmountCents, currency: "GBP" },
               reason: (refundReq.reason as string | undefined) || undefined,
@@ -327,11 +381,11 @@ export async function POST(request: Request) {
       // hasInAppEquivalent flag was already set; this is the missing
       // half of that contract.
       createNotification({
-        userId: order.artist_user_id,
+        userId: order.artist_user_id as string,
         kind: "refund_approved",
         title: `Refund issued, £${Number(refundReq.amount).toFixed(2)}`,
         body: `Order ${order.id} was refunded. Any payout already transferred will be reversed.`,
-        link: `/artist-portal/orders?id=${encodeURIComponent(order.id)}`,
+        link: `/artist-portal/orders?id=${encodeURIComponent(order.id as string)}`,
       }).catch((err) => { if (err) console.error("Artist refund bell error:", err); });
     }
 
@@ -341,7 +395,16 @@ export async function POST(request: Request) {
       stripeRefundId: stripeRefund.id,
       orderStatus: newStatus,
     });
-  } catch {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  } catch (err) {
+    // An unexpected throw after a successful claim (e.g. the order-status update
+    // or getUserById) would otherwise leave the row stuck in 'processing'. Log
+    // it, best-effort release any claim we took, and return a 500 (not a
+    // misleading 400). The explicit error paths above each handle their own
+    // releaseClaim and return before reaching here, so we never double-release.
+    console.error("[refunds/process] unexpected error", err);
+    if (claimedRefundId) {
+      await releaseClaim(db, "refund_requests", claimedRefundId).catch(() => {});
+    }
+    return NextResponse.json({ error: "Failed to process refund" }, { status: 500 });
   }
 }
