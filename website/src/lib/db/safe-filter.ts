@@ -7,7 +7,21 @@
 const SAFE_TERM =
   /^[a-zA-Z_][a-zA-Z0-9_]*\.(eq|neq|gt|gte|lt|lte|like|ilike|in|is)\.[A-Za-z0-9_@%+.\-]+$/;
 
-/** Join only the terms whose value is safe to interpolate into .or(). */
+/**
+ * Join only the terms whose value is safe to interpolate into .or().
+ *
+ * Fails CLOSED: if no safe terms remain after filtering, throws rather than
+ * returning an empty string. An empty .or("") in PostgREST can widen the
+ * query to every row, which is a data leak. In normal operation the first
+ * term is always a trusted server-side id (userId/slug) that survives, so
+ * this throw is unreachable for legitimate traffic.
+ */
 export function orFilter(terms: string[]): string {
-  return terms.filter((t) => SAFE_TERM.test(t)).join(",");
+  const safe = terms.filter((t) => SAFE_TERM.test(t));
+  if (safe.length === 0) {
+    throw new Error(
+      "orFilter: no safe terms; refusing to build an empty .or() filter that could match all rows"
+    );
+  }
+  return safe.join(",");
 }
