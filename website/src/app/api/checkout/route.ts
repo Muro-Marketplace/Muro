@@ -162,31 +162,39 @@ export async function POST(request: Request) {
     //   total is below the DB base. Above-base lines fall back to the
     //   client price for unit_amount and emit a warn log so we can
     //   observe how often the fallback runs.
+    // Residual risk: the frame UPLIFT itself remains fully client-trusted
+    // for resolvable lines — a buyer can obtain the frame at or below cost
+    // (down to the bare base price). Fully closing this gap requires
+    // server-side uplift resolution (either carrying frame identity on the
+    // cart line or resolving the uplift from a server-held price table).
     // Full price-correction for framed lines requires either parsing the
     // uplift server-side or carrying frame identity on the cart line.
+    const unresolvableFramed = (workId: string) =>
+      NextResponse.json(
+        {
+          error: "This framed item's price could not be verified. Please refresh your cart and try again.",
+          code: "size_label_unresolvable",
+          workId,
+        },
+        { status: 409 },
+      );
     for (const item of items) {
       if (!item.workId) continue;
       const isFramedLine = item.framed === true || (typeof item.size === "string" && item.size.includes(" + "));
       if (!isFramedLine) continue;
       const row = workById.get(item.workId);
-      if (!row?.pricing || !Array.isArray(row.pricing)) continue;
+      if (!row?.pricing || !Array.isArray(row.pricing)) {
+        return unresolvableFramed(item.workId);
+      }
       const baseSize = typeof item.size === "string" ? item.size.split(" + ")[0] : "";
       if (!baseSize) {
-        console.warn("[checkout] framed line: empty base size", {
-          workId: item.workId,
-          size: item.size,
-        });
-        continue;
+        return unresolvableFramed(item.workId);
       }
       const dbBaseTier = row.pricing.find(
         (p) => p?.label?.toLowerCase?.() === baseSize.toLowerCase(),
       );
       if (!dbBaseTier || typeof dbBaseTier.price !== "number" || dbBaseTier.price <= 0) {
-        console.warn("[checkout] framed line: base tier missing in DB pricing", {
-          workId: item.workId,
-          baseSize,
-        });
-        continue;
+        return unresolvableFramed(item.workId);
       }
       if (item.price < dbBaseTier.price) {
         return NextResponse.json(
