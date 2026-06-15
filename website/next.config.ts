@@ -44,8 +44,18 @@ const SECURITY_HEADERS = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), payment=(self), usb=(), magnetometer=(), accelerometer=()" },
   // HSTS: 2 years + preload. Only sent on HTTPS; Vercel terminates TLS so this is safe.
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-  // CSP in report-only mode first — flip to enforcing after a week of
-  // clean reports. Swap the header key to `Content-Security-Policy`.
+  // CSP stays in REPORT-ONLY mode. Decision recorded 2026-06-15 (remediation
+  // Phase 6): enforcing requires first confirming the policy produces no
+  // violations in production, but there is currently no report sink. The policy
+  // has no report-to / report-uri directive and there is no collector endpoint,
+  // so there is no violation data to justify the flip. Enforcing blind would
+  // risk breaking Stripe Checkout (3DS), Supabase realtime/storage, fonts, or
+  // any resource the policy inadvertently omits. The policy looks complete for
+  // the known integrations (Stripe, Supabase, Resend, Vercel), but "looks
+  // complete" is not "verified clean". To enable enforcement later: add a
+  // report-to directive plus a lightweight collector route, observe for a
+  // representative window, confirm the reports are clean, then swap this header
+  // key to `Content-Security-Policy`.
   { key: "Content-Security-Policy-Report-Only", value: CSP },
 ];
 
