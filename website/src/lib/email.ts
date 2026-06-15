@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { isLoan, isRevenueShare } from "./arrangement-type";
 
 let _resend: Resend | null = null;
 function getResend(): Resend | null {
@@ -180,9 +181,9 @@ export async function notifyPlacementRequest(venue: {
   const resend = getResend();
   if (!resend) return;
   try {
-    const typeLabel = venue.arrangementType === "revenue_share"
+    const typeLabel = isRevenueShare(venue.arrangementType)
       ? `Revenue Share (${venue.revenueSharePercent || 0}%)`
-      : venue.arrangementType === "free_loan" ? "Paid Loan" : "Direct Purchase";
+      : isLoan(venue.arrangementType) ? "Paid Loan" : "Direct Purchase";
     await resend.emails.send({
       from: FROM,
       to: venue.email,

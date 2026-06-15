@@ -5,6 +5,7 @@ const noInlineAdminCheck = require("./no-inline-admin-check");
 const noUnawaitedCriticalSideeffect = require("./no-unawaited-critical-sideeffect");
 const noAdHocCap = require("./no-ad-hoc-cap");
 const noRedirectParam = require("./no-redirect-param");
+const noRawArrangementType = require("./no-raw-arrangement-type");
 
 module.exports = {
   meta: {
@@ -17,5 +18,6 @@ module.exports = {
     "no-unawaited-critical-sideeffect": noUnawaitedCriticalSideeffect,
     "no-ad-hoc-cap": noAdHocCap,
     "no-redirect-param": noRedirectParam,
+    "no-raw-arrangement-type": noRawArrangementType,
   },
 };

@@ -25,6 +25,7 @@
  */
 
 import Link from "next/link";
+import { isPaidLoan as isPaidLoanArrangement } from "@/lib/arrangement-type";
 
 export interface PaidLoanPaymentChipProps {
   placementId: string;
@@ -50,7 +51,7 @@ export default function PaidLoanPaymentChip({
   compact = false,
 }: PaidLoanPaymentChipProps) {
   const isPaidLoan =
-    arrangementType === "free_loan" || (monthlyFeeGbp ?? 0) > 0;
+    isPaidLoanArrangement(arrangementType, monthlyFeeGbp) || (monthlyFeeGbp ?? 0) > 0;
   const isLive = !!liveFrom;
   const status = (subscriptionStatus || "").toLowerCase();
   const isHealthy = ACTIVE_STATES.has(status);
