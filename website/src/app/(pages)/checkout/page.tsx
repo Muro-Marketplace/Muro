@@ -512,9 +512,22 @@ export default function CheckoutPage() {
     }`;
 
   function renderInput(field: keyof ShippingInfo, placeholder: string, type = "text") {
+    const inputId = `checkout-${field}`;
+    // Strip the trailing " *" from the placeholder to produce a clean label.
+    const labelText = placeholder.replace(/\s*\*$/, "");
     return (
       <div>
+        {/* Visually hidden label keeps the input accessible via
+            getByLabelText while leaving the placeholder visible as
+            the primary affordance in the UI. */}
+        <label
+          htmlFor={inputId}
+          className="sr-only"
+        >
+          {labelText}
+        </label>
         <input
+          id={inputId}
           type={type}
           placeholder={placeholder}
           value={shipping[field] || ""}
