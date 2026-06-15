@@ -186,7 +186,7 @@ export default function CustomerSignUpPage() {
                         const r = await fetch("/api/auth/oauth-sign-state", {
                           method: "POST",
                           headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ role: "customer", next: "/browse" }),
+                          body: JSON.stringify({ role: "customer", next: postSignupNext }),
                         });
                         if (r.ok) state = (await r.json()).state || "";
                       } catch { /* fall through */ }
@@ -211,7 +211,7 @@ export default function CustomerSignUpPage() {
                         const r = await fetch("/api/auth/oauth-sign-state", {
                           method: "POST",
                           headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ role: "customer", next: "/browse" }),
+                          body: JSON.stringify({ role: "customer", next: postSignupNext }),
                         });
                         if (r.ok) state = (await r.json()).state || "";
                       } catch { /* fall through */ }
@@ -263,4 +263,5 @@ export default function CustomerSignUpPage() {
     </div>
     </RedirectIfLoggedIn>
   );
+
 }
