@@ -49,7 +49,7 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const classes = [
-    "inline-flex items-center justify-center font-medium rounded-sm transition-all duration-200 cursor-pointer",
+    "inline-flex items-center justify-center min-h-11 font-medium rounded-sm transition-all duration-200 cursor-pointer",
     sizeClasses[size],
     variantClasses[variant],
     className,

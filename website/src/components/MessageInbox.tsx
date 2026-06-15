@@ -1134,7 +1134,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           <div className="px-3.5 py-2 border-t border-border flex gap-2 flex-wrap">
                             <button
                               onClick={() => handleOfferResponse(msg, "accept")}
-                              className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-full transition-colors"
+                              className="px-4 py-2.5 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-full transition-colors"
                             >
                               Accept
                             </button>
@@ -1152,13 +1152,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                                   title: primaryTitle,
                                 });
                               }}
-                              className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
+                              className="px-4 py-2.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
                             >
                               Counter
                             </button>
                             <button
                               onClick={() => handleOfferResponse(msg, "decline")}
-                              className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 rounded-full transition-colors"
+                              className="px-4 py-2.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 rounded-full transition-colors"
                             >
                               Decline
                             </button>
@@ -1359,17 +1359,17 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                             const placementIdForCounter = meta.placementId as string | undefined;
                             return (
                               <div className="px-3.5 py-2 border-t border-border flex gap-2 flex-wrap">
-                                <button onClick={() => handlePlacementResponse(msg, true)} className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-full transition-colors">Accept</button>
+                                <button onClick={() => handlePlacementResponse(msg, true)} className="px-4 py-2.5 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-full transition-colors">Accept</button>
                                 {placementIdForCounter && (
                                   <button
                                     type="button"
                                     onClick={() => openCounterDialog(placementIdForCounter)}
-                                    className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
+                                    className="px-4 py-2.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full transition-colors"
                                   >
                                     Counter
                                   </button>
                                 )}
-                                <button onClick={() => handlePlacementResponse(msg, false)} className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 rounded-full transition-colors">Decline</button>
+                                <button onClick={() => handlePlacementResponse(msg, false)} className="px-4 py-2.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 rounded-full transition-colors">Decline</button>
                               </div>
                             );
                           }

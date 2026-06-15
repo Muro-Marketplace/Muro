@@ -537,7 +537,7 @@ function ViewsChart({ data }: { data: { date: string; profile_views: number; art
     // the min-width clamp on the inner div prevents legend collapse
     // and unreadable axis labels on iPhone SE-sized screens.
     <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-      <div ref={containerRef} className="min-w-[400px]">
+      <div ref={containerRef} className="min-w-[300px] sm:min-w-[400px]">
         {/* Legend */}
         <div className="flex items-center gap-4 mb-3">
           {lines.map((line) => (
@@ -677,7 +677,7 @@ function EarningsChart({ data }: { data: { month: string; earnings: number; sale
     // Plan F #13: same horizontal-scroll pattern as the views chart so
     // the earnings line stays legible on phones.
     <div className="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-      <div ref={containerRef} className="min-w-[400px]">
+      <div ref={containerRef} className="min-w-[300px] sm:min-w-[400px]">
         <svg width={width} height={chartHeight}>
         {yTicks.map((tick) => {
           const y = padding.top + innerHeight - (tick / maxEarnings) * innerHeight;

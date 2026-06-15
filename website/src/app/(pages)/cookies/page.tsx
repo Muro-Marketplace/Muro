@@ -115,8 +115,34 @@ export default function CookiesPage() {
                   The following table lists the specific cookies used on the
                   Wallplace website:
                 </p>
-                <div className="overflow-x-auto -mx-6 px-6">
-                  <table className="w-full min-w-[640px] text-sm border border-border rounded-sm overflow-hidden">
+                {/* Mobile card list — shown below sm breakpoint */}
+                <div className="sm:hidden space-y-3">
+                  {cookies.map((cookie) => (
+                    <div
+                      key={cookie.name}
+                      className="border border-border rounded-sm p-4 bg-surface text-sm"
+                    >
+                      <p className="font-mono text-xs text-foreground mb-2">{cookie.name}</p>
+                      <dl className="space-y-1">
+                        <div className="flex gap-2">
+                          <dt className="text-xs font-medium text-muted uppercase tracking-wider w-20 shrink-0">Category</dt>
+                          <dd className="text-xs text-muted">{cookie.category}</dd>
+                        </div>
+                        <div className="flex gap-2">
+                          <dt className="text-xs font-medium text-muted uppercase tracking-wider w-20 shrink-0">Purpose</dt>
+                          <dd className="text-xs text-muted leading-relaxed">{cookie.purpose}</dd>
+                        </div>
+                        <div className="flex gap-2">
+                          <dt className="text-xs font-medium text-muted uppercase tracking-wider w-20 shrink-0">Duration</dt>
+                          <dd className="text-xs text-muted">{cookie.duration}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop table — hidden below sm breakpoint */}
+                <div className="hidden sm:block overflow-x-auto -mx-6 px-6">
+                  <table className="w-full sm:min-w-[640px] text-sm border border-border rounded-sm overflow-hidden">
                     <thead>
                       <tr className="bg-surface border-b border-border">
                         <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wider">

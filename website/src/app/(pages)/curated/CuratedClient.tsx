@@ -308,13 +308,13 @@ export default function CuratedClient() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Link
                   href="#plans"
-                  className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
+                  className="inline-flex items-center justify-center w-full sm:w-auto sm:min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
                 >
                   PICK A PLAN
                 </Link>
                 <Link
                   href="#how"
-                  className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white/10 text-white border border-white/30 rounded-sm hover:bg-white/15 transition-colors backdrop-blur-sm"
+                  className="inline-flex items-center justify-center w-full sm:w-auto sm:min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white/10 text-white border border-white/30 rounded-sm hover:bg-white/15 transition-colors backdrop-blur-sm"
                 >
                   HOW IT WORKS
                 </Link>
