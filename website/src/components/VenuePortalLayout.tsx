@@ -183,7 +183,7 @@ export default function VenuePortalLayout({
   return (
     <div className="flex flex-1 bg-background">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col w-56 shrink-0 bg-[#F5F3F0] border-r border-border sticky top-0 lg:top-16 self-start h-[100dvh]">
+      <aside className="hidden lg:flex flex-col w-56 shrink-0 bg-[#F5F3F0] border-r border-border sticky top-0 lg:top-16 self-start h-[calc(100dvh-4rem)]">
         {navContent}
       </aside>
 
