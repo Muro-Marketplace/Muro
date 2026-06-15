@@ -92,58 +92,58 @@ test.describe("tap-target audit — auth-gated pages (skipped: no auth fixture)"
   // Remove the test.skip() calls here once a seeded storageState is wired
   // into playwright.config.ts (artist + venue test accounts).
 
-  test("/artist/dashboard — all interactive elements >= 44 x 44 px", async ({
+  test("/artist-portal — all interactive elements >= 44 x 44 px", async ({
     page,
   }) => {
     test.skip(
       true,
       "Needs authenticated storageState — redirects to /login without it",
     );
-    await page.goto("/artist/dashboard");
-    await assertTapTargets(page, "/artist/dashboard");
+    await page.goto("/artist-portal");
+    await assertTapTargets(page, "/artist-portal");
   });
 
-  test("/artist/works — all interactive elements >= 44 x 44 px", async ({
+  test("/artist-portal/portfolio — all interactive elements >= 44 x 44 px", async ({
     page,
   }) => {
     test.skip(
       true,
       "Needs authenticated storageState — redirects to /login without it",
     );
-    await page.goto("/artist/works");
-    await assertTapTargets(page, "/artist/works");
+    await page.goto("/artist-portal/portfolio");
+    await assertTapTargets(page, "/artist-portal/portfolio");
   });
 
-  test("/artist/enquiries — all interactive elements >= 44 x 44 px", async ({
+  test("/artist-portal/placements — all interactive elements >= 44 x 44 px", async ({
     page,
   }) => {
     test.skip(
       true,
       "Needs authenticated storageState — redirects to /login without it",
     );
-    await page.goto("/artist/enquiries");
-    await assertTapTargets(page, "/artist/enquiries");
+    await page.goto("/artist-portal/placements");
+    await assertTapTargets(page, "/artist-portal/placements");
   });
 
-  test("/venue/dashboard — all interactive elements >= 44 x 44 px", async ({
+  test("/venue-portal — all interactive elements >= 44 x 44 px", async ({
     page,
   }) => {
     test.skip(
       true,
       "Needs authenticated storageState — redirects to /login without it",
     );
-    await page.goto("/venue/dashboard");
-    await assertTapTargets(page, "/venue/dashboard");
+    await page.goto("/venue-portal");
+    await assertTapTargets(page, "/venue-portal");
   });
 
-  test("/venue/placements — all interactive elements >= 44 x 44 px", async ({
+  test("/venue-portal/placements — all interactive elements >= 44 x 44 px", async ({
     page,
   }) => {
     test.skip(
       true,
       "Needs authenticated storageState — redirects to /login without it",
     );
-    await page.goto("/venue/placements");
-    await assertTapTargets(page, "/venue/placements");
+    await page.goto("/venue-portal/placements");
+    await assertTapTargets(page, "/venue-portal/placements");
   });
 });
