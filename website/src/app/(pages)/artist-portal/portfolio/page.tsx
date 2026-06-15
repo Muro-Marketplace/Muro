@@ -2467,7 +2467,7 @@ export default function PortfolioPage() {
                                 value={size.price || ""}
                                 onChange={(e) => updateSize(i, "price", Number(e.target.value) || 0)}
                                 placeholder="Price"
-                                className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
+                                className="w-16 sm:w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                               />
                             </div>
                             {form.shippingPerSize && (
@@ -2498,7 +2498,7 @@ export default function PortfolioPage() {
                                       });
                                     }}
                                     placeholder={shipEst ? shipEst.cost.toFixed(2) : (defaultShipping || "9.95")}
-                                    className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
+                                    className="w-16 sm:w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                                   />
                                 </div>
                                 {shipEst && !shipCurrent && (
@@ -2544,7 +2544,7 @@ export default function PortfolioPage() {
                                     });
                                   }}
                                   placeholder="-"
-                                  className="w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
+                                  className="w-16 sm:w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
                                 />
                               </div>
                             )}
