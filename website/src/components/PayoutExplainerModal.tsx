@@ -61,6 +61,18 @@ export default function PayoutExplainerModal({ audience, userId, active }: Props
     setOpen(true);
   }, [active, userId, audience]);
 
+  // Dismiss on Escape so keyboard users can close the modal without
+  // reaching the "Got it" button.
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") dismiss();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   function dismiss() {
     if (userId) markSeen(audience, userId);
     setOpen(false);
@@ -79,9 +91,21 @@ export default function PayoutExplainerModal({ audience, userId, active }: Props
       onClick={dismiss}
     >
       <div
-        className="bg-background rounded-sm w-full max-w-lg p-6 shadow-xl"
+        className="bg-background rounded-sm w-full max-w-lg p-6 shadow-xl relative"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Corner close button — gives mouse and touch users an obvious
+            affordance without waiting for the "Got it" CTA. */}
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={dismiss}
+          className="absolute top-4 right-4 text-muted hover:text-foreground transition-colors"
+        >
+          <svg width="16" height="16" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+            <path d="M3 3l8 8M11 3L3 11" />
+          </svg>
+        </button>
         <div className="flex items-start gap-3 mb-5">
           <div className="w-9 h-9 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
             <svg

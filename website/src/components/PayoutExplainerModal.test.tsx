@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, act } from "@testing-library/react";
 import PayoutExplainerModal from "./PayoutExplainerModal";
 
 // Node 25's native Storage shim used by jsdom is partial; swap in a
@@ -93,5 +93,21 @@ describe("PayoutExplainerModal", () => {
     );
     render(<PayoutExplainerModal audience="venue" userId="u1" active={true} />);
     expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("dismisses on Escape key press", () => {
+    render(<PayoutExplainerModal audience="artist" userId="u1" active={true} />);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("dismisses when the corner X button is clicked", () => {
+    render(<PayoutExplainerModal audience="artist" userId="u1" active={true} />);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
