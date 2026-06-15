@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, Suspense, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -30,6 +30,11 @@ import {
   serializeLocationParams,
   type ParsedLocation,
 } from "./locationParams";
+import {
+  mergeFilterParams,
+  parseFilters,
+  type BrowseFilterState,
+} from "./filterParams";
 
 /** Haversine great-circle distance in miles */
 function calcDistance(
@@ -362,7 +367,6 @@ function BrowsePortfoliosPageInner() {
   // Reset pagination when switching views / categories so users don't land
   // on an empty grid if they scroll back to a narrow filter.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadedArtists(PAGE_SIZE);
     setLoadedWorks(PAGE_SIZE);
     setLoadedCollections(PAGE_SIZE);
@@ -380,7 +384,6 @@ function BrowsePortfoliosPageInner() {
     // pill active. Collections view ignores discipline since the pill
     // row isn't shown.
     if (viewParam === "collections") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveDiscipline("collections");
     } else if (viewParam === "portfolios") {
       setActiveDiscipline(disciplineParam || "");
@@ -404,7 +407,6 @@ function BrowsePortfoliosPageInner() {
         .map((s) => s.trim())
         .filter(Boolean),
     );
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveSubStyles(next);
   }, [subParam]);
 
@@ -610,6 +612,147 @@ function BrowsePortfoliosPageInner() {
   const [collectionsFreeLoan, setCollectionsFreeLoan] = useState(false);
   const [collectionsRevShare, setCollectionsRevShare] = useState(false);
   const [collectionsPurchase, setCollectionsPurchase] = useState(false);
+
+  // ---------------------------------------------------------------------------
+  // Sidebar filter <-> URL sync (Bug 20).
+  //
+  // The primary filters above (view / discipline / sub / q / featured) and the
+  // location filter already round-trip through the URL. The gallery +
+  // collections *refinement* filters did not, so a refresh or a shared link
+  // dropped every one. We sync them here using filterParams.ts.
+  //
+  // Architecture (deliberate, see the DistanceSliderControl note on the
+  // slider-thumb lag bug): LOCAL STATE STAYS THE OWNER. We only
+  //   (a) HYDRATE the URL -> state ONCE on mount, and
+  //   (b) MIRROR state -> URL via router.replace, loop-guarded.
+  // No refinement filter is ever a URL-controlled-every-render value, so the
+  // price/range sliders keep reading their local-state value and never snap
+  // back mid-drag.
+  // ---------------------------------------------------------------------------
+
+  // Bundle the in-scope state into the shape filterParams.ts speaks. Memoised
+  // so the write-effect below has a stable dependency that only changes when a
+  // synced filter actually changes.
+  const filterState = useMemo<BrowseFilterState>(
+    () => ({
+      artistSort,
+      gallerySort,
+      galleryTheme,
+      galleryMedium,
+      galleryStyle,
+      galleryAvailableOnly,
+      galleryPriceMin,
+      galleryPriceMax,
+      galleryLocationMode,
+      galleryOriginals,
+      galleryPrints,
+      galleryFraming,
+      galleryFreeLoan,
+      galleryRevenueShare,
+      galleryRevenueShareMin,
+      galleryPurchase,
+      gallerySizes,
+      collectionsLocationMode,
+      collectionsPriceMin,
+      collectionsPriceMax,
+      collectionsFreeLoan,
+      collectionsRevShare,
+      collectionsPurchase,
+    }),
+    [
+      artistSort,
+      gallerySort,
+      galleryTheme,
+      galleryMedium,
+      galleryStyle,
+      galleryAvailableOnly,
+      galleryPriceMin,
+      galleryPriceMax,
+      galleryLocationMode,
+      galleryOriginals,
+      galleryPrints,
+      galleryFraming,
+      galleryFreeLoan,
+      galleryRevenueShare,
+      galleryRevenueShareMin,
+      galleryPurchase,
+      gallerySizes,
+      collectionsLocationMode,
+      collectionsPriceMin,
+      collectionsPriceMax,
+      collectionsFreeLoan,
+      collectionsRevShare,
+      collectionsPurchase,
+    ],
+  );
+
+  // (a) HYDRATE once on mount. Reading the URL params here (not via a
+  // searchParams-keyed effect) means a later URL change driven by our own
+  // write below cannot re-trigger hydration and clobber a user's edit — the
+  // ref latches after the first pass. We apply ONLY the fields present in the
+  // URL (parseFilters returns a partial), so absent params leave the page's
+  // existing useState defaults untouched and we never overwrite a real value
+  // with a junk one. Empty dep array + a ref guard = strictly first-render.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const parsed = parseFilters(searchParams);
+    if (parsed.artistSort !== undefined) setArtistSort(parsed.artistSort);
+    if (parsed.gallerySort !== undefined) setGallerySort(parsed.gallerySort);
+    if (parsed.galleryTheme !== undefined) setGalleryTheme(parsed.galleryTheme);
+    if (parsed.galleryMedium !== undefined) setGalleryMedium(parsed.galleryMedium);
+    if (parsed.galleryStyle !== undefined) setGalleryStyle(parsed.galleryStyle);
+    if (parsed.galleryAvailableOnly !== undefined)
+      setGalleryAvailableOnly(parsed.galleryAvailableOnly);
+    if (parsed.galleryPriceMin !== undefined) setGalleryPriceMin(parsed.galleryPriceMin);
+    if (parsed.galleryPriceMax !== undefined) setGalleryPriceMax(parsed.galleryPriceMax);
+    if (parsed.galleryLocationMode !== undefined)
+      setGalleryLocationMode(parsed.galleryLocationMode);
+    if (parsed.galleryOriginals !== undefined) setGalleryOriginals(parsed.galleryOriginals);
+    if (parsed.galleryPrints !== undefined) setGalleryPrints(parsed.galleryPrints);
+    if (parsed.galleryFraming !== undefined) setGalleryFraming(parsed.galleryFraming);
+    if (parsed.galleryFreeLoan !== undefined) setGalleryFreeLoan(parsed.galleryFreeLoan);
+    if (parsed.galleryRevenueShare !== undefined)
+      setGalleryRevenueShare(parsed.galleryRevenueShare);
+    if (parsed.galleryRevenueShareMin !== undefined)
+      setGalleryRevenueShareMin(parsed.galleryRevenueShareMin);
+    if (parsed.galleryPurchase !== undefined) setGalleryPurchase(parsed.galleryPurchase);
+    if (parsed.gallerySizes !== undefined) setGallerySizes(parsed.gallerySizes);
+    if (parsed.collectionsLocationMode !== undefined)
+      setCollectionsLocationMode(parsed.collectionsLocationMode);
+    if (parsed.collectionsPriceMin !== undefined)
+      setCollectionsPriceMin(parsed.collectionsPriceMin);
+    if (parsed.collectionsPriceMax !== undefined)
+      setCollectionsPriceMax(parsed.collectionsPriceMax);
+    if (parsed.collectionsFreeLoan !== undefined)
+      setCollectionsFreeLoan(parsed.collectionsFreeLoan);
+    if (parsed.collectionsRevShare !== undefined)
+      setCollectionsRevShare(parsed.collectionsRevShare);
+    if (parsed.collectionsPurchase !== undefined)
+      setCollectionsPurchase(parsed.collectionsPurchase);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // (b) MIRROR state -> URL, debounced + loop-guarded. We hold off until
+  // hydration has run so the very first effect pass can't strip the params we
+  // were about to read on mount. The guard `nextQs === searchParams.toString()`
+  // is the hard stop against a replace-loop: a no-op render (or a render where
+  // only an unsynced bit of state changed) produces the same query string, so
+  // router.replace is never called. mergeFilterParams preserves every
+  // non-filter param (view/discipline/sub/q/featured/loc_*) so this never
+  // fights the existing primary-filter sync. The 200ms debounce keeps a slider
+  // drag from spamming history; the trailing call still writes the final value.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    const handle = setTimeout(() => {
+      const currentQs = searchParams?.toString() ?? "";
+      const nextQs = mergeFilterParams(filterState, new URLSearchParams(currentQs));
+      if (nextQs === currentQs) return; // loop guard: nothing to write
+      router.replace(`/browse${nextQs ? `?${nextQs}` : ""}`, { scroll: false });
+    }, 200);
+    return () => clearTimeout(handle);
+  }, [filterState, searchParams, router]);
 
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
