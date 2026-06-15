@@ -9,8 +9,7 @@
 //   pro     → 10/day
 //   (`-1` sentinel = unlimited, reserved for staff)
 //
-// Callers pass the kind of outreach they're about to make plus the
-// number of units (e.g. multi-work placement request counts as N).
+// Callers pass the number of units (e.g. multi-work placement request counts as N).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -20,10 +19,7 @@ const DAILY_LIMITS: Record<string, number> = {
   pro: 10,
 };
 
-export type OutreachKind = "placement_request" | "first_contact_message" | "artwork_request_response";
-
 export interface OutreachCapResult {
-  allowed: boolean;
   plan: string;
   limit: number;
   used: number;
@@ -33,10 +29,28 @@ export interface OutreachCapResult {
   message: string;
 }
 
+export interface OutreachCapOpts {
+  /**
+   * When set, and the conversation id already appears in the artist's
+   * messages today, the call is treated as a reply / re-contact (not
+   * new outreach) and is unconditionally allowed. This mirrors the
+   * `!startedToday.has(cidLocal)` guard that the old inline counter in
+   * the messages route used to implement.
+   *
+   * The exemption ONLY fires when `exemptConversationId` is already present
+   * in the artist's set of conversations messaged today — i.e. it is a reply
+   * or re-contact into a thread that was already counted. A conversation id
+   * not yet in today's set is treated as a normal first contact and is fully
+   * subject to the daily cap.
+   */
+  exemptConversationId?: string;
+}
+
 export async function checkArtistOutreachCap(
   db: SupabaseClient,
   artistUserId: string,
   units = 1,
+  opts?: OutreachCapOpts,
 ): Promise<{ ok: true } | { ok: false; result: OutreachCapResult }> {
   const planRow = await db
     .from("artist_profiles")
@@ -45,6 +59,10 @@ export async function checkArtistOutreachCap(
     .single();
   const planKey = ((planRow.data as { subscription_plan?: string | null } | null)?.subscription_plan || "core").toLowerCase();
   const limit = DAILY_LIMITS[planKey] ?? DAILY_LIMITS.core;
+  // Guards the unlimited sentinel (-1). No DAILY_LIMITS entry currently maps
+  // to -1 (reserved for a future staff/unlimited plan), so this branch is
+  // intentionally unreachable today. Removing it would cause a future -1
+  // entry to silently block ALL outreach (`used + units > -1` is always true).
   if (limit === -1) return { ok: true };
 
   const dayStart = new Date();
@@ -81,12 +99,19 @@ export async function checkArtistOutreachCap(
   const messageCount = conversationsToday.size;
 
   const used = placementCount + messageCount + responseCount;
+
+  // A message into a conversation the artist already started today is a
+  // reply / re-contact, not new outreach, so it is exempt (mirrors the
+  // old cidLocal guard in the messages route).
+  if (opts?.exemptConversationId && conversationsToday.has(opts.exemptConversationId)) {
+    return { ok: true };
+  }
+
   if (used + units > limit) {
     const planName = planKey === "premium" ? "Premium" : planKey === "pro" ? "Pro" : "Core";
     return {
       ok: false,
       result: {
-        allowed: false,
         plan: planKey,
         limit,
         used,
