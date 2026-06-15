@@ -30,4 +30,13 @@ describe("safeRedirect()", () => {
     expect(safeRedirect("javascript:alert(1)", "/browse")).toBe("/browse");
     expect(safeRedirect("/javascript:alert(1)", "/browse")).toBe("/browse");
   });
+
+  it("rejects in-app paths containing ASCII control characters", () => {
+    const tab = String.fromCharCode(9);
+    const nul = String.fromCharCode(0);
+    const del = String.fromCharCode(127);
+    expect(safeRedirect("/foo" + tab + "bar", "/browse")).toBe("/browse");
+    expect(safeRedirect("/foo" + nul + "bar", "/browse")).toBe("/browse");
+    expect(safeRedirect("/foo" + del, "/browse")).toBe("/browse");
+  });
 });
