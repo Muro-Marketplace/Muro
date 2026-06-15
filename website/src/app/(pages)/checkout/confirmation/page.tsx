@@ -146,7 +146,7 @@ function ConfirmationContent() {
           href="/browse"
           className="inline-flex items-center justify-center px-6 py-3 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-background transition-colors"
         >
-          Continue Browsing
+          Continue browsing
         </Link>
       </div>
     );
@@ -238,7 +238,7 @@ function ConfirmationContent() {
           href="/browse"
           className="inline-flex items-center justify-center px-6 py-3 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-background transition-colors"
         >
-          Continue Browsing
+          Continue browsing
         </Link>
         {user && (
           <Link
