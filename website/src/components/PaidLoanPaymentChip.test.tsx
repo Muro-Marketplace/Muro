@@ -55,4 +55,18 @@ describe("PaidLoanPaymentChip — N3 entry-point reachability", () => {
     );
     expect(container.firstChild).toBeNull();
   });
+
+  it("renders nothing for a free_loan display with no fee (nothing to bill)", () => {
+    const { container } = render(
+      <PaidLoanPaymentChip
+        placementId="p1"
+        arrangementType="free_loan"
+        monthlyFeeGbp={null}
+        liveFrom={null}
+        subscriptionStatus={null}
+        role="venue"
+      />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
 });
