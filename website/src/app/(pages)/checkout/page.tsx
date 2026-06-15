@@ -656,7 +656,9 @@ export default function CheckoutPage() {
                         OR "format wrong" without fighting the renderInput
                         helper's single-error contract. */}
                     <div>
+                      <label htmlFor="checkout-postcode" className="sr-only">Postcode</label>
                       <input
+                        id="checkout-postcode"
                         type="text"
                         placeholder="Postcode *"
                         value={shipping.postcode || ""}
@@ -687,17 +689,21 @@ export default function CheckoutPage() {
                         </p>
                       )}
                     </div>
-                    <select
-                      value={shipping.country}
-                      onChange={(e) => updateField("country", e.target.value)}
-                      className={inputClass("country")}
-                    >
+                    <div>
+                      <label htmlFor="checkout-country" className="sr-only">Country</label>
+                      <select
+                        id="checkout-country"
+                        value={shipping.country}
+                        onChange={(e) => updateField("country", e.target.value)}
+                        className={inputClass("country")}
+                      >
                       {COUNTRIES.map((c) => (
                         <option key={c.code} value={c.code}>
                           {c.label}
                         </option>
                       ))}
-                    </select>
+                      </select>
+                    </div>
                   </div>
                   <textarea
                     placeholder="Delivery notes (optional)"

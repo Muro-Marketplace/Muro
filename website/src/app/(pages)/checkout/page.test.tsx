@@ -117,7 +117,7 @@ describe("Checkout submit button copy (fix 7.1)", () => {
     fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: "07700900000" } });
     fireEvent.change(screen.getByLabelText(/address line 1/i), { target: { value: "1 High Street" } });
     fireEvent.change(screen.getByLabelText(/city/i), { target: { value: "London" } });
-    fireEvent.change(screen.getByPlaceholderText(/postcode \*/i), { target: { value: "SW1A 1AA" } });
+    fireEvent.change(screen.getByLabelText(/postcode/i), { target: { value: "SW1A 1AA" } });
 
     // Click the submit button (non-async — just fires the event).
     fireEvent.click(screen.getByRole("button", { name: /proceed to payment/i }));
@@ -147,9 +147,8 @@ describe("Checkout renderInput a11y (fix 3.9)", () => {
     // Give the async effects time to resolve (pickup lookup, address fetch).
     await new Promise((r) => setTimeout(r, 50));
 
-    // Only the fields rendered via the renderInput helper (postcode has
-    // a bespoke inline block with extra format validation, so it is
-    // excluded from this helper's scope).
+    // Fields rendered via the renderInput helper plus the bespoke postcode
+    // and country controls which each received sr-only labels in fix 3.9.
     const fieldMappings: Array<[string, string]> = [
       ["checkout-fullName", "Full name"],
       ["checkout-email", "Email address"],
@@ -168,5 +167,15 @@ describe("Checkout renderInput a11y (fix 3.9)", () => {
       const label = document.querySelector(`label[for="${id}"]`);
       expect(label, `<label for="${id}"> not found`).toBeTruthy();
     }
+
+    // Bespoke postcode input: must be reachable by label (fix 3.9).
+    const postcodeInput = screen.getByLabelText(/postcode/i);
+    expect(postcodeInput, "Postcode input not found via getByLabelText").toBeTruthy();
+    expect(postcodeInput.id).toBe("checkout-postcode");
+
+    // Country select: must be reachable by label (fix 3.9).
+    const countrySelect = screen.getByLabelText(/country/i);
+    expect(countrySelect, "Country select not found via getByLabelText").toBeTruthy();
+    expect(countrySelect.id).toBe("checkout-country");
   });
 });
