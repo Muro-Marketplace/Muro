@@ -15,6 +15,7 @@ import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 import { isFlagOn } from "@/lib/feature-flags";
+import { isLoan } from "@/lib/arrangement-type";
 
 interface PlacementRow {
   id: string;
@@ -519,7 +520,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                 })()
               : placement.arrangement_type === "revenue_share"
                 ? `Revenue Share${placement.revenue_share_percent ? ` (${placement.revenue_share_percent}%)` : ""}`
-                : placement.arrangement_type === "free_loan"
+                : isLoan(placement.arrangement_type)
                   ? "Paid Loan"
                   : "Purchase"}
           </p>
@@ -942,7 +943,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
               </p>
             </div>
           </>
-        ) : placement.arrangement_type === "free_loan" ? (
+        ) : isLoan(placement.arrangement_type) ? (
           <>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Monthly fee</p>
