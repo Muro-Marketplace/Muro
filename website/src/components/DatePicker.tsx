@@ -125,7 +125,7 @@ export default function DatePicker({
               weekdays: "text-[10px] uppercase tracking-wider text-muted",
               weekday: "px-2 py-1 font-normal",
               day: "p-0",
-              day_button: "w-8 h-8 text-xs rounded-sm hover:bg-accent/10 cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
+              day_button: "w-11 h-11 text-xs rounded-sm hover:bg-accent/10 cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
               selected: "!bg-accent !text-white hover:!bg-accent-hover",
               today: "font-bold text-accent",
               outside: "text-muted/50",
