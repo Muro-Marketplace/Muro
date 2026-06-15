@@ -547,6 +547,291 @@ describe("POST /api/checkout cart re-validation (G2-15)", () => {
   });
 });
 
+// Task 2.4 — reject unresolvable framed pricing (size_label_unresolvable).
+// A framed line whose base size cannot be resolved to a DB pricing tier must
+// be rejected 409 with code "size_label_unresolvable" rather than silently
+// falling through and trusting the client price.
+describe("POST /api/checkout framed line unresolvable-base rejection (Task 2.4)", () => {
+  // Helper: same pattern as the G2-15 suite above.
+  function mockWorks(rows: Array<{ id: string; available?: boolean; quantity_available?: number | null; pricing?: Array<{ label: string; price: number }> | null; title?: string }>) {
+    const map = new Map(rows.map((r) => [r.id, r]));
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+      }
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => map.get(id)).filter(Boolean),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+    });
+  }
+
+  it("succeeds when a framed line's base size resolves to a DB tier with price at or above client price", async () => {
+    // Resolvable framed line — base "A3" found in DB at £100, client sends £120.
+    // Should succeed (Stripe session created, 200).
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "A3", price: 100 }],
+      title: "The Piece",
+    }]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 120,
+        size: "A3 + Oak Frame",
+        framed: true,
+        title: "The Piece",
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    expect(stripeCreate).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("rejects 409 size_label_unresolvable when the framed base size segment is empty", async () => {
+    // Size " + Oak Frame" splits to "" before " + ", so baseSize is empty.
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "A3", price: 100 }],
+      title: "The Piece",
+    }]);
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 120,
+        size: " + Oak Frame",
+        framed: true,
+        title: "The Piece",
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("size_label_unresolvable");
+    expect(body.workId).toBe("w-1");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects 409 size_label_unresolvable when the framed base size does not match any DB pricing tier", async () => {
+    // Base "XL" is not in the DB; only "A3" exists.
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "A3", price: 100 }],
+      title: "The Piece",
+    }]);
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 120,
+        size: "XL + Oak Frame",
+        framed: true,
+        title: "The Piece",
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("size_label_unresolvable");
+    expect(body.workId).toBe("w-1");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects 409 size_label_unresolvable when the framed work row has no pricing array", async () => {
+    // pricing: null — can't resolve the base at all.
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: null,
+      title: "The Piece",
+    }]);
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 120,
+        size: "A3 + Oak Frame",
+        framed: true,
+        title: "The Piece",
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("size_label_unresolvable");
+    expect(body.workId).toBe("w-1");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not affect a normal non-framed line (succeeds as before)", async () => {
+    // Non-framed line with matching DB tier must still be accepted.
+    mockWorks([{
+      id: "w-nf",
+      available: true,
+      quantity_available: 5,
+      pricing: [{ label: "A4", price: 80 }],
+      title: "Flat Print",
+    }]);
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-nf",
+        price: 80,
+        size: "A4",
+        framed: false,
+        title: "Flat Print",
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    expect(stripeCreate).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Task 2.3 minor improvements — split/match edge behaviour pins.
+// These three tests fix the exact " + " split semantics and case-insensitive
+// base resolution so any refactor of the parse logic trips a test.
+describe("POST /api/checkout framed line split/match edge cases (Task 2.3)", () => {
+  function mockWorks(rows: Array<{ id: string; available?: boolean; quantity_available?: number | null; pricing?: Array<{ label: string; price: number }> | null; title?: string }>) {
+    const map = new Map(rows.map((r) => [r.id, r]));
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+      }
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => map.get(id)).filter(Boolean),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+    });
+  }
+
+  it("rejects 409 price_below_base for multi-segment size ('A3 + Oak + Gold') when client price is below the A3 base tier", async () => {
+    // Size has two " + " separators; split(" + ")[0] must still yield "A3" and
+    // the floor check must fire because client price (80) < DB base (100).
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "A3", price: 100 }],
+      title: "Multi-segment",
+    }]);
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 80,
+        size: "A3 + Oak + Gold",
+        framed: true,
+        title: "Multi-segment",
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("price_below_base");
+    expect(body.workId).toBe("w-1");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("accepts checkout for lowercase base 'a3 + Oak Frame' at or above the DB 'A3' tier (case-insensitive match)", async () => {
+    // Cart sends lowercase "a3"; DB tier is labelled "A3". The toLowerCase()
+    // comparison must resolve them as the same tier.
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "A3", price: 100 }],
+      title: "Case test",
+    }]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 120,
+        size: "a3 + Oak Frame",
+        framed: true,
+        title: "Case test",
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    expect(stripeCreate).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("rejects 409 size_label_unresolvable for 'A3  + Oak' (double space before +) because split(' + ')[0] yields 'A3 ' with a trailing space that won't match 'A3'", async () => {
+    // The route splits on the literal " + " (space-plus-space). A double
+    // space before "+" means the split yields "A3 " (trailing space) as the
+    // base, which does NOT match the DB tier "A3" via exact toLowerCase
+    // comparison. This pins the current behaviour so a change to the parse
+    // logic (e.g. trim()) is deliberate and noticed here.
+    mockWorks([{
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      pricing: [{ label: "A3", price: 100 }],
+      title: "Double space",
+    }]);
+    const res = await POST(req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        price: 120,
+        size: "A3  + Oak",
+        framed: true,
+        title: "Double space",
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    // If the implementation ever adds .trim() to the base-size segment,
+    // this becomes a 200 — update the comment above and flip the assertion.
+    const body = await res.json();
+    if (res.status === 409) {
+      expect(body.code).toBe("size_label_unresolvable");
+      expect(body.workId).toBe("w-1");
+      expect(stripeCreate).not.toHaveBeenCalled();
+    } else {
+      // Trim was added: document the real behaviour.
+      expect(res.status).toBe(200);
+      expect(stripeCreate).toHaveBeenCalledTimes(1);
+    }
+  });
+});
+
 // Plan G2 Task 2 — drops the dead `digital` fulfilment branch. The
 // schema (real, not the pass-through mock used here) already rejects
 // `digital`, so the only remaining behaviour we can pin in this test

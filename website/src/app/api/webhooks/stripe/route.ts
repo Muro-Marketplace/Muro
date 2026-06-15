@@ -99,13 +99,13 @@ export async function POST(request: Request) {
               managed_monthly: "Managed, monthly rotation",
               managed_quarterly: "Managed, quarterly refresh",
             };
-            notifyCurationCustomerPaid({
+            await notifyCurationCustomerPaid({
               email: existing.contact_email,
               contactName: existing.contact_name,
               venueName: existing.venue_name,
               tierLabel: tierLabels[existing.tier] || existing.tier,
               amountGbp: amountPaid,
-            }).catch(() => {});
+            }).catch((err) => { if (err) console.error("notifyCurationCustomerPaid error:", err); });
           }
         }
       }
@@ -631,7 +631,7 @@ export async function POST(request: Request) {
               const { data: { user: venueUser } } = await db.auth.admin.getUserById(vp.user_id);
               const { data: ap } = await db.from("artist_profiles").select("name").eq("slug", firstArtistSlug).single();
               if (venueUser?.email) {
-                notifyVenueOrderFromPlacement({ email: venueUser.email, venueName: vp.name, artistName: ap?.name || firstArtistSlug, itemTitle: firstItemTitle, total, venueRevenue }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+                await notifyVenueOrderFromPlacement({ email: venueUser.email, venueName: vp.name, artistName: ap?.name || firstArtistSlug, itemTitle: firstItemTitle, total, venueRevenue }).catch((err) => { if (err) console.error("notifyVenueOrderFromPlacement error:", err); });
               }
               createNotification({
                 userId: vp.user_id,

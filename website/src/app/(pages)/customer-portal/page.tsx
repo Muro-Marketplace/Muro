@@ -9,6 +9,7 @@ import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import { formatCurrency } from "@/lib/format-currency";
 import { isRefundEligible } from "@/lib/order-status-labels";
 import { useUrlState } from "@/lib/use-url-state";
+import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
 
 function safeArray(val: unknown): { title: string; qty: number; price: number; artistSlug?: string }[] {
   if (Array.isArray(val)) return val;
@@ -35,15 +36,8 @@ interface Order {
   venue_slug?: string;
 }
 
-interface RefundRequest {
-  id: string;
-  order_id: string;
-  status: "pending" | "approved" | "rejected";
-  type: "full" | "partial";
-  amount?: number;
-  reason: string;
-  created_at: string;
-}
+// RefundRequest is now the canonical shared type from the API module.
+type RefundRequest = RefundRequestRow;
 
 type StatusFilter = "all" | "active" | "delivered" | "cancelled";
 
@@ -100,7 +94,7 @@ function CustomerPortalContent() {
   useEffect(() => {
     authFetch("/api/refunds")
       .then((r) => r.json())
-      .then((data) => { if (data.requests) setRefundRequests(data.requests); })
+      .then((data: RefundsListResponse) => { if (data.refundRequests) setRefundRequests(data.refundRequests); })
       .catch(() => {});
   }, []);
 
@@ -114,8 +108,8 @@ function CustomerPortalContent() {
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        const data = await res.json();
-        if (data.request) setRefundRequests((prev) => [...prev, data.request]);
+        const data: RefundRequestCreateResponse = await res.json();
+        if (data.refundRequest) setRefundRequests((prev) => [...prev, data.refundRequest]);
         setRefundSuccess(true);
         setShowRefundForm(false);
         setRefundReason("");
@@ -271,7 +265,7 @@ function CustomerPortalContent() {
                 );
               }
 
-              if (orderRefund && orderRefund.status === "pending") {
+              if (orderRefund && (orderRefund.status === "pending" || orderRefund.status === "processing")) {
                 return (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 text-sm font-medium rounded-sm">
                     <span className="w-2 h-2 rounded-full bg-amber-500" />

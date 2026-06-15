@@ -208,7 +208,7 @@ export async function POST(request: Request) {
     // Admin ping, keep the legacy helper, it's internal only.
     // primaryMedium is optional now; fall back to a placeholder so
     // the admin notification helper's required-string contract holds.
-    notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium || "-" });
+    await notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium || "-" }).catch((err) => { if (err) console.error("notifyAdminNewApplication error:", err); });
 
     // Applicant receipt via the new pipeline (polished template, logged,
     // preference-aware). We key idempotency off the email address so a

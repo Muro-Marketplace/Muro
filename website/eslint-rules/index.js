@@ -2,6 +2,7 @@
 
 const noRawOrFilter = require("./no-raw-or-filter");
 const noInlineAdminCheck = require("./no-inline-admin-check");
+const noUnawaitedCriticalSideeffect = require("./no-unawaited-critical-sideeffect");
 
 module.exports = {
   meta: {
@@ -11,5 +12,6 @@ module.exports = {
   rules: {
     "no-raw-or-filter": noRawOrFilter,
     "no-inline-admin-check": noInlineAdminCheck,
+    "no-unawaited-critical-sideeffect": noUnawaitedCriticalSideeffect,
   },
 };

@@ -76,7 +76,10 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 
 vi.mock("@/lib/email", () => ({
-  notifyAdminNewApplication: (...args: unknown[]) => notifyAdminMock(...args),
+  notifyAdminNewApplication: (...args: unknown[]) => {
+    notifyAdminMock(...args);
+    return Promise.resolve();
+  },
 }));
 
 vi.mock("@/lib/email/send", () => ({

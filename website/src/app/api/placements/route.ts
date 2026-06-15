@@ -596,7 +596,7 @@ export async function POST(request: Request) {
             metadata: { placementId: placementIdForLink, arrangementType: parsed.data[0].type },
           });
         } else {
-          notifyPlacementRequest({
+          await notifyPlacementRequest({
             email: notifyUser.email,
             venueName: venueProfile!.name,
             artistName: artistProfile!.name,
@@ -604,7 +604,7 @@ export async function POST(request: Request) {
             arrangementType: parsed.data[0].type,
             revenueSharePercent: parsed.data[0].revenueSharePercent,
             message: parsed.data[0].message,
-          }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+          }).catch((err) => { if (err) console.error("notifyPlacementRequest error:", err); });
         }
       }
 

@@ -505,7 +505,7 @@ export async function POST(request: Request) {
           const { data: { user: recipientUser } } = await db.auth.admin.getUserById(recipientProfile.user_id);
           if (recipientUser?.email) {
             const senderProfile = senderIsArtist ? artistProfile : venueProfileData;
-            notifyPlacementRequest({
+            await notifyPlacementRequest({
               email: recipientUser.email,
               venueName: venueProfileData.name,
               artistName: artistProfile.name,
@@ -513,7 +513,7 @@ export async function POST(request: Request) {
               arrangementType: (m.arrangementType as string) || "free_loan",
               revenueSharePercent: m.revenueSharePercent as number | undefined,
               message: content,
-            }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+            }).catch((err) => { if (err) console.error("notifyPlacementRequest error:", err); });
           }
         }
       }
@@ -537,12 +537,12 @@ export async function POST(request: Request) {
           const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", placement.artist_user_id).single();
           const { data: { user: artistUser } } = await db.auth.admin.getUserById(placement.artist_user_id);
           if (artistUser?.email && artistProfile) {
-            notifyPlacementResponse({
+            await notifyPlacementResponse({
               email: artistUser.email,
               artistName: artistProfile.name,
               venueName: placement.venue || "Venue",
               accepted: responseStatus === "active",
-            }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+            }).catch((err) => { if (err) console.error("notifyPlacementResponse error:", err); });
           }
         }
       }

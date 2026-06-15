@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { isAdminRequest } from "@/lib/admin-auth";
 import { orFilter } from "@/lib/db/safe-filter";
+import type { RefundRequestRow, RefundsListResponse } from "./types";
 
 export async function GET(request: Request) {
   const auth = await getAuthenticatedUser(request);
@@ -38,7 +39,8 @@ export async function GET(request: Request) {
       const orderIds = artistOrders?.map((o) => o.id) || [];
 
       if (orderIds.length === 0) {
-        return NextResponse.json({ refundRequests: [], userType: "artist" });
+        const earlyBody: RefundsListResponse = { refundRequests: [], userType: "artist" };
+        return NextResponse.json(earlyBody);
       }
 
       query = db
@@ -60,10 +62,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Failed to fetch refund requests" }, { status: 500 });
     }
 
-    return NextResponse.json({
-      refundRequests: data || [],
+    const body: RefundsListResponse = {
+      refundRequests: (data || []) as RefundRequestRow[],
       userType: isAdmin ? "admin" : artistProfile ? "artist" : "customer",
-    });
+    };
+    return NextResponse.json(body);
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }

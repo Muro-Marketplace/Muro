@@ -76,12 +76,15 @@ export async function executeTransfer(transferId: string) {
 
   if (!pending) return null;
 
-  const transfer = await stripe.transfers.create({
-    amount: pending.amount_cents,
-    currency: pending.currency || "gbp",
-    destination: pending.stripe_connect_account_id,
-    transfer_group: pending.order_id,
-  });
+  const transfer = await stripe.transfers.create(
+    {
+      amount: pending.amount_cents,
+      currency: pending.currency || "gbp",
+      destination: pending.stripe_connect_account_id,
+      transfer_group: pending.order_id,
+    },
+    { idempotencyKey: `transfer:${transferId}` },
+  );
 
   await db
     .from("stripe_transfers")

@@ -121,3 +121,85 @@ describe("GET /api/refunds — admin vs artist scope (1.5)", () => {
     expect(body.refundRequests[0].id).toBe("rr-artist-1");
   });
 });
+
+// Producer contract lock (finding 2.1 / 6.1):
+// The GET success body must use `refundRequests` (not `requests`)
+// and include `userType`, so the consumer page can read them by name
+// and tsc rejects any mismatch.
+describe("GET /api/refunds — response shape contract (2.1, 6.1)", () => {
+  it("success body key is refundRequests, NOT requests, and includes userType", async () => {
+    isAdminMock.mockResolvedValue(false);
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "refund_requests") {
+        return {
+          select: () => ({
+            or: () => ({
+              order: async () => ({
+                data: [{ id: "rr-1", order_id: "ord-1", status: "pending", type: "full", reason: "x", created_at: "2025-01-01" }],
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Contract: field must be `refundRequests`, not `requests`
+    expect(body).toHaveProperty("refundRequests");
+    expect(body).not.toHaveProperty("requests");
+    expect(body).toHaveProperty("userType", "customer");
+    expect(Array.isArray(body.refundRequests)).toBe(true);
+  });
+
+  it("artist early-return (zero orders) also uses refundRequests key", async () => {
+    isAdminMock.mockResolvedValue(false);
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: { slug: "alice" }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "orders") {
+        return {
+          select: () => ({
+            eq: () => ({
+              data: [],
+              error: null,
+              then(resolve: (v: { data: never[]; error: null }) => void) {
+                resolve({ data: [], error: null });
+              },
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toHaveProperty("refundRequests");
+    expect(body).not.toHaveProperty("requests");
+    expect(body.refundRequests).toHaveLength(0);
+    expect(body.userType).toBe("artist");
+  });
+});

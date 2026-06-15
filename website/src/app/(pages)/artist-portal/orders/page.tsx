@@ -6,6 +6,7 @@ import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
+import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
 
 interface Order {
   id: string;
@@ -37,17 +38,10 @@ interface Order {
   created_at: string;
 }
 
-interface RefundRequest {
-  id: string;
-  order_id: string;
-  status: "pending" | "approved" | "rejected";
-  type: "full" | "partial";
-  amount?: number;
-  reason: string;
+type RefundRequest = RefundRequestRow & {
   requester_type?: string;
-  created_at: string;
   resolved_reason?: string;
-}
+};
 
 const statusActions: Record<string, { next: string; label: string; color: string }> = {
   confirmed: { next: "processing", label: "Mark as Processing", color: "bg-blue-600 hover:bg-blue-700" },
@@ -121,7 +115,7 @@ export default function ArtistOrdersPage() {
   useEffect(() => {
     authFetch("/api/refunds")
       .then((r) => r.json())
-      .then((data) => { if (data.requests) setRefundRequests(data.requests); })
+      .then((data: RefundsListResponse) => { if (data.refundRequests) setRefundRequests(data.refundRequests); })
       .catch(() => {});
   }, []);
 
@@ -157,14 +151,14 @@ export default function ArtistOrdersPage() {
         body: JSON.stringify(body),
       });
       if (reqRes.ok) {
-        const reqData = await reqRes.json();
-        if (reqData.request) {
+        const reqData: RefundRequestCreateResponse = await reqRes.json();
+        if (reqData.refundRequest) {
           const approveRes = await authFetch("/api/refunds/process", {
             method: "POST",
-            body: JSON.stringify({ refundRequestId: reqData.request.id, action: "approve" }),
+            body: JSON.stringify({ refundRequestId: reqData.refundRequest.id, action: "approve" }),
           });
           if (approveRes.ok) {
-            setRefundRequests((prev) => [...prev, { ...reqData.request, status: "approved" }]);
+            setRefundRequests((prev) => [...prev, { ...reqData.refundRequest, status: "approved" }]);
           }
         }
       }
@@ -403,8 +397,8 @@ export default function ArtistOrdersPage() {
           {/* Refund management */}
           {(() => {
             const orderRefunds = refundRequests.filter((r) => r.order_id === selected.id);
-            const pendingRefunds = orderRefunds.filter((r) => r.status === "pending");
-            const pastRefunds = orderRefunds.filter((r) => r.status !== "pending");
+            const pendingRefunds = orderRefunds.filter((r) => r.status === "pending" || r.status === "processing");
+            const pastRefunds = orderRefunds.filter((r) => r.status !== "pending" && r.status !== "processing");
             const refundEligible = ["confirmed", "processing", "shipped", "delivered"].includes(selected.status);
 
             return (
