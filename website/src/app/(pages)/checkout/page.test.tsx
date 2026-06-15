@@ -92,12 +92,13 @@ describe("Checkout submit button copy (fix 7.1)", () => {
 
   it("shows the processing copy while submitting", async () => {
     // Stall the checkout fetch so submitting stays true long enough to assert.
-    let checkoutResolve: ((v: Response) => void) | null = null;
+    // eslint-disable-next-line prefer-const
+    let checkoutResolveHolder: { fn: ((v: Response) => void) | null } = { fn: null };
     vi.spyOn(global, "fetch").mockImplementation(
       (input) => {
         const url = typeof input === "string" ? input : (input as Request).url;
         if (url.includes("/api/checkout")) {
-          return new Promise<Response>((res) => { checkoutResolve = res; });
+          return new Promise<Response>((res) => { checkoutResolveHolder.fn = res; });
         }
         return Promise.resolve({
           ok: true,
@@ -127,7 +128,7 @@ describe("Checkout submit button copy (fix 7.1)", () => {
     }, { timeout: 2000 });
 
     // Clean up the stalled fetch so the test teardown can finish.
-    checkoutResolve?.({ ok: false, json: async () => ({}), status: 500 } as unknown as Response);
+    checkoutResolveHolder.fn?.({ ok: false, json: async () => ({}), status: 500 } as unknown as Response);
   });
 });
 
