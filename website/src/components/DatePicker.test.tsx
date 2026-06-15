@@ -19,22 +19,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.join(__dirname, "DatePicker.tsx"), "utf8");
 
 describe("DatePicker — day button tap target (w-11 h-11)", () => {
+  // Resolve the day_button: line once and reuse across all assertions so
+  // every check is scoped to that line, not the whole source file.
+  const dayButtonLine = src.split("\n").find((line) => line.includes("day_button:"));
+
+  it("day_button line is present in source", () => {
+    expect(dayButtonLine).toBeDefined();
+  });
+
   it("day_button classNames contain w-11 (44px)", () => {
     // e.g. day_button: "w-11 h-11 ..."
-    expect(src).toContain("w-11");
+    expect(dayButtonLine).toContain("w-11");
   });
 
   it("day_button classNames contain h-11 (44px)", () => {
-    expect(src).toContain("h-11");
+    expect(dayButtonLine).toContain("h-11");
   });
 
   it("day_button classNames do not revert to the old w-8 h-8 (32px)", () => {
     // Guard against the old values accidentally being re-introduced.
-    // We check that w-8 / h-8 do not appear adjacent to day_button.
-    const dayButtonLine = src
-      .split("\n")
-      .find((line) => line.includes("day_button:"));
-    expect(dayButtonLine).toBeDefined();
     expect(dayButtonLine).not.toContain("w-8");
     expect(dayButtonLine).not.toContain("h-8");
   });
