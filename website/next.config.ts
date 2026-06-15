@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
-// Content Security Policy — kept as a constant so the header() block stays
-// readable. Start in report-only mode: browsers log violations but don't
-// enforce. Once the report log is quiet for a week, flip the header name
-// to `Content-Security-Policy` (enforcing).
+// Content Security Policy, kept as a constant so the header() block stays
+// readable. It is served in report-only mode. See the decision recorded at the
+// `Content-Security-Policy-Report-Only` header below for why it stays
+// report-only for now (no report sink exists yet) and how to enable
+// enforcement later.
 //
 // Sources allowed:
 //   - self everywhere
