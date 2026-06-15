@@ -22,6 +22,7 @@ const eslintConfig = defineConfig([
       "wallplace/no-raw-or-filter": "error",
       "wallplace/no-inline-admin-check": "error",
       "wallplace/no-unawaited-critical-sideeffect": "error",
+      "wallplace/no-ad-hoc-cap": "error",
     },
   },
   // The eslint-rules/ plugin files are CommonJS by design — they cannot use
