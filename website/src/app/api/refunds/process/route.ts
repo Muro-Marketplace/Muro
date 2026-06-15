@@ -127,16 +127,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Failed to reject refund request" }, { status: 500 });
       }
 
-      // Notify the requester (fire-and-forget)
+      // Notify the requester (awaited so it runs on serverless; .catch keeps mail failure non-fatal)
       const requesterEmail = refundReq.requester_email as string | null | undefined;
       const buyerEmailFallback = order.buyer_email as string | null | undefined;
       if (requesterEmail || buyerEmailFallback) {
-        notifyRefundDecision({
+        await notifyRefundDecision({
           buyerEmail: (requesterEmail || buyerEmailFallback) as string,
           orderId: order.id,
           approved: false,
           reason: reason || undefined,
-        }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+        }).catch((err) => { if (err) console.error("notifyRefundDecision error:", err); });
       }
 
       return NextResponse.json({ success: true, status: "rejected" });
@@ -302,12 +302,12 @@ export async function POST(request: Request) {
     const orderBuyerEmail = order.buyer_email as string | null | undefined;
     if (refundRequesterEmail || orderBuyerEmail) {
       const buyerEmail = (refundRequesterEmail || orderBuyerEmail) as string;
-      notifyRefundDecision({
+      await notifyRefundDecision({
         buyerEmail,
         orderId: order.id,
         approved: true,
         amount: refundReq.amount as number,
-      }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+      }).catch((err) => { if (err) console.error("notifyRefundDecision error:", err); });
 
       // In-app bell for the buyer if they're an account holder. The
       // refund_requests row carries the requester's user id, fall back

@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
     }
 
-    notifyAdminNewEnquiry({ senderName, senderEmail, artistSlug, enquiryType, message });
+    await notifyAdminNewEnquiry({ senderName, senderEmail, artistSlug, enquiryType, message }).catch((err) => { if (err) console.error("notifyAdminNewEnquiry error:", err); });
 
     // Also create a message in the messaging system so it appears in the artist's inbox
     const db = getSupabaseAdmin();
@@ -62,12 +62,12 @@ export async function POST(request: Request) {
     if (artistProfile?.user_id) {
       const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistProfile.user_id);
       if (artistUser?.email) {
-        notifyNewMessage({
+        await notifyNewMessage({
           email: artistUser.email,
           name: artistProfile.name,
           senderName,
           messagePreview: message,
-        });
+        }).catch((err) => { if (err) console.error("notifyNewMessage error:", err); });
       }
     }
 

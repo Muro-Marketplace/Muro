@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       );
     }
 
-    notifyAdminNewContact({ name, email, type, message });
+    await notifyAdminNewContact({ name, email, type, message }).catch((err) => { if (err) console.error("notifyAdminNewContact error:", err); });
 
     return NextResponse.json({ success: true });
   } catch {

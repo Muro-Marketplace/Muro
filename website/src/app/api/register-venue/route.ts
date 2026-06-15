@@ -56,13 +56,13 @@ export async function POST(request: Request) {
       );
     }
 
-    notifyAdminNewVenue({
+    await notifyAdminNewVenue({
       name: d.venueName,
       contactName: d.contactName,
       email: d.email,
       type: d.venueType,
       location: `${d.city}, ${d.postcode}`,
-    });
+    }).catch((err) => { if (err) console.error("notifyAdminNewVenue error:", err); });
 
     // Seed venue_profiles so the portal is ready on verified login.
     // user_id stays NULL until VenuePortalLayout's adoptIfOrphan effect

@@ -123,8 +123,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not create request" }, { status: 500 });
   }
 
-  // Fire-and-forget notification to admin, useful for all flows
-  notifyAdminCurationRequest({
+  // Notify admin (awaited so it runs on serverless; .catch keeps mail failure non-fatal)
+  await notifyAdminCurationRequest({
     requestId: row.id,
     tier: tier.label,
     payFirst: isPayFirst || isManaged,
@@ -133,16 +133,16 @@ export async function POST(request: Request) {
     contactName: d.contactName,
     contactEmail: d.contactEmail,
     location: d.location,
-  }).catch((err) => { if (err) console.error("curation admin email error:", err); });
+  }).catch((err) => { if (err) console.error("notifyAdminCurationRequest error:", err); });
 
   // Bespoke tier: no upfront payment.
   if (tier.kind === "one_off" && !tier.payFirst) {
-    notifyCurationCustomerEnquiry({
+    await notifyCurationCustomerEnquiry({
       email: d.contactEmail,
       contactName: d.contactName,
       venueName: d.venueName,
       tierLabel: tier.label,
-    }).catch(() => {});
+    }).catch((err) => { if (err) console.error("notifyCurationCustomerEnquiry error:", err); });
     return NextResponse.json({ mode: "enquiry", id: row.id });
   }
 

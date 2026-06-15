@@ -151,7 +151,7 @@ export async function POST(request: Request) {
         .eq("user_id", order.artist_user_id)
         .single();
 
-      notifyRefundRequested({
+      await notifyRefundRequested({
         artistEmail: artistUser?.email || undefined,
         artistName: artistProfile?.name || undefined,
         requesterName: userEmail,
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
         reason,
         amount: refundAmount,
         type,
-      }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+      }).catch((err) => { if (err) console.error("notifyRefundRequested error:", err); });
 
       // In-app bell. Deep-link to the orders page so the artist can
       // approve / reject directly. The buyer's identity (not the
@@ -179,14 +179,14 @@ export async function POST(request: Request) {
       }
     } else {
       // No artist, still notify admin via the email pipeline.
-      notifyRefundRequested({
+      await notifyRefundRequested({
         requesterName: userEmail,
         requesterType,
         orderId,
         reason,
         amount: refundAmount,
         type,
-      }).catch((err) => { if (err) console.error("Fire-and-forget error:", err); });
+      }).catch((err) => { if (err) console.error("notifyRefundRequested error:", err); });
     }
 
     return NextResponse.json({ success: true, refundRequest });
