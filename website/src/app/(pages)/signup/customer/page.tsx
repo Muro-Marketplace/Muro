@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { isFlagOn } from "@/lib/feature-flags";
+import { safeRedirect } from "@/lib/safe-redirect";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
 import Turnstile from "@/components/Turnstile";
@@ -21,6 +22,14 @@ export default function CustomerSignUpPage() {
   // Cloudflare Turnstile token; the component emits "dev-bypass" if the
   // site key isn't configured so signup still works in local dev.
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  // Read ?next= so a deep-link funnel (e.g. checkout → sign up →
+  // back to checkout) survives the email-verification hop.
+  const inboundNext =
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.search).get("next") ?? "";
+  const postSignupNext = safeRedirect(inboundNext, "/browse");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,7 +70,7 @@ export default function CustomerSignUpPage() {
         password,
         options: {
           data: { user_type: "customer", display_name: name },
-          emailRedirectTo: `${window.location.origin}/login?next=/browse`,
+          emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(postSignupNext)}`,
         },
       });
 

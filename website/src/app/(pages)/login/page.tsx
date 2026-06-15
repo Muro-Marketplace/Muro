@@ -42,10 +42,13 @@ export default function LoginPage() {
       toastFired.current = true;
       showToast("You're already signed in. Redirecting…", { durationMs: 2500 });
     }
-    const next =
+    const params =
       typeof window === "undefined"
-        ? null
-        : new URLSearchParams(window.location.search).get("next");
+        ? new URLSearchParams()
+        : new URLSearchParams(window.location.search);
+    // Canonical param is ?next=. Back-compat: legacy ?redirect= links
+    // (e.g. old artwork-page message button) also honoured here.
+    const next = params.get("next") ?? params.get("redirect");
     router.replace(safeRedirect(next, portalPathForRole(userType)));
   }, [authLoading, user, userType, router, showToast]);
 
@@ -86,6 +89,21 @@ export default function LoginPage() {
   // Don't render form while checking auth
   if (authLoading) return null;
   if (user) return null;
+
+  // Build the ?next= suffix to forward onto the Sign up cross-link.
+  // Reads the same params as the redirect useEffect above; validated so
+  // external URLs produce no suffix (clean /signup link, no dangling param).
+  const signupParams =
+    typeof window === "undefined"
+      ? new URLSearchParams()
+      : new URLSearchParams(window.location.search);
+  const signupSafeNext = safeRedirect(
+    signupParams.get("next") ?? signupParams.get("redirect"),
+    "",
+  );
+  const signupNextSuffix = signupSafeNext
+    ? `?next=${encodeURIComponent(signupSafeNext)}`
+    : "";
 
   return (
     <div className="relative min-h-[calc(110vh-3.5rem)] sm:min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex items-center justify-center px-6 py-16">
@@ -243,7 +261,10 @@ export default function LoginPage() {
         <div className="text-center mt-6 space-y-2">
           <p className="text-sm text-white/50">
             Don&rsquo;t have an account?{" "}
-            <Link href="/signup" className="text-accent hover:underline underline-offset-4">
+            <Link
+              href={`/signup${signupNextSuffix}`}
+              className="text-accent hover:underline underline-offset-4"
+            >
               Sign up
             </Link>
           </p>
