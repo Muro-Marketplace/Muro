@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { notifyRefundRequested } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import { verifyOrderToken } from "@/lib/order-tracking-token";
+import type { RefundRequestRow, RefundRequestCreateResponse } from "../types";
 
 export async function POST(request: Request) {
   let body: { orderId?: string; reason?: string; type?: string; amount?: number; token?: string };
@@ -189,7 +190,11 @@ export async function POST(request: Request) {
       }).catch((err) => { if (err) console.error("notifyRefundRequested error:", err); });
     }
 
-    return NextResponse.json({ success: true, refundRequest });
+    const responseBody: RefundRequestCreateResponse = {
+      success: true,
+      refundRequest: refundRequest as RefundRequestRow,
+    };
+    return NextResponse.json(responseBody);
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
