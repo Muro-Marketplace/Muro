@@ -14,7 +14,7 @@
 // strictly-once-per-user we can mirror the dismiss to a profile
 // column, but that's overkill for an FYI screen.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export type PayoutAudience = "artist" | "venue";
 
@@ -61,6 +61,11 @@ export default function PayoutExplainerModal({ audience, userId, active }: Props
     setOpen(true);
   }, [active, userId, audience]);
 
+  const dismiss = useCallback(() => {
+    if (userId) markSeen(audience, userId);
+    setOpen(false);
+  }, [userId, audience]);
+
   // Dismiss on Escape so keyboard users can close the modal without
   // reaching the "Got it" button.
   useEffect(() => {
@@ -70,13 +75,7 @@ export default function PayoutExplainerModal({ audience, userId, active }: Props
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  function dismiss() {
-    if (userId) markSeen(audience, userId);
-    setOpen(false);
-  }
+  }, [open, dismiss]);
 
   if (!open) return null;
 
