@@ -5,7 +5,7 @@
 // and render with one item in the cart so the shipping form is shown.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 
 // --- module mocks ---
 
@@ -72,6 +72,64 @@ vi.mock("@/lib/api-client", () => ({
 import CheckoutPage from "./page";
 
 afterEach(() => cleanup());
+
+describe("Checkout submit button copy (fix 7.1)", () => {
+  beforeEach(() => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ artists: [] }),
+    } as unknown as Response);
+  });
+
+  it("shows the default proceed-to-payment label before submission", async () => {
+    render(<CheckoutPage />);
+    await new Promise((r) => setTimeout(r, 50));
+    // The button text contains "Proceed to Payment" when not submitting.
+    const btn = screen.getByRole("button", { name: /proceed to payment/i });
+    expect(btn).toBeTruthy();
+    expect(btn.textContent).toMatch(/Proceed to Payment/i);
+  });
+
+  it("shows the processing copy while submitting", async () => {
+    // Stall the checkout fetch so submitting stays true long enough to assert.
+    let checkoutResolve: ((v: Response) => void) | null = null;
+    vi.spyOn(global, "fetch").mockImplementation(
+      (input) => {
+        const url = typeof input === "string" ? input : (input as Request).url;
+        if (url.includes("/api/checkout")) {
+          return new Promise<Response>((res) => { checkoutResolve = res; });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ artists: [] }),
+        } as unknown as Response);
+      },
+    );
+
+    render(<CheckoutPage />);
+    // Let pickup + address effects settle.
+    await new Promise((r) => setTimeout(r, 80));
+
+    // Fill required fields.
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Jane Smith" } });
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "jane@example.com" } });
+    fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: "07700900000" } });
+    fireEvent.change(screen.getByLabelText(/address line 1/i), { target: { value: "1 High Street" } });
+    fireEvent.change(screen.getByLabelText(/city/i), { target: { value: "London" } });
+    fireEvent.change(screen.getByPlaceholderText(/postcode \*/i), { target: { value: "SW1A 1AA" } });
+
+    // Click the submit button (non-async — just fires the event).
+    fireEvent.click(screen.getByRole("button", { name: /proceed to payment/i }));
+
+    // Wait for the submitting=true state to render.
+    await waitFor(() => {
+      expect(screen.getByText("Processing payment, do not refresh")).toBeTruthy();
+    }, { timeout: 2000 });
+
+    // Clean up the stalled fetch so the test teardown can finish.
+    checkoutResolve?.({ ok: false, json: async () => ({}), status: 500 } as unknown as Response);
+  });
+});
 
 describe("Checkout renderInput a11y (fix 3.9)", () => {
   beforeEach(() => {

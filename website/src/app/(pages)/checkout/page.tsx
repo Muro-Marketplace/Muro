@@ -821,7 +821,7 @@ export default function CheckoutPage() {
             disabled={submitting}
             className="w-full px-6 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:bg-accent/60 disabled:cursor-not-allowed"
           >
-            {submitting ? "Redirecting to Stripe..." : `Proceed to Payment, £${total.toFixed(2)}`}
+            {submitting ? "Processing payment, do not refresh" : `Proceed to Payment, £${total.toFixed(2)}`}
           </button>
         </div>
 
