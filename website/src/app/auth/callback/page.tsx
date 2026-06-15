@@ -20,6 +20,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { authFetch } from "@/lib/api-client";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export default function AuthCallbackPage() {
         }
       }
 
-      if (!cancelled) window.location.replace(nextHref);
+      if (!cancelled) window.location.replace(safeRedirect(nextHref, "/browse"));
     })();
 
     return () => {
