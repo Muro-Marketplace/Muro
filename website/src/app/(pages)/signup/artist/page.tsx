@@ -40,6 +40,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { isFlagOn } from "@/lib/feature-flags";
+import { safeRedirect } from "@/lib/safe-redirect";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
 import Turnstile from "@/components/Turnstile";
@@ -53,6 +54,13 @@ export default function ArtistSignUpPage() {
   const [loading, setLoading] = useState(false);
   const [agreedToTos, setAgreedToTos] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  // Read ?next= so a deep-link funnel survives the email-verification hop.
+  const inboundNext =
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.search).get("next") ?? "";
+  const postSignupNext = safeRedirect(inboundNext, "/apply");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -89,7 +97,7 @@ export default function ArtistSignUpPage() {
         password,
         options: {
           data: { user_type: "artist", display_name: name },
-          emailRedirectTo: `${window.location.origin}/login?next=/apply`,
+          emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(postSignupNext)}`,
         },
       });
 
@@ -218,7 +226,7 @@ export default function ArtistSignUpPage() {
                         const r = await fetch("/api/auth/oauth-sign-state", {
                           method: "POST",
                           headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ role: "artist", next: "/apply" }),
+                          body: JSON.stringify({ role: "artist", next: postSignupNext }),
                         });
                         if (r.ok) state = (await r.json()).state || "";
                       } catch { /* fall through */ }
@@ -247,7 +255,7 @@ export default function ArtistSignUpPage() {
                         const r = await fetch("/api/auth/oauth-sign-state", {
                           method: "POST",
                           headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ role: "artist", next: "/apply" }),
+                          body: JSON.stringify({ role: "artist", next: postSignupNext }),
                         });
                         if (r.ok) state = (await r.json()).state || "";
                       } catch { /* fall through */ }

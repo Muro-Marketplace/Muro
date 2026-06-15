@@ -23,6 +23,7 @@ const eslintConfig = defineConfig([
       "wallplace/no-inline-admin-check": "error",
       "wallplace/no-unawaited-critical-sideeffect": "error",
       "wallplace/no-ad-hoc-cap": "error",
+      "wallplace/no-redirect-param": "error",
     },
   },
   // The eslint-rules/ plugin files are CommonJS by design — they cannot use

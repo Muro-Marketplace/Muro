@@ -146,8 +146,17 @@ function ConfirmationContent() {
           href="/browse"
           className="inline-flex items-center justify-center px-6 py-3 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-background transition-colors"
         >
-          Continue Browsing
+          Continue browsing
         </Link>
+        {/* Discover more strip */}
+        <div data-testid="discover-strip" className="mt-8 border-t border-border pt-6">
+          <p className="text-xs text-muted uppercase tracking-widest mb-3">Discover more</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link href="/browse" className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors">Browse art</Link>
+            <Link href="/spaces" className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors">Explore spaces</Link>
+            <Link href="/browse/collections" className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors">Featured collections</Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -238,7 +247,7 @@ function ConfirmationContent() {
           href="/browse"
           className="inline-flex items-center justify-center px-6 py-3 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-background transition-colors"
         >
-          Continue Browsing
+          Continue browsing
         </Link>
         {user && (
           <Link
@@ -248,6 +257,31 @@ function ConfirmationContent() {
             View My Orders
           </Link>
         )}
+      </div>
+
+      {/* Discover more strip */}
+      <div data-testid="discover-strip" className="mt-12 border-t border-border pt-8">
+        <p className="text-xs text-muted uppercase tracking-widest mb-4">Discover more</p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Link
+            href="/browse"
+            className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors"
+          >
+            Browse art
+          </Link>
+          <Link
+            href="/spaces"
+            className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors"
+          >
+            Explore spaces
+          </Link>
+          <Link
+            href="/browse/collections"
+            className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors"
+          >
+            Featured collections
+          </Link>
+        </div>
       </div>
       </div>
     </div>

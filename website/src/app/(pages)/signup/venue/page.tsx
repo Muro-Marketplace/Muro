@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { slugify } from "@/lib/slugify";
+import { safeRedirect } from "@/lib/safe-redirect";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import Dropdown from "@/components/Dropdown";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
@@ -97,6 +98,13 @@ export default function RegisterVenuePage() {
   const [acknowledgedInsurance, setAcknowledgedInsurance] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
+  // Read ?next= so a deep-link funnel survives the email-verification hop.
+  const inboundNext =
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.search).get("next") ?? "";
+  const postSignupNext = safeRedirect(inboundNext, "/venue-portal");
+
   function updateField(field: keyof VenueFormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
@@ -168,7 +176,7 @@ export default function RegisterVenuePage() {
         password: form.password,
         options: {
           data: { user_type: "venue", display_name: form.contactName, venue_slug: venueSlug },
-          emailRedirectTo: `${window.location.origin}/login?next=/venue-portal`,
+          emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(postSignupNext)}`,
         },
       });
 

@@ -662,7 +662,7 @@ export default function ArtworkPageClient({
             } else if (user) {
               router.push(`/customer-portal/messages?artist=${artistSlug}${nameParam}`);
             } else {
-              router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+              router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
             }
           }}
           className="w-full px-5 py-2 text-xs text-muted hover:text-accent transition-colors border-t border-border"

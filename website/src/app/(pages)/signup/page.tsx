@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 export const metadata: Metadata = {
   title: "Sign Up",
@@ -67,7 +68,18 @@ const options = [
   },
 ];
 
-export default function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const rawNext = typeof params.next === "string" ? params.next : "";
+  // safeRedirect validates the value and drops external URLs.
+  const next = safeRedirect(rawNext, "");
+  // Build the forwarded query suffix. Empty string when next is empty so
+  // role links stay clean (/signup/customer, not /signup/customer?next=).
+  const nextSuffix = next ? `?next=${encodeURIComponent(next)}` : "";
   return (
     <RedirectIfLoggedIn>
     <div className="relative min-h-[calc(110vh-3.5rem)] sm:min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex items-center justify-center">
@@ -96,7 +108,7 @@ export default function SignUpPage() {
           {options.map((opt) => (
             <Link
               key={opt.label}
-              href={opt.href}
+              href={`${opt.href}${nextSuffix}`}
               className="group block bg-white/95 backdrop-blur-sm rounded-sm p-6 hover:bg-white hover:shadow-lg transition-all duration-200 min-h-[88px]"
             >
               <div className="flex items-start gap-4">
@@ -120,7 +132,7 @@ export default function SignUpPage() {
         {/* Login link */}
         <p className="text-center mt-8 text-sm text-white/50">
           Already have an account?{" "}
-          <Link href="/login" className="text-white hover:text-accent transition-colors">
+          <Link href={`/login${nextSuffix}`} className="text-white hover:text-accent transition-colors">
             Sign in
           </Link>
         </p>

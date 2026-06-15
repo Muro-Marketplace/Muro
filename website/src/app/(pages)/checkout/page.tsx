@@ -512,9 +512,22 @@ export default function CheckoutPage() {
     }`;
 
   function renderInput(field: keyof ShippingInfo, placeholder: string, type = "text") {
+    const inputId = `checkout-${field}`;
+    // Strip the trailing " *" from the placeholder to produce a clean label.
+    const labelText = placeholder.replace(/\s*\*$/, "");
     return (
       <div>
+        {/* Visually hidden label keeps the input accessible via
+            getByLabelText while leaving the placeholder visible as
+            the primary affordance in the UI. */}
+        <label
+          htmlFor={inputId}
+          className="sr-only"
+        >
+          {labelText}
+        </label>
         <input
+          id={inputId}
           type={type}
           placeholder={placeholder}
           value={shipping[field] || ""}
@@ -643,7 +656,9 @@ export default function CheckoutPage() {
                         OR "format wrong" without fighting the renderInput
                         helper's single-error contract. */}
                     <div>
+                      <label htmlFor="checkout-postcode" className="sr-only">Postcode</label>
                       <input
+                        id="checkout-postcode"
                         type="text"
                         placeholder="Postcode *"
                         value={shipping.postcode || ""}
@@ -674,17 +689,21 @@ export default function CheckoutPage() {
                         </p>
                       )}
                     </div>
-                    <select
-                      value={shipping.country}
-                      onChange={(e) => updateField("country", e.target.value)}
-                      className={inputClass("country")}
-                    >
+                    <div>
+                      <label htmlFor="checkout-country" className="sr-only">Country</label>
+                      <select
+                        id="checkout-country"
+                        value={shipping.country}
+                        onChange={(e) => updateField("country", e.target.value)}
+                        className={inputClass("country")}
+                      >
                       {COUNTRIES.map((c) => (
                         <option key={c.code} value={c.code}>
                           {c.label}
                         </option>
                       ))}
-                    </select>
+                      </select>
+                    </div>
                   </div>
                   <textarea
                     placeholder="Delivery notes (optional)"
@@ -808,7 +827,7 @@ export default function CheckoutPage() {
             disabled={submitting}
             className="w-full px-6 py-4 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:bg-accent/60 disabled:cursor-not-allowed"
           >
-            {submitting ? "Redirecting to Stripe..." : `Proceed to Payment, £${total.toFixed(2)}`}
+            {submitting ? "Processing payment, do not refresh" : `Proceed to Payment, £${total.toFixed(2)}`}
           </button>
         </div>
 

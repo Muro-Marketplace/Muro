@@ -154,7 +154,21 @@ function MakeOfferModalBody({
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
       <div className="bg-background rounded-sm w-full max-w-md p-6">
         {submitted ? (
-          <div className="text-center py-6">
+          <div className="text-center py-6 relative">
+            {/* Explicit close affordance in the success state. The
+                auto-close timeout (1 800 ms) handles the happy path,
+                but a user who wants to dismiss immediately — or whose
+                browser throttles setTimeout — needs a manual escape. */}
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="absolute top-0 right-0 text-muted hover:text-foreground transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+                <path d="M3 3l8 8M11 3L3 11" />
+              </svg>
+            </button>
             <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             </div>
