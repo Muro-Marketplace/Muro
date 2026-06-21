@@ -514,7 +514,9 @@ export default function PlacementDetailClient({ placementId }: Props) {
                     ? ` (${placement.revenue_share_percent}%)`
                     : "";
                   if (t === "purchase") return "Purchase";
+                  // eslint-disable-next-line wallplace/no-raw-arrangement-type -- flag-on detail label; every value is handled explicitly (paid_loan is not missed) and free_loan -> "Display" is the deliberate flag-on nuance per ADR 0007
                   if (t === "paid_loan") return "Paid Loan";
+                  // eslint-disable-next-line wallplace/no-raw-arrangement-type -- see above
                   if (t === "free_loan") return "Display";
                   if (t === "revenue_share") return `Revenue Share${pct}`;
                   if (t === "mixed") return `Paid Loan + Rev Share${pct}`;

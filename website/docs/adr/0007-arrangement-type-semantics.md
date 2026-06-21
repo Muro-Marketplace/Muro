@@ -28,8 +28,8 @@ Display and notification code hand-rolled `arrangement_type === "free_loan"` che
 ## Consequences
 
 - `paid_loan` and `mixed` placements now render and bill correctly wherever the migrated sites are used, regardless of whether the placement came from a direct request, an offer, or an artwork-request fulfilment. Offers and artwork-requests carry no additional raw comparisons, so they are covered by the shared helper.
-- The lint rule is set to **warn**, not error, for now. Three groups still compare raw values and need migrating before the rule flips to error:
-  - the placement-counter business logic in `src/app/api/placements/route.ts` (high-risk; needs its own tested change),
-  - the flag-on label path in `PlacementDetailClient.tsx` (deliberately distinguishes `free_loan` "Display" from `paid_loan` "Paid Loan"; needs a product decision on whether `free_loan` without a fee should read as free display everywhere),
-  - `PlacementNegotiationLog.tsx` and `SpacesPlacementRequestForm.tsx`.
-- Flipping the rule to error is a tracked fast-follow once those migrate.
+- The lint rule is now set to **error** (raised 2026-06-15). Fixing the remaining sites surfaced a genuine bug: `PlacementNegotiationLog.describeTerms` gated on `=== "free_loan"`, so a `paid_loan` entry with no monthly fee showed no loan term. It now uses `isLoan()`.
+- The remaining raw comparisons are legitimate (not the bug pattern) and are explicitly handled so the rule passes at error:
+  - `SpacesPlacementRequestForm.tsx` is exempted in the rule itself: it types its arrangement as a strict `"revenue_share" | "free_loan" | "purchase"` union where `free_loan` IS the paid-loan option (`paid_loan` is not a possible value), so its comparisons are type-checked and correct.
+  - the flag-on detail label in `PlacementDetailClient.tsx` and the negotiation-log term text in `placements/route.ts` carry a targeted `eslint-disable-next-line` with a reason: both handle `paid_loan` and `free_loan` explicitly, so neither is missed. The `free_loan` -> "Display" flag-on nuance is preserved pending a product decision.
+- Any NEW `=== "free_loan"` / `=== "paid_loan"` in non-exempt code now fails CI.

@@ -34,7 +34,12 @@ module.exports = {
     // The canonical helper and the label map legitimately define these values.
     if (
       filename.endsWith("/src/lib/arrangement-type.ts") ||
-      filename.endsWith("/src/lib/arrangement-labels.ts")
+      filename.endsWith("/src/lib/arrangement-labels.ts") ||
+      // The placement request form types its arrangement as a strict
+      // "revenue_share" | "free_loan" | "purchase" union, where free_loan IS
+      // the paid-loan option (paid_loan is not a possible value there), so its
+      // comparisons are type-checked and correct, not the bug pattern.
+      filename.endsWith("/src/components/SpacesPlacementRequestForm.tsx")
     ) {
       return {};
     }
