@@ -1591,6 +1591,19 @@ export default function VenuePlacementsPage() {
                             } : x))}
                           />
 
+                          {/* Paid-loan billing entry, mirrors the mobile card:
+                              surfaces "Set up payment" to the venue when a paid
+                              loan's monthly billing is not active yet, so the
+                              desktop table is no longer a dead end for billing. */}
+                          <PaidLoanPaymentChip
+                            placementId={p.id}
+                            arrangementType={p.type as string}
+                            monthlyFeeGbp={p.monthlyFeeGbp}
+                            liveFrom={p.liveFrom}
+                            subscriptionStatus={p.subscriptionStatus}
+                            role="venue"
+                          />
+
                           {/* Actions, divided from the details block by a
                               hairline border, primary response buttons on
                               the left, secondary links (Message / Add Loan

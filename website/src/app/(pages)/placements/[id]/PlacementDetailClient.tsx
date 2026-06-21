@@ -14,6 +14,7 @@ import PlacementLoanForm from "./PlacementLoanForm";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
+import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isLoan } from "@/lib/arrangement-type";
 
@@ -46,6 +47,7 @@ interface PlacementRow {
   scheduled_for?: string | null;
   installed_at?: string | null;
   live_from?: string | null;
+  subscription_status?: string | null;
   collected_at?: string | null;
 }
 
@@ -1007,6 +1009,22 @@ export default function PlacementDetailClient({ placementId }: Props) {
           </p>
         </div>
       </div>
+
+      {/* Paid-loan billing entry. Surfaces the "Set up payment" CTA to the
+          venue (and an info chip to the artist) right under the commercial
+          terms, so a paid loan whose monthly billing is not yet set up is
+          reachable from the placement itself, not only the venue-portal
+          card view. */}
+      {viewerRole && (
+        <PaidLoanPaymentChip
+          placementId={placement.id}
+          arrangementType={placement.arrangement_type}
+          monthlyFeeGbp={placement.monthly_fee_gbp}
+          liveFrom={placement.live_from}
+          subscriptionStatus={placement.subscription_status}
+          role={viewerRole}
+        />
+      )}
 
       {/* Works covered by this placement. The primary work is the
           header; additional works (#16) appear as a labelled gallery
