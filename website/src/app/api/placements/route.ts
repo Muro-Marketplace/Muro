@@ -1041,8 +1041,10 @@ export async function PATCH(request: Request) {
           const terms: string[] = [];
           if (counter.arrangementType === "revenue_share" && counter.revenueSharePercent !== undefined) {
             terms.push(`Revenue share: ${counter.revenueSharePercent}% to the venue`);
+          // eslint-disable-next-line wallplace/no-raw-arrangement-type -- negotiation-log term text; paid_loan and free_loan are both handled with their own copy, neither is missed
           } else if (counter.arrangementType === "paid_loan") {
             terms.push("Paid loan arrangement");
+          // eslint-disable-next-line wallplace/no-raw-arrangement-type -- see above
           } else if (counter.arrangementType === "free_loan") {
             terms.push("Free loan arrangement");
           } else if (counter.arrangementType === "purchase") {

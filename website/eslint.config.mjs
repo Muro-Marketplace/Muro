@@ -24,10 +24,7 @@ const eslintConfig = defineConfig([
       "wallplace/no-unawaited-critical-sideeffect": "error",
       "wallplace/no-ad-hoc-cap": "error",
       "wallplace/no-redirect-param": "error",
-      // warn (not error) until the counter business logic, the flag-on
-      // label path, the negotiation log and the spaces request form migrate
-      // off raw arrangement comparisons. See ADR 0007.
-      "wallplace/no-raw-arrangement-type": "warn",
+      "wallplace/no-raw-arrangement-type": "error",
     },
   },
   // The eslint-rules/ plugin files are CommonJS by design — they cannot use

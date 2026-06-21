@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/api-client";
+import { isLoan } from "@/lib/arrangement-type";
 
 interface Props {
   placementId: string;
@@ -39,7 +40,7 @@ function formatDateTime(ts: string) {
 function describeTerms(meta: LogEntry["metadata"]): string | null {
   if (!meta) return null;
   const bits: string[] = [];
-  if (meta.arrangementType === "free_loan" || typeof meta.monthlyFeeGbp === "number") {
+  if (isLoan(meta.arrangementType) || typeof meta.monthlyFeeGbp === "number") {
     if (typeof meta.monthlyFeeGbp === "number" && meta.monthlyFeeGbp > 0) {
       bits.push(`Paid loan £${meta.monthlyFeeGbp}/mo`);
     } else {
