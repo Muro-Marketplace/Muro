@@ -9,7 +9,7 @@ Order of work: the "Corrected dependency order" at the end of
 | # | Task | Owner doc | Status |
 |---|---|---|---|
 | 0a | CI `continue-on-error` removed, lint blocks | runbook §1.1 | **done** (47cb468) |
-| 0b | `audit:advisors` job added to CI | runbook §1.1 | **superseded by D12 ruling 3**: must not gate PRs. Correction is the next task |
+| 0b | Advisor in CI: nightly, not a PR gate | runbook §1.1, then D12 r3 | **done** (6615736 then corrected by 72adec9) |
 | 0c | `audit:e2e-security` covered in CI | runbook §1.1 | **done** (fa9416e), premise was wrong, gate meaningfulness is an open owner decision |
 | 0d | Branch protection requiring `check` + `e2e`; apply pending workflow change in `docs/ci/2026-06-15-required-checks.md` | runbook §1.1 | **owner only, and BLOCKED**: `e2e` is red on main (10 failures), so requiring it would block every merge |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
@@ -530,3 +530,88 @@ waitlist_signups    | Authenticated can read waitlist           | (auth.role() =
 `044_cart_sessions.sql` and `045_artist_charges_cache.sql` at their old numbers.
 Left alone deliberately: it is a completed May plan and a historical record, and
 editing it to match a July rename would falsify what was done at the time.
+
+---
+
+## Iteration 5 — 2026-07-29
+
+### D12 ruling 3 + ruling 5 — advisor off the PR gate
+
+Owner: `2026-07-11-EXECUTION-DECISIONS.md` D12, superseding runbook §1.1 row 2.
+This reverses my own iteration-2 decision.
+
+**Changed:**
+
+- `.github/workflows/ci.yml` — `advisors` job removed, replaced by a comment
+  pointing at the nightly workflow and the reason.
+- `.github/workflows/advisors-nightly.yml` — new. `schedule: 0 3 * * *` plus
+  `workflow_dispatch`, same job body, token from the repo secret.
+- `website/scripts/audit/snapshot-advisors.ts` — ruling 5: the header claimed
+  the token was "already exported in the developer's ~/.zshrc". Now says it must
+  be exported manually or supplied by CI, that the script exits 2 without it, and
+  that it runs only in the nightly workflow.
+- `website/scripts/audit/README.md` — same correction, it described the advisor as
+  a general CI check.
+
+**Why nightly rather than `continue-on-error`.** D12 allows either. Nightly
+answers all three of the ruling's reasons; `continue-on-error` only answers the
+first, since the token would still be present in every PR run (reason c) and fork
+PRs would still fail visibly (reason b). The nightly run also has no
+`continue-on-error`, deliberately: it gates nothing, so a red nightly is the only
+signal that exists.
+
+**Verification, both directions.** Before, 3 of 10 fail:
+
+```
+   × advisor runs nightly, not as a PR gate (D12 ruling 3) > does not run the advisor in the PR-gating workflow
+   × advisor runs nightly, not as a PR gate (D12 ruling 3) > runs the advisor on a schedule instead
+     → advisors-nightly.yml is missing: expected '' to match /audit:advisors/
+   × advisor runs nightly, not as a PR gate (D12 ruling 3) > passes SUPABASE_ACCESS_TOKEN from repo secrets
+      Tests  3 failed | 7 passed (10)
+```
+
+After:
+
+```
+ ✓ tests/integration/ci-gates.test.ts (10 tests) 2ms
+      Tests  10 passed (10)
+```
+
+Both workflows parse, with the advisor gone from the PR-gating one:
+
+```
+.github/workflows/ci.yml -> jobs: ['check', 'e2e'] | triggers: ['push', 'pull_request']
+.github/workflows/advisors-nightly.yml -> jobs: ['advisors'] | triggers: ['schedule', 'workflow_dispatch']
+```
+
+Because I edited the assertion after watching it fail, I re-proved it by putting
+`- run: npm run audit:advisors` back into ci.yml as executable YAML:
+
+```
+51:      - run: npm run audit:advisors
+--- must FAIL now ---
+   × advisor runs nightly, not as a PR gate (D12 ruling 3) > does not run the advisor in the PR-gating workflow
+      Tests  1 failed | 9 passed (10)
+--- reverted, must PASS ---
+      Tests  10 passed (10)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  128 passed (128)
+      Tests  1169 passed (1169)
+```
+
+**Commit:** 72adec9
+
+### A mistake worth recording
+
+My first version of the nightly workflow failed its own test. The assertion greps
+for `continue-on-error`, and the workflow's explanatory comment contains the
+phrase "there is no continue-on-error here". Fixed by stripping whole-line `#`
+comments before matching, which is the more correct assertion anyway: prose cannot
+silence a step. The same helper now guards the ci.yml comparison, which had been
+passing only by luck (my comment happened to say "advisor" rather than
+"audit:advisors").
