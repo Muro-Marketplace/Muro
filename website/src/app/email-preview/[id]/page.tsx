@@ -8,10 +8,15 @@ import { render } from "@react-email/components";
 import Link from "next/link";
 import { createElement } from "react";
 import { findTemplate } from "@/emails/registry";
+import { isEmailPreviewAllowed } from "../access";
 
 export const dynamic = "force-dynamic";
 
 export default async function EmailPreviewPage({ params }: { params: Promise<{ id: string }> }) {
+  // B4: same gate as the index. Checked before the template lookup so a
+  // production request cannot even distinguish a real template id from a bogus one.
+  if (!isEmailPreviewAllowed()) notFound();
+
   const { id } = await params;
   const entry = findTemplate(id);
   if (!entry) notFound();
