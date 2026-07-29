@@ -847,7 +847,7 @@ export default function Header() {
                 <Link
                   href="/signup"
                   className={`text-sm px-4 py-2 rounded-sm transition-colors duration-300 ${
-                    isPortal || !showSolid ? "bg-white/10 text-white hover:bg-white/20" : "bg-accent text-white hover:bg-accent-hover"
+                    isPortal || !showSolid ? "bg-white/10 text-white hover:bg-white/20" : "bg-accent-text text-white hover:bg-accent-text-hover"
                   }`}
                 >
                   Sign Up

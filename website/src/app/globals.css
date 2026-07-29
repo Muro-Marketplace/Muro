@@ -5,6 +5,23 @@
   --color-foreground: #1A1A1A;
   --color-accent: #C17C5A;
   --color-accent-hover: #A8684A;
+  /* Accessible companions to --color-accent, for SMALL text only (under 24px,
+     or under 18.66px bold). The brand accent stays as-is for large text, icons,
+     borders and decoration, where WCAG's 3:1 large-text allowance applies and it
+     already clears it. See EXECUTION-DECISIONS D13.2 / D14.1.
+
+     Measured contrast ratios (WCAG 2.1 relative luminance):
+                        white on it   on #FFFFFF  on #FAFAF8  on #F7F4F0  on #F9F2EF
+       #C17C5A (accent)     3.33         3.33        3.19        3.04        3.01   all fail
+       #A8684A (hover)      4.43         4.43        4.24        4.04        4.00   all fail
+       #9C5F42 (this)       5.09         5.09        4.87        4.64        4.60   all pass
+       #8A5439 (hover)      6.16         6.16        5.90        5.66        5.61   all pass
+
+     The two tinted backgrounds matter: they are bg-accent/5 and bg-accent/10 as
+     rendered, and they are the tightest case. #9E664A, which clears white-on at
+     4.72, fails on them (4.30 / 4.26), so it is not a viable value. */
+  --color-accent-text: #9C5F42;
+  --color-accent-text-hover: #8A5439;
   --color-muted: #6B6B6B;
   --color-border: #E5E2DD;
   --color-surface: #FFFFFF;

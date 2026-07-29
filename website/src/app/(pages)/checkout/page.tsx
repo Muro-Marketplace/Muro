@@ -488,7 +488,7 @@ export default function CheckoutPage() {
           <p className="text-sm text-muted mb-6">Browse the marketplace to find artwork for your space.</p>
           <Link
             href="/browse"
-            className="inline-flex items-center justify-center px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 bg-accent-text text-white text-sm font-medium rounded-sm hover:bg-accent-text-hover transition-colors"
           >
             Discover Art
           </Link>

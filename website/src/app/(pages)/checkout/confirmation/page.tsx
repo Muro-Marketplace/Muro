@@ -119,7 +119,7 @@ function ConfirmationContent() {
           <p className="text-sm text-muted mb-6">It looks like you haven&apos;t placed an order yet.</p>
           <Link
             href="/browse"
-            className="inline-flex items-center justify-center px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 bg-accent-text text-white text-sm font-medium rounded-sm hover:bg-accent-text-hover transition-colors"
           >
             Discover Art
           </Link>
@@ -252,7 +252,7 @@ function ConfirmationContent() {
         {user && (
           <Link
             href={ordersHref}
-            className="inline-flex items-center justify-center px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 bg-accent-text text-white text-sm font-medium rounded-sm hover:bg-accent-text-hover transition-colors"
           >
             View My Orders
           </Link>
