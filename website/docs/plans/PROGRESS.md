@@ -11,8 +11,8 @@ Order of work: the "Corrected dependency order" at the end of
 | 0a | CI `continue-on-error` removed, lint blocks | runbook §1.1 | **done** (47cb468) |
 | 0b | Advisor in CI: nightly, not a PR gate | runbook §1.1, then D12 r3 | **done** (6615736 then corrected by 72adec9) |
 | 0c | `audit:e2e-security` covered in CI | runbook §1.1 | **done** (fa9416e). Real creds ruled in by D13.1, blocked on the human adding secrets |
-| 0d | Branch protection requiring `check` + `e2e`; apply pending workflow change in `docs/ci/2026-06-15-required-checks.md` | runbook §1.1 | **owner only, and BLOCKED**: `e2e` is red on main (10 failures), so requiring it would block every merge |
-| 0e | Go green on main (D14) | D14 | **all 7 product failures fixed** (4f83d3a, f612159, edacda3). Suite now 3 failed / 18 passed. Remaining: D14.3 skip-loudly guard, then the 3 need the repo secrets |
+| 0d | Branch protection requiring `check` + `e2e` | runbook §1.1, D13.3 | **owner only, now UNBLOCKED**: suite is green locally. D13.3 phasing: require `check` now, add `e2e` once it is green on main, never require `advisors` |
+| 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles: `06 A1–A7` `writable-fields.ts` + `01 Phase A` `authz.ts` | `06`, `01` | todo |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
@@ -901,3 +901,104 @@ Only D14.3: the skip-loudly guard on `security-no-leaks.spec.ts`, so those 3 sto
 failing for the wrong reason while still refusing to pass silently. After that the
 suite is green except where the repo secrets are genuinely missing, which is the
 human's step, and Task 0d's phased branch protection becomes possible.
+
+---
+
+## Iteration 9 — 2026-07-29
+
+### Task 0e complete — full Playwright suite exits 0
+
+Owner: D14.3, with the CI half from D13.1.
+
+**Changed:**
+
+1. `tests/e2e/security-no-leaks.spec.ts` — describe-level guard skipping when
+   `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is unset or still
+   a placeholder, with a reason naming both secrets and reporting what it saw.
+2. Same file — requests now use Playwright's `baseURL` via relative paths.
+3. `.github/workflows/ci.yml` — the `e2e` job prefers real secrets with a
+   placeholder fallback.
+
+**A defect the plan did not mention.** The spec hardcoded
+`process.env.E2E_BASE_URL ?? "http://localhost:3000"` and ignored Playwright's
+`baseURL` entirely, so it only worked when the server happened to be on port 3000.
+That is why these three tests failed *locally* for a different reason than in CI:
+in CI they reached a real server and got 404/500, whereas locally they were hitting
+nothing at all on 3000. Switched to relative paths and dropped `E2E_BASE_URL` in
+favour of `PLAYWRIGHT_BASE_URL`, which the config already reads, so there is one
+mechanism rather than two.
+
+**Why the `||` fallback in ci.yml.** A bare `${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}`
+expands to `""` when the secret is absent, and `src/env.ts` requires a valid URL,
+so the *build* would fail rather than the one spec that needs credentials. With the
+fallback, a missing secret or any fork PR keeps the placeholder and the spec skips
+loudly. Service-role key stays a placeholder: nothing in the e2e suite needs it and
+a real one in CI would be a genuine escalation of blast radius.
+
+**Verification, both directions.** Credentials absent:
+
+```
+  4 skipped
+  SKIP REASON: no real Supabase credentials, so these assertions cannot detect a leak.
+  Set the repo secrets NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+  (fork PRs never receive secrets, so they always land here).
+  Saw NEXT_PUBLIC_SUPABASE_URL="(unset)", NEXT_PUBLIC_SUPABASE_ANON_KEY=(unset).
+```
+
+Credentials present (probe values, not real ones):
+
+```
+  ✓ GET /api/venues/demand redacts paywalled fields (14.4s)
+  ✘ GET /api/venues/:slug redacts postcode ... Expected: 200  Received: 404
+  ✘ GET /api/artwork-requests ...            Expected: 200  Received: 500
+  ✘ Storage bucket message-attachments listing is not anon-accessible
+  3 failed, 1 passed
+```
+
+Failing there is the honest outcome: the local server is built against a
+placeholder project, so there is no data to assert on. What matters is that they
+execute rather than skip.
+
+**Full suite against the production build:**
+
+```
+=== FULL SUITE EXIT = 0 ===
+  13 skipped
+  18 passed (18.7s)
+```
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  128 passed (128)
+      Tests  1169 passed (1169)
+```
+
+**Commit:** e38e698
+
+### Mistake worth recording
+
+My first probe value for "credentials present" was
+`not_a_placeholder_value_for_guard_test_only`, which contains the word
+"placeholder", so the guard correctly skipped and my check appeared to fail. The
+guard was right and the test value was wrong.
+
+### Where Task 0 now stands
+
+| Item | State |
+|---|---|
+| 0a lint blocks CI | done, 47cb468 |
+| 0b advisor nightly, not a PR gate | done, 72adec9 |
+| 0c security-e2e collection locked | done, fa9416e |
+| 0e main green | done: 0 failed, 13 skipped, 18 passed |
+| 0d branch protection | **owner**, now unblocked. D13.3 phasing: require `check` now, add `e2e` once green on main, never require `advisors` |
+
+Two things still need the human, neither blocking the queue:
+
+1. **Repo secrets** `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   so the security suite asserts against real data instead of skipping. Until then
+   it skips loudly, which is the intended interim state, not a failure.
+   `SUPABASE_ACCESS_TOKEN` remains optional per D12 ruling 4 (nightly advisor only).
+2. **Branch protection** (0d), which is GitHub settings.
+
+Next in the corrected dependency order: item 2, the vehicles, `06 A1–A7`
+`writable-fields.ts` and `01 Phase A` `authz.ts`.
