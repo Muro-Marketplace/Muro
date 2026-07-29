@@ -18,7 +18,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **`01` Phase B complete**: E32, E44, E45, E19, E39, E17/E18. Next: `01` Phase C/D, `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
-| 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | todo |
+| 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
 | 7 | `04` payments Phase 0→9 (D4 Bug 15, G-C Bug 10, curation 7.0 at Phase 0) | `04` | todo |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
@@ -36,6 +36,10 @@ Owner decisions the loop is waiting on (none block the remaining queue):
   only. Say if you want the admin check too.
 - **Migration ledger divergence.** Iteration 4: rewrite prod's ledger, adopt
   timestamps locally, or accept the numbered files as documentation.
+- **N-K2 implausible dimensions.** What should checkout do when a work's
+  `dimensions` is pixel data (18 of 26 distinct values in prod)? Refuse to quote,
+  clamp to a maximum, or fall back to a default size? Shipping currently prices a
+  242 × 363cm parcel from "2420 × 3632 px". Detail in iteration 24.
 
 Owner actions blocking a merge, added as they surface:
 
@@ -2233,3 +2237,104 @@ opaque ids plus resolution; or stop emitting the link for unentitled viewers, wh
 closes the leak but removes the funnel.
 
 Part 1 stands on its own: the coordinate leak is closed either way.
+
+---
+
+## Iteration 24 — 2026-07-30
+
+### N-K2 — both `parseDimensions` implementations pinned. The collapse itself needs a decision.
+
+Owner: `07 §13.2`, pulled forward by the dependency order.
+
+**I did not do the collapse.** §13.2 says to collapse onto
+`lib/visualizer/dimensions.ts`. Measuring first showed that doing so changes
+shipping prices for most of the real data, and that the choice it forces is a
+product decision, not a refactor. What shipped instead is the safety net that makes
+the collapse deliberate and reviewable when it happens.
+
+**There are three modules in this family, not two.** The doc describes a pair:
+
+```
+lib/shipping-calculator.ts    parseDimensions            → shipping price
+lib/visualizer/dimensions.ts  parseDimensions            → wall preview
+lib/dimensions.ts             displayPhysicalDimensions  → what buyers see
+```
+
+**Measured on every distinct `artist_works.dimensions` value in prod** (26 of them)
+plus the formats each docstring advertises. **They disagree on 17 of 27 inputs**, on
+real data rather than exotica:
+
+```
+input                  shipping     visualizer
+750 × 562 px           56×75        750×562
+2326 × 1551 px         155×233      232.6×155.1
+812 × 812 px           81×81        812×812
+612 × 459 px           46×61        612×459
+3 x 20x30 cm           20×30        3×20
+A4                     21×30        21×29.7
+12 inch by 16 inch     30×41        30.48×40.64
+```
+
+**Neither parser is uniformly better**, which is why "collapse onto the visualizer
+one" cannot be applied literally:
+
+- **shipping alone** handles the multi-piece form (`"3 x 20x30 cm"`) that its own
+  docstring advertises, and its `> 300 ⇒ millimetres` heuristic accidentally keeps
+  pixel data in a plausible range.
+- **shipping alone** sorts the pair descending, so it **silently swaps
+  orientation**: landscape `2326 × 1551` comes back portrait. That is a defect in
+  its own right and probably part of Bug 8.
+- **the visualizer alone** uses true ISO paper sizes and preserves orientation, but
+  takes the **first** numeric pair, so it reads `"3 x 20x30 cm"` as 3×20.
+
+A correct single parser needs ISO sizes **and** preserved orientation **and**
+parenthesised hints **and** multi-piece **and** a plausibility rule. Four of those
+five exist, in two different files.
+
+**The decision that blocks it.** 18 of the 26 prod values are pixel dimensions.
+`lib/dimensions.ts` already rejects those for display (`MAX_REASONABLE_CM = 200`,
+`PIXEL_HINT`) and its comments name the shipping parser as what it is defending
+against:
+
+> *"1000 is pixel data even without the "px" marker. parseDimensions happily
+> reinterprets such pairs as millimetres (any value > 300 ...) ... 'print' for a
+> 5141 × 3427 px image. Stop that here."*
+
+Shipping has **no equivalent guard**, so it still prices a 242 × 363cm parcel from
+`"2420 × 3632 px"`. That asymmetry is the live defect behind Bug 7 / Bug 8. Closing
+it means deciding what checkout does with an implausible size: refuse to quote,
+clamp to a maximum, or fall back to a default. That changes checkout behaviour for a
+large share of works and touches money, so it is escalated, not guessed.
+
+**What shipped:** `src/lib/dimension-parsers.characterisation.test.ts`, 35 tests
+pinning today's behaviour per input, the disagreement count, the orientation swap,
+the multi-piece gap, the ISO difference, and the display guard's asymmetry with
+shipping.
+
+```
+ ✓ src/lib/dimension-parsers.characterisation.test.ts (35 tests) 4ms
+```
+
+Proved the pin has teeth by changing shipping's A4 entry from `21×30` to `21×29.7`:
+
+```
+× A4: shipping reads 21×30, visualizer reads 21×29.7
+  → shipping changed for "A4": expected '21×29.7' to be '21×30'
+× 8×10" (A4): ...
+× only the visualizer uses true ISO paper sizes
+```
+
+restored, back to 35 passing. Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  143 passed (143)
+      Tests  1354 passed (1354)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** 04c023c
+
+When the collapse lands, the disagreement count in that file should go to 0 and the
+file should be deleted along with the losing parser. It is scaffolding, not a
+permanent fixture, and it says so at the top.
