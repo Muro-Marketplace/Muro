@@ -69,8 +69,16 @@ h6 {
   color: white;
 }
 
-a {
-  text-decoration: none;
+/* Inside @layer base so Tailwind utilities can still win. Unlayered CSS beats
+   *every* layered rule regardless of specificity, so while this sat outside a
+   layer it silently defeated `underline` and `hover:underline` everywhere in the
+   codebase: those classes rendered with text-decoration-line: none. That is also
+   why /cookies failed axe's link-in-text-block rule, links in body copy were
+   distinguished by colour alone. */
+@layer base {
+  a {
+    text-decoration: none;
+  }
 }
 
 img {

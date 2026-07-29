@@ -132,7 +132,7 @@ export default function PricingPage() {
           <div className="bg-accent/5 border-2 border-accent rounded-sm p-6 md:p-8">
             <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8">
               <div>
-                <p className="text-xs font-medium text-accent uppercase tracking-wider mb-1">
+                <p className="text-xs font-medium text-accent-text uppercase tracking-wider mb-1">
                   Get Started
                 </p>
                 <p className="text-foreground font-medium text-lg">
@@ -176,7 +176,7 @@ export default function PricingPage() {
                   <th className="text-left py-3 px-4 font-medium text-muted text-xs uppercase tracking-wider">
                     Core
                   </th>
-                  <th className="text-left py-3 px-4 font-medium text-accent text-xs uppercase tracking-wider">
+                  <th className="text-left py-3 px-4 font-medium text-accent-text text-xs uppercase tracking-wider">
                     Premium
                   </th>
                   <th className="text-left py-3 px-4 font-medium text-muted text-xs uppercase tracking-wider">
@@ -249,7 +249,7 @@ export default function PricingPage() {
                     <div>
                       <p
                         className={`text-sm font-medium ${
-                          wallplace ? "text-accent" : "text-foreground/70"
+                          wallplace ? "text-accent-text" : "text-foreground/70"
                         }`}
                       >
                         {label}

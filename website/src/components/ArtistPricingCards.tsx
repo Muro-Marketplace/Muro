@@ -100,7 +100,7 @@ export default function ArtistPricingCards({
           >
             Annual
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium ${
-              cycle === "annual" ? "bg-white/15 text-white" : "bg-accent/10 text-accent"
+              cycle === "annual" ? "bg-white/15 text-white" : "bg-accent/10 text-accent-text"
             }`}>
               Save 17%
             </span>
@@ -141,7 +141,7 @@ export default function ArtistPricingCards({
           return (
             <div key={plan.key} className={containerCls}>
               {plan.badge && (
-                <div className="absolute -top-3 left-6 bg-accent text-white text-xs font-medium px-3 py-1 rounded-sm">
+                <div className="absolute -top-3 left-6 bg-accent-text text-white text-xs font-medium px-3 py-1 rounded-sm">
                   {plan.badge}
                 </div>
               )}
@@ -150,7 +150,7 @@ export default function ArtistPricingCards({
                 <span className="text-4xl font-serif">{primaryAmount}</span>
                 <span className="text-muted text-sm">/mo</span>
                 {isAnnual && (
-                  <span className="text-[10px] uppercase tracking-widest font-medium px-1.5 py-0.5 bg-accent/10 text-accent rounded-sm">Save 17%</span>
+                  <span className="text-[10px] uppercase tracking-widest font-medium px-1.5 py-0.5 bg-accent/10 text-accent-text rounded-sm">Save 17%</span>
                 )}
               </div>
               <p className="text-xs text-muted mb-1">{secondaryLine}</p>
