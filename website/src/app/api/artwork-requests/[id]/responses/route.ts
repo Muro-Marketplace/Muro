@@ -10,6 +10,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import {
+  assertCanViewArtworkRequest,
+  handleAuthzError,
+  type ArtworkRequestViewerRole,
+} from "@/lib/authz";
 import { createNotification } from "@/lib/notifications";
 import { checkArtistOutreachCap } from "@/lib/outreach-cap";
 
@@ -53,12 +58,30 @@ const createSchema = z.object({
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
+  // E18. Unauthenticated before this: anyone could read every artist's bid on any
+  // brief. Same rule as the parent route, the owning venue sees all responses and
+  // an artist sees only their own.
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
   const db = getSupabaseAdmin();
-  const { data, error } = await db
+
+  let role: ArtworkRequestViewerRole;
+  try {
+    ({ role } = await assertCanViewArtworkRequest(auth.user!, id, db));
+  } catch (err) {
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    throw err;
+  }
+
+  let query = db
     .from("artwork_request_responses")
     .select("*")
-    .eq("request_id", id)
-    .order("created_at", { ascending: false });
+    .eq("request_id", id);
+  if (role !== "owner") {
+    query = query.eq("artist_user_id", auth.user!.id);
+  }
+  const { data, error } = await query.order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: "Could not load responses" }, { status: 500 });
   return NextResponse.json({ responses: data || [] });
 }

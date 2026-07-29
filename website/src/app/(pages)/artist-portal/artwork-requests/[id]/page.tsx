@@ -83,7 +83,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`/api/artwork-requests/${id}`);
+      const res = await authFetch(`/api/artwork-requests/${id}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.request) {
         setLoadError(

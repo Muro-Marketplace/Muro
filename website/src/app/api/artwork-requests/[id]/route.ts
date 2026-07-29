@@ -4,6 +4,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import {
+  assertCanViewArtworkRequest,
+  handleAuthzError,
+  type ArtworkRequestRef,
+  type ArtworkRequestViewerRole,
+} from "@/lib/authz";
 
 export const runtime = "nodejs";
 
@@ -32,33 +38,49 @@ const patchSchema = z.object({
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
+  // E17. This read used to be completely unauthenticated, so anyone could pull a
+  // private brief (description, budgets, location, the invited-artist list) plus
+  // every rival artist's response. Visibility is decided by
+  // assertCanViewArtworkRequest: the owning venue, an artist named on a private
+  // row, or any approved artist on a semi_public row. Everyone else gets 404
+  // rather than 403, so the endpoint is not an existence oracle.
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
   const db = getSupabaseAdmin();
+
+  let req: ArtworkRequestRef;
+  let role: ArtworkRequestViewerRole;
+  try {
+    ({ request: req, role } = await assertCanViewArtworkRequest(auth.user!, id, db));
+  } catch (err) {
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    throw err;
+  }
   // Plan G2 #4: surface the venue's NAME alongside the slug for the
   // artist-portal detail page. Done as a separate lookup, not an
   // embedded PostgREST join, because there's no FK between
   // artwork_requests.venue_user_id and venue_profiles.user_id (both
   // reference auth.users.id) — the embed silently 500s and breaks
   // the whole endpoint.
-  const { data: req } = await db
-    .from("artwork_requests")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (!req) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  const venueUserId = (req as { venue_user_id: string }).venue_user_id;
+  const venueUserId = req.venue_user_id;
   const { data: venueRow } = await db
     .from("venue_profiles")
     .select("name")
     .eq("user_id", venueUserId)
     .maybeSingle<{ name: string | null }>();
 
-  // Pull responses (artist replies) too.
-  const { data: responses } = await db
+  // E18. Only the owning venue sees the full response set. An artist viewing the
+  // brief sees their own response and nothing else, so they can tell whether they
+  // have already replied without reading rival terms first.
+  let responsesQuery = db
     .from("artwork_request_responses")
     .select("*")
-    .eq("request_id", id)
-    .order("created_at", { ascending: false });
+    .eq("request_id", id);
+  if (role !== "owner") {
+    responsesQuery = responsesQuery.eq("artist_user_id", auth.user!.id);
+  }
+  const { data: responses } = await responsesQuery.order("created_at", { ascending: false });
 
   const requestRow = { ...req, venue_name: venueRow?.name ?? null };
 
