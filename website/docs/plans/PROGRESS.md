@@ -14,7 +14,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0d | Branch protection requiring `check` + `e2e` | runbook §1.1, D13.3 | **owner only, now UNBLOCKED**: suite is green locally. D13.3 phasing: require `check` now, add `e2e` once it is green on main, never require `advisors` |
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
-| 2 | Vehicles: `writable-fields.ts` + `authz.ts` + state machine | `06`, `01` | **done** (8d99498, 9427aab, 3a73a80). Remaining in `01` Phase A: task 3, the `require-authz-on-mutation` eslint rule |
+| 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | todo |
@@ -1276,3 +1276,93 @@ line 104), so wherever `nextAction` IS used, every viewer resolves to
 `"responder"` and is offered Accept/Counter regardless of who proposed — the
 mirror-image failure. Both want `proposed_by_user_id`. Fix belongs with the `01`
 Phase B–D placement work, where `assertPlacementParty` already returns that field.
+
+---
+
+## Iteration 13 — 2026-07-29
+
+### `01` Phase A task 3 — `require-authz-on-mutation` + the route allowlist
+
+Owner: `implementation/01-authz-idor.md` §3. **This completes `01` Phase A.**
+
+**Changed:** `eslint-rules/require-authz-on-mutation.js`,
+`eslint-rules/public-routes.js`, wiring in `eslint-rules/index.js` and
+`eslint.config.mjs`, `scripts/audit/check-public-routes.ts`, and
+`audit:allowlist` added to `npm run check`.
+
+**Set to `warn`, not `error`, and the doc contradicts itself here.** §3.3's diff
+shows `"error"`; Part 4 task 3 says `"warn"` for now. Measured, `error` today would
+fail lint on **50 route files**, because Phase B to D have not converted them.
+Since Task 0a made lint blocking, this rule flips to `error` as the **Phase 2 exit
+criterion** ("a new route that forgets authz fails CI"), not before. Recorded so
+the flip is a deliberate step with a known cost.
+
+**Measured baseline, which is the size of the remaining conversion work:**
+
+```
+files missing an authz import : 50
+files missing a demo guard    : 55
+demo-only (authz already ok)  :  6
+```
+
+Lint total is now `257 problems (0 errors, 257 warnings)`, up from 122, all from
+this rule. Still exits 0, so CI stays green.
+
+**One addition to the spec.** The rule also matches `export const POST = ...`, not
+just function declarations. `src/app/api/stripe-connect/process-pending/route.ts`
+uses that form, so the spec's `FunctionDeclaration`-only matcher left a real hole.
+§3.5 lists three known limits and not this one; the other three (import-presence
+not call-graph, no indirection through `@/lib/db/*`, and the `walls/[id]`
+exemption) are reproduced in the rule's doc comment.
+
+**Verification, both directions.**
+
+Rule, before: `Cannot find module '../../eslint-rules/require-authz-on-mutation.js'`.
+After: `16 passed`.
+
+Allowlist guard, with two bogus entries injected:
+
+```
+FAIL: 8 problem(s) in eslint-rules/public-routes.js:
+  - PUBLIC_ROUTES: "src/app/api/deleted-route/route.ts" does not exist. ...
+  - PUBLIC_ROUTES: "src/app/api/contact/route.ts_bad" is not a src/app/api/**/route.ts path
+  - PUBLIC_ROUTES: "src/app/api/contact/route.ts_bad" needs a reason of at least 20 characters ...
+```
+
+Reverted:
+
+```
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+Full gate, now including the new allowlist step:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  132 passed (132)
+      Tests  1243 passed (1243)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** eb2acd9
+
+### Two smaller notes
+
+- All 14 allowlisted route files exist, so §3.2's list needed no adjustment. That
+  is the first section of any doc so far that matched reality exactly.
+- The runbook's "`assertNotDemo` zero call sites" is now stale: `demo-guard.ts`
+  exists and has 2 call sites outside itself. The rule's `missingDemoGuard` count
+  of 55 is the real measure of that gap.
+
+### Phase A is complete
+
+| Task | State |
+|---|---|
+| 1 `authz.ts` + tests | done, 9427aab |
+| 2 `placements/state-machine.ts` + tests | done, 3a73a80 |
+| 3 lint rule + allowlist + stale guard | done, eb2acd9 |
+
+Next in the corrected dependency order: item 4, the route fixes. `01` Phase B is
+the highest value (E19 delete, E39 PII strip, E17/E18 auth) and `06` A4 to A7
+convert the mass-assignment routes onto `pickWritable`. The E32+E44 chain is the
+one the runbook wants first.
