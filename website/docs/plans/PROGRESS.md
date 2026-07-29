@@ -1527,3 +1527,100 @@ not the control that stops the attack.
 
 Both halves are now regression-tested. Either fix alone breaks the chain; both are
 in place.
+
+---
+
+## Iteration 16 — 2026-07-29
+
+### E45 — venue-profile mass-assignment, closed (06 A6 + A7's pin)
+
+`PUT` (route.ts:24) and the general-update branch of `PATCH` (route.ts:58) passed
+the raw body to `upsertVenueProfile`, which spreads it into a service-role update.
+Both now go through `pickWritable(body, VENUE_PROFILE_WRITABLE)`.
+
+**Changed:** `src/app/api/venue-profile/route.ts`, `src/lib/db/venue-profiles.ts`.
+
+**A7's pin, and what the doc got slightly wrong.** A7 says to "pin `user_id: userId`
+on the update branch". The update was *already* scoped by `.eq("user_id", userId)` in
+the WHERE, so the doc reads as if the scoping were missing. It is not; the real
+exposure is different and worse: a body-supplied `user_id` lands in **SET** while the
+WHERE still matches the caller, so the row is reassigned to another account. Pinning
+`user_id: userId` into the SET closes that, on the retry path as well.
+
+`ensureVenueProfile` is untouched per A6. It legitimately writes `user_id` and `slug`
+during self-heal, and the PATCH branch that calls it returns before the allowlist.
+Two tests assert that branch never reaches `upsertVenueProfile`, covering both the
+`ensureProfile` flag and the legacy `adoptIfOrphan` alias.
+
+**The typecheck earned its place.** First attempt failed:
+
+```
+=== npm run check EXIT = 2 ===
+src/app/api/venue-profile/route.ts(32,7): error TS2345: Argument of type
+'Partial<Record<"type" | "name" | ... , unknown>>' is not assignable to parameter
+of type 'Partial<Omit<DbVenueProfile, "user_id" | "id">>'.
+```
+
+That is a true statement about the code, not a nuisance: `pickWritable` guarantees
+the **keys**, and the values are still unvalidated JSON. Resolved with an explicit
+cast that says so and names `06` A3's zod schema as the thing that will remove it.
+This is the reason the doc pairs A3 with A4/A6, which was not obvious until the
+compiler said it.
+
+**Verification, both directions.** Before:
+
+```
+× PUT drops every server-owned field from the body
+  → id reached the DB payload: expected { …(13) } to not have property "id"
+× PUT drops columns that exist in no schema
+  → expected { name: 'Kettle', …(2) } to not have property "preferred_sizes"
+× PATCH drops every server-owned field on the general-update branch
+  → id reached the DB payload
+ Tests  3 failed | 5 passed (8)
+```
+
+After:
+
+```
+ ✓ src/app/api/venue-profile/route.test.ts (8 tests) 5ms
+      Tests  8 passed (8)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  135 passed (135)
+      Tests  1267 passed (1267)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** 39a2758
+
+### assertNoServerOwned (A5 and A7's second half) — now with hard evidence
+
+Both remain deferred, and the reason is no longer speculative. Three legitimate
+callers write server-owned columns today:
+
+| Caller | Writes | Why it is legitimate |
+|---|---|---|
+| `api/artist-profile` PUT | `lat`, `lng` | derived server-side from the postcode by the geocoder |
+| `api/artist-profile` POST | `review_status: "pending"` | server-chosen initial state for the claim flow |
+| `api/venue-profile` POST:181 | `slug` | the venue picks its handle at creation |
+
+`assertNoServerOwned` as specified throws on all three. It needs an exemption
+mechanism first, an `allow` parameter or a separate `applyServerOwned()` path, and
+that is a design decision deserving its own iteration rather than being improvised
+inside a security fix. Neither E44 nor E45 depends on it: the allowlist at the route
+is the control, the assert is defence in depth against a future careless caller.
+
+### Follow-up noted, not done: the strip-and-retry dance
+
+`upsertVenueProfile` still strips `preferred_sizes`, `interested_in_local_artists`,
+`images` and the four `display_*` columns on retry, as "columns that may not exist in
+older schemas". Verified in iteration 10: the first two exist in **no** schema, and
+the other five all exist in prod. With the allowlist in place every key that can
+arrive is known to exist, so the whole dance is dead weight against prod. §5.1 says
+as much ("once the allowlist lands, the whole strip-and-retry dance can be deleted").
+Left alone this iteration because deleting it changes error-path behaviour, which
+does not belong bundled into a security fix.
