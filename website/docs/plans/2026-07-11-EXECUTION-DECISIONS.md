@@ -146,3 +146,68 @@ Prod junk confirmed: artists `avatar, test, test-artist, test-user, sass-test, s
 11. **`09`** emails (artist-sale trigger first; provisioning dropped)
 12. **`07 K5a/K5b`** before `08 PR#2`; **`09 §4.1`** harness before `08 PR#5`
 13. **`08`** rewritten cull last
+
+---
+
+## D12. Advisor / CI-secret ruling (added 2026-07-11, in response to the loop's escalation)
+
+Both escalated claims are **verified correct**:
+- `gh` cannot read or write repo secrets here. Active token scopes are `gist, read:org, repo, workflow` — no secrets permission; `gh secret list` returns HTTP 403. **Neither the agent nor a subagent can add or even check this secret. It is a human-only task.**
+- `SUPABASE_ACCESS_TOKEN` is genuinely **absent** from `~/.zshrc` (0 occurrences; only `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_URL` are exported). **The header comment in `scripts/audit/snapshot-advisors.ts:9-11` is factually wrong** and must be corrected — it claims the token is "already exported in the developer's ~/.zshrc".
+
+### Rulings
+
+**1. The loop's workaround is APPROVED and is now the primary evidence, not a fallback.**
+The Supabase advisor **provably does not catch the leaks this project actually has**. A full `get_advisors(security)` run against prod on 2026-07-11 returned `rls_enabled_no_policy` (INFO) and `rls_policy_always_true` (WARN, INSERT-only) items — and **flagged none of the five live `SELECT USING (auth.role() = 'authenticated')` leaks** on `artist_applications`, `contact_submissions`, `venue_registrations`, `waitlist_signups`, `enquiries`. The linter documents that it deliberately excludes permissive SELECT policies.
+→ **A clean advisor run is NOT evidence of RLS health. Never report it as such.**
+
+**Canonical blocking assertion for every DB/RLS task** (must return zero rows):
+```sql
+select tablename, policyname, cmd, qual
+from pg_policies
+where schemaname = 'public'
+  and cmd = 'SELECT'
+  and qual ilike '%auth.role()%authenticated%';
+```
+
+**2. The advisor is still runnable — just not via the npm script.** Use the Supabase MCP `get_advisors` tool (project `uwkuhygwvasdzwsusiym`) directly. Only the CLI path is blocked by the missing token. So report it as "advisor run via MCP", not "could not run", when the MCP is available. State plainly which path was used.
+
+**3. Do NOT gate PRs on `audit:advisors`.** Reasons: (a) it cannot catch this codebase's actual leak class (above), so it would give false assurance; (b) GitHub does not expose repo secrets to fork PRs, so the job would hard-fail on any external contribution; (c) a per-PR job holding a prod management token widens the blast radius for little gain.
+→ **Required change:** make the advisor job `continue-on-error: true` **or** move it to a nightly `schedule:` workflow. The **blocking** gate is the `pg_policies` assertion above. If that assertion is wanted in CI it needs its own DB-URL secret — until then run it via MCP pre-merge and paste the output.
+
+**4. `SUPABASE_ACCESS_TOKEN` is therefore NOT a blocker for the loop.** Continue without it. Do not re-escalate. It remains on the human's list only so the nightly/non-blocking advisor job works later.
+
+**5. Fix the stale header** in `scripts/audit/snapshot-advisors.ts:9-11`: state that the token must be exported manually or supplied by CI, and that `npm run audit:advisors` exits 2 when unset. Small task, owner `02`.
+
+---
+
+## D13. Owner rulings on the two Task-0c/0d escalations (2026-07-11)
+
+Both answered by the owner. These are binding; Task 0d is **unblocked**.
+
+### D13.1 — Security e2e gets REAL Supabase credentials in CI
+
+**Ruling: add real creds as repo secrets.** The anon key is already public in the shipped browser bundle, so this exposes nothing new, and it is the only option that gives a genuine **per-PR** leak gate — which matters because Bug 1 and Bug 5 are *live* PII leaks that this suite is meant to catch.
+
+Implementation:
+- Human adds repo secrets: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (real values). *(Also `SUPABASE_ACCESS_TOKEN` per D12, but that one is non-blocking.)*
+- The `e2e` job takes them from `secrets.*`, replacing the `placeholder.supabase.co` values for the security spec.
+- **Fork-PR caveat:** GitHub does not expose secrets to fork PRs. The security spec must therefore **skip loudly** (explicit skip message naming the missing secret) when the URL is absent or still `placeholder`, and **fail** when creds are present but a leak is found. A silent pass on missing config is the exact failure mode we are removing — never do that.
+- Until the secrets exist the job stays red on that spec; that is expected and acceptable.
+
+### D13.2 — Brand accent: darken for small text only, keep the brand
+
+**Ruling: keep `#c17c5a` for large text, buttons and decoration; introduce a darker token used only where small text sits on the accent, or the accent is small text on a warm background.** WCAG 2.1 permits 3:1 for large text (≥24px, or ≥18.66px bold), so the brand colour stays legitimate in its dominant uses.
+
+Implementation:
+- Add a distinct token (e.g. `--accent-text` / `accent-ink`) alongside the existing accent. **Do not** globally redefine `#c17c5a`.
+- **Derive the value empirically — do not trust a hex I or anyone else asserts.** Darken until the axe contrast checks pass, then record the measured ratio in the commit message. Required: ≥4.5:1 for white-on-accent and for accent-on-warm-background at small sizes.
+- Apply only at the failing sites: `/pricing`, `/checkout`, `/checkout/confirmation`, `/cookies`.
+- The 3 tap-target failures are uncontroversial sizing fixes (≥44×44px) — fix them in the same phase, no design decision needed.
+- Evidence required: the 7 previously-failing a11y/tap-target tests pass, and a visual check that the brand still reads correctly.
+
+### D13.3 — Task 0d (branch protection) is now unblocked, with a phased gate
+
+- **Now:** require `check` (lint + typecheck + unit). It is green and blocking today.
+- **After D13.1 + D13.2 land and `e2e` is green:** add `e2e` to required checks.
+- Do **not** require `advisors` (per D12 it is non-blocking/nightly).

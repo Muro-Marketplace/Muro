@@ -62,6 +62,7 @@ A coherence review found the nine implementation docs **not executable as writte
 | `implementation/06-validation-massassign.md` | Allowlisted writes + E44–E46, E16 |
 | `implementation/07-unknot.md` | K1–K11 + `browse/page.tsx` decomposition |
 | `implementation/08-surface-cull.md` | Route inventory, reachability, deletion plan |
+| `implementation/09-emails.md` | Email pipeline, consolidation, missing triggers (E1, E4, E5) |
 
 ---
 
