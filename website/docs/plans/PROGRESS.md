@@ -9,10 +9,10 @@ Order of work: the "Corrected dependency order" at the end of
 | # | Task | Owner doc | Status |
 |---|---|---|---|
 | 0a | CI `continue-on-error` removed, lint blocks | runbook §1.1 | **done** (47cb468) |
-| 0b | `audit:advisors` job added to CI | runbook §1.1 | **done** (6615736), needs the repo secret before merge |
+| 0b | `audit:advisors` job added to CI | runbook §1.1 | **superseded by D12 ruling 3**: must not gate PRs. Correction is the next task |
 | 0c | `audit:e2e-security` covered in CI | runbook §1.1 | **done** (fa9416e), premise was wrong, gate meaningfulness is an open owner decision |
 | 0d | Branch protection requiring `check` + `e2e`; apply pending workflow change in `docs/ci/2026-06-15-required-checks.md` | runbook §1.1 | **owner only, and BLOCKED**: `e2e` is red on main (10 failures), so requiring it would block every merge |
-| 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | todo, blocks all new migrations |
+| 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles: `06 A1–A7` `writable-fields.ts` + `01 Phase A` `authz.ts` | `06`, `01` | todo |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
@@ -328,3 +328,205 @@ Supabase URL and anon key as secrets (points per-PR CI at prod data); run the
 suite against the deployed site post-deploy or on a schedule instead of per PR;
 make it skip loudly when Supabase is a placeholder (honest, but no CI coverage);
 or seed a dedicated test Supabase project.
+
+---
+
+## Iteration 4 — 2026-07-29
+
+### D12 arrived mid-iteration
+
+The owner added **D12** to EXECUTION-DECISIONS while this iteration was running,
+answering the iteration-3 escalation, and committed here as **a087e15** (their
+words, not mine). Two consequences:
+
+- **It overrules Task 0b.** Ruling 3: "Do NOT gate PRs on `audit:advisors`",
+  because it cannot catch this codebase's leak class, fork PRs get no secrets, and
+  a per-PR job holding a prod management token widens the blast radius. The
+  blocking `advisors` job landed in 6615736 must become non-blocking or nightly.
+  **That is the next task.** Ledger row 0b re-marked.
+- **Ruling 2 unblocks advisor runs:** use the Supabase MCP `get_advisors` tool
+  rather than the npm script, and say which path was used. Ruling 4: the missing
+  token is not a blocker, do not re-escalate. Noted, and I won't.
+
+### Task 1 — `02` prereqs
+
+Owner: `implementation/02-rls-db-storage.md` §8 (X1/K10) and §9 (X2/K11), with D2
+making §8.3 authoritative over `07 §10.4`.
+
+#### Done: K10 renumber
+
+**Changed:** four files renamed into free slots per §8.3, keeping the member of
+each pair that has downstream references:
+
+```
+037_welcomed_at          -> 002_welcomed_at
+044_cart_sessions        -> 017_cart_sessions
+045_artist_charges_cache -> 068_artist_charges_cache
+054_customer_addresses   -> 069_customer_addresses
+```
+
+Slots 002, 017, 068 and 069 were verified empty first. `git mv` throughout, so
+history follows. Ten header lines corrected (the four renamed, plus six stale).
+
+**Test added:** `tests/integration/migration-numbering.test.ts` — no repeated
+numeric prefix, filenames on convention, and a header's declared number must match
+its filename.
+
+**Verification, both directions.** Before:
+
+```
+   × supabase migration numbering > uses every numeric prefix at most once
+     → duplicate migration numbers:
+   × supabase migration numbering > keeps each header's number in step with its filename
+041_placement_reviews.sql declares 038
+042_orders_fulfilment_method.sql declares 039
+043_message_attachments.sql declares 040
+044_feature_requests.sql declares 041
+045_purchase_offers.sql declares 042
+046_artwork_requests_and_commissions.sql declares 043: expected [ …(6) ] to deeply equal []
+```
+
+After, plus a direct check that no prefix repeats and no file was lost:
+
+```
+ ✓ tests/integration/migration-numbering.test.ts (4 tests) 8ms
+      Tests  4 passed (4)
+=== dup prefixes now ===
+(empty above = no duplicates)
+=== count ===
+      73
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  128 passed (128)
+      Tests  1167 passed (1167)
+```
+
+No SQL was executed against prod for this task. Renaming a file changes nothing in
+the database.
+
+**Commit:** 800c02b
+
+#### Not done, and why: §8.4 reconcile is void
+
+**The premise is false.** §8.4 says to insert `('002','welcomed_at')`,
+`('017','cart_sessions')` and so on into `supabase_migrations.schema_migrations` so
+the CLI skips the renamed files. Prod's ledger is not keyed that way:
+
+```
+total_rows | min_version    | max_version
+        48 | 20260429222509 | 20260615042101
+```
+
+All 48 rows carry **14-digit timestamp** versions, i.e. everything was applied with
+the MCP `apply_migration` path, not `supabase db push` of the numbered files.
+Inserting a row keyed `'002'` would add a junk key that matches nothing. I did not
+run it, and I am not going to without a decision, because the underlying situation
+is much worse than the renumbering:
+
+- **The repo's migration files and prod's ledger have completely diverged.** Local
+  versions are `NNN`; remote versions are timestamps. `supabase migration list
+  --linked` would therefore call **all 73** local files unapplied, and a
+  `supabase db push` would try to re-run every one of them against prod. That
+  hazard exists independently of K10 and is not described anywhere in the plan.
+- Only 48 of 73 files appear at all, and the names do not line up either:
+  `070_qa44_db_hardening.sql` is one local file but ten `qa44_*` rows in prod,
+  `072`/`073` are recorded without their number prefixes, and
+  `071_defence_in_depth_venue_pii` is recorded **twice**.
+- **§8.2's stated bug never bit prod.** "Two files claiming version 037 means the
+  second insert conflicts" is only true for a fresh `db push` bootstrap. Prod's
+  timestamp keys never collided.
+
+The ledger names also confirm where the stale headers came from. Prod recorded
+`038_placement_reviews`, `039_orders_fulfilment_method`, `040_message_attachments`,
+`041_feature_requests`, `042_purchase_offers` and
+`043_artwork_requests_and_commissions` — exactly the six stale header numbers,
+each three below its filename. Whoever applied them used the header, not the
+filename. Mapping worth keeping:
+
+| File (now) | Applied to prod as |
+|---|---|
+| `041_placement_reviews.sql` | `038_placement_reviews` |
+| `042_orders_fulfilment_method.sql` | `039_orders_fulfilment_method` |
+| `043_message_attachments.sql` | `040_message_attachments` |
+| `044_feature_requests.sql` | `041_feature_requests` |
+| `045_purchase_offers.sql` | `042_purchase_offers` |
+| `046_artwork_requests_and_commissions.sql` | `043_artwork_requests_and_commissions` |
+
+**Needs an owner decision** (recorded, not blocking the next tasks): whether to
+rewrite prod's ledger to match the numbered files, adopt timestamps locally, or
+accept that the numbered files are documentation and prod is managed via MCP. The
+third is closest to current reality and costs nothing, but it means never running
+`supabase db push` against prod again. Nothing in the queue ahead needs this
+resolved, because 074 will be applied via MCP like everything else.
+
+#### Blocked: base schema (X2/K11)
+
+§9.3 wants `000_base_schema.sql` produced by `supabase db dump --linked`. Not
+possible here:
+
+```
+=== supabase CLI? ===
+supabase not found
+(no supabase config.toml / link state)
+```
+
+No CLI, no link state, and no DB password available to link with. Recorded as
+blocked rather than faked from `information_schema`, which would produce a
+plausible file that is not a real dump.
+
+### Baseline: the five live RLS leaks, and a correction to D12's gate
+
+Ran D12's canonical assertion via MCP before touching anything, as the pre-074
+baseline. **It returns 4 rows, not 5:**
+
+```
+artist_applications  | Authenticated users can read applications | (auth.role() = 'authenticated'::text)
+waitlist_signups     | Authenticated can read waitlist           | (auth.role() = 'authenticated'::text)
+contact_submissions  | Authenticated can read contact            | (auth.role() = 'authenticated'::text)
+venue_registrations  | Authenticated can read venue reg          | (auth.role() = 'authenticated'::text)
+```
+
+`enquiries` is missing because its leak is a different shape, confirming D3:
+
+```
+enquiries | Artists can read their enquiries | SELECT | PERMISSIVE | true
+enquiries | Users can read own enquiries     | SELECT | PERMISSIVE | ((sender_email = (auth.jwt() ->> 'email')) OR (auth.role() = 'service_role'))
+```
+
+So **D12's assertion, used alone, would report zero rows while `enquiries` is still
+world-readable.** Broadening it to include `btrim(qual) = 'true'` catches
+`enquiries` but also picks up four *intentionally* public tables
+(`artist_profiles`, `artist_works`, `artist_collections`, `venue_profiles`), which
+are the public marketplace surface and must stay readable, so an unqualified
+"zero rows" gate is unachievable. The assertion that actually works, and the one I
+will use as Task 4's acceptance gate:
+
+```sql
+select tablename, policyname, qual
+from pg_policies
+where schemaname = 'public'
+  and cmd = 'SELECT'
+  and (qual ilike '%auth.role()%authenticated%' or btrim(qual) = 'true')
+  and tablename not in ('artist_profiles','artist_works','artist_collections','venue_profiles');
+```
+
+Today it returns exactly the five leaks, and must return zero rows after 074:
+
+```
+artist_applications | Authenticated users can read applications | (auth.role() = 'authenticated'::text)
+contact_submissions | Authenticated can read contact            | (auth.role() = 'authenticated'::text)
+enquiries           | Artists can read their enquiries          | true
+venue_registrations | Authenticated can read venue reg          | (auth.role() = 'authenticated'::text)
+waitlist_signups    | Authenticated can read waitlist           | (auth.role() = 'authenticated'::text)
+```
+
+### Also noted
+
+`docs/plans/2026-05-02-B-checkout-payment-integrity.md` still refers to
+`044_cart_sessions.sql` and `045_artist_charges_cache.sql` at their old numbers.
+Left alone deliberately: it is a completed May plan and a historical record, and
+editing it to match a July rename would falsify what was done at the time.
