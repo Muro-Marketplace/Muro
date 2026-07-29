@@ -54,7 +54,11 @@ export async function upsertVenueProfile(
   if (existing) {
     let { error } = await db
       .from("venue_profiles")
-      .update({ ...data, updated_at: new Date().toISOString() })
+      // user_id is pinned in the SET as well as matched in the WHERE (E45, A7).
+      // The WHERE alone does not stop a caller-supplied user_id landing in SET
+      // and reassigning the row; pinning it makes that impossible even if a
+      // future caller forgets the allowlist.
+      .update({ ...data, user_id: userId, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
     // Retry without potentially missing columns if update fails. `images`
     // is added in migration 022 and may not exist in older environments.
@@ -72,7 +76,7 @@ export async function upsertVenueProfile(
       } = data as Record<string, unknown>;
       const retry = await db
         .from("venue_profiles")
-        .update({ ...safeData, updated_at: new Date().toISOString() })
+        .update({ ...safeData, user_id: userId, updated_at: new Date().toISOString() })
         .eq("user_id", userId);
       error = retry.error;
     }

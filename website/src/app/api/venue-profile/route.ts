@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getVenueProfileByUserId, upsertVenueProfile } from "@/lib/db/venue-profiles";
+import { pickWritable, VENUE_PROFILE_WRITABLE } from "@/lib/db/writable-fields";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { slugify } from "@/lib/slugify";
 import type { User } from "@supabase/supabase-js";
@@ -21,7 +22,20 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { error } = await upsertVenueProfile(auth.user!.id, body);
+    // E45. Passing `body` straight through spread the whole venue_profiles row
+    // into a service-role update: squat another venue's slug, self-grant a paid
+    // subscription_plan, set the stripe_* columns, or write user_id, which lands
+    // in SET while the WHERE still matches the caller, handing your own row to
+    // another account.
+    const { error } = await upsertVenueProfile(
+      auth.user!.id,
+      // The allowlist guarantees the KEYS, not the value types: these came from
+      // JSON, so they are `unknown` until something validates their shape. That
+      // is 06 A3's zod schema (and E46a's numeric bounds), not this cast. The
+      // cast states the current position honestly rather than implying the values
+      // have been checked.
+      pickWritable(body, VENUE_PROFILE_WRITABLE) as Parameters<typeof upsertVenueProfile>[1],
+    );
 
     if (error) {
       console.error("Venue profile update error:", error);
@@ -55,7 +69,17 @@ export async function PATCH(request: Request) {
 
   // General partial update (same semantics as PUT but for PATCH callers)
   try {
-    const { error } = await upsertVenueProfile(auth.user!.id, body);
+    // Same allowlist as PUT (E45). The ensureProfile branch above returns before
+    // this point: it legitimately writes user_id and slug, so it keeps its own path.
+    const { error } = await upsertVenueProfile(
+      auth.user!.id,
+      // The allowlist guarantees the KEYS, not the value types: these came from
+      // JSON, so they are `unknown` until something validates their shape. That
+      // is 06 A3's zod schema (and E46a's numeric bounds), not this cast. The
+      // cast states the current position honestly rather than implying the values
+      // have been checked.
+      pickWritable(body, VENUE_PROFILE_WRITABLE) as Parameters<typeof upsertVenueProfile>[1],
+    );
     if (error) {
       console.error("Venue profile patch error:", error);
       return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
