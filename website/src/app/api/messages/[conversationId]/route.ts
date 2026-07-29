@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertConversationParticipant, handleAuthzError } from "@/lib/authz";
 
-// GET: fetch all messages in a conversation
+// E31. Conversation ids are `dm-${slugA}__${slugB}` built from two PUBLIC profile
+// slugs, so they are guessable, not secret. Every handler here therefore proves
+// participation against the message rows via assertConversationParticipant rather
+// than trusting the id, the caller's word, or the request body. Denial is 404: a
+// 403 would confirm the conversation exists, which is the enumeration oracle.
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ conversationId: string }> }
@@ -12,12 +18,12 @@ export async function GET(
 
   try {
     const { conversationId } = await params;
-
-    if (!conversationId || conversationId.length > 200) {
-      return NextResponse.json({ error: "Valid conversation ID required" }, { status: 400 });
-    }
-
     const db = getSupabaseAdmin();
+
+    // Was: authenticated, then read every message for whatever id was supplied.
+    // Any signed-in user could enumerate ids from public slugs and read the lot.
+    await assertConversationParticipant(auth.user!, conversationId, db);
+
     const { data, error } = await db
       .from("messages")
       .select("*")
@@ -30,7 +36,9 @@ export async function GET(
     }
 
     return NextResponse.json({ messages: data || [] });
-  } catch {
+  } catch (err) {
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -45,21 +53,22 @@ export async function PATCH(
 
   try {
     const { conversationId } = await params;
-    const body = await request.json();
-    const { readerSlug } = body;
+    const db = getSupabaseAdmin();
 
-    if (!readerSlug || typeof readerSlug !== "string" || readerSlug.length > 100) {
-      return NextResponse.json({ error: "Valid readerSlug required" }, { status: 400 });
+    // The reader is whoever is signed in. This used to come from the request
+    // body as `readerSlug`, so a caller could mark somebody else's messages as
+    // read. The gate returns the caller's own slugs, and a user may hold both an
+    // artist and a venue slug, hence the .in().
+    const { slugs } = await assertConversationParticipant(auth.user!, conversationId, db);
+    if (slugs.length === 0) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 400 });
     }
 
-    const safeSlug = readerSlug.replace(/[^a-zA-Z0-9_-]/g, "");
-
-    const db = getSupabaseAdmin();
     const { error } = await db
       .from("messages")
       .update({ is_read: true })
       .eq("conversation_id", conversationId)
-      .eq("recipient_slug", safeSlug)
+      .in("recipient_slug", slugs)
       .eq("is_read", false);
 
     if (error) {
@@ -68,7 +77,9 @@ export async function PATCH(
     }
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -83,40 +94,14 @@ export async function DELETE(
 
   try {
     const { conversationId } = await params;
-
-    if (!conversationId || conversationId.length > 200) {
-      return NextResponse.json({ error: "Valid conversation ID required" }, { status: 400 });
-    }
-
-    // Verify user is a participant in this conversation
     const db = getSupabaseAdmin();
 
-    // Get user's slug
-    const { data: artistProfile } = await db.from("artist_profiles").select("slug").eq("user_id", auth.user!.id).single();
-    const { data: venueProfile } = !artistProfile
-      ? await db.from("venue_profiles").select("slug").eq("user_id", auth.user!.id).single()
-      : { data: null };
-    const userSlug = artistProfile?.slug || venueProfile?.slug;
-
-    if (!userSlug) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 400 });
-    }
-
-    // Check that user is part of this conversation
-    const { data: msgs } = await db
-      .from("messages")
-      .select("sender_name, recipient_slug")
-      .eq("conversation_id", conversationId)
-      .limit(1);
-
-    if (!msgs || msgs.length === 0) {
-      return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
-    }
-
-    const msg = msgs[0];
-    if (msg.sender_name !== userSlug && msg.recipient_slug !== userSlug) {
-      return NextResponse.json({ error: "Not authorised" }, { status: 403 });
-    }
+    // This handler had its own participation check: look up the caller's slug,
+    // read one message row, compare sender_name/recipient_slug in application
+    // code. That is a second implementation of the same rule, and the weaker
+    // fetch-then-compare shape. Replaced by the shared gate, which also covers
+    // the modern sender_id / recipient_user_id columns the inline version missed.
+    await assertConversationParticipant(auth.user!, conversationId, db);
 
     const { error } = await db
       .from("messages")
@@ -129,7 +114,9 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }

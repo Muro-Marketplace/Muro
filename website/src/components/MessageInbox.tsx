@@ -332,11 +332,10 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         // content after switching between threads with equal counts.
         setMessages(data.messages);
       }
-      await authFetch(`/api/messages/${convId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ readerSlug: slugRef.current }),
-      });
+      // No body: the server marks read against the signed-in caller's own slugs.
+      // It used to take a readerSlug from here, which let a caller mark somebody
+      // else's messages as read (E31).
+      await authFetch(`/api/messages/${convId}`, { method: "PATCH" });
       setConversations((prev) => prev.map((c) => c.conversationId === convId ? { ...c, unreadCount: 0 } : c));
     } catch (err) {
       if (!silent) console.error("Failed to load thread:", err);
