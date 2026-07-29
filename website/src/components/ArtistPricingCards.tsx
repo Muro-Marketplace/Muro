@@ -85,7 +85,7 @@ export default function ArtistPricingCards({
           <button
             type="button"
             onClick={() => setCycle("monthly")}
-            className={`px-4 py-2 rounded-sm transition-colors ${
+            className={`px-4 py-2 min-h-11 inline-flex items-center justify-center rounded-sm transition-colors ${
               cycle === "monthly" ? "bg-foreground text-white" : "text-muted hover:text-foreground"
             }`}
           >
@@ -94,7 +94,7 @@ export default function ArtistPricingCards({
           <button
             type="button"
             onClick={() => setCycle("annual")}
-            className={`px-4 py-2 rounded-sm transition-colors inline-flex items-center gap-2 ${
+            className={`px-4 py-2 min-h-11 rounded-sm transition-colors inline-flex items-center gap-2 ${
               cycle === "annual" ? "bg-foreground text-white" : "text-muted hover:text-foreground"
             }`}
           >

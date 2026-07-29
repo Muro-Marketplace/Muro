@@ -51,12 +51,12 @@ export default function NewsletterForm({ source = "footer", className = "" }: Ne
           onChange={(e) => setEmail(e.target.value)}
           placeholder="your@email.com"
           required
-          className="flex-1 px-3 py-2 text-sm bg-background border border-border rounded-sm focus:outline-none focus:border-accent/60 text-foreground placeholder:text-muted"
+          className="flex-1 px-3 py-2 min-h-11 text-sm bg-background border border-border rounded-sm focus:outline-none focus:border-accent/60 text-foreground placeholder:text-muted"
         />
         <button
           type="submit"
           disabled={status === "loading"}
-          className="px-4 py-2 text-sm font-medium text-white bg-accent-text hover:bg-accent-text-hover rounded-sm transition-colors disabled:opacity-50"
+          className="px-4 py-2 min-h-11 text-sm font-medium text-white bg-accent-text hover:bg-accent-text-hover rounded-sm transition-colors disabled:opacity-50"
         >
           {status === "loading" ? "…" : "Subscribe"}
         </button>
