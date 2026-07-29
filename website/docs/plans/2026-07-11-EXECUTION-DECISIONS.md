@@ -211,3 +211,54 @@ Implementation:
 - **Now:** require `check` (lint + typecheck + unit). It is green and blocking today.
 - **After D13.1 + D13.2 land and `e2e` is green:** add `e2e` to required checks.
 - Do **not** require `advisors` (per D12 it is non-blocking/nightly).
+
+---
+
+## D14. Task 0e — GO GREEN ON MAIN (owner request, 2026-07-11)
+
+**Goal:** `main` CI green. Currently `10 failed, 9 skipped, 12 passed` (run 27908014082) — `check` passes, `e2e` fails. Breakdown: 4 a11y contrast + 3 tap-target + 3 security-environmental.
+
+### D14.1 — Contrast: measured values (do NOT re-derive by eye)
+
+Computed from the tokens in `src/app/globals.css` (WCAG 2.1 relative-luminance formula):
+
+| Pair | Ratio | 4.5:1? |
+|---|---|---|
+| white on `--color-accent` `#C17C5A` | **3.33** | ✗ |
+| `#C17C5A` on `--color-background` `#FAFAF8` | **3.19** | ✗ |
+| `#C17C5A` on `--color-surface` `#FFFFFF` | **3.33** | ✗ |
+| white on `--color-accent-hover` `#A8684A` | **4.43** | ✗ |
+| `#A8684A` on `#FAFAF8` | **4.24** | ✗ |
+
+**⚠️ New finding not in the loop's report: `--color-accent-hover` (`#A8684A`) ALSO fails**, at 4.43/4.24 — just under the bar. Any fix that only addresses `--color-accent` leaves hover states non-compliant. Fix both.
+
+**Candidates (measured, hue-preserving darkening):**
+
+| Hex | white-on | on `#FAFAF8` | Note |
+|---|---|---|---|
+| `#9E664A` | 4.72 | **4.51** | bare minimum — 0.01 of margin on background, too fragile |
+| **`#9C5F42`** | **5.09** | **4.87** | **recommended** — comfortable margin, sits naturally beside the existing hover shade |
+| `#8F5638` | 5.91 | 5.65 | safest, visibly darker |
+
+**Ruling:** add `--color-accent-text: #9C5F42` (new token). Do **not** redefine `--color-accent`. Per D13.2, `#C17C5A` stays for large text (≥24px, or ≥18.66px bold), icons, borders and decoration, where the 3:1 large-text allowance applies and it already clears it.
+
+### D14.2 — Method (evidence-driven, not guesswork)
+
+1. **Run axe first and capture the exact failing nodes** — do not assume which elements fail. `npx playwright test tests/e2e/a11y.spec.ts` and read the node HTML in the failure output.
+2. Apply `--color-accent-text` **only at those nodes** (small text on accent, and small accent text on light backgrounds), on `/pricing`, `/checkout`, `/checkout/confirmation`, `/cookies`.
+3. Add a hover partner for it if any darkened element has a hover state.
+4. Re-run axe until 0 critical/serious. **Record the measured ratios in the commit message.**
+5. Tap-targets: pad the 3 failing controls to ≥44×44px (`min-h-11 min-w-11` or equivalent). Purely mechanical, no design decision.
+6. Visual check that the brand still reads correctly on those four pages.
+
+### D14.3 — The 3 security failures are NOT a code fix
+
+They are environmental: CI runs against `https://placeholder.supabase.co`, producing `ENOTFOUND` / `404` / `500` — not real leaks. Resolved by D13.1 (real creds as repo secrets) **plus** the skip-loudly guard for fork PRs. **Blocked on the human adding the secrets.** Until then, implement the skip-loudly guard so these 3 stop failing for the wrong reason while still refusing to pass silently.
+
+### D14.4 — Definition of green
+
+- `npm run check` exit 0 (already true)
+- `npx playwright test` → 0 failed, with the security spec either passing (secrets present) or explicitly skipped with a named reason (fork/no secrets)
+- Then Task 0d: require `check` + `e2e` in branch protection
+
+**Landing on main needs a PR and the owner's approval — do not push or merge autonomously.**
