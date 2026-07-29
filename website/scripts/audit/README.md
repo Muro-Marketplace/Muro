@@ -19,7 +19,7 @@ git add scripts/audit/baseline-advisors.json
 git commit -m "chore(audit): seed real Supabase advisor baseline"
 ```
 
-After that, `npm run audit:advisors` works locally and in CI (the GitHub Actions workflow reads `SUPABASE_ACCESS_TOKEN` from repo secrets — add the secret in Settings > Secrets and variables > Actions).
+After that, `npm run audit:advisors` works locally and in CI. In CI it runs **only** in `.github/workflows/advisors-nightly.yml`, which reads `SUPABASE_ACCESS_TOKEN` from repo secrets (add the secret in Settings > Secrets and variables > Actions). It is deliberately not a PR gate, per `docs/plans/2026-07-11-EXECUTION-DECISIONS.md` D12 ruling 3: the advisor skips permissive SELECT policies, so a clean run is not evidence of RLS health. The blocking RLS check is the `pg_policies` assertion in D12 ruling 1.
 
 ## When fixing a bug surfaces in advisors
 

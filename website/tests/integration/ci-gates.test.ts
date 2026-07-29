@@ -81,21 +81,53 @@ describe("CI lint gate", () => {
   });
 });
 
-describe("CI advisor gate", () => {
-  it("has a step that runs `npm run audit:advisors`", () => {
-    expect(() => stepBlock("npm run audit:advisors")).not.toThrow();
+/**
+ * Executable YAML only, with whole-line `#` comments dropped. These workflows
+ * explain their own reasoning in prose, so a comment saying "there is no
+ * continue-on-error here" must not read as the setting itself.
+ */
+function withoutComments(yaml: string): string {
+  return yaml
+    .split("\n")
+    .filter((line) => !/^\s*#/.test(line))
+    .join("\n");
+}
+
+describe("advisor runs nightly, not as a PR gate (D12 ruling 3)", () => {
+  const NIGHTLY_WORKFLOW = path.resolve(here, "../../../.github/workflows/advisors-nightly.yml");
+  const nightly = existsSync(NIGHTLY_WORKFLOW)
+    ? withoutComments(readFileSync(NIGHTLY_WORKFLOW, "utf8"))
+    : "";
+
+  it("does not run the advisor in the PR-gating workflow", () => {
+    // D12: the advisor demonstrably misses this codebase's leak class (a clean
+    // run is not evidence of RLS health), GitHub withholds secrets from fork
+    // PRs so the job would hard-fail on any external contribution, and a per-PR
+    // job holding a prod management token widens the blast radius for little
+    // gain. The blocking gate is the pg_policies assertion, run via MCP.
+    expect(withoutComments(readFileSync(CI_WORKFLOW, "utf8"))).not.toMatch(/audit:advisors/);
   });
 
-  it("does not let the advisor step pass when a new lint appears", () => {
-    expect(stepBlock("npm run audit:advisors").join("\n")).not.toMatch(/continue-on-error/);
+  it("runs the advisor on a schedule instead", () => {
+    expect(nightly, "advisors-nightly.yml is missing").toMatch(/audit:advisors/);
+    expect(nightly).toMatch(/^\s*schedule:/m);
   });
 
-  it("passes SUPABASE_ACCESS_TOKEN from repo secrets to the advisor job", () => {
-    // snapshot-advisors.ts exits 2 without this token, so a job that omits it
-    // can never do anything but fail.
-    expect(jobBlock("npm run audit:advisors").join("\n")).toMatch(
+  it("never triggers the advisor workflow from a pull request", () => {
+    expect(nightly).not.toMatch(/pull_request/);
+  });
+
+  it("passes SUPABASE_ACCESS_TOKEN from repo secrets", () => {
+    // snapshot-advisors.ts exits 2 without this token.
+    expect(nightly).toMatch(
       /SUPABASE_ACCESS_TOKEN:\s*\$\{\{\s*secrets\.SUPABASE_ACCESS_TOKEN\s*\}\}/,
     );
+  });
+
+  it("does not silence advisor failures in the nightly run", () => {
+    // It gates nothing, so failing loudly is the whole point: a red nightly is
+    // the drift signal. continue-on-error here would leave no signal at all.
+    expect(nightly).not.toMatch(/continue-on-error/);
   });
 });
 
