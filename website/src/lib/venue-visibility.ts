@@ -11,6 +11,8 @@
 //   - customers are always allowed (no subscription required)
 //   - anonymous callers (no role) are never allowed
 
+import { coarsenCoordinates } from "@/lib/geo-precision";
+
 export type ViewerRole = string | null | undefined;
 
 export function canSeeVenueIdentity(
@@ -36,6 +38,14 @@ export function redactDemandVenue(
     description: "",
     image: "",
     images: [],
+    // Bug 5 / G-B: the identity fields were blanked but the exact fix was left on
+    // the row, so a paywalled venue's precise location was still published. DB
+    // venues carry null here, but the static venues in src/data/venues.ts carry
+    // 4dp (~11m). Coarsened rather than dropped because /spaces sorts by distance
+    // client-side.
+    coordinates: coarsenCoordinates(
+      venue.coordinates as { lat: number; lng: number } | null | undefined,
+    ),
     displayWallSpace: "",
     displayLighting: "",
     displayInstallNotes: "",

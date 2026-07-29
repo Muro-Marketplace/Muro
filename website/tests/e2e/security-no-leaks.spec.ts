@@ -49,6 +49,15 @@ test.describe("Public API surface — no PII / paywalled-data leaks @security", 
       expect(v.description, `venue ${v.slug} leaked description`).toBeFalsy();
       expect(v.displayInstallNotes, `venue ${v.slug} leaked install notes`).toBeFalsy();
       expect((v.images?.length ?? 0) === 0, `venue ${v.slug} leaked images`).toBeTruthy();
+      // Bug 5 / G-B: the identity fields were blanked but the exact fix was left
+      // on the row. Coarsened, not dropped, because /spaces sorts by distance
+      // client-side, so the assertion is on precision.
+      if (!v.coordinates) continue;
+      for (const axis of ["lat", "lng"] as const) {
+        const value = v.coordinates[axis];
+        const decimals = String(value).split(".")[1]?.length ?? 0;
+        expect(decimals, `venue ${v.slug} leaked ${axis}=${value} at ${decimals}dp`).toBeLessThanOrEqual(2);
+      }
     }
   });
 

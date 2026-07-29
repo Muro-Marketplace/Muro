@@ -9,26 +9,16 @@
 // transform also serves the artist their OWN profile, where the postcode is theirs
 // to see and is needed by the profile editor.
 
-/**
- * Decimal places kept on published coordinates.
- *
- * 2, not the "~1 decimal" D8 offers as an example. The browse page's smallest
- * radius option is 5 miles (~8km), and 1dp quantises latitude to ~11km, which is
- * larger than the filter itself, so it would silently break local search. At 2dp
- * the worst-case error is ~0.55km on latitude and less on longitude at UK
- * latitudes: enough to stop being a street address, small enough that a 5-mile
- * filter still means something.
- */
-export const PUBLIC_COORD_DECIMALS = 2;
+import {
+  coarsenCoordinates,
+  PUBLIC_COORD_DECIMALS,
+  type Coordinates,
+} from "@/lib/geo-precision";
 
-const FACTOR = 10 ** PUBLIC_COORD_DECIMALS;
-
-const coarsen = (value: number): number => Math.round(value * FACTOR) / FACTOR;
-
-interface Coordinates {
-  lat: number;
-  lng: number;
-}
+// The precision rule has one definition, in geo-precision.ts, shared with the
+// venue demand tracker so the two cannot drift. Re-exported here because callers
+// and tests reason about it in terms of the artist feed.
+export { PUBLIC_COORD_DECIMALS };
 
 /**
  * Strip the postcode and coarsen the coordinates, leaving everything else the
@@ -49,8 +39,6 @@ export function toPublicArtist<T extends object>(
   } = artist as T & { postcode?: string | null; coordinates?: Coordinates | null };
   return {
     ...rest,
-    coordinates: coordinates
-      ? { lat: coarsen(coordinates.lat), lng: coarsen(coordinates.lng) }
-      : null,
+    coordinates: coarsenCoordinates(coordinates),
   };
 }
