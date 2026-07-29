@@ -45,10 +45,15 @@ export async function GET(request: Request) {
         // Orders, pull amount + status for the gross-revenue computation.
         // We restrict to paid statuses so refunded/abandoned orders don't
         // inflate the headline number on the dashboard.
-        db.from("orders").select("total, amount_cents, status, created_at"),
+        // Bug 15: this used to select `amount_cents` too. That column exists in no
+        // migration and not in the live table, so PostgREST rejected the whole
+        // statement, .data came back null, `|| []` made it an empty array, and the
+        // dashboard reported £0 against 12 real paid orders. `total` is the column
+        // the Stripe webhook actually writes, in pounds.
+        db.from("orders").select("total, status, created_at"),
         db
           .from("orders")
-          .select("total, amount_cents, status, created_at")
+          .select("total, status, created_at")
           .gte("created_at", thirtyDaysAgo),
       ]);
 
@@ -79,7 +84,7 @@ export async function GET(request: Request) {
     // varies (paid / shipped / delivered / etc.). Refunded / cancelled
     // are explicitly excluded.
     const PAID_EXCLUDE = new Set(["refunded", "cancelled", "failed", "void"]);
-    function sumPaid(rows: Array<{ amount_cents?: number | null; total?: number | null; status?: string | null }>): {
+    function sumPaid(rows: Array<{ total?: number | null; status?: string | null }>): {
       gross: number;
       count: number;
     } {
@@ -87,25 +92,17 @@ export async function GET(request: Request) {
       let count = 0;
       for (const row of rows) {
         if (PAID_EXCLUDE.has(((row.status as string) || "").toLowerCase())) continue;
-        // Orders are written by the Stripe webhook as `total` in pounds and
-        // never populated amount_cents, so the headline read £0. Prefer
-        // amount_cents when present (legacy rows) else convert pounds to pence.
-        const cents =
-          row.amount_cents != null
-            ? Number(row.amount_cents)
-            : Math.round(Number(row.total || 0) * 100);
-        gross += cents;
+        // `total` is pounds, the response is pence.
+        gross += Math.round(Number(row.total || 0) * 100);
         count += 1;
       }
       return { gross, count };
     }
     const ordersAllRows = (ordersAll.data || []) as Array<{
-      amount_cents?: number | null;
       total?: number | null;
       status?: string | null;
     }>;
     const orders30dRows = (orders30d.data || []) as Array<{
-      amount_cents?: number | null;
       total?: number | null;
       status?: string | null;
     }>;
