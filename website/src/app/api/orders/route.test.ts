@@ -282,3 +282,21 @@ describe("PATCH /api/orders payout + email side-effects", () => {
     expect(vi.mocked(notifyBuyerStatusUpdate)).toHaveBeenCalledTimes(1);
   });
 });
+
+// E19 / E46f. POST /api/orders had no authentication of any kind and inserted
+// with status: "confirmed" and a client-supplied total, so anyone could forge a
+// paid order. It was also dead: every "/api/orders" call site in src/app is a
+// GET except artist-portal/orders/page.tsx:84, which is the PATCH. Deleting beat
+// fixing, so the handler is gone and this asserts it stays gone.
+describe("POST /api/orders (E19, deleted)", () => {
+  it("exports no POST handler", async () => {
+    const route = await import("./route");
+    expect("POST" in route, "POST was re-added to /api/orders").toBe(false);
+  });
+
+  it("still exports the handlers that are actually used", async () => {
+    const route = await import("./route");
+    expect(typeof route.GET).toBe("function");
+    expect(typeof route.PATCH).toBe("function");
+  });
+});
