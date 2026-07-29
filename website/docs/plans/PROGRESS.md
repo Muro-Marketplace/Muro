@@ -12,7 +12,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0b | Advisor in CI: nightly, not a PR gate | runbook §1.1, then D12 r3 | **done** (6615736 then corrected by 72adec9) |
 | 0c | `audit:e2e-security` covered in CI | runbook §1.1 | **done** (fa9416e). Real creds ruled in by D13.1, blocked on the human adding secrets |
 | 0d | Branch protection requiring `check` + `e2e`; apply pending workflow change in `docs/ci/2026-06-15-required-checks.md` | runbook §1.1 | **owner only, and BLOCKED**: `e2e` is red on main (10 failures), so requiring it would block every merge |
-| 0e | Go green on main (D14) | D14 | **in progress**: all 4 a11y tests pass (4f83d3a, f612159). Remaining: 4 tap-target components, security skip-loudly (D14.3) |
+| 0e | Go green on main (D14) | D14 | **all 7 product failures fixed** (4f83d3a, f612159, edacda3). Suite now 3 failed / 18 passed. Remaining: D14.3 skip-loudly guard, then the 3 need the repo secrets |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles: `06 A1–A7` `writable-fields.ts` + `01 Phase A` `authz.ts` | `06`, `01` | todo |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
@@ -819,3 +819,85 @@ different component before reading the file.
 
 Still true from iteration 6: the `32x32 aria-label="Open Next.js Dev Tools"`
 button is a dev-server artefact, absent from CI's production build. Not a target.
+
+---
+
+## Iteration 8 — 2026-07-29
+
+### Task 0e slice 3 — tap targets, and all 7 product failures are closed
+
+Owner: D13.2 / D14.2 step 5.
+
+**Changed:** every failing control was wide enough and too short, so each gained
+`min-h-11` (44px):
+
+```
+  ArtistPricingCards  Monthly toggle        85x36
+  ArtistPricingCards  Annual toggle        144x36
+  NewsletterForm      Subscribe             99x38
+  FeedbackBubble      Feedback              99x32
+  CookieBanner        Decline               83x38
+  CookieBanner        Accept                80x38
+```
+
+The newsletter email input got it too. It is not a tap target under the spec's
+selector, but it shares a flex row with Subscribe and would otherwise be 6px
+shorter.
+
+**Verified against a production build, deliberately not the dev server.** The dev
+server injects a 32x32 "Open Next.js Dev Tools" button that fails the same
+assertion and does not exist in CI, so a dev-server run could never go green and
+would have been misleading evidence. `npm run build`, then `next start` on port
+3098 via a new `wallspace-prod` launch config:
+
+```
+  ✓ /checkout/confirmation — no critical or serious axe violations (865ms)
+  ✓ /checkout — no critical or serious axe violations (893ms)
+  ✓ /cookies — no critical or serious axe violations (960ms)
+  ✓ /pricing — no critical or serious axe violations (1.1s)
+  ✓ /pricing — all interactive elements >= 44 x 44 px (530ms)
+  ✓ /checkout — all interactive elements >= 44 x 44 px (302ms)
+  ✓ /cookies — all interactive elements >= 44 x 44 px (326ms)
+  9 skipped, 7 passed
+```
+
+**Full suite against the same build:**
+
+```
+  ✘ security-no-leaks.spec.ts:21  GET /api/venues/demand redacts paywalled fields
+  ✘ security-no-leaks.spec.ts:33  GET /api/venues/:slug redacts postcode for anon callers
+  ✘ security-no-leaks.spec.ts:41  GET /api/artwork-requests blocks anon, or redacts internal IDs
+  3 failed, 10 skipped, 18 passed
+```
+
+CI's baseline was `10 failed, 9 skipped, 12 passed`. **All 7 product failures are
+fixed**; the 3 that remain are the environmental security tests from D14.3.
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  128 passed (128)
+      Tests  1169 passed (1169)
+```
+
+**Commit:** edacda3
+
+### Notes
+
+- The webServer route did not work: with `CI=true` Playwright builds and serves
+  itself, but the config hard-codes a 120s `webServer.timeout` and the build plus
+  start exceeds that on this machine (`Error: Timed out waiting 120000ms from
+  config.webServer`). Building first and serving through the harness is the
+  reliable path, and is why `wallspace-prod` now exists in `.claude/launch.json`.
+- Local run shows **10** skipped where CI shows 9. The extra one is the storage
+  test, which does `test.skip(!ANON_KEY)` reading the *test process* environment.
+  `.env.local` is loaded by Next, not by Playwright, so it skips here and runs (and
+  fails on `ENOTFOUND`) in CI. Same underlying story either way.
+- Locally `/api/venues/demand` fails too, where in CI it passed. Also
+  environmental: the route cannot reach placeholder Supabase.
+
+### Remaining for Task 0e
+
+Only D14.3: the skip-loudly guard on `security-no-leaks.spec.ts`, so those 3 stop
+failing for the wrong reason while still refusing to pass silently. After that the
+suite is green except where the repo secrets are genuinely missing, which is the
+human's step, and Task 0d's phased branch protection becomes possible.
