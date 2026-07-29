@@ -1,25 +1,47 @@
 /**
  * Paywall + PII-leak guard for unauthenticated callers.
  *
- * Today (2026-05-27) these tests are EXPECTED TO FAIL against production —
- * they document the bugs that Phases A and B close. Once those phases land
- * the suite turns green and stays green; any new leak surfacing in a later
- * PR re-fails the suite in CI.
+ * These assertions only mean something against a project that holds real data.
+ * Pointed at a placeholder Supabase project the routes return 404s and 500s, so
+ * the suite can neither pass honestly nor detect an actual leak. It therefore
+ * SKIPS LOUDLY when no real credentials are present, and never passes quietly:
+ * a silent pass on missing config is the exact failure mode being removed here
+ * (EXECUTION-DECISIONS D13.1 and D14.3).
  *
- * Run with E2E_BASE_URL pointing at the env to test:
- *   E2E_BASE_URL=https://www.wallplace.co.uk npx playwright test tests/e2e/security-no-leaks.spec.ts
+ * Target environment comes from Playwright's own `baseURL`, so requests below use
+ * relative paths. Override per run with PLAYWRIGHT_BASE_URL:
+ *   PLAYWRIGHT_BASE_URL=https://www.wallplace.co.uk npx playwright test tests/e2e/security-no-leaks.spec.ts
  */
 
 import { expect, test } from "@playwright/test";
 
-const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
-const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://uwkuhygwvasdzwsusiym.supabase.co";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
+/**
+ * A value counts as absent when it is unset or still a placeholder. CI's default
+ * env uses `https://placeholder.supabase.co` and `eyJhbGciOi_PLACEHOLDER_...`,
+ * and GitHub withholds secrets from fork PRs, so both land here by design.
+ */
+const isPlaceholder = (value: string): boolean =>
+  value === "" || /placeholder/i.test(value);
+
+const CREDENTIALS_MISSING = isPlaceholder(SUPABASE_URL) || isPlaceholder(ANON_KEY);
+
+const SKIP_REASON =
+  "no real Supabase credentials, so these assertions cannot detect a leak. " +
+  "Set the repo secrets NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY " +
+  "(fork PRs never receive secrets, so they always land here). " +
+  `Saw NEXT_PUBLIC_SUPABASE_URL="${SUPABASE_URL || "(unset)"}", ` +
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY ? "(placeholder)" : "(unset)"}.`;
+
 test.describe("Public API surface — no PII / paywalled-data leaks @security", () => {
+  // Loud skip, not a quiet pass. With credentials present these tests run and
+  // fail on any leak they find.
+  test.skip(CREDENTIALS_MISSING, SKIP_REASON);
+
   test("GET /api/venues/demand redacts paywalled fields", async ({ request }) => {
-    const res = await request.get(`${BASE}/api/venues/demand`);
+    const res = await request.get("/api/venues/demand");
     expect(res.status()).toBe(200);
     const body = await res.json();
     for (const v of body.venues ?? []) {
@@ -32,14 +54,14 @@ test.describe("Public API surface — no PII / paywalled-data leaks @security", 
 
   test("GET /api/venues/:slug redacts postcode for anon callers", async ({ request }) => {
     const slug = "the-copper-kettle-demo";
-    const res = await request.get(`${BASE}/api/venues/${slug}`);
+    const res = await request.get(`/api/venues/${slug}`);
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.venue?.postcode, "venue postcode leaked").toBeFalsy();
   });
 
   test("GET /api/artwork-requests blocks anon, or redacts internal IDs", async ({ request }) => {
-    const res = await request.get(`${BASE}/api/artwork-requests`);
+    const res = await request.get("/api/artwork-requests");
     if (res.status() === 401 || res.status() === 403) return;
     expect(res.status()).toBe(200);
     const body = await res.json();
@@ -55,7 +77,8 @@ test.describe("Public API surface — no PII / paywalled-data leaks @security", 
   });
 
   test("Storage bucket message-attachments listing is not anon-accessible", async ({ request }) => {
-    test.skip(!ANON_KEY, "NEXT_PUBLIC_SUPABASE_ANON_KEY not set");
+    // No per-test skip needed: the describe-level guard already covers an unset
+    // or placeholder ANON_KEY, and covers it more strictly.
     const url = `${SUPABASE_URL}/storage/v1/object/list/message-attachments`;
     const res = await request.post(url, {
       headers: {

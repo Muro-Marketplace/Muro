@@ -63,8 +63,20 @@ jobs:
     timeout-minutes: 20
     needs: check
     env:
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOi_PLACEHOLDER_CI_ANON_KEY
+      # Real project when the secrets exist, placeholders otherwise (D13.1). The
+      # anon key is already public in the shipped browser bundle, so this exposes
+      # nothing new, and it is what lets security-no-leaks.spec.ts assert against
+      # real data instead of an empty app.
+      #
+      # The `||` fallback is deliberate: an unset secret expands to "" and
+      # src/env.ts requires a valid URL, so a bare `secrets.*` reference would
+      # break the *build* rather than the one spec that needs it. With the
+      # fallback, a missing secret (or any fork PR, which never receives secrets)
+      # leaves the placeholder in place and that spec skips loudly.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOi_PLACEHOLDER_CI_ANON_KEY' }}
+      # Service-role key stays a placeholder. Nothing in the e2e suite needs it,
+      # and a real one in CI would be a genuine escalation of blast radius.
       SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOi_PLACEHOLDER_CI_SVC_KEY
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       # src/lib/stripe.ts instantiates `new Stripe(...)` at module load,
