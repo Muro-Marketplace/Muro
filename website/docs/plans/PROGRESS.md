@@ -14,7 +14,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0d | Branch protection requiring `check` + `e2e` | runbook §1.1, D13.3 | **owner only, now UNBLOCKED**: suite is green locally. D13.3 phasing: require `check` now, add `e2e` once it is green on main, never require `advisors` |
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
-| 2 | Vehicles: `06 A1–A7` `writable-fields.ts` + `01 Phase A` `authz.ts` | `06`, `01` | **A1+A2 done** (8d99498), A8 answered. Next: `authz.ts`, then A3–A7 route conversion |
+| 2 | Vehicles: `writable-fields.ts` + `authz.ts` | `06`, `01` | **both vehicles done** (8d99498, 9427aab). Remaining in `01` Phase A: state-machine (task 2), eslint rule (task 3) |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | todo |
@@ -1098,3 +1098,93 @@ but A1/A2 build the module while A4–A7 convert three route handlers and two db
 helpers to use it. Split deliberately: this commit is the vehicle, and nothing
 consumes it yet. Next iteration takes `01 Phase A` `authz.ts` (the other vehicle),
 then A3–A7 convert the routes, which is dependency item 4's "route fixes" anyway.
+
+---
+
+## Iteration 11 — 2026-07-29
+
+### Dependency item 2, vehicle two — `authz.ts` (01 Phase A task 1)
+
+Owner: `implementation/01-authz-idor.md` §1.1 and §Part 4 Phase A.
+
+**Changed:** new `src/lib/authz.ts` (nine assert helpers plus `AuthzError`,
+`handleAuthzError`, `withAuthz`) and `authz.test.ts` with 34 cases.
+
+Built on the existing `api-auth.ts` rather than duplicating authentication:
+`getAuthenticatedUser` keeps returning the 401, and these helpers consume the
+`Actor` it yields. `.or()` goes through `orFilter()` because `no-raw-or-filter` is
+already at error.
+
+**A second phantom column, same class as A8.** §1.1's `assertPlacementParty`
+selects `placements.requester_user_id`. It exists in no migration and **not in the
+live table**. The real column is `proposed_by_user_id`, which is what
+`api/placements/route.ts` writes. I verified all 27 columns the module touches
+against prod in one query, and this was the only miss:
+
+```
+tbl        | col                | status
+placements | requester_user_id  | MISSING
+```
+
+Left as written this would have been worse than a phantom allowlist entry:
+PostgREST rejects a select naming an unknown column, so **every** placement
+authz check would have failed closed. Prod's actual identity columns on
+`placements` are `artist_user_id`, `venue_user_id`, `proposed_by_user_id` and
+`cancelled_by_user_id`.
+
+**Verification, both directions.** Before:
+
+```
+Error: Failed to load url ./authz ... Does the file exist?
+ Test Files  1 failed (1)
+      Tests  no tests
+```
+
+After:
+
+```
+ ✓ src/lib/authz.test.ts (34 tests) 6ms
+      Tests  34 passed (34)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  130 passed (130)
+      Tests  1218 passed (1218)
+```
+
+**Commit:** 9427aab
+
+Tests cover the Phase A list (every `assert*` throws `AuthzError` 404 on
+non-match; `assertOwnsArtistProfile` and `assertVenueOwner` throw 403 when the
+profile is missing; `handleAuthzError` returns null for a non-AuthzError) plus the
+E-numbers each helper closes: E32, E31 including the legacy slug-only path, E33,
+E17, and that `withAuthz` rethrows non-AuthzErrors so a real failure is never
+masked as a 404.
+
+### NEW live bug found while checking that column: placement accept/decline is unreachable
+
+`src/app/(pages)/placements/[id]/PlacementDetailClient.tsx` declares
+`requester_user_id?: string | null` on its own placement interface and gates the
+CTAs on it. Since the column does not exist, the API can never populate it, so the
+value is always `undefined`:
+
+- **line 822:** `status === "pending" && viewerRole && !!placement.requester_user_id && placement.requester_user_id !== user?.id` — `!!undefined` is false, so **the accept/decline block never renders**.
+- **line 851:** `status === "pending" && (placement.requester_user_id === user?.id || !placement.requester_user_id)` — `!undefined` is true, so **the "waiting on them" branch always renders**, for both parties.
+
+So on a pending placement both sides are told they are waiting for the other, and
+neither can accept or decline from the detail page. Not in the findings list.
+Almost certainly the same root cause family as N3/N4 (PR #63/#64, the paid-loan
+CTA that was unreachable). The fix is to read `proposed_by_user_id` instead, and it
+belongs with the `01` Phase B–D placement work (dependency item 4), where
+`assertPlacementParty` already returns the field. Recorded here so it is not lost.
+
+### Still open in `01` Phase A
+
+Task 2 (`placements/state-machine.ts`, which wants a
+`select status, count(*) from placements group by 1` recorded first) and task 3
+(the `require-authz-on-mutation` ESLint rule plus `check-public-routes.ts`).
+Neither blocks the route conversions, but task 3 is the guard that stops the IDOR
+cluster reforming, so it should land before Phase 2 closes.
