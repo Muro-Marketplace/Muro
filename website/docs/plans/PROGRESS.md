@@ -1882,3 +1882,83 @@ Still open in Phase 1b: E31 (conversation reads, `assertConversationParticipant`
 is ready and unused), B4 (`/email-preview` unauthenticated in prod), and the
 `074` RLS closure with the `/apply` service-role switch, which D2 says needs the
 `02` prereqs first.
+
+---
+
+## Iteration 20 — 2026-07-30
+
+### E31 — conversation reads gated
+
+Owner: `01`, Phase 1b.
+
+`GET /api/messages/[conversationId]` required a login and then checked **nothing**:
+it read every message for whatever id was supplied. Ids are
+`dm-${slugA}__${slugB}` built from two public profile slugs, so they are
+enumerable. Any signed-in user could walk slug pairs and read anyone's DMs. All
+three handlers now call `assertConversationParticipant`, 404 on denial.
+
+**Changed:** `src/app/api/messages/[conversationId]/route.ts`,
+`src/components/MessageInbox.tsx`.
+
+**Two more holes in the same file, neither in the finding:**
+
+1. **PATCH trusted the request body.** It read `readerSlug` from the body and
+   marked read on `recipient_slug = <that value>`, so a caller could mark another
+   user's messages as read. Now uses the caller's own slugs from the gate, via
+   `.in()` since a user may hold both an artist and a venue slug. `MessageInbox.tsx`
+   stops sending the field rather than leaving a payload the server ignores.
+2. **DELETE had its own participation check** — look up the caller's slug, read one
+   message row, compare `sender_name`/`recipient_slug` in application code. A second
+   implementation of the same rule, in the weaker fetch-then-compare shape, and it
+   knew only the legacy slug columns. The shared gate also handles the modern
+   `sender_id` / `recipient_user_id` rows, so replacing it widened correctness as
+   well as removing the duplicate.
+
+**Verification, both directions.** Before, 7 of 9 red, with both extra holes
+legible as results:
+
+```
+× GET returns 404 for a conversation the caller is not in → expected 200 to be 404
+× GET checks participation against the id it was given    → expected "spy" to be called once, got 0
+× PATCH marks read against the caller's own slug          → expected 'somebody-else' to deeply equal [ 'maya-chen' ]
+× DELETE refuses a conversation the caller is not in      → expected 400 to be 404
+× DELETE uses the shared gate rather than its own check   → expected true to be false
+```
+
+After:
+
+```
+ ✓ src/app/api/messages/[conversationId]/route.test.ts (9 tests) 5ms
+      Tests  9 passed (9)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  138 passed (138)
+      Tests  1291 passed (1291)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** c0d5f9b
+
+The denial tests assert that no read, update or delete was issued after the gate
+refused, not merely that the status was 404. A handler that checks late but still
+returns 404 would pass a status-only test.
+
+One note on the mid-test adjustment: after seeing the first failure I changed the
+PATCH assertion from `.eq` to `.in` semantics (a user can hold two slugs), then
+**re-ran against the still-unfixed route** to confirm it was red for the right
+reason (`expected 'somebody-else' to deeply equal [ 'maya-chen' ]`) before touching
+the handler.
+
+### Phase 1b remaining
+
+| Finding | State |
+|---|---|
+| E31 conversation reads | done, c0d5f9b |
+| B1 bootstrap RLS on orders/messages | refuted for prod by the runbook's own B1 check: `orders_select_party` and `messages_select_party` are live |
+| B4 `/email-preview` unauthenticated in prod | open, and on D6's unconditional list, so "delete or gate to admin+non-prod" |
+| E39, E17, E18, E19 | done in iterations 17 to 19 |
+| `074` RLS closure + `/apply` service-role switch | blocked behind the `02` prereqs (D2), which are themselves blocked on the base-schema dump |
