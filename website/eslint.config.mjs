@@ -25,6 +25,11 @@ const eslintConfig = defineConfig([
       "wallplace/no-ad-hoc-cap": "error",
       "wallplace/no-redirect-param": "error",
       "wallplace/no-raw-arrangement-type": "error",
+      // Staged rollout per 01 Part 4 task 3: "warn" until Phase B to D convert
+      // the routes, then "error". The doc contradicts itself here, section 3.3
+      // shows "error" while the task checklist says "warn"; "error" today would
+      // fail lint on every route not yet converted.
+      "wallplace/require-authz-on-mutation": "warn",
     },
   },
   // The eslint-rules/ plugin files are CommonJS by design — they cannot use
