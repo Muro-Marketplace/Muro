@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | **E32 done** (3999102). E44 next, then the rest of Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | todo |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | todo |
@@ -1366,3 +1366,83 @@ Next in the corrected dependency order: item 4, the route fixes. `01` Phase B is
 the highest value (E19 delete, E39 PII strip, E17/E18 auth) and `06` A4 to A7
 convert the mass-assignment routes onto `pickWritable`. The E32+E44 chain is the
 one the runbook wants first.
+
+---
+
+## Iteration 14 — 2026-07-29
+
+### E32 — `upsertWork` artwork hijack, closed
+
+Owner: `01` (D7 assigns E32 to `01` t7 over `05` B7). First half of the theft
+chain the runbook wants closed before anything else.
+
+**The hole was wider than the doc said.** §1.1 cites "lines 22-33". Six queries
+were keyed on `id` alone:
+
+```
+25  existence check          select("id").eq("id", work.id).single()
+30  main update              update(r).eq("id", work.id)
+80  per-column fallback      update({[col]: ...}).eq("id", work.id)
+98  read-back select         select("*").eq("id", work.id).single()
+110 description repair       update({description}).eq("id", work.id)
+117 refetch after repair     select("*").eq("id", work.id).single()
+```
+
+Fixing only the pair the doc names would have left the strip-and-retry fallback
+(80) writing to a victim's row whenever the first write failed, which is a path
+that fires routinely because `in_store_price` does not exist in prod. All six are
+now scoped, and the shared `scopedUpdate()` helper means a seventh cannot be added
+carelessly.
+
+**Changed:** `src/lib/db/artist-works.ts`. A non-owner is refused explicitly
+rather than falling through to an insert that would surface as an opaque
+primary-key conflict. The refusal reuses `authz.ts`'s wording and carries
+`code: "work_not_owned"`.
+
+**Known gap, deliberately left:** `api/artist-works/route.ts:183` maps any error
+to a 500 "Failed to save work". The request is denied, but with the wrong status.
+Mapping `work_not_owned` to 404 belongs with the Phase B-D route work rather than
+here, since it changes an externally visible status code on a route this task does
+not otherwise touch.
+
+**Verification, both directions.** Before, 5 of 7 red, with the exploit legible in
+the failure output:
+
+```
+× refuses to touch a work owned by another artist, and writes nothing
+  → an ownership refusal must be reported: expected null to be truthy
+× never reassigns artist_id on someone else's row
+  → expected 'artist-mine' not to be 'artist-mine'
+× scopes every artist_works query by artist_id, including the read-back
+  → these queries are keyed on id alone: [{"op":"update","filters":{"id":"my-work"},
+     "payload":{...,"artist_id":"artist-mine"}}, ...]
+```
+
+After:
+
+```
+ ✓ src/lib/db/artist-works.test.ts (7 tests) 3ms
+      Tests  7 passed (7)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  133 passed (133)
+      Tests  1250 passed (1250)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** 3999102
+
+The tests assert the invariant rather than the line: a fake records every query,
+so "no write escapes the artist_id scope" is checked across all paths including
+the fallback, which is how the extra four sites were caught in the first place.
+
+### On the runbook's "fix E32 + E44 together"
+
+Taken as "same phase, first, neither deferred" rather than one commit. They live in
+different files (`lib/db/artist-works.ts` vs `api/artist-profile/route.ts`), each
+is independently testable, and either one alone breaks the chain. E44 is the next
+iteration, so both land before the loop moves on.
