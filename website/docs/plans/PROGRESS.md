@@ -17,7 +17,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **`01` Phase B complete**: E32, E44, E45, E19, E39, E17/E18. Next: `01` Phase C/D, `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
-| 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). G-B (Bug 5) next |
+| 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | todo |
 | 7 | `04` payments Phase 0→9 (D4 Bug 15, G-C Bug 10, curation 7.0 at Phase 0) | `04` | todo |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
@@ -25,6 +25,17 @@ Order of work: the "Corrected dependency order" at the end of
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
 | 12 | `08` rewritten cull last (D6 unconditional list only until rewritten) | `08` | todo |
+
+Owner decisions the loop is waiting on (none block the remaining queue):
+
+- **G-B part 2, the venue slug.** Is a venue's name paywalled enough to give up the
+  /spaces click-through, or is the click-through worth the name leak? Detail in
+  iteration 23. Options: accept the leak; invest in opaque ids plus route
+  resolution; or drop the click-through for unentitled viewers.
+- **B4 admin conjunct.** D6 says "admin+non-prod"; iteration 21 shipped non-prod
+  only. Say if you want the admin check too.
+- **Migration ledger divergence.** Iteration 4: rewrite prod's ledger, adopt
+  timestamps locally, or accept the numbered files as documentation.
 
 Owner actions blocking a merge, added as they surface:
 
@@ -2137,3 +2148,88 @@ makes it a *weak type* (all properties optional), so TypeScript rejected
 carrying no location data is a legitimate input. Constraint is now `object` with the
 shape asserted inside. That is the third time in this run that `npm run check`
 caught something worth fixing rather than something to appease.
+
+---
+
+## Iteration 23 — 2026-07-30
+
+### G-B / Bug 5 part 1 — paywalled venue coordinates coarsened
+
+Owner: D8 G-B.
+
+`redactDemandVenue` blanked name, description, image, images and the display fields
+but left the **exact coordinates** on the row, so a paywalled venue's precise
+location was still published to anonymous callers. DB venues carry
+`coordinates: null`, but the static venues in `src/data/venues.ts` carry 4dp fixes
+(~11m), e.g. `{ lat: 51.4732, lng: -0.0693 }`.
+
+**Changed:** new `src/lib/geo-precision.ts`, `venue-visibility.ts`,
+`public-artist.ts` (now delegates), and the e2e venues/demand assertion.
+
+Coarsened rather than dropped, because `/spaces` sorts by distance client-side
+(`spaces/page.tsx:234-235`). Extracted the precision rule into one shared module so
+the artist feed and the venue tracker cannot drift apart, rather than copying the
+constant.
+
+**Verification, both directions.** Before:
+
+```
+× coarsens the coordinates for an unentitled viewer
+  → expected { lat: 51.4732, lng: -0.0693 } to deeply equal { lat: 51.47, lng: -0.07 }
+ Tests  1 failed | 13 passed (14)
+```
+
+After:
+
+```
+ ✓ src/lib/db/public-artist.test.ts (7 tests)
+ ✓ src/lib/venue-visibility.test.ts (14 tests)
+ ✓ src/app/api/browse-artists/route.test.ts (5 tests)
+      Tests  26 passed (26)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  142 passed (142)
+      Tests  1319 passed (1319)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** ceb4d45
+
+### G-B part 2 — the slug. Real finding, but the fix is an owner decision
+
+D8 also says to "return an opaque id instead of the slug" for non-subscribers, and
+to strip venue-name-bearing hrefs from the `/spaces` HTML.
+
+**The finding is real.** I checked whether the name is actually secret, because if
+it were already public the slug would leak nothing. It is not public:
+
+- `venues/[slug]/page.tsx` keeps its SSR metadata deliberately generic: *"Venue
+  identity is paywalled ... server-rendered metadata can't vary per viewer, so the
+  SSR title/description stay generic and don't leak the venue name."*
+- `VenueProfileBody` fetches the gated `/api/venues/[slug]/profile` and renders
+  either the full profile **or a locked teaser** (`!state.data.locked`).
+
+So a slug that spells the name (`the-copper-kettle`) does bypass that gate, in the
+JSON and in the card's `href`.
+
+**But the slug is load-bearing.** `/spaces` links every card through to
+`/venues/<slug>` for everyone except other venues (`canClickThroughCard = userType
+!== "venue"`), with a comment stating the intent: *"Logged-out and unsubscribed
+visitors land on the read-only public profile."* Replacing the slug with an opaque
+id therefore needs:
+
+1. an opaque id that `/venues/[id]` can resolve,
+2. an id for the **static** venues too, which have no DB uuid,
+3. a change to public URL structure.
+
+That trades a paywall leak against a conversion funnel, and changes URLs. Not a
+call to make silently inside a security fix, so it is recorded above as an owner
+decision. Options: accept the leak as the price of the click-through; invest in
+opaque ids plus resolution; or stop emitting the link for unentitled viewers, which
+closes the leak but removes the funnel.
+
+Part 1 stands on its own: the coordinate leak is closed either way.
