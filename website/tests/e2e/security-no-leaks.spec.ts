@@ -76,6 +76,26 @@ test.describe("Public API surface — no PII / paywalled-data leaks @security", 
     }
   });
 
+  test("GET /api/browse-artists publishes no postcode and no exact coordinates", async ({ request }) => {
+    // Bug 1 / G-A. D8 says "strip postcode and coordinates". Postcode is stripped
+    // outright. Coordinates are COARSENED rather than removed, because the browse
+    // page filters by distance client-side and its smallest radius is 5 miles;
+    // removing them entirely would delete local search. So the assertion is that no
+    // published coordinate is more precise than the public projection allows.
+    const res = await request.get("/api/browse-artists");
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    for (const a of body.artists ?? []) {
+      expect(a.postcode, `artist ${a.slug} leaked a postcode`).toBeFalsy();
+      if (!a.coordinates) continue;
+      for (const axis of ["lat", "lng"] as const) {
+        const value = a.coordinates[axis];
+        const decimals = String(value).split(".")[1]?.length ?? 0;
+        expect(decimals, `artist ${a.slug} leaked ${axis}=${value} at ${decimals}dp`).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
   test("Storage bucket message-attachments listing is not anon-accessible", async ({ request }) => {
     // No per-test skip needed: the describe-level guard already covers an unset
     // or placeholder ANON_KEY, and covers it more strictly.
