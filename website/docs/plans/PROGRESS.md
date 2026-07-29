@@ -9,7 +9,7 @@ Order of work: the "Corrected dependency order" at the end of
 | # | Task | Owner doc | Status |
 |---|---|---|---|
 | 0a | CI `continue-on-error` removed, lint blocks | runbook §1.1 | **done** (47cb468) |
-| 0b | `audit:advisors` job added to CI | runbook §1.1 | todo |
+| 0b | `audit:advisors` job added to CI | runbook §1.1 | **done** (6615736), needs the repo secret before merge |
 | 0c | `audit:e2e-security` covered in CI | runbook §1.1 | todo |
 | 0d | Branch protection requiring `check` + `e2e`; apply pending workflow change in `docs/ci/2026-06-15-required-checks.md` | runbook §1.1 | **owner only** (GitHub settings, needs a token with `workflow` scope) |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | todo, blocks all new migrations |
@@ -24,6 +24,13 @@ Order of work: the "Corrected dependency order" at the end of
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
 | 12 | `08` rewritten cull last (D6 unconditional list only until rewritten) | `08` | todo |
+
+Owner actions blocking a merge, added as they surface:
+
+- **Add the `SUPABASE_ACCESS_TOKEN` repo secret** (Settings > Secrets and
+  variables > Actions), a Supabase personal access token from
+  https://supabase.com/dashboard/account/tokens. The `advisors` job added in 0b
+  fails on every PR until it exists.
 
 Human-owned, not code (do not attempt): D11 reconciliation of `off_1778` £33 and
 `off_1779` £27 against Stripe; all Stripe dashboard work (Connect activation,
@@ -115,3 +122,92 @@ payment change).
    `audit:e2e-security` coverage. Tracked above as 0b and 0c, next in line. 0d
    (branch protection, the pending required-checks workflow change) needs GitHub
    settings access and a token with `workflow` scope, so it stays with the owner.
+
+---
+
+## Iteration 2 — 2026-07-29
+
+### Task 0b — advisor regression gate in CI
+
+Owner: `2026-07-11-MASTER-RUNBOOK.md` §1.1, row 2 ("Advisor checks not in CI").
+
+**Changed:** `.github/workflows/ci.yml` — new `advisors` job (`needs: check`,
+10-minute timeout) running `npm run audit:advisors` with
+`SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}`. The workflow-level
+`defaults.run.working-directory: website` applies, which the script needs since it
+resolves `scripts/audit` from `process.cwd()`.
+
+**Test added:** renamed `tests/integration/ci-lint-blocking.test.ts` to
+`ci-gates.test.ts` (one file owning the CI workflow invariants rather than one per
+gate, `git mv` so history follows) and added three assertions: a step runs
+`npm run audit:advisors`, that step carries no `continue-on-error`, and its job
+passes the token from repo secrets.
+
+**Verification, both directions.**
+
+Before the fix, the three new assertions fail while the two lint ones still pass:
+
+```
+ FAIL  tests/integration/ci-gates.test.ts > CI advisor gate > passes SUPABASE_ACCESS_TOKEN from repo secrets to the advisor job
+Error: no step in ci.yml runs `npm run audit:advisors`
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+```
+
+After:
+
+```
+ ✓ tests/integration/ci-gates.test.ts (5 tests) 2ms
+      Tests  5 passed (5)
+```
+
+Cross-checked with a real YAML parser rather than trusting the regex helpers:
+
+```
+jobs: ['check', 'advisors', 'e2e']
+advisors.needs: check
+advisors.env: {'SUPABASE_ACCESS_TOKEN': '${{ secrets.SUPABASE_ACCESS_TOKEN }}'}
+advisors steps run: ['npm ci', 'npm run audit:advisors']
+lint step: [{'name': 'Lint', 'run': 'npm run lint'}]
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  127 passed (127)
+      Tests  1160 passed (1160)
+```
+
+**Commit:** 6615736
+
+### What the plan got wrong, and one thing it could not know
+
+1. **`snapshot-advisors.ts` lies about its own setup.** Its header says
+   `SUPABASE_ACCESS_TOKEN` is "already exported in the developer's ~/.zshrc for
+   this project". It is not:
+
+   ```
+   SUPABASE_ACCESS_TOKEN NOT SET
+   ...
+   > tsx scripts/audit/snapshot-advisors.ts && tsx scripts/audit/check-regressions.ts
+   SUPABASE_ACCESS_TOKEN not set
+   AUDIT EXIT = 2
+   ```
+
+   So `npm run audit:advisors` cannot run in this environment at all, which
+   matters for the DB tasks ahead: the loop's per-iteration procedure asks for an
+   advisor run on every DB/RLS task, and that will exit 2 until the token is
+   available. The direct `pg_policies` assertion (which the procedure rightly
+   calls the real evidence) still works over the Supabase MCP.
+2. **The gate reads prod, not the PR.** Worth stating because it is not obvious
+   from the runbook's one-line "add a job": the advisor API reports the state of
+   project `uwkuhygwvasdzwsusiym`, so this job cannot pre-validate a migration
+   that has not been applied yet, and unrelated PRs go red if prod drifts. It
+   matches the plan's actual workflow (apply to live via MCP during the task,
+   then open the PR), so PR placement is right, but it is a drift detector rather
+   than a per-PR check.
+3. **The baseline is real, so the gate is meaningful:** 32 lints, names include
+   `rls_enabled_no_policy`, `rls_policy_always_true`,
+   `auth_leaked_password_protection`, plus a documented `known-acceptable.json`
+   ignore list for the service-role-only tables.
