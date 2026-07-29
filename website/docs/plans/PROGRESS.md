@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | **theft chain closed**: E32 (3999102) + E44 (1780a5b). Next: `06` A5–A7, then `01` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **`01` Phase B complete**: E32, E44, E45, E19, E39, E17/E18. Next: `01` Phase C/D, `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | todo |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | todo |
@@ -1781,3 +1781,104 @@ the browser suite against the production build:
 | 4 | E19 delete POST /api/orders | done, 740b79a |
 | 5 | E39 checkout-session PII | done, 19f9098 |
 | 6 | E17 + E18 artwork-request reads | next; route and page must ship together, the artist-portal page uses plain `fetch` |
+
+---
+
+## Iteration 19 — 2026-07-30
+
+### E17 + E18 — artwork-request reads gated. `01` Phase B is complete.
+
+Owner: `01` Phase B task 6.
+
+Both GETs were completely unauthenticated. `[id]/route.ts` returned the whole
+request row (description, both budget columns, location, `invited_artist_slugs`,
+`venue_user_id`) **plus every response**, so anyone could read a private brief and
+every rival artist's terms before submitting their own. `[id]/responses/route.ts`
+returned the same bids on its own. `PATCH` and `POST` in the same files were
+properly gated, so the reads were the entire hole.
+
+**Changed:** both routes now require auth and go through
+`assertCanViewArtworkRequest` (the helper from 9427aab), plus
+`artist-portal/artwork-requests/[id]/page.tsx`.
+
+Response fan-out is gated on the returned role: the owning venue sees every
+response, an artist sees only their own. Verified against prod that
+`artwork_request_responses.artist_user_id` exists before filtering on it (the doc
+was right this time).
+
+**Also removed:** the detail route's unscoped re-read of `artwork_requests`. The
+gate has already fetched and authorised that row, so re-selecting it by `id` alone
+was redundant *and* exactly the fetch-then-trust pattern `authz.ts` exists to
+remove.
+
+**Route and page shipped together, and the doc's warning was accurate.**
+`page.tsx:86` used a plain `fetch` while the same file already imported `authFetch`
+and used it on line 164. Adding auth to the route without that one-word change
+would have 401'd the artist detail page. Confirmed no plain `fetch` to these
+endpoints remains anywhere in `src/app`.
+
+**Verification, both directions.** Before, with the vulnerability legible as a test
+result:
+
+```
+× returns 401 to an anonymous caller and never reaches the gate
+  → expected 200 to be 401
+× returns the gate's 404 for an artist who may not view the brief
+  → expected 200 to be 404
+× shows a browsing artist only their own response, never a rival's (E18)
+  → expected undefined to be 'artist-1'
+× passes the caller and the id to the gate
+  → expected "spy" to be called once, but got 0 times
+ 5 failed
+```
+
+After:
+
+```
+ ✓ src/app/api/artwork-requests/[id]/route.test.ts (6 tests) 5ms
+      Tests  6 passed (6)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  137 passed (137)
+      Tests  1282 passed (1282)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+`assertCanViewArtworkRequest` itself is mocked in the route test: its visibility
+logic already has its own coverage in `authz.test.ts`, so the route test checks
+that the gate is called, its denial is honoured, and the response set is fanned out
+by role. That is the seam worth testing here.
+
+**Commit:** dcb91f0
+
+### The lint guard is measuring the work now
+
+```
+files missing an authz import : 48  (was 50 at iteration 13)
+files missing a demo guard    : 55  (was 55)
+```
+
+Both artwork-request routes now clear `missingAuthz` and report only
+`missingDemoGuard`. Note E44 and E45's routes are still counted in the 48: they
+import `writable-fields`, not `authz`, which is correct, they needed an allowlist
+rather than an ownership gate. The 48 is therefore an over-count of real remaining
+authz work, and the rule's own §3.5 limits already say it is an import-presence
+check rather than proof.
+
+### `01` Phase B status: complete
+
+| Task | Finding | State |
+|---|---|---|
+| 4 | E19 delete `POST /api/orders` | done, 740b79a |
+| 5 | E39 checkout-session PII | done, 19f9098 |
+| 6 | E17 + E18 artwork-request reads | done, dcb91f0 |
+
+Phase 1a/1b security items closed so far: E32, E44, E45, E19, E39, E17, E18.
+Still open in Phase 1b: E31 (conversation reads, `assertConversationParticipant`
+is ready and unused), B4 (`/email-preview` unauthenticated in prod), and the
+`074` RLS closure with the `/apply` service-role switch, which D2 says needs the
+`02` prereqs first.
