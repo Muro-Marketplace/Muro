@@ -1696,3 +1696,88 @@ missingDemoGuard -> src/app/api/orders/route.ts exports PATCH and mutates, but d
 Correct and expected: `PATCH` is one of the 50 handlers Phase B to D still has to
 convert, and E21 covers this route specifically. Recorded because it demonstrates
 the rule pointing at real remaining work rather than at noise.
+
+---
+
+## Iteration 18 — 2026-07-29
+
+### E39 — unauthenticated checkout-session PII disclosure, closed
+
+Owner: `01` Phase B task 5.
+
+`GET /api/checkout/session` authenticates nothing; it checks only that a session id
+was supplied. It answered with `customerEmail`, the raw Stripe `metadata`, the
+`cart`, and the full delivery address (name, both address lines, city, postcode,
+country). The response is now id, payment status, total, and line-item names and
+amounts.
+
+**Changed:** `src/app/api/checkout/session/route.ts` and
+`src/app/(pages)/checkout/confirmation/page.tsx`, together, as Phase B task 5
+requires.
+
+**Route and page had to ship together.** The confirmation page was the sole
+consumer (`page.tsx:94`) and rendered both the delivery-address block
+(`page.tsx:203-211`) and "You'll receive updates at <email>" (`page.tsx:226`) from
+the stripped fields. Shipping the route alone would have left a page reading
+`order.shipping.fullName` off an object that no longer has it.
+
+**A real cost, which the doc anticipated** ("update the success page to match"):
+the buyer no longer sees their delivery address or email on the confirmation page.
+They have both in the confirmation email. Restoring it for a signed-in owner is
+possible later, but needs owner matching, and per E21 the webhook does not populate
+`buyer_user_id` on the main path, so guest checkout, the common case here, could
+not benefit yet. Recorded in the route's comment so the next reader knows why it is
+absent rather than assuming an oversight.
+
+**Two things removed rather than left dangling:** `loadCartSession` (cart and
+shipping were the only things it fed the response, so the import and the extra
+round trip are gone) and, on the page, the now-dead `labelForCountry` import and
+`SavedShipping` interface.
+
+**Verification, both directions.** Before:
+
+```
+× does not return the customer's email     → to not have property "customerEmail"
+× does not return the delivery address     → to not have property "shipping"
+× does not return the raw cart or metadata → to not have property "cart"
+× does not need the cart session row       → expected "spy" to not be called, called 1 times
+ Tests  4 failed | 3 passed (7)
+```
+
+After:
+
+```
+ ✓ src/app/api/checkout/session/route.test.ts (7 tests) 6ms
+```
+
+The PII assertions check the serialised body, not just property absence, so a field
+reappearing under a different name still fails.
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  136 passed (136)
+      Tests  1276 passed (1276)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+Because this removes a render block from a customer-facing page, rebuilt and re-ran
+the browser suite against the production build:
+
+```
+ ✓ /checkout/confirmation — no critical or serious axe violations (1.0s)
+ ✓ /checkout, ✓ /cookies, ✓ /pricing
+ ✓ 8 smoke tests
+ 4 skipped, 12 passed
+```
+
+**Commit:** 19f9098
+
+### Phase B status
+
+| Task | Finding | State |
+|---|---|---|
+| 4 | E19 delete POST /api/orders | done, 740b79a |
+| 5 | E39 checkout-session PII | done, 19f9098 |
+| 6 | E17 + E18 artwork-request reads | next; route and page must ship together, the artist-portal page uses plain `fetch` |
