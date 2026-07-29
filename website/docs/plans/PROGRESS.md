@@ -19,7 +19,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
-| 7 | `04` payments Phase 0→9 (D4 Bug 15, G-C Bug 10, curation 7.0 at Phase 0) | `04` | todo |
+| 7 | `04` payments Phase 0→9 | `04` | **Bug 15 done** (ee7e888). Next in Phase 0: curation CHECK widening (D9 pulls 7.0 forward), then G-C Bug 10 |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -2338,3 +2338,102 @@ PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
 When the collapse lands, the disagreement count in that file should go to 0 and the
 file should be deleted along with the losing parser. It is scaffolding, not a
 permanent fixture, and it says so at the top.
+
+---
+
+## Iteration 25 — 2026-07-30
+
+### Bug 15 / D4 — `/admin` gross sales was £0 against £1174.87 of real orders
+
+Owner: `04` Phase 0, assigned by D4 (which voided `07 §6.1-6.2`'s "backfill
+amount_cents", since that would backfill a column that does not exist).
+
+`/admin` reported **"£0" and "0 orders"** while prod held 12 paid orders. The orders
+query selected `amount_cents`, which exists in no migration and not in the live
+table, so PostgREST rejected the whole statement, `.data` came back null, `|| []`
+turned it into an empty array, and both headline figures read zero.
+
+**Why it looked like a display bug:** the pounds-to-pence fallback directly beneath
+the select was already correct, and its comment even said *"never populated
+amount_cents, so the headline read £0"*. Someone had diagnosed the symptom and
+fixed the arithmetic, but the query above it still named the phantom column, so the
+fallback was unreachable. **Fifth phantom column this run.**
+
+**Changed:** `src/app/api/admin/stats/route.ts`. Removed the column from both
+selects, the row types, and `sumPaid`, where the `amount_cents != null` branch could
+no longer be reached. Per D4, the column is not added.
+
+**Measured against prod, before and after**, using the route's own exclusion
+semantics (`status not in refunded/cancelled/failed/void`):
+
+```
+amount_cents_exists |  0
+counted_orders      | 12
+gross_pounds        | 1174.87
+gross_pence         | 117487
+```
+
+D4's acceptance was "gross ≥ £773.25, count > 0". Actual is £1174.87 across 12
+orders. £773.25 was the artist-portal subtotal, so a lower bound rather than the
+full figure, which is why the real number is higher.
+
+**Verification, both directions.** The fake db **refuses a select naming a column
+the table does not have**, exactly as PostgREST does; without that the test cannot
+see this class of bug at all. Before:
+
+```
+× does not select a column the orders table does not have
+  → orders select names a phantom column: "total, amount_cents, status, created_at"
+× reports the real gross instead of £0   → expected +0 to be 117487
+× reports a non-zero order count         → expected +0 to be 12
+× still excludes refunded and cancelled  → expected +0 to be 117487
+× converts pounds to pence               → expected 0 to be greater than 10000
+ 5 failed
+```
+
+After:
+
+```
+ ✓ src/app/api/admin/stats/route.test.ts (6 tests) 4ms
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  144 passed (144)
+      Tests  1360 passed (1360)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** ee7e888
+
+### Checked the neighbours rather than assuming
+
+Every other `amount_cents` reference in `src` is on **`stripe_transfers`**, which
+genuinely has the column. Confirmed it is the only table that does:
+
+```
+table_name       | column_name
+stripe_transfers | amount_cents
+```
+
+So `api/admin/financials` and `api/refunds/process` are correct and untouched. Worth
+recording because "grep for the phantom column and delete every hit" would have
+broken both.
+
+### Running tally of phantom columns
+
+Five now, all found by checking prod rather than trusting a doc or the surrounding
+code:
+
+| Column | Where | Iteration |
+|---|---|---|
+| `artist_profiles.ships_internationally` | `06` §5.1 allowlist | 10 |
+| `artist_profiles.international_shipping_price` | `06` §5.1 allowlist | 10 |
+| `artist_works.in_store_price` | `06` §5.1 allowlist | 10 |
+| `placements.requester_user_id` | `01` §1.1 authz select, **and live UI code** | 11, 12 |
+| `orders.amount_cents` | `api/admin/stats` select | 25 |
+
+Two of the five were breaking production behaviour, not just sitting in a plan: the
+placement accept/decline controls never render, and admin gross sales read £0.
