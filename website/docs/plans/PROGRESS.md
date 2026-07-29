@@ -14,7 +14,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0d | Branch protection requiring `check` + `e2e` | runbook §1.1, D13.3 | **owner only, now UNBLOCKED**: suite is green locally. D13.3 phasing: require `check` now, add `e2e` once it is green on main, never require `advisors` |
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
-| 2 | Vehicles: `writable-fields.ts` + `authz.ts` | `06`, `01` | **both vehicles done** (8d99498, 9427aab). Remaining in `01` Phase A: state-machine (task 2), eslint rule (task 3) |
+| 2 | Vehicles: `writable-fields.ts` + `authz.ts` + state machine | `06`, `01` | **done** (8d99498, 9427aab, 3a73a80). Remaining in `01` Phase A: task 3, the `require-authz-on-mutation` eslint rule |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | todo |
@@ -1188,3 +1188,91 @@ Task 2 (`placements/state-machine.ts`, which wants a
 (the `require-authz-on-mutation` ESLint rule plus `check-public-routes.ts`).
 Neither blocks the route conversions, but task 3 is the guard that stops the IDOR
 cluster reforming, so it should land before Phase 2 closes.
+
+---
+
+## Iteration 12 — 2026-07-29
+
+### `01` Phase A task 2 — placement state machine (E20)
+
+Owner: `implementation/01-authz-idor.md` §1.2.
+
+**Prod status distribution, recorded before writing the table as §1.2 requires:**
+
+```
+status     | rows
+active     |   37
+pending    |   33
+cancelled  |    7
+declined   |    5
+completed  |    4
+```
+
+No `paused` and no `sold` rows, though the code recognises both. Also confirmed:
+**`placements.status` has no CHECK constraint** (the only checks on the table are
+`arrangement_type`, `proposed_stage` and `subscription_status`), so any text can
+be stored. That is why `from` is normalised for case while `to` is not: `to`
+should be a canonical server-chosen value, so a mis-cased target is a caller bug
+worth surfacing.
+
+**Changed:** new `src/lib/placements/state-machine.ts` + test.
+
+**Two deviations from §1.2, both evidence-driven:**
+
+1. **"Placements have nothing equivalent" is not quite right.**
+   `src/lib/placements/status.ts` already exists, describes itself as the "single
+   source of truth for placement status + stage presentation", and exports a
+   7-value `RawStatus`. It has no transition table, so a state machine is
+   genuinely new, but I imported `RawStatus` rather than declaring the doc's
+   competing 6-value `PlacementStatus`. A second status vocabulary sitting beside
+   a self-declared source of truth is precisely the N-K3 duplicate-vocabulary
+   problem this plan exists to remove. A test asserts the two stay identical.
+2. **`sold` is missing from §1.2's table.** It is read as terminal by
+   `api/placements/route.ts:922` alongside `completed`, and counted as a finished
+   placement by `artist-portal/analytics`. Nothing writes it and prod holds none,
+   so it is modelled as terminal with **no incoming** transition: a legacy `sold`
+   row now reports as terminal rather than "Unknown current status", and no path
+   to it is invented on speculation.
+
+**Verification, both directions.** Before: `Failed to load url ./state-machine`.
+After:
+
+```
+ ✓ src/lib/placements/state-machine.test.ts (9 tests) 2ms
+      Tests  9 passed (9)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  131 passed (131)
+      Tests  1227 passed (1227)
+```
+
+**Commit:** 3a73a80
+
+### Iteration 11's placement finding, now fully evidenced
+
+I claimed the accept/decline controls never render on the placement detail page.
+Confirmed, and the mechanism is worth stating precisely because the intent was
+right and only the field name was wrong.
+`PlacementDetailClient.tsx:814-821` carries this comment:
+
+> Safety rule: only show when we KNOW the requester and it is someone other than
+> the viewer. If requester_user_id is unknown we keep the controls hidden, better
+> to ask the user to refresh than risk letting the original sender accept their
+> own request.
+
+The fail-closed rule is correct. It just depends on a column that does not exist,
+so it fires on **every** pending placement. Lines 831 and 845 (the Accept and
+Decline buttons) are inside that hidden block, and this page does not use
+`status.ts`'s `nextAction`, which would otherwise have offered an Accept CTA: it
+keeps its own local `viewerRole` state fetched from the API. So there is no other
+accept path on this page.
+
+`status.ts`'s own `viewerRole()` has the same dependency (`p.requesterUserId`,
+line 104), so wherever `nextAction` IS used, every viewer resolves to
+`"responder"` and is offered Accept/Counter regardless of who proposed — the
+mirror-image failure. Both want `proposed_by_user_id`. Fix belongs with the `01`
+Phase B–D placement work, where `assertPlacementParty` already returns that field.
