@@ -40,11 +40,12 @@ jobs:
           cache-dependency-path: website/package-lock.json
 
       - run: npm ci
-      # Lint surfaces pre-existing React Compiler warnings — informational
-      # only until the backlog is cleared. Flip to blocking once green.
-      - name: Lint (informational)
+      # Lint blocks CI. Rules set to "error" (e.g. no-raw-arrangement-type)
+      # fail the build; the residual React Compiler / unused-vars warning
+      # backlog does not, since eslint exits 0 when only warnings remain.
+      # Locked by tests/integration/ci-lint-blocking.test.ts.
+      - name: Lint
         run: npm run lint
-        continue-on-error: true
       - run: npm run typecheck
       - run: npm run test
 
