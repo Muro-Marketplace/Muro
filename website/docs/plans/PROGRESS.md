@@ -14,7 +14,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0d | Branch protection requiring `check` + `e2e` | runbook §1.1, D13.3 | **owner only, now UNBLOCKED**: suite is green locally. D13.3 phasing: require `check` now, add `e2e` once it is green on main, never require `advisors` |
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
-| 2 | Vehicles: `06 A1–A7` `writable-fields.ts` + `01 Phase A` `authz.ts` | `06`, `01` | todo |
+| 2 | Vehicles: `06 A1–A7` `writable-fields.ts` + `01 Phase A` `authz.ts` | `06`, `01` | **A1+A2 done** (8d99498), A8 answered. Next: `authz.ts`, then A3–A7 route conversion |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | todo |
@@ -1002,3 +1002,99 @@ Two things still need the human, neither blocking the queue:
 
 Next in the corrected dependency order: item 2, the vehicles, `06 A1–A7`
 `writable-fields.ts` and `01 Phase A` `authz.ts`.
+
+---
+
+## Iteration 10 — 2026-07-29
+
+### Dependency item 2, vehicles part 1 — `writable-fields.ts` (06 A1, A2, A8)
+
+Owner: `implementation/06-validation-massassign.md` §5.1 and §7 Phase A.
+
+**Changed:** new `src/lib/db/writable-fields.ts` with six frozen lists plus
+`pickWritable()` and `assertNoServerOwned()`, and `writable-fields.test.ts` with
+15 cases.
+
+**A8 is answered, and it changes the spec.** §5.1 flagged three columns as
+"applied out of band, confirm against prod before merging". They **do not exist**
+in the live project at all:
+
+```
+artist_profiles.ships_internationally          absent
+artist_profiles.international_shipping_price    absent
+artist_works.in_store_price                     absent
+```
+
+So they are **omitted from the writable lists**, not migrated in. Allowlisting a
+non-existent column is worse than useless: `pickWritable` would pass a client
+value into the write and PostgREST would reject the whole statement, so one stray
+field would fail the entire save. Nothing needs them, the transform defaults both
+shipping fields, and this is exactly why `upsertWork` already carries a
+strip-and-retry fallback (`artist-works.ts:35-80`): the `in_store_price` write
+fails today and gets dropped per-column, silently.
+
+`free_until` and `signup_order` are also absent from prod but stay on the deny
+list, where a missing column costs nothing and fails closed if one is ever added.
+
+**Lists verified against prod, not against the migration files** (prod was
+bootstrapped from `supabase-all-migrations.sql`, so the numbered sequence is not
+authoritative):
+
+```
+== artist_profiles: 35 writable + 32 server-owned vs 65 live columns
+   writable columns missing from prod   : none
+   live columns classified by neither   : none
+== venue_profiles: 28 writable + 12 server-owned vs 40 live columns
+   writable columns missing from prod   : none
+   live columns classified by neither   : none
+== artist_works: 15 writable + 5 server-owned vs 21 live columns
+   writable columns missing from prod   : none
+   live columns classified by neither   : ['id']
+RESULT: every writable column exists in prod
+```
+
+`artist_works.id` being unclassified is deliberate per §5.1: it is client-supplied
+by design and the row is scoped to the caller's `artist_id` by the route.
+
+The doc's claim about `venue_profiles.preferred_sizes` and
+`interested_in_local_artists` checks out: neither exists in prod, so the
+strip-and-retry in `upsertVenueProfile` was achieving by accident what the
+allowlist now does deliberately.
+
+**Verification, both directions.** Before the module existed:
+
+```
+Error: Failed to load url ./writable-fields ... Does the file exist?
+ Test Files  1 failed (1)
+      Tests  no tests
+```
+
+After:
+
+```
+ ✓ src/lib/db/writable-fields.test.ts (15 tests) 3ms
+      Tests  15 passed (15)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  129 passed (129)
+      Tests  1184 passed (1184)
+```
+
+**Commit:** 8d99498
+
+Tests cover the A2 list plus three the doc did not ask for: an explicit `null` is
+preserved (it is a real value, unlike an absent key), no column appears on both a
+writable and a server-owned list, and the lists are frozen so a route cannot push
+onto one at runtime.
+
+### Note on scope
+
+The dependency order bundles `06 A1–A7` with `01 Phase A` as one "vehicles" item,
+but A1/A2 build the module while A4–A7 convert three route handlers and two db
+helpers to use it. Split deliberately: this commit is the vehicle, and nothing
+consumes it yet. Next iteration takes `01 Phase A` `authz.ts` (the other vehicle),
+then A3–A7 convert the routes, which is dependency item 4's "route fixes" anyway.
