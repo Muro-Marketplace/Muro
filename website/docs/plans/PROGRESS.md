@@ -1962,3 +1962,98 @@ the handler.
 | B4 `/email-preview` unauthenticated in prod | open, and on D6's unconditional list, so "delete or gate to admin+non-prod" |
 | E39, E17, E18, E19 | done in iterations 17 to 19 |
 | `074` RLS closure + `/apply` service-role switch | blocked behind the `02` prereqs (D2), which are themselves blocked on the base-schema dump |
+
+---
+
+## Iteration 21 — 2026-07-30
+
+### B4 — `/email-preview` gated out of production
+
+Owner: D6 item 5, one of the unconditional items that may proceed before `08` is
+rewritten.
+
+The previewer renders every template in the registry and was reachable
+unauthenticated on the live site, handing out the whole transactional-email surface
+to anyone who guessed the path. The page's own header comment admitted it: *"Not
+gated behind auth, add a check here or in middleware if you want to restrict it in
+production."*
+
+**Gated, not deleted.** D6 allows either. The templates are Keep per D0, this is how
+anyone reviews them, and two smoke tests cover it, so deleting would have taken the
+tool and the coverage with it.
+
+**Changed:** new `access.ts` (the gate), `page.tsx` becomes a server component that
+gates then renders, the listing UI moved to `EmailPreviewIndex.tsx` via `git mv`,
+and `[id]/page.tsx` gates before the template lookup.
+
+**The gate is an allowlist and fails closed.** Available only where the environment
+is positively identifiable as non-production: a localhost origin, or `VERCEL_ENV` of
+preview/development. Everything else 404s, including an unset or unparseable site
+URL. The direction matters: `src/env.ts` defaults `NEXT_PUBLIC_SITE_URL` to
+`https://wallplace.co.uk`, so treating "unset" as non-production would fail open on
+a misconfiguration.
+
+The index had to be split because it was `"use client"` and a client component
+cannot read the environment. `page.tsx` is now a thin server gate.
+
+**One deviation from D6, flagged rather than buried.** D6 says "admin+non-prod";
+this implements non-prod only, with no admin conjunct. The previewer renders from
+`entry.mock` fixtures and never touches real user data, so in a non-prod environment
+an admin check protects nothing while breaking both smoke tests and the local dev
+loop. The finding is specifically "unauthenticated **in prod**", which is closed.
+Owner can ask for the admin conjunct if they want it anyway.
+
+**Verification, both directions.** Gate helper, before: `Failed to load url ./access`.
+After:
+
+```
+ ✓ src/app/email-preview/access.test.ts (7 tests) 1ms
+ ✓ src/app/email-preview/page.test.tsx (4 tests) 4ms
+```
+
+The wiring test's own teeth, proved by deleting the gate line from `page.tsx`:
+
+```
+× /email-preview index page (B4) > 404s on the live site
+  → expected [Function] to throw an error
+ Tests  1 failed | 3 passed (4)
+```
+
+restored, back to 4 passed. Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  139 passed (139)
+      Tests  1298 passed (1298)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+Rebuilt and re-ran the smoke suite against the production build, to prove the dev
+path still works:
+
+```
+ ✓ /email-preview lists the template library (1.0s)
+ ✓ /email-preview/customer_order_receipt renders the template (977ms)
+ 8 passed
+```
+
+**Commit:** efc93a4
+
+### Phase 1b is now closed apart from the DB work
+
+| Finding | State |
+|---|---|
+| E32, E44, E45 | closed (theft chain, both ends, plus the venue equivalent) |
+| E19 | deleted |
+| E39 | closed |
+| E17, E18 | closed |
+| E31 | closed |
+| B4 | closed |
+| B1 | refuted for prod by the runbook's own verification |
+| `074` RLS closure + `/apply` switch | **blocked**: D2 puts the `02` prereqs first, and those need the base-schema dump, which needs the Supabase CLI (see iteration 4) |
+
+Next unblocked work, in dependency order: G-A / G-B, the public PII projections for
+Bug 1 (`/api/browse-artists` leaking exact postcode and GPS to anonymous callers)
+and Bug 5 (`/api/venues/demand` paywall bypass via the name-bearing slug and exact
+coordinates). Both are API-side with no migration, which is why D8 assigns them to
+`02`'s workstream rather than to a migration.
