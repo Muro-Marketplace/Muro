@@ -1624,3 +1624,75 @@ arrive is known to exist, so the whole dance is dead weight against prod. §5.1 
 as much ("once the allowlist lands, the whole strip-and-retry dance can be deleted").
 Left alone this iteration because deleting it changes error-path behaviour, which
 does not belong bundled into a security fix.
+
+---
+
+## Iteration 17 — 2026-07-29
+
+### E19 / E46f — unauthenticated `POST /api/orders`, deleted
+
+Owner: `04` per D7 (it was claimed by `01` t4, `04` §0.3 and `06` A9; D7 resolves
+to `04`). Runbook Phase 1c: "delete rather than fix".
+
+The handler had **no authentication of any kind** and inserted directly into
+`orders` with `status: "confirmed"` plus a client-supplied `total`, `subtotal`,
+`items` and `buyerEmail`. Anyone could forge a paid order.
+
+**Verified dead before deleting**, rather than taking the doc's word. Every
+`"/api/orders"` reference in `src/app`, with the method each uses:
+
+```
+artist-portal/orders/page.tsx:68     GET
+artist-portal/orders/page.tsx:84     PATCH
+artist-portal/analytics/page.tsx:94  GET
+customer-portal/page.tsx:87          GET
+venue-portal/orders/page.tsx:59      GET
+venue-portal/enquiries/page.tsx:41   GET
+```
+
+No caller used POST, and the only POST reference anywhere in `src` or `tests` is
+to `/api/orders/track`, a different route. **The doc's claim held exactly**, which
+is worth recording given how many others in this doc set have not.
+
+**Changed:** 31 lines removed from `src/app/api/orders/route.ts`. Two tests
+appended to the existing `route.test.ts`.
+
+**Verification, both directions.** Before:
+
+```
+× POST /api/orders (E19, deleted) > exports no POST handler
+  → POST was re-added to /api/orders: expected true to be false
+```
+
+After:
+
+```
+ ✓ src/app/api/orders/route.test.ts (11 tests) 9ms
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  135 passed (135)
+      Tests  1269 passed (1269)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** 740b79a
+
+The second test (GET and PATCH still exported) exists because a deletion is the
+one change where the regression risk is taking a live handler with it.
+
+### The lint guard is already earning its keep
+
+After the deletion the route still reports two warnings:
+
+```
+missingAuthz     -> src/app/api/orders/route.ts exports PATCH and uses the service-role client...
+missingDemoGuard -> src/app/api/orders/route.ts exports PATCH and mutates, but does not import @/lib/demo-guard
+```
+
+Correct and expected: `PATCH` is one of the 50 handlers Phase B to D still has to
+convert, and E21 covers this route specifically. Recorded because it demonstrates
+the rule pointing at real remaining work rather than at noise.
