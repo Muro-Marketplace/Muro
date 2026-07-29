@@ -10,8 +10,9 @@ Order of work: the "Corrected dependency order" at the end of
 |---|---|---|---|
 | 0a | CI `continue-on-error` removed, lint blocks | runbook §1.1 | **done** (47cb468) |
 | 0b | Advisor in CI: nightly, not a PR gate | runbook §1.1, then D12 r3 | **done** (6615736 then corrected by 72adec9) |
-| 0c | `audit:e2e-security` covered in CI | runbook §1.1 | **done** (fa9416e), premise was wrong, gate meaningfulness is an open owner decision |
+| 0c | `audit:e2e-security` covered in CI | runbook §1.1 | **done** (fa9416e). Real creds ruled in by D13.1, blocked on the human adding secrets |
 | 0d | Branch protection requiring `check` + `e2e`; apply pending workflow change in `docs/ci/2026-06-15-required-checks.md` | runbook §1.1 | **owner only, and BLOCKED**: `e2e` is red on main (10 failures), so requiring it would block every merge |
+| 0e | Go green on main (D14) | D14 | **in progress**: shared-chrome contrast done (4f83d3a), /checkout + /checkout/confirmation now pass. Remaining: /pricing + /cookies nodes, link-in-text-block, 4 tap-target components, security skip-loudly |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles: `06 A1–A7` `writable-fields.ts` + `01 Phase A` `authz.ts` | `06`, `01` | todo |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
@@ -615,3 +616,119 @@ comments before matching, which is the more correct assertion anyway: prose cann
 silence a step. The same helper now guards the ci.yml comparison, which had been
 passing only by luck (my comment happened to say "advisor" rather than
 "audit:advisors").
+
+---
+
+## Iteration 6 — 2026-07-29
+
+### Task 0e (D14) — go green on main, slice 1 of several
+
+Owner: `2026-07-11-EXECUTION-DECISIONS.md` D14, method in D14.2.
+
+#### Environment work needed first
+
+- Created `website/.env.local` with the same placeholder values as ci.yml's e2e
+  job, so the failures reproduce locally the way they do in CI. Gitignored
+  (`.env*`), no real credentials.
+- Dev server started via the harness preview (port 3099), not by hand.
+- `npx playwright install chromium` **failed** with an opaque
+  `Download failure, code=1`. Cause is the known Node/macOS TLS issue on this
+  machine; `NODE_EXTRA_CA_CERTS=/etc/ssl/cert.pem npx playwright install chromium`
+  succeeded. Worth remembering: the installed browser was build 1228 while this
+  Playwright (1.59.1) wants 1217, so every spec failed with
+  "Executable doesn't exist ... chromium_headless_shell-1217" until this was fixed.
+
+With that done, the local run reproduces CI exactly for these two specs:
+**7 failed, 9 skipped**, matching CI's 10 (these 7 plus the 3 security).
+
+#### D14.2 step 1 — the complete failing-node set
+
+The spec reporter truncates to 3 nodes per violation, so I dumped the full set
+directly. Node counts before any change: /pricing 7, /checkout 4,
+/checkout/confirmation 4, /cookies 7 contrast nodes.
+
+**Three findings that change D14's plan:**
+
+1. **The failing nodes are mostly shared chrome, not page content.** The repeat
+   offenders are the header Sign Up link, the footer newsletter Subscribe button,
+   the floating Feedback button and a shared "Discover Art" CTA. D14.2 says to
+   apply the token "only at those nodes ... on /pricing, /checkout,
+   /checkout/confirmation, /cookies", but those nodes are global components, so
+   the fix necessarily changes every page. Reading it as "only the failing nodes"
+   rather than "only those four pages" is the only coherent interpretation.
+2. **`/cookies` does NOT fail on contrast alone.** It also fails
+   `link-in-text-block` (serious, 4 nodes): the inline `privacy@wallplace.co.uk`
+   and `Privacy Policy` links are distinguished from body text by colour only, and
+   carry `hover:underline` rather than a persistent underline. **Fixing contrast
+   will not make /cookies pass.** D14 describes the /cookies failure as contrast
+   only, so this was missed.
+3. **One local-only false positive to ignore:** a `32x32` button with
+   `aria-label="Open Next.js Dev Tools"` shows as an undersized tap target here.
+   It is the dev overlay. CI runs `npm run build && npm run start`, so it does not
+   exist there. Not a real failure, must not be "fixed".
+
+#### Token derivation, done by measurement
+
+Computed WCAG 2.1 ratios rather than trusting any asserted hex:
+
+```
+                     white on it   on #FFFFFF  on #FAFAF8  on #F7F4F0  on #F9F2EF
+  #C17C5A (accent)      3.33          3.33        3.19        3.04        3.01   all fail
+  #A8684A (hover)       4.43          4.43        4.24        4.04        4.00   all fail
+  #9E664A                4.72          4.72        4.51        4.30        4.26   FAILS on tints
+  #9C5F42                5.09          5.09        4.87        4.64        4.60   all pass
+  #8A5439                6.16          6.16        5.90        5.66        5.61   all pass
+```
+
+D14.1's recommendation of `#9C5F42` holds, and its rejection of `#9E664A` was
+right for a reason it did not give: the binding cases are the two tinted
+backgrounds `#F7F4F0` and `#F9F2EF` (rendered `bg-accent/5` and `bg-accent/10`),
+not `#FAFAF8`. `#9E664A` fails those at 4.30 and 4.26. On the tints `#9C5F42`
+gives 4.60, so the real margin is 0.10 rather than D14.1's stated 4.87.
+
+D14.1's extra finding was correct and is handled: every element moved to the new
+token had a `hover:bg-accent-hover` partner sitting at 4.43, so a fix touching
+only the base colour would have left non-compliant hover states. Added
+`--color-accent-text-hover: #8A5439` and paired them.
+
+**Changed:** `globals.css` (both tokens, with the measured table as a comment),
+`Header.tsx`, `NewsletterForm.tsx`, `FeedbackBubble.tsx`,
+`checkout/page.tsx`, `checkout/confirmation/page.tsx`.
+
+**Verification against the real gate:**
+
+```
+  ✓  1 /checkout/confirmation — no critical or serious axe violations (989ms)
+  ✓  3 /checkout — no critical or serious axe violations (993ms)
+  ✘  2 /cookies — no critical or serious axe violations (1.1s)
+  ✘  4 /pricing — no critical or serious axe violations (1.2s)
+  2 failed, 4 skipped, 2 passed
+```
+
+Contrast node counts after: /checkout 4→**0**, /checkout/confirmation 4→**0**,
+/pricing 7→5, /cookies 7→5. Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  128 passed (128)
+      Tests  1169 passed (1169)
+```
+
+Visual check on /checkout: the darkened Sign Up and Discover Art still read as the
+same warm terracotta family, and the cookie banner Accept keeps the original
+`#C17C5A` since axe does not flag it.
+
+**Commit:** 4f83d3a
+
+#### Remaining for Task 0e
+
+1. `/pricing` page nodes: "Get Started" (12px), the "Save 17%" badge (10px), the
+   `th` "Premium" header (12px), "Wallplace Core" (14px), and the white-on-accent
+   "Most Popular" badge (12px). In `pricing/page.tsx` and `ArtistPricingCards.tsx`.
+2. `/cookies` page nodes: the "Required" badge plus four inline links, **and** the
+   separate `link-in-text-block` rule, which needs a persistent underline rather
+   than `hover:underline`.
+3. Tap targets, four components: the pricing Monthly/Annual toggle (85x36,
+   144x36), newsletter Subscribe (99x38), Feedback bubble (99x32), cookie banner
+   Accept/Decline (80x38, 83x38).
+4. D14.3 security skip-loudly guard.
