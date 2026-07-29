@@ -12,7 +12,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0b | Advisor in CI: nightly, not a PR gate | runbook §1.1, then D12 r3 | **done** (6615736 then corrected by 72adec9) |
 | 0c | `audit:e2e-security` covered in CI | runbook §1.1 | **done** (fa9416e). Real creds ruled in by D13.1, blocked on the human adding secrets |
 | 0d | Branch protection requiring `check` + `e2e`; apply pending workflow change in `docs/ci/2026-06-15-required-checks.md` | runbook §1.1 | **owner only, and BLOCKED**: `e2e` is red on main (10 failures), so requiring it would block every merge |
-| 0e | Go green on main (D14) | D14 | **in progress**: shared-chrome contrast done (4f83d3a), /checkout + /checkout/confirmation now pass. Remaining: /pricing + /cookies nodes, link-in-text-block, 4 tap-target components, security skip-loudly |
+| 0e | Go green on main (D14) | D14 | **in progress**: all 4 a11y tests pass (4f83d3a, f612159). Remaining: 4 tap-target components, security skip-loudly (D14.3) |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles: `06 A1–A7` `writable-fields.ts` + `01 Phase A` `authz.ts` | `06`, `01` | todo |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
@@ -732,3 +732,90 @@ same warm terracotta family, and the cookie banner Accept keeps the original
    144x36), newsletter Subscribe (99x38), Feedback bubble (99x32), cookie banner
    Accept/Decline (80x38, 83x38).
 4. D14.3 security skip-loudly guard.
+
+---
+
+## Iteration 7 — 2026-07-29
+
+### Task 0e slice 2 — a11y now fully green on all four pages
+
+Owner: D14.1 / D14.2.
+
+**Changed:** `pricing/page.tsx` (the "Get Started" eyebrow, the comparison-table
+`th` headers, the "Wallplace Core" row label), `ArtistPricingCards.tsx` (the
+"Most Popular" badge and both "Save 17%" badges), `cookies/page.tsx` (the
+"Required" badge and four inline links), `globals.css` (the `a` reset, see below).
+SVG icons keep `#C17C5A` per D13.2, they are decoration.
+
+**Verification:**
+
+```
+  ✓  3 /checkout/confirmation — no critical or serious axe violations (1.2s)
+  ✓  4 /checkout — no critical or serious axe violations (1.2s)
+  ✓  2 /cookies — no critical or serious axe violations (1.3s)
+  ✓  1 /pricing — no critical or serious axe violations (1.3s)
+  4 skipped, 4 passed
+```
+
+Contrast node counts across the two slices: /pricing 7→0, /checkout 4→0,
+/checkout/confirmation 4→0, /cookies 7→0. Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  128 passed (128)
+      Tests  1169 passed (1169)
+```
+
+### The root cause of link-in-text-block was a CSS layering bug
+
+Adding `underline` to the /cookies links did **not** fix the rule. Measured the
+computed style rather than guessing:
+
+```
+{ classes: "text-accent-text underline", color: "rgb(156, 95, 66)",
+  textDecorationLine: "none",
+  underlineUtilityCount: 5, hoverUnderlineCount: 0 }
+```
+
+`a { text-decoration: none }` in `globals.css` was **unlayered**. Unlayered CSS
+wins over *every* layered rule regardless of specificity, and Tailwind v4 emits
+utilities into `@layer utilities`. So `underline` and `hover:underline` have been
+dead everywhere in this codebase, not just here. Moved the reset into
+`@layer base`. After:
+
+```
+{ link: { classes: "text-accent-text underline", decoration: "underline", color: "rgb(156, 95, 66)" },
+  navLinkDecoration: { text: "Wallplace", decoration: "none" } }
+```
+
+The utility now wins where it is asked for, and links without it stay undecorated,
+so the reset still does its job.
+
+**Visible side effect, flagged deliberately:** every `hover:underline` in the
+codebase starts working. That is what those classes were written to do, but it is
+a site-wide behaviour change rather than something confined to the four audited
+pages. Worth a look during the next visual pass.
+
+### A mistake, caught by re-measuring
+
+There are two "Save 17%" badges. The flagged one is the toggle badge at
+`ArtistPricingCards.tsx:102` (`rounded-full`, `tracking-wider`); I first changed
+the card badge at `:153` (`rounded-sm`, `tracking-widest`), which axe never
+flagged, and the failure survived. Re-running the audit caught it. Kept both
+changes: `:153` is the same `#C17C5A` on `bg-accent/10` at 10px, so it fails the
+same 4.5:1 bar whenever it renders, axe simply does not reach it in the default
+state.
+
+This is the second time this iteration that re-measuring beat assuming. The other
+was `text-accent` on line 252 of `pricing/page.tsx`, which I had written off as a
+different component before reading the file.
+
+### Remaining for Task 0e
+
+1. Tap targets, four components: pricing Monthly/Annual toggle (85x36, 144x36),
+   newsletter Subscribe (99x38), Feedback bubble (99x32), cookie banner
+   Accept/Decline (80x38, 83x38).
+2. D14.3 security skip-loudly guard.
+
+Still true from iteration 6: the `32x32 aria-label="Open Next.js Dev Tools"`
+button is a dev-server artefact, absent from CI's production build. Not a target.
