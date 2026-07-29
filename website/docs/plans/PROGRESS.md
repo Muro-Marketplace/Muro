@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | **E32 done** (3999102). E44 next, then the rest of Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | **theft chain closed**: E32 (3999102) + E44 (1780a5b). Next: `06` A5–A7, then `01` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | todo |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | todo |
@@ -1446,3 +1446,84 @@ Taken as "same phase, first, neither deferred" rather than one commit. They live
 different files (`lib/db/artist-works.ts` vs `api/artist-profile/route.ts`), each
 is independently testable, and either one alone breaks the chain. E44 is the next
 iteration, so both land before the loop moves on.
+
+---
+
+## Iteration 15 — 2026-07-29
+
+### E44 — artist-profile mass-assignment, closed. The theft chain is broken at both ends.
+
+Owner: `06` A4.
+
+`const updatePayload: Record<string, unknown> = { ...body }` at
+`api/artist-profile/route.ts:41` handed the client the entire `artist_profiles`
+row through a service-role write. The body now goes through
+`pickWritable(body, ARTIST_PROFILE_WRITABLE)`.
+
+**Changed:** `src/app/api/artist-profile/route.ts`.
+
+Preserved and re-verified: UK postcode validation and upper-casing, the negative
+shipping-price guard, the Premium-tier theme strip, and the 401. `lat`/`lng` are
+deliberately off the allowlist so a client cannot set them, while the route still
+writes them from the geocoder, which is the only legitimate source.
+
+Also removed `international_shipping_price` from the shipping-price loop: absent
+from the live table, therefore absent from the allowlist, therefore unreachable, so
+the loop entry was dead code. And corrected a comment that claimed "the body-side
+allow-anything stays", which stopped being true with this change.
+
+**Verification, both directions.** Before:
+
+```
+× drops every server-owned field from the body
+  → review_status reached the DB payload: expected { …(17) } to not have property "review_status"
+× ignores an unknown field rather than passing it through
+  → expected { name: 'Maya', not_a_column: 'boom' } to not have property "not_a_column"
+ Tests  2 failed | 7 passed (9)
+```
+
+The 7 already-passing tests are the behaviours the change had to preserve, which is
+why they were written first. After:
+
+```
+ ✓ src/app/api/artist-profile/route.test.ts (9 tests) 11ms
+      Tests  9 passed (9)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  134 passed (134)
+      Tests  1259 passed (1259)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** 1780a5b
+
+### A5 deferred, with a reason
+
+`06` A5 adds `assertNoServerOwned` inside `upsertArtistProfile`. It needs an
+exemption path before it can land, because two callers legitimately write
+server-owned columns:
+
+- the PUT route writes `lat`/`lng` after geocoding (server-derived, not client input)
+- the POST claim flow writes `review_status: "pending"` (server-chosen)
+
+A5 as written would throw on both. The doc half-notices this ("keep the insert
+branch's explicit review_status handling") without saying how the assert tolerates
+it. Options are an `allow` parameter on `assertNoServerOwned`, or a separate
+`applyServerOwned()` path for derived columns. That is a design decision for A5's
+own iteration, not something to improvise inside a security fix. E44 is fully
+closed without it: the assert is defence in depth for a future careless caller,
+not the control that stops the attack.
+
+### Chain status
+
+| Finding | Where | State |
+|---|---|---|
+| E32 steal the listing | `lib/db/artist-works.ts` | closed, 3999102 |
+| E44 redirect the payout | `api/artist-profile/route.ts` | closed, 1780a5b |
+
+Both halves are now regression-tested. Either fix alone breaks the chain; both are
+in place.
