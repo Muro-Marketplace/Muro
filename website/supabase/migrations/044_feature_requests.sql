@@ -1,4 +1,4 @@
--- 041_feature_requests.sql
+-- 044_feature_requests.sql
 -- F4 — public feature/idea submissions, optional upvoting.
 
 CREATE TABLE IF NOT EXISTS feature_requests (

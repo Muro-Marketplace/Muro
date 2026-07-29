@@ -1,4 +1,4 @@
--- 045_artist_charges_cache.sql
+-- 068_artist_charges_cache.sql
 --
 -- 60-second cache columns for the Stripe Connect charges_enabled
 -- pre-flight check (Plan B Task 7). canArtistAcceptOrders() reads

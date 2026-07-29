@@ -1,4 +1,4 @@
--- 054_customer_addresses.sql
+-- 069_customer_addresses.sql
 --
 -- Address book for customers. /customer-portal/addresses surfaces the
 -- list, /checkout's saved-address picker reads the rows when the buyer

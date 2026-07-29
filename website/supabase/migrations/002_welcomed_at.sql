@@ -1,4 +1,4 @@
--- 037: welcomed_at flag for first-touch onboarding emails
+-- 002: welcomed_at flag for first-touch onboarding emails
 --
 -- We fire the welcome email exactly once per profile and set this column
 -- to the send time. Next firing reads it and short-circuits. The column

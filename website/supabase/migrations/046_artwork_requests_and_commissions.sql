@@ -1,4 +1,4 @@
--- 043_artwork_requests_and_commissions.sql
+-- 046_artwork_requests_and_commissions.sql
 -- Request 2 — venue-led artwork demand. Venues post what they're looking
 -- for; artists browse + respond. Responses convert to placements,
 -- offers, or commissions on accept.

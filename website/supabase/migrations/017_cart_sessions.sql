@@ -1,4 +1,4 @@
--- 044_cart_sessions.sql
+-- 017_cart_sessions.sql
 --
 -- In-flight cart records, keyed by Stripe Checkout Session id. Replaces
 -- the 500-char metadata storage that was truncating large carts. The
