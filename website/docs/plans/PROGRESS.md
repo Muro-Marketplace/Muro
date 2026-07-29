@@ -17,7 +17,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **`01` Phase B complete**: E32, E44, E45, E19, E39, E17/E18. Next: `01` Phase C/D, `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
-| 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | todo |
+| 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). G-B (Bug 5) next |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | todo |
 | 7 | `04` payments Phase 0→9 (D4 Bug 15, G-C Bug 10, curation 7.0 at Phase 0) | `04` | todo |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
@@ -2057,3 +2057,83 @@ Bug 1 (`/api/browse-artists` leaking exact postcode and GPS to anonymous callers
 and Bug 5 (`/api/venues/demand` paywall bypass via the name-bearing slug and exact
 coordinates). Both are API-side with no migration, which is why D8 assigns them to
 `02`'s workstream rather than to a migration.
+
+---
+
+## Iteration 22 — 2026-07-30
+
+### G-A / Bug 1 — the anonymous artist feed no longer publishes home addresses
+
+Owner: D8 G-A, assigned to `02`'s workstream (API-side, no migration).
+
+`/api/browse-artists` is unauthenticated and returned each artist straight from the
+transform, `postcode` and the `coordinates` geocoded from it included. For a solo
+artist working from home that is their home address, available to anyone who curls
+the endpoint.
+
+**Changed:** new `src/lib/db/public-artist.ts` (`toPublicArtist`), applied in
+`src/app/api/browse-artists/route.ts`, plus the anonymous assertion in
+`tests/e2e/security-no-leaks.spec.ts`.
+
+**Deviation from D8, with the arithmetic.** D8 says strip both, and "if distance
+filtering is needed ... a coarse band (e.g. rounded to ~1 decimal)". Distance
+filtering **is** needed: `browse/page.tsx` filters and sorts on
+`artist.coordinates` client-side in four places (lines 887-892, 950-951, 1135-1136,
+1795). But:
+
+```
+DISTANCE_OPTIONS smallest radius : 5 miles  (~8 km)
+1 decimal place                  : ~11 km quantisation on latitude
+2 decimal places                 : ~1.1 km, worst-case error ~0.55 km
+```
+
+At 1dp the rounding error exceeds the tightest filter, so local search would have
+silently stopped meaning anything. Using **2dp**, with `PUBLIC_COORD_DECIMALS` as a
+named constant carrying the reasoning and a test asserting the worst-case error
+stays under 1km. Postcode is removed outright, since nothing client-side reads it.
+
+**Projected at the route, not in the transform.** `artist-profiles-transform.ts`
+also serves an artist their own profile, where the postcode is theirs to see and the
+editor needs it. Checked the alternatives first: `getAllArtists()` has exactly two
+callers, this route and `api/admin/stats`, and the latter only reads `.length`.
+
+**Verification, both directions.** Before: `Failed to load url ./public-artist`.
+After:
+
+```
+ ✓ src/lib/db/public-artist.test.ts (7 tests) 3ms
+ ✓ src/app/api/browse-artists/route.test.ts (5 tests) 8ms
+```
+
+Route test's teeth, proved by dropping `.map(toPublicArtist)`:
+
+```
+× publishes no postcode                → to not have property "postcode"
+× publishes coarsened coordinates      → expected { lat: 51.418123, lng: -0.366789 }
+                                          to deeply equal { lat: 51.42, lng: -0.37 }
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  142 passed (142)
+      Tests  1314 passed (1314)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+The e2e assertion asserts "no postcode, no coordinate finer than 2dp" rather than
+D8's "no coordinates", to match what the projection actually guarantees. Confirmed
+it skips with the rest of that suite when credentials are absent and executes when
+they are present.
+
+**Commit:** 3a13aab
+
+### The typecheck found a real API flaw again
+
+Constraining the generic to `{ postcode?: string; coordinates?: Coordinates }`
+makes it a *weak type* (all properties optional), so TypeScript rejected
+`toPublicArtist({ slug, name })` with "no properties in common" — and an artist
+carrying no location data is a legitimate input. Constraint is now `object` with the
+shape asserted inside. That is the third time in this run that `npm run check`
+caught something worth fixing rather than something to appease.
