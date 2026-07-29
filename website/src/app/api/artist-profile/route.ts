@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getArtistProfileByUserId, upsertArtistProfile } from "@/lib/db/artist-profiles";
 import { getWorksByArtistProfileId } from "@/lib/db/artist-works";
 import { geocodePostcode } from "@/lib/geocode";
+import { pickWritable, ARTIST_PROFILE_WRITABLE } from "@/lib/db/writable-fields";
 
 // GET: fetch the current user's artist profile
 export async function GET(request: Request) {
@@ -38,8 +39,21 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json();
 
-    // Geocode postcode if provided, store lat/lng
-    const updatePayload: Record<string, unknown> = { ...body };
+    // E44. This used to be `{ ...body }`, which handed the client the whole
+    // artist_profiles row through a service-role write: self-approve moderation
+    // (review_status), self-grant Pro (subscription_plan/status), extend the
+    // trial, and set stripe_connect_account_id, which is where payouts land.
+    // Chained with E32 that is a complete theft: take a listing, redirect the
+    // payout, get paid for someone else's art.
+    //
+    // Everything the client may set now comes through the allowlist. Keys absent
+    // from the body are omitted rather than nulled, so a partial edit stays
+    // partial. lat/lng are deliberately NOT on the allowlist and are set below
+    // from the geocoder, server-side.
+    const updatePayload: Record<string, unknown> = pickWritable(
+      body,
+      ARTIST_PROFILE_WRITABLE,
+    );
     if (typeof body.postcode === "string" && body.postcode.trim()) {
       const cleaned = body.postcode.trim();
       if (!UK_POSTCODE_RE.test(cleaned)) {
@@ -62,10 +76,10 @@ export async function PUT(request: Request) {
     // Without this the artist UI can post any value through; the price
     // appears on the checkout flow as-is, which would let buyers see
     // an effective discount through a "negative" shipping line.
-    for (const key of [
-      "default_shipping_price",
-      "international_shipping_price",
-    ] as const) {
+    // Only default_shipping_price: international_shipping_price is absent from
+    // the live table and therefore absent from the allowlist, so it can no longer
+    // reach updatePayload at all.
+    for (const key of ["default_shipping_price"] as const) {
       const v = updatePayload[key];
       if (v === null || v === undefined || v === "") continue;
       const num = typeof v === "number" ? v : Number(v);
@@ -81,10 +95,10 @@ export async function PUT(request: Request) {
       updatePayload[key] = num;
     }
 
-    // Premium+ tier gate for theme fields. Strip them for Core artists
-    // so a downgraded user can't keep a paid theme live by editing
-    // unrelated fields. The body-side allow-anything stays, the server
-    // is the authority on what gets persisted.
+    // Premium+ tier gate for theme fields. Strip them for Core artists so a
+    // downgraded user can't keep a paid theme live by editing unrelated fields.
+    // Being on the allowlist is not the gate: the theme fields are writable in
+    // principle, and this check is what decides whether they persist.
     if ("profile_theme" in updatePayload || "label_theme" in updatePayload) {
       const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
       const { canCustomiseTheme } = await import("@/lib/profile-themes");
