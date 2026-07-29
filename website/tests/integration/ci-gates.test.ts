@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
+import playwrightConfig from "../../playwright.config";
 
 // Task 0 (MASTER-RUNBOOK §1.1): the CI gaps that make the rest of the
 // remediation plan enforceable. Every custom ESLint rule in the plan is theatre
@@ -95,5 +96,42 @@ describe("CI advisor gate", () => {
     expect(jobBlock("npm run audit:advisors").join("\n")).toMatch(
       /SUPABASE_ACCESS_TOKEN:\s*\$\{\{\s*secrets\.SUPABASE_ACCESS_TOKEN\s*\}\}/,
     );
+  });
+});
+
+describe("CI security-e2e gate", () => {
+  // Runbook §1.1 row 3 asks whether security-no-leaks.spec.ts reaches CI. It
+  // does: `npm run test:e2e` collects everything under testDir, so the separate
+  // `audit:e2e-security` script is a convenience for running it alone, not the
+  // only path to it. What needs locking is that nothing narrows the collection
+  // so the spec quietly stops running. (Whether its assertions are *meaningful*
+  // in CI is a separate, open question, see PROGRESS.md.)
+  const SPEC = "tests/e2e/security-no-leaks.spec.ts";
+  const websiteRoot = path.resolve(here, "../..");
+
+  it("has a CI step that runs the Playwright suite", () => {
+    expect(() => stepBlock("npm run test:e2e")).not.toThrow();
+  });
+
+  it("keeps the security spec on disk where the suite looks for it", () => {
+    expect(existsSync(path.join(websiteRoot, SPEC))).toBe(true);
+    expect(path.resolve(websiteRoot, playwrightConfig.testDir ?? ".")).toBe(
+      path.join(websiteRoot, "tests/e2e"),
+    );
+  });
+
+  it("does not narrow Playwright collection in a way that could drop the spec", () => {
+    // Any of these silently shrinks the suite. The security spec is the one we
+    // can least afford to lose, so treat narrowing as a config error.
+    expect(playwrightConfig.testMatch, "testMatch would override the default glob").toBeUndefined();
+    expect(playwrightConfig.testIgnore, "testIgnore could exclude the spec").toBeUndefined();
+    expect(playwrightConfig.grep, "grep could exclude the spec").toBeUndefined();
+    expect(playwrightConfig.grepInvert, "grepInvert could exclude the spec").toBeUndefined();
+    for (const project of playwrightConfig.projects ?? []) {
+      expect(project.testMatch, `project ${project.name} narrows testMatch`).toBeUndefined();
+      expect(project.testIgnore, `project ${project.name} narrows testIgnore`).toBeUndefined();
+      expect(project.grep, `project ${project.name} narrows grep`).toBeUndefined();
+      expect(project.grepInvert, `project ${project.name} narrows grepInvert`).toBeUndefined();
+    }
   });
 });
