@@ -10,8 +10,8 @@ Order of work: the "Corrected dependency order" at the end of
 |---|---|---|---|
 | 0a | CI `continue-on-error` removed, lint blocks | runbook §1.1 | **done** (47cb468) |
 | 0b | `audit:advisors` job added to CI | runbook §1.1 | **done** (6615736), needs the repo secret before merge |
-| 0c | `audit:e2e-security` covered in CI | runbook §1.1 | todo |
-| 0d | Branch protection requiring `check` + `e2e`; apply pending workflow change in `docs/ci/2026-06-15-required-checks.md` | runbook §1.1 | **owner only** (GitHub settings, needs a token with `workflow` scope) |
+| 0c | `audit:e2e-security` covered in CI | runbook §1.1 | **done** (fa9416e), premise was wrong, gate meaningfulness is an open owner decision |
+| 0d | Branch protection requiring `check` + `e2e`; apply pending workflow change in `docs/ci/2026-06-15-required-checks.md` | runbook §1.1 | **owner only, and BLOCKED**: `e2e` is red on main (10 failures), so requiring it would block every merge |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | todo, blocks all new migrations |
 | 2 | Vehicles: `06 A1–A7` `writable-fields.ts` + `01 Phase A` `authz.ts` | `06`, `01` | todo |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` (E32+E44 chain) | `01`, `06` | todo |
@@ -211,3 +211,120 @@ Full gate:
    `rls_enabled_no_policy`, `rls_policy_always_true`,
    `auth_leaked_password_protection`, plus a documented `known-acceptable.json`
    ignore list for the service-role-only tables.
+
+---
+
+## Iteration 3 — 2026-07-29
+
+### Task 0c — security e2e in CI
+
+Owner: `2026-07-11-MASTER-RUNBOOK.md` §1.1, row 3.
+
+**The runbook's premise was wrong.** Row 3 says "`audit:e2e-security` exists but
+CI only runs `test:e2e`", implying the security spec never runs in CI. It does.
+`playwright.config.ts` sets `testDir: "./tests/e2e"` with no `testMatch`,
+`testIgnore`, `grep` or `grepInvert`, so `npm run test:e2e` collects every spec in
+that directory. Evidence:
+
+```
+  [chromium] › security-no-leaks.spec.ts:21:7 › ... › GET /api/venues/demand redacts paywalled fields
+  [chromium] › security-no-leaks.spec.ts:33:7 › ... › GET /api/venues/:slug redacts postcode for anon callers
+  [chromium] › security-no-leaks.spec.ts:41:7 › ... › GET /api/artwork-requests blocks anon, or redacts internal IDs
+  [chromium] › security-no-leaks.spec.ts:57:7 › ... › Storage bucket message-attachments listing is not anon-accessible
+Total: 31 tests in 5 files
+```
+
+So the runbook's own alternative ("or add the job explicitly") would have added a
+second runner for a spec that already runs. Did not do it. Corrected the runbook
+row instead.
+
+**Changed:** `2026-07-11-MASTER-RUNBOOK.md` §1.1 row 3 rewritten with the
+correction. `tests/integration/ci-gates.test.ts` gained a "CI security-e2e gate"
+block: the CI step running the suite exists, the spec is still on disk under
+`testDir`, and nothing (config-level or per-project) narrows collection.
+
+**Verification.** These assertions pass immediately, since there was no gap to
+fix, so a plain green run would prove nothing. Demonstrated teeth by mutating the
+config, adding `testIgnore: ["**/security-no-leaks.spec.ts"]`:
+
+```
+   × CI security-e2e gate > does not narrow Playwright collection in a way that could drop the spec
+     → testIgnore could exclude the spec: expected [ '**/security-no-leaks.spec.ts' ] to be undefined
+      Tests  1 failed | 7 passed (8)
+```
+
+Reverted, clean (`git diff --stat playwright.config.ts` empty), and green again:
+
+```
+ ✓ tests/integration/ci-gates.test.ts (8 tests) 2ms
+      Tests  8 passed (8)
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  127 passed (127)
+      Tests  1163 passed (1163)
+```
+
+**Commit:** fa9416e
+
+### The bigger finding: CI has been red on main for over a month
+
+Nothing in the plan mentions this, and it changes the Phase 0 exit criterion.
+Every run in `gh run list` is a failure, including the pushes to `main` for PRs
+63, 64 and 65. `check` passes; **`e2e` fails**. Run 27908014082 (main, 2026-06-21):
+`10 failed, 9 skipped, 12 passed`. The distinct failures:
+
+```
+a11y              :63   /pricing — no critical or serious axe violations
+a11y              :68   /checkout — no critical or serious axe violations
+a11y              :73   /checkout/confirmation — no critical or serious axe violations
+a11y              :78   /cookies — no critical or serious axe violations
+security-no-leaks :33   GET /api/venues/:slug redacts postcode for anon callers
+security-no-leaks :41   GET /api/artwork-requests blocks anon, or redacts internal IDs
+security-no-leaks :57   Storage bucket message-attachments listing is not anon-accessible
+tap-targets       :69   /pricing — all interactive elements >= 44 x 44 px
+tap-targets       :74   /checkout — all interactive elements >= 44 x 44 px
+tap-targets       :81   /cookies — all interactive elements >= 44 x 44 px
+```
+
+Two separate causes:
+
+1. **7 real product failures (a11y + tap targets)** that Phase 5 was supposed to
+   close. PR 61 (`claude/remediation-p5-mobile-a11y`) merged, yet `/pricing`,
+   `/checkout`, `/checkout/confirmation` and `/cookies` still fail. The a11y ones
+   are colour contrast on the brand accent `#c17c5a`: white on accent is 3.33:1 and
+   accent on the warm backgrounds is 3.01 to 3.04:1, against a 4.5:1 requirement.
+   Fixing that properly means changing the accent colour or its usage, which is a
+   brand decision, not a mechanical fix.
+2. **3 environmental security failures.** CI runs with
+   `NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co`, so:
+
+   ```
+   :33  Expected: 200   Received: 404      (the-copper-kettle-demo does not exist without a DB)
+   :41  Expected: 200   Received: 500      (route cannot reach Supabase)
+   :57  Error: apiRequestContext.post: getaddrinfo ENOTFOUND placeholder.supabase.co
+   ```
+
+   These are **not leaks**. The suite's own header says to run it with
+   `E2E_BASE_URL=https://www.wallplace.co.uk`. In CI it asserts against an app with
+   no data, so it can neither pass honestly nor detect a real leak.
+
+**Consequences for the plan:**
+
+- **0d is blocked, not merely owner-owned.** Branch protection requiring `e2e`
+  would block every merge while these 10 failures stand.
+- **Phase 0's exit criterion ("a failing lint rule actually fails CI") is met**,
+  but the runbook's implicit assumption that CI is otherwise green is false.
+- The security gate is currently theatre in CI for the opposite reason to the one
+  Task 0 anticipated: it runs, but against an empty app.
+
+**Open owner decision (asked 2026-07-29, iteration 3):** how the security suite
+should get a meaningful CI verdict. The options, none of which I should pick
+unilaterally because each changes what CI touches externally: give CI the real
+Supabase URL and anon key as secrets (points per-PR CI at prod data); run the
+suite against the deployed site post-deploy or on a schedule instead of per PR;
+make it skip loudly when Supabase is a placeholder (honest, but no CI coverage);
+or seed a dedicated test Supabase project.
