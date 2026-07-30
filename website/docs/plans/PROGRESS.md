@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase D items 10-11 done**: E20+E23b (8f47841), E21 (92e3dfe). Next: Phase D item 12 (E22), then `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). Next: `01` Phase E items 13-16, and `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -3378,3 +3378,96 @@ found each in seconds; guessing would have risked "fixing" working code or
 weakening a real assertion.
 
 **Commit:** 92e3dfe
+
+---
+
+## E22 — the fulfil route minted a fresh payable artifact per replay (owner: `01` Phase D item 12)
+
+**The hole.** No idempotency gate of any kind. `req.status` was selected and never
+tested; `resp.status` stayed `"accepted"` after a successful fulfil so the only gate
+passed again; and `linked_placement_id` / `linked_offer_id` were read as **routing
+hints**, never as "already done" markers.
+
+Every replay minted a new artifact. `action:"order"` inserts another
+`purchase_offers` row at status `"accepted"`, i.e. **independently payable**, so N
+replays give the venue N identical payable offers. `action:"placement"` gives the
+artist N placement requests for one agreement, and the earlier placement ids are
+orphaned when `linked_placement_id` is overwritten. The ids embed `Date.now()`, so
+replays never collide and no constraint caught them. **A double-click on a flaky
+connection is enough** — this needs no attacker.
+
+The sibling route `responses/[responseId]` already has exactly this gate
+(`if (resp.status !== "sent") return 409`). The fulfil route was the same shape with
+the gate missing.
+
+**Migration first, code second**, per `01` §E22.6, and the reason is real. Verified
+in prod before writing:
+
+```
+artwork_request_responses_status_check:
+  'sent','accepted','declined','countered','withdrawn'   ← no 'fulfilled'
+```
+
+The code's compare-and-set writes `status: "fulfilled"`. Against the old CHECK that
+UPDATE violates the constraint, and because the route does not await it into the
+response it would have **failed silently**, leaving the entire idempotency scheme
+inert while looking fixed.
+
+**What shipped.** `098` adds `source_response_id` to `purchase_offers` and
+`placements` with **partial** unique indexes, so two *concurrent* requests that both
+pass the read-side gate still cannot both insert. It also widens the status CHECK.
+The route refuses a replay `409 already_fulfilled` on any of three markers, stamps
+`source_response_id` on both artifact types, and consumes the response with a
+compare-and-set on `"accepted"`. A failed consume is logged loudly rather than
+swallowed, because that is exactly the replay window this finding is about.
+
+**A gap in D1.** Its table allocates `074-079` to `02`, `080-089` to `04`,
+`090-094` to `07`, `095-097` to `09`, and reserves `098+`. It gives **`01` no
+range**, presumably because `01` was assumed to be code-only, but E22 needs schema. I
+took the first reserved number (`098`) rather than borrowing another doc's range,
+which would break D1's disjointness guarantee. Worth adding an `01` row to D1 if any
+further `01` migration appears.
+
+**Where the doc's expectation was wrong.** §E22.6 says to run the duplicate query and
+"expect it to be non-empty in production given the bug has been live". It is empty:
+
+```
+artwork_requests 6 | responses 3 | accepted 1 | fulfilled 0
+```
+
+The bug is live but has never been triggered, so the unique indexes were created
+directly with no backfill decision to make.
+
+**Verified after applying:**
+
+```
+purchase_offers.source_response_id   present
+placements.source_response_id        present
+unique indexes                       2 of 2
+status CHECK accepts 'fulfilled'     yes
+```
+
+**Tests.** New `route.test.ts`, 12 cases. Probed both halves:
+
+```
+remove the idempotency gate  → 4 fail
+remove the consume step      → 1 fails ("compare-and-set on accepted")
+```
+
+Full gate:
+
+```
+ Test Files  151 passed (151)
+      Tests  1480 passed (1480)
+✖ 249 problems (0 errors, 249 warnings)
+PASS: 13 public route(s) and 15 demo-exempt route(s) all resolve, with reasons.
+```
+
+**One test-authoring note worth keeping.** My first `RESPONSE_ID` constant was not a
+valid RFC 4122 v4 UUID (the variant nibble was `4`, must be `8/9/a/b`), and zod 4's
+`.uuid()` enforces both version and variant, so all 12 cases returned 400
+"Validation failed". It looked like the route was broken. Prod ids come from
+`gen_random_uuid()` and always satisfy it, so there is no production issue here, only
+a lazily-typed test constant. Worth knowing that zod 4 is stricter than zod 3 was.
+
+**Commit:** fae5945
