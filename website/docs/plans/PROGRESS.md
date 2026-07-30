@@ -4443,3 +4443,105 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 real controls remain `pickWritable()` at the route and `assertNoServerOwned()` at
 the boundary; this rule only makes the careless shape loud. It also follows one
 assignment hop, not general dataflow.
+
+---
+
+## 06 C4 — CI check that CLIENT_ENV covers every flag, statically
+
+`06-validation-massassign.md` Phase C item C4. Commits `edab91a` (C4) and
+`b6254ed` (D28.1.3, below).
+
+**Why it is needed.** `CLIENT_ENV` is hand-written, one line per flag. The failure
+mode is adding a sixth flag and forgetting the sixth line: that flag then resolves
+to its `prodDefault` on the client while the server reads the env var, which is
+E16 reintroduced one flag at a time.
+
+**Change.** `src/lib/feature-flags.ts` exports `FLAGS` and `CLIENT_ENV`. Four
+checks in `src/lib/feature-flags.test.ts`:
+
+1. every `FLAGS` entry has a `CLIENT_ENV` key (the doc's §4.4 assertion);
+2. no `CLIENT_ENV` key is orphaned, so a stale entry left behind by a deleted flag
+   cannot read as coverage;
+3. `envKey` is exactly `NEXT_PUBLIC_FLAG_<name>`, pinning the assumption the whole
+   scheme rests on: Next only inlines the `NEXT_PUBLIC_` prefix;
+4. each entry is written as a **static, self-matching** member read.
+
+Also replaced C1's hardcoded five-key list with a loop over `FLAGS`, so that
+coverage test grows with the map rather than being left behind. Old list deleted,
+not left beside the new one.
+
+**Why check 4 reads the source.** A runtime test cannot see *how* a value was
+read. In Node, `process.env[k]`, `process.env["K"]` and `process.env.K` all work
+identically; only the last is reliably inlined by the bundler. So the runtime
+checks are blind to the exact defect C1 fixed, and the source check is what closes
+it.
+
+**Three probes.**
+
+```
+PROBE A — sixth flag added to FLAGS, forgotten in CLIENT_ENV
+  FAIL  C4 ... > every FLAGS entry has a CLIENT_ENV key
+        NEW_THING_V1 is missing from CLIENT_ENV
+  FAIL  E16 ... > holds for every flag ...
+        NEXT_PUBLIC_FLAG_NEW_THING_V1 is not statically read
+  FAIL  C4 ... > finds one static read per flag
+        expected ... to have a length of 6 but got 5
+
+PROBE B — copy-paste slip, BLOGS_V1's entry reads GATING_V1's var
+  FAIL  C4 ... > reads each key's own env var, not a copy-pasted neighbour's
+        CLIENT_ENV.NEXT_PUBLIC_FLAG_BLOGS_V1 reads process.env.NEXT_PUBLIC_FLAG_GATING_V1
+  FAIL  E16 ... > holds for every flag ...
+      Tests  2 failed | 22 passed (24)
+
+PROBE C — computed access, process.env["NEXT_PUBLIC_FLAG_BLOGS_V1"]
+  FAIL  C4 ... > finds one static read per flag
+  FAIL  C4 ... > uses no computed access, which is the defect C1 fixed
+      Tests  2 failed | 22 passed (24)
+```
+
+Probe C is the one that justifies the source check: the runtime tests **pass**
+under it, because Node resolves bracket-with-literal access fine. Only reading the
+file distinguishes the two.
+
+---
+
+## D28 acknowledged (supervisor, committed separately as `8169b73`)
+
+**D28.1 authorises C2**, which had already shipped as `7e6649a`. Requirements 1, 2
+and 4 were met by that commit (default flipped, env var documented as the kill
+switch in the `WALL_VISUALIZER_V1` style, verified with the sound bundle check).
+
+**Requirement 3 was outstanding**: a test asserting the *client* resolver returns
+true under prod defaults. Added in `b6254ed`. The case it models is the one that
+made C2 necessary, and it is narrower than the C2 default test: a client built
+with **no** flag env var at all, so neither `process.env` nor the inlined snapshot
+has anything and the resolver falls through to `prodDefault`. Plus a generalised
+loop asserting every flag on a bare client resolves to its own `prodDefault`, so a
+future flag cannot reintroduce the split quietly.
+
+Probe, reverting C2:
+
+```
+ FAIL  feature flags, defaults > GATING_V1 prod default is on
+ FAIL  E16 ... > the client resolves GATING_V1 on under prod defaults, matching the server
+      Tests  2 failed | 24 passed (26)
+```
+
+**D28.2** makes "prove a verification command fails before the fix" a standing
+rule, and records the doc's `grep -rl` as the fourth unsound-verification instance
+this session. Already applied in C1 and recorded above; the C4 probes above are the
+same discipline applied to the new checks.
+
+**Full gate after both commits.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  157 passed (157)
+Tests  1607 passed (1607)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Phase C status.** C1, C2, C3, C4 done. C5 is "re-run the full suite and confirm
+the pre-existing gating tests still pass", which the run above does: both files it
+names drive gating through `isFlagOnMock`, so they were never exposed to the
+default change, and all 157 files pass.
