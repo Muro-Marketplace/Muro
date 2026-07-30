@@ -5952,3 +5952,45 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 the paid-loan handler), D14 (referral credit read-modify-write; NOTE its snippet
 reads the phantom `free_until` column, so it needs adapting to the live schema),
 D15 (scope the subscription handler by metadata.kind).
+
+---
+
+## `04` T7 / D13 — a stale SaaS subscription.deleted skipped the paid-loan cancel (owner: `04` §B7)
+
+Commit `9922c98`.
+
+**The finding.** The SaaS `customer.subscription.deleted` block returned early on
+`isStale` (the upgrade-race guard). That `return` exited the whole handler, so the
+paid-loan `customer.subscription.deleted` block below it never ran. An artist
+upgrading their plan (a stale SaaS deletion) could leave a paid-loan billing row
+stuck `active` after Stripe cancelled the subscription.
+
+**What changed.** The `isStale` check now guards only the SaaS-specific work (the
+profile status write + the cancellation email) with `if (!isStale) { ... }` instead
+of an early `return`, so execution falls through to the paid-loan handler. The
+paid-loan handler already no-ops for a subscription it does not own.
+
+**Deliberately minimal.** §D13 also asks to consolidate the two
+`customer.subscription.deleted`, two `invoice.payment_failed` and two `invoice.paid`
+blocks into one branch each ("duplicated event.type checks... is how D13 happened").
+That is a maintainability refactor across ~6 blocks, not the bug, and it would make
+this change hard to review. Left for a dedicated pass; recorded here so it is not
+lost. **New owner/cleanup item: consolidate the duplicated `event.type` blocks in
+the webhook.**
+
+**Tests.** 2 cases: the paid-loan handler runs even when the SaaS deletion is stale,
+and on a non-stale deletion. A hoisted `handleSubDeletedMock` makes the paid-loan
+call assertable. Probe (restore the early return) fails the stale case, 1 of 84.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  163 passed (163)
+Tests  1780 passed (1780)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Still open in T7:** D14 (referral credit read-modify-write; its snippet reads the
+phantom `free_until` column and needs adapting to the live schema), D15 (scope the
+subscription handler by metadata.kind).
