@@ -25,7 +25,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
 | 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (08495ae): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot |
-| 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **NEXT**. D62.5 owner escalation: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
+| 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **DONE** (this commit): dependency recorded in guard header + runner; `MISSING_TOKEN_MESSAGE` points at the remedy (tested); service-role path investigated — none clean, token stands. **D62.5 owner escalation OPEN**: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (portfolio add/edit awaits the write, c9a4925). Remaining E4x caller migrations one each: E41-b/-d/-e/-f, E42-a/-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -7958,12 +7958,39 @@ entry omitted that dependency. **OWNER ESCALATION (D62.5):** adding
 `SUPABASE_ACCESS_TOKEN` locally now matters — it is what keeps the phantom guard
 maintainable across migrations (it joins the two CI secrets, but as a local export).
 
-**Next: ROW 20b (D62.4 follow-up), before more E4x.** (1) Record the token
-dependency in the guard header and here; (2) make `scripts/schema-snapshot.ts`'s
-exit-2 message point at the remedy ("SUPABASE_ACCESS_TOKEN not set; see
-EXECUTION-DECISIONS D12. Do NOT add the new column to GRANDFATHERED instead."), with
-a test asserting the message; (3) investigate whether a service-role / direct-Postgres
-path avoids the token — do NOT invent a SECURITY DEFINER catalogue helper (it would
-undo the function lockdown); if no clean path, the token stands, record that. THEN
-resume E41-b (deletes), E41-d/-e (dropped fields), E41-f (delete the localStorage
-editor), E42-a/-b/-c, E43-a..k, `no-authfetch-mutation` eslint rule LAST.
+## ROW 20b (supervisor D62.4) — record the regenerator's token dependency + remedy message
+
+Commit `<pending>`. Tooling + docs.
+
+**(1) Dependency recorded.** The phantom-guard header
+(`tests/integration/phantom-columns.test.ts`) and `scripts/schema-snapshot.ts`'s doc
+comment now both state that the regenerator hits the Supabase Management API, needs
+`SUPABASE_ACCESS_TOKEN`, and is INERT in this environment (D12 verified the token is
+absent) until an owner adds it (D62.5).
+
+**(2) Remedy-pointing error.** Added `MISSING_TOKEN_MESSAGE` to
+`schema-snapshot.lib.ts` and wired it into the runner's exit-2 path:
+"SUPABASE_ACCESS_TOKEN not set; the schema-snapshot regenerator needs it (see
+EXECUTION-DECISIONS D12/D62). Do NOT add the new column to GRANDFATHERED instead —
+regenerate the snapshot once the token is set." A new lib test asserts it names the
+variable, D12, and GRANDFATHERED. Fail-before verified by reverting the message to
+the old bare string: the test failed on the D12 assertion.
+
+**(3) Service-role path investigated — none clean, the token stands.** `information_schema`
+(and `pg_catalog`) are not in PostgREST's exposed schema (only `public`), so the
+`SUPABASE_SERVICE_ROLE_KEY` that IS present here cannot read the catalogue through
+the REST API / `@supabase/supabase-js` (`from()` only addresses exposed tables). A
+direct Postgres connection could, but needs a connection string this environment does
+not have (D12: only `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`), and there is no
+`pg`/`postgres` dependency. Exposing the catalogue via a `SECURITY DEFINER` helper
+was explicitly rejected (D62.4) — it would undo the function lockdown from doc `02`.
+So the Management-API token is the only clean path; **the token stands** (owner action
+D62.5). `npm run check` green: 173 files, 1883 tests, audit:allowlist PASS, exit 0.
+
+**Next: doc `05` E41-b** — deletes are fire-and-forget in
+`artist-portal/portfolio/page.tsx`: `handleDeleteWork` (~:471) fires
+`authFetch(... DELETE)` with no `await`/`res.ok` then removes the card regardless, and
+the bulk delete ends with an unconditional "Deleted N works" toast. Route both through
+`mutate`+`useSaveAction`, removing the row(s) only in `onSuccess` (optimistic + rollback).
+Re-read the page first. Then E41-d/-e (dropped fields), E41-f (delete the localStorage
+editor), E42-a/-b/-c, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST.

@@ -12,24 +12,27 @@
  *
  *   SUPABASE_ACCESS_TOKEN=... npm run schema:snapshot
  *
- * Requires SUPABASE_ACCESS_TOKEN, a personal access token from
+ * DEPENDENCY: this needs SUPABASE_ACCESS_TOKEN (a personal access token from
  * https://supabase.com/dashboard/account/tokens — the same token
- * scripts/audit/snapshot-advisors.ts uses. Exits 2 when it is not set. A no-change
- * run rewrites the file byte-for-byte, so `git status` stays clean unless the
- * schema actually moved.
+ * scripts/audit/snapshot-advisors.ts uses, hitting the Supabase Management API).
+ * D12 verified that token is absent from this environment (only SUPABASE_URL and
+ * SUPABASE_SERVICE_ROLE_KEY are exported), so the regenerator is INERT here until a
+ * human adds it (supervisor D62). It exits 2 with a remedy-pointing message rather
+ * than writing an empty snapshot. A no-change run rewrites the file byte-for-byte, so
+ * `git status` stays clean unless the schema actually moved.
  */
 
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SNAPSHOT_SQL, serialize, toSnapshot } from "./schema-snapshot.lib";
+import { MISSING_TOKEN_MESSAGE, SNAPSHOT_SQL, serialize, toSnapshot } from "./schema-snapshot.lib";
 
 const PROJECT_REF = "uwkuhygwvasdzwsusiym";
 
 async function main() {
   const token = process.env.SUPABASE_ACCESS_TOKEN;
   if (!token) {
-    console.error("SUPABASE_ACCESS_TOKEN not set");
+    console.error(MISSING_TOKEN_MESSAGE);
     process.exit(2);
   }
 

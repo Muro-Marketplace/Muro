@@ -25,6 +25,11 @@
 // schema via the query below. Do NOT instead add the new column to GRANDFATHERED —
 // that hollows out the guard (supervisor D61).
 //
+// DEPENDENCY: the regenerator hits the Supabase Management API and needs
+// SUPABASE_ACCESS_TOKEN. D12 verified that token is absent from this environment, so
+// `npm run schema:snapshot` is INERT here (exits 2) until a human adds it — an owner
+// action, see EXECUTION-DECISIONS D62.5.
+//
 //   select jsonb_object_agg(table_name, cols) from (
 //     select table_name, jsonb_agg(column_name order by ordinal_position) cols
 //     from information_schema.columns where table_schema='public' group by table_name) t;

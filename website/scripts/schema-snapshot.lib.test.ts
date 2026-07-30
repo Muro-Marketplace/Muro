@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SNAPSHOT_SQL, serialize, toSnapshot } from "./schema-snapshot.lib";
+import { MISSING_TOKEN_MESSAGE, SNAPSHOT_SQL, serialize, toSnapshot } from "./schema-snapshot.lib";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -62,5 +62,15 @@ describe("the regenerator is wired and discoverable, not a buried SQL comment (r
     expect(SNAPSHOT_SQL).toContain("information_schema.columns");
     expect(SNAPSHOT_SQL).toContain("table_schema='public'");
     expect(SNAPSHOT_SQL).toContain("order by ordinal_position");
+  });
+});
+
+describe("the missing-token error points at the remedy, not just the variable (row 20b, D62.4)", () => {
+  it("names the variable, the decision to consult, and the shortcut NOT to take", () => {
+    // This message lands exactly when a migration has just broken the guard, so it
+    // must steer away from the GRANDFATHERED shortcut, not merely report a missing var.
+    expect(MISSING_TOKEN_MESSAGE).toContain("SUPABASE_ACCESS_TOKEN");
+    expect(MISSING_TOKEN_MESSAGE).toContain("D12");
+    expect(MISSING_TOKEN_MESSAGE).toContain("GRANDFATHERED");
   });
 });

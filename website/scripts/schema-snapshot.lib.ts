@@ -12,6 +12,19 @@ export const SNAPSHOT_SQL =
   "select table_name, jsonb_agg(column_name order by ordinal_position) cols " +
   "from information_schema.columns where table_schema='public' group by table_name) t;";
 
+/**
+ * Printed and returned exit 2 when the runner has no credential. D12 verified
+ * SUPABASE_ACCESS_TOKEN is absent from this environment (only SUPABASE_URL and
+ * SUPABASE_SERVICE_ROLE_KEY are exported), so this fires at exactly the moment a
+ * migration has just broken the guard. It names the remedy, not just the variable,
+ * because the tempting wrong shortcut here is to add the new real column to the
+ * guard's GRANDFATHERED list (supervisor D61.3 / D62.4).
+ */
+export const MISSING_TOKEN_MESSAGE =
+  "SUPABASE_ACCESS_TOKEN not set; the schema-snapshot regenerator needs it (see " +
+  "EXECUTION-DECISIONS D12/D62). Do NOT add the new column to GRANDFATHERED instead — " +
+  "regenerate the snapshot once the token is set.";
+
 export type Snapshot = Record<string, string[]>;
 
 /**
