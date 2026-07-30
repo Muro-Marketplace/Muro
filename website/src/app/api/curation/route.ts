@@ -3,29 +3,18 @@ import { z } from "zod";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyAdminCurationRequest, notifyCurationCustomerEnquiry } from "@/lib/email";
-
-// Keep pricing server-side so a client can't submit a lower tier amount.
-// Bespoke is a quote-first enquiry, no upfront charge, the admin follows up
-// with a tailored quote and manual Stripe link.
-// Managed tiers are recurring subscriptions charged through Stripe.
-type OneOffTier = { kind: "one_off"; label: string; priceGbp: number; payFirst: boolean };
-type ManagedTier = { kind: "managed"; label: string; priceGbp: number; interval: "month" | "quarter"; priceEnvVar: string };
-
-const TIERS: Record<string, OneOffTier | ManagedTier> = {
-  single_wall: { kind: "one_off", label: "Single wall", priceGbp: 49, payFirst: true },
-  full_space: { kind: "one_off", label: "Full space", priceGbp: 149, payFirst: true },
-  bespoke: { kind: "one_off", label: "Bespoke project", priceGbp: 299, payFirst: false },
-  managed_monthly: { kind: "managed", label: "Managed, monthly rotation", priceGbp: 79.99, interval: "month", priceEnvVar: "STRIPE_PRICE_CURATION_MONTHLY" },
-  managed_quarterly: { kind: "managed", label: "Managed, quarterly refresh", priceGbp: 199.99, interval: "quarter", priceEnvVar: "STRIPE_PRICE_CURATION_QUARTERLY" },
-};
-
-type TierKey = keyof typeof TIERS;
+import {
+  CURATION_TIERS as TIERS,
+  CURATION_TIER_KEYS,
+  type CurationTierKey as TierKey,
+} from "@/lib/curation-tiers";
 
 const safe = (n: number) => z.string().trim().max(n);
 const optional = (n: number) => z.string().trim().max(n).optional().default("");
 
 const curationSchema = z.object({
-  tier: z.enum(["single_wall", "full_space", "bespoke", "managed_monthly", "managed_quarterly"]),
+  // Derived from CURATION_TIERS so the validator cannot drift from the table.
+  tier: z.enum(CURATION_TIER_KEYS),
   venueName: safe(200).min(1),
   contactName: safe(120).min(1),
   contactEmail: z.string().trim().email().max(320),
