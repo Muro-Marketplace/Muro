@@ -21,8 +21,9 @@ Order of work: the "Corrected dependency order" at the end of
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
 | 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082). **T6 COMPLETE** (E7a-E7d, E8, E11, E11b). **B0 COMPLETE**: D2 (E19/E46f, 740b79a), D1 (13aed91, migration 084, event-dedup half; payment_status gate deferred to owner), D3 (c066a38). Next: T1 (D4-D6), then T4, T9, T5 |
 | 7a | `free_until` overcharge: every sale billed 15% | D17.1 | **done** (6e0705e). Four sites, not the two D17 named. No fee changes today, no artist has a future `trial_end` |
-| 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **narrow form done** (6e0705e): `phantom-columns.test.ts`, table-aware, four probes. Full form (generated `schema-columns.json` covering ALL columns) still todo |
-| 7c | `placements/route.ts` integrates the phantom `requester_user_id` in ~20 places | N3 follow-up, found by 7b's guard | todo. Recorded in the guard's `KNOWN_UNFIXED` ratchet so it cannot be forgotten |
+| 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **DONE**. Narrow form (6e0705e), then **full form** (7f556eb): `schema-columns.json` snapshots all 53 tables / 750 columns; the scan surfaced 12 phantom selects, parked in a shrinking `GRANDFATHERED` ratchet and queued as **row 19** |
+| 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
+| 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (this commit). Ratchet 12 → 5. Remaining: **#7** offers title→name (x2), **#8** placements/[id] image→profile_image, **#9** sitemap updated_at→created_at. `free_until` (webhooks/stripe) stays parked per D14/D17.2 |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -7711,7 +7712,38 @@ venues would have been wrongly 403'd). Ratchet 7 -> 6. `npm run check` green: 16
 files, 1858 tests. (Pre-existing lint warning on the POST handler's authz is
 unrelated and unchanged.)
 
-**Next: row 19 #6** — `paid-loan-billing.ts:200` `ensureVenueCustomer` selects
-`venue_profiles.contact_email`; the real column is `email`. MONEY PATH: the select
-is rejected, so it always falls back to the auth-user email for the Stripe customer.
-Fix contact_email -> email (verify usages), remove grandfather (ratchet 6 -> 5).
+## row 19 #6 — paid-loan-billing selects venue_profiles.email, not phantom contact_email
+
+Commit `12c76f6`. Code-only. MONEY PATH.
+
+**The defect.** `ensureVenueCustomer` selected `"user_id, stripe_customer_id,
+contact_email, name"` from `venue_profiles`, but the column is `email`, not
+`contact_email` (confirmed against schema-columns.json). PostgREST rejected the
+whole select, so the venue row came back null and the function fell through to the
+auth-user email (`getUserById`) for the Stripe customer it creates. Every paid-loan
+venue that had never had a Stripe customer minted got one keyed to the auth email
+instead of the venue's billing email, and any receipt/customer-portal mail Stripe
+sends went to the wrong address.
+
+**The fix.** `contact_email -> email` across all four references (the SELECT, the
+`VenueRow` inline type, the early-return `{ customerId, email: venue.email }`, and
+`let fallbackEmail = venue.email`). The auth-email path stays as a genuine fallback
+for venues that truly have no email. Grandfather entry removed, ratchet 6 -> 5.
+
+**Test.** New regression in `paid-loan-billing.test.ts`: a venue with
+`email: "venue-real@e.com"` and `stripe_customer_id: null` drives
+`startPaidLoanBilling`; asserts `stripe.customers.create` is called with that email,
+not the auth fallback `venue@example.com`. Simulated event through the real handler
+(no live Stripe key in this env). Fail-before verified both directions by reverting
+the source to the committed phantom version: the regression test failed with
+`+ "email": "venue@example.com"` (the bug) and the phantom guard failed with
+`paid-loan-billing.ts:200 selects "venue_profiles.contact_email" (not in the live
+schema)`. Re-applied -> both pass. `npm run check` green: 168 files, 1859 tests,
+audit:allowlist PASS, exit 0.
+
+**Next: row 19 #7** — `offers/route.ts:174,448` select `artist_collections.title`
+(x2); the real column is `name`. The collection title reads null on the offers path.
+Fix title -> name on both selects, remove the two grandfather entries (they are
+matched on distinct column strings `"id, title, work_ids"` and `"title"`), ratchet
+5 -> 3. Re-read the route to see whether the consumer needs the value aliased back
+to `title`.

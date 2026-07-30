@@ -197,12 +197,12 @@ async function ensureVenueCustomer(
 ): Promise<{ customerId: string; email: string | null } | null> {
   const { data: venue } = await db
     .from("venue_profiles")
-    .select("user_id, stripe_customer_id, contact_email, name")
+    .select("user_id, stripe_customer_id, email, name")
     .eq("user_id", venueUserId)
     .maybeSingle<{
       user_id: string;
       stripe_customer_id: string | null;
-      contact_email: string | null;
+      email: string | null;
       name: string | null;
     }>();
 
@@ -212,14 +212,14 @@ async function ensureVenueCustomer(
   }
 
   if (venue.stripe_customer_id) {
-    return { customerId: venue.stripe_customer_id, email: venue.contact_email };
+    return { customerId: venue.stripe_customer_id, email: venue.email };
   }
 
   // Look up the auth user's email as a fallback. Resend / Stripe receipts
   // both prefer the venue contact email when we have one. Guarded
   // against empty/invalid venueUserId so the admin client doesn't
   // throw "Expected parameter to be UUID".
-  let fallbackEmail = venue.contact_email;
+  let fallbackEmail = venue.email;
   if (!fallbackEmail && venueUserId) {
     try {
       const { data: authUser } = await db.auth.admin.getUserById(venueUserId);

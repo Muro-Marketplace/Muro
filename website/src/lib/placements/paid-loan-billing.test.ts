@@ -256,7 +256,7 @@ describe("startPaidLoanBilling()", () => {
       venue: {
         user_id: "v1",
         stripe_customer_id: "cus_existing",
-        contact_email: "v@e.com",
+        email: "v@e.com",
         name: "Venue",
       },
     });
@@ -278,6 +278,27 @@ describe("startPaidLoanBilling()", () => {
     expect(subscriptionsCreateMock).not.toHaveBeenCalled();
   });
 
+  it("creates the Stripe customer with the venue's email column, not the auth fallback (row 19 #6)", async () => {
+    isFlagOnMock.mockReturnValue(true);
+    paymentMethodsListMock.mockResolvedValue({ data: [] });
+    setupIntentsCreateMock.mockResolvedValue({ client_secret: "seti_secret_123" });
+    customersCreateMock.mockResolvedValue({ id: "cus_new" });
+    const { db } = buildDb({
+      // No stripe_customer_id yet, so ensureVenueCustomer mints one; venue has an
+      // email, which the phantom `contact_email` select used to miss.
+      venue: { user_id: "v1", stripe_customer_id: null, email: "venue-real@e.com", name: "Venue" },
+    });
+    await startPaidLoanBilling(
+      { placementId: "p1", venueUserId: "v1", artistUserId: "a1", arrangementType: "paid_loan", monthlyFeePence: 5000 },
+      db as Parameters<typeof startPaidLoanBilling>[1],
+    );
+    // Fail-before: the old code read venue.contact_email (absent -> undefined) and
+    // fell back to the auth email "venue@example.com" for the Stripe customer.
+    expect(customersCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "venue-real@e.com" }),
+    );
+  });
+
   it("returns skipped with a warning when STRIPE_PAID_LOAN_PRODUCT_ID is unset", async () => {
     isFlagOnMock.mockReturnValue(true);
     paymentMethodsListMock.mockResolvedValue({ data: [{ id: "pm_card" }] });
@@ -287,7 +308,7 @@ describe("startPaidLoanBilling()", () => {
       venue: {
         user_id: "v1",
         stripe_customer_id: "cus_existing",
-        contact_email: "v@e.com",
+        email: "v@e.com",
         name: "Venue",
       },
     });
@@ -321,7 +342,7 @@ describe("startPaidLoanBilling()", () => {
       venue: {
         user_id: "v1",
         stripe_customer_id: "cus_existing",
-        contact_email: "v@e.com",
+        email: "v@e.com",
         name: "Venue",
       },
       placement: { stripe_subscription_id: null },
