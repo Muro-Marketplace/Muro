@@ -66,6 +66,46 @@ export async function POST(request: Request) {
 
   const db = getSupabaseAdmin();
 
+  // D1 (04 §B0): global replay guard. Claim this event id before any branch runs,
+  // so a Stripe redelivery is a no-op rather than a second order. Some branches
+  // had their own idempotency (payment-intent unique, offer compare-and-set); this
+  // closes the gap once, for every branch.
+  const claim = await db
+    .from("stripe_webhook_events")
+    .insert({ event_id: event.id, event_type: event.type });
+  if (claim.error) {
+    if ((claim.error as { code?: string }).code === "23505") {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+    // A real DB failure must 500 so Stripe retries, rather than us silently
+    // processing an event we could not record.
+    console.error("[webhook] dedup insert failed", claim.error);
+    return NextResponse.json({ error: "Dedup unavailable" }, { status: 500 });
+  }
+
+  const res = await handleWebhookEvent(event, db);
+
+  // Release the claim if processing failed, so Stripe's retry can reprocess. The
+  // plan's snippet claimed the event and never released it, which turned any
+  // transient 500 (a DB write that should be retried) into a permanent drop: the
+  // retry would hit 23505 and be waved through as a duplicate with the work never
+  // done.
+  if (res.status >= 500) {
+    const { error: relErr } = await db
+      .from("stripe_webhook_events")
+      .delete()
+      .eq("event_id", event.id);
+    if (relErr) {
+      console.error("[webhook] could not release the event claim", { eventId: event.id, relErr });
+    }
+  }
+  return res;
+}
+
+async function handleWebhookEvent(
+  event: Stripe.Event,
+  db: ReturnType<typeof getSupabaseAdmin>,
+): Promise<NextResponse> {
   // ─── Curation checkout (one-off OR managed subscription) ───
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;

@@ -120,6 +120,16 @@ vi.mock("@/lib/placements/paid-loan-billing", async (importOriginal) => ({
   handleSubscriptionDeleted: vi.fn(async () => false),
 }));
 
+/** D1: every branch now runs behind a global replay guard that claims event.id in
+ *  stripe_webhook_events. The claim insert returns { error: null } here so tests
+ *  exercise the branch; the release delete is only hit on a 5xx. */
+function webhookEventsStub() {
+  return {
+    insert: async () => ({ error: null }),
+    delete: () => ({ eq: async () => ({ error: null }) }),
+  };
+}
+
 import { POST } from "./route";
 
 type Placement = { id: string; artist_slug: string; revenue_share_percent: number };
@@ -152,6 +162,7 @@ function setupDbMock(state: DbState) {
   const profiles: ArtistProfile[] =
     state.artistProfiles ?? (state.artistProfile ? [state.artistProfile] : []);
   fromMock.mockImplementation((table: string) => {
+    if (table === "stripe_webhook_events") return webhookEventsStub();
     if (table === "artist_profiles") {
       return {
         select: () => ({
@@ -464,6 +475,7 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
 
   function setupOfferDb(state: OfferDbState) {
     fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
       if (table === "orders") {
         return {
           insert: (row: Record<string, unknown>) => {
@@ -1147,6 +1159,7 @@ describe("Stripe webhook — paid-loan subscription checkout (E7a)", () => {
 
   function setupPaidLoanDb(state: PaidLoanState) {
     fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
       if (table === "placements") {
         return {
           select: () => ({
@@ -1390,6 +1403,7 @@ describe("Stripe webhook — setup_intent.succeeded (E7d)", () => {
     notifyAdminBillingStalledMock.mockReset();
     notifyAdminBillingStalledMock.mockResolvedValue(undefined);
     fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
       if (table === "placements") {
         return {
           select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: sstate.placement }) }) }),
@@ -1518,6 +1532,7 @@ describe("Stripe webhook — subscription period end (E11b)", () => {
   beforeEach(() => {
     profileUpdates = [];
     fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
       if (table === "artist_profiles") {
         return {
           update: (row: Record<string, unknown>) => {
@@ -1565,5 +1580,116 @@ describe("Stripe webhook — subscription period end (E11b)", () => {
       await POST(buildRequest());
       expect(String(profileUpdates[0].subscription_period_end)).not.toContain("1970");
     }
+  });
+});
+
+// ── D1: global webhook replay guard (04 §B0) ─────────────────────────────────
+//
+// The handler had no event-id table; idempotency was per-branch and ad hoc, so a
+// redelivery reaching a branch without its own guard could act twice. A single
+// claim on event.id at the top makes every branch replay-safe. The subtlety is
+// release-on-failure: claiming and never releasing turns a transient 500 into a
+// permanent drop, because Stripe's retry then hits 23505 and is waved through.
+describe("Stripe webhook — global replay guard (D1)", () => {
+  /** Records what the guard did to stripe_webhook_events. */
+  interface GuardState {
+    claimError: { code?: string; message?: string } | null;
+    inserted: Array<Record<string, unknown>>;
+    deleted: string[];
+    /** Forces the wrapped handler to a given status via an unknown event type. */
+  }
+  let g: GuardState;
+
+  function guardTable() {
+    return {
+      insert: async (row: Record<string, unknown>) => {
+        g.inserted.push(row);
+        return { error: g.claimError };
+      },
+      delete: () => ({
+        eq: async (_col: string, val: string) => {
+          g.deleted.push(val);
+          return { error: null };
+        },
+      }),
+    };
+  }
+
+  beforeEach(() => {
+    g = { claimError: null, inserted: [], deleted: [] };
+    // The curation branch is the simplest money branch to drive to a 500: an
+    // update error. Everything else falls through to the guard table.
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return guardTable();
+      if (table === "curation_requests") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: "cr1", tier: "single_wall", venue_name: "V", contact_name: "C", contact_email: "c@e.com", status: "pending" },
+              }),
+            }),
+          }),
+          update: () => ({ eq: async () => ({ error: { message: "boom" } }) }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+    });
+  });
+
+  function fireCuration() {
+    constructEventMock.mockReturnValue({
+      id: "evt_cur_1",
+      type: "checkout.session.completed",
+      data: { object: { id: "cs_1", mode: "payment", metadata: { kind: "curation_request", curation_request_id: "cr1" } } },
+    });
+  }
+
+  it("claims the event id before processing", async () => {
+    fireCuration();
+    // Curation update fails → 500, but the claim must have been attempted first.
+    await POST(buildRequest());
+    expect(g.inserted).toEqual([{ event_id: "evt_cur_1", event_type: "checkout.session.completed" }]);
+  });
+
+  it("treats a redelivery (23505 on the claim) as a no-op duplicate", async () => {
+    g.claimError = { code: "23505" };
+    fireCuration();
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ duplicate: true });
+    // The branch never ran, so no release either.
+    expect(g.deleted).toEqual([]);
+  });
+
+  it("500s when the claim insert fails for a real reason, so Stripe retries", async () => {
+    g.claimError = { code: "40001", message: "deadlock" };
+    fireCuration();
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(500);
+  });
+
+  it("releases the claim when the handler returns a 5xx, so the retry can reprocess", async () => {
+    // This is the case the plan's claim-only snippet gets wrong: the curation
+    // branch 500s, and without the release the retry would be dropped as a
+    // duplicate with the order never written.
+    fireCuration();
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(500);
+    expect(g.deleted).toEqual(["evt_cur_1"]);
+  });
+
+  it("keeps the claim when the handler succeeds", async () => {
+    // A normal 2xx must NOT release, or the guard would protect nothing on
+    // redelivery.
+    constructEventMock.mockReturnValue({
+      id: "evt_noop_1",
+      type: "charge.refunded", // no branch handles it → fall-through 200
+      data: { object: {} },
+    });
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200);
+    expect(g.inserted).toHaveLength(1);
+    expect(g.deleted).toEqual([]);
   });
 });
