@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { startPaidLoanBilling, cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
 import { deriveArrangementType } from "@/lib/placements/arrangement";
@@ -800,6 +801,27 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
     }
 
+    // E20. Every caller-supplied status write goes through the state machine.
+    // Without it, `existing.status` was consulted only for two same-state
+    // no-ops, so declined/cancelled/completed → active all fell through to the
+    // unconditional `updates.status = status` below. A party who had been
+    // REJECTED could force their own deal live, and because every downstream
+    // hook keys on `pending → active`, the row went active with no Stripe
+    // subscription, no inventory decrement and no accepted_at.
+    //
+    // Scoped to the `status` body field on purpose. The stage path
+    // (stage="collected" → completed) and the undo path (unsetStage="collected"
+    // → active) write updates.status directly and are server-chosen, not
+    // caller-asserted, so they legitimately bypass this gate. Verified in the
+    // source rather than assumed, because completed has no outgoing transition
+    // and gating the undo would have broken it.
+    if (status) {
+      const transition = canPlacementTransition(existing.status, status);
+      if (!transition.ok) {
+        return NextResponse.json({ error: transition.reason }, { status: 422 });
+      }
+    }
+
     // B3 (Phase 2.5, gated by GATING_V1): non-subscribed artists can't
     // respond to placement requests. Accepting an active arrangement is
     // gated; declining + counters fall through so artists can still
@@ -892,7 +914,12 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (existing.status === "pending" && (status === "active" || status === "declined")) {
+    // E20(b): no longer scoped to `existing.status === "pending"`. The pending
+    // scope meant the guard did not run for a declined or cancelled row, which
+    // is exactly where the force-activation happened. Defence in depth now that
+    // the state machine above rejects those transitions anyway, and it covers
+    // any future path that reaches active from a non-pending state.
+    if (status === "active" || status === "declined") {
       if (isSelfPlacement) {
         return NextResponse.json(
           { error: "You cannot accept a placement you created yourself" },
@@ -1350,7 +1377,15 @@ export async function PATCH(request: Request) {
     // migration; here the update will return an error which we swallow.
     try {
       const becameActive = existing.status === "pending" && status === "active";
-      const becameCollected = existing.status === "active" && stage === "collected";
+      // E23b. This keyed on the STAGE, so a direct {status:"completed"} write
+      // left it false: quantity_available was never restored, `available`
+      // stayed false where the decrement had hit zero, and placed_at_venue kept
+      // pointing at a finished placement. Any party could burn an artist's
+      // inventory with a legitimate-looking request. Keyed on the resulting
+      // status now, whichever path produced it.
+      const effectiveStatus = (updates.status as string | undefined) ?? existing.status;
+      const becameCollected =
+        existing.status === "active" && effectiveStatus === "completed";
       if (becameActive || becameCollected) {
         // Production schema stores work data denormalised on the
         // placement (work_title + extra_works JSONB), there is no

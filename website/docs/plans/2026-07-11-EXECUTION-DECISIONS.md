@@ -5,6 +5,25 @@
 
 A coherence review of the nine independently-written plans found conflicts, duplicated ownership, stale content and gaps. Every one is resolved below. Where a doc contradicts this file, **this file wins**.
 
+## ⚡ OPERATING RULES — read these FIRST, every iteration
+
+*Not task guidance. How to run the loop itself. Ignoring these has already cost hours.*
+
+1. **PACING: use `ScheduleWakeup delaySeconds: 60`. Not 1200-1800.**
+   Nothing external gates this work. Every task is local: read source, edit, write a test,
+   `npm run check`, commit. Measured on this branch: **the work takes 0-1 minutes, the idle
+   delay takes 27-30** — about 97% dead time, and 24-48 hours of pure waiting across the
+   remaining queue. A long delay is correct only when genuinely blocked on external state
+   (a CI run, a deploy, a queue) — and if you use one, say in the report what you are
+   waiting for. "Self-pacing" is not a reason. Full reasoning: **D22**.
+
+2. **Rule 1 changes pacing ONLY.** One task per iteration, the regression test verified
+   failing *before* the fix, `npm run check` green before commit, evidence pasted, no
+   bundling. The instruction is to stop idling, not to hurry.
+
+3. **Read the newest decisions first.** This document is append-only and long. The most
+   recent D-number is the most likely to change what you are about to do.
+
 ---
 
 ## D0. Owner decisions (recorded)
