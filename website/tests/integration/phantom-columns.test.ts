@@ -50,12 +50,6 @@ const GRANDFATHERED: Array<{ file: string; columns: string; phantom: string[]; w
     why: "D17.2: the referral path writes a free window and where it should write is an open owner question (trial_end is Stripe-managed). Left as the silent no-op it already is. Remove when D17.2 is answered.",
   },
   {
-    file: "app/api/cron/onboarding-nudges/route.ts",
-    columns: "user_id, name, slug, created_at, artist_statement, profile_photo, primary_medium, stripe_connect_account_id, venue_types_suited_for, themes",
-    phantom: ["artist_statement", "profile_photo"],
-    why: "artist_profiles has short_bio/extended_bio and profile_image, not artist_statement/profile_photo. The nudge query is rejected whole, so nudges are silently skipped. Fix: use the real columns.",
-  },
-  {
     file: "app/api/cron/placement-ending-soon/route.ts",
     columns: "id, artist_user_id, venue_user_id, venue, venue_slug, end_date",
     phantom: ["end_date"],
@@ -218,7 +212,7 @@ describe("no .select() names a column the live schema lacks (D17.3, full form)",
   it("holds the grandfathered list at its recorded size, so new debt fails the build", () => {
     // A ratchet, not a cap on effort: shrink it by fixing a select, and lower the
     // number in the same commit. It must never grow.
-    expect(GRANDFATHERED).toHaveLength(10);
+    expect(GRANDFATHERED).toHaveLength(9);
     for (const g of GRANDFATHERED) {
       expect(g.phantom.length, "each entry lists the phantom column(s) it parks").toBeGreaterThan(0);
       expect(g.why.length, "each entry names the real column and why it is not fixed here").toBeGreaterThan(60);

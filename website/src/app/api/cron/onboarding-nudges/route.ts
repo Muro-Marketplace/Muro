@@ -4,8 +4,8 @@
 //
 // Assumptions (adjust to match your schema):
 // - artist_profiles.created_at is present
-// - profile-completion fields are direct columns (artist_statement,
-//   profile_photo, instagram, etc.), if you move to a completeness flag,
+// - profile-completion fields are direct columns (short_bio,
+//   profile_image, instagram, etc.), if you move to a completeness flag,
 //   update the predicates below
 // - venue_profiles has a similar shape
 
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
   const { data: artists } = await db
     .from("artist_profiles")
-    .select("user_id, name, slug, created_at, artist_statement, profile_photo, primary_medium, stripe_connect_account_id, venue_types_suited_for, themes")
+    .select("user_id, name, slug, created_at, short_bio, profile_image, primary_medium, stripe_connect_account_id, venue_types_suited_for, themes")
     .gte("created_at", cutoff)
     .not("user_id", "is", null);
 
@@ -63,9 +63,9 @@ export async function GET(request: Request) {
     // Day 2, profile completion
     if (inDayWindow(days, 2)) {
       const missing: string[] = [];
-      if (!artist.artist_statement) missing.push("Artist statement");
+      if (!artist.short_bio) missing.push("Artist statement");
       if (!artist.primary_medium) missing.push("Primary medium");
-      if (!artist.profile_photo) missing.push("Profile photo");
+      if (!artist.profile_image) missing.push("Profile photo");
       if (missing.length === 0) return;
       const completionPct = Math.max(30, 100 - missing.length * 15);
 
@@ -157,9 +157,9 @@ export async function GET(request: Request) {
         .select("id", { count: "exact", head: true })
         .eq("artist_user_id", artist.user_id);
       const fullyOnboarded =
-        !!artist.artist_statement &&
+        !!artist.short_bio &&
         !!artist.primary_medium &&
-        !!artist.profile_photo &&
+        !!artist.profile_image &&
         !!artist.stripe_connect_account_id &&
         (worksCount ?? 0) > 0;
 
@@ -181,9 +181,9 @@ export async function GET(request: Request) {
       } else {
         // Rough completion %: 5 steps, each ~20%.
         let done = 0;
-        if (artist.artist_statement) done++;
+        if (artist.short_bio) done++;
         if (artist.primary_medium) done++;
-        if (artist.profile_photo) done++;
+        if (artist.profile_image) done++;
         if (artist.stripe_connect_account_id) done++;
         if ((worksCount ?? 0) > 0) done++;
         const pct = done * 20;
@@ -198,9 +198,9 @@ export async function GET(request: Request) {
             firstName,
             completionPct: pct,
             remainingSteps: [
-              ...(!artist.artist_statement ? [{ label: "Add your artist statement", done: false, url: `${SITE}/artist-portal/profile` }] : []),
+              ...(!artist.short_bio ? [{ label: "Add your artist statement", done: false, url: `${SITE}/artist-portal/profile` }] : []),
               ...(!artist.primary_medium ? [{ label: "Choose your primary medium", done: false, url: `${SITE}/artist-portal/profile` }] : []),
-              ...(!artist.profile_photo ? [{ label: "Add a profile photo", done: false, url: `${SITE}/artist-portal/profile` }] : []),
+              ...(!artist.profile_image ? [{ label: "Add a profile photo", done: false, url: `${SITE}/artist-portal/profile` }] : []),
               ...(!artist.stripe_connect_account_id ? [{ label: "Connect Stripe", done: false, url: `${SITE}/artist-portal/billing` }] : []),
               ...((worksCount ?? 0) === 0 ? [{ label: "Upload your first work", done: false, url: `${SITE}/artist-portal/portfolio` }] : []),
             ],
