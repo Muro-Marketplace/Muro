@@ -5530,3 +5530,88 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 **Still open in T1:** D5 (read-then-write stock decrement → atomic RPC, migration
 in 04's range, next free is 085) and D6 (the strip-and-retry loop can drop money
 columns).
+
+---
+
+## `04` T1 / D5 — read-then-write stock decrement let two buyers get one piece (owner: `04` §B1)
+
+Commit `dc37c18`. Migration `085`.
+
+**The finding.** The decrement was `SELECT quantity_available` → `max(0, current -
+qty)` → `UPDATE`. Two concurrent orders for the last piece both read 1 and both
+wrote 0, so both buyers got it. `decrement_work_stock(work_id, qty)` does it in a
+single `UPDATE ... SET quantity_available = GREATEST(0, ... - qty)`, which Postgres
+serialises: the first takes 1→0, the second 0→0.
+
+**Scope: both branches.** E10's decrement comment explicitly said "replacing that
+pattern with an atomic decrement is D5's task, and inventing a second mechanism
+here would just add a third". So D5 converts **both** the cart decrement (its named
+target) and the offer decrement to the one RPC. The offer branch keeps a separate
+best-effort `title` read for the confirmation email, which is display-only and need
+not be atomic.
+
+**Proved against prod with a rolled-back `DO` block** (unconditional trailing
+`raise`):
+
+```
+start=1 afterMinus1=0 afterFloor=0 afterExtra=0 availableAtZero=f missingReturns=NULL
+```
+
+1→0, floors at 0, `-5` stays 0 (never negative, which checkout reads as sold),
+`available` flips false at 0, an unknown id returns NULL. `count(*) where
+quantity_available < 0` → 0 after; nothing written.
+
+**Two departures from the plan, each with a reason.**
+
+1. **EXECUTE revoked from anon and authenticated, not just PUBLIC.** The plan's
+   migration only `REVOKE ... FROM PUBLIC`. Checking the live ACL after apply showed
+   `anon=X, authenticated=X` still present: Supabase grants those roles **explicitly**,
+   not via PUBLIC. A `SECURITY DEFINER` function any signed-in or anonymous caller
+   could invoke to `decrement_work_stock('any_work', 999)` is a real vulnerability, so
+   this would have *introduced* one. Revoked all three; the live ACL is now
+   `postgres=X, service_role=X` only. **This is the fifth "advisor/ACL clean is not
+   proof" moment: the pg_policies leak assertion says nothing about function grants,
+   and neither does the advisor here.**
+
+2. **Best-effort, not fatal.** The plan says "treat failure as fatal for the order".
+   But the decrement runs *after* the order insert and *before* the buyer's receipt,
+   and a 500 there loses both on the retry: Stripe re-delivers, the order's 23505 is
+   classified a duplicate by D3 and returns early, so neither the decrement nor the
+   emails ever run again. The plan's own note ("the retry path relies on D1's event
+   dedup plus the D3 payment-intent check to stay idempotent") is exactly what makes
+   fatal unrecoverable. True fatality needs the decrement inside the order-insert
+   transaction, larger than D5 scopes. The race, which is the finding, is closed
+   regardless; a failed decrement oversells by at most the failed line and is logged.
+
+**Migration numbering, wrong again.** The plan names it `075`, inside `02`'s range.
+`04` is 080-089, 080-084 taken, so **085**. (Running tally: 076→E9/082, 078→E7c/083,
+074→D1/084, 075→D5/085.)
+
+**Tests.** 4 cart cases in `describe("Stripe webhook — atomic stock decrement
+(D5)")` (per-line RPC call + qty, no read-then-write UPDATE, best-effort on RPC
+error, skips no-id/zero-qty lines), plus the E10 offer test rewritten to assert the
+RPC. The webhook mock gained `db.rpc` and a `maybeSingle` on the offer title read.
+
+**Probe** (revert the cart decrement to read-then-write):
+
+```
+ FAIL  D5 > calls the RPC once per line with the line quantity
+ FAIL  D5 > does not read-then-write: no artist_works UPDATE is issued
+ FAIL  D5 > skips lines with no work id or a non-positive quantity
+      Tests  3 failed | 70 passed (73)
+```
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  162 passed (162)
+Tests  1749 passed (1749)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+DB: pg_policies SELECT-leak assertion → 0 rows; advisor shows no new item for
+`decrement_work_stock` (the fixed `search_path` avoids `function_search_path_mutable`).
+
+**Still open in T1:** D6 (the strip-and-retry loop can drop money columns; split the
+list so money columns and `stripe_payment_intent_id` are never stripped).
