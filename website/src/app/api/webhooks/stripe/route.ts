@@ -585,8 +585,27 @@ async function handleWebhookEvent(
         // artist_slug / artist_user_id column, but it no longer decides the fee
         // rate or who gets paid. That is what the legs below are for (E9).
         if (firstArtistSlug) {
-          const { data: ap } = await db.from("artist_profiles").select("user_id").eq("slug", firstArtistSlug).single();
-          if (ap) artistUserId = ap.user_id;
+          // D4: .single() errors on 0 rows AND on >1 row, and the old code
+          // discarded that error, so artist_user_id was silently left null and the
+          // order booked with no attribution. .maybeSingle() plus an explicit check
+          // refuses to book an order we cannot attribute; the 500 makes Stripe retry
+          // (idempotent via D1's event dedup and D3's payment-intent check). The
+          // select is user_id only: the fee and payouts come from the legs now (E9),
+          // so this is purely the order row's attribution.
+          const { data: ap, error: apErr } = await db
+            .from("artist_profiles")
+            .select("user_id")
+            .eq("slug", firstArtistSlug)
+            .maybeSingle();
+          if (apErr) {
+            console.error("[webhook] artist profile lookup failed", { firstArtistSlug, apErr });
+            return NextResponse.json({ error: "Artist lookup failed" }, { status: 500 });
+          }
+          if (!ap) {
+            console.error("[webhook] no artist_profiles row for slug", firstArtistSlug);
+            return NextResponse.json({ error: "Unknown artist" }, { status: 500 });
+          }
+          artistUserId = ap.user_id;
         }
 
         // Per-line venue revenue share. Multi-artist carts can mix

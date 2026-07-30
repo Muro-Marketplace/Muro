@@ -171,17 +171,17 @@ function setupDbMock(state: DbState) {
             data: profiles.filter((p) => slugs.includes((p.slug || "").toLowerCase())),
             error: null,
           }),
-          // The firstArtistSlug user_id lookup and the per-leg Connect lookup.
-          // Filtered by the actual column so a two-artist transfer test gets each
-          // artist's own Connect row rather than one shared answer.
-          eq: (col: string, val: string) => ({
-            single: async () => ({
-              data:
-                profiles.find((p) =>
-                  col === "user_id" ? p.user_id === val : (p.slug || "") === val,
-                ) ?? null,
-            }),
-          }),
+          // The firstArtistSlug user_id lookup (D4: .maybeSingle) and the per-leg
+          // Connect lookup (.single). Filtered by the actual column so a two-artist
+          // transfer test gets each artist's own Connect row, not one shared answer.
+          eq: (col: string, val: string) => {
+            const row = () =>
+              profiles.find((p) => (col === "user_id" ? p.user_id === val : (p.slug || "") === val)) ?? null;
+            return {
+              single: async () => ({ data: row() }),
+              maybeSingle: async () => ({ data: row(), error: null }),
+            };
+          },
         }),
       };
     }
@@ -1711,5 +1711,63 @@ describe("Stripe webhook — global replay guard (D1)", () => {
     expect(res.status).toBe(200);
     expect(g.inserted).toHaveLength(1);
     expect(g.deleted).toEqual([]);
+  });
+});
+
+// ── D4: the artist lookup silently zeroed attribution (04 §B1) ───────────────
+//
+// `.single()` errors on 0 rows AND on >1 row, and the old code discarded that
+// error, so artist_user_id was left null and the order booked with no attribution
+// (pre-E9 it also skipped the artist transfer and defaulted the fee to 15%; E9
+// moved payouts and the fee to per-artist legs, so what remains is attribution).
+describe("Stripe webhook — artist attribution lookup (D4)", () => {
+  function driveWithFirstArtist(firstArtistSlug: string, profiles: Array<Record<string, unknown>>) {
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({
+      artistProfiles: profiles as never,
+      insertCaptured,
+    });
+    loadCartSessionMock.mockResolvedValue({
+      // The cart line's artist (bob) resolves, so buildArtistLegs succeeds; only
+      // firstArtistSlug (from artistSlugs) is the missing one. That isolates D4
+      // from buildArtistLegs' own missing-artist throw.
+      cart: [{ workId: "w-b", artistSlug: "bob", title: "Sunrise", price: 100, qty: 1, image: "" }],
+      shipping: { fullName: "Buyer", email: "buyer@example.com", country: "GB", fulfilmentMethod: "ship" },
+      source: "direct",
+      venueSlug: "",
+      artistSlugs: [firstArtistSlug],
+      expectedSubtotalPence: 10000,
+      expectedShippingPence: 0,
+      artistShippingPence: {},
+    });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: buildSession({
+          amount_total: 10000,
+          metadata: { kind: "cart_checkout", artist_slugs: firstArtistSlug, venue_slug: "", fulfilment_method: "ship", source: "direct" },
+        }),
+      },
+    });
+    return insertCaptured;
+  }
+
+  const BOB = { user_id: "u-bob", slug: "bob", subscription_plan: "core" };
+
+  it("500s and books no order when the first artist's profile is missing", async () => {
+    const insertCaptured = driveWithFirstArtist("ghost", [BOB]);
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({ error: "Unknown artist" });
+    expect(insertCaptured.row, "no order may be booked when we cannot attribute it").toBeNull();
+  });
+
+  it("books the order with attribution when the first artist resolves", async () => {
+    // firstArtistSlug = bob, who exists. The order row carries artist_user_id.
+    const insertCaptured = driveWithFirstArtist("bob", [BOB]);
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200);
+    expect(insertCaptured.row).not.toBeNull();
+    expect(insertCaptured.row!.artist_user_id).toBe("u-bob");
   });
 });
