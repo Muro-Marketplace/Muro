@@ -7565,3 +7565,45 @@ this cron has NEVER fired. Verify what "ending soon" should key on (placements h
 live_from / scheduled_for / collected_at, no explicit end), fix the select, remove
 the grandfather entry (ratchet 10 -> 9). Re-read the cron + the placements columns
 first.
+
+## row 19 #2 — placement-ending-soon cron: BLOCKED on a data-model decision (owner)
+
+Investigated; not fixed. Recording the blocker per the supervisor's own "flag if
+genuinely ambiguous" instruction (EXECUTION-DECISIONS :574) and loop step 6, then
+moving to the next phantom bug.
+
+**The defect.** `cron/placement-ending-soon/route.ts:30` selects/filters on
+`placements.end_date`, which does not exist. PostgREST rejects the whole select, so
+the cron finds nothing and the "your placement is ending soon" email has never
+sent (confirmed absent from all sends in EXECUTION-DECISIONS :561). The source
+comment admits the guess: "map from whichever DB column holds it. Common options:
+end_date, ends_at, collected_at."
+
+**Why it is not a simple rename (genuinely ambiguous).**
+- `placements` has NO planned-end column. The G-doc (2026-05-03-G :334) planned
+  `placements.start_date` + `end_date`, but they were never migrated.
+- `placements.collected_at` / `cancelled_at` are PAST events (set when the
+  placement ends), so they cannot drive a reminder 14 days BEFORE the end.
+- `scheduled_for` is a scheduling (start/install) date, not an end.
+- The planned-collection concept may live in the SEPARATE `placement_records`
+  table (`collection_date`, `review_date` — future planned dates). Reworking the
+  cron to join `placement_records` and key on `collection_date` is plausible, but
+  needs confirming that active placements reliably have a record with a populated
+  `collection_date` (likely sparse), or the cron still sends nothing.
+- Adding a `placements.end_date` column is a FEATURE/migration (owner sign-off per
+  the loop's authority; do not invent a column autonomously).
+- The `08` cull doc (:302) lists this cron under "zero callers is correct" (KEEP,
+  a legitimate Vercel cron), so "deleting beats fixing" does NOT authorise deleting
+  it either.
+
+**Owner decision needed (recommendation).** Pick one: (a) rework the cron to key
+on `placement_records.collection_date` (verify population first — this is the most
+likely "real column" answer, matching the G-doc intent); (b) add an explicit
+`placements.end_date` column + populate it on placement accept (a feature); or (c)
+retire the ending-soon reminder (delete the cron + its vercel.json entry + the
+PlacementEndingSoon template). Until then the cron stays grandfathered in the
+phantom guard (ratchet unchanged at 10) and remains inert (it already sends
+nothing). Its twin, `onboarding-nudges`, is a clean rename and is being fixed next.
+
+**Moving on:** row 19 #3, `cron/onboarding-nudges:51` (artist_statement /
+profile_photo → real columns), which is unambiguous.
