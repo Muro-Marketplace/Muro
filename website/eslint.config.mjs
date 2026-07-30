@@ -25,6 +25,10 @@ const eslintConfig = defineConfig([
       "wallplace/no-ad-hoc-cap": "error",
       "wallplace/no-redirect-param": "error",
       "wallplace/no-raw-arrangement-type": "error",
+      // C3: blocks the E44 / E45 shape, `.update({ ...body })`. Error from the
+      // start, unlike require-authz-on-mutation: nothing in src/ violates it,
+      // because the two legitimate spreads sit behind assertNoServerOwned().
+      "wallplace/no-spread-into-db-write": "error",
       // Staged rollout per 01 Part 4 task 3: "warn" until Phase B to D convert
       // the routes, then "error". The doc contradicts itself here, section 3.3
       // shows "error" while the task checklist says "warn"; "error" today would

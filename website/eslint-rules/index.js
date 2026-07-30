@@ -7,6 +7,7 @@ const noAdHocCap = require("./no-ad-hoc-cap");
 const noRedirectParam = require("./no-redirect-param");
 const noRawArrangementType = require("./no-raw-arrangement-type");
 const requireAuthzOnMutation = require("./require-authz-on-mutation");
+const noSpreadIntoDbWrite = require("./no-spread-into-db-write");
 
 module.exports = {
   meta: {
@@ -21,5 +22,6 @@ module.exports = {
     "no-redirect-param": noRedirectParam,
     "no-raw-arrangement-type": noRawArrangementType,
     "require-authz-on-mutation": requireAuthzOnMutation,
+    "no-spread-into-db-write": noSpreadIntoDbWrite,
   },
 };
