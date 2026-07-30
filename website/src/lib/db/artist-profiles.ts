@@ -1,9 +1,7 @@
-// Server-only artist-profile DB helpers (use the service-role admin client +
-// the public supabase client). The pure transform helpers (DbArtistProfile,
-// DbArtistWork, dbProfileToArtist) live in artist-profiles-transform.ts so that
-// client components can import them without pulling the admin client into the
-// browser bundle.
-import { supabase } from "@/lib/supabase";
+// Server-only artist-profile DB helpers (use the service-role admin client).
+// The pure transform helpers (DbArtistProfile, DbArtistWork, dbProfileToArtist)
+// live in artist-profiles-transform.ts so that client components can import them
+// without pulling the admin client into the browser bundle.
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { assertNoServerOwned, ARTIST_PROFILE_SERVER_OWNED } from "@/lib/db/writable-fields";
 import type { Artist } from "@/data/artists";
@@ -62,16 +60,28 @@ export async function getAllDatabaseArtists(): Promise<Artist[]> {
   // /apply/claim default to pending and stay hidden until review_status
   // flips to "approved". Legacy rows without the column get treated as
   // approved (the query below falls back if the column doesn't exist yet).
+  //
+  // D38 / ADR 0004: this is the marketplace listing read, and it was the LAST
+  // anon-client `SELECT *` on artist_profiles. Migration 076 revokes anon's
+  // SELECT on the PII/Stripe columns (postcode, stripe_customer_id,
+  // stripe_connect_account_id, stripe_subscription_id), which would make an anon
+  // `SELECT *` fail with "permission denied for column". So this reads via the
+  // service-role client instead, the same defence-in-depth pattern 071 used for
+  // venue_profiles (server routes read via service-role, which is not subject to
+  // column grants; the anon key can no longer read those columns via PostgREST
+  // directly). This runs server-side only, and keeps the explicit
+  // review_status filter, so the rows and columns returned are unchanged.
+  const db = getSupabaseAdmin();
   let profiles: unknown[] | null = null;
   {
-    const res = await supabase
+    const res = await db
       .from("artist_profiles")
       .select("*")
       .eq("review_status", "approved")
       .order("created_at", { ascending: false });
     if (res.error && /review_status/.test(res.error.message)) {
       // Column not yet migrated, fall back to the old behaviour.
-      const all = await supabase
+      const all = await db
         .from("artist_profiles")
         .select("*")
         .order("created_at", { ascending: false });
@@ -84,7 +94,7 @@ export async function getAllDatabaseArtists(): Promise<Artist[]> {
   if (!profiles || profiles.length === 0) return [];
 
   const profileIds = profiles.map((p) => (p as { id: string }).id);
-  const { data: allWorks } = await supabase
+  const { data: allWorks } = await db
     .from("artist_works")
     .select("*")
     .in("artist_id", profileIds)
