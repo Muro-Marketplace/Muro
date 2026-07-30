@@ -5901,3 +5901,50 @@ T2 (E9), T3 (E6/E10 + D7), T4 (D8, D9), T5 (D10, D11), T6 (E7a-E7d, E8, E11, E11
 Remaining: T7 (D12-D15, artist subscription), T8 refunds (D16-D18), T9 (N1, N2),
 and the C-series payout helpers (C1 canReceivePayout, C3 recordBlockedLeg, C4 retry
 sweep) where the earlier tasks used simpler primitives.
+
+---
+
+## `04` T7 / D12 — an unknown price id silently downgraded the artist (owner: `04` §B7)
+
+Commit `62f8fed`.
+
+**The finding.** The subscription branch did `let plan = "core"` then bumped up on a
+price match. So an unset or mistyped `STRIPE_PRICE_PRO` wrote every Pro artist's
+profile as `core`, and `platformFeePercentForArtist` then charged 15% instead of 5%
+on every sale, silently and ongoing.
+
+**What changed.** A `PRICE_TO_PLAN` map built from the six `STRIPE_PRICE_*` envs
+(empty entries filtered out). An unrecognised price returns
+`{ received, ignored: "unknown_price" }` and stamps nothing, so a misconfigured env
+**fails closed** (no write) rather than mis-charging. This also correctly ignores
+paid-loan and curation subscriptions, whose prices are dynamic `price_data` rather
+than a `STRIPE_PRICE_*` id, leaving them to their own handlers (a partial overlap
+with D15's kind-scoping, which is still its own task for the recognised-price case).
+
+**Tests.** 3 D12 cases: recognised Pro price → `pro`; unknown price → ignored, no
+`artist_profiles` write; a paid-loan dynamic price → ignored. The 4 E11b
+subscription-period tests were reshaped to carry a recognised price (the branch now
+needs one) and vary only the period; the old no-items shape is an ignored event
+under D12 and its null-period behaviour is already covered by
+`stripe-subscription-period.test.ts`. Probe (restore guess-to-core) fails 2.
+
+**Not done, recorded.** The plan asks for "a startup assertion in src/env.ts that
+all six price envs are set in production". There is no `src/env.ts` (nor
+`env.test.ts`) in the tree, so there is nothing to hang it on, and the fail-closed
+behaviour already prevents the mis-charge (an unset env yields no mapping, so the
+event is ignored, not mis-stamped). A prod-config check for the six price envs is a
+deploy-time concern; left as an owner item.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  163 passed (163)
+Tests  1774 passed (1774)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Still open in T7:** D13 (the subscription.deleted stale-guard early-return skips
+the paid-loan handler), D14 (referral credit read-modify-write; NOTE its snippet
+reads the phantom `free_until` column, so it needs adapting to the live schema),
+D15 (scope the subscription handler by metadata.kind).
