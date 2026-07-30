@@ -19,7 +19,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
-| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082). **T6 COMPLETE**: E7a (416aac2), E7b (b298ba5), E8 (ab96b2d), E7c (cb0e687, migration 083), E7d (b4132fa), E11 (336979e), E11b (4a8759f). Next: T1, T4, T9, T5 |
+| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082). **T6 COMPLETE** (E7a-E7d, E8, E11, E11b). **B0**: D2 done earlier (E19/E46f, 740b79a), **D1 done** (13aed91, migration 084, event-dedup half; payment_status gate deferred). Next: B0 D3, then T1, T4, T9, T5 |
 | 7a | `free_until` overcharge: every sale billed 15% | D17.1 | **done** (6e0705e). Four sites, not the two D17 named. No fee changes today, no artist has a future `trial_end` |
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **narrow form done** (6e0705e): `phantom-columns.test.ts`, table-aware, four probes. Full form (generated `schema-columns.json` covering ALL columns) still todo |
 | 7c | `placements/route.ts` integrates the phantom `requester_user_id` in ~20 places | N3 follow-up, found by 7b's guard | todo. Recorded in the guard's `KNOWN_UNFIXED` ratchet so it cannot be forgotten |
@@ -5311,3 +5311,86 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 **`04` T6 is complete**: E7a, E7b, E7c, E7d, E8, E11, E11b. No Stripe drive was
 possible for any of them (`sk_test_PLAC...`, api.stripe.com 401, no webhook secret,
 no CLI), so each is verified against recorded Stripe-client calls and DB writes.
+
+---
+
+## `04` B0 / D1 — the webhook had no global replay guard (owner: `04` §B0)
+
+Commit `13aed91`. Migration `084`.
+
+**B0 status first.** D2 (unauthenticated `POST /api/orders`) was already done under
+finding **E19/E46f** (`740b79a`): the POST handler is gone and a ratchet test in
+`api/orders/route.test.ts` fails if it is re-added. D3 (order-id collision) is still
+open. This iteration did **D1**.
+
+**The finding.** The webhook had no `event.id` table; idempotency was per-branch and
+ad hoc (cart on `stripe_payment_intent_id`, offer on a status compare-and-set,
+curation on a status read). A redelivery reaching a branch with a weaker guard could
+act twice.
+
+**What changed.** Migration `084` adds `stripe_webhook_events` (`event_id PRIMARY
+KEY`, RLS on, 0 policies, service-role only). The handler claims `event.id` at the
+top: a duplicate (23505) short-circuits to `{ received, duplicate }`, a real insert
+failure 500s so Stripe retries.
+
+**Departure from the plan's snippet, with a dedicated test.** The snippet claims the
+event and never releases it. That turns any **transient** 500 into a **permanent
+drop**: a money branch's DB write fails, we return 500, Stripe retries, the retry
+hits 23505 and is waved through as a duplicate with the work never done. There are 6
+such 500-return sites in the handler, all "DB write failed, retry me" cases. So the
+POST body is split into a thin wrapper plus `handleWebhookEvent(event, db)`, and the
+wrapper deletes the claim whenever the handler returns >= 500. The extraction is
+mechanical: `request` is unused past the signature check, and the body keeps its
+indentation because it was already one level deep. The **61 existing branch tests
+still pass**, which is what validates the extraction.
+
+**Migration numbering, wrong again.** The plan names it
+`074_stripe_webhook_events.sql`, but 074 is taken (`074_rls_gap_closure.sql`) and
+074-079 is `02`'s range (D1 decision). It is `04`-owned, range 080-089, 080-083
+taken, so **084**. Third numbering correction (E9 → 076, E7c → 078, D1 → 074).
+
+**Scope: the event-dedup half only.** D1 bundles a second, explicitly "Separately"
+paragraph: no branch checks `session.payment_status`, and the
+`async_payment_succeeded` / `_failed` / `expired` branches "fall on the floor". Not
+done here, deliberately:
+
+- Only `card` is enabled (`payment_method_types: ["card"]` at every session
+  creation), so `checkout.session.completed` always carries `payment_status: "paid"`
+  today; the gate is defence for a delayed-notification method that is not turned on.
+- The subscription-mode branches (paid-loan, managed curation) report `payment_status`
+  differently (`no_payment_required` for a trial), so a blanket `isSettled` gate
+  would need a Stripe test-mode drive to prove it does not reject a legitimate
+  subscription. That drive is impossible here (`sk_test_PLAC...`, api 401).
+
+Recorded as the remaining part of D1 under owner decisions.
+
+**Tests.** 5 cases in `describe("Stripe webhook — global replay guard (D1)")`. The 5
+`fromMock.mockImplementation` sites in the file each grew a `stripe_webhook_events`
+stub so every existing branch test runs behind the new guard.
+
+**Two probes:**
+
+```
+PROBE A — claim-only, no release (the plan's snippet)
+ FAIL  D1 > releases the claim when the handler returns a 5xx, so the retry can reprocess
+      Tests  1 failed | 65 passed (66)
+
+PROBE B — no global guard at all
+      Tests  4 failed | 62 passed (66)
+```
+
+Probe A is the one that matters: it fails exactly the release test, so the departure
+from the snippet is pinned as load-bearing rather than decorative.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  161 passed (161)
+Tests  1731 passed (1731)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**DB verification.** `pg_policies` SELECT-leak assertion → 0 rows. Advisor (via MCP)
+shows `stripe_webhook_events` as `rls_enabled_no_policy` INFO, which is intended for
+a service-role-only table, and adds no new WARN or ERROR.
