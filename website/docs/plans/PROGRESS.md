@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | `06` **A+A2 done, B1 done** (a4142c2). `01`: **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -61,6 +61,14 @@ Owner decisions the loop is waiting on (none block the remaining queue):
   so flipping now reddens CI over convention, not security. Migrate them to
   `assert*` helpers, or allowlist each with "self-scopes on user_id" as the stated
   control? A ratchet holds the count at 43 meanwhile, so the gap cannot widen.
+
+- **Where terms acceptance should be recorded** (E46b, `06` B1). A pre-signup
+  assertion about an email address is forgeable by construction, so the doc's
+  split-route with an HMAC token cannot fix it. Either record acceptance after email
+  confirmation from the token (loses the tick-the-box timestamp, and an unconfirmed
+  signup leaves no row), or add a verified/self-asserted distinction so the 51
+  existing anonymous rows stop implying more than they can prove. The authenticated
+  path, validation and rate limit are already fixed either way.
 
 Owner actions blocking a merge, added as they surface:
 
@@ -3842,3 +3850,80 @@ what item 16 asks for, and scope drift is how the knot re-formed last time.
 
 **`01` is now complete** except item 15's `warn` → `error` flip, which is an owner
 decision held behind a ratchet.
+
+---
+
+## `06` B1 / E46b — ToS-acceptance forgery (owner: `06` §3.2)
+
+**The finding.** `POST /api/terms/accept` inserted `user_email` straight from the
+request body while **discarding the auth error**, so an unauthenticated caller could
+forge a row asserting that any email address had accepted the platform terms,
+stamped with the attacker's IP and user agent. `terms_acceptances` is the evidence
+trail for a contractual act, so the harm is twofold: a forged acceptance against a
+third party, and repudiation cover for a real one. Four uncapped free-text fields on
+an unbounded unauthenticated insert made it a storage vector as well.
+
+**The prod fact that framed the fix:**
+
+```
+terms_acceptances: 51 rows | with user_id: 0 | anonymous: 51
+```
+
+**Every acceptance on record is the unverifiable kind.** Not one is bound to an
+authenticated user, because all six callers are pre-signup.
+
+**Closed.**
+
+- An **authenticated** acceptance now takes the email from the token and ignores the
+  body's, lower-cased so the trail is comparable. The body can no longer name a
+  third party.
+- The body is schema-validated (`termsAcceptSchema`: `userType` an enum, `userEmail`
+  must parse as an email, versions capped) instead of four uncapped strings.
+- The route is rate limited, checked **before** parsing so a large body cannot be
+  used to probe.
+
+**Not closed, and not closable here.** The doc says to grep the callers first, so I
+did. All six (`signup/artist`, `signup/venue`, `signup/customer`,
+`ApplicationForm` twice) fire immediately after `supabase.auth.signUp` and **before
+email confirmation**, so there is no session. Requiring auth breaks every one.
+
+`06` §3.2 anticipates this and proposes splitting the route, binding pre-signup
+acceptance to "a short-lived signed token issued by the signup flow". **That cannot
+work.** Any endpoint issuing such a token pre-auth is itself unauthenticated, so an
+attacker mints one for the victim's address and is exactly where they started. A
+pre-auth assertion about an email address is forgeable by construction; no amount of
+HMAC fixes it, because the thing being signed is unverified.
+
+**Recommendation, needs an owner call.** Record acceptance **after** confirmation,
+from the token, carrying the terms version through `signUp`'s `options.data` (which
+already carries `user_type` and `display_name`). The client then asserts nothing; the
+row is written by a post-auth step from verified identity. The trade-off is that the
+evidence is stamped at confirmation rather than at the moment the box was ticked, and
+a user who never confirms leaves no acceptance row at all. That is a legal-trail
+decision, not a code one, so it is escalated rather than guessed.
+
+A cheaper interim, if the timestamp semantics matter: keep the pre-signup insert but
+add a column distinguishing a token-verified acceptance from a self-asserted one, so
+the 51 existing rows and future pre-signup rows stop carrying evidentiary weight they
+cannot support. That needs a migration and is still an owner call about what the
+trail must prove.
+
+**Tests.** 12 new. The pre-signup path is pinned with an explicit comment saying it
+is the **residual gap**, not behaviour being blessed as correct, so nobody later
+reads the test as approval.
+
+**Probed three ways:**
+
+```
+trust the body email again  → 2 fail
+drop the schema             → 4 fail
+drop the rate limit         → 2 fail
+```
+
+```
+ Test Files  155 passed (155)
+      Tests  1526 passed (1526)
+✖ 175 problems (0 errors, 175 warnings)
+```
+
+**Commit:** a4142c2
