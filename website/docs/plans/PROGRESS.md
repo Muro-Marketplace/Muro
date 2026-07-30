@@ -6735,3 +6735,49 @@ spot); (d) re-enter the leg block on a `duplicate` redelivery at the D3
 short-circuit (`webhooks/stripe/route.ts`), safe via scheduleTransfer's 23505
 idempotency. Then the D52.2 `lib/email/welcome.ts` cosmetic follow-up, then T8 D18
 / T9.
+
+---
+
+## `04` C4 (part 2c) — orders-without-legs reconciliation (D52.3)
+
+Commit `c02fdfe`. Code-only. Owner-authorised (D52's order). Second of three
+C4-part-2 pieces (leg re-entry still to do; welcome.ts cosmetic after).
+
+**The finding (verified read-only in prod).** The retry sweep only re-tries
+`stripe_transfers` rows that EXIST, so it cannot see the failure that produces
+nothing: a ledger INSERT that threw, a webhook that never ran, or a duplicate
+redelivery that early-returned. Prod: **11 orders owe an artist and have zero
+transfer rows** (6 with a resolvable `artist_user_id`; 0 owe a venue; statuses
+confirmed/delivered/processing).
+
+**What changed.** New `reconcileOrdersWithoutLegs()` selects orders with
+`artist_revenue > 0` in a paid status with no `stripe_transfers` row and records
+the owed amount as a `'blocked'` ledger row (reason
+`reconciliation:missing_ledger`). Blocked, not scheduled: it SURFACES the owed
+money without auto-paying, so the manual Stripe reconciliation stays the human's
+call (D11 covers the two unpaid offers). Idempotent via the unique index. Wired
+into the process-pending cron next to the sweep.
+
+**Files.** `src/lib/stripe-connect.ts` (reconcile fn + ReconcileResult),
+`src/lib/stripe-connect.test.ts` (+3 tests),
+`src/app/api/stripe-connect/process-pending/route.ts` (wire + response fields).
+
+**Tests (probe-verified).** Flags an owed order (2899p for a 28.99 net); skips an
+order that already has a ledger row (probe: drop the skip → it double-flags);
+counts a null-artist order as unresolved. `Tests 1816 passed (1816)`, `0 lint
+errors`, allowlist PASS.
+
+**Not run against prod.** The reconciliation writes blocked legs to the payout
+ledger for real orders; left to the cron / ops to trigger, per the payment-touching
++ D11 caution. Detection query was read-only.
+
+**Scope notes.** Artist-only (0 venue owed in prod; venue would need
+venue_slug→venue_profiles user-id resolution — follow-up if venue owed appears).
+`OWED_ORDER_STATUSES` allowlist = confirmed/processing/shipped/delivered; a paid
+order in another status is not reconciled (none in prod today).
+
+**Next: C4 part 2d** — duplicate-redelivery leg re-entry: at the D3 duplicate
+short-circuit in `webhooks/stripe/route.ts`, look up existing `stripe_transfers`
+for the order and schedule any missing legs before returning (safe via
+scheduleTransfer's 23505 idempotency). Then the D52.2 `lib/email/welcome.ts`
+cosmetic follow-up. Then T8 D18 / T9.
