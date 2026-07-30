@@ -35,6 +35,12 @@ export type OrderEmailItem = {
   size?: string;
   image: string;
   lineTotal: { amount: number; currency: "GBP" };
+  /**
+   * The work id, carried through from the cart so the persisted order row can be
+   * restocked on a full refund (D17). Optional: the email templates ignore it,
+   * and legacy orders persisted before this field never had it.
+   */
+  workId?: string;
 };
 
 export type OrderConfirmationInput = {

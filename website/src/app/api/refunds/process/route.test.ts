@@ -3,10 +3,11 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { isAdminMock, authMock, fromMock, stripeMock, claimPendingMock, releaseClaimMock } = vi.hoisted(() => ({
+const { isAdminMock, authMock, fromMock, rpcMock, stripeMock, claimPendingMock, releaseClaimMock } = vi.hoisted(() => ({
   isAdminMock: vi.fn(),
   authMock: vi.fn(),
   fromMock: vi.fn(),
+  rpcMock: vi.fn(async (..._args: unknown[]) => ({ error: null })),
   stripeMock: {
     refunds: { create: vi.fn(async () => ({ id: "re_test" })) },
     transfers: { createReversal: vi.fn(async () => ({})) },
@@ -20,6 +21,7 @@ vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
     from: fromMock,
+    rpc: rpcMock,
     auth: { admin: { getUserById: vi.fn(async () => ({ data: { user: null } })) } },
   }),
 }));
@@ -166,6 +168,8 @@ beforeEach(() => {
   isAdminMock.mockReset();
   authMock.mockReset();
   fromMock.mockReset();
+  rpcMock.mockReset();
+  rpcMock.mockResolvedValue({ error: null });
   claimPendingMock.mockReset();
   releaseClaimMock.mockReset();
   stripeMock.refunds.create.mockReset();
@@ -508,5 +512,88 @@ describe("POST /api/refunds/process — partial reversal denominator (D16)", () 
       "refund_requests",
       "rr-1",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D17 — full refunds restock the work(s) (04 §B8)
+//
+// A refunded piece must go back on sale. Full refunds only: a partial refund is
+// a price adjustment, the buyer keeps the artwork. Two prod item shapes: cart
+// orders carry workId per line (persisted since D17); offer orders carry a
+// work_ids array on one synthetic item. Restock is best-effort (money already
+// moved), so a failing rpc is logged, not fatal.
+// ---------------------------------------------------------------------------
+
+describe("POST /api/refunds/process — restock on full refund (D17)", () => {
+  const restockCalls = () =>
+    rpcMock.mock.calls.filter(([fn]) => fn === "restock_work");
+
+  it("restocks each cart-line work once on a full refund (D17)", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    setupDb({
+      refundRow: baseRefundRow, // type "full"
+      order: {
+        ...baseOrder,
+        stripe_payment_intent_id: "pi_test",
+        items: [
+          { workId: "w1", quantity: 1 },
+          { workId: "w2", quantity: 2 },
+        ],
+      },
+      claimResult: baseClaimedReq, // type "full"
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    expect(res.status).toBe(200);
+
+    const calls = restockCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls).toContainEqual(["restock_work", { p_work_id: "w1", p_qty: 1 }]);
+    expect(calls).toContainEqual(["restock_work", { p_work_id: "w2", p_qty: 2 }]);
+  });
+
+  it("restocks each id in an offer order's work_ids array on a full refund (D17)", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    setupDb({
+      refundRow: baseRefundRow,
+      order: {
+        ...baseOrder,
+        stripe_payment_intent_id: "pi_test",
+        items: [{ offer_id: "off_1", work_ids: ["w1", "w2"] }],
+      },
+      claimResult: baseClaimedReq,
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    expect(res.status).toBe(200);
+
+    const calls = restockCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls).toContainEqual(["restock_work", { p_work_id: "w1", p_qty: 1 }]);
+    expect(calls).toContainEqual(["restock_work", { p_work_id: "w2", p_qty: 1 }]);
+  });
+
+  it("does NOT restock on a partial refund (D17)", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    setupDb({
+      refundRow: { ...baseRefundRow, type: "partial", amount: 20 },
+      order: {
+        ...baseOrder,
+        subtotal: 45,
+        shipping_cost: 5,
+        total: 50,
+        stripe_payment_intent_id: "pi_test",
+        items: [{ workId: "w1", quantity: 1 }],
+      },
+      claimResult: { ...baseClaimedReq, type: "partial", amount: 20 },
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    expect(res.status).toBe(200);
+    expect(restockCalls()).toHaveLength(0);
   });
 });

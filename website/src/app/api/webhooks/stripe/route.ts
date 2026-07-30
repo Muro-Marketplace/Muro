@@ -948,7 +948,7 @@ async function handleWebhookEvent(
           if (buyerEmail) {
             // Adapt the cart items shape to the OrderSummary component.
             orderItems = (cartItemsForNotify as Array<{
-              title?: string; artistName?: string; artistSlug?: string; qty?: number; quantity?: number; size?: string; image?: string; price?: number;
+              title?: string; artistName?: string; artistSlug?: string; qty?: number; quantity?: number; size?: string; image?: string; price?: number; workId?: string; id?: string;
             }>).map((item) => {
               const slug = item.artistSlug || firstArtistSlug || "";
               const resolved = slugMap.get(slug);
@@ -963,6 +963,10 @@ async function handleWebhookEvent(
                   amount: Math.round((item.price ?? 0) * Number(item.qty ?? item.quantity ?? 1) * 100),
                   currency: "GBP" as const,
                 },
+                // Carry the work id onto the persisted order so a full refund can
+                // restock it (D17). The enriched update below overwrites the raw
+                // cart items (which had it), so without this the id is lost.
+                workId: item.workId || item.id,
               };
             });
 

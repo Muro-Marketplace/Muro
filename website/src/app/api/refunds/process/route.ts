@@ -293,6 +293,37 @@ export async function POST(request: Request) {
       })
       .eq("id", order.id);
 
+    // D17: a full refund returns the piece(s) to sale, so restock each work.
+    // Only full refunds restock — a partial refund is a price adjustment, the
+    // buyer keeps the artwork. Best-effort: the money has already moved, so a
+    // restock failure is logged, never fatal (blocking here would strand the
+    // refund). Two item shapes exist in prod: cart orders carry a work id per
+    // line (workId, persisted since D17); offer orders carry a work_ids array on
+    // a single synthetic item. Handle both; legacy cart orders predating the
+    // persisted workId simply have nothing to key on and are skipped.
+    if (isFullRefund) {
+      const items = Array.isArray(order.items) ? order.items : [];
+      const restocks: Array<{ workId: string; qty: number }> = [];
+      for (const raw of items as Array<Record<string, unknown>>) {
+        if (Array.isArray(raw.work_ids)) {
+          for (const id of raw.work_ids as unknown[]) {
+            if (typeof id === "string" && id) restocks.push({ workId: id, qty: 1 });
+          }
+          continue;
+        }
+        const workId = (raw.workId || raw.id) as string | undefined;
+        const qty = Number((raw.quantity ?? raw.qty) ?? 1);
+        if (workId && Number.isFinite(qty) && qty > 0) restocks.push({ workId, qty });
+      }
+      for (const { workId, qty } of restocks) {
+        const { error: restockErr } = await db.rpc("restock_work", {
+          p_work_id: workId,
+          p_qty: qty,
+        });
+        if (restockErr) console.error("[refunds/process] restock failed", { workId, restockErr });
+      }
+    }
+
     // Phase 2.3 J1: full refunds drop a lifecycle event so the K3
     // stepper / future order-events consumers see the state change.
     // Partial refunds don't currently produce a lifecycle event —
