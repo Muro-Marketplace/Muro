@@ -4953,3 +4953,89 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 `sessions.create` options, which is where Stripe would read it from.
 
 **Still open in T6:** E8, E7c, E7d, E11, E11b.
+
+---
+
+## `04` T6 / E8 — a monthly charge we could not pay out (owner: `04` §B6)
+
+Commit `ab96b2d`.
+
+**The finding.** The setup route gated on `artistProfile?.stripe_connect_account_id`
+being truthy, which is "the column is a non-empty string", not "this artist can be
+paid". The column defaults to `''` and is written the moment onboarding *starts*,
+so an account mid-KYC passed the check and the venue was charged monthly with no
+way to forward the money.
+
+**What changed.**
+
+- The gate calls `canArtistAcceptOrders(slug)`, the same `charges_enabled` check
+  (60s cache, fails closed) that the cart and offer checkouts already use, and
+  returns 422 `payouts_unavailable`. §B6's fix names `canReceivePayout`, which is
+  C1's helper and does not exist yet; using the primitive that is already in two
+  other payment routes avoids standing up a second one, and C1 can fold all three
+  call sites together when it lands.
+- **Path 2 deleted** per §B6's stated decision: no `transfer_data`, no
+  `application_fee_percent`. The platform collects the fee and the artist is paid by
+  a separate transfer through the `stripe_transfers` ledger.
+- The route's header comment described a "10% application fee placeholder" that no
+  longer exists. Corrected.
+
+**Why Path 2's deletion is urgent and not cosmetic.** `handleInvoicePaid` looks the
+subscription up in `placement_recurring_billings` and schedules a transfer for the
+artist's share. **E7a made setup-route subscriptions appear in that table**, so a
+destination charge here would pay the artist once directly through Stripe and again
+through the ledger. `PAID_LOAN_V2` being off in prod (`handleInvoicePaid` returns
+false immediately) is the only reason that has not happened.
+
+**Sequencing constraint, recorded loudly: E8 had to land before `PAID_LOAN_V2` is
+enabled.** It has. But anyone turning that flag on should confirm both are present.
+
+**The copy problem was worse than the plan describes.** §B6 says the banner promises
+a release mechanism that does not exist, which is true. It is also gated on
+`artist_stripe_ready`, and that is **not a column** (checked against prod: 0 rows in
+`information_schema.columns`) and is produced by nothing in the codebase. So
+`artistReady` was always false and the misleading banner rendered on **every**
+paid-loan payment page, including for artists who were perfectly payout-ready. That
+is the sixth phantom-field instance this session.
+
+Rather than rewording a banner fed by a field that does not exist, the banner is
+**deleted** and the route's 422 message is the single source of that information.
+The client already renders `data.error`, so the message now comes from the check
+that enforces it and cannot drift from it. The upfront warning is lost, but it was
+always-wrong noise rather than information.
+
+**Tests.** 9 cases added to `src/app/api/placements/[id]/payment/setup/route.test.ts`
+(23 total), including the exact case the old check waved through: an account id
+present, `charges_enabled` false.
+
+**Two probes:**
+
+```
+PROBE 1 — capability gate removed
+      Tests  5 failed | 18 passed (23)
+
+PROBE 2 — destination charge restored (Path 2)
+ FAIL  ... > sends no transfer_data, so the platform collects and the ledger pays out
+ FAIL  ... > sends no application_fee_percent
+ FAIL  ... > would otherwise double-pay: handleInvoicePaid already transfers the artist's share
+      Tests  3 failed | 20 passed (23)
+```
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  160 passed (160)
+Tests  1694 passed (1694)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Blast radius: none live.** 0 rows in `placement_recurring_billings`, 0 placements
+with a `stripe_subscription_id`, and `PAID_LOAN_V2` off in prod, so no existing
+subscription changes behaviour.
+
+**Stripe drive not run**, same blocker. The absence of `transfer_data` and
+`application_fee_percent` is asserted against the recorded `sessions.create`
+parameters, which is exactly what Stripe would have received.
+
+**Still open in T6:** E7c, E7d, E11, E11b.
