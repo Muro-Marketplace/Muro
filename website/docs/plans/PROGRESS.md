@@ -6306,3 +6306,16 @@ changes arriving via a mid-session unauthored doc edit are exactly the
 escalate-don't-guess case. C1 stands (done + green); pausing to confirm the pivot
 before executing the queue. Also flagging that 6d5c197 mixed these doc edits with
 C1 code — not my intent, `git add -A` did it.
+
+**RESOLUTION (user, via chat this session).** User chose "Work the security queue
+next." The pivot is authorised: the loop now works the supervisor queue (rows
+13–16) ahead of the remaining 04 C-series. **Next task = row 13 (D38, doc `02`):**
+revoke anon/authenticated `SELECT` on `artist_profiles.postcode`,
+`stripe_customer_id`, `stripe_connect_account_id`, `stripe_subscription_id` —
+migration in `02`'s free range (074-079; 074 taken → 075/076 free), copying
+`071`'s DO-block pattern (a bare column REVOKE is a silent no-op while a table
+grant exists). Exclude `lat`/`lng` (still read via `select("*")` until
+`getAllDatabaseArtists` is narrowed). Update ADR 0004 (currently argues against
+this). This is a live anon PII/Stripe-ID exposure, verified in prod this session.
+Then rows 14 (revoke EXECUTE on `increment_placement_revenue`) and 16
+(`platformFeePercentForArtist` must respect `subscription_status`).
