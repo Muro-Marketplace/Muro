@@ -25,7 +25,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
 | 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (this commit): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot (08495ae) |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate`/`ApiError`/`NetworkError`/`isTransient` in api-client.ts, 80a7c41). Remaining: §1.2 `useSaveAction` hook, then E41/E42/E43 caller migrations (one each), `no-authfetch-mutation` eslint rule LAST |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, this commit). Remaining: E41/E42/E43 caller migrations to `mutate`+`useSaveAction` (one each, starting E41-a portfolio save), `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -7898,10 +7898,36 @@ placeholder), but the live response shape was confirmed via the Supabase MCP
 no-op regen). `npm run check` green: 171 files, 1877 tests, audit:allowlist PASS,
 exit 0.
 
-**Next: resume doc `05` §1.2** — the `useSaveAction` hook (new file
-`src/hooks/useSaveAction.ts`; reference impl in the doc). Then the E41/E42/E43 caller
-migrations to `mutate`+`useSaveAction` (one finding each), with the
-`no-authfetch-mutation` eslint rule LAST (after all ~70 authFetch mutation call sites
-move to `mutate`). Then ledger rows 9(`03` admin — safe prep, surface the conjunct
-cutover), 10(`09`), 11(`07`), 12(`08` cull). Owner-gated / NOT loop-actionable: row
-19 #2 (b)/(c), E25 bucket cutover, the row-9 admin conjunct cutover, free_until.
+## row 8 (doc `05`) §1.2 — the `useSaveAction` hook
+
+Commit `<pending>`. Code-only. Additive (new file, no callers migrated yet).
+
+**What.** New `src/hooks/useSaveAction.ts`, per the doc's reference impl: one save
+control done correctly — an `inFlight` ref that blocks a double-submit before React
+flushes `saving`; awaits `run` (which must throw, i.e. `mutate`); reports success
+ONLY on a confirmed resolve (`onSuccess` + `clearDirty` + optional success toast +
+`saved=true`); on failure rolls back the `optimistic` change, surfaces the real
+error via `describe()` (ApiError/NetworkError message) + an error toast, and returns
+false. `clearDirty` (the unsaved-changes guard) is cleared on success and nowhere
+else. Confirmed `ToastContext` exposes only info|warn|error (no `success`), so
+confirmed saves use the default info — not adding a variant this iteration (doc note).
+
+**Test.** New `src/hooks/useSaveAction.test.tsx` (3 tests, `renderHook`+`act`,
+`// @vitest-environment jsdom`): (a) confirmed success → true, onSuccess+clearDirty
+run, one success toast, saved=true; (b) failure (`mutate` throws ApiError) → rollback
+fires, clearDirty NOT called, error toast with the code, resolves false, error set;
+(c) in-flight lock → a second concurrent `save()` returns false and `run` is called
+once. Fail-before verified by mutating the hook's catch to report success (return
+true + clearDirty): test (b) failed on `ret===false`. Restored -> pass. `npm run
+check` green: 172 files, 1880 tests, audit:allowlist PASS, exit 0.
+
+**Next: doc `05` E41-a** — the worst data-loss path. `artist-portal/portfolio/page.tsx`
+`saveWorks()` is fire-and-forget (`authFetch` in a `forEach`, no await, no `res.ok`),
+and `handleSubmit` closes the form + resets the dirty snapshot + toasts "Artwork
+added" before any request resolves, so a 402/403/500 loses the work silently. Route
+it through `mutate`+`useSaveAction`: keep the form open + restore `works` from the
+pre-save snapshot on failure, move the toast/`setShowForm(false)`/`initialFormJson`
+reset into `onSuccess`/`clearDirty`. Re-read the page + its test first. (E41-c "only
+changed works" diffing can be a follow-on finding; E41-a is the await+confirm fix.)
+Then E41-b (deletes), E41-d/-e (dropped fields), E41-f (delete the localStorage
+editor), E42-a/-b/-c, E43-a..k, then the `no-authfetch-mutation` eslint rule LAST.
