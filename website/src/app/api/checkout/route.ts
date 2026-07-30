@@ -7,6 +7,7 @@ import { findUkOnlyArtists } from "@/lib/shipping-scope";
 import { saveCartSession } from "@/lib/cart-sessions";
 import { canArtistAcceptOrders } from "@/lib/stripe-connect-status";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 // Fulfilment method narrowed to ship | collection. Earlier revisions
@@ -54,6 +55,12 @@ export async function POST(request: Request) {
     if (authHeader) {
       const auth = await getAuthenticatedUser(request);
       if (auth.user) {
+        // E23a. Guarded only inside the authenticated branch, because guest
+        // checkout is supported and an anonymous caller has no id to test. A
+        // demo session reaching Stripe would take real money, so this is the
+        // strict variant.
+        const demoBlocked = assertNotDemoStrict(auth.user.id);
+        if (demoBlocked) return demoBlocked;
         const db = getSupabaseAdmin();
         const { data: artistProfile } = await db
           .from("artist_profiles")

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { startPaidLoanBilling, cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
 import { deriveArrangementType } from "@/lib/placements/arrangement";
 import { isFlagOn } from "@/lib/feature-flags";
@@ -299,6 +300,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: the demo guard existed but had ZERO call sites, while two doc comments
+  // claimed it was wired. This handler reaches real people (real emails, real
+  // money, or content on a public page), so it takes the STRICT 403 variant.
+  const demoBlocked = assertNotDemoStrict(auth.user!.id);
+  if (demoBlocked) return demoBlocked;
 
   try {
     const body = await request.json();
@@ -757,6 +763,11 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: the demo guard existed but had ZERO call sites, while two doc comments
+  // claimed it was wired. This handler reaches real people (real emails, real
+  // money, or content on a public page), so it takes the STRICT 403 variant.
+  const demoBlocked = assertNotDemoStrict(auth.user!.id);
+  if (demoBlocked) return demoBlocked;
 
   try {
     const body = await request.json();
