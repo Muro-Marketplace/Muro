@@ -3,7 +3,8 @@ import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
 import { canReceivePayout } from "@/lib/payouts/capability";
-import { notifyCurationCustomerPaid, notifyAdminBillingStalled } from "@/lib/email";
+import { notifyCurationCustomerPaid, notifyAdminCurationPaid, notifyAdminBillingStalled } from "@/lib/email";
+import { CURATION_TIERS, type CurationTierKey } from "@/lib/curation-tiers";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
 import { resolveArtistNamesBulk } from "@/emails/_helpers/resolve-artist-name";
@@ -163,19 +164,29 @@ async function handleWebhookEvent(
             console.error("curation_requests update error:", updErr);
             return NextResponse.json({ error: "DB update failed" }, { status: 500 });
           }
+          // One label source: CURATION_TIERS, not a second inline map that could drift.
+          const tierLabel = CURATION_TIERS[existing.tier as CurationTierKey]?.label || existing.tier;
+
+          // D23: tell the curator the money actually landed. notifyAdminCurationRequest
+          // fired at submit, before payment, so without this an admin cannot tell a paid
+          // brief from an abandoned checkout without opening Stripe. Fires whether or not
+          // the venue left a contact email.
+          await notifyAdminCurationPaid({
+            requestId,
+            tier: tierLabel,
+            amountGbp: amountPaid,
+            venueName: existing.venue_name,
+            contactName: existing.contact_name,
+            contactEmail: existing.contact_email,
+            isSubscription,
+          }).catch((err) => { if (err) console.error("notifyAdminCurationPaid error:", err); });
+
           if (existing.contact_email) {
-            const tierLabels: Record<string, string> = {
-              single_wall: "Single wall",
-              full_space: "Full space",
-              bespoke: "Bespoke project",
-              managed_monthly: "Managed, monthly rotation",
-              managed_quarterly: "Managed, quarterly refresh",
-            };
             await notifyCurationCustomerPaid({
               email: existing.contact_email,
               contactName: existing.contact_name,
               venueName: existing.venue_name,
-              tierLabel: tierLabels[existing.tier] || existing.tier,
+              tierLabel,
               amountGbp: amountPaid,
             }).catch((err) => { if (err) console.error("notifyCurationCustomerPaid error:", err); });
           }

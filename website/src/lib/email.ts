@@ -671,3 +671,47 @@ export async function notifyCurationCustomerPaid(params: {
     console.error("Email send error (curation paid):", err);
   }
 }
+
+/**
+ * Admin alert when a curation payment actually settles (D23). The submit-time
+ * notifyAdminCurationRequest fires before payment, so without this an admin
+ * cannot tell a paid brief from an abandoned checkout without opening Stripe.
+ * Also fired on managed-subscription renewals.
+ */
+export async function notifyAdminCurationPaid(params: {
+  requestId: string;
+  tier: string;
+  amountGbp: number;
+  venueName: string;
+  contactName: string;
+  contactEmail: string | null;
+  isSubscription: boolean;
+  isRenewal?: boolean;
+}) {
+  const resend = getResend();
+  if (!resend) return;
+  try {
+    const kind = params.isRenewal
+      ? "Managed subscription renewal"
+      : params.isSubscription
+        ? "Managed subscription, first payment"
+        : "One-off payment";
+    await resend.emails.send({
+      from: FROM,
+      to: ADMIN_EMAIL,
+      subject: `Curation paid (£${params.amountGbp}): ${params.venueName}`,
+      html: `
+        <h2>Curation payment received</h2>
+        <p><strong>${params.venueName}</strong> paid <strong>£${params.amountGbp}</strong> (${params.tier}).</p>
+        <ul>
+          <li>${kind}</li>
+          <li>Contact: ${params.contactName}${params.contactEmail ? ` &lt;${params.contactEmail}&gt;` : ""}</li>
+        </ul>
+        <p>The brief is paid and ready to curate.</p>
+        <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/curation" style="color: #C17C5A; font-weight: 600;">View in admin</a></p>
+      `,
+    });
+  } catch (err) {
+    console.error("Email send error (curation paid admin):", err);
+  }
+}

@@ -23,7 +23,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { readSubscriptionIdFromInvoice } from "@/lib/stripe-subscription-period";
-import { notifyAdminCurationCancelled } from "@/lib/email";
+import { notifyAdminCurationCancelled, notifyAdminCurationPaid } from "@/lib/email";
+import { CURATION_TIERS, type CurationTierKey } from "@/lib/curation-tiers";
 
 interface CurationRow {
   id: string;
@@ -70,6 +71,25 @@ export async function handleCurationInvoicePaid(
       updated_at: new Date().toISOString(),
     })
     .eq("id", row.id);
+
+  // D23: a renewal is money landing again, and it was silent. Only ping on a
+  // recurring cycle — the first invoice (subscription_create) is already covered
+  // by the checkout webhook's notifyAdminCurationPaid, so guarding here avoids a
+  // double send at signup.
+  if (invoice.billing_reason === "subscription_cycle") {
+    await notifyAdminCurationPaid({
+      requestId: row.id,
+      tier: CURATION_TIERS[row.tier as CurationTierKey]?.label || row.tier || "",
+      amountGbp: (invoice.amount_paid ?? 0) / 100,
+      venueName: row.venue_name ?? "",
+      contactName: row.contact_name ?? "",
+      contactEmail: row.contact_email,
+      isSubscription: true,
+      isRenewal: true,
+    }).catch((err) => {
+      if (err) console.error("notifyAdminCurationPaid (renewal) error:", err);
+    });
+  }
   return true;
 }
 

@@ -54,10 +54,11 @@ const { recordBlockedLegMock, canReceivePayoutMock } = vi.hoisted(() => ({
 // each event to the right reconciler. The handlers return false (not a curation
 // subscription) so every existing test flows through unchanged; their real
 // behaviour is unit-tested in src/lib/curation/billing.test.ts.
-const { curationInvoicePaidMock, curationInvoiceFailedMock, curationSubDeletedMock } = vi.hoisted(() => ({
+const { curationInvoicePaidMock, curationInvoiceFailedMock, curationSubDeletedMock, notifyAdminCurationPaidMock } = vi.hoisted(() => ({
   curationInvoicePaidMock: vi.fn(async () => false),
   curationInvoiceFailedMock: vi.fn(async () => false),
   curationSubDeletedMock: vi.fn(async () => false),
+  notifyAdminCurationPaidMock: vi.fn(async () => {}),
 }));
 
 vi.mock("@/lib/stripe", () => ({
@@ -95,6 +96,7 @@ vi.mock("@/lib/email", () => ({
   notifyArtistNewOrder: vi.fn(async () => {}),
   notifyVenueOrderFromPlacement: vi.fn(async () => {}),
   notifyCurationCustomerPaid: vi.fn(async () => {}),
+  notifyAdminCurationPaid: notifyAdminCurationPaidMock,
   notifyAdminBillingStalled: notifyAdminBillingStalledMock,
 }));
 
@@ -365,6 +367,7 @@ beforeEach(() => {
   curationInvoicePaidMock.mockClear();
   curationInvoiceFailedMock.mockClear();
   curationSubDeletedMock.mockClear();
+  notifyAdminCurationPaidMock.mockClear();
 });
 
 describe("Stripe webhook — venue revenue split", () => {
@@ -2438,6 +2441,21 @@ describe("Stripe webhook — curation payment id storage (D20)", () => {
     // A one-off has no subscription, so the column stays null.
     expect(curationUpdate!.stripe_subscription_id).toBeNull();
     expect(curationUpdate!.status).toBe("paid");
+  });
+
+  it("D23: tells the admin the money landed when a curation payment settles", async () => {
+    setupCurationDb();
+
+    await fireCuration({ mode: "subscription", payment_intent: null, subscription: "sub_x", amount_total: 7999 });
+
+    expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isSubscription: true,
+        amountGbp: 79.99,
+        venueName: "The Copper Kettle",
+        tier: "Managed, monthly rotation",
+      }),
+    );
   });
 });
 

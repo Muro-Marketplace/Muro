@@ -10,13 +10,15 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 
-const { notifyAdminCurationCancelledMock } = vi.hoisted(() => ({
+const { notifyAdminCurationCancelledMock, notifyAdminCurationPaidMock } = vi.hoisted(() => ({
   notifyAdminCurationCancelledMock: vi.fn(async () => {}),
+  notifyAdminCurationPaidMock: vi.fn(async () => {}),
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({}) }));
 vi.mock("@/lib/email", () => ({
   notifyAdminCurationCancelled: notifyAdminCurationCancelledMock,
+  notifyAdminCurationPaid: notifyAdminCurationPaidMock,
 }));
 
 import {
@@ -59,10 +61,16 @@ function makeDb(row: Record<string, unknown> | null) {
 }
 
 /** An invoice carrying a subscription id in the SDK-22 canonical shape. */
-function invoice(subId: string | null, nextAttempt: number | null = 123): Stripe.Invoice {
+function invoice(
+  subId: string | null,
+  nextAttempt: number | null = 123,
+  extra: { billingReason?: string; amountPaid?: number } = {},
+): Stripe.Invoice {
   return {
     parent: subId ? { subscription_details: { subscription: subId } } : undefined,
     next_payment_attempt: nextAttempt,
+    billing_reason: extra.billingReason,
+    amount_paid: extra.amountPaid,
   } as unknown as Stripe.Invoice;
 }
 
@@ -99,6 +107,33 @@ describe("handleCurationInvoicePaid", () => {
 
     expect(handled).toBe(false);
     expect(updates).toHaveLength(0);
+  });
+
+  it("D23: pings the admin on a subscription_cycle renewal", async () => {
+    const { db } = makeDb(ROW);
+
+    await handleCurationInvoicePaid(
+      invoice("sub_cur_1", null, { billingReason: "subscription_cycle", amountPaid: 7999 }),
+      db,
+    );
+
+    expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: "cr_1", amountGbp: 79.99, isRenewal: true, isSubscription: true }),
+    );
+  });
+
+  it("D23: does NOT ping the admin on the first invoice (subscription_create)", async () => {
+    const { db, updates } = makeDb(ROW);
+
+    const handled = await handleCurationInvoicePaid(
+      invoice("sub_cur_1", null, { billingReason: "subscription_create", amountPaid: 7999 }),
+      db,
+    );
+
+    // Still reconciles the row, just no admin ping (the checkout webhook already sent one).
+    expect(handled).toBe(true);
+    expect(updates[0].status).toBe("in_progress");
+    expect(notifyAdminCurationPaidMock).not.toHaveBeenCalled();
   });
 });
 
