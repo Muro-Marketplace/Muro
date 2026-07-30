@@ -5039,3 +5039,98 @@ subscription changes behaviour.
 parameters, which is exactly what Stripe would have received.
 
 **Still open in T6:** E7c, E7d, E11, E11b.
+
+---
+
+## `04` T6 / E7c — nothing stopped a placement having two live billing rows (owner: `04` §B6)
+
+Commit `07317eb`. Migration `083`.
+
+**Three parts, one already fixed.** §E7c's first paragraph (the cancel path reads a
+table Path 2 never populated, plus "add the `placements.stripe_subscription_id`
+mirror write") was resolved by E7a: both paths now write the ledger and the mirror.
+What remained was the conflict target and the FK.
+
+**The finding.** The table's only uniqueness was `UNIQUE (stripe_subscription_id)`
+on a **nullable** column (confirmed in prod: `stripe_subscription_id text YES`), and
+NULLs do not conflict in Postgres, so a row written before the subscription id was
+known gave no protection and nothing stopped one placement accumulating live billing
+rows. That matters because both `cancelPaidLoanBilling` and E7b's dedup guard ask
+"does this placement have a live subscription?", and two rows make the answer
+ambiguous.
+
+**Migration 083** adds a partial unique index on `placement_id WHERE status <>
+'cancelled'` and the FK to `placements`. Partial rather than total because cancelled
+rows are archived by status, not deleted, so a venue who cancels must be able to
+start again.
+
+**The plan's UNCONFIRMED is resolved.** §E7c flags "UNCONFIRMED: whether
+`placements.id` is TEXT PRIMARY KEY. Verify before adding the FK; the migration must
+be split if not." Verified against the live project: `placements.id` is `text` with
+`PRIMARY KEY (id)`, and `placement_recurring_billings.placement_id` is `text NOT
+NULL`. Type-compatible, no split needed.
+
+**Migration numbering, wrong again.** The plan names this `078`, inside `02`'s range
+(074-079). D1 gives `04` 080-089 and 080-082 are taken, so it is **083**. Second
+numbering error in this doc after E9's `076`.
+
+**Proved against prod with a rolled-back `DO` block** (unconditional trailing
+`raise`, so nothing is written):
+
+```
+ERROR: P0001: PROBE RESULT (rolled back):
+  PASS: second live row refused with 23505
+| PASS: cancelled row alongside live accepted
+| PASS: orphan placement_id refused by the FK
+```
+
+`select count(*) from placement_recurring_billings` → `0` after the probe.
+
+**A second defect the new index exposes.** `cancelPaidLoanBilling` read its row with
+`.maybeSingle()`. A cancelled row beside a live one is exactly the state 083
+permits, and `maybeSingle()` raises PGRST116 on the pair, returns `data: null`, and
+the function reported `not_found` **while the subscription kept billing the venue**.
+It now filters cancelled rows in SQL and takes a list, the same shape as E7b's
+guard. This is the third `.maybeSingle()`-on-a-multi-row-query bug in this doc's
+snippets, so it is worth naming as a pattern rather than three coincidences.
+
+The unreachable "already cancelled" branch is deleted, and the behaviour change
+(cancelled-only placements now return `not_found` rather than `cancelled`) is safe:
+the only caller, `api/placements/route.ts:1385`, ignores the return value.
+
+**Permanent versus transient failures.** `recordPaidLoanSubscription` reports 23505
+on the new index as `duplicate_live_billing`, and the webhook treats it as permanent
+(200 + `ignored`) alongside `monthly_amount_missing`. A retry can never resolve a
+placement that already has a live row for a different subscription, so a 500 would
+have Stripe retry for three days while the real problem, a venue being charged
+twice, sat unread in the logs.
+
+**Tests.** 5 cases added to `src/lib/placements/paid-loan-billing.test.ts` (18
+total). `buildDb` grew the list-based lookup.
+
+**Two probes:**
+
+```
+PROBE 1 — cancel path back to .maybeSingle()
+ FAIL  ... > cancels the live subscription when a cancelled row sits beside it
+      Tests  1 failed | 17 passed (18)
+
+PROBE 2 — 23505 not distinguished
+ FAIL  ... > reports duplicate_live_billing on 23505 rather than a generic failure
+      Tests  1 failed | 17 passed (18)
+```
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  160 passed (160)
+Tests  1699 passed (1699)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+`tests/integration/migration-numbering.test.ts` → `Tests 4 passed (4)`, so 083 sits
+in the right range.
+
+**Still open in T6:** E7d (the `setup_intent.succeeded` branch, §C5's second half),
+E11, E11b.
