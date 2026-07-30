@@ -7607,3 +7607,36 @@ nothing). Its twin, `onboarding-nudges`, is a clean rename and is being fixed ne
 
 **Moving on:** row 19 #3, `cron/onboarding-nudges:51` (artist_statement /
 profile_photo → real columns), which is unambiguous.
+
+## row 19 #3 — onboarding-nudges artist branch uses real bio/image columns
+
+Commit `bb1a695` (supervisor D60 committed in isolation first, `faf76bf`).
+
+**The defect.** The artist branch selected `artist_profiles.artist_statement` +
+`profile_photo` (absent), so the whole artist select was rejected and the artist
+onboarding nudges have NEVER sent (the venue branch, real columns, works).
+
+**The fix.** `artist_statement` -> `short_bio`, `profile_photo` -> `profile_image`
+across the select + 8 completeness checks. `short_bio` (not extended_bio) is the
+right target: it is the primary bio shown on cards/search that a complete profile
+needs; extended_bio is explicitly optional. Labels ("Artist statement"/"Profile
+photo") unchanged copy. Ratchet 10 -> 9. Fail-before verified via the guard.
+`npm run check` -> `EXIT=0`, 1854 tests, 0 errors.
+
+**Supervisor D60 (this run) on #2 (placement-ending-soon):** confirmed my
+escalation was right, and ELIMINATED my recommended option (a): verified
+`placement_records.collection_date` is populated for only 1 of 37 active
+placements (0 in the future), so rewiring there is "the same silence with more
+code". The owner decision is now two-way: (b) build a real `placements.end_date`
+data model (a feature), or (c) disable the cron honestly. D60 is emphatic that
+LEAVING IT AS-IS is the worst option (a Vercel-scheduled job that looks healthy and
+has never sent an email).
+
+**Next iteration (per D60): honestly disable the ending-soon cron (option c
+interim).** Gate the handler to return early with a comment that the placement
+end-date data model does not exist (removes the phantom select + the daily wasted
+invocation + the pretence), remove its phantom-columns grandfather entry (ratchet
+-> 8), and correct `08 §302`'s "KEEP" note to record it is non-functional pending
+the owner's (b)-vs-(c) decision. This interim is fully reversible and does not
+foreclose (b); it just stops the pretence. Surface (b) to the owner. THEN continue
+row 19 #4 (walls/my-works placements.work_id).
