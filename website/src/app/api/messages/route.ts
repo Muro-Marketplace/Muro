@@ -5,6 +5,8 @@ import { isAdminRequest } from "@/lib/admin-auth";
 import { messageSchema } from "@/lib/validations";
 import { checkArtistOutreachCap } from "@/lib/outreach-cap";
 import { orFilter } from "@/lib/db/safe-filter";
+import { assertPlacementParty, handleAuthzError } from "@/lib/authz";
+import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { moderateMessage } from "@/lib/moderation";
 import { isFlagOn } from "@/lib/feature-flags";
 import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
@@ -507,14 +509,59 @@ export async function POST(request: Request) {
       const responseStatus = m.status as string;
 
       if (placementId && (responseStatus === "active" || responseStatus === "declined")) {
-        await db.from("placements").update({
-          status: responseStatus,
-          responded_at: new Date().toISOString(),
-        }).eq("id", placementId);
+        // E33. placementId and status came straight off client-supplied
+        // metadata and were written with the service-role client, so RLS never
+        // intervened. Any account with a profile could accept or decline ANY
+        // placement by guessing an id, and the notification email then told the
+        // artist their venue had accepted. This was a second, unguarded door to
+        // the state change that PATCH /api/placements protects.
+        //
+        // assertPlacementParty is the boundary: it re-reads the row filtered to
+        // artist_user_id or venue_user_id = the caller, so a non-party gets
+        // placement_not_found rather than a write.
+        const placement = await assertPlacementParty(auth.user!, placementId, db);
 
-        // Notify the other party
-        const { data: placement } = await db.from("placements").select("artist_user_id, venue, artist_slug").eq("id", placementId).single();
-        if (placement?.artist_user_id) {
+        // A known proposer may not answer their own request. Applied only when
+        // proposed_by_user_id is populated: prod has it on 2 of 86 rows, so
+        // treating "unknown proposer" as a refusal (which is what canRespond
+        // does) would block legitimate responses on the other 84. Widening that
+        // is 01 Phase D item 10's effective-requester work, and duplicating its
+        // fallback here would make a third copy of the rule.
+        if (placement.proposed_by_user_id && placement.proposed_by_user_id === auth.user!.id) {
+          return NextResponse.json(
+            { error: "You can't respond to your own placement request." },
+            { status: 403 },
+          );
+        }
+
+        const transition = canPlacementTransition(placement.status, responseStatus);
+        if (!transition.ok) {
+          return NextResponse.json({ error: transition.reason }, { status: 422 });
+        }
+
+        // Compare-and-set on pending, so two concurrent responses cannot both
+        // land and the second cannot overwrite the first.
+        const { data: updated, error: updErr } = await db
+          .from("placements")
+          .update({ status: responseStatus, responded_at: new Date().toISOString() })
+          .eq("id", placementId)
+          .eq("status", "pending")
+          .select("id");
+        if (updErr) {
+          console.error("[messages] placement response update failed", updErr);
+          return NextResponse.json({ error: "Could not update placement" }, { status: 500 });
+        }
+        if (!updated || updated.length === 0) {
+          return NextResponse.json(
+            { error: "This placement has already been answered." },
+            { status: 409 },
+          );
+        }
+
+        // Notify the other party. The row assertPlacementParty already fetched
+        // carries artist_user_id, venue and artist_slug, so the second SELECT
+        // that used to sit here is gone rather than left beside it.
+        if (placement.artist_user_id) {
           const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", placement.artist_user_id).single();
           const { data: { user: artistUser } } = await db.auth.admin.getUserById(placement.artist_user_id);
           if (artistUser?.email && artistProfile) {
@@ -579,7 +626,12 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, conversationId: cid });
-  } catch {
+  } catch (err) {
+    // Without this, the bare catch below swallowed AuthzError and reported a
+    // 400 for what is a 404 or 403, which would have made E33's new guard
+    // indistinguishable from a malformed body (01 §1.3).
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }

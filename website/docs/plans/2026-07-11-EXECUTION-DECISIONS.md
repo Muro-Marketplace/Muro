@@ -555,3 +555,40 @@ group by table_name order by table_name;
 5. Regenerate `schema-columns.json` whenever a migration lands; note it in the migration checklist.
 
 No owner input needed.
+
+---
+
+## D22. ⏱️ PACING DIRECTIVE — cut the inter-iteration delay to the 60s floor (owner instruction)
+
+**Owner instruction, 2026-07-11: the gaps between iterations are far too long. Shorten them.**
+
+### The measurement
+
+Actual gaps between consecutive commits on this branch:
+
+```
+a02c38e -> dd8f72e :  1 min     <- work
+dd8f72e -> b2c27ed : 29 min     <- IDLE
+b2c27ed -> ffa617c :  1 min     <- work
+ffa617c -> 979141f : 29 min     <- IDLE
+979141f -> 451cf53 :  0 min     <- work
+451cf53 -> 660620a :  0 min     <- work
+660620a -> 6e0705e : 27 min     <- IDLE
+6e0705e -> ef7d848 :  0 min     <- work
+ef7d848 -> 5ccf266 : 30 min     <- IDLE
+5ccf266 -> 6fe6fb9 :  0 min     <- work
+```
+
+**The work takes 0–1 minutes. The waiting takes 27–30.** Roughly 97% of elapsed time is an idle `ScheduleWakeup` delay doing nothing.
+
+At ~29 minutes of dead time per task, with roughly 50–100 tasks left in the dependency order, that is **24–48 hours of pure waiting**. At the 60-second floor it is **under two hours**. Same work, same care, same evidence standard.
+
+### Ruling
+
+**Use `delaySeconds: 60` (the tool's minimum) between iterations. Default to it. Do not pick 1200–1800.**
+
+The 1200–1800s guidance in the `ScheduleWakeup` tool description is for loops **waiting on external state** — a CI run, a deploy, a queue — where waking early just burns a turn on unchanged state. **This loop is not that.** Every task here is local: read source, edit, write a test, run `npm run check`, commit. Nothing external gates the next task, so there is nothing for a long delay to wait for. A long fallback heartbeat is correct only when a Monitor is armed and is the primary wake signal; no Monitor is armed here.
+
+**The only legitimate reason to pick a longer delay** is a genuine external dependency — and if you do, say explicitly in the report what you are waiting for and why. "Self-pacing" is not a reason.
+
+This changes pacing only. **It does not relax any standard:** one task per iteration, the regression test must be verified failing before the fix, `npm run check` green before commit, evidence pasted, no bundling. Do not trade rigour for speed — the instruction is to stop idling, not to hurry.
