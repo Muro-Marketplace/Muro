@@ -671,3 +671,42 @@ Item 14 is a good example of the payoff: the stricter gate immediately found **a
 **Carry forward:** a test asserting "it refused" is weaker than one asserting "it refused *with this status, for this reason*". Where cheap, assert the reason.
 
 No owner input needed.
+
+---
+
+## D25. `01` item 15 is NOT an owner decision — it is a 51-warning dependency, and until it clears, the authz guard does not guard
+
+**`01` is complete and item 16 was correctly assessed void.** The reasoning there is exemplary: no consumer for the PII, the prescribed token mechanism has an ordering bug (`success_url` is fixed at session-creation, before the session id exists, and Stripe only templates `{CHECKOUT_SESSION_ID}`), `verifyOrderToken` throws rather than returning null, and the doc's own stated fallback had already shipped in Phase B. Shipping an **exact response-shape lock** instead was the right call, and the probe proved why: adding an innocuous `currency` field failed 2 tests while **every by-name assertion passed**. Declining to also add TTL-bounding — "scope drift is how the knot re-formed last time" — is exactly the discipline this plan needs.
+
+### D25.1 — Correcting the framing
+
+The ledger records item 15's `warn` → `error` flip as an **owner decision**. It is not. I checked before endorsing it:
+
+```
+eslint.config.mjs:32   "wallplace/require-authz-on-mutation": "warn"
+measured:              51 warnings across 43 files
+```
+
+Flipping today breaks CI with 51 errors. So this is a **dependency, not a decision**: drive 51 → 0, then flip. There is nothing for the owner to choose.
+
+### D25.2 — Why this matters more than its ledger position suggests
+
+**A `warn` rule cannot fail a build.** Task 0 made lint block CI, but only on errors. So the authz guard — the single highest-leverage control in this entire plan (K9: 119 routes, 103 service-role, only 73 identifying the caller) — is **currently decorative in CI**, in precisely the way `no-raw-arrangement-type` was before Task 0. We fixed that exact failure mode on day one and have quietly recreated it.
+
+### D25.3 — Ruling: clear the 51, using the pattern that already worked
+
+The demo guard drove **58 → 0** with "guarded or exempt-with-reason". Mirror it:
+
+1. **Triage each of the 51.** Two outcomes only:
+   - **Real gap** → add the appropriate `assert*` from `@/lib/authz`.
+   - **Safe by construction** (writes only the caller's own row, scoped in the same query, e.g. `account/preferences`, `account/email-preferences`, `saved`) → allowlist entry **with a stated reason**, same shape as the demo-guard exemptions. Never a bare suppression.
+2. **Check these first** — they mutate objects with a second party, so a self-scoped write is not sufficient: `placements/[id]/photos`, `works/[id]/mockups`, `messages/item/[messageId]`, `customer-addresses/[id]`, `blogs/[id]`, `collections`, `artwork-requests/[id]/responses/[responseId]`.
+   *Evidence, not assertion:* `placements/[id]/photos` authenticates and calls `assertNotDemo`, but a grep shows **no ownership `.eq`** — it may do a fetch-then-compare, which is the exact gap CC1 exists to close. Verify it properly rather than trusting the grep.
+3. **Ratchet as you go** (the ratchet test already exists), then **flip to `error`** as the Phase 2 exit.
+4. **Apply D24.2:** after flipping, revert one `assert*` call and confirm CI fails. A guard nobody has seen fail is not a guard.
+
+### D25.4 — Sequencing
+
+**Do this before going deep into `05`, `07` or `08`.** Every later workstream adds routes, and each one added while the rule is at `warn` can reintroduce the exact IDOR class `01` just spent twenty commits closing. Closing the gate is worth more than the next feature fix.
+
+No owner input needed — for either item 15 or item 16.

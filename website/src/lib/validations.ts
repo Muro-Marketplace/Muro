@@ -150,6 +150,20 @@ export const placementSchema = z.object({
   requestedDimensions: optionalString(100),
 });
 
+/**
+ * E46b. POST /api/terms/accept previously took four free-text fields with no
+ * caps and no validation, on an unauthenticated insert, which is a
+ * storage-exhaustion vector as well as a forgery one. `userEmail` is accepted
+ * here but the route IGNORES it whenever the caller is authenticated: an
+ * authenticated acceptance takes the email from the token, never the body.
+ */
+export const termsAcceptSchema = z.object({
+  userEmail: z.string().trim().toLowerCase().email().max(320),
+  userType: z.enum(["artist", "venue", "customer"]),
+  termsVersion: safeString(50),
+  termsType: safeString(50),
+});
+
 export const placementUpdateSchema = z.object({
   id: safeString(100),
   // "completed" is deliberately absent (E23b). It is reachable only through
