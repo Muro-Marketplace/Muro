@@ -1,81 +1,119 @@
-// Guard against the phantom-column class (D17.3).
+// Guard against the phantom-column class (D17.3), full form (ledger 7b).
 //
 // The failure is always the same and always silent: a `.select()` names a column
 // that does not exist, PostgREST rejects the ENTIRE query, the `|| []` or `?? null`
-// fallback yields a plausible-but-wrong value, and nothing throws. Four instances
-// have cost real money or real entitlements so far:
+// fallback yields a plausible-but-wrong value, and nothing throws. Instances have
+// cost real money or real entitlements:
 //
 //   orders.amount_cents          Bug 15  /admin read £0 against £1174.87 of sales
 //   artist_profiles.free_until   D17.1   every artist charged 15%, premium owed 8%
 //   ships_internationally        G-C     every artwork page claimed "UK only"
 //   placements.requester_user_id N3      accept/decline never rendered
 //
-// This file is the narrow version, scoped to the columns already proven absent
-// against project uwkuhygwvasdzwsusiym. D17.3 mandates the general form: a
-// committed schema-columns.json snapshot plus a scan of every select. That is
-// ledger item 7b; this is the part that pays for itself now.
+// The narrow first cut hard-coded a denylist of four columns already proven
+// absent. This is the general form D17.3 mandated: a committed snapshot of every
+// column in the live schema (schema-columns.json, generated from project
+// uwkuhygwvasdzwsusiym) plus a scan of every select against it. Any select naming
+// a column the snapshot lacks is a phantom, whether or not anyone knew about it.
+//
+// Regenerate the snapshot after a migration:
+//   select jsonb_object_agg(table_name, cols) from (
+//     select table_name, jsonb_agg(column_name order by ordinal_position) cols
+//     from information_schema.columns where table_schema='public' group by table_name) t;
 
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../src");
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SRC = path.resolve(HERE, "../../src");
+const SCHEMA: Record<string, string[]> = JSON.parse(
+  readFileSync(path.join(HERE, "schema-columns.json"), "utf8"),
+);
 
 /**
- * Verified absent from a SPECIFIC live table, keyed "table.column".
+ * Phantom selects that already exist, grandfathered so the build passes while a
+ * NEWLY introduced phantom still fails. Each is a real bug found by this guard,
+ * queued as its own work; the `why` names the real column. A ratchet, not a cap:
+ * shrink it by fixing something and lower the count in the same commit. NEVER add
+ * to it to make a new phantom select pass, that is the one thing it exists to stop.
  *
- * Table-aware on purpose. The first cut of this guard matched on column name
- * alone and immediately flagged `stripe_transfers.amount_cents`, which is a real
- * column: only `orders.amount_cents` was ever phantom. A guard that cries wolf
- * teaches people to add exemptions, so it must be as precise as the schema.
- *
- * `ships_internationally` and `international_shipping_price` are deliberately
- * absent from this list: they WERE phantom, and migration 081 made them real.
+ * Matched on the EXACT columns string, not the file alone: a file-level exemption
+ * would silently un-guard every other select in the same file.
  */
-const PHANTOM: Record<string, string> = {
-  "artist_profiles.free_until": "D17.1. Real column is trial_end",
-  "orders.amount_cents": "Bug 15. Use total (pounds) and convert",
-  "artist_works.in_store_price": "A8. Still absent",
-  "placements.requester_user_id": "N3. Real column is proposed_by_user_id",
-};
-
-/**
- * Parked by an explicit decision, not by neglect. Each entry names the decision.
- */
-const EXEMPT = [
+const GRANDFATHERED: Array<{ file: string; columns: string; phantom: string[]; why: string }> = [
   {
     file: "app/api/webhooks/stripe/route.ts",
-    column: "free_until",
-    // Matched on the EXACT column list, not just the file. A file-level exemption
-    // here silently un-guarded the fee select in the same file, which is the one
-    // line D17.1 exists to protect: reverting that fix left the suite green. Found
-    // by probing the guard rather than trusting it.
     columns: "id, free_until",
-    why: "D17.2: the referral path WRITES a free window and where it should write is "
-       + "an open owner question (trial_end is Stripe-managed). Left as the silent "
-       + "no-op it already is rather than half-migrated. Remove this exemption when "
-       + "D17.2 is answered.",
+    phantom: ["free_until"],
+    why: "D17.2: the referral path writes a free window and where it should write is an open owner question (trial_end is Stripe-managed). Left as the silent no-op it already is. Remove when D17.2 is answered.",
   },
-];
-
-/**
- * Real bugs, found by this guard, queued as their own work. Kept SEPARATE from
- * EXEMPT so nobody reads a bug as a decision. The count below is a ratchet: it may
- * shrink, never grow, so a newly introduced phantom select still fails the build.
- */
-const KNOWN_UNFIXED = [
   {
     file: "app/api/placements/route.ts",
-    column: "requester_user_id",
     columns: "artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, requester_user_id",
-    finding: "N3 follow-up",
-    why: "This route integrates the phantom column in roughly twenty places: reads, "
-       + "an insert, an update, a role-flip, a strip-candidate list and a backfill. "
-       + "The real column is proposed_by_user_id, which lib/authz.ts already uses. "
-       + "Untangling it is its own task, not a side effect of the D17.1 fee fix. The "
-       + "site is not currently failing for users because it retries without the "
-       + "column, at the cost of one guaranteed-rejected query per request.",
+    phantom: ["requester_user_id"],
+    why: "N3 / ledger 7c. The real column is proposed_by_user_id, which lib/authz.ts already uses. This route integrates the phantom in ~20 places; untangling it is its own task.",
+  },
+  {
+    file: "app/api/cron/onboarding-nudges/route.ts",
+    columns: "user_id, name, slug, created_at, artist_statement, profile_photo, primary_medium, stripe_connect_account_id, venue_types_suited_for, themes",
+    phantom: ["artist_statement", "profile_photo"],
+    why: "artist_profiles has short_bio/extended_bio and profile_image, not artist_statement/profile_photo. The nudge query is rejected whole, so nudges are silently skipped. Fix: use the real columns.",
+  },
+  {
+    file: "app/api/cron/placement-ending-soon/route.ts",
+    columns: "id, artist_user_id, venue_user_id, venue, venue_slug, end_date",
+    phantom: ["end_date"],
+    why: "placements has no end_date (it tracks live_from / collected_at / scheduled_for). The ending-soon cron query is rejected whole, so it never fires. Fix: derive the end from the real columns.",
+  },
+  {
+    file: "app/api/offers/route.ts",
+    columns: "id, title, work_ids",
+    phantom: ["title"],
+    why: "artist_collections has name, not title. The collection title reads null on the offers path. Fix: select name (alias to title if the consumer needs it).",
+  },
+  {
+    file: "app/api/offers/route.ts",
+    columns: "title",
+    phantom: ["title"],
+    why: "artist_collections has name, not title (second select on the same route). Fix: select name.",
+  },
+  {
+    file: "app/api/orders/[id]/events/route.ts",
+    columns: "id, status, buyer_email, artist_user_id, venue_user_id, items, shipping, total, currency, placed_at, created_at",
+    phantom: ["venue_user_id", "currency", "placed_at"],
+    why: "orders has no venue_user_id (venue is via venue_slug), no currency, no placed_at (use created_at). The whole select is rejected, so loadOrder returns null and the events page cannot resolve the order.",
+  },
+  {
+    file: "app/api/orders/track/route.ts",
+    columns: "id, order_number, status, buyer_email, buyer_name, artist_slug, total_amount, shipping_amount, currency, cart_items, status_history, tracking_number, tracking_url, shipped_at, delivered_at, created_at",
+    phantom: ["buyer_name", "total_amount", "shipping_amount", "currency", "cart_items", "tracking_url", "shipped_at", "delivered_at"],
+    why: "orders has total/shipping_cost/items, not total_amount/shipping_amount/cart_items, and no buyer_name/currency/tracking_url/shipped_at/delivered_at. The whole select is rejected, so order tracking cannot load an order at all.",
+  },
+  {
+    file: "app/api/placements/[id]/route.ts",
+    columns: "name, slug, image",
+    phantom: ["image"],
+    why: "artist_profiles has profile_image, not image. The artist image reads null on the placement detail path. Fix: select profile_image.",
+  },
+  {
+    file: "app/api/walls/my-works/route.ts",
+    columns: "id, work_id, work_title, work_image, status, artist_user_id, artist_slug",
+    phantom: ["work_id"],
+    why: "placements has no work_id (it carries work_title / work_image / current_placement_id). The whole select is rejected, so my-works cannot list placed works.",
+  },
+  {
+    file: "app/sitemap.ts",
+    columns: "title, updated_at, artist_profiles!inner(slug)",
+    phantom: ["updated_at"],
+    why: "artist_works has created_at, not updated_at. The sitemap lastmod is null (the whole select is rejected). Fix: select created_at.",
+  },
+  {
+    file: "lib/placements/paid-loan-billing.ts",
+    columns: "user_id, stripe_customer_id, contact_email, name",
+    phantom: ["contact_email"],
+    why: "venue_profiles has email, not contact_email. ensureVenueCustomer's lookup is rejected whole, so it falls back to the auth email every time. Fix: select email.",
   },
 ];
 
@@ -109,58 +147,132 @@ function tableSelects(source: string): { table: string; columns: string; line: n
   return found;
 }
 
+/**
+ * Split a PostgREST select on its TOP-LEVEL commas only, so an embed like
+ * `orders(id, total)` stays one token instead of leaking its inner columns as
+ * bare tokens of the parent table (which is how the naive split cried wolf on
+ * `refunds.buyer_email`).
+ */
+function topLevelColumns(columns: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of columns) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur.trim()) out.push(cur);
+  return out;
+}
+
+const PLAIN_COLUMN = /^[a-z_][a-z0-9_]*$/;
+
+/**
+ * The columns a select names that the table's live schema lacks. Only PLAIN column
+ * tokens are checked: `*`, embeds `foo(...)`, aliases `a:b`, casts `x::text`, json
+ * ops `x->>y` and aggregates are skipped, because those are not "column X of this
+ * table" claims. Returns [] for a table the snapshot does not cover (e.g. a table a
+ * pending migration will add), so the guard never blocks on an unknown table.
+ */
+export function phantomColumns(table: string, columns: string, schema = SCHEMA): string[] {
+  const known = schema[table];
+  if (!known) return [];
+  const set = new Set(known);
+  const bad: string[] = [];
+  for (const raw of topLevelColumns(columns)) {
+    const token = raw.trim();
+    if (!PLAIN_COLUMN.test(token) || token === "count") continue;
+    if (!set.has(token)) bad.push(token);
+  }
+  return bad;
+}
+
 const FILES = walk(SRC);
 
-describe("no .select() names a column the live schema lacks", () => {
+describe("no .select() names a column the live schema lacks (D17.3, full form)", () => {
   it("scans a meaningful number of source files", () => {
-    // Cheap insurance: a broken walk would make every assertion below vacuous.
     expect(FILES.length).toBeGreaterThan(100);
   });
 
-  it("finds table/select pairs to check", () => {
-    const total = FILES.reduce((n, f) => n + tableSelects(readFileSync(f, "utf8")).length, 0);
-    expect(total).toBeGreaterThan(50);
+  it("checks a meaningful number of table/select pairs against the snapshot", () => {
+    let checked = 0;
+    for (const f of FILES) {
+      for (const { table } of tableSelects(readFileSync(f, "utf8"))) {
+        if (SCHEMA[table]) checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(200);
   });
 
-  it("has no unexempted phantom column in any select", () => {
+  it("has no phantom column in any select except the grandfathered ones", () => {
     const offences: string[] = [];
     for (const file of FILES) {
       const rel = path.relative(SRC, file);
       for (const { table, columns, line } of tableSelects(readFileSync(file, "utf8"))) {
-        const named = columns.split(",").map((c) => c.trim().split(/[\s(]/)[0]);
-        for (const column of named) {
-          const key = `${table}.${column}`;
-          if (!PHANTOM[key]) continue;
-          const parked = [...EXEMPT, ...KNOWN_UNFIXED].some(
-            (e) => rel === e.file && e.column === column && e.columns === columns,
+        for (const column of phantomColumns(table, columns)) {
+          const parked = GRANDFATHERED.some(
+            (g) => g.file === rel && g.columns === columns && g.phantom.includes(column),
           );
           if (parked) continue;
-          offences.push(`${rel}:${line} selects "${key}" (${PHANTOM[key]})`);
+          offences.push(`${rel}:${line} selects "${table}.${column}" (not in the live schema)`);
         }
       }
     }
-    expect(offences, `phantom column(s) in a select:\n${offences.join("\n")}`).toEqual([]);
+    expect(offences, `phantom column(s) not grandfathered:\n${offences.join("\n")}`).toEqual([]);
   });
 
-  it("holds the known-unfixed list at its recorded size, so new debt fails the build", () => {
-    // A ratchet, not a cap on effort: shrink it by fixing something, and lower the
-    // number in the same commit.
-    expect(KNOWN_UNFIXED).toHaveLength(1);
-    for (const k of KNOWN_UNFIXED) {
-      expect(k.finding.length, "each entry names the finding it belongs to").toBeGreaterThan(1);
-      expect(k.why.length, "each entry explains why it is not fixed here").toBeGreaterThan(60);
+  it("holds the grandfathered list at its recorded size, so new debt fails the build", () => {
+    // A ratchet, not a cap on effort: shrink it by fixing a select, and lower the
+    // number in the same commit. It must never grow.
+    expect(GRANDFATHERED).toHaveLength(12);
+    for (const g of GRANDFATHERED) {
+      expect(g.phantom.length, "each entry lists the phantom column(s) it parks").toBeGreaterThan(0);
+      expect(g.why.length, "each entry names the real column and why it is not fixed here").toBeGreaterThan(60);
     }
   });
 
-  it("keeps every exemption honest: the site must still exist and still name it", () => {
-    // A stale exemption is worse than none, it hides a regression behind a
-    // reason that no longer applies.
-    for (const e of [...EXEMPT, ...KNOWN_UNFIXED]) {
-      const full = path.join(SRC, e.file);
-      const source = readFileSync(full, "utf8");
-      const stillThere = tableSelects(source).some((s) => s.columns === e.columns);
-      expect(stillThere, `exemption for ${e.file}:${e.column} is stale, delete it`).toBe(true);
-      expect(e.why.length, `exemption for ${e.file} needs a reason`).toBeGreaterThan(40);
+  it("keeps every grandfathered entry honest: the select must still exist and still trip the guard", () => {
+    // A stale entry hides a regression behind a reason that no longer applies.
+    for (const g of GRANDFATHERED) {
+      const source = readFileSync(path.join(SRC, g.file), "utf8");
+      const match = tableSelects(source).find((s) => s.columns === g.columns);
+      expect(match, `grandfathered select for ${g.file} is gone, delete this entry`).toBeTruthy();
+      const stillPhantom = phantomColumns(match!.table, match!.columns);
+      for (const col of g.phantom) {
+        expect(stillPhantom, `${g.file}: ${col} is no longer phantom, remove it from the entry`).toContain(col);
+      }
     }
+  });
+});
+
+describe("phantomColumns() allowlist logic", () => {
+  const schema = { orders: ["id", "total", "items"], artist_profiles: ["id", "name"] };
+
+  it("flags a column the table's schema lacks (what the narrow denylist could not)", () => {
+    expect(phantomColumns("orders", "id, total_amount", schema)).toEqual(["total_amount"]);
+  });
+
+  it("passes a select naming only real columns", () => {
+    expect(phantomColumns("orders", "id, total, items", schema)).toEqual([]);
+  });
+
+  it("does not leak an embed's inner columns as phantom columns of the parent", () => {
+    // artist_profiles(name) is a foreign-table embed; name belongs to it, not orders.
+    expect(phantomColumns("orders", "id, total, artist_profiles(name)", schema)).toEqual([]);
+  });
+
+  it("skips *, aliases, casts and json ops rather than treating them as columns", () => {
+    expect(phantomColumns("orders", "*", schema)).toEqual([]);
+    expect(phantomColumns("orders", "gross:total, id::text", schema)).toEqual([]);
+  });
+
+  it("returns [] for a table the snapshot does not cover, so an unknown table never blocks", () => {
+    expect(phantomColumns("admin_users", "id, whatever", schema)).toEqual([]);
   });
 });
