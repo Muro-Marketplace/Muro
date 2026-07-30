@@ -5994,3 +5994,49 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 **Still open in T7:** D14 (referral credit read-modify-write; its snippet reads the
 phantom `free_until` column and needs adapting to the live schema), D15 (scope the
 subscription handler by metadata.kind).
+
+---
+
+## `04` T7 / D14 — BLOCKED on a product decision (owner: `04` §B7)
+
+**Not implemented. The finding's premise is false against prod.**
+
+§D14 says the referral credit is a read-modify-write race and gives an atomic fix
+plus migration `079_extend_free_until.sql` operating on `free_until`. But:
+
+- **`free_until` is not a column** in the live `artist_profiles` (columns present:
+  `referral_code`, `referred_by_code`, `referral_credited_at`, `trial_end`, ... but
+  no `free_until`). The referral block's `.select("id, free_until")` on the referrer
+  is therefore rejected by PostgREST, `referrer` comes back null, the
+  `if (referrer)` branch never runs, and the credit is silently inert. The
+  subsequent `.update({ free_until })` would be rejected too.
+- **The race can never fire.** It is a read-modify-write in code that has never
+  executed, because the target column does not exist.
+- **There is no data either.** `referred_by_code` set on **0** profiles,
+  `referral_credited_at` set on **0**. 7 profiles have a `referral_code`, but nobody
+  has ever been referred and no credit has ever been applied.
+
+So the doc's atomicity fix would polish dead code, and its `extend_free_until` RPC
+targets a column that isn't there.
+
+**Why this is an owner decision, not a guess.** Making the feature actually work
+needs a home for the referral bonus:
+- `free_until` was removed (D17.1 territory: the fee-free window moved to
+  `trial_end`).
+- `trial_end` is written by the subscription webhook from Stripe's own trial, so a
+  referral extension stamped there would be clobbered the next time the referrer's
+  subscription updates. Not a safe target.
+- A new column (e.g. `referral_free_until`) plus a change to
+  `platformFeePercentForArtist` to honour it is a schema + commercial-model change.
+
+Which of these is a product call about the referral programme, so per "escalate,
+don't guess" it is recorded here rather than guessed. **No code shipped for D14.**
+
+**New owner decision.** Decide where a referral bonus lives (new column vs. reuse),
+then the atomic-credit implementation (conditional update on `referral_credited_at`
+as the guard, RPC increment on the chosen column) is straightforward. Until then the
+referral-credit block is inert and harmless (it writes nothing, because the phantom
+select fails).
+
+Proceeding to D15 in the same iteration per the loop's "record the blocker and move
+to the next unblocked task".
