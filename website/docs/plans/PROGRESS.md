@@ -6781,3 +6781,48 @@ short-circuit in `webhooks/stripe/route.ts`, look up existing `stripe_transfers`
 for the order and schedule any missing legs before returning (safe via
 scheduleTransfer's 23505 idempotency). Then the D52.2 `lib/email/welcome.ts`
 cosmetic follow-up. Then T8 D18 / T9.
+
+---
+
+## `04` C4 (part 2d) — duplicate-redelivery leg re-entry (D52.3). C4 COMPLETE.
+
+Commit `b6e80cb`. Webhook money-path change, done via a clean extraction.
+
+**The finding.** The D3 duplicate-order short-circuit returned `{duplicate}` before
+reaching leg scheduling, so a Stripe redelivery of a session whose order already
+exists (the F30 payment-intent check `:786`, and the 23505 order-id check `:807`)
+never re-attempted the payouts. If the first delivery inserted the order then 500'd
+before/around the legs, the retry saw the order, returned, and the legs were lost.
+
+**What changed.** Extracted the ~90-line transfers block into a module-level
+`scheduleOrderLegs(db, {orderId, legs, venueSlug, venueRevenue, isCollection})` and
+call it from all THREE points: the normal path and both duplicate returns. All the
+locals it needs are declared before the duplicate returns (orderId:573,
+venueSlug:575, venueRevenue:582, legs:684, isCollection:729), verified by typecheck.
+Safe because `scheduleTransfer` treats a `(order_id, recipient_user_id)` 23505 as an
+idempotent replay (C3), so a redelivery only fills the legs the first pass missed
+and never double-pays. No `_v2`: the block is one function now, not two copies.
+
+**Files.** `src/app/api/webhooks/stripe/route.ts` (extract + 3 call sites +
+ArtistLeg import), `src/app/api/webhooks/stripe/route.test.ts` (+1 test).
+
+**Tests (probe-verified).** A duplicate redelivery (existingOrderId → F30 path) now
+schedules both artist legs; probe (drop the F30 re-entry) → 0 legs, the blind spot.
+The E9 tests verify the extracted helper is unchanged on the normal path.
+`Tests 1817 passed (1817)`, `0 lint errors`, allowlist PASS. Dormant (Connect not
+live), so no live Stripe drive.
+
+**Feasibility note (the prompt asked me to escalate if too invasive).** It was NOT
+too invasive: a clean extraction with 6 well-defined params, the same code called
+from 3 places, verified by the existing E9 suite. So I did it rather than escalate.
+
+## C-SERIES COMPLETE (C1, C3, C4); D52 order fully executed
+- C1 canReceivePayout (`6d5c197`) + D52.2 webhook adoption (`3d6ee4e`).
+- C3 scheduleTransfer throws + recordBlockedLeg + migration 089 (`6dd4e40`).
+- C4: retry sweep (`779c588`), orders-without-legs reconciliation (`c02fdfe`),
+  duplicate-redelivery leg re-entry (`b6e80cb`).
+(C2 per-artist legs = E9, done earlier; C5 paid-loan webhook branches = earlier T6.)
+
+**Next:** the small D52.2 `lib/email/welcome.ts` `stripeConnected` cosmetic
+follow-up (own commit), then T8 D18 (curation refund, B10) and T9 (N1/N2). D14
+blocked on a product decision.
