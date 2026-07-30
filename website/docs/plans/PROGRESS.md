@@ -7130,3 +7130,43 @@ reconcile only. The curation refund path stays a feature (D57.4/D56.3).
 notification, folds in the renewal receipt deferred here), D24 (/curated/success
 asserts payment never verified). Re-read api/curation/route.ts + the curated
 success page first.
+
+## `04` B10 / D22 — managed curation billing interval made authoritative
+
+Commit `4d129fd`. Code-only, no migration.
+
+**The defect.** `curation-tiers.ts` declared `interval: "month"/"quarter"` on the
+managed tiers, and nothing read it. The actual cadence came from the Stripe price
+behind `STRIPE_PRICE_CURATION_MONTHLY`/`_QUARTERLY`, unvalidated: a quarterly env
+pointing at a monthly price would bill £199.99 every month while the page promises
+every quarter, silently.
+
+**The fix (doc's prescription — validate, not delete the field).** In the managed
+branch of `api/curation/route.ts`, before creating the subscription session,
+retrieve the configured price (cached 5 min in module scope) and check it against
+the tier: `recurring.interval === "month"`, `interval_count === (quarter ? 3 : 1)`
+(Stripe models quarterly as monthly ×3), `unit_amount === priceGbp*100`,
+`currency === "gbp"`. On mismatch or a retrieve failure, delete the pending row
+(safe — no session exists yet, D19) and 503 "Managed curation is temporarily
+unavailable". `tier.interval` is now read (lines 72, 211), so the field is
+authoritative.
+
+**Tests.** `curation/route.test.ts` gains a D22 block: matching price → checkout
+proceeds; wrong cadence, wrong amount, and failed retrieve each → 503 + row
+deleted + no session created. The stripe mock gained `prices.retrieve`, defaulted
+to a managed_monthly-matching price (so the D19/D20 managed cases still reach
+session creation); tests needing a specific outcome use a unique price id because
+the route's 5-min price cache is module-scoped and not cleared between tests.
+
+**Verification.** Fail-before: removing the validation block failed all 4 D22
+cases; restored byte-identical. `npm run check` → `EXIT=0`, `Test Files 165
+passed`, `Tests 1839 passed (1839)` (+4), 0 lint/type errors (warning count
+unchanged). No schema/RLS change → no DB ladder. Payment task; a live Stripe drive
+is impossible here, so the mocked route test exercises the retrieve+validate paths.
+
+**Next: D23** (nobody is told the money landed — 04 §B10 doc ~:1868). The admin is
+notified at SUBMIT (`notifyAdminCurationRequest`, before payment) but never when
+the payment settles. Doc fix: add `notifyAdminCurationPaid` in the webhook curation
+branch next to `notifyCurationCustomerPaid`. Also folds in the D21-deferred
+customer renewal-paid signal (send on `invoice.paid billing_reason ===
+'subscription_cycle'`). Re-read the webhook curation branch + lib/email.ts first.
