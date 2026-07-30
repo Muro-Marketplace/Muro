@@ -356,7 +356,7 @@ export async function POST(request: Request) {
 
         // Look up artist profile for subscription plan (fee rate)
         if (firstArtistSlug) {
-          const { data: ap } = await db.from("artist_profiles").select("user_id, subscription_plan, free_until").eq("slug", firstArtistSlug).single();
+          const { data: ap } = await db.from("artist_profiles").select("user_id, subscription_plan, trial_end").eq("slug", firstArtistSlug).single();
           if (ap) {
             artistUserId = ap.user_id;
             platformFeePct = platformFeePercentForArtist(ap);

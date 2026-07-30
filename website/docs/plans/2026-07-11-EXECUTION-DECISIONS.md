@@ -396,3 +396,79 @@ The referral path (`webhooks/stripe/route.ts:879-898`) *writes* to `free_until`,
 This delivers K11's actual value (a committed, auditable schema record) far more cheaply than `supabase db dump`, and unlike the dump it *actively prevents* the bug. **X2/K11's pg_dump requirement is downgraded to optional.** Owner: `02`, but pull it forward — every payment task depends on selects being correct.
 
 Reference (prod, verified): `artist_profiles` 67 cols · `orders` 27 · `placements` 36 · `purchase_offers` 21 · `venue_profiles` 40 · `artist_works` 21 · `stripe_transfers` 11 · `curation_requests` 24.
+
+---
+
+## D18. CORRECTION to D17.1 — `free_until` has FIVE select sites, not two, with three distinct live consequences
+
+**D17.1 named two sites. That was wrong and incomplete.** Verified by grep against the current tree. Fixing only the two named would leave two live bugs and a third partially open. Read this before starting task 7a.
+
+### The five `.select()` sites
+
+| # | Site | Consequence if left |
+|---|---|---|
+| 1 | `api/webhooks/stripe/route.ts:359` | Sale platform fee = 15% for every artist *(known, D17.1)* |
+| 2 | `api/placements/[id]/payment/setup/route.ts:47` | Paid-loan `application_fee_percent` wrong *(known, D17.1)* |
+| 3 | **`lib/placements/paid-loan-billing.ts:417`** | **NEW — recurring paid-loan payouts** |
+| 4 | **`lib/visualizer/tier-resolver.ts:95`** | **NEW — every artist downgraded to the free tier** |
+| 5 | `api/webhooks/stripe/route.ts:819` | Referral write path — the D17.2 owner question |
+
+### The two newly-found consequences, traced
+
+**Site 3 — paid-loan payouts are also over-charged.** `paid-loan-billing.ts:417` selects `free_until` → `artistProfile` is undefined → `platformFeePercentForArtist(null)` → **15%** → `artistShareCents` computed at `1 - 0.15` regardless of plan. Same overcharge as the sale path, applied to **recurring** loan revenue. D17.1 missed this because it is in `lib/`, not a route.
+
+**Site 4 — paying artists silently lose their visualizer tier.** `tier-resolver.ts:95` `readArtistTier` selects `free_until` → PostgREST error → the `if (error)` branch logs a warning and **returns `null`** → falls through to `readVenueTier` → `null` → the resolver returns **`"customer"`**. So **every artist, on every plan, is resolved to the free customer tier** and gets customer-level visualizer quota/limits. This is the mirror image of the fee bug: there Wallplace over-charges, here it under-delivers a paid feature. A Pro artist paying £49.99/month is silently on the free tier.
+
+*(Note site 4 does at least log `[visualizer] artist_profiles lookup failed:` — grep production logs for that string to confirm how long it has been firing.)*
+
+### Ruling
+
+**Fix all five in ONE commit.** They share a single root cause; splitting them invites a partial fix that reports success while two consequences remain live. Sites 1–4: drop `free_until` from the select (and map the free-window to **`trial_end`**, which exists). Site 5 stays until D17.2 is answered, but must be explicitly *deferred with a comment*, not silently left.
+
+**Regression test:** assert no `.select()` string in `src/` contains `free_until`, plus a unit test that `platformFeePercentForArtist` returns 8 for a premium artist and 5 for pro. Add a `tier-resolver` test asserting a premium artist resolves to a premium tier, not `customer`.
+
+### Why this matters beyond `free_until`
+
+I found sites 3 and 4 with a two-second grep that D17 did not run — I reasoned from the two sites the loop had reported instead of enumerating them. **This is precisely the failure mode D17.3's schema-column guard exists to eliminate**: a lint over every `.select()` would have listed all five automatically and could not have missed two. **Raise 7b (the guard) to run immediately after 7a**, not later in `02`. The manual sweep it mandates must cover the whole of `src/`, not just the sites already known.
+
+---
+
+## D19. The phantom-column class is bigger than believed — and it has killed two cron jobs
+
+Loop idle 22 min (a normal long wakeup; D18 unconsumed). No plan conflict to resolve, so this cycle went to ground truth: **the Postgres error log, which nobody had checked.** It is the fastest phantom-column detector available and it changes the picture.
+
+### D19.1 — Live errors in the last 24h (prod, `get_logs(postgres)`)
+
+```
+ERROR  column "free_until" does not exist                    ← D17/D18, pending
+ERROR  column "amount_cents" does not exist                  ← Bug 15, fixed
+ERROR  column placements.end_date does not exist             ← NEW
+ERROR  column artist_profiles.artist_statement does not exist ← NEW
+ERROR  column analytics_events.venue_slug does not exist     ← NEW (×9 in one burst)
+```
+
+**At least five distinct phantom columns are failing in production right now**, not the three D17.3 assumed.
+
+### D19.2 — 🔴 TWO CRON JOBS HAVE NEVER WORKED
+
+**`cron/placement-ending-soon/route.ts:30`** selects `end_date`. `placements` has no such column (36 columns; the nearest are `collected_at`, `cancelled_at`). The source comment admits the guess: *"map from whichever DB column holds it. Common options: `end_date`, `ends_at`, `collected_at`."* Someone guessed, guessed wrong, and nothing ever surfaced it. **The entire "your placement is ending soon" email has never sent.**
+
+**`cron/onboarding-nudges/route.ts:51`** selects `artist_statement, profile_photo` from `artist_profiles`. **Neither exists** (the real columns are `short_bio`/`extended_bio` and `profile_image`). The whole artist query fails → **every artist onboarding nudge is dead.**
+
+**The proof is in `email_events`, and it is unusually clean.** That one cron has two branches. The *venue* branch (`:217`) selects only real columns and works: `venue_photo_upload_nudge:4`, `venue_space_details_nudge:4`, `venue_art_preferences_nudge:3`, `venue_first_placement_cta:2` all delivered. The *artist* branch names two phantom columns and has delivered **zero** — no profile-completion, first-artwork, connect-Stripe or placement-preferences nudge has ever been sent. Same cron, same schedule, same mailer; the only difference is column validity. `placement_ending_soon` is likewise absent from all 238 sends.
+
+**This means the email audit's "66 wired" is overstated.** A trigger whose query always fails is not wired — it is dead code that reports success. Re-derive the wired count by cross-checking each trigger's select against the schema, not by the presence of a `sendEmail` call.
+
+### D19.3 — `analytics_events.venue_slug` (×9 in one burst)
+
+`analytics_events` has `venue_user_id` and `venue_name` — **not** `venue_slug`. The table holds **4,889 rows**. So venue-side analytics is querying a column that cannot exist while nearly five thousand events sit unread; a venue viewing analytics sees nothing. My grep did not locate the source site (it is not a literal `venue_slug` string near "analytics"), so **the sweep must find it** — this is exactly why a lint beats grepping.
+
+### D19.4 — Rulings
+
+1. **Raise 7b (schema-column guard) to run IMMEDIATELY after 7a.** It is no longer a tidy-up; it is the only thing that finds this class reliably. Two of five instances were invisible to code review and to me.
+2. **The sweep must cover `src/app/api/cron/**` explicitly.** Cron failures are invisible — no user complains, nothing 500s in a user's face. All 8 crons need every select validated.
+3. **Add the Postgres error log as a standing discovery source.** Run `get_logs(postgres)` and grep `does not exist` at the start of any DB-touching task. It found in one call what code review missed across a nine-document audit.
+4. **Fix the two dead crons as part of 7b**, not later: map `end_date` → the correct placement lifecycle column (decide between `collected_at` and a new explicit column — flag if genuinely ambiguous), and `artist_statement`/`profile_photo` → `extended_bio`/`profile_image`.
+5. **Correct the email findings**: `09-emails.md`'s wired/unwired tally is unreliable until every trigger's select is schema-validated.
+
+**No owner input needed for any of this.**

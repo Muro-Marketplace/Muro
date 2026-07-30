@@ -44,13 +44,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: artistProfile } = await db
     .from("artist_profiles")
-    .select("name, stripe_connect_account_id, subscription_plan, free_until")
+    .select("name, stripe_connect_account_id, subscription_plan, trial_end")
     .eq("user_id", placement.artist_user_id)
     .maybeSingle();
 
   // Application fee mirrors the artist's existing platform-fee tier, the
   // same 5% / 8% / 15% that applies to their sales. Founding / trialling
-  // artists (free_until in the future) pay 0% on recurring loan payments.
+  // artists (trial_end in the future) pay 0% on recurring loan payments.
   const feePct = platformFeePercentForArtist(artistProfile);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
