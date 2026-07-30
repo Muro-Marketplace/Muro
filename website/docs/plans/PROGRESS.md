@@ -6040,3 +6040,41 @@ select fails).
 
 Proceeding to D15 in the same iteration per the loop's "record the blocker and move
 to the next unblocked task".
+
+---
+
+## `04` T7 / D15 — SaaS subscription handler was not scoped by kind (owner: `04` §B7)
+
+Commit `0d08a01`. **T7 (B7) is code-complete bar D14** (D12 `62f8fed` + env
+`222eb60`, D13 `9922c98`, D15 `0d08a01`; D14 blocked on a product decision above).
+
+**The finding.** The `customer.subscription.created|updated` branch writes
+`artist_profiles` by `stripe_customer_id` and matched *every* subscription,
+including paid-loan and managed-curation ones. A near-miss today (those flows create
+fresh customers rather than reusing an artist's customer id), one refactor from
+stamping a plan onto the wrong profile.
+
+**What changed.** The branch returns `{ received, ignored: "not_saas_subscription" }`
+when `metadata.kind`/`source` is `paid_loan_monthly`, `wallplace_paid_loan_billing`
+or `curation_request`. This is independent of the price, so it also covers a curation
+tier priced via a `STRIPE_PRICE_*` id, which D12's unknown-price guard would not
+catch (they compose: D12 catches paid-loan's *dynamic* price; D15 catches by kind
+regardless of price).
+
+**Tests.** 4 cases: ignore paid-loan (even with a known SaaS price), ignore
+curation, ignore the `wallplace_paid_loan_billing` source label, still process a
+genuine no-kind SaaS subscription. Probe (remove the guard) fails 3.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  163 passed (163)
+Tests  1784 passed (1784)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**`04` status.** Done: Phase 0, B0 (D1-D3), T1 (D4-D6), T2 (E9), T3 (E6/E10 + D7),
+T4 (D8, D9), T5 (D10, D11), T6 (E7a-E7d, E8, E11, E11b), T7 (D12, D13, D15; D14
+blocked). Remaining: T8 refunds (D16-D18), T9 (N1, N2), and the C-series payout
+helpers (C1 canReceivePayout, C3 recordBlockedLeg, C4 retry sweep).
