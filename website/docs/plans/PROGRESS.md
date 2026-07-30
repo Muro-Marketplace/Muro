@@ -5676,3 +5676,63 @@ E8, E11, E11b), Phase 0 (Bug 15, curation, G-C/Bug 10) all done. Remaining `04`:
 T4 (D8, D9), T5 (D10, D11), T7 (D12-D15), T8 refunds (D16-D18), T9 (N1, N2), and
 the C-series helpers the plan factored out (C1 canReceivePayout, C3 recordBlockedLeg,
 C4 retry sweep) where they are not yet folded in.
+
+---
+
+## `04` T4 / D8 — billing survived collection and sale (owner: `04` §B4)
+
+Commit `420739f`.
+
+**The finding.** `cancelPaidLoanBilling` was called only on `active → cancelled`.
+A collection (`stage: "collected"`, which sets `status: "completed"`) or a sale
+left the Stripe subscription live, so the venue kept paying a monthly fee for a
+piece that had come off the wall.
+
+**Where the plan's fix falls short, with a probe.** §D8 widens the body `status`
+comparison to `status === "cancelled" || status === "completed" || status ===
+"sold"`. But the real collection path sends `stage: "collected"`, not `status`, and
+the handler sets `updates.status = "completed"` while the body `status` stays
+undefined. A *direct* `status: "completed"` write is rejected at the schema (the
+E23b test asserts the 400), so the body-`status` comparison can never see
+"completed" on the path that actually happens. Probe A (apply the plan's fix
+verbatim) fails the collection test:
+
+```
+PROBE A — plan's fix (widen the body status)
+ FAIL  D8 > cancels billing when the work is collected via stage:collected
+```
+
+**What changed.** The check reads the **effective** new status,
+`(updates.status as string) ?? existing.status`, which is exactly the pattern the
+inventory-restore block immediately below already uses (`becameCollected`, my E23b
+work). Renamed `goingCancelled` to `goingInactive`, since it now covers cancelled,
+completed and sold. Direct `status: "cancelled"` still cancels (unchanged); a
+non-terminal stage (`installed`) and an undo (`unsetStage: "collected"`, which sets
+`updates.status = "active"`) both correctly do NOT cancel.
+
+**Prod.** No status CHECK on `placements.status` (free text; statuses in use:
+active, cancelled, completed, declined, pending). `sold` is not currently present
+but is possible, so its branch is defensive. `completed`/`sold` placements with a
+live subscription: **0**. With `PAID_LOAN_V2` off and no subscriptions linked, this
+is preventative.
+
+**Tests.** 4 cases in `describe("PATCH /api/placements stops billing on a terminal
+transition (D8)")`. A hoisted `cancelBillingMock` replaced the inline
+`cancelPaidLoanBilling` stub so the call is assertable.
+
+**Probes.** A (plan's fix) and B (original `cancelled`-only) both fail the
+stage:collected test, 1 of 16. Restored: 16 pass.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  162 passed (162)
+Tests  1756 passed (1756)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Still open in T4:** D9 (revenue_share_percent unbounded + non-deterministic
+duplicate placements: a bounded CHECK migration and a determinism fix in the
+webhook's placement map, with an UNCONFIRMED about the unique-index key given
+multi-work placements).
