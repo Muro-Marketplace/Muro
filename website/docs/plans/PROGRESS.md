@@ -4545,3 +4545,25 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 the pre-existing gating tests still pass", which the run above does: both files it
 names drive gating through `isFlagOnMock`, so they were never exposed to the
 default change, and all 157 files pass.
+
+**C5 explicitly, on the two files the doc names:**
+
+```
+✓ src/app/api/messages/route.test.ts (13 tests)
+✓ src/app/api/artist-works/route.test.ts (20 tests)
+Tests  33 passed (33)
+```
+
+**06 Verification ladder.** V1 (`npm run test`) and V2 (`npm run lint`, `tsc
+--noEmit`) are green in every run above. **V3 and V4 remain undone and are not
+blockers I can clear:** V3 wants the §1.3 E44 body replayed against a dev server,
+and V4 wants Stripe to receive `unit_amount: 18500` for the §3.3 framed line. The
+local `.env.local` holds placeholder Supabase credentials and `STRIPE_SECRET_KEY`
+is `sk_test_PLAC...` (api.stripe.com returns 401, no webhook secret, no Stripe
+CLI), so neither replay can run here. Both are covered by route-level tests
+instead; the manual replays stay owner actions, alongside the Stripe items already
+listed under owner decisions.
+
+So `06` is complete except V3/V4. Checkboxes in the implementation docs are left
+as authored throughout this plan (0 of 25 ticked in `06`), since PROGRESS.md is
+the ledger.
