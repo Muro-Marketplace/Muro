@@ -157,6 +157,62 @@ export const placementSchema = z.object({
  * here but the route IGNORES it whenever the caller is authenticated: an
  * authenticated acceptance takes the email from the token, never the body.
  */
+/**
+ * E46a (06 B5). POST /api/artist-works destructured the body and passed it
+ * straight to the write with no numeric validation: `pricing` had no array cap
+ * and no per-entry price check, `quantity_available` had no lower bound (and
+ * checkout treats <= 0 as sold, so a negative value reads as permanently sold),
+ * and `shipping_price` was stored unbounded even though the checkout schema caps
+ * what a cart may claim.
+ *
+ * `pricing` is the one that reaches money: checkout recomputes unit_amount from
+ * the stored tier, so a bad tier price feeds Stripe. It is defended there too
+ * (a non-positive tier falls back to the client price), which makes this a
+ * correctness and trust problem rather than direct theft. Fixed at the write
+ * boundary regardless.
+ *
+ * No `inStorePrice`: see the route for why.
+ */
+const money = (max: number) => z.number().finite().min(0).max(max);
+
+export const sizePricingSchema = z.object({
+  label: safeString(100),
+  price: money(100_000),
+});
+
+export const artistWorkInputSchema = z.object({
+  id: safeString(200),
+  title: safeString(200),
+  image: safeString(2000),
+  medium: optionalString(100),
+  dimensions: optionalString(200),
+  priceBand: optionalString(100),
+  // Capped so one work cannot carry hundreds of tiers, and floored at 0 so
+  // checkout can never recompute from a negative tier.
+  pricing: z.array(sizePricingSchema).max(30).optional(),
+  available: z.boolean().optional(),
+  color: optionalString(20),
+  orientation: z.enum(["portrait", "landscape", "square"]).optional(),
+  sortOrder: z.number().int().min(0).max(10_000).optional(),
+  shippingPrice: money(1000).nullable().optional(),
+  quantityAvailable: z.number().int().min(0).max(10_000).nullable().optional(),
+  description: optionalString(2000),
+  images: z.array(z.string().max(2000)).max(10).optional(),
+  // Replaces the 45-line hand-rolled sanitiser this route used to carry. The
+  // .max(20) preserves its .slice(0, 20) semantics.
+  frameOptions: z
+    .array(
+      z.object({
+        label: safeString(80),
+        priceUplift: money(10_000),
+        imageUrl: optionalString(1000),
+        pricesBySize: z.record(z.string().min(1).max(100), money(10_000)).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
+});
+
 export const termsAcceptSchema = z.object({
   userEmail: z.string().trim().toLowerCase().email().max(320),
   userType: z.enum(["artist", "venue", "customer"]),

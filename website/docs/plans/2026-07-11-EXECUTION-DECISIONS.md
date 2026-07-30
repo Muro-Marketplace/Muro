@@ -710,3 +710,50 @@ The demo guard drove **58 → 0** with "guarded or exempt-with-reason". Mirror i
 **Do this before going deep into `05`, `07` or `08`.** Every later workstream adds routes, and each one added while the rule is at `warn` can reintroduce the exact IDOR class `01` just spent twenty commits closing. Closing the gate is worth more than the next feature fix.
 
 No owner input needed — for either item 15 or item 16.
+
+---
+
+## D26. Correcting D25, ruling item 15, and escalating E46b
+
+### D26.1 — ❌ D25.2's counter-example was wrong. I made the mistake D24.1 warns about.
+
+D25 named `placements/[id]/photos` as a likely real gap because "a grep shows no ownership `.eq`". I read the file. **It authorises correctly:**
+
+```ts
+const { data: placement } = await db.from("placements")
+  .select("artist_user_id, venue_user_id").eq("id", id).single();
+if (!placement) return 404;
+if (placement.artist_user_id !== auth.user!.id &&
+    placement.venue_user_id  !== auth.user!.id) return 403;
+```
+
+A placement has **two** legitimate parties, so a single scoping `.eq` cannot express the check — fetch-then-compare is the correct shape here, and it is immediate and total.
+
+I reasoned from a grep instead of reading executable source: **exactly the trap D24.1 names**, committed by the person who wrote D24.1, one cycle later. Noting it because the standard has to apply to the supervisor too, and because the loop independently recorded the same lesson this cycle ("the grep that misled me").
+
+**The loop's characterisation is correct: the 51 warnings are a convention gap, not a security gap.**
+
+### D26.2 — Item 15 RULING: allowlist, do not migrate. Off the owner list.
+
+43 routes authorise inline via `.eq("user_id", auth.user!.id)` in the mutation itself. **Allowlist them with a stated control. Do not migrate them to `assert*` helpers.**
+
+Reasoning: `.eq("user_id", <authenticated id>)` in the mutating statement **is** the CC1 principle — ownership enforced in the same query, no gap between check and write. Forcing an `assert*` helper would *add* a fetch and convert a single scoped statement into fetch-then-compare, which is strictly worse: an extra round-trip, and the shape CC1 exists to discourage. The helper is right when the row has other parties or the check cannot be expressed as a scope; it is wrong as a blanket convention.
+
+Requirements, so the allowlist is evidence and not a rubber stamp:
+1. Each entry states its control verbatim — `"self-scopes on user_id in the mutating statement"` — in the demo-guard exemption style. Never a bare suppression.
+2. **Read the executable source of every multi-party route before allowlisting it** (`placements/[id]/photos`, `works/[id]/mockups`, `messages/item/[messageId]`, `customer-addresses/[id]`, `blogs/[id]`, `collections`, `artwork-requests/[id]/responses/[responseId]`). Confirm the comparison covers *every* party and returns 403. Do not grep. See D26.1.
+3. Then **flip to `error`**, and per D24.2 revert one control and confirm CI reddens.
+
+D25.2's core point stands unchanged: **at `warn` the rule cannot fail a build, so the highest-leverage control in the plan is decorative.** Closing it is still the Phase 2 exit and still precedes deep work in `05`/`07`/`08`.
+
+### D26.3 — E46b IS genuinely the owner's. Escalating with a recommendation.
+
+**Terms-acceptance evidence.** A pre-signup assertion about an email address is forgeable by construction, so the doc's split-route-plus-HMAC cannot fix it — correct analysis. This is a legal-record question, not a code one: it decides what Wallplace can *prove* in a dispute. The authenticated path, validation and rate limit are already fixed either way.
+
+**Options for the owner:**
+- **(a) Record acceptance after email confirmation.** Strongest evidence — the address is proven. Costs the tick-the-box timestamp, and an abandoned signup leaves no row at all.
+- **(b) Keep the pre-signup row, add a `verified` / `self_asserted` distinction.** Preserves the timestamp and keeps a record for abandoned signups, while stopping the **51 existing anonymous rows** from implying more than they can prove.
+
+**Recommendation: (b).** It is honest about what each row actually evidences, it does not lose data, and it retro-labels the 51 existing rows rather than leaving them silently overstated. (a) is stronger evidence per row but discards the acceptance moment, which is usually the thing you want to show.
+
+Not urgent, but settle before launch — this is the record you would produce if a consumer dispute ever turned on whether someone accepted the terms.

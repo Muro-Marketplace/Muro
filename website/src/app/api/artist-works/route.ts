@@ -8,6 +8,7 @@ import { getWorksByArtistProfileId, upsertWork, deleteWork } from "@/lib/db/arti
 import { slugify } from "@/lib/slugify";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
+import { artistWorkInputSchema } from "@/lib/validations";
 
 // GET: fetch works for the current user's artist profile
 export async function GET(request: Request) {
@@ -39,12 +40,25 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
-    const { id, title, medium, dimensions, priceBand, pricing, available, color, image, orientation, sortOrder, shippingPrice, inStorePrice, quantityAvailable, frameOptions, description, images } = body;
-
-    if (!id || !title || !image) {
-      return NextResponse.json({ error: "ID, title, and image are required" }, { status: 400 });
+    // E46a (06 B5). The body used to be destructured raw and passed straight to
+    // the write: no array cap on `pricing`, no per-tier price check, no lower
+    // bound on `quantity_available` (and checkout reads <= 0 as sold, so a
+    // negative value made a work permanently unbuyable), and an unbounded stored
+    // `shipping_price` that feeds calculateOrderShipping.
+    const parsed = artistWorkInputSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      const field = first?.path.join(".") || "body";
+      return NextResponse.json(
+        { error: "validation_failed", message: `${field}: ${first?.message || "invalid"}` },
+        { status: 400 },
+      );
     }
+    const {
+      id, title, medium, dimensions, priceBand, pricing, available, color, image,
+      orientation, sortOrder, shippingPrice, quantityAvailable, frameOptions,
+      description, images,
+    } = parsed.data;
 
     // B2 + C2 (Phase 2.5, gated by GATING_V1):
     //   - If the artist is not currently subscribed and tries to mark
@@ -88,69 +102,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Sanitize the frame options. Each frame may carry an optional
-    // imageUrl thumbnail and a `pricesBySize` map of size-label → £
-    // uplift overrides for that size. Both are validated independently
-    // so a malformed extras blob doesn't poison the row.
-    const sanitizedFrames = Array.isArray(frameOptions)
-      ? frameOptions
-          .filter((f: unknown): f is {
-            label: string;
-            priceUplift: number;
-            imageUrl?: unknown;
-            pricesBySize?: unknown;
-          } =>
-            !!f && typeof f === "object" && typeof (f as { label?: unknown }).label === "string" &&
-            typeof (f as { priceUplift?: unknown }).priceUplift === "number" &&
-            ((f as { label: string }).label.trim().length > 0),
-          )
-          .slice(0, 20)
-          .map((f) => {
-            const out: {
-              label: string;
-              priceUplift: number;
-              imageUrl?: string;
-              pricesBySize?: Record<string, number>;
-            } = {
-              label: f.label.trim().slice(0, 80),
-              priceUplift: Math.max(0, Math.round(f.priceUplift * 100) / 100),
-            };
-            if (typeof f.imageUrl === "string" && f.imageUrl.length > 0) {
-              out.imageUrl = f.imageUrl.slice(0, 1000);
-            }
-            if (
-              f.pricesBySize &&
-              typeof f.pricesBySize === "object" &&
-              !Array.isArray(f.pricesBySize)
-            ) {
-              const cleaned: Record<string, number> = {};
-              for (const [k, v] of Object.entries(
-                f.pricesBySize as Record<string, unknown>,
-              )) {
-                if (typeof k !== "string" || k.length === 0 || k.length > 100) continue;
-                const n = typeof v === "number" ? v : Number(v);
-                if (!Number.isFinite(n) || n < 0) continue;
-                cleaned[k] = Math.round(n * 100) / 100;
-              }
-              if (Object.keys(cleaned).length > 0) out.pricesBySize = cleaned;
-            }
-            return out;
-          })
-      : [];
+    // The 45-line hand-rolled frameOptions sanitiser that used to sit here is
+    // DELETED, not left beside the schema. artistWorkInputSchema enforces the
+    // same rules (label trimmed and capped, priceUplift floored at 0, at most 20
+    // frames, pricesBySize keys and values bounded), so keeping both would be two
+    // sources of truth for one rule.
+    const sanitizedFrames = frameOptions ?? [];
 
     // Tier-gated image count. Limits are TOTAL images (primary + extras).
     const IMAGE_LIMITS: Record<string, number> = { core: 3, premium: 5, pro: 10 };
     const plan = result.profile.subscription_plan || "core";
     const totalLimit = IMAGE_LIMITS[plan] ?? 3;
     const extraImagesAllowed = Math.max(0, totalLimit - 1);
-    const rawExtras = Array.isArray(images)
-      ? images.filter((u): u is string => typeof u === "string" && u.length > 0 && u !== image)
-      : [];
+    const rawExtras = (images ?? []).filter((u) => u.length > 0 && u !== image);
     const sanitizedImages = rawExtras.slice(0, extraImagesAllowed);
 
-    const sanitizedDescription = typeof description === "string"
-      ? description.slice(0, 2000)
-      : "";
+    // Capped by the schema now, so the manual slice is gone.
+    const sanitizedDescription = description ?? "";
 
     // C2 (Phase 2.5, GATING_V1): default-to-draft for non-subscribed
     // artists. A new work created without an explicit `available` flag
@@ -180,8 +148,16 @@ export async function POST(request: Request) {
       orientation: orientation || "landscape",
       sort_order: sortOrder ?? 0,
       shipping_price: shippingPrice ?? null,
-      in_store_price: inStorePrice ?? null,
-      quantity_available: typeof quantityAvailable === "number" ? quantityAvailable : null,
+      // `in_store_price` is NOT written. It exists in no migration and not in the
+      // live table, so upsertWork's strip-and-retry dropped it on every single
+      // request: a guaranteed-failing column write per save. It is absent from
+      // ARTIST_WORK_WRITABLE for the same reason (A8).
+      //
+      // The artist portal still COLLECTS per-size in-store prices, so artists are
+      // typing values that have never been stored. Finishing that feature needs a
+      // migration and removing it needs a UI change, so it is escalated in
+      // PROGRESS.md rather than decided here.
+      quantity_available: quantityAvailable ?? null,
       frame_options: sanitizedFrames,
       description: sanitizedDescription,
       images: sanitizedImages,
