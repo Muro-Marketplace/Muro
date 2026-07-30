@@ -4787,3 +4787,100 @@ here. A real test-mode drive remains an owner action.
 per-leg payability check is today's `stripe_connect_onboarding_complete` guard,
 applied per artist instead of once, and the skip path logs the slug, user id and
 amount. Both helpers remain their own tasks.
+
+---
+
+## `04` T6 / E7a — the paid-loan subscription was recorded by nothing (owner: `04` §B6, branch from §C5)
+
+Commit `416aac2`.
+
+**The finding.** `api/placements/[id]/payment/setup` mints a real Stripe
+subscription, and no webhook branch consumed the resulting session. A venue could
+complete the flow and be billed monthly while `placements.stripe_subscription_id`
+stayed null, so the setup route's "already set up" guard never fired (a second
+subscription could be minted for the same placement) and `cancelPaidLoanBilling`,
+which reads `placement_recurring_billings`, had nothing to cancel.
+
+**Prod confirms it:** `placement_recurring_billings` has **0 rows**, and **0 of
+77 placements** have a `stripe_subscription_id`. Every column and constraint §C5
+needs already exists, including the UNIQUE on
+`placement_recurring_billings.stripe_subscription_id` that the upsert's
+`onConflict` depends on, and `placements_subscription_status_check` allows
+`'active'`.
+
+**What changed.** Rather than pasting §C5's snippet into the webhook, the write is
+extracted: `recordPaidLoanSubscription()` in
+`src/lib/placements/paid-loan-billing.ts` owns the ledger row **and** the
+`placements` mirror, plus `periodFromSubscription()` for the SDK-22 item-level
+period bounds. `startPaidLoanBilling` calls it and **its inline upsert is
+deleted**. One ledger, two callers. The snippet would have been a second copy of an
+upsert that already existed twelve lines away, which is how these two paths would
+drift apart again.
+
+`startPaidLoanBilling` also never mirrored onto `placements`, so the setup route's
+guard was false for subscriptions started that way too. It writes it now.
+
+**Deliberately not flag-gated**, unlike `startPaidLoanBilling`. `PAID_LOAN_V2`
+decides whether we *start* billing; once Stripe has a live subscription, recording
+it is always correct. The setup route has no flag check either (verified in
+source), so a venue can already be on a monthly subscription with the flag off, and
+refusing to record that would leave them billed with nothing to cancel.
+
+**Two departures from §C5, each with its own test:**
+
+1. **The notification fires only on the first link.** §C5 notifies
+   unconditionally, but Stripe redelivers, and the branch is entered by *both*
+   `checkout.session.completed` and `checkout.session.async_payment_succeeded` for
+   one session, so the artist would be told their payments had started two or three
+   times. `recordPaidLoanSubscription` returns `newlyLinked`, which gates it.
+2. **A placement with no monthly fee returns 200 + `ignored` instead of writing.**
+   `monthly_amount_pence` carries `CHECK (> 0)`, so a zero raises 23514, the branch
+   would answer 500, and Stripe would retry a request that can never succeed. All
+   27 `paid_loan` placements have a positive fee today (7 of 9 `free_loan` rows have
+   a null fee, but the setup route already refuses those), so this is defence
+   against the fee being cleared afterwards.
+
+**A fixture was proving nothing.** The existing `startPaidLoanBilling` test put
+`current_period_start` / `current_period_end` on the subscription object. SDK 22
+carries them on the **first item**, which is where the code has always read them,
+so the assertion never touched the dates. Corrected, and it now asserts a real
+period end, which is exactly the E11b failure mode (`new Date(undefined * 1000)`
+stamping 1970-01-01).
+
+**Tests.** 11 cases in `src/app/api/webhooks/stripe/route.test.ts`. The
+`paid-loan-billing` module mock now uses `importOriginal` so
+`recordPaidLoanSubscription` and `periodFromSubscription` are the **real**
+implementations: E7a is about whether the ledger row and mirror get written, so
+stubbing them would have tested nothing. `stripe.subscriptions.retrieve` was added
+to the Stripe mock, and `buildDb` in `paid-loan-billing.test.ts` grew a
+`placements` branch.
+
+**Two probes:**
+
+```
+PROBE 1 — E7a branch removed
+      Tests  9 failed | 39 passed (48)
+
+PROBE 2 — notification not gated on newlyLinked
+ FAIL  E7a > does not re-notify when Stripe redelivers the same session
+      Tests  1 failed | 47 passed (48)
+```
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  159 passed (159)
+Tests  1671 passed (1671)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Stripe drive not run**, same blocker as D7 and E9. The subscription retrieve, the
+ledger upsert and the mirror are asserted against the recorded mock calls.
+
+**Still open in T6:** E7b (idempotency key + a working dedup guard), E8
+(`charges_enabled` gating and the copy that promises a release mechanism that does
+not exist), E7c (`cancelPaidLoanBilling` reading a table Path 2 never populated),
+E7d (`setup_intent.succeeded`, the second §C5 branch), E11 (`PAID_LOAN_V2` off in
+prod), E11b (`subscription_period_end` stamped 1970, now partly addressed by
+`periodFromSubscription` being the single reader).
