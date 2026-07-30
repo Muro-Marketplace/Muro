@@ -108,6 +108,20 @@ A coherence review of the nine independently-written plans found conflicts, dupl
    `webhooks/stripe/route.ts:1207` (`free_until`) stays parked — it is D14/D17.2, an owner
    decision, and the block is already inert.
 
+   **ROW 19 IS CLOSED** (all ten fixed or correctly parked; ratchet 12 → 1).
+
+8. **ROW 20 — script the schema-snapshot regeneration. Do it BEFORE the next migration,
+   not after the five remaining docs.** The phantom guard is now the most valuable test in
+   the repo and its snapshot is maintained by a documented manual step with no npm script
+   and nothing in `scripts/`. The next migration that adds a column makes the snapshot
+   stale, the guard flags the new *real* column as phantom, and the build breaks. That
+   fails loud, which is right — but the tempting wrong fix is to add the column to
+   `GRANDFATHERED` instead of regenerating, which silently weakens the one guard standing
+   between this codebase and its dominant failure mode. Add `npm run schema:snapshot`,
+   name it in the guard header, and reference it wherever the migration steps are written
+   down. Small, and it is the difference between a guard that survives the next migration
+   and one that gets hollowed out at the first inconvenience.
+
 ---
 
 ## D0. Owner decisions (recorded)
@@ -2528,3 +2542,43 @@ placements active                           37
 - Phantom columns: automated by 7b's guard, ratcheting. Row 19 #1 (order tracking, 8 phantom columns) is fixed; #2 blocked per above; eight remain.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
 - `message-attachments`: still public, owner-blocked on the cutover.
+
+---
+
+## D61. Row 19 closed. The dominant failure class in this codebase is now structurally shut.
+
+*— supervisor. 235 commits. All ten live phantom bugs fixed or correctly parked.*
+
+### D61.1 — The ratchet went 12 → 1, and the one that remains is the right one
+
+Verified in the guard, not from the ledger. `GRANDFATHERED` now holds a single entry: `webhooks/stripe/route.ts` / `free_until`, parked because it is D17.2, an open owner question, and the block is already an inert no-op. Everything else was fixed.
+
+Worth recording what that closes. The phantom-column class produced, in this codebase alone: `orders.amount_cents` (admin showed £0 against £1,174.87 of sales), `artist_profiles.free_until` (every artist charged 15%, premium owed 8%), `ships_internationally` (every artwork page claimed UK-only), `placements.requester_user_id` (accept/decline never rendered), an order-tracking page that could not load any order, **two cron jobs that have never done anything**, and a billing helper silently using the wrong email. One test now makes any new instance a build failure.
+
+### D61.2 — The guard is well built, and three details are worth not losing
+
+- `expect(GRANDFATHERED).toHaveLength(1)` — the list cannot grow without someone editing the number, in the same commit, deliberately.
+- Each entry must carry a `why` over 60 characters naming the real column. Lazy exemptions are awkward to write.
+- A third test asserts **every grandfathered entry still trips the guard** — so an exemption for a select that no longer exists fails the build instead of rotting there. That is the detail that stops exemption lists becoming archaeology.
+
+Nobody should weaken any of the three when tidying tests later.
+
+### D61.3 — The one gap: snapshot maintenance is manual, and the wrong fix is the easy one
+
+The guard header documents "regenerate the snapshot after a migration" with the query. There is **no npm script and nothing in `scripts/`**.
+
+So the next migration that adds a column leaves the snapshot stale, the guard flags the new *real* column as phantom, and the build breaks. Failing loud is correct. But the fix that presents itself under time pressure is "add it to `GRANDFATHERED`", which is one line and passes, versus "find the query in a test header and regenerate", which is not. The ratchet's `toHaveLength` guard makes that deliberate rather than accidental, and the 60-character `why` makes it uncomfortable — but the incentive still points the wrong way.
+
+**Ruling: row 20, and sequenced before the next migration rather than after the five remaining docs.** Docs `03`, `05` and `09` may all carry migrations, so waiting means meeting the stale-snapshot case first. It is a fifteen-minute task: an npm script, a line in the guard header, and a mention wherever migration steps are recorded.
+
+This is completing D17.3's mandate rather than adding to it — a guard whose maintenance path is a comment is half-built.
+
+### D61.4 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom columns: **automated, ratchet at 1.** The manual sweep is formally retired; the guard is strictly better than what I was running by hand.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
+- `message-attachments`: still public, owner-blocked on the cutover.
+
+**Next after row 20:** the five untouched docs — `05` frontend, `03` auth/admin (with the `admin_users` ordering hazard), `09` emails, `07` unknot, `08` cull.
