@@ -4353,3 +4353,93 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 doc's comment points it at "/api/_internal/flags or dev pages", neither of which
 exists. Left in place: it is the natural consumer of C4's map check, and dead
 exports belong to the 08 cull, not here.
+
+---
+
+## 06 C3 — lint rule against spreading a request object into a DB write
+
+`06-validation-massassign.md` Phase C item C3. Commit `6e13a0a`.
+
+**What it blocks.** E44 and E45 were the same single line, `.update({ ...body })`
+against the service-role client: every key the client sent reached the column
+list, so an artist could self-approve (`review_status`), self-grant Pro
+(`subscription_plan`), redirect payouts (`stripe_connect_account_id`), or hand a
+venue row to another account (`user_id`). Phase A/B fixed the sites with
+`pickWritable()` and `assertNoServerOwned()`. This is the guardrail that stops the
+next route reintroducing the shape.
+
+**Files.** `eslint-rules/no-spread-into-db-write.js` (new),
+`eslint-rules/index.js`, `eslint.config.mjs` (registered at **error**, like
+`no-raw-arrangement-type` after 356cd37, not staged at warn: nothing in `src/`
+violates it today, proven below).
+
+**Where the spec was too narrow.** C3 asks for a spread "inside a `.insert(`,
+`.update(` or `.upsert(` call". That misses the shape that actually shipped.
+`src/lib/db/artist-profiles.ts` builds the object first and writes it on the next
+line:
+
+```ts
+const insertPayload = { ...data, user_id: userId, review_status: ... };
+const { error } = await db.from("artist_profiles").insert(insertPayload);
+```
+
+A rule that only inspects call arguments sees nothing here. So it also follows a
+one-hop assignment: an object literal with a flagged spread, bound to a variable
+that is later handed to a write call. The live probe below shows this catching the
+`insert` site that the literal spec would have let through.
+
+**The exemption is earned, not granted by filename.** The two remaining spreads in
+`src/lib/db/{artist,venue}-profiles.ts` are safe *because* `assertNoServerOwned()`
+runs at the top of the same function. Exempting them by path would have made the
+rule blind at exactly the two sites that had the bug, and would let someone delete
+the guard without the rule noticing. Instead the rule allows a spread only when
+the enclosing function calls `assertNoServerOwned()`, matched on the AST rather
+than on file text, so a comment mentioning the guard cannot stand in for calling
+it. Both properties have a test.
+
+**Test.** `tests/integration/eslint-no-spread-into-db-write.test.ts`, 17 cases,
+following the `Linter`-based pattern of the existing rule tests. 6 invalid shapes,
+7 valid ones, 4 on the exemption. Two fixtures initially failed as parse errors
+(top-level `return`), which surfaced a real hazard: a parse error arrives as a
+message with `ruleId: null`, so a broken fixture satisfies `toHaveLength(1)`
+without the rule firing at all. The `lint()` helper now throws on any
+`ruleId: null` message, so no test in this file can pass for that reason.
+
+```
+Test Files  1 passed (1)
+Tests  17 passed (17)
+```
+
+**Live probe against the real code.** Removing the `assertNoServerOwned` call from
+`upsertArtistProfile` and linting the actual file:
+
+```
+126:17  error  Don't spread `data` into a .update() call: ...  wallplace/no-spread-into-db-write
+138:7   error  Don't spread `data` into a .insert() call: ...  wallplace/no-spread-into-db-write
+✖ 5 problems (2 errors, 3 warnings)
+```
+
+`138:7` is the assemble-then-write site. Guard restored, file back to a clean
+`git diff`, and `npx eslint src/lib/db/artist-profiles.ts` reports nothing.
+
+**Whole tree at error, no violations:**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+```
+
+Same 175 as before the rule, so it adds no debt.
+
+**Full gate.**
+
+```
+Test Files  157 passed (157)
+Tests  1599 passed (1599)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Limits, recorded so nobody reads more into it.** It is a name heuristic:
+`body`, `payload`, `data`. A request object stored as `fields` walks past it. The
+real controls remain `pickWritable()` at the route and `assertNoServerOwned()` at
+the boundary; this rule only makes the careless shape loud. It also follows one
+assignment hop, not general dataflow.
