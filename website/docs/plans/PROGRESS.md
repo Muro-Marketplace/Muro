@@ -7346,3 +7346,42 @@ constraint (admin lockout) and row 12 (`08` cull) is partly an escalation item.
 Remaining loop order from here: **D55.2** (reconcile predicate), **E25** (bucket
 → private), then the six rows above in dependency order. The loop does NOT stop
 after E25.
+
+## `04` D55.2 — reconcile sweep keys on money-in, not artist_revenue
+
+Commit `f842916`. Code-only (reads an existing column, no migration).
+
+**The defect.** `reconcileOrdersWithoutLegs` selected `.gt("artist_revenue", 0)`.
+`artist_revenue = 0` is the SIGNATURE of the D4 attribution failure (WP-WSP06D:
+£64.49 taken, no artist attributed), not evidence nothing is owed, so the sweep
+was blind to exactly the orders money is stuck on. Verified against the doc's prod
+finding (D55.2, EXECUTION-DECISIONS ~:2224): 1 invisible zero-revenue order.
+
+**The fix.** Predicate → `total > 0` + owed status + no ledger row (added `total`
+to the select). Loop branch: recipient present AND `owedCents > 0` → record the
+blocked leg as before; otherwise (no recipient, OR artist_revenue 0) → `unresolved`
+with the id.
+
+**Refinement noted (doc vs the amount_cents CHECK).** The D55.2 ruling said "if
+artist_user_id is present, record the blocked leg as now." But `stripe_transfers`
+has `CHECK (amount_cents > 0)`, so a 0-revenue order (the D4 shape) cannot be a
+blocked leg even when the artist is known: there is no valid amount to record.
+Those route to `unresolved`-with-id instead. This is stricter than the doc's
+literal wording and matches the CHECK; recorded here per the trust-source rule.
+
+**Tests.** (1) the sweep keys on `total`, not `artist_revenue` (captures the
+predicate column — the crux, since a mocked DB returns rows regardless of the
+predicate, so this is the only way to prove the change); (2) the WP-WSP06D shape
+(total>0, artist_revenue 0, artist_user_id NULL) surfaces as unresolved-with-id;
+(3) a 0-revenue order with a present artist routes to unresolved, not a £0 leg.
+Fail-before: the old predicate fails tests (1) and (3); restored.
+
+**Verification.** `npm run check` → `EXIT=0`, `Test Files 166 passed`, `Tests 1849
+passed (1849)` (+3), 0 lint/type errors. No schema/RLS change → no DB ladder.
+Payment task, but the sweep drives no Stripe event (it reads orders + writes
+blocked legs); the unit tests cover the predicate + branch logic. **D55 (rows
+17+18) now fully done.**
+
+**Next: E25** (message-attachments bucket public → private + signed URLs + test).
+Then the six D58 ledger rows (7b/7c/8/9/10/11/12). Per operating rule 6, re-read
+the top-of-PROGRESS ledger before ever concluding the loop is finished.
