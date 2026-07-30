@@ -7217,3 +7217,53 @@ component that retrieves the Stripe session and branches on `payment_status`,
 matching the checkout/confirmation pattern; a `processing` state must say so rather
 than claim receipt. Re-read the success page + the checkout/confirmation pattern
 first. Likely no migration.
+
+## `04` B10 / D24 — curation success page verifies the payment
+
+Commit `feb967e`. Code-only, no migration. **This completes B10 (curation).**
+
+**The defect.** `(pages)/curated/success/page.tsx` was a static component that
+always read "Payment received." with no session lookup, though the Stripe success
+URL carries `session_id`. A buyer whose payment had not settled, or who reached
+the URL with a stale id, was told the money was taken when it may not have been.
+
+**The fix.** Now an async server component (Next 16, `searchParams` is a Promise).
+It calls `stripe.checkout.sessions.retrieve(session_id)` and branches on
+`payment_status`: `paid` → the receipt; anything else → a "We're confirming your
+payment" processing state that does NOT claim receipt; a failed retrieve falls to
+the same processing state; no `session_id` → a neutral "Start your curation"
+state. A server component (not the client+API confirmation pattern) because this
+page has no cart/auth dependency, so verification is simplest server-side. Public
+copy is dash-free per AGENTS.md.
+
+**Test.** `(pages)/curated/success/page.test.tsx` (jsdom) awaits the server
+component with a mocked Stripe and asserts each branch. Fail-before: the old
+static page fails all four cases (it never calls Stripe and always says
+received); restored. **Browser-verified** on the dev server: `?session_id=cs_fake`
+→ processing state (screenshot), no `session_id` → neutral state — neither claims
+receipt. The `paid` state needs a real Stripe session so it is unit-test only.
+
+**Verification.** `npm run check` → `EXIT=0`, `Test Files 166 passed`, `Tests 1846
+passed (1846)` (+4), 0 lint/type errors. No schema/RLS change → no DB ladder.
+
+---
+
+## B10 (curation) COMPLETE
+
+All eight curation findings shipped this session: D25 (tier CHECK, guard), D19
+(orphan-payment race), D20 + D20-complete (payment-intent/subscription-id columns),
+D21 (subscription reconcilers + migration 100), D22 (managed price validation),
+D23 (payment-settled notification), D24 (success-page verification). Migrations
+099 and 100 applied to prod. Supervisor D57 retired D1's per-doc migration ranges
+mid-session.
+
+**Remaining plan items are all owner-decision or feature work, not loop-eligible
+bug fixes:**
+- **T9 / N1 / N2** (collect-from-venue): net-new checkout FEATURE. Per the plan it
+  needs an owner decision before building (surface via AskUserQuestion).
+- **D14** (referral credit): blocked on a product decision.
+- **The two unpaid offers** off_1778 (£33) / off_1779 (£27), artist fin-coles:
+  D11, a MANUAL human Stripe reconciliation, explicitly not a code change.
+
+Per per-iteration procedure step 8 ("stop when only owner-decision items remain"),
+the loop stops here.
