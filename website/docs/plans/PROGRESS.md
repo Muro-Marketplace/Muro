@@ -7689,3 +7689,29 @@ green: 167 files, 1855 tests.
 (orders has none; venue is via venue_slug), `currency` (none), `placed_at` (use
 created_at). Re-read the route (loadOrder + how these are used) to map/drop each
 correctly, fix the select + usages, remove grandfather (ratchet 7 -> 6).
+
+## row 19 #5 — orders/[id]/events selects real columns + resolves venue by slug
+
+Commit `1b8a270`. Code-only.
+
+**The defect.** loadOrder selected phantom `venue_user_id`/`currency`/`placed_at`,
+so the select was rejected and the order-events route 404'd for every order (the
+customer tracking stepper could not load).
+
+**The fix (with an authz subtlety).** `venue_user_id` was gating a real check (a
+venue viewing its order's events). orders links the venue via `venue_slug`, so the
+fix resolves the venue user id from `venue_slug -> venue_profiles.user_id`
+(`isVenueForSlug`) rather than dropping the venue path. `currency -> "gbp"`,
+`placed_at -> created_at`. OrderRow + select trimmed.
+
+**Test.** New route test pins the mapping AND the venue authz path (venue via slug
+authorised; unrelated user 403). Fail-before: the old phantom route fails the
+mapping AND the venue-authz test (order.venue_user_id was always undefined, so
+venues would have been wrongly 403'd). Ratchet 7 -> 6. `npm run check` green: 168
+files, 1858 tests. (Pre-existing lint warning on the POST handler's authz is
+unrelated and unchanged.)
+
+**Next: row 19 #6** — `paid-loan-billing.ts:200` `ensureVenueCustomer` selects
+`venue_profiles.contact_email`; the real column is `email`. MONEY PATH: the select
+is rejected, so it always falls back to the auth-user email for the Stripe customer.
+Fix contact_email -> email (verify usages), remove grandfather (ratchet 6 -> 5).
