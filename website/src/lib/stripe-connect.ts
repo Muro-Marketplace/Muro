@@ -186,22 +186,30 @@ const OWED_ORDER_STATUSES = ["confirmed", "processing", "shipped", "delivered"];
  * Reconcile orders that have money owed to an artist but NO stripe_transfers row
  * at all (D52.3). The retry sweep only re-tries rows that EXIST, so it is blind to
  * the failure that produces nothing: a ledger INSERT that threw, a webhook that
- * never ran, or a duplicate redelivery that early-returned. Prod showed the shape
- * this catches: orders with artist_revenue owed and zero transfer rows.
+ * never ran, or a duplicate redelivery that early-returned.
+ *
+ * D55.2: keyed on "money came in and nothing went out" (total > 0 + owed status +
+ * no ledger row), NOT on artist_revenue. Keying on artist_revenue was blind to the
+ * order it most needed to find: `artist_revenue = 0` is the SIGNATURE of the D4
+ * attribution failure (WP-WSP06D, £64.49 taken, nothing attributed), not evidence
+ * nothing is owed, and `.gt("artist_revenue", 0)` filtered exactly those out.
  *
  * Records the owed amount as a 'blocked' ledger row (reason
  * `reconciliation:missing_ledger`) rather than auto-scheduling a payout: a blocked
  * row SURFACES the owed money for an operator without paying it, which keeps the
  * manual Stripe reconciliation (D11) the human's call. Idempotent via the
- * (order_id, recipient_user_id) unique index, so it is safe to run every sweep.
+ * (order_id, recipient_user_id) unique index, so it is safe to run every sweep. An
+ * order with no resolvable recipient OR no computed owed amount (artist_revenue 0,
+ * the D4 shape — a £0 leg would violate the amount_cents > 0 CHECK anyway) goes to
+ * `unresolved` with its id for an operator to resolve (D42.4).
  */
 export async function reconcileOrdersWithoutLegs(): Promise<ReconcileResult> {
   const db = getSupabaseAdmin();
 
   const { data: owed, error } = await db
     .from("orders")
-    .select("id, artist_user_id, artist_revenue, status")
-    .gt("artist_revenue", 0)
+    .select("id, artist_user_id, artist_revenue, status, total")
+    .gt("total", 0)
     .in("status", OWED_ORDER_STATUSES)
     .limit(500);
 
@@ -218,9 +226,12 @@ export async function reconcileOrdersWithoutLegs(): Promise<ReconcileResult> {
   const result: ReconcileResult = { flagged: 0, unresolved: [], errors: [] };
   for (const o of owed) {
     if (haveLegs.has(o.id)) continue; // a ledger row exists; the sweep/webhook owns it
-    if (!o.artist_user_id) {
-      // No recipient to attribute the owed money to; an operator must resolve it.
-      // D55.3: keep the id, not just a count, so the operator knows which order.
+    const owedCents = Math.round(Number(o.artist_revenue) * 100);
+    if (!o.artist_user_id || owedCents <= 0) {
+      // No recipient, OR no computed owed amount (artist_revenue 0 on a total > 0
+      // order — the D4 attribution-failure signature). A £0 blocked leg would
+      // violate the amount_cents > 0 CHECK, so there is nothing valid to record:
+      // an operator must resolve it. D55.3: keep the id, not just a count.
       result.unresolved.push(o.id);
       continue;
     }
@@ -228,7 +239,7 @@ export async function reconcileOrdersWithoutLegs(): Promise<ReconcileResult> {
       await recordBlockedLeg(db, {
         orderId: o.id,
         recipientUserId: o.artist_user_id,
-        amountCents: Math.round(Number(o.artist_revenue) * 100),
+        amountCents: owedCents,
         reason: "reconciliation:missing_ledger",
       });
       result.flagged++;

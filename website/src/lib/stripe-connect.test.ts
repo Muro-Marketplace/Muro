@@ -269,16 +269,25 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
 // "money owed, 0 transfers" blind spot a retry-existing-rows sweep cannot see.
 describe("reconcileOrdersWithoutLegs() (D52.3)", () => {
   let inserts: Array<Record<string, unknown>>;
+  // D55.2: capture the column the predicate keys on, so a test can prove the sweep
+  // keys on "money in" (total) not the attribution field (artist_revenue).
+  let gtColumn: string | null;
 
   function setupReconcile(opts: {
     owed: Array<Record<string, unknown>>;
     existing: Array<{ order_id: string }>;
   }) {
     inserts = [];
+    gtColumn = null;
     fromMock.mockImplementation((table: string) => {
       if (table === "orders") {
         return {
-          select: () => ({ gt: () => ({ in: () => ({ limit: async () => ({ data: opts.owed, error: null }) }) }) }),
+          select: () => ({
+            gt: (col: string) => {
+              gtColumn = col;
+              return { in: () => ({ limit: async () => ({ data: opts.owed, error: null }) }) };
+            },
+          }),
         };
       }
       // stripe_transfers: select("order_id").in() for the existing-legs lookup;
@@ -328,6 +337,46 @@ describe("reconcileOrdersWithoutLegs() (D52.3)", () => {
     const res = await reconcileOrdersWithoutLegs();
     // D55.3: the id must survive, not just a count, or the operator cannot chase it.
     expect(res.unresolved).toEqual(["o2"]);
+    expect(res.flagged).toBe(0);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("keys the sweep on total (money in), not artist_revenue (D55.2)", async () => {
+    setupReconcile({ owed: [], existing: [] });
+
+    await reconcileOrdersWithoutLegs();
+
+    // The crux: artist_revenue = 0 is the D4 attribution-failure signature, so
+    // keying on it makes the sweep blind to exactly the orders it must find.
+    expect(gtColumn).toBe("total");
+    expect(gtColumn).not.toBe("artist_revenue");
+  });
+
+  it("surfaces the WP-WSP06D shape (total>0, artist_revenue 0, artist_user_id NULL) as unresolved-with-id (D55.2)", async () => {
+    // The order the old .gt("artist_revenue", 0) predicate filtered out entirely.
+    setupReconcile({
+      owed: [{ id: "WP-WSP06D", total: 64.49, artist_user_id: null, artist_revenue: 0, status: "confirmed" }],
+      existing: [],
+    });
+
+    const res = await reconcileOrdersWithoutLegs();
+
+    expect(res.unresolved).toEqual(["WP-WSP06D"]);
+    expect(res.flagged).toBe(0);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("routes an owed order whose split was never computed (artist_revenue 0, artist present) to unresolved, not a £0 blocked leg (D55.2)", async () => {
+    setupReconcile({
+      owed: [{ id: "o3", total: 40, artist_user_id: "u3", artist_revenue: 0, status: "confirmed" }],
+      existing: [],
+    });
+
+    const res = await reconcileOrdersWithoutLegs();
+
+    // A £0 blocked leg would violate the amount_cents > 0 CHECK; the owed amount is
+    // indeterminate, so this is a human's call, surfaced by id.
+    expect(res.unresolved).toEqual(["o3"]);
     expect(res.flagged).toBe(0);
     expect(inserts).toHaveLength(0);
   });
