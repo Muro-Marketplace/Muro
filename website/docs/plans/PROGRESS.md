@@ -16,7 +16,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
 | 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **`01` Phase B complete**: E32, E44, E45, E19, E39, E17/E18. Next: `01` Phase C/D, `06` Phase B |
-| 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
+| 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
 | 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). Next: T3 emails, then D7 |
@@ -3017,3 +3017,114 @@ PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
 ```
 
 **Commit:** 6e0705e
+
+---
+
+## Task 4 / `074` — RLS gap closure + the `/apply` switch (owner: `02` §11, unblocked by D15)
+
+**What was actually exposed.** Not theoretical. Counted in prod as the service role,
+against what `authenticated` could read before this migration:
+
+```
+artist_applications   13 rows   name, email, location, portfolio, artist statement
+enquiries             11 rows
+venue_registrations    6 rows
+contact_submissions    5 rows
+waitlist_signups       2 rows
+```
+
+37 real people's details, readable by anyone who could create an account.
+
+**Three errors in `02` §11's migration, all caught by verifying prod first.**
+
+1. **It drops four permissive SELECT policies; there are five.** `enquiries` carries
+   `USING (true)` granted to `authenticated`, which §11 missed and D12's assertion
+   could not match. Closing four would have left enquiries wide open **with the gate
+   reporting green**, which is exactly the failure mode D15.1 was written to prevent.
+2. **Its X3 block drops one `artist_applications` INSERT policy; prod has two.**
+   `Anyone can insert applications` (role public) and `Allow public inserts` (role
+   anon), both `WITH CHECK (true)`. Dropping one leaves the table writable by any
+   anonymous caller, making the lockdown decorative.
+3. **Its E27 block runs an unguarded `ALTER TABLE placement_record_versions`.** That
+   table does not exist in prod, so the statement fails `42P01` and takes the whole
+   migration with it. It does exist on a database built from this repo's migrations
+   (`033`), so the block is guarded on existence rather than deleted, keeping the
+   file correct against both.
+
+**Evidence, D15.3's assertion, before and after:**
+
+```
+before: 5 rows
+  artist_applications  | Authenticated users can read applications | auth.role() = 'authenticated'
+  contact_submissions  | Authenticated can read contact            | auth.role() = 'authenticated'
+  enquiries            | Artists can read their enquiries          | true
+  venue_registrations  | Authenticated can read venue reg          | auth.role() = 'authenticated'
+  waitlist_signups     | Authenticated can read waitlist           | auth.role() = 'authenticated'
+
+after:  0 rows
+```
+
+**And behaviourally**, because a policy list is not proof that reads are blocked. A
+role-switched read inside a DO block that aborts, so it cannot commit:
+
+```
+RLS PROOF >> as authenticated: artist_applications=0 waitlist_signups=0 enquiries=0
+             | as anon: artist_applications=0
+```
+
+Checked that those zeros are not vacuous: the same tables hold 13, 2 and 11 rows to
+the service role.
+
+**D15.2 respected.** The four intentionally-public SELECT policies
+(`artist_profiles_select`, `artist_works_select`, `Anyone can read collections`,
+`venue_profiles_select_public`) are untouched. Venue PII is restricted per column:
+
+```
+authenticated, venue_profiles: table SELECT grants = 0
+                               PII columns SELECTable = none
+                               non-PII columns SELECTable = 34
+```
+
+Which is precisely the shape `anon` has had since `071`, and that precedent is why
+the change is safe for the public site.
+
+**Other blocks verified after applying:** `stripe_transfers.recipient_user_id` is
+NOT NULL and its dedupe index is `NULLS NOT DISTINCT` (0 rows, so nothing to
+backfill); `customer_profiles` exists with RLS and an owner-scoped read;
+`artist_applications` has zero policies.
+
+**The paired code change** (`/api/apply` onto `getSupabaseAdmin`) is in the same
+commit, per D15.4. Without it, `074` breaks every public artist application
+silently: the insert fails RLS and the applicant still sees success.
+
+`/api/apply` is added to `PUBLIC_ROUTES` with its alternative controls named
+(`applySchema`, `checkRateLimit`, a `pending` status the applicant cannot set past,
+and an insert of nothing but the submitted form). The authz lint rule from Phase A
+flagged the new service-role usage correctly, which is the guard doing its job.
+
+**Tests:** `tests/integration/rls-gap-closure.test.ts`, 17 assertions. They pin the
+two traps rather than the RLS state, which is what a repo test can actually hold.
+Probed both:
+
+```
+revert /api/apply to the anon client   → 2 tests fail
+drop only four policies (the §11 bug)  → the enquiries test fails
+```
+
+The existing `/api/apply` test mocked the anon client. Its mock moved to the admin
+client and the dead one was **deleted**, so a route that quietly reverts fails
+instead of passing on a stale mock.
+
+```
+ Test Files  149 passed (149)
+      Tests  1442 passed (1442)
+✖ 250 problems (0 errors, 250 warnings)
+PASS: 13 public route(s) and 15 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Advisor (MCP, token still absent locally).** Strict improvement: the two
+`artist_applications` INSERT `rls_policy_always_true` WARNs are resolved (13 → 11),
+and one new INFO appears for `artist_applications` having RLS with no policies,
+which is the intended deny-all rather than a regression.
+
+**Commit:** 5ccf266
