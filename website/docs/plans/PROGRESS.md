@@ -19,7 +19,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
-| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93: covers collection offers too, which the plan's snippet skipped, and the expiry is compare-and-set). Next: T2 (E9 pooled remainder), then T6, T1, T4, T9, T5 |
+| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082: per-artist legs; the plan's snippet named a phantom column and would have thrown on every multi-artist cart). Next: T6 (E7a-E7d, E8, E11), then T1, T4, T9, T5 |
 | 7a | `free_until` overcharge: every sale billed 15% | D17.1 | **done** (6e0705e). Four sites, not the two D17 named. No fee changes today, no artist has a future `trial_end` |
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **narrow form done** (6e0705e): `phantom-columns.test.ts`, table-aware, four probes. Full form (generated `schema-columns.json` covering ALL columns) still todo |
 | 7c | `placements/route.ts` integrates the phantom `requester_user_id` in ~20 places | N3 follow-up, found by 7b's guard | todo. Recorded in the guard's `KNOWN_UNFIXED` ratchet so it cannot be forgotten |
@@ -4665,3 +4665,125 @@ nothing: `offer_work_ids` metadata is empty by `chk_target_shape`, and the
 decrement loop iterates that list. So collection offers never move stock (E10's
 fix covers the named-works shape only). Recorded for `04` D5, which owns the
 decrement rewrite.
+
+---
+
+## `04` T2 / E9 — the first artist was paid everyone's money (owner: `04` §B2 + §C2)
+
+Commit `7dffb33`. Migration `082`.
+
+**The finding.** Three lines in the cart webhook: the fee tier came from
+`firstArtistSlug` only, one `platformFee` and one pooled `artistRevenue` were
+computed, and exactly one transfer went to `artistUserId`. In a two-artist cart
+that pays artist A the money owed to artist B, and charges B's sale at A's plan
+rate.
+
+**Blast radius, checked before writing anything** (project `uwkuhygwvasdzwsusiym`):
+12 orders, **0 multi-artist**, and **0 of 14 artists** have
+`stripe_connect_onboarding_complete = true`, so the transfer guard has never let a
+transfer through on this path. Nobody has been misdirected money yet. This is
+preventative.
+
+**What changed.**
+
+- `src/lib/payouts/legs.ts` (new): `buildArtistLegs`, `reconcilePlatformFee`,
+  `assertLegsReconcile`, `penceToGbp`.
+- Migration `082_cart_sessions_artist_shipping.sql`, applied to prod and verified
+  (`jsonb`, `NOT NULL`, default `'{}'`).
+- `src/lib/cart-sessions.ts` + `api/checkout/route.ts` carry
+  `artistShippingPence` from `calculateOrderShipping().artistGroups`.
+- `api/webhooks/stripe/route.ts`: the three sites replaced. Every figure on the
+  order row is now the sum of the legs, so what is reported and what is transferred
+  cannot disagree. One leg failing no longer strands the others.
+
+**The plan numbered the migration wrongly.** §B2 says
+`076_cart_sessions_artist_shipping.sql`, but 076 is inside `02`'s range (074-079).
+D1 gives `04` the range 080-089, and 080/081 are taken, so this is **082**.
+
+**Four departures from the plan's snippets, each with its own test:**
+
+1. **Integer pence throughout.** §C2's `ArtistLeg` carries GBP floats, and its own
+   reconciliation block converts back with `Math.round(l.netGbp * 100)` at every
+   use site. That manufactures rounding drift on the one code path that has to
+   balance exactly. Pence is the single source of truth; `penceToGbp` exists for
+   the order's numeric GBP columns.
+2. **`buildArtistLegs` does not select `free_until`.** §C2's version does. That
+   column is in no migration and not in the live table, so PostgREST would reject
+   the select whole, `profiles` would be null, every slug would land in `missing`,
+   and it would **throw on every multi-artist cart**. `trial_end` is the real column
+   (D17.1). This is the fifth phantom-column instance this session, and the second
+   time a plan snippet has contained one.
+3. **Shipping attribution handles three cases, not one.** The doc reads the map and
+   uses it. But a session created before 082 has `'{}'`, which would attribute zero
+   and quietly hand the buyer's postage to the platform; and a **collection order
+   charges no postage at all** (`amount_total - subtotal` is 0) while the saved map
+   still holds what posting would have cost, which would pay artists money the
+   buyer never paid. So: sums-to-total uses the map as-is, sums-to-less splits the
+   residual pro rata by artwork value, sums-to-more scales down proportionally.
+   The remainder penny goes to the largest gross, ties broken by slug, so replays
+   are deterministic.
+4. **A residual is absorbed by the platform fee and logged, not thrown.** §C2's
+   `assertLegsReconcile` throws, and the doc calls it "before writing anything".
+   Thrown from the webhook that means an order the buyer has already paid for is
+   never booked. `reconcilePlatformFee` moves any residual onto the platform fee
+   (never onto a recipient), warns when it is larger than one penny per leg, and
+   then the assert runs as a real invariant that must hold.
+
+**A fixture was concealing the whole finding.** The webhook test mocked
+`@/lib/platform-fee` with `vi.fn(() => 15)`, a flat 15% for every artist. That is
+exactly the behaviour E9 removes, so a two-artist cart with two different plans
+looked correct. The mock is **deleted**: the function is pure, over
+`{ subscription_plan, trial_end }`, with no I/O, so there was nothing to mock and
+the stub could only lie. Removing it is what made the per-plan assertions possible.
+
+`setupDbMock` also grew a slug-aware `artist_profiles` branch supporting `.in()`,
+and its `.eq()` now filters on the actual column, so a two-artist transfer test
+gets each artist's own Connect row instead of one shared answer.
+
+**Tests.** `src/lib/payouts/legs.test.ts` (26) and 7 cases in
+`src/app/api/webhooks/stripe/route.test.ts`.
+
+**Two probes, one per half of the finding:**
+
+```
+PROBE A — one pooled transfer to the first artist (the original shape)
+ FAIL  E9 > pays each artist their own net, at their own plan rate
+ FAIL  E9 > attributes shipping to the artist who posts the parcel
+ FAIL  E9 > pays the other artist when one artist's Connect account has lapsed
+      Tests  3 failed | 34 passed (37)
+
+PROBE B — one fee tier for everyone (the first artist's plan)
+ FAIL  legs > charges each artist their own plan rate, not the first artist's
+ FAIL  legs > pays each artist their own net, so nobody receives another's money
+ FAIL  legs > applies each artist's own placement rate to their own lines
+ FAIL  E9 > splits to the penny: venue + fee + every leg equals what Stripe collected
+      (+3 more)  Tests  7 failed | 56 passed (63)
+```
+
+Restored: `Tests 63 passed (63)` across both files.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  159 passed (159)
+Tests  1660 passed (1660)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+Warning count is unchanged at 175: the one warning this work introduced was the
+now-unused `platformFeePercentForArtist` import in the webhook, and that import was
+deleted with the code path it served.
+
+**Stripe drive not run.** Same blocker as D7: `STRIPE_SECRET_KEY` is
+`sk_test_PLAC...`, api.stripe.com returns 401, no webhook secret, no CLI. The
+split-to-the-penny assertion is made against `scheduleTransfer`'s recorded
+arguments plus the persisted order row, which is the strongest evidence available
+here. A real test-mode drive remains an owner action.
+
+**Not done here, still open in `04`:** C1 `canReceivePayout` (the richer
+`charges_enabled` / `payouts_enabled` check) and C3 `recordBlockedLeg` (a
+`stripe_transfers` row with `status: 'blocked'` so ops can see what is owed). The
+per-leg payability check is today's `stripe_connect_onboarding_complete` guard,
+applied per artist instead of once, and the skip path logs the slug, user id and
+amount. Both helpers remain their own tasks.
