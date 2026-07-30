@@ -7714,7 +7714,7 @@ unrelated and unchanged.)
 
 ## row 19 #6 — paid-loan-billing selects venue_profiles.email, not phantom contact_email
 
-Commit `12c76f6`. Code-only. MONEY PATH.
+Commit `648fb10`. Code-only. MONEY PATH.
 
 **The defect.** `ensureVenueCustomer` selected `"user_id, stripe_customer_id,
 contact_email, name"` from `venue_profiles`, but the column is `email`, not
