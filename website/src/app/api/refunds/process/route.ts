@@ -161,6 +161,29 @@ export async function POST(request: Request) {
     const refundAmountCents = Math.round((refundReq.amount as number) * 100);
     const isFullRefund = refundReq.type === "full";
 
+    // D16 guard: never reverse or refund more than the order was worth. The
+    // request route enforces this at submission time, but the order total can be
+    // re-read between request and process, so re-assert here. Release the claim
+    // so the row returns to 'pending' rather than being stranded in 'processing'.
+    const orderTotalCents = Math.round(Number(order.total) * 100);
+    if (refundAmountCents > orderTotalCents) {
+      await releaseClaim(db, "refund_requests", refundRequestId);
+      return NextResponse.json(
+        { error: "Refund amount exceeds the order total." },
+        { status: 400 },
+      );
+    }
+
+    // D16: shipping is NOT shared revenue. The artist keeps 100% of it and pays
+    // the courier from it (webhooks/stripe adds shippingCost straight to
+    // artistRevenue), so a partial reversal must pro-rate against the SUBTOTAL,
+    // not order.total. Reversing against total would claw back a slice of the
+    // shipping the artist already spent. A shipping-inclusive partial refund
+    // reverses the shipping portion against the artist leg only.
+    const subtotalPence = Math.round(Number(order.subtotal) * 100);
+    const artworkRefundPence = Math.min(refundAmountCents, subtotalPence);
+    const shippingRefundPence = Math.max(0, refundAmountCents - subtotalPence);
+
     // Look up transfers for this order
     const { data: transfers } = await db
       .from("stripe_transfers")
@@ -186,7 +209,14 @@ export async function POST(request: Request) {
           try {
             const reverseAmount = isFullRefund
               ? transfer.amount_cents
-              : Math.round(transfer.amount_cents * (refundAmountCents / Math.round(order.total * 100)));
+              : (() => {
+                  const base = subtotalPence > 0
+                    ? Math.round(transfer.amount_cents * (artworkRefundPence / subtotalPence))
+                    : 0;
+                  // Only the artist leg carries shipping.
+                  const ship = transfer.recipient_type === "artist" ? shippingRefundPence : 0;
+                  return Math.min(transfer.amount_cents, base + ship);
+                })();
 
             // Idempotency key scoped per transfer so retries dedupe safely.
             await stripe.transfers.createReversal(
