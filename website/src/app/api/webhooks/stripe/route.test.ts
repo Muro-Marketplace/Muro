@@ -12,10 +12,15 @@ const {
   sendEmailMock,
   resolveArtistNamesBulkMock,
   platformFeePercentForArtistMock,
+  receiptPropsMock,
 } = vi.hoisted(() => ({
   constructEventMock: vi.fn(),
   fromMock: vi.fn(),
-  authGetUserByIdMock: vi.fn(async () => ({ data: { user: null } })),
+  // Explicit return type: inferred from the default it would be `user: null` and
+  // every mockResolvedValue carrying an email would fail typecheck.
+  authGetUserByIdMock: vi.fn(
+    async (): Promise<{ data: { user: { email: string } | null } }> => ({ data: { user: null } }),
+  ),
   loadCartSessionMock: vi.fn(),
   scheduleTransferMock: vi.fn(async () => {}),
   signOrderTokenMock: vi.fn(async () => "token-abc"),
@@ -23,6 +28,7 @@ const {
   sendEmailMock: vi.fn(async () => {}),
   resolveArtistNamesBulkMock: vi.fn(async () => new Map<string, string>()),
   platformFeePercentForArtistMock: vi.fn(() => 15),
+  receiptPropsMock: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/stripe", () => ({
@@ -74,7 +80,8 @@ vi.mock("@/lib/order-tracking-token", () => ({
 // Email templates are React components, the route only constructs them
 // for the `sendEmail` payload. Returning null keeps the templates inert
 // without pulling in @react-email at test time.
-vi.mock("@/emails/templates/orders/CustomerOrderReceipt", () => ({ CustomerOrderReceipt: () => null }));
+// Recording spy, not an inert stub: the receipt's totals are worth asserting.
+vi.mock("@/emails/templates/orders/CustomerOrderReceipt", () => ({ CustomerOrderReceipt: receiptPropsMock }));
 vi.mock("@/emails/templates/orders/ArtistOrderConfirmation", () => ({ ArtistOrderConfirmation: () => null }));
 vi.mock("@/emails/templates/orders/ArtistWorkSold", () => ({ ArtistWorkSold: () => null }));
 vi.mock("@/emails/templates/payments/ArtistPayoutSent", () => ({ ArtistPayoutSent: () => null }));
@@ -229,11 +236,15 @@ beforeEach(() => {
   fromMock.mockReset();
   loadCartSessionMock.mockReset();
   scheduleTransferMock.mockClear();
-  sendEmailMock.mockClear();
+  // mockReset, not mockClear: a mockRejectedValueOnce that no test consumed
+  // stays queued and fires in whichever test calls sendEmail next.
+  sendEmailMock.mockReset();
+  sendEmailMock.mockResolvedValue(undefined);
   createNotificationMock.mockClear();
   authGetUserByIdMock.mockReset();
   authGetUserByIdMock.mockResolvedValue({ data: { user: null } });
   platformFeePercentForArtistMock.mockReturnValue(15);
+  receiptPropsMock.mockClear();
 });
 
 describe("Stripe webhook — venue revenue split", () => {
@@ -393,8 +404,10 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     orderInsert: { row: Record<string, unknown> | null; error: { code?: string; message: string } | null };
     offerUpdate: { row: Record<string, unknown> | null };
     stock: Record<string, number | null>;
+    titles?: Record<string, string>;
     stockUpdates: Array<{ workId: string; updates: Record<string, unknown> }>;
     connect?: { stripe_connect_account_id: string | null; stripe_connect_onboarding_complete: boolean } | null;
+    artistName?: string;
   };
 
   function setupOfferDb(state: OfferDbState) {
@@ -436,7 +449,7 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
               single: async () => ({
                 data: state.stock[workId] === undefined
                   ? null
-                  : { quantity_available: state.stock[workId] },
+                  : { quantity_available: state.stock[workId], title: state.titles?.[workId] },
               }),
             }),
           }),
@@ -452,12 +465,21 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
         return {
           select: () => ({
             eq: () => ({
-              single: async () => ({ data: state.connect ?? null }),
+              // Connect columns for the payout guard, name for the emails.
+              single: async () => ({ data: { ...state.connect, name: state.artistName } }),
+              maybeSingle: async () => ({ data: { ...state.connect, name: state.artistName } }),
             }),
           }),
         };
       }
-      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: null }),
+            maybeSingle: async () => ({ data: null }),
+          }),
+        }),
+      };
     });
   }
 
@@ -466,8 +488,10 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
       orderInsert: { row: null, error: null },
       offerUpdate: { row: null },
       stock: { "w-1": 3 },
+      titles: { "w-1": "Harbour Light" },
       stockUpdates: [],
       connect: { stripe_connect_account_id: "acct_artist", stripe_connect_onboarding_complete: true },
+      artistName: "Fin Coles",
       ...overrides,
     };
   }
@@ -612,6 +636,99 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     expect(state.offerUpdate.row).toMatchObject({ status: "paid" });
   });
 
+  // ── E6 part 3: the offer branch used to send nothing at all ──
+
+  function offerSends() {
+    return (sendEmailMock.mock.calls as unknown as Array<[{ template: string; to: string; idempotencyKey: string; react: unknown }]>)
+      .map(([a]) => a);
+  }
+
+  it("sends the buyer a receipt and the artist both emails, which it never did before", async () => {
+    authGetUserByIdMock.mockResolvedValue({ data: { user: { email: "artist@example.com" } } });
+    setupOfferDb(freshState());
+    await fireOffer();
+    expect(offerSends().map((s) => s.template)).toEqual([
+      "customer_order_receipt",
+      "artist_work_sold",
+      "artist_order_confirmation",
+    ]);
+    expect(offerSends()[0].to).toBe("venue@example.com");
+    expect(offerSends()[1].to).toBe("artist@example.com");
+  });
+
+  it("keys the offer sends on the payment intent, like the cart path", async () => {
+    authGetUserByIdMock.mockResolvedValue({ data: { user: { email: "artist@example.com" } } });
+    setupOfferDb(freshState());
+    await fireOffer();
+    expect(offerSends().map((s) => s.idempotencyKey)).toEqual([
+      "order_receipt:pi_test_1",
+      "artist_work_sold:pi_test_1",
+      "artist_order_confirmation:pi_test_1",
+    ]);
+  });
+
+  it("raises the in-app sale notification for the artist", async () => {
+    setupOfferDb(freshState());
+    await fireOffer();
+    expect(createNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u-artist", kind: "sale", link: "/artist-portal/orders" }),
+    );
+  });
+
+  it("never notifies a venue: an offer has no placement share", async () => {
+    setupOfferDb(freshState());
+    await fireOffer();
+    for (const call of createNotificationMock.mock.calls as unknown as Array<[{ link?: string }]>) {
+      expect(call[0].link).not.toBe("/venue-portal/orders");
+    }
+  });
+
+  it("still returns 200 when the confirmations throw, because the money is already taken", async () => {
+    authGetUserByIdMock.mockResolvedValue({ data: { user: { email: "artist@example.com" } } });
+    setupOfferDb(freshState());
+    sendEmailMock.mockRejectedValueOnce(new Error("provider down"));
+    const res = await fireOffer();
+    expect(res.status).toBe(200);
+  });
+
+  it("bills the receipt as one aggregate line that sums to what was charged", async () => {
+    setupOfferDb(freshState());
+    await fireOffer();
+    const props = (receiptPropsMock.mock.calls as unknown as Array<[{
+      items: Array<{ title: string; quantity: number; lineTotal: { amount: number } }>;
+      subtotal: { amount: number }; shipping: { amount: number }; total: { amount: number };
+    }]>)[0][0];
+    // An offer is a single agreed price, so one line, and the line, subtotal and
+    // total must all agree or the buyer's receipt does not add up.
+    expect(props.items).toHaveLength(1);
+    expect(props.items[0].lineTotal.amount).toBe(3300);
+    expect(props.subtotal.amount).toBe(3300);
+    expect(props.shipping.amount).toBe(0);
+    expect(props.total.amount).toBe(3300);
+  });
+
+  it("names the piece on the receipt when the offer covers one work", async () => {
+    setupOfferDb(freshState());
+    await fireOffer();
+    const props = (receiptPropsMock.mock.calls as unknown as Array<[{ items: Array<{ title: string; artistName: string }> }]>)[0][0];
+    expect(props.items[0].title).toBe("Harbour Light");
+    expect(props.items[0].artistName).toBe("Fin Coles");
+  });
+
+  it("counts the works when the offer covers several", async () => {
+    setupOfferDb(freshState({ stock: { "w-1": 2, "w-2": 2 }, titles: { "w-1": "One", "w-2": "Two" } }));
+    await fireOffer({ ...OFFER_META, offer_work_ids: "w-1,w-2" });
+    const props = (receiptPropsMock.mock.calls as unknown as Array<[{ items: Array<{ title: string }> }]>)[0][0];
+    expect(props.items[0].title).toBe("2 works");
+  });
+
+  it("names the collection when the offer is for one", async () => {
+    setupOfferDb(freshState());
+    await fireOffer({ ...OFFER_META, offer_collection_id: "col_7" });
+    const props = (receiptPropsMock.mock.calls as unknown as Array<[{ items: Array<{ title: string }> }]>)[0][0];
+    expect(props.items[0].title).toBe("Collection col_7");
+  });
+
   it("charges a pro artist's real rate when the fee percent says 5", async () => {
     // £27.00 at 5%: 135p fee, 2565p net. Guards the arithmetic against a
     // hard-coded 15% creeping back in.
@@ -626,5 +743,112 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     expect(row.artist_revenue).toBe(25.65);
     expect(row.platform_fee_percent).toBe(5);
     expect(scheduleTransferMock).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 2565 }));
+  });
+});
+
+// ─── Characterisation: cart-checkout confirmations ───
+//
+// Written BEFORE extracting this block into lib/orders/confirmations.ts so the
+// extraction is provably behaviour-preserving. Nothing pinned these sends before,
+// so a refactor of the highest-consequence path in the app was unverifiable.
+//
+// This is a pin, not an endorsement. If a send legitimately changes, this file is
+// where it shows up.
+describe("Stripe webhook — cart confirmations, current behaviour pinned", () => {
+  function sends() {
+    return (sendEmailMock.mock.calls as unknown as Array<[{ template: string; to: string; idempotencyKey: string; category: string; userId?: string }]>)
+      .map(([a]) => a);
+  }
+
+  async function runCartCheckout() {
+    setupDbMock({
+      artistProfile: { user_id: "u-alice", subscription_plan: "core", free_until: null, name: "Alice Adams" },
+      placements: [],
+      insertCaptured: { row: null },
+    });
+    authGetUserByIdMock.mockResolvedValue({ data: { user: { email: "alice@example.com" } } });
+    loadCartSessionMock.mockResolvedValue({
+      cart: [{ workId: "w-a", artistSlug: "alice", title: "Sunset", price: 100, qty: 2, image: "" }],
+      shipping: {
+        fullName: "Bea Buyer", email: "buyer@example.com", country: "GB",
+        addressLine1: "1 Test St", city: "London", postcode: "E1 1AA",
+        fulfilmentMethod: "ship",
+      },
+      source: "direct",
+      artistSlugs: ["alice"],
+      expectedSubtotalPence: 20000,
+      expectedShippingPence: 0,
+    });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: { object: buildSession({ id: "cs_cart_1", amount_total: 20000, metadata: { kind: "cart_checkout", artist_slugs: "alice", fulfilment_method: "ship", source: "direct" } }) },
+    });
+    return POST(buildRequest());
+  }
+
+  it("sends exactly three emails: buyer receipt, artist sale, artist confirmation", async () => {
+    await runCartCheckout();
+    expect(sends().map((s) => s.template)).toEqual([
+      "customer_order_receipt",
+      "artist_work_sold",
+      "artist_order_confirmation",
+    ]);
+  });
+
+  it("keys every send on the payment intent so a Stripe retry cannot double-send", async () => {
+    await runCartCheckout();
+    expect(sends().map((s) => s.idempotencyKey)).toEqual([
+      "order_receipt:pi_test_1",
+      "artist_work_sold:pi_test_1",
+      "artist_order_confirmation:pi_test_1",
+    ]);
+  });
+
+  it("routes the receipt to the buyer and both artist emails to the artist", async () => {
+    await runCartCheckout();
+    const s = sends();
+    expect(s[0].to).toBe("buyer@example.com");
+    expect(s[1].to).toBe("alice@example.com");
+    expect(s[2].to).toBe("alice@example.com");
+    // The artist sends carry userId so preference checks can apply; the buyer
+    // receipt does not, because a receipt is not opt-out-able.
+    expect(s[0].userId).toBeUndefined();
+    expect(s[1].userId).toBe("u-alice");
+    expect(s[2].userId).toBe("u-alice");
+  });
+
+  it("files all three under orders_and_payouts", async () => {
+    await runCartCheckout();
+    expect(sends().map((s) => s.category)).toEqual([
+      "orders_and_payouts", "orders_and_payouts", "orders_and_payouts",
+    ]);
+  });
+
+  it("raises the in-app sale notification for the artist", async () => {
+    await runCartCheckout();
+    expect(createNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u-alice", kind: "sale", link: "/artist-portal/orders" }),
+    );
+  });
+
+  it("sends nothing to the artist when the artist has no auth user", async () => {
+    authGetUserByIdMock.mockResolvedValue({ data: { user: null } });
+    setupDbMock({
+      artistProfile: { user_id: "u-alice", subscription_plan: "core", free_until: null, name: "Alice" },
+      placements: [],
+      insertCaptured: { row: null },
+    });
+    loadCartSessionMock.mockResolvedValue({
+      cart: [{ workId: "w-a", artistSlug: "alice", title: "Sunset", price: 100, qty: 1, image: "" }],
+      shipping: { fullName: "Bea", email: "buyer@example.com", country: "GB", fulfilmentMethod: "ship" },
+      source: "direct", artistSlugs: ["alice"],
+      expectedSubtotalPence: 10000, expectedShippingPence: 0,
+    });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: { object: buildSession({ id: "cs_cart_2", amount_total: 10000, metadata: { kind: "cart_checkout", artist_slugs: "alice", fulfilment_method: "ship", source: "direct" } }) },
+    });
+    await POST(buildRequest());
+    expect(sends().map((s) => s.template)).toEqual(["customer_order_receipt"]);
   });
 });

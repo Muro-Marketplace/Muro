@@ -2,13 +2,10 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer } from "@/lib/stripe-connect";
-import { notifyArtistNewOrder, notifyVenueOrderFromPlacement, notifyCurationCustomerPaid } from "@/lib/email";
+import { notifyCurationCustomerPaid } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
-import { CustomerOrderReceipt } from "@/emails/templates/orders/CustomerOrderReceipt";
 import { resolveArtistNamesBulk } from "@/emails/_helpers/resolve-artist-name";
-import { ArtistOrderConfirmation } from "@/emails/templates/orders/ArtistOrderConfirmation";
-import { ArtistWorkSold } from "@/emails/templates/orders/ArtistWorkSold";
 import { ArtistPayoutSent } from "@/emails/templates/payments/ArtistPayoutSent";
 import { ArtistPayoutFailed } from "@/emails/templates/payments/ArtistPayoutFailed";
 import { SubscriptionPaymentFailed } from "@/emails/templates/payments/SubscriptionPaymentFailed";
@@ -19,13 +16,12 @@ import { SubscriptionRenewalReceipt } from "@/emails/templates/payments/Subscrip
 import { ArtistStripeKycNeeded } from "@/emails/templates/artist-additions/ArtistStripeKycNeeded";
 import { platformFeePercentForArtist, DEFAULT_PLAN_FEE_PERCENT } from "@/lib/platform-fee";
 import { loadCartSession } from "@/lib/cart-sessions";
-import { signOrderToken } from "@/lib/order-tracking-token";
 import {
   handleInvoicePaid as handleInvoicePaidPaidLoan,
   handleInvoicePaymentFailed as handleInvoicePaymentFailedPaidLoan,
   handleSubscriptionDeleted as handleSubscriptionDeletedPaidLoan,
 } from "@/lib/placements/paid-loan-billing";
-import { recordOrderEvent } from "@/lib/orders/lifecycle";
+import { sendOrderConfirmations, type OrderEmailItem } from "@/lib/orders/confirmations";
 import type Stripe from "stripe";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -203,13 +199,17 @@ export async function POST(request: Request) {
         // accepted offer stayed on sale. Read-then-write to match the cart
         // path; replacing that pattern with an atomic decrement is D5's task,
         // and inventing a second mechanism here would just add a third.
+        const workTitles: string[] = [];
         for (const workId of workIds) {
           try {
             const { data: work } = await db
               .from("artist_works")
-              .select("quantity_available")
+              // title comes along for the confirmation emails, so naming the
+              // piece costs no extra round-trip.
+              .select("quantity_available, title")
               .eq("id", workId)
               .single();
+            if (work?.title) workTitles.push(work.title as string);
             const current = work?.quantity_available;
             if (typeof current === "number") {
               const next = Math.max(0, current - 1);
@@ -252,6 +252,63 @@ export async function POST(request: Request) {
           } catch (transferErr) {
             console.error("[offer] artist transfer error:", transferErr);
           }
+        }
+
+        // E6 part 3: the offer branch sent nothing at all. The buyer got no
+        // receipt (CCR 2013 requires one) and the artist was never told they
+        // had sold anything. Same module as the cart path, because the reason
+        // this branch drifted in the first place was that the sends were
+        // inline in the other one.
+        //
+        // One aggregate line, not one per work: an offer is a single agreed
+        // price, so splitting it across pieces would invent per-line figures
+        // that do not exist and would not sum back to what was charged.
+        const offerTitle = session.metadata.offer_collection_id
+          ? `Collection ${session.metadata.offer_collection_id}`
+          : workTitles.length === 1
+            ? workTitles[0]
+            : `${workIds.length} work${workIds.length === 1 ? "" : "s"}`;
+        const { data: offerArtist } = await db
+          .from("artist_profiles")
+          .select("name")
+          .eq("user_id", artistUserId || "")
+          .maybeSingle();
+        const offerBuyerEmail = session.customer_email || session.metadata.offer_buyer_email || "";
+
+        try {
+          await sendOrderConfirmations(db, {
+            orderId: paidOrderId,
+            paymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : null,
+            buyerEmail: offerBuyerEmail || null,
+            // No name is collected anywhere in the offer flow, so the module's
+            // per-use fallbacks apply ("there" to the buyer, "your buyer" to
+            // the artist).
+            buyerName: "",
+            items: [{
+              title: offerTitle,
+              artistName: (offerArtist?.name as string | undefined)
+                || session.metadata.offer_artist_slug
+                || "Artist",
+              quantity: 1,
+              image: `${SITE}/placeholder-work.jpg`,
+              lineTotal: { amount: session.amount_total || 0, currency: "GBP" },
+            }],
+            subtotal: totalGbp,
+            shippingCost: 0,
+            total: totalGbp,
+            address: { line1: "", city: "", postcode: "", country: "GB" },
+            artistUserId,
+            artistRevenue: netPence / 100,
+            firstItemTitle: offerTitle,
+            stripeSessionId: session.id,
+            // An offer is between buyer and artist. No placement, so no venue
+            // share to notify about.
+            venue: null,
+          });
+        } catch (confirmErr) {
+          // The money is taken and the order exists. A failed email must not
+          // turn that into a Stripe retry that redoes the payout path.
+          console.error("[offer] confirmations failed", { paidOrderId, confirmErr });
         }
       }
       return NextResponse.json({ received: true });
@@ -510,33 +567,6 @@ export async function POST(request: Request) {
           console.error("Supabase order save error:", error);
           return NextResponse.json({ error: "DB save failed" }, { status: 500 });
         } else {
-          // J1 (Phase 2.3): log the initial order.placed event +
-          // dispatch the matching Phase 2.0c emails. Best-effort,
-          // legacy templates below continue to fire for backwards
-          // compatibility.
-          try {
-            const buyerEmail = orderRow.buyer_email as string | undefined;
-            const artistUserId = orderRow.artist_user_id as string | undefined;
-            let artistEmail: string | null = null;
-            if (artistUserId) {
-              const { data: artistAuth } = await db.auth.admin.getUserById(artistUserId);
-              artistEmail = artistAuth.user?.email ?? null;
-            }
-            await recordOrderEvent({
-              orderId: String(orderRow.id),
-              newStatus: "confirmed",
-              buyerEmail: buyerEmail ?? null,
-              artistEmail,
-              data: {
-                firstName: buyerEmail ? buyerEmail.split("@")[0] : "there",
-                orderNumber: String(orderRow.id),
-                orderUrl: `${SITE}/customer-portal/orders`,
-              },
-              metadata: { stripe_session_id: session.id },
-            });
-          } catch (lifecycleErr) {
-            console.error("[webhook checkout] lifecycle hook:", lifecycleErr);
-          }
           // Decrement per-work quantity (F10). Best-effort: swallow any errors
           // so a DB hiccup here doesn't abort the rest of the order flow.
           try {
@@ -575,13 +605,15 @@ export async function POST(request: Request) {
             (cartItemsForNotify as Array<{ artistSlug?: string }>).map((i) => i.artistSlug),
           );
 
-          // Customer order receipt (legally required under CCR 2013).
-          // Keyed by payment_intent so Stripe retries don't double-send.
+          // Build the display-ready lines, then hand everything to the shared
+          // confirmations module. The mapping and the write-back stay here:
+          // they need the cart row and the slug map, and on an offer order
+          // items carries the offer_id linkage that must not be overwritten.
           const buyerEmail = session.customer_email || savedShipping?.email;
+          let orderItems: OrderEmailItem[] = [];
           if (buyerEmail) {
-            const buyerName = savedShipping?.fullName || "there";
             // Adapt the cart items shape to the OrderSummary component.
-            const orderItems = (cartItemsForNotify as Array<{
+            orderItems = (cartItemsForNotify as Array<{
               title?: string; artistName?: string; artistSlug?: string; qty?: number; quantity?: number; size?: string; image?: string; price?: number;
             }>).map((item) => {
               const slug = item.artistSlug || firstArtistSlug || "";
@@ -610,137 +642,32 @@ export async function POST(request: Request) {
             } catch (persistErr) {
               console.warn("[webhook] persisting enriched items failed:", persistErr);
             }
-            // Mint a signed tracking token bound to {orderId, email} so
-            // /orders/track can authenticate the lookup without trusting
-            // bare email match. Best-effort: if the secret isn't
-            // configured the email still sends, just without the token.
-            let trackingToken: string | undefined;
-            try {
-              trackingToken = await signOrderToken({ orderId, email: buyerEmail });
-            } catch (err) {
-              console.warn("[webhook] signOrderToken failed:", err);
-            }
-            await sendEmail({
-              idempotencyKey: `order_receipt:${paymentIntentId || orderId}`,
-              template: "customer_order_receipt",
-              category: "orders_and_payouts",
-              to: buyerEmail,
-              subject: `Your Wallplace order ${orderId}`,
-              react: CustomerOrderReceipt({
-                firstName: buyerName.split(" ")[0] || "there",
-                orderNumber: orderId,
-                orderUrl: `${SITE}/orders/${orderId}`,
-                orderDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
-                trackingToken,
-                items: orderItems,
-                subtotal: { amount: Math.round(subtotal * 100), currency: "GBP" },
-                shipping: { amount: Math.round(shippingCost * 100), currency: "GBP" },
-                total: { amount: Math.round(total * 100), currency: "GBP" },
-                billingAddress: {
-                  name: buyerName,
-                  line1: savedShipping?.addressLine1 || "",
-                  line2: savedShipping?.addressLine2 || undefined,
-                  city: savedShipping?.city || "",
-                  postcode: savedShipping?.postcode || "",
-                  country: savedShipping?.country || "GB",
-                },
-                shippingAddress: {
-                  name: buyerName,
-                  line1: savedShipping?.addressLine1 || "",
-                  line2: savedShipping?.addressLine2 || undefined,
-                  city: savedShipping?.city || "",
-                  postcode: savedShipping?.postcode || "",
-                  country: savedShipping?.country || "GB",
-                },
-                supportUrl: `${SITE}/support`,
-              }),
-              metadata: { orderId, paymentIntentId },
-            });
           }
 
-          // Notify artist, email + in-app bell notification.
-          if (artistUserId) {
-            const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistUserId);
-            const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", artistUserId).single();
-            if (artistUser?.email && artistProfile) {
-              // Two emails to the artist: the celebration ("you made a sale")
-              // and the operational receipt (order confirmation). They serve
-              // different purposes, the first is emotional, the second
-              // itemised and record-worthy. Idempotency keys are distinct.
-              await sendEmail({
-                idempotencyKey: `artist_work_sold:${paymentIntentId || orderId}`,
-                template: "artist_work_sold",
-                category: "orders_and_payouts",
-                to: artistUser.email,
-                subject: `You made a sale, ${firstItemTitle}`,
-                userId: artistUserId,
-                react: ArtistWorkSold({
-                  firstName: (artistProfile.name || "there").split(" ")[0],
-                  workTitle: firstItemTitle,
-                  orderNumber: orderId,
-                  saleAmount: { amount: Math.round(artistRevenue * 100), currency: "GBP" },
-                  nextSteps: [
-                    "Pack the piece securely (packing guidelines in the portal)",
-                    "Print the shipping label we've generated",
-                    "Drop off or arrange collection within 3 business days",
-                  ],
-                  orderUrl: `${SITE}/artist-portal/orders/${orderId}`,
-                  shippingInstructionsUrl: `${SITE}/artist-portal/orders/${orderId}/ship`,
-                }),
-                metadata: { orderId, paymentIntentId },
-              });
-              await sendEmail({
-                idempotencyKey: `artist_order_confirmation:${paymentIntentId || orderId}`,
-                template: "artist_order_confirmation",
-                category: "orders_and_payouts",
-                to: artistUser.email,
-                subject: `Order ${orderId}, ${firstItemTitle}`,
-                userId: artistUserId,
-                react: ArtistOrderConfirmation({
-                  firstName: (artistProfile.name || "there").split(" ")[0],
-                  orderNumber: orderId,
-                  workTitle: firstItemTitle,
-                  buyerFirstName: (savedShipping?.fullName || "your buyer").split(" ")[0],
-                  orderUrl: `${SITE}/artist-portal/orders/${orderId}`,
-                  nextSteps: [
-                    "Ship within 3 business days",
-                    "Mark as shipped in the portal",
-                    "Payout lands 2 business days after delivery",
-                  ],
-                }),
-                metadata: { orderId, paymentIntentId },
-              });
-              // Legacy helper is a no-op now, the new pipeline covers it.
-              void notifyArtistNewOrder;
-            }
-            // In-app sale notification, deep-linked to the artist orders
-            // page so they can acknowledge the sale and start fulfilment.
-            createNotification({
-              userId: artistUserId,
-              kind: "sale",
-              title: "Your artwork sold",
-              body: `${firstItemTitle}, £${artistRevenue.toFixed(2)} to you (${orderId})`,
-              link: "/artist-portal/orders",
-            }).catch(() => {});
-          }
-          // Notify venue if revenue share exists, email + in-app bell.
-          if (venueSlug && venueRevenue > 0) {
-            const { data: vp } = await db.from("venue_profiles").select("user_id, name").eq("slug", venueSlug).single();
-            if (vp?.user_id) {
-              const { data: { user: venueUser } } = await db.auth.admin.getUserById(vp.user_id);
-              const { data: ap } = await db.from("artist_profiles").select("name").eq("slug", firstArtistSlug).single();
-              if (venueUser?.email) {
-                await notifyVenueOrderFromPlacement({ email: venueUser.email, venueName: vp.name, artistName: ap?.name || firstArtistSlug, itemTitle: firstItemTitle, total, venueRevenue }).catch((err) => { if (err) console.error("notifyVenueOrderFromPlacement error:", err); });
-              }
-              createNotification({
-                userId: vp.user_id,
-                kind: "sale",
-                title: "Placement sale",
-                body: `${firstItemTitle} sold, £${venueRevenue.toFixed(2)} to your venue (${orderId})`,
-                link: "/venue-portal/orders",
-              }).catch(() => {});
-            }
-          }
+          await sendOrderConfirmations(db, {
+            orderId,
+            paymentIntentId,
+            buyerEmail: buyerEmail || null,
+            buyerName: savedShipping?.fullName || "",
+            items: orderItems,
+            subtotal,
+            shippingCost,
+            total,
+            address: {
+              line1: savedShipping?.addressLine1 || "",
+              line2: savedShipping?.addressLine2 || undefined,
+              city: savedShipping?.city || "",
+              postcode: savedShipping?.postcode || "",
+              country: savedShipping?.country || "GB",
+            },
+            artistUserId: artistUserId || null,
+            artistRevenue,
+            firstItemTitle,
+            stripeSessionId: session.id,
+            venue: venueSlug && venueRevenue > 0
+              ? { slug: venueSlug, revenue: venueRevenue, artistSlug: firstArtistSlug }
+              : null,
+          });
 
           // ─── Stripe Connect transfers ───
           // Collection orders are paid out immediately, the work is
