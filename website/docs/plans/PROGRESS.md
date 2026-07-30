@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **`01` Phase B complete**: E32, E44, E45, E19, E39, E17/E18. Next: `01` Phase C/D, `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). Next: Phase D items 10-12 (E20+E23b, E21, E22), then `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -3128,3 +3128,92 @@ and one new INFO appears for `artist_applications` having RLS with no policies,
 which is the intended deny-all rather than a regression.
 
 **Commit:** 5ccf266
+
+---
+
+## E33 — any authenticated user could accept or decline any placement (owner: `01` Phase C item 9)
+
+**The hole.** `POST /api/messages` with `messageType: "placement_response"` took
+`placementId` and `status` verbatim from client-supplied `metadata` and wrote them
+with the service-role client, so RLS never intervened. No party check, no state
+check, no requester check, no link to the conversation. `notifyPlacementResponse`
+then emailed the artist to say their venue had accepted, from a venue that did
+nothing. Placement ids appear in notification links. **Prod has 33 pending
+placements**, so this was live, and sweeping ids would have killed or force-accepted
+every negotiation on the platform.
+
+**What changed.** `assertPlacementParty` re-reads the row filtered to
+`artist_user_id` or `venue_user_id` = the caller, so a non-party gets
+`placement_not_found`. `canPlacementTransition` refuses an illegal move with 422.
+The update compare-and-sets on `status = 'pending'` and returns 409 if it matched
+nothing. The redundant second SELECT for the notification is **deleted**, since the
+row `assertPlacementParty` already fetched carries what the email needs. The POST's
+bare `catch` now runs `handleAuthzError` first, per `01` §1.3: it previously answered
+400, which would have made the new 404/403 look like a malformed body.
+
+**Deliberate deviation from the doc, with evidence.** `01` §E33 says to gate on
+`canRespond()`. Two problems:
+
+1. **It would not work at all.** `assertPlacementParty` returns
+   `proposed_by_user_id` (the real column); `canRespond` reads
+   `requester_user_id` (phantom, exists in no migration and not in the live table).
+   Composed as the doc writes it, the field is `undefined`, `canRespond` falls to its
+   refuse-ambiguous branch, and **every legitimate responder gets a 403**. The doc
+   composes two helpers that disagree about a column name.
+2. **Even mapped to the real column it refuses almost everyone.** Prod:
+
+   ```
+   placements: 86 rows | with proposed_by_user_id: 2 | pending: 33
+   ```
+
+   `canRespond` treats an unknown proposer as a refusal, so 84 of 86 rows, pending
+   ones included, would stop accepting responses. Closing a hole is worth a lot;
+   disabling the feature for 98% of live placements is a different change, and not
+   one the plan anticipated.
+
+So the boundary here is the **party check**, which fully kills the exploit, plus a
+narrower self-answer refusal applied **only when the proposer is known**. That
+closes the doc's stated "requester can accept their own request" to the extent the
+data supports, and breaks nobody. Widening it needs the effective-requester fallback
+that `01` Phase D item 10 owns (already present at
+`api/placements/[id]/route.ts:78`); copying that fallback here would make a third
+copy of a rule the plan itself argues should have one definition.
+
+This is the `requester_user_id` debt (ledger 7c) surfacing exactly where the guard
+had to be built. Recorded there; not expanded here.
+
+**Also note** `canRespond`'s third parameter `viewerRole` is unused (it is one of the
+252 lint warnings). The doc's fix passes `placement.role` into it, which would have
+done nothing.
+
+**Tests.** 8 new in `src/app/api/messages/route.test.ts`. They assert on **whether
+the write reached `placements`**, not only on status codes, because the route does a
+lot after this branch and the fixture is not a full schema. The security property
+holds regardless of what the route answers.
+
+Also fixed the fixture itself: `getSupabaseAdmin` was mocked with only `from`, so
+any test reaching the notification path threw on `db.auth.admin.getUserById` and the
+outer catch reported 400. A working guard would have looked like a malformed body.
+
+**Verification, both directions.** Restoring the unguarded write fails 6 of 8,
+including the one that matters:
+
+```
+ × never writes when the caller is not a party to the placement
+ × refuses the known proposer answering their own request
+ × compare-and-sets on pending so two concurrent responses cannot both land
+ × returns 409 when the row was already answered by the time we wrote
+ × rejects an illegal transition instead of forcing it
+ × surfaces the authz status rather than the bare catch's 400
+      Tests  6 failed | 7 passed (13)
+```
+
+Restored:
+
+```
+ Test Files  149 passed (149)
+      Tests  1450 passed (1450)
+✖ 250 problems (0 errors, 250 warnings)
+```
+
+**Commit:** 1bed512
