@@ -5615,3 +5615,64 @@ DB: pg_policies SELECT-leak assertion → 0 rows; advisor shows no new item for
 
 **Still open in T1:** D6 (the strip-and-retry loop can drop money columns; split the
 list so money columns and `stripe_payment_intent_id` are never stripped).
+
+---
+
+## `04` T1 / D6 — the strip-and-retry loop could drop the money columns (owner: `04` §B1)
+
+Commit `532eece`. **T1 (B1) is now complete**: D4 (`68885e8`), D5 (`dc37c18`,
+migration 085), D6 (`532eece`).
+
+**The finding.** On a schema-drift insert error the loop stripped whatever column
+the error named and retried. `optionalCols` included `venue_revenue`,
+`artist_revenue`, `platform_fee`, `venue_revenue_share_percent`,
+`platform_fee_percent` and `stripe_payment_intent_id`, so the order could save with
+the split silently missing, and the code then scheduled transfers from the
+in-memory values that were never persisted. Reconciliation became impossible.
+
+**What changed.** The list is split, per the plan:
+- `strippableCols`: attribution only (`source`, `artist_slug`, `artist_user_id`,
+  `venue_slug`, `placement_id`, `fulfilment_method`, `collection_notes`,
+  `delivered_at`, `status_history`). Dropping these keeps an order bookable.
+- `REQUIRED_MONEY_COLS`: `venue_revenue_share_percent`, `venue_revenue`,
+  `artist_revenue`, `platform_fee_percent`, `platform_fee`,
+  `stripe_payment_intent_id`. Never stripped. An insert error naming one 500s with
+  `Schema drift on money columns`, so Stripe retries (idempotent via D1 + D3)
+  rather than us booking a half-attributed order.
+
+**Beyond the plan's snippet, minor.** The plan puts the money-column check only
+before the loop. I added the same check to the retry error inside the loop, so a
+money column that only surfaces after an attribution strip also fails loud with the
+clear message rather than falling through to the generic "DB save failed". Both are
+500; the difference is diagnosability. (Even without the retry check the loop could
+not strip a money column, since they are no longer in `strippableCols` — the retry
+check just makes the message uniform.)
+
+**Tests.** 3 cases in `describe("Stripe webhook — strip-and-retry money-column
+guard (D6)")` driving an insert that errors "column X does not exist": a money
+column (`artist_revenue`) 500s with one attempt, `stripe_payment_intent_id` 500s,
+and an attribution column (`placement_id`) is stripped and the order books with the
+money columns intact.
+
+**Probe** (money columns back in the strippable list, guard neutered):
+
+```
+ FAIL  D6 > 500s rather than stripping a money column (artist_revenue)
+ FAIL  D6 > 500s rather than stripping stripe_payment_intent_id
+      Tests  2 failed | 74 passed (76)
+```
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  162 passed (162)
+Tests  1752 passed (1752)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**`04` progress.** B0 (D1-D3), T1 (D4-D6), T2 (E9), T3 (E6/E10 + D7), T6 (E7a-E7d,
+E8, E11, E11b), Phase 0 (Bug 15, curation, G-C/Bug 10) all done. Remaining `04`:
+T4 (D8, D9), T5 (D10, D11), T7 (D12-D15), T8 refunds (D16-D18), T9 (N1, N2), and
+the C-series helpers the plan factored out (C1 canReceivePayout, C3 recordBlockedLeg,
+C4 retry sweep) where they are not yet folded in.
