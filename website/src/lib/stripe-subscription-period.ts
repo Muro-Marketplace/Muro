@@ -50,3 +50,33 @@ export function epochToUkDate(
     year: "numeric",
   });
 }
+
+/**
+ * The subscription id behind an invoice, tolerant of SDK shape drift.
+ *
+ * Stripe SDK 22 moved `Invoice.subscription` off the root and onto
+ * `parent.subscription_details.subscription`; the line-item shape still carries
+ * it as a fallback for upcoming invoices. Lived private in paid-loan-billing.ts
+ * until the curation billing reconcilers needed the same read (D21); a second
+ * copy is how the two would drift, so it lives here and both import it.
+ */
+export function readSubscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
+  // SDK 22+ canonical path.
+  const parent = (invoice as { parent?: { subscription_details?: { subscription?: string | Stripe.Subscription } } }).parent;
+  const detailSub = parent?.subscription_details?.subscription;
+  if (typeof detailSub === "string") return detailSub;
+  if (detailSub && typeof detailSub === "object" && "id" in detailSub) return detailSub.id;
+  // Pre-22 fallback.
+  const legacy = (invoice as { subscription?: string | Stripe.Subscription }).subscription;
+  if (typeof legacy === "string") return legacy;
+  if (legacy && typeof legacy === "object" && "id" in legacy) return legacy.id;
+  // Last fallback: the line-item carries it for upcoming/preview invoices.
+  const line = invoice.lines?.data?.[0] as
+    | { subscription?: string | { id?: string } }
+    | undefined;
+  if (typeof line?.subscription === "string") return line.subscription;
+  if (line?.subscription && typeof line.subscription === "object") {
+    return line.subscription.id ?? null;
+  }
+  return null;
+}

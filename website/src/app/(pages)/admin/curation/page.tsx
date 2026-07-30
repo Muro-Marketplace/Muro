@@ -37,6 +37,9 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Completed",
   cancelled: "Cancelled",
   refunded: "Refunded",
+  // D21: set by the managed-curation subscription reconcilers, not by an admin.
+  past_due: "Past due",
+  paused: "Paused",
 };
 
 const STATUS_ORDER: string[] = [
@@ -66,9 +69,11 @@ function statusBadge(status: string): string {
       return "bg-green-100 text-green-700";
     case "awaiting_quote":
     case "pending_payment":
+    case "past_due":
       return "bg-amber-100 text-amber-700";
     case "cancelled":
     case "refunded":
+    case "paused":
       return "bg-red-100 text-red-600";
     default:
       return "bg-gray-100 text-gray-600";

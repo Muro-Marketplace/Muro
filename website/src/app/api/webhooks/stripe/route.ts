@@ -39,6 +39,11 @@ import {
   handleInvoicePaymentFailed as handleInvoicePaymentFailedPaidLoan,
   handleSubscriptionDeleted as handleSubscriptionDeletedPaidLoan,
 } from "@/lib/placements/paid-loan-billing";
+import {
+  handleCurationInvoicePaid,
+  handleCurationInvoiceFailed,
+  handleCurationSubscriptionDeleted,
+} from "@/lib/curation/billing";
 import { sendOrderConfirmations, type OrderEmailItem } from "@/lib/orders/confirmations";
 import { orderIdFromSession, classifyOrderIdConflict } from "@/lib/orders/order-id";
 import { missingStripePriceEnvs } from "@/env";
@@ -1422,6 +1427,35 @@ async function handleWebhookEvent(
       await handleSubscriptionDeletedPaidLoan(subscription);
     } catch (err) {
       console.error("[stripe webhook] paid-loan subscription.deleted:", err);
+    }
+  }
+
+  // ─── D21: managed-curation subscription reconcile ───
+  // Mirrors the paid-loan block above. Each helper returns false when the
+  // subscription is not a curation one, so the SaaS receipt path below still
+  // runs for artist subscriptions.
+  if (event.type === "invoice.paid") {
+    const invoice = event.data.object as Stripe.Invoice;
+    try {
+      await handleCurationInvoicePaid(invoice);
+    } catch (err) {
+      console.error("[stripe webhook] curation invoice.paid:", err);
+    }
+  }
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as Stripe.Invoice;
+    try {
+      await handleCurationInvoiceFailed(invoice);
+    } catch (err) {
+      console.error("[stripe webhook] curation invoice.payment_failed:", err);
+    }
+  }
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object as Stripe.Subscription;
+    try {
+      await handleCurationSubscriptionDeleted(subscription);
+    } catch (err) {
+      console.error("[stripe webhook] curation subscription.deleted:", err);
     }
   }
 

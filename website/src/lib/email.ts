@@ -616,6 +616,33 @@ export async function notifyCurationCustomerEnquiry(params: {
 }
 
 /**
+ * Admin alert when a managed-curation subscription is cancelled in Stripe (D21).
+ * The curator needs to stop the ongoing work, which is now unpaid.
+ */
+export async function notifyAdminCurationCancelled(params: {
+  requestId: string;
+  venueName: string;
+  tier: string;
+}) {
+  const resend = getResend();
+  if (!resend) return;
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: ADMIN_EMAIL,
+      subject: `Curation subscription cancelled: ${params.venueName}`,
+      html: `
+        <h2>Managed curation cancelled</h2>
+        <p>The managed curation subscription for <strong>${params.venueName}</strong> (${params.tier}) has been cancelled in Stripe. Stop any ongoing curation work for this venue.</p>
+        <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/curation" style="color: #C17C5A; font-weight: 600;">View in admin</a></p>
+      `,
+    });
+  } catch (err) {
+    console.error("Email send error (curation cancelled):", err);
+  }
+}
+
+/**
  * Customer confirmation after a paid curation checkout (pay-first tiers).
  */
 export async function notifyCurationCustomerPaid(params: {

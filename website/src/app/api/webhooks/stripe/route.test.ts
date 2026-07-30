@@ -50,6 +50,16 @@ const { recordBlockedLegMock, canReceivePayoutMock } = vi.hoisted(() => ({
   canReceivePayoutMock: vi.fn(),
 }));
 
+// D21: the curation billing module is mocked so we can assert the webhook wires
+// each event to the right reconciler. The handlers return false (not a curation
+// subscription) so every existing test flows through unchanged; their real
+// behaviour is unit-tested in src/lib/curation/billing.test.ts.
+const { curationInvoicePaidMock, curationInvoiceFailedMock, curationSubDeletedMock } = vi.hoisted(() => ({
+  curationInvoicePaidMock: vi.fn(async () => false),
+  curationInvoiceFailedMock: vi.fn(async () => false),
+  curationSubDeletedMock: vi.fn(async () => false),
+}));
+
 vi.mock("@/lib/stripe", () => ({
   stripe: {
     webhooks: { constructEvent: constructEventMock },
@@ -73,6 +83,12 @@ vi.mock("@/lib/stripe-connect", () => ({
 
 vi.mock("@/lib/payouts/capability", () => ({
   canReceivePayout: canReceivePayoutMock,
+}));
+
+vi.mock("@/lib/curation/billing", () => ({
+  handleCurationInvoicePaid: curationInvoicePaidMock,
+  handleCurationInvoiceFailed: curationInvoiceFailedMock,
+  handleCurationSubscriptionDeleted: curationSubDeletedMock,
 }));
 
 vi.mock("@/lib/email", () => ({
@@ -346,6 +362,9 @@ beforeEach(() => {
   authGetUserByIdMock.mockReset();
   authGetUserByIdMock.mockResolvedValue({ data: { user: null } });
   receiptPropsMock.mockClear();
+  curationInvoicePaidMock.mockClear();
+  curationInvoiceFailedMock.mockClear();
+  curationSubDeletedMock.mockClear();
 });
 
 describe("Stripe webhook — venue revenue split", () => {
@@ -2419,5 +2438,59 @@ describe("Stripe webhook — curation payment id storage (D20)", () => {
     // A one-off has no subscription, so the column stays null.
     expect(curationUpdate!.stripe_subscription_id).toBeNull();
     expect(curationUpdate!.status).toBe("paid");
+  });
+});
+
+// D21: the webhook must route each subscription-lifecycle event to the curation
+// reconciler. Before D21 there was no curation billing module wired in at all,
+// so a managed-curation renewal / cancellation / failure reconciled nothing. The
+// module is mocked (returns false) here; this pins only the wiring. The empty db
+// lets the co-running paid-loan and SaaS handlers no-op without throwing.
+describe("Stripe webhook — D21 curation reconcile wiring", () => {
+  beforeEach(() => {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: null, error: null }),
+            single: async () => ({ data: null, error: null }),
+          }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+      };
+    });
+  });
+
+  it("routes invoice.paid to handleCurationInvoicePaid", async () => {
+    const invoice = { id: "in_cur_1", subscription: "sub_cur_1" };
+    constructEventMock.mockReturnValue({ type: "invoice.paid", data: { object: invoice } });
+
+    await POST(buildRequest());
+
+    expect(curationInvoicePaidMock).toHaveBeenCalledWith(invoice);
+    expect(curationInvoiceFailedMock).not.toHaveBeenCalled();
+    expect(curationSubDeletedMock).not.toHaveBeenCalled();
+  });
+
+  it("routes invoice.payment_failed to handleCurationInvoiceFailed", async () => {
+    const invoice = { id: "in_cur_2", subscription: "sub_cur_1", next_payment_attempt: null };
+    constructEventMock.mockReturnValue({ type: "invoice.payment_failed", data: { object: invoice } });
+
+    await POST(buildRequest());
+
+    expect(curationInvoiceFailedMock).toHaveBeenCalledWith(invoice);
+    expect(curationInvoicePaidMock).not.toHaveBeenCalled();
+  });
+
+  it("routes customer.subscription.deleted to handleCurationSubscriptionDeleted", async () => {
+    const subscription = { id: "sub_cur_1", customer: "cus_1" };
+    constructEventMock.mockReturnValue({ type: "customer.subscription.deleted", data: { object: subscription } });
+
+    await POST(buildRequest());
+
+    expect(curationSubDeletedMock).toHaveBeenCalledWith(subscription);
+    expect(curationInvoicePaidMock).not.toHaveBeenCalled();
   });
 });
