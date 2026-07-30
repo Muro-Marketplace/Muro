@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { scheduleTransfer } from "@/lib/stripe-connect";
+import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
 import { notifyCurationCustomerPaid, notifyAdminBillingStalled } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
@@ -309,11 +309,19 @@ async function handleWebhookEvent(
               });
             } else {
               // The checkout pre-flight should have stopped this, so it means
-              // onboarding lapsed between session creation and payment.
+              // onboarding lapsed between session creation and payment. Record
+              // the owed payout as a 'blocked' ledger row (C3) so it surfaces in
+              // reconciliation instead of vanishing into a log line.
               console.error("[offer] artist cannot be paid out, transfer skipped", {
                 paidOrderId,
                 artistUserId,
                 netPence,
+              });
+              await recordBlockedLeg(db, {
+                orderId: paidOrderId,
+                recipientUserId: artistUserId,
+                amountCents: netPence,
+                reason: "onboarding_incomplete",
               });
             }
           } catch (transferErr) {
@@ -1059,16 +1067,23 @@ async function handleWebhookEvent(
                   immediate: isCollection,
                 });
               } else {
-                // The checkout pre-flight (canReceivePayout) should have
-                // stopped this, so reaching here means onboarding lapsed between
-                // session creation and payment. The money stays on the platform
-                // balance until ops resolve it. C3's recordBlockedLeg will turn
-                // this log into a ledger row.
+                // The checkout pre-flight (canReceivePayout) should have stopped
+                // this, so reaching here means onboarding lapsed between session
+                // creation and payment. Record the owed payout as a 'blocked'
+                // ledger row (C3) so it surfaces in reconciliation instead of
+                // vanishing into a log line; the money stays on the platform
+                // balance until ops resolve it.
                 console.error("[cart] artist cannot be paid out, transfer skipped", {
                   orderId,
                   artistSlug: leg.artistSlug,
                   artistUserId: leg.artistUserId,
                   netPence: leg.netPence,
+                });
+                await recordBlockedLeg(db, {
+                  orderId,
+                  recipientUserId: leg.artistUserId,
+                  amountCents: leg.netPence,
+                  reason: "onboarding_incomplete",
                 });
               }
             } catch (transferErr) {

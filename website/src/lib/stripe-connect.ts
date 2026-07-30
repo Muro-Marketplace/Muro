@@ -14,7 +14,7 @@ import { getSupabaseAdmin } from "./supabase-admin";
  * was the right model for shipped orders but wrong for QR-scan sales
  * at the venue counter.
  */
-export async function scheduleTransfer(params: {
+export interface ScheduleTransferParams {
   orderId: string;
   recipientType: "venue" | "artist";
   recipientUserId: string;
@@ -23,16 +23,29 @@ export async function scheduleTransfer(params: {
   /** Skip the 14-day hold and fire the transfer right away. Used for
    *  collection-fulfilment orders (in-store handover). */
   immediate?: boolean;
-}) {
+}
+
+export async function scheduleTransfer(params: ScheduleTransferParams): Promise<string> {
   const db = getSupabaseAdmin();
 
-  // Hold window. Default 14 days for shipped orders; immediate
-  // (now) for in-store collection where there's no shipment to
-  // worry about.
+  // C3: the ledger insert MUST NOT vanish. The old code discarded the insert
+  // error, so a failed insert (RLS, connection blip, bad column) returned
+  // normally and the caller believed the payout was scheduled — nobody paid, no
+  // trace (E37). Validate the inputs, and throw on any insert failure the caller
+  // must not swallow.
+  if (!params.connectAccountId) {
+    throw new Error(`scheduleTransfer: empty connectAccountId for order ${params.orderId}`);
+  }
+  if (!Number.isInteger(params.amountCents) || params.amountCents <= 0) {
+    throw new Error(`scheduleTransfer: bad amountCents ${params.amountCents} for order ${params.orderId}`);
+  }
+
+  // Hold window. Default 14 days for shipped orders; immediate (now) for in-store
+  // collection where there's no shipment to worry about.
   const holdMs = params.immediate ? 0 : 14 * 24 * 60 * 60 * 1000;
   const payoutAfter = new Date(Date.now() + holdMs).toISOString();
 
-  const { data: inserted } = await db
+  const { data: inserted, error } = await db
     .from("stripe_transfers")
     .insert({
       order_id: params.orderId,
@@ -47,17 +60,68 @@ export async function scheduleTransfer(params: {
     .select("id")
     .maybeSingle();
 
-  // For immediate payouts, execute the transfer right now so the
-  // recipient doesn't have to wait for the next cron sweep. If the
-  // execute call fails the row stays in `pending` and the next cron
-  // run will retry; the audit trail in stripe_transfers is preserved
-  // either way.
-  if (params.immediate && inserted?.id) {
+  if (error) {
+    // UNIQUE (order_id, recipient_user_id) — a webhook replay. Return the
+    // existing row's id so the caller's flow is unchanged and idempotent.
+    if ((error as { code?: string }).code === "23505") {
+      const { data: existing } = await db
+        .from("stripe_transfers")
+        .select("id")
+        .eq("order_id", params.orderId)
+        .eq("recipient_user_id", params.recipientUserId)
+        .maybeSingle();
+      if (existing?.id) return existing.id;
+    }
+    // Anything else is a lost payout. The caller MUST NOT swallow this.
+    throw new Error(
+      `scheduleTransfer: ledger insert failed for order=${params.orderId} ` +
+        `recipient=${params.recipientUserId}: ${error.message}`,
+    );
+  }
+  if (!inserted?.id) {
+    throw new Error(`scheduleTransfer: ledger insert returned no row for order ${params.orderId}`);
+  }
+
+  // For immediate payouts, execute the transfer right now so the recipient
+  // doesn't wait for the next cron sweep. If the execute call fails the row stays
+  // `pending` and the sweep retries; the ledger row exists either way, so this is
+  // recoverable and NOT fatal, unlike a missing row.
+  if (params.immediate) {
     try {
       await executeTransfer(inserted.id);
     } catch (err) {
       console.error("[stripe-connect] immediate transfer execution failed:", err);
     }
+  }
+  return inserted.id;
+}
+
+/**
+ * A payout we owe but cannot yet send (recipient's Connect account not payout-
+ * ready). Written to the ledger as 'blocked' so it appears in reconciliation
+ * instead of vanishing into a log line (C3, referenced by the webhook B2/B3 legs).
+ *
+ * Takes the amount in integer pence (the ledger's native unit) to avoid a lossy
+ * pounds round-trip; the doc drafted it as `netGbp`. Idempotent: a duplicate
+ * (order_id, recipient_user_id) is the same blocked leg, so a 23505 is swallowed.
+ */
+export async function recordBlockedLeg(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  args: { orderId: string; recipientUserId: string; amountCents: number; reason: string },
+): Promise<void> {
+  const { error } = await db.from("stripe_transfers").insert({
+    order_id: args.orderId,
+    recipient_type: "artist",
+    recipient_user_id: args.recipientUserId,
+    stripe_transfer_id: "",
+    stripe_connect_account_id: "",
+    amount_cents: args.amountCents,
+    status: "blocked",
+    last_error: `payout_capability:${args.reason}`,
+    payout_after: null,
+  });
+  if (error && (error as { code?: string }).code !== "23505") {
+    throw new Error(`recordBlockedLeg failed for order ${args.orderId}: ${error.message}`);
   }
 }
 
