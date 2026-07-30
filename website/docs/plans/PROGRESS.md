@@ -6644,3 +6644,49 @@ the stale `stripe_connect_onboarding_complete` boolean C1 replaced. I escalated
 2. THEN C4 = retry sweep + orders-without-legs reconciliation (catches the "12
    orders, 0 transfers" blind spot) + duplicate-redelivery leg re-entry (D52.3).
 All dormant (Connect not live). Authorised.
+
+---
+
+## D52.2 — webhook adopts canReceivePayout (completes C1)
+
+Commit `3d6ee4e`. Owner-authorised (adopt D52's order) ahead of C4.
+
+**The finding (supervisor D52, verified).** C1's `canReceivePayout` was referenced
+in the webhook only in comments; all three live payout gates still keyed on
+`stripe_connect_onboarding_complete` — the predicate C1 replaced because it can't
+distinguish `payouts_enabled` from `charges_enabled`. So a lapsed account passed
+the gate and the transfer landed in an unpayable balance. C1 shipped the
+replacement and left the callers behind (a "new impl => old deleted" miss, one
+commit late).
+
+**What changed.** All three gates (offer→artist, cart→venue, cart→artist) call
+`canReceivePayout` at transfer time and use `PayoutCapability.reason` to drive
+`recordBlockedLeg` (no_account / charges_disabled / payouts_disabled), replacing
+the single "onboarding_incomplete". `recordBlockedLeg` gained an optional
+`recipientType` so a blocked VENUE payout is recorded too. The stale
+`onboarding_complete` reads in these gates are gone.
+
+**Files.** `src/lib/stripe-connect.ts` (recordBlockedLeg recipientType),
+`src/app/api/webhooks/stripe/route.ts` (3 gates + import),
+`src/app/api/webhooks/stripe/route.test.ts` (canReceivePayout mock + 2 reworked
+blocked tests).
+
+**Tests.** Webhook now mocks `canReceivePayout` (default payable, account id derived
+`u-alice → acct_alice`; `blockedPayoutTargets` simulates a lapse). The two blocked
+tests assert no transfer AND a recorded blocked leg with the real reason. Probe
+(force the offer gate open) fails the blocked test ("expected spy not to be called,
+called 1 time"), proving the gate is respected. `Tests 1809 passed (1809)`, `0 lint
+errors`, allowlist PASS. Dormant (Connect not live).
+
+**Follow-up (D52.2, not bundled).** `lib/email/welcome.ts:66,82` reads the same
+`stripe_connect_onboarding_complete` for a `stripeConnected` welcome-email flag.
+Cosmetic (not money). Supervisor said fix it after the gates, in its own commit.
+Left as a small follow-up item.
+
+**Next: C4** (owner-authorised expanded scope, D52.3): the retry sweep in
+`processPendingTransfers` (select pending AND retryable failed by next_attempt_at,
+backoff via retry_count, stop at MAX_RETRIES, widen executeTransfer to accept
+failed, exhausted-payout admin alert), PLUS the orders-without-legs reconciliation
+(catches the "12 orders, 0 transfers" blind spot) and the duplicate-redelivery
+leg re-entry. Columns exist (089). Given the scale, C4 may span 2 iterations
+(sweep first, then reconciliation + re-entry).
