@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | `06` **A+A2 done, B1 done** (a4142c2). `01`: **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | `06` **A+A2 done, B1 done** (a4142c2), **B2 void / B3+B4 done** (f657719). `01`: **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -3927,3 +3927,68 @@ drop the rate limit         → 2 fail
 ```
 
 **Commit:** a4142c2
+
+---
+
+## `06` B2/B3/B4 / E46d — private-brief bid injection (owner: `06` §3.6)
+
+**The hole.** Any signed-in approved artist could bid on a **private** brief they
+were never invited to. The POST's gates were: valid token, has an artist profile,
+under the daily cap, request is open. `visibility` and `invited_artist_slugs` were
+never consulted, while the sibling LIST route did enforce them. Chained with the
+then-unauthenticated GETs, an attacker could read every rival bid and then submit
+their own.
+
+**I nearly recorded this as already fixed, and that is the lesson.** Both handlers
+live in one file. `01`'s E17/E18 added `assertCanViewArtworkRequest` to the GET, so
+`grep assertCanViewArtworkRequest` on the file returns a hit and the POST looks
+covered. It was not: **line 71 is inside GET; POST starts at line 90.** The test
+caught it, the reading did not. An undifferentiated grep across a multi-handler file
+is not evidence about a specific handler.
+
+**What changed.** POST now calls `assertCanViewArtworkRequest`, placed after the
+artist-profile check (so a non-artist still gets the clearer `artist_only` 403) and
+**before** the outreach cap (so a refused attempt does not burn quota). The
+request-is-open check moved ahead of the cap as well: responding to a **closed** brief
+used to cost the artist one of their two-to-ten daily sends for nothing.
+
+**B2 is void.** It asks for a new `src/lib/artwork-request-access.ts` exporting
+`canArtistSeeRequest`. That rule already exists as `assertCanViewArtworkRequest` in
+`@/lib/authz`, used by both GETs. Writing the doc's helper would be a **parallel copy
+of a rule that already has one**, which is precisely the pattern this plan exists to
+remove ("no `_v2` beside `_v1`"). Reused the existing one.
+
+**B4 was already done** by E17/E18: both GETs require auth, return 404 rather than
+403, and give the full response set only to the owning venue. Verified in the source
+rather than assumed.
+
+**Deviation on the status code.** The doc wants `403 not_invited`;
+`assertCanViewArtworkRequest` denies `404 artwork_request_not_found`. Kept the 404: it
+does not confirm a given private id exists, and it matches what the GETs already do.
+
+**The fixture was hiding the bug.** The test stub had `chain.eq = () => chain`,
+ignoring every filter, so the helper's owner query (`.eq("venue_user_id", actor.id)`)
+matched and **every artist was classified as the owner**. The six pre-existing tests
+passed because the fixture was permissive, not because any rule held, and the
+visibility logic had **zero** coverage on this route. The stub now records and honours
+`eq` and `contains`, so owner / semi_public / invited-private behave distinctly. This
+is the second fixture this session that was quietly asserting nothing.
+
+**Prod context.** All 6 `artwork_requests` are `semi_public` with no invite list, so
+the private path is unexercised in production today. The hole was real but had not yet
+been walked through.
+
+**Tests.** 6 new. Probed both halves:
+
+```
+remove the visibility gate    → 2 fail
+restore the old cap ordering  → 1 fails
+```
+
+```
+ Test Files  155 passed (155)
+      Tests  1532 passed (1532)
+✖ 175 problems (0 errors, 175 warnings)
+```
+
+**Commit:** f657719
