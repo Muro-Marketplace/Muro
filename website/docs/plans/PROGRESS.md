@@ -6238,3 +6238,71 @@ live. Left as-is; new cart orders carry the id from now on.
 D7), T4 (D8, D9), T5 (D10, D11), T6 (E7a-E7d, E8, E11, E11b), T7 (D12, D13, D15;
 D14 blocked), T8 **D16 + D17** (D18 curation-refund deferred to B10 by the doc).
 Remaining: T8 D18 (B10), T9 (N1, N2), C-series payout helpers (C1, C3, C4).
+
+---
+
+## `04` C1 — canReceivePayout gates on payouts_enabled (owner: `04` §C1)
+
+Commit `6d5c197`, migration `088_payouts_enabled_columns` (applied + registered).
+Phase 1 shared primitive. Picked per the corrected dependency order (Phase 1
+precedes T9/curation).
+
+**What changed.** New `src/lib/payouts/capability.ts` (`canReceivePayout`,
+`decide`, `payoutBlockMessage`) answers "can we pay this person now, and why not"
+for artists AND venues, gating on `payouts_enabled` (charges_enabled is not
+enough: an account can accept charges while payouts are held mid-KYC). 60s cache
+on the profile, fails closed. Superseded `lib/stripe-connect-status.ts`
+(charges-only, artist-only, bare boolean) — **deleted in the same commit** with
+all THREE callers migrated (doc named only one): cart checkout (`checkout`),
+offer checkout (`offers/[id]/checkout`), placement payment setup
+(`placements/[id]/payment/setup`). Webhook `account.updated` now warms the cache
+(charges/payouts/checked_at).
+
+**Migration 088** (04 range; doc drafted it as 084, taken): +`stripe_payouts_enabled`
+on artist_profiles; +`stripe_charges_enabled`,`stripe_payouts_enabled`,
+`stripe_charges_checked_at` on venue_profiles. All 6 verified present in prod
+after apply.
+
+**Tests.** New `capability.test.ts` (8): no_account (null + empty-string), fresh
+ok, fresh payouts_disabled (the reason C1 exists), stale re-check → payouts_disabled,
+charges_disabled, stripe throw → fail closed, venue target hits venue_profiles.
+3 caller test files re-mocked `@/lib/payouts/capability`. Old
+`stripe-connect-status.test.ts` deleted (coverage ported).
+
+**Gate.** `Test Files 163 passed (163)`, `Tests 1794 passed (1794)`,
+`176 problems (0 errors, 176 warnings)`, allowlist PASS, `pg_policies` SELECT-leak
+assertion = 0. No live Stripe drive possible (dormant; Connect not live).
+
+**Satisfies D29.2 / CC6 unknowingly-then-knowingly.** The doc's D29.2 rule
+"test emptiness not nullness for stripe_connect_account_id" is met: `accountId =
+profile?.stripe_connect_account_id || null` treats `''` as no_account, and there
+is an explicit `''` test. Verified prod: 13 of 14 artists have empty/null connect
+id; only fin-coles has a real `acct_`.
+
+---
+
+## ‼️ DISCOVERY — unauthored supervisor-queue additions in the BINDING doc, bundled into 6d5c197
+
+While staging C1, `git add -A` swept **uncommitted, working-tree-only** additions
+to `2026-07-11-EXECUTION-DECISIONS.md` into commit `6d5c197`. **I did not author
+them.** They are new supervisor entries (D29, D37–D40) plus a "SUPERVISOR QUEUE"
+of rows 13–16, in the same forensic/prod-evidence style as the existing D16–D20
+supervisor checks. They appeared mid-session (session start was clean).
+
+**Provenance check: the prod claims are all TRUE**, so the content is credible,
+not an injection:
+- D29.2: 13 of 14 artists have empty/null `stripe_connect_account_id` — verified.
+- Row 13: `artist_profiles` has `anon:SELECT` + `authenticated:SELECT` table
+  grants, RLS on, policy `artist_profiles_select` = `roles=public qual=true`, so
+  **anon can read postcode, stripe_customer_id, stripe_connect_account_id,
+  stripe_subscription_id on every artist** — a real live PII/financial exposure.
+
+**Why this needs the human, not a guess.** The queue says "rows 13 and 14 are
+live prod exposures and outrank the remaining 04 correctness work; take them
+next." That (a) reorders the plan I was given, and (b) directs **prod grant
+revokes** (row 13 mig 076, row 14 mig 075) and a live payment-split fix (row 16,
+`platformFeePercentForArtist` vs `subscription_status`). Prod security/payment
+changes arriving via a mid-session unauthored doc edit are exactly the
+escalate-don't-guess case. C1 stands (done + green); pausing to confirm the pivot
+before executing the queue. Also flagging that 6d5c197 mixed these doc edits with
+C1 code — not my intent, `git add -A` did it.
