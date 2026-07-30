@@ -20,7 +20,8 @@ Order of work: the "Corrected dependency order" at the end of
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
 | 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). Next: T3 emails, then D7 |
-| 7a | `free_until` is a phantom column overcharging non-core artists 15% on every sale | new, surfaced by T3 | **owner decision**: add the column or delete the concept |
+| 7a | `free_until` is a phantom column overcharging non-core artists 15% on every sale | new, surfaced by T3; ruled by **D17.1** | **mandated fix, not an owner decision**. Next task. Real column is `trial_end` |
+| 7b | Schema-column guard: commit `schema-columns.json`, fail CI on a `.select()` naming a column prod lacks | **D17.3**, owner `02`, pulled forward | todo, replaces the expensive half of K11 |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -47,12 +48,12 @@ Owner decisions the loop is waiting on (none block the remaining queue):
   becomes a one-line UPDATE plus a guard; leave it and any ISO-keyed report keeps
   seeing half the orders. Detail in G-C / Bug 10.
 
-- **`free_until` is phantom and non-core artists are being overcharged.** Add it as
-  a real column (it is referenced as a founding/trial concept and the referral path
-  wants to write to it), or delete the concept and all four references. Until then
-  every sale charges 15% regardless of plan, and prod has a `pro` and a `premium`
-  artist. Detail in the T3 entry. This one costs real money per sale, so it is the
-  most urgent of these.
+- **Referral credit's target column** (D17.2, the only owner question left from the
+  `free_until` finding). The referral path writes a 30-day free-window extension to
+  `free_until`, which does not exist. `trial_end` does, but it is Stripe-managed, so
+  writing app-side referral credit into it is questionable. Drop referral credit, add
+  a dedicated `referral_free_until`, or accept writing to `trial_end`? The read-path
+  fix (D17.1) proceeds regardless and does not wait on this.
 
 Owner actions blocking a merge, added as they surface:
 
@@ -2818,3 +2819,110 @@ the referral path wants to write to it) or delete the concept and every referenc
 That is a product call, not a mechanical one. Recorded as its own queue item below;
 the offer path I wrote today already computes the correct per-plan rate because it
 selects `subscription_plan` alone.
+
+---
+
+## T3 / E6 part 3 — the offer branch sent nothing (owner: `04` §B3)
+
+**The finding.** An accepted offer, once paid, sent no email to anyone. The buyer got
+no receipt (CCR 2013 requires one) and the artist was never told they had sold a
+piece. The three sends lived inline in the cart branch, so the offer branch, written
+later, never inherited them. That is exactly the drift the doc predicted, and the
+reason it prescribes extraction rather than a second copy.
+
+**What changed.**
+
+- `src/lib/orders/confirmations.ts` (new) holds `sendOrderConfirmations`: the
+  lifecycle event, the buyer receipt, the artist's two emails and the in-app
+  notifications for artist and venue. One copy.
+- The cart branch's inline block is **deleted**, along with the six imports the
+  extraction orphaned (`CustomerOrderReceipt`, `ArtistWorkSold`,
+  `ArtistOrderConfirmation`, `signOrderToken`, `recordOrderEvent`,
+  `notifyArtistNewOrder`/`notifyVenueOrderFromPlacement`). Confirmed by grep that
+  exactly one copy of each idempotency key remains in the tree.
+- The offer branch calls the same module with **one aggregate line**. An offer is a
+  single agreed price, so splitting it per work would invent figures that do not sum
+  back to the amount charged. The work title comes off the existing stock-decrement
+  query, so naming the piece costs no extra round-trip.
+- A failed send in the offer branch is caught: the money is taken and the order row
+  exists, so a provider outage must not become a Stripe retry that re-runs the
+  payout path.
+
+**What deliberately stayed with the caller.** Resolving cart lines into display items
+needs the cart row and the slug map, and the write-back of those items must not
+happen on an offer, where `orders.items` carries the `offer_id` linkage.
+
+**Tests.** 6 characterisation tests written **before** the extraction, because
+nothing pinned these sends and a refactor of the highest-consequence path in the app
+was otherwise unverifiable. They passed unchanged afterwards, which is the evidence
+the move preserved behaviour. 11 new tests cover the offer sends, including that the
+receipt's line total, subtotal and total all agree.
+
+**A real bug found in my own test file.** An unconsumed `mockRejectedValueOnce`
+stayed queued and fired inside whichever test called `sendEmail` next. It surfaced as
+a phantom cart failure during the before/after probe, and would have been an
+intermittent failure later. `beforeEach` now resets rather than clears.
+
+**Verification, both directions.** With the offer call disabled, exactly the 7 offer
+send tests fail and every cart pin stays green:
+
+```
+ × sends the buyer a receipt and the artist both emails, which it never did before
+ × keys the offer sends on the payment intent, like the cart path
+ × raises the in-app sale notification for the artist
+ × bills the receipt as one aggregate line that sums to what was charged
+ × names the piece on the receipt when the offer covers one work
+ Tests  7 failed | 23 passed (30)
+```
+
+Restored:
+
+```
+ Test Files  147 passed (147)
+      Tests  1419 passed (1419)
+✖ 252 problems (0 errors, 252 warnings)   ← same warning baseline as before
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+Stripe test-mode drive still not possible (placeholder key), same blocker as b2c27ed.
+
+**Commit:** 451cf53
+
+---
+
+## Supervisor D16 / D17 received (committed separately as 979141f)
+
+The supervisor added D16 and D17 to EXECUTION-DECISIONS mid-iteration. Committed on
+its own so authorship stays clear. I verified D17.1's prod claims rather than taking
+them from the doc:
+
+```
+artist_profiles: 67 columns
+trial_end            timestamp with time zone   ← exists
+is_founding_artist   boolean                    ← exists
+free_until                                      ← absent, as D17 says
+```
+
+**Two rulings change this ledger:**
+
+1. **D17.1 reclassifies the `free_until` overcharge from an owner decision to a
+   mandated fix.** I had queued it for the owner; that was wrong per the ruling, and
+   the entry above is superseded. The fix needs no owner input: drop `free_until`
+   from both `.select()` calls, and map the free-window concept onto `trial_end`,
+   which exists. The supervisor also found the specific victim I had not attributed:
+   ten of the twelve orders belong to `fin-coles`, who is `premium` and should pay
+   8%, not 15%. Their two honest caveats stand, the plan start date is unknown and
+   `stripe_transfers` is empty, so the ~£59 figure is not settled and the cash
+   question joins the D11 reconciliation. **This is the next task.**
+2. **D17.3 pulls a schema-column guard forward**, ahead of the remaining payment
+   tasks, and downgrades X2/K11's `pg_dump` to optional. That unblocks what was
+   recorded here as blocked on the absent Supabase CLI: a committed
+   `schema-columns.json` generated from `information_schema.columns` delivers K11's
+   auditable schema record without the dump, and a test scanning every
+   `.from(...).select(...)` turns the phantom-column class into a CI failure instead
+   of a silent wrong answer. Seven instances found so far by hand, which is the
+   argument for the guard.
+
+Also logged for `04` T1: **D16.1** normalise country on read, no backfill of order
+history; **D16.2 / E47** re-read `international_shipping_price` from the DB instead
+of trusting the cart, before any artist can enable international shipping.
