@@ -19,7 +19,7 @@ vi.mock("@/lib/email", () => ({
   notifyAdminPayoutExhausted: notifyAdminPayoutExhaustedMock,
 }));
 
-import { executeTransfer, scheduleTransfer, recordBlockedLeg, processPendingTransfers } from "./stripe-connect";
+import { executeTransfer, scheduleTransfer, recordBlockedLeg, processPendingTransfers, reconcileOrdersWithoutLegs } from "./stripe-connect";
 
 beforeEach(() => {
   transfersCreate.mockReset();
@@ -262,5 +262,72 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
     expect(res.processed).toBe(0);
     expect(res.retried).toBe(0);
     expect(transfersCreate).not.toHaveBeenCalled();
+  });
+});
+
+// D52.3: reconcile orders that are owed money but have NO ledger row at all — the
+// "money owed, 0 transfers" blind spot a retry-existing-rows sweep cannot see.
+describe("reconcileOrdersWithoutLegs() (D52.3)", () => {
+  let inserts: Array<Record<string, unknown>>;
+
+  function setupReconcile(opts: {
+    owed: Array<Record<string, unknown>>;
+    existing: Array<{ order_id: string }>;
+  }) {
+    inserts = [];
+    fromMock.mockImplementation((table: string) => {
+      if (table === "orders") {
+        return {
+          select: () => ({ gt: () => ({ in: () => ({ limit: async () => ({ data: opts.owed, error: null }) }) }) }),
+        };
+      }
+      // stripe_transfers: select("order_id").in() for the existing-legs lookup;
+      // insert() for recordBlockedLeg.
+      return {
+        select: () => ({ in: async () => ({ data: opts.existing, error: null }) }),
+        insert: (payload: Record<string, unknown>) => {
+          inserts.push(payload);
+          return Promise.resolve({ error: null });
+        },
+      };
+    });
+  }
+
+  it("flags an owed order with no ledger row as a blocked leg", async () => {
+    setupReconcile({
+      owed: [{ id: "o1", artist_user_id: "u1", artist_revenue: 28.99, status: "confirmed" }],
+      existing: [],
+    });
+    const res = await reconcileOrdersWithoutLegs();
+    expect(res.flagged).toBe(1);
+    expect(res.unresolved).toBe(0);
+    expect(inserts[0]).toMatchObject({
+      order_id: "o1",
+      recipient_user_id: "u1",
+      amount_cents: 2899,
+      status: "blocked",
+      last_error: "payout_capability:reconciliation:missing_ledger",
+    });
+  });
+
+  it("skips an order that already has a ledger row", async () => {
+    setupReconcile({
+      owed: [{ id: "o1", artist_user_id: "u1", artist_revenue: 28.99, status: "delivered" }],
+      existing: [{ order_id: "o1" }],
+    });
+    const res = await reconcileOrdersWithoutLegs();
+    expect(res.flagged).toBe(0);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("counts an owed order with no resolvable artist as unresolved, not flagged", async () => {
+    setupReconcile({
+      owed: [{ id: "o2", artist_user_id: null, artist_revenue: 10, status: "processing" }],
+      existing: [],
+    });
+    const res = await reconcileOrdersWithoutLegs();
+    expect(res.unresolved).toBe(1);
+    expect(res.flagged).toBe(0);
+    expect(inserts).toHaveLength(0);
   });
 });

@@ -166,6 +166,73 @@ export async function executeTransfer(transferId: string) {
  * Process all pending transfers that are past their payout_after date.
  * Called by /api/stripe-connect/process-pending (cron or manual).
  */
+export interface ReconcileResult {
+  /** Owed orders with no ledger row, now recorded as a blocked leg. */
+  flagged: number;
+  /** Owed orders with no resolvable artist recipient (null artist_user_id). */
+  unresolved: number;
+  errors: string[];
+}
+
+/** Order statuses that mean the buyer has paid and money is owed to the artist. */
+const OWED_ORDER_STATUSES = ["confirmed", "processing", "shipped", "delivered"];
+
+/**
+ * Reconcile orders that have money owed to an artist but NO stripe_transfers row
+ * at all (D52.3). The retry sweep only re-tries rows that EXIST, so it is blind to
+ * the failure that produces nothing: a ledger INSERT that threw, a webhook that
+ * never ran, or a duplicate redelivery that early-returned. Prod showed the shape
+ * this catches: orders with artist_revenue owed and zero transfer rows.
+ *
+ * Records the owed amount as a 'blocked' ledger row (reason
+ * `reconciliation:missing_ledger`) rather than auto-scheduling a payout: a blocked
+ * row SURFACES the owed money for an operator without paying it, which keeps the
+ * manual Stripe reconciliation (D11) the human's call. Idempotent via the
+ * (order_id, recipient_user_id) unique index, so it is safe to run every sweep.
+ */
+export async function reconcileOrdersWithoutLegs(): Promise<ReconcileResult> {
+  const db = getSupabaseAdmin();
+
+  const { data: owed, error } = await db
+    .from("orders")
+    .select("id, artist_user_id, artist_revenue, status")
+    .gt("artist_revenue", 0)
+    .in("status", OWED_ORDER_STATUSES)
+    .limit(500);
+
+  if (error) throw new Error(`reconcile select failed: ${error.message}`);
+  if (!owed || owed.length === 0) return { flagged: 0, unresolved: 0, errors: [] };
+
+  const orderIds = owed.map((o) => o.id);
+  const { data: existing } = await db
+    .from("stripe_transfers")
+    .select("order_id")
+    .in("order_id", orderIds);
+  const haveLegs = new Set((existing || []).map((r) => r.order_id));
+
+  const result: ReconcileResult = { flagged: 0, unresolved: 0, errors: [] };
+  for (const o of owed) {
+    if (haveLegs.has(o.id)) continue; // a ledger row exists; the sweep/webhook owns it
+    if (!o.artist_user_id) {
+      // No recipient to attribute the owed money to; an operator must resolve it.
+      result.unresolved++;
+      continue;
+    }
+    try {
+      await recordBlockedLeg(db, {
+        orderId: o.id,
+        recipientUserId: o.artist_user_id,
+        amountCents: Math.round(Number(o.artist_revenue) * 100),
+        reason: "reconciliation:missing_ledger",
+      });
+      result.flagged++;
+    } catch (err) {
+      result.errors.push(`Order ${o.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return result;
+}
+
 const MAX_RETRIES = 6;
 /** Exponential backoff in minutes between attempts: 1, 4, 15, 60, 240, 960 (16h). */
 const BACKOFF_MINUTES = [1, 4, 15, 60, 240, 960];
