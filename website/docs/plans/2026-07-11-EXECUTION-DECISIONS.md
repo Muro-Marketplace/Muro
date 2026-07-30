@@ -1905,3 +1905,53 @@ rollback;
 ```
 
 Assertion 3 is the one that matters: the catalogue can look right while behaviour differs, which is how E51 survived the G-A route fix in the first place. **And per D44.4, the `getAllDatabaseArtists` repoint must already be committed before the migration is applied**, or the public marketplace listing returns nothing the moment the revoke lands.
+
+---
+
+## D49. Row 13 verified and E51 is closed. My warning against the service-role switch was wrong.
+
+*— supervisor. 159 commits. `dc13688` (row 13 / D38) landed 18:13; `077` is applied to prod and still uncommitted, which is a normal mid-task state.*
+
+### D49.1 — All three D48.4 assertions pass
+
+| Assertion | Expected | Actual |
+|---|---|---|
+| 1. anon column count | 68 → 64 | **64** |
+| 2. four target columns absent for anon + authenticated | 0 rows | **0 rows** |
+| 3. behavioural probe as `anon` | raises 42501 | **`ERROR: 42501: permission denied for table artist_profiles`** |
+
+Full grant state: `anon` 64, `authenticated` 64, `postgres` 68, `service_role` 68. **E51 is closed.** Assertion 3 is the one that counts, and it is the one that would have caught the original failure: the catalogue can look right while behaviour differs, which is exactly how E51 survived the G-A route fix.
+
+I also re-ran the browser-read regression behaviourally rather than by inspection: `select subscription_status, subscription_plan` as `authenticated` still returns a row, so `AuthContext` is unaffected.
+
+### D49.2 — CORRECTING D44.4: I told the loop not to use the service-role client, and I was wrong on both counts
+
+D44.4 said, in terms: *"Do not switch it to `getSupabaseAdmin()` as a shortcut: the service role ignores column grants, so that would restore the data to the response while removing the very layer being added, and it would also drop the anon-role check that currently keeps unapproved profiles out."*
+
+Both halves are wrong.
+
+- **"Restores the data to the response."** The two layers are independent. `getAllDatabaseArtists` feeds `toPublicArtist()`, the G-A projection, which already strips postcode and coarsens coordinates before anything reaches a client. The column revoke exists to close the **direct PostgREST** path, and it closes it regardless of which client a server-side helper uses. Assertion 3 above proves that path is shut.
+- **"Drops the anon-role check on unapproved profiles."** There was never an RLS-based filter to drop. `artist_profiles`' SELECT policy is `USING (true)`, so unapproved rows were only ever excluded by the explicit `.eq("review_status", "approved")` in the query — which the loop kept, and its comment says so.
+
+The loop's approach is simpler than the explicit-column-list I prescribed, and correct. **This is my fourth error on this branch, after D33 (`charges_enabled` vs `payouts_enabled`), D38's "zero breakage risk", and D45.3's misplaced priority.** The pattern is consistent enough to name: I have been wrong every time I reasoned about a mechanism from its shape instead of testing it, and right when I ran the probe. Prefer the probe.
+
+### D49.3 — `077` explains the `authenticated` count, and its sweep independently matches mine
+
+`dc13688`'s message says "authenticated + service_role untouched", which was true when written; `077_artist_pii_authenticated.sql` followed, is applied to prod, and is still untracked pending commit. Hence `authenticated` at 64.
+
+Its header records a sweep done independently of D44.5 and reaching the same conclusion by different routes: no browser-side read selects the four columns, no server-side user-JWT client reads the table at all (`api-auth`'s client only calls `auth.getUser`), the artist portal loads its own profile through the service-role API, and `getAllDatabaseArtists` is now service-role. That is a better-evidenced version of my own ruling, arrived at without leaning on it.
+
+### D49.4 — Catch before it repeats: ADR 0004's amendment currently covers `anon` only
+
+`dc13688` amended `docs/adr/0004-defence-in-depth-view.md` for the anon revoke. **`077` must extend that same amendment to `authenticated` when it commits.**
+
+This is not bookkeeping. E51 existed *because* ADR 0004 stated a conclusion that had stopped being true and nobody revisited it — an ADR arguing "no clear privacy gain" while the leak was live. Leaving it now describing an anon-only restriction, when the live state restricts both roles, recreates the identical failure mode one paragraph further down. The ADR's "Scope and follow-ups" section should end up describing the state prod is actually in: both roles restricted on four columns, `lat`/`lng` deliberately retained, `service_role` untouched.
+
+### D49.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- E51 `artist_profiles`: **CLOSED** — 68 → 64 for both anon and authenticated, behaviourally confirmed.
+- `venue_profiles`: 34, unchanged, `071` hardening holding.
+- E50 `increment_placement_revenue`: still `anon=X, authenticated=X, PUBLIC`. **Row 14 is next**, migration `075`, which D44.6 reserved and which `076`/`077` correctly left free.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
+- `message-attachments` bucket: still public. E25 open.
