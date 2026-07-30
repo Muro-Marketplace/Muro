@@ -19,7 +19,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
-| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082: per-artist legs; the plan's snippet named a phantom column and would have thrown on every multi-artist cart). Next: T6 (E7a-E7d, E8, E11), then T1, T4, T9, T5 |
+| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082). **T6 COMPLETE**: E7a (416aac2), E7b (b298ba5), E8 (ab96b2d), E7c (cb0e687, migration 083), E7d (b4132fa), E11 (336979e), E11b (4a8759f). Next: T1, T4, T9, T5 |
 | 7a | `free_until` overcharge: every sale billed 15% | D17.1 | **done** (6e0705e). Four sites, not the two D17 named. No fee changes today, no artist has a future `trial_end` |
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **narrow form done** (6e0705e): `phantom-columns.test.ts`, table-aware, four probes. Full form (generated `schema-columns.json` covering ALL columns) still todo |
 | 7c | `placements/route.ts` integrates the phantom `requester_user_id` in ~20 places | N3 follow-up, found by 7b's guard | todo. Recorded in the guard's `KNOWN_UNFIXED` ratchet so it cannot be forgotten |
@@ -5207,3 +5207,107 @@ asserted against the recorded `customers.update` and `startPaidLoanBilling` call
 **Still open in T6:** E11 (`PAID_LOAN_V2` off in prod, an owner decision on
 enabling it) and E11b (`subscription_period_end` stamped 1970, partly addressed
 because `periodFromSubscription` is now the single reader).
+
+---
+
+## `04` T6 / E11 — the flag gated the reconcilers, so a failed card did nothing (owner: `04` §B6)
+
+Commit `336979e`.
+
+**The finding.** Every helper in `paid-loan-billing.ts` short-circuited on
+`PAID_LOAN_V2`, which is off in prod. So a failed venue card did nothing at all: no
+`past_due`, no `paused`, no notification, and the placement kept displaying while
+nobody was paying for it.
+
+**What changed.** The flag check is removed from the three webhook reconcilers
+(`handleInvoicePaid`, `handleInvoicePaymentFailed`, `handleSubscriptionDeleted`) and
+from `cancelPaidLoanBilling`, and kept in `startPaidLoanBilling`. A subscription that
+already exists in Stripe must be reconciled whatever the flag says; the flag only
+decides whether we would create a **new** one. `cancelPaidLoanBilling`'s return type
+loses `"skipped"`, which nothing else produced.
+
+**Safe to ungate now, and only now.** An ungated `handleInvoicePaid` schedules a
+transfer for the artist's share, so any subscription still carrying
+`transfer_data.destination` from before E8 would be paid twice. Verified in prod
+before making the change: **0** ledger rows, **0** placements with a
+`stripe_subscription_id`, **0** paid-loan transfers ever
+(`stripe_transfers where order_id like 'placement:%'`). No such subscription exists.
+Had any existed, E11 would have had to wait.
+
+**A test was pinning the defect.** `cancelPaidLoanBilling() > "skips when flag is
+off"` asserted `{ status: "skipped" }`, i.e. it encoded the uncancellable-subscription
+behaviour as correct. Rewritten to assert cancellation proceeds. This is exactly what
+D27's "grep test titles for permissive verbs on payment, auth and authz paths" sweep
+is for, found here by the change failing the old assertion rather than by the sweep.
+
+**This does NOT flip the flag.** §E11 calls that "this plan's exit criterion"; it is
+an owner decision and is listed under owner decisions below.
+
+**Tests.** 4 new cases in a `describe("webhook reconcilers ignore PAID_LOAN_V2
+(E11)")` block, plus the rewritten cancel test and a companion asserting `not_found`
+still holds with the flag off. Each reconciler is driven with
+`isFlagOnMock.mockReturnValue(false)`, prod's state.
+
+**Probe** (flag checks restored on all four):
+
+```
+ FAIL  cancelPaidLoanBilling() > cancels even with PAID_LOAN_V2 off ...
+ FAIL  webhook reconcilers ignore PAID_LOAN_V2 (E11) > handleInvoicePaid reconciles with the flag off
+ FAIL  webhook reconcilers ignore PAID_LOAN_V2 (E11) > handleInvoicePaymentFailed marks past_due with the flag off
+ FAIL  webhook reconcilers ignore PAID_LOAN_V2 (E11) > handleSubscriptionDeleted marks cancelled with the flag off
+      Tests  4 failed | 19 passed (23)
+```
+
+---
+
+## `04` T6 / E11b — a subscription that expired in 1970 (owner: `04` §B6)
+
+Commit `4a8759f`.
+
+**The finding.** Both artist-subscription sites read
+`new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000)`. When Stripe
+omits the period, `?? 0` becomes the Unix epoch, so the billing page showed a
+subscription that expired 56 years ago and the upgrade email quoted "1 January 1970"
+as the next billing date.
+
+**What changed, and why more than the doc asks.** §E11b patches the expression at
+both sites. But the same item-level read already existed in `paid-loan-billing.ts`
+from E7a, so patching in place would have left a **third** copy of a two-trap
+expression (bounds live on the item, not the subscription; and `?? 0` means 1970).
+It now lives in `src/lib/stripe-subscription-period.ts` as
+`periodFromSubscription` / `epochToIso` / `epochToUkDate`, and
+`paid-loan-billing.ts` imports and re-exports it for existing callers.
+
+`epochToUkDate` returns "your next billing date" when the date is unknown, so
+customer-facing copy has no path to printing a 1970 date.
+
+**Tests.** `src/lib/stripe-subscription-period.test.ts` (11 cases, including one
+proving that period fields on the *subscription* are ignored, which is the SDK-22
+half of the trap) and 4 webhook-level cases asserting `null` rather than 1970.
+
+**Probe** (`?? 0` restored at both sites):
+
+```
+ × E11b > writes null, not 1970, when Stripe sends no period
+   → expected '1970-01-01T00:00:00.000Z' to be null
+ × E11b > writes null, not 1970, when the subscription has no items
+   → expected '1970-01-01T00:00:00.000Z' to be null
+ × E11b > never writes a 1970 date under any of those shapes
+   → expected '1970-01-01T00:00:00.000Z' not to contain '1970'
+```
+
+The probe reproduces the finding's exact string, so the test is measuring the real
+defect and not a proxy for it.
+
+**Full gate after both commits.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  161 passed (161)
+Tests  1726 passed (1726)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**`04` T6 is complete**: E7a, E7b, E7c, E7d, E8, E11, E11b. No Stripe drive was
+possible for any of them (`sk_test_PLAC...`, api.stripe.com 401, no webhook secret,
+no CLI), so each is verified against recorded Stripe-client calls and DB writes.
