@@ -7385,3 +7385,60 @@ blocked legs); the unit tests cover the predicate + branch logic. **D55 (rows
 **Next: E25** (message-attachments bucket public → private + signed URLs + test).
 Then the six D58 ledger rows (7b/7c/8/9/10/11/12). Per operating rule 6, re-read
 the top-of-PROGRESS ledger before ever concluding the loop is finished.
+
+## `04` E25 — BLOCKED on an owner-coordinated deploy cutover (not done autonomously)
+
+Investigated this iteration; not implemented. Recording the blocker per loop step 6
+and moving to the next unblocked task.
+
+**Confirmed in prod (Supabase MCP).** `storage.buckets` `message-attachments`:
+`public = true`, 1 object. The exposure is real: a public bucket serves any object
+by direct URL regardless of listing, so message attachments (potentially sensitive
+DMs) are anonymously fetchable by anyone who has or guesses the path.
+
+**The data flow (why the fix is not a one-liner).**
+- `src/lib/upload.ts` `uploadMessageAttachment` runs on the **browser** client
+  (`import { supabase } from "./supabase"`), uploads to `message-attachments`, and
+  returns `getPublicUrl(path).publicUrl`.
+- That public URL is persisted into `messages.attachments[].url` (JSONB), validated
+  as `z.string().url()` in `src/lib/validations.ts`, written by
+  `src/app/api/messages/route.ts`.
+- `MessageInbox.tsx` renders it directly: `<img src={a.url}>` / `<a href={a.url}>`.
+
+So the stored value IS a public URL, and rendering depends on the bucket being
+public. A private bucket has no working public URL.
+
+**Why it cannot be done autonomously and safely (the hard blocker).** Flipping the
+bucket to `public = false` takes effect **immediately on the live site**. The
+remedying code (store a path, mint short-lived signed URLs through an
+authenticated read path) only takes effect **on deploy**, and this loop never
+pushes or deploys (authority: never push without approval). So flipping the bucket
+now breaks every attachment on the deployed site (still running `getPublicUrl`),
+with the fix sitting undeployed on the branch. There is no safe autonomous slice:
+closing the hole = flipping the bucket = breaking the live feature until a deploy
+that only the owner can do.
+
+**The complete fix (owner-coordinated), for when it is scheduled:**
+1. Change the stored shape from a public URL to a storage **path**
+   (`attachments[].url` → `path`; update `validations.ts`, `upload.ts`, the send
+   route, and `MessageInbox`).
+2. Add an authenticated read path (e.g. `GET /api/messages/attachment?path=…`)
+   that verifies the requester is the sender or recipient of the message carrying
+   that attachment, then redirects to / streams a short-lived `createSignedUrl`.
+   Render `<img src="/api/messages/attachment?path=…">`.
+3. **Deploy that code**, THEN flip the bucket `public = false` (coordinated, so the
+   live site is never serving old public-URL code against a private bucket).
+4. Backfill the 1 existing object's stored `url` → `path` (this UPDATEs a real
+   `messages` row — an escalation-listed "touching real messages" action, owner's
+   call).
+5. Fix `tests/e2e/security-no-leaks.spec.ts`: assert a DIRECT object fetch
+   (`getPublicUrl` → fetch) is DENIED, not just that listing is denied (D38.6: the
+   current test misses the exposure because listing is not the exposure).
+
+**Owner decision needed:** schedule the coordinated deploy + bucket flip (and the
+1-row backfill). Until then the bucket stays public and E25 stays open. This is the
+last item from the original security queue; it is a genuine open exposure, so it is
+worth the owner's attention soon.
+
+**Moving on:** the next unblocked loop task is D58 row **7b** (`02` schema-column
+guard, full form) — code-only, no prod cutover.
