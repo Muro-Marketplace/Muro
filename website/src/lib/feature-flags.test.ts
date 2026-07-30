@@ -5,7 +5,7 @@
 //   - unknown flag returns false (fail closed)
 //   - listFlags reports the resolved state
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { isFlagOn, listFlags, requireFlag } from "./feature-flags";
 
 const ENV_KEY = "NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1";
@@ -109,5 +109,85 @@ describe("listFlags", () => {
       expect(typeof f.on).toBe("boolean");
       expect(f.description.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ── E16: the client bundle must see the env var (06 §4.3, C1) ────────────────
+//
+// The doc says "feature-flags.test.ts cannot catch this: every test runs in Node
+// under Vitest, where process.env[key] works fine". It can, if the test
+// reproduces what the two reads actually differ on rather than trying to be a
+// browser.
+//
+// Next inlines NEXT_PUBLIC_* via webpack DefinePlugin, which only substitutes a
+// statically-written member expression. So:
+//   - a static read  → the value is frozen into the bundle at BUILD time, which
+//                      here is module-evaluation time;
+//   - process.env[k] → a lookup at CALL time against an object that is empty in
+//                      the browser (the compiled chunk read `t.default.env[e]`
+//                      off the bundled `process` polyfill).
+//
+// Emptying process.env after import therefore models the browser precisely: the
+// build-time snapshot must survive it, the runtime lookup cannot.
+describe("E16: a flag resolves from a build-time snapshot, not a call-time lookup", () => {
+  const SNAPSHOT = { ...process.env };
+  afterEach(() => {
+    process.env = { ...SNAPSHOT };
+    vi.resetModules();
+  });
+
+  async function importWithBuildEnv(
+    key: string,
+    value: string,
+  ): Promise<typeof import("./feature-flags")> {
+    process.env[key] = value; // set at "build" time
+    vi.resetModules();
+    const mod = await import("./feature-flags");
+    delete process.env[key]; // the browser's process.env has nothing in it
+    return mod;
+  }
+
+  it("GATING_V1=1 still resolves on once the runtime env is empty", async () => {
+    const mod = await importWithBuildEnv("NEXT_PUBLIC_FLAG_GATING_V1", "1");
+    setNodeEnv("production");
+    expect(mod.isFlagOn("GATING_V1")).toBe(true);
+  });
+
+  it("the kill switch survives too: =0 beats an on-by-default prod flag", async () => {
+    // The same defect in the other direction. WALL_VISUALIZER_V1 is prodDefault
+    // true, so a client that cannot see the env var ignores the kill switch and
+    // keeps rendering a feature someone has just turned off.
+    const mod = await importWithBuildEnv("NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1", "0");
+    setNodeEnv("production");
+    expect(mod.isFlagOn("WALL_VISUALIZER_V1")).toBe(false);
+  });
+
+  it("holds for every flag, so a new one cannot be added without its static read", async () => {
+    // Guards the map itself: an entry missing from CLIENT_ENV fails here rather
+    // than shipping a flag that is invisible to the client.
+    for (const key of [
+      "NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1",
+      "NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE",
+      "NEXT_PUBLIC_FLAG_PAID_LOAN_V2",
+      "NEXT_PUBLIC_FLAG_GATING_V1",
+      "NEXT_PUBLIC_FLAG_BLOGS_V1",
+    ]) {
+      const mod = await importWithBuildEnv(key, "1");
+      setNodeEnv("production");
+      const flag = key.replace("NEXT_PUBLIC_FLAG_", "") as Parameters<typeof mod.isFlagOn>[0];
+      expect(mod.isFlagOn(flag), `${key} is not statically read`).toBe(true);
+      process.env = { ...SNAPSHOT };
+    }
+  });
+
+  it("a live env value still wins over the snapshot, so the server stays dynamic", async () => {
+    // The snapshot must not pin the value: on the server process.env is real and
+    // current, and the test suite above depends on mutating it after import.
+    process.env.NEXT_PUBLIC_FLAG_GATING_V1 = "1";
+    vi.resetModules();
+    const mod = await import("./feature-flags");
+    process.env.NEXT_PUBLIC_FLAG_GATING_V1 = "0";
+    setNodeEnv("production");
+    expect(mod.isFlagOn("GATING_V1")).toBe(false);
   });
 });

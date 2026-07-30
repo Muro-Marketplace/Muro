@@ -95,8 +95,37 @@ const FLAGS: Record<FeatureFlag, FlagDef> = {
   },
 };
 
+/**
+ * One static read per flag, so webpack's DefinePlugin can inline the values into
+ * the client bundle (E16, 06-validation-massassign.md §4.3).
+ *
+ * DefinePlugin only substitutes a statically-written member expression such as
+ * `process.env.NEXT_PUBLIC_FLAG_GATING_V1`. It cannot substitute
+ * `process.env[key]` with a computed key: the compiled chunk kept that as a
+ * call-time lookup (`t.default.env[e]`) against the bundled `process` polyfill,
+ * whose `env` is empty in the browser. So every client-side flag read returned
+ * null from readBoolEnv and fell through to prodDefault, meaning the env var had
+ * no effect on the client at all, in either direction. Upgrade prompts and
+ * paywall affordances stayed hidden with gating on, and a kill switch flipped to
+ * 0 kept rendering the feature it was meant to kill.
+ *
+ * The map must list every FLAGS envKey. C4 adds the CI check for that.
+ */
+const CLIENT_ENV: Record<string, string | undefined> = {
+  NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1: process.env.NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1,
+  NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE: process.env.NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE,
+  NEXT_PUBLIC_FLAG_PAID_LOAN_V2: process.env.NEXT_PUBLIC_FLAG_PAID_LOAN_V2,
+  NEXT_PUBLIC_FLAG_GATING_V1: process.env.NEXT_PUBLIC_FLAG_GATING_V1,
+  NEXT_PUBLIC_FLAG_BLOGS_V1: process.env.NEXT_PUBLIC_FLAG_BLOGS_V1,
+};
+
 function readBoolEnv(key: string): boolean | null {
-  const raw = process.env[key];
+  // Live value first, build-time snapshot second. The server has a real,
+  // current process.env and should keep using it (§4.3 suggests the reverse
+  // order, which would pin the value to whatever was set when this module was
+  // first evaluated). In the browser the first read is always undefined, so the
+  // inlined snapshot is what answers.
+  const raw = process.env[key] ?? CLIENT_ENV[key];
   if (raw === undefined || raw === null || raw === "") return null;
   const v = raw.toLowerCase().trim();
   if (v === "1" || v === "true" || v === "on" || v === "yes") return true;
