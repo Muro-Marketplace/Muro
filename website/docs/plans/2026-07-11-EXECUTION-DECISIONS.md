@@ -1955,3 +1955,61 @@ This is not bookkeeping. E51 existed *because* ADR 0004 stated a conclusion that
 - E50 `increment_placement_revenue`: still `anon=X, authenticated=X, PUBLIC`. **Row 14 is next**, migration `075`, which D44.6 reserved and which `076`/`077` correctly left free.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
 - `message-attachments` bucket: still public. E25 open.
+
+---
+
+## D50. Row 14 / E50 closed and verified. One stale ADR bullet left, of exactly the kind that caused E51.
+
+*— supervisor. 164 commits; rows 13 and 14 both done. Row 15 in flight (`env.ts` + `checkout/route.ts` modified).*
+
+### D50.1 — E50 verified closed in prod
+
+`ecd5fc5`, migration **`075`** — the number D44.6 pinned, correctly left free by `076`/`077`. Live ACL:
+
+```
+increment_placement_revenue   grants = {postgres=X/postgres, service_role=X/postgres}
+```
+
+No `anon`, no `authenticated`, no PUBLIC. The artist-inflatable revenue path is shut.
+
+**Regression check on the caller, since this one could silently break revenue recording.** Only one call site: `api/orders/route.ts:340`, `db.rpc("increment_placement_revenue", ...)`, and `db` in that file is bound from `getSupabaseAdmin()` at `:37` and `:160`. Service-role retains EXECUTE, so placement-revenue attribution on the first `delivered` transition is unaffected. Clean.
+
+### D50.2 — D49.4 was acted on properly
+
+The ADR amendment covers both migrations, strikes through the superseded reasoning rather than deleting it, records the D44.5 rationale for including `authenticated`, and states why `lat`/`lng` stay granted. That is the right shape for an ADR correction.
+
+### D50.3 — But ADR 0004's FIRST scope bullet is now false, and it is the same failure that produced E51
+
+The "Scope and follow-ups" section still opens with:
+
+> **`authenticated` role left untouched.** A logged-in user could still read these columns directly... Tightening `authenticated` is a sensible follow-up but carries more breakage risk and is **deferred**.
+
+That is about `venue_profiles`, the ADR's original subject, and **it stopped being true earlier today.** `migration 074_rls_gap_closure.sql:138` contains `revoke select on public.venue_profiles from authenticated;`.
+
+Confirmed in prod, behaviourally rather than from a catalogue count:
+
+```
+set local role authenticated;
+select email, phone, address_line1 from public.venue_profiles limit 1;
+→ ERROR: 42501: permission denied for table venue_profiles
+```
+
+Counts agree: `venue_profiles` is 34 of 43 for **both** `anon` and `authenticated`; `service_role` retains 43.
+
+**Fix: correct that bullet when row 15 or 16 next touches docs.** Small, but not cosmetic. E51 existed *because* this same ADR carried a scope note that had been overtaken by events and was never revisited — it is the sentence someone cites later to justify not acting. Leaving a second one in place, in the same section, a day after the first caused a live PII leak, is the identical mistake with a different subject.
+
+### D50.4 — My hypothesis was wrong, and the discipline held
+
+I expected `venue_profiles.authenticated` to still be open and was ready to file it as a fresh E51-class finding on the neighbouring table: venue contact PII (`email`, `phone`, `contact_name`, `address_line1/2`, `postcode`) readable by any logged-in user would have outranked everything in the queue. **It is not open.** `074` had already closed it.
+
+Per D49.2 — "I have been wrong every time I reasoned about a mechanism from its shape instead of testing it" — I ran the probe before writing the finding, and the probe killed it. Recording that the rule worked, not just that it was stated.
+
+### D50.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- E50 function grants: **CLOSED**, verified above.
+- E51 `artist_profiles`: **CLOSED**, 64 for both anon and authenticated.
+- `venue_profiles`: 34 for both roles, behaviourally confirmed. Clean.
+- E50 caller sweep: single call site, service-role bound. Clean.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
+- `message-attachments` bucket: still public. **E25 is now the only untouched item from the original security queue** — worth picking up after rows 15 and 16.
