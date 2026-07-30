@@ -19,7 +19,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
-| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082). **T6 COMPLETE** (E7a-E7d, E8, E11, E11b). **B0**: D2 done earlier (E19/E46f, 740b79a), **D1 done** (13aed91, migration 084, event-dedup half; payment_status gate deferred). Next: B0 D3, then T1, T4, T9, T5 |
+| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082). **T6 COMPLETE** (E7a-E7d, E8, E11, E11b). **B0 COMPLETE**: D2 (E19/E46f, 740b79a), D1 (13aed91, migration 084, event-dedup half; payment_status gate deferred to owner), D3 (c066a38). Next: T1 (D4-D6), then T4, T9, T5 |
 | 7a | `free_until` overcharge: every sale billed 15% | D17.1 | **done** (6e0705e). Four sites, not the two D17 named. No fee changes today, no artist has a future `trial_end` |
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **narrow form done** (6e0705e): `phantom-columns.test.ts`, table-aware, four probes. Full form (generated `schema-columns.json` covering ALL columns) still todo |
 | 7c | `placements/route.ts` integrates the phantom `requester_user_id` in ~20 places | N3 follow-up, found by 7b's guard | todo. Recorded in the guard's `KNOWN_UNFIXED` ratchet so it cannot be forgotten |
@@ -5394,3 +5394,74 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 **DB verification.** `pg_policies` SELECT-leak assertion → 0 rows. Advisor (via MCP)
 shows `stripe_webhook_events` as `rls_enabled_no_policy` INFO, which is intended for
 a service-role-only table, and adds no new WARN or ERROR.
+
+---
+
+## `04` B0 / D3 — order-id collisions were silently dropped (owner: `04` §B0)
+
+Commit `c066a38`. **B0 is now complete** (D1 `13aed91`, D2 `740b79a`, D3 `c066a38`).
+
+**The finding.** `orders.id` was `WS-${session.id.slice(-8)}` (and `OFR-${...}`),
+only 8 characters. Two different payments could collide, and the webhook then saw
+the second insert's 23505 and returned `{ received, duplicate }`, so the second
+buyer's money was taken with no order written.
+
+**What changed.** `src/lib/orders/order-id.ts` (new) holds both halves:
+- `orderIdFromSession(prefix, sessionId)` takes 16 chars of the session entropy
+  (the part after the last underscore, 24+ random chars) and uppercases it, making
+  a collision cryptographically implausible.
+- `classifyOrderIdConflict(db, orderId, paymentIntentId)` reads the clashing row on
+  a 23505: same payment intent → `"duplicate"` (a real redelivery, safe to drop),
+  anything else → `"collision"` (500, so Stripe retries loudly). The bias is always
+  a loud retry over a silent drop: a missing clash row, a different intent, or a
+  null-vs-nonnull mismatch all count as a collision.
+
+Both branches use it. The cart branch's **two** 23505 sites (main insert and the
+strip-and-retry) and the offer branch's 23505 path, which used to proceed and flip
+the offer paid unconditionally, now route through the check.
+
+**Extracted, not inlined.** The helpers first went inline in the route, but the
+collision check reads the DB and both branches share it, so a small module is the
+testable home (the pattern used for work-stock, legs, confirmations,
+stripe-subscription-period). That also keeps the route file, already 1500 lines,
+from growing.
+
+**The plan's UNCONFIRMED is resolved.** §D3 flags "whether any existing UI or email
+hardcodes an 11-character `WS-xxxxxxxx` shape. Grep `WS-` before landing." Grepped:
+nothing hardcodes the shape or slices order ids by length, and `orders.id` is TEXT.
+Widening is safe; existing orders keep their ids, only new orders get the wider
+form.
+
+**Interaction with D1.** The global replay guard (D1, this session) already catches
+same-event redelivery upstream, so `classifyOrderIdConflict` fires in practice only
+for a null-intent redelivery (both null → duplicate) or a true collision. It is the
+backstop, not the primary dedup, which the tests note.
+
+**Tests.** `src/lib/orders/order-id.test.ts` (11 unit cases across both helpers),
+plus an offer-branch integration test asserting a 500 and that the offer is NOT
+flipped paid on a collision. The offer test harness grew an `orders.select` for the
+classify read and an `orderClash` fixture; one existing assertion moved to the new
+uppercased 16-char id.
+
+**Two probes:**
+
+```
+PROBE A — widening reverted (old slice(-8), no uppercase)
+      Tests  7 failed | 71 passed (78)
+
+PROBE B — collision distinction reverted (always duplicate, the old bug)
+      Tests  4 failed | 74 passed (78)
+```
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  162 passed (162)
+Tests  1743 passed (1743)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Stripe drive not run**, same blocker as the rest of `04`. The widening is asserted
+on the persisted `id` / `paid_order_id`, and the collision path on the recorded
+insert error plus the `orders.select` the check reads.
