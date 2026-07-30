@@ -48,6 +48,24 @@ const DEMO_EXEMPT_ROUTES = {
     "Signs the demo session in. Guarding it would make the demo unreachable.",
   "src/app/api/account/delete/route.ts":
     "Deleting a demo account is harmless and self-correcting on reseed.",
+  // E23a. Signup finalisation, authenticated by a one-time token rather than a
+  // session. A demo session never traverses OAuth or the welcome step: the demo
+  // ids are pre-seeded and entered through demo/login, so a guard here could
+  // only ever block a real signup.
+  "src/app/api/auth/oauth-finalize/route.ts":
+    "OAuth signup finalisation, token-authenticated. No demo session reaches it.",
+  "src/app/api/auth/welcome/route.ts":
+    "Post-signup welcome step, token-authenticated. No demo session reaches it.",
+  // E23a. Admin surfaces: an admin is never a demo user, and support needs these
+  // to work against demo data when reproducing a report.
+  "src/app/api/admin/applications/[id]/route.ts":
+    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
+  "src/app/api/admin/blogs/[id]/route.ts":
+    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
+  "src/app/api/admin/curation/route.ts":
+    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
+  "src/app/api/admin/disputes/[id]/route.ts":
+    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
 };
 
 module.exports = { PUBLIC_ROUTES, DEMO_EXEMPT_ROUTES };

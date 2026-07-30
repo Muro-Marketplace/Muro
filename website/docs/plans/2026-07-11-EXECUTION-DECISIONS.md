@@ -611,3 +611,30 @@ The 1200–1800s guidance in the `ScheduleWakeup` tool description is for loops 
 **The only legitimate reason to pick a longer delay** is a genuine external dependency — and if you do, say explicitly in the report what you are waiting for and why. "Self-pacing" is not a reason.
 
 This changes pacing only. **It does not relax any standard:** one task per iteration, the regression test must be verified failing before the fix, `npm run check` green before commit, evidence pasted, no bundling. Do not trade rigour for speed — the instruction is to stop idling, not to hurry.
+
+---
+
+## D23. D1 migration ranges were incomplete — allocating the missing five
+
+**My error in D1.** I assigned ranges to `02`, `04`, `07` and `09` only, on the assumption the other docs were code-only. That was wrong: `01` needed a migration for E22 and correctly fell back to the "Reserved 098+" band (`098_artwork_request_response_single_fulfilment.sql`). `03` will certainly need one — D5 requires **creating and backfilling `admin_users`**, which does not exist in prod.
+
+**Full allocation (supersedes the D1 table):**
+
+| Doc | Range | Used so far |
+|---|---|---|
+| `02` RLS/DB/storage | 074–079 | `074` |
+| `04` payments | 080–089 | `080`, `081` |
+| `07` unknot | 090–094 | — |
+| `09` emails | 095–097 | — |
+| **`01` authz** | **098–099** | `098` ✅ (already correct) |
+| **`03` auth/admin** | **100–104** | — (`admin_users` create + backfill lands here) |
+| **`05` frontend** | **105–107** | — |
+| **`06` validation** | **108–109** | — |
+| **`08` cull** | **110–112** | — |
+| Reserved | 113+ | — |
+
+`098` stays where it is. No renumbering — it is inside `01`'s range as now defined, and moving an applied migration would be strictly worse than a one-line doc fix.
+
+**Rule unchanged:** before writing a migration, `ls website/supabase/migrations/ | tail -5` and take the next free number **inside your doc's range**. If your doc has no range, it now does — do not improvise into Reserved.
+
+No owner input needed.

@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemoStrict } from "@/lib/demo-guard";
 
 export async function POST(request: Request) {
   const { user, error } = await getAuthenticatedUser(request);
   if (!user) return error;
+  // E23a: STRICT. This creates or opens a real Stripe Connect account, which is
+  // an external identity and a payout destination. A demo session must not.
+  const demoBlocked = assertNotDemoStrict(user.id);
+  if (demoBlocked) return demoBlocked;
 
   const db = getSupabaseAdmin();
 

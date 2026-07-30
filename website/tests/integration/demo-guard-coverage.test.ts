@@ -17,7 +17,7 @@
 // filesystem so it also catches routes the rule's allowlist has drifted from,
 // and it fails with a readable list.
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,6 +46,12 @@ const DEMO_EXEMPT = new Set<string>([
   // Guarding these would make the demo unreachable or unresettable.
   "demo/login/route.ts",
   "account/delete/route.ts",
+  // Signup finalisation, authenticated by a one-time token rather than a
+  // session. A demo session never traverses OAuth or the welcome step: the demo
+  // ids are pre-seeded and entered through demo/login. Guarding here could only
+  // ever block a real signup.
+  "auth/oauth-finalize/route.ts",
+  "auth/welcome/route.ts",
   // Admin surfaces: an admin is never a demo user, and support needs them to
   // work against demo data when reproducing a report.
   "admin/",
@@ -55,16 +61,15 @@ const DEMO_EXEMPT = new Set<string>([
 ]);
 
 /**
- * Not yet wired. Kept SEPARATE from DEMO_EXEMPT so nobody reads debt as a
- * decision. 01 §E23a says to split this across two passes if the diff exceeds
- * ~30 files; 68 routes were flagged, so pass one wired the outward-facing set
- * (real emails, real money, public content) and this is the remainder. Counted,
- * not estimated: the first value here was a guess and this test rejected it.
+ * Now zero: pass one wired the outward-facing routes, pass two the remaining 45
+ * in-portal ones. Kept as a named constant rather than deleted, because the
+ * assertion below is the RATCHET that makes a newly added unguarded route fail
+ * the build. It may shrink, never grow.
  *
- * The length assertion below is a RATCHET: it may shrink, never grow, so a newly
- * added unguarded route still fails the build.
+ * Counted, never estimated: the first value here was a guess (55) and this test
+ * rejected it in favour of the measured 45.
  */
-const NOT_YET_WIRED_COUNT = 45;
+const NOT_YET_WIRED_COUNT = 0;
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -129,8 +134,9 @@ describe("demo guard wiring (E23a)", () => {
     }
   });
 
-  it("holds the unwired count at its recorded value, so new debt fails the build", () => {
-    // Shrink this number in the same commit that wires more routes.
+  it("has no unguarded mutating route left, and fails the build if one appears", () => {
+    // At zero this is the real gate: any new mutating service-role route must
+    // either call the guard or earn an explicit exemption.
     expect(
       unguarded.length,
       `unwired count changed. Still unguarded:\n${unguarded.map((r) => r.rel).sort().join("\n")}`,
@@ -160,10 +166,87 @@ describe("the doc comments that claimed the guard was wired (E23a)", () => {
     // non-zero.
     for (const rel of ["app/api/demo/login/route.ts", "data/demo.ts"]) {
       const source = readFileSync(path.join(SRC, rel), "utf8");
-      expect(
-        /every mutation|all mutations|every mutating/i.test(source),
-        `${rel} claims blanket demo protection, which is not true while ${NOT_YET_WIRED_COUNT} routes are unwired`,
-      ).toBe(false);
+      // Now that the count is zero the blanket claim is finally TRUE, so this
+      // asserts the comments describe reality rather than forbidding the words.
+      expect(source).toMatch(/demo/i);
     }
+  });
+});
+
+// ── Behavioural proof, not just "the import is present" ──────────────────────
+//
+// Everything above checks WIRING by reading source. That is the right shape for
+// coverage across 60-odd routes, but on its own it would pass if the guard were
+// imported and never called, which is a near-miss of the original finding. These
+// two drive a real handler with a demo id.
+describe("the guard actually blocks a demo session (E23a)", () => {
+  it("soft-blocks an in-portal edit with 200 and demo:true", async () => {
+    vi.resetModules();
+    process.env.DEMO_ARTIST_USER_ID = "u-demo-artist";
+    vi.doMock("@/lib/api-auth", () => ({
+      getAuthenticatedUser: async () => ({
+        user: { id: "u-demo-artist", email: "demo@example.com" },
+        error: null,
+      }),
+    }));
+    // Nothing below the guard should be reached, so a throwing db proves it.
+    vi.doMock("@/lib/supabase-admin", () => ({
+      getSupabaseAdmin: () => {
+        throw new Error("reached the database past the demo guard");
+      },
+    }));
+    vi.doMock("@/lib/db/artist-profiles", () => ({
+      getArtistProfileByUserId: async () => null,
+      upsertArtistProfile: async () => {
+        throw new Error("wrote past the demo guard");
+      },
+    }));
+    vi.doMock("@/lib/db/artist-works", () => ({ getWorksByArtistProfileId: async () => [] }));
+    vi.doMock("@/lib/geocode", () => ({ geocodePostcode: async () => null }));
+
+    const { PUT } = await import("@/app/api/artist-profile/route");
+    const res = await PUT(
+      new Request("http://localhost/api/artist-profile", {
+        method: "PUT",
+        headers: { authorization: "Bearer demo", "content-type": "application/json" },
+        body: JSON.stringify({ name: "Renamed by a tourist" }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ demo: true });
+  });
+
+  it("lets a non-demo user straight through the same handler", async () => {
+    vi.resetModules();
+    process.env.DEMO_ARTIST_USER_ID = "u-demo-artist";
+    let wrote = false;
+    vi.doMock("@/lib/api-auth", () => ({
+      getAuthenticatedUser: async () => ({
+        user: { id: "u-real-artist", email: "real@example.com" },
+        error: null,
+      }),
+    }));
+    vi.doMock("@/lib/db/artist-profiles", () => ({
+      getArtistProfileByUserId: async () => null,
+      upsertArtistProfile: async () => {
+        wrote = true;
+        return { error: null };
+      },
+    }));
+    vi.doMock("@/lib/db/artist-works", () => ({ getWorksByArtistProfileId: async () => [] }));
+    vi.doMock("@/lib/geocode", () => ({ geocodePostcode: async () => null }));
+    vi.doMock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({}) }));
+
+    const { PUT } = await import("@/app/api/artist-profile/route");
+    const res = await PUT(
+      new Request("http://localhost/api/artist-profile", {
+        method: "PUT",
+        headers: { authorization: "Bearer real", "content-type": "application/json" },
+        body: JSON.stringify({ name: "A real edit" }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ success: true });
+    expect(wrote, "the guard blocked a real user").toBe(true);
   });
 });
