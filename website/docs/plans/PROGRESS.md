@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **item 14 done** (99e8c83). Next: item 15 (`warn` → `error`), item 16 (E39 part 2), and `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **items 14-15 done** (99e8c83, 0fd8a4d). Item 15's flip is blocked on 43 inline-authorising routes, held by a ratchet. Next: item 16 (E39 part 2), then `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -55,6 +55,12 @@ Owner decisions the loop is waiting on (none block the remaining queue):
   writing app-side referral credit into it is questionable. Drop referral credit, add
   a dedicated `referral_free_until`, or accept writing to `trial_end`? The read-path
   fix (D17.1) proceeds regardless and does not wait on this.
+
+- **The `warn` → `error` flip for `require-authz-on-mutation`** (item 15). 43 routes
+  authorise inline (`.eq("user_id", auth.user!.id)`) rather than via `@/lib/authz`,
+  so flipping now reddens CI over convention, not security. Migrate them to
+  `assert*` helpers, or allowlist each with "self-scopes on user_id" as the stated
+  control? A ratchet holds the count at 43 meanwhile, so the gap cannot widen.
 
 Owner actions blocking a merge, added as they surface:
 
@@ -3690,3 +3696,78 @@ already bound and logged the error but still flattened an AuthzError to 400. The
 ```
 
 **Commit:** 99e8c83
+
+---
+
+## Phase E item 15 — rule extension done, the flip deliberately not (owner: `01` Part 3)
+
+**Extension, landed.** `require-authz-on-mutation` now treats any `@/lib/db/*`
+import as service-role-equivalent, because those helpers use the admin client
+internally. This is **E32's exact shape**: `api/artist-works` never imported
+`supabase-admin`, it called `lib/db/artist-works.ts`, so the rule could not see it
+and the unscoped update went unflagged. 5 new rule tests, probed by reverting the
+extension (2 fail).
+
+**It flags zero additional routes today, and I am not claiming otherwise.** Only one
+route in the tree has that shape and it already imports authz. The value is
+prospective: the next route written that way gets caught.
+
+**Except it found something immediately anyway.** `api/artist-works` had POST and
+DELETE with **no demo guard**. E23a pass two missed it because my enumeration
+filtered on a `getSupabaseAdmin` import, which is precisely the blind spot this
+extension exists to close. Both handlers are now guarded, and
+`demo-guard-coverage.test.ts`'s filter is widened the same way, so the test is no
+longer blind in the manner the rule was. Two guards built to catch the same class of
+bug, and one of them had the bug.
+
+**The flip: not done, and the doc's precondition is wrong.** `01` says land it "once
+phases B to D are green, or CI will be red on known work". Phases B to D **are**
+green, every finding fixed. But the rule's criterion is "imports `@/lib/authz` or
+`@/lib/admin-auth`, or is allowlisted", which is far broader than "the findings are
+fixed". **43 route files still fail it, and they are not unauthorised.** Sampled
+three at random and all authorise inline by self-scoping:
+
+```
+saved/route.ts              .eq("user_id", auth.user!.id)
+notifications/route.ts      .eq("user_id", auth.user!.id)
+customer-addresses/route.ts .eq("user_id", auth.user!.id)
+```
+
+That is real authorisation, just not routed through the shared helpers. Flipping
+today would turn CI red across 43 files over a **convention migration**, not a
+security gap. Doing that unasked would be the opposite of the plan's intent.
+
+**What shipped instead:** `tests/integration/authz-import-ratchet.test.ts` holds the
+count at 43 and asserts the rule stays at `warn` while it is non-zero. The count may
+shrink, never grow, so the flip becomes reachable rather than indefinitely deferred,
+and nobody can add a new unannotated mutating route. It also asserts the demo-guard
+arm is still at zero, which proves the two arms move independently.
+
+**Probed three ways:**
+
+```
+add an unannotated route  → fails, "Expected 43, found 44"
+flip to error early       → fails, "43 routes still lack the import"
+revert the extension      → 2 rule tests fail
+```
+
+**The second probe initially reported "no tests" rather than a failure.** eslint
+exits non-zero when it reports an error, `execFileSync` throws on that, and the file
+died at collection time. So the severity assertion **could never have run in the
+state it exists to catch**. It now reads the report off stdout either way. That is
+the fourth guard-hole this session found by probing rather than by assuming.
+
+```
+ Test Files  154 passed (154)
+      Tests  1511 passed (1511)
+✖ 175 problems (0 errors, 175 warnings)
+```
+
+**Owner decision available, not blocking.** To reach the flip, the 43 routes need
+either migrating to `assert*` helpers or allowlisting with "self-scopes on user_id"
+as the stated alternative control. The second is cheap and honest; the first is
+better hygiene. Neither is a security fix, so it is a judgement call about how much
+convention work is worth it. The ratchet means the decision can wait without the gap
+widening.
+
+**Commit:** 0fd8a4d
