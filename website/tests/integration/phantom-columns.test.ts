@@ -62,12 +62,6 @@ const GRANDFATHERED: Array<{ file: string; columns: string; phantom: string[]; w
     why: "artist_collections has name, not title (second select on the same route). Fix: select name.",
   },
   {
-    file: "app/api/orders/[id]/events/route.ts",
-    columns: "id, status, buyer_email, artist_user_id, venue_user_id, items, shipping, total, currency, placed_at, created_at",
-    phantom: ["venue_user_id", "currency", "placed_at"],
-    why: "orders has no venue_user_id (venue is via venue_slug), no currency, no placed_at (use created_at). The whole select is rejected, so loadOrder returns null and the events page cannot resolve the order.",
-  },
-  {
     file: "app/api/placements/[id]/route.ts",
     columns: "name, slug, image",
     phantom: ["image"],
@@ -200,7 +194,7 @@ describe("no .select() names a column the live schema lacks (D17.3, full form)",
   it("holds the grandfathered list at its recorded size, so new debt fails the build", () => {
     // A ratchet, not a cap on effort: shrink it by fixing a select, and lower the
     // number in the same commit. It must never grow.
-    expect(GRANDFATHERED).toHaveLength(7);
+    expect(GRANDFATHERED).toHaveLength(6);
     for (const g of GRANDFATHERED) {
       expect(g.phantom.length, "each entry lists the phantom column(s) it parks").toBeGreaterThan(0);
       expect(g.why.length, "each entry names the real column and why it is not fixed here").toBeGreaterThan(60);

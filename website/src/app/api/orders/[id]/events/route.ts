@@ -18,17 +18,19 @@ import { verifyOrderToken } from "@/lib/order-tracking-token";
 
 export const runtime = "nodejs";
 
+// 7b phantom-column fix: the select named venue_user_id, currency and placed_at,
+// none of which exist on orders, so the whole select was rejected and this route
+// 404'd for every order. orders links the venue via venue_slug (resolved to a user
+// id below for the authz check), has no currency (GBP only), and uses created_at.
 interface OrderRow {
   id: string;
   status: string;
   buyer_email: string | null;
   artist_user_id: string | null;
-  venue_user_id: string | null;
+  venue_slug: string | null;
   items: unknown;
   shipping: unknown;
   total: number | null;
-  currency: string | null;
-  placed_at: string | null;
   created_at: string;
 }
 
@@ -37,11 +39,23 @@ async function loadOrder(id: string): Promise<OrderRow | null> {
   const { data } = await db
     .from("orders")
     .select(
-      "id, status, buyer_email, artist_user_id, venue_user_id, items, shipping, total, currency, placed_at, created_at",
+      "id, status, buyer_email, artist_user_id, venue_slug, items, shipping, total, created_at",
     )
     .eq("id", id)
     .maybeSingle<OrderRow>();
   return data ?? null;
+}
+
+/** Whether `userId` is the venue behind `venueSlug` (orders has no venue_user_id;
+ *  the link is venue_slug -> venue_profiles.user_id). */
+async function isVenueForSlug(venueSlug: string, userId: string): Promise<boolean> {
+  const db = getSupabaseAdmin();
+  const { data } = await db
+    .from("venue_profiles")
+    .select("user_id")
+    .eq("slug", venueSlug)
+    .maybeSingle<{ user_id: string | null }>();
+  return !!data?.user_id && data.user_id === userId;
 }
 
 export async function GET(
@@ -88,7 +102,10 @@ export async function GET(
   const isBuyer =
     !!order.buyer_email && userEmail && order.buyer_email.toLowerCase() === userEmail.toLowerCase();
   const isArtist = !!order.artist_user_id && order.artist_user_id === auth.user!.id;
-  const isVenue = !!order.venue_user_id && order.venue_user_id === auth.user!.id;
+  const isVenue =
+    !isBuyer && !isArtist && !!order.venue_slug
+      ? await isVenueForSlug(order.venue_slug, auth.user!.id)
+      : false;
   if (!isBuyer && !isArtist && !isVenue) {
     return NextResponse.json({ error: "Not authorised" }, { status: 403 });
   }
@@ -112,8 +129,8 @@ async function buildResponse(order: OrderRow): Promise<NextResponse> {
       items: order.items,
       shipping: order.shipping,
       total: order.total,
-      currency: order.currency,
-      placedAt: order.placed_at ?? order.created_at,
+      currency: "gbp",
+      placedAt: order.created_at,
     },
     events: events ?? [],
   });
