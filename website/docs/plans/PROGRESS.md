@@ -23,7 +23,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 7a | `free_until` overcharge: every sale billed 15% | D17.1 | **done** (6e0705e). Four sites, not the two D17 named. No fee changes today, no artist has a future `trial_end` |
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **DONE**. Narrow form (6e0705e), then **full form** (7f556eb): `schema-columns.json` snapshots all 53 tables / 750 columns; the scan surfaced 12 phantom selects, parked in a shrinking `GRANDFATHERED` ratchet and queued as **row 19** |
 | 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
-| 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects). Ratchet 12 → 3. Remaining: **#8** placements/[id] image→profile_image, **#9** sitemap updated_at→created_at. `free_until` (webhooks/stripe) stays parked per D14/D17.2 |
+| 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (this commit, aliased). Ratchet 12 → 2. Remaining: **#9** sitemap updated_at→created_at. `free_until` (webhooks/stripe) stays parked per D14/D17.2 (ratchet floor 1) |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -7771,8 +7771,34 @@ by reverting `route.ts`: the GET test failed with `expected null to match object
 Re-applied -> pass. Both grandfather entries removed, ratchet 5 -> 3.
 `npm run check` green: 168 files, 1860 tests, audit:allowlist PASS, exit 0.
 
-**Next: row 19 #8** — `placements/[id]/route.ts:59` selects
-`artist_profiles.image`; the real column is `profile_image`. The artist image reads
-null on the placement detail path. Fix image -> profile_image, remove the
-grandfather entry, ratchet 3 -> 2. Re-read the route to map the value to whatever
-key the consumer expects.
+## row 19 #8 — placements/[id] selects artist_profiles.profile_image, not phantom image
+
+Commit `<pending>`. Code-only.
+
+**The defect.** The placement-detail route selected `artist_profiles.image`, which
+does not exist (the column is `profile_image`). Because PostgREST rejects a select
+naming a missing column, the whole artist lookup came back null, so the response's
+entire `artist` block (name, slug, image) was null and the "from <artist>"
+attribution link never rendered on the placement detail page. (The sibling
+`venue_profiles` select on the next line is fine: venue_profiles really does have
+`image`, `location` and `city`.)
+
+**The fix.** `image -> image:profile_image` (a PostgREST alias) on the one select.
+The consumer state type in `PlacementDetailClient.tsx` is `{ name; slug; image? }`
+and does not render the image (only name + slug), so aliasing keeps the response's
+`artist.image` shape intact with a single source-line change and no consumer edit.
+Aliases are an established pattern here and are skipped by the phantom guard.
+
+**Test.** New `route.test.ts` drives GET with the artist as the placement party. The
+`artist_profiles` mock models PostgREST faithfully (rejects a select naming a column
+the table lacks; skips alias tokens), so it fails before the fix (artist null) and
+passes after. Asserts `body.artist` is `{ name, slug, image }`. Fail-before verified
+by reverting `route.ts`: the test failed with `expected null to match object` and
+the phantom guard failed on `route.ts:59`. Re-applied -> pass. Grandfather entry
+removed, ratchet 3 -> 2. `npm run check` green: 169 files, 1861 tests,
+audit:allowlist PASS, exit 0.
+
+**Next: row 19 #9** — `sitemap.ts:74` selects `artist_works.updated_at`; the real
+column is `created_at` (the whole select is rejected, so the sitemap lastmod is
+null). Fix updated_at -> created_at, remove the last-but-one grandfather entry,
+ratchet 2 -> 1. `free_until` (webhooks/stripe) is the parked floor at 1 (D14/D17.2).
