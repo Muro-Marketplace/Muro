@@ -5,8 +5,16 @@
 //   - unknown flag returns false (fail closed)
 //   - listFlags reports the resolved state
 
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isFlagOn, listFlags, requireFlag } from "./feature-flags";
+import {
+  isFlagOn,
+  listFlags,
+  requireFlag,
+  FLAGS,
+  CLIENT_ENV,
+  type FeatureFlag,
+} from "./feature-flags";
 
 const ENV_KEY = "NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1";
 
@@ -186,19 +194,12 @@ describe("E16: a flag resolves from a build-time snapshot, not a call-time looku
   });
 
   it("holds for every flag, so a new one cannot be added without its static read", async () => {
-    // Guards the map itself: an entry missing from CLIENT_ENV fails here rather
-    // than shipping a flag that is invisible to the client.
-    for (const key of [
-      "NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1",
-      "NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE",
-      "NEXT_PUBLIC_FLAG_PAID_LOAN_V2",
-      "NEXT_PUBLIC_FLAG_GATING_V1",
-      "NEXT_PUBLIC_FLAG_BLOGS_V1",
-    ]) {
-      const mod = await importWithBuildEnv(key, "1");
+    // Derived from FLAGS rather than a hardcoded list (C4), so adding a sixth
+    // flag extends this test automatically instead of leaving it behind.
+    for (const [flag, def] of Object.entries(FLAGS) as [FeatureFlag, { envKey: string }][]) {
+      const mod = await importWithBuildEnv(def.envKey, "1");
       setNodeEnv("production");
-      const flag = key.replace("NEXT_PUBLIC_FLAG_", "") as Parameters<typeof mod.isFlagOn>[0];
-      expect(mod.isFlagOn(flag), `${key} is not statically read`).toBe(true);
+      expect(mod.isFlagOn(flag), `${def.envKey} is not statically read`).toBe(true);
       process.env = { ...SNAPSHOT };
     }
   });
@@ -212,5 +213,71 @@ describe("E16: a flag resolves from a build-time snapshot, not a call-time looku
     process.env.NEXT_PUBLIC_FLAG_GATING_V1 = "0";
     setNodeEnv("production");
     expect(mod.isFlagOn("GATING_V1")).toBe(false);
+  });
+});
+
+// ── C4: CLIENT_ENV must stay in step with FLAGS ───────────────────────────────
+//
+// C1 fixed the read. This is the check that keeps it fixed: the map is written by
+// hand, one line per flag, so the failure mode is adding a sixth flag and
+// forgetting the sixth line. That flag would then be invisible to the client and
+// silently resolve to its prodDefault, which is exactly the bug C1 just removed,
+// reintroduced one flag at a time.
+describe("C4: every flag has a static CLIENT_ENV read", () => {
+  it("every FLAGS entry has a CLIENT_ENV key", () => {
+    for (const { flag } of listFlags()) {
+      expect(Object.keys(CLIENT_ENV), `${flag} is missing from CLIENT_ENV`).toContain(
+        FLAGS[flag].envKey,
+      );
+    }
+  });
+
+  it("CLIENT_ENV has no key that is not a flag envKey", () => {
+    // The other direction: a stale entry left behind when a flag is deleted is
+    // dead weight that reads as coverage.
+    const envKeys = Object.values(FLAGS).map((d) => d.envKey);
+    for (const key of Object.keys(CLIENT_ENV)) {
+      expect(envKeys, `${key} is in CLIENT_ENV but no flag uses it`).toContain(key);
+    }
+  });
+
+  it("envKey follows the NEXT_PUBLIC_FLAG_<name> convention", () => {
+    // Pins the assumption the whole scheme rests on. Next only inlines variables
+    // prefixed NEXT_PUBLIC_, so a flag whose envKey drifts off that prefix is
+    // unreachable from the client no matter what CLIENT_ENV says.
+    for (const [flag, def] of Object.entries(FLAGS)) {
+      expect(def.envKey).toBe(`NEXT_PUBLIC_FLAG_${flag}`);
+    }
+  });
+
+  // The runtime checks above cannot see HOW each value is read: in Node,
+  // process.env[key], process.env["KEY"] and process.env.KEY all work. Only the
+  // last is reliably inlined by the bundler, and only the source can tell them
+  // apart, so this reads the file.
+  describe("each entry is written as a static, self-matching member read", () => {
+    const source = readFileSync(new URL("./feature-flags.ts", import.meta.url), "utf8");
+    const block = source.slice(
+      source.indexOf("export const CLIENT_ENV"),
+      source.indexOf("function readBoolEnv"),
+    );
+    // Collapse whitespace so a prettier line-wrap cannot break the match.
+    const flat = block.replace(/\s+/g, "");
+    const pairs = [...flat.matchAll(/(NEXT_PUBLIC_FLAG_[A-Z0-9_]+):process\.env\.([A-Za-z0-9_]+)/g)];
+
+    it("finds one static read per flag", () => {
+      expect(pairs).toHaveLength(Object.keys(FLAGS).length);
+    });
+
+    it("reads each key's own env var, not a copy-pasted neighbour's", () => {
+      // The likeliest slip when adding a flag is duplicating the line above and
+      // changing only the left-hand side. Both sides must name the same var.
+      for (const [, key, read] of pairs) {
+        expect(read, `CLIENT_ENV.${key} reads process.env.${read}`).toBe(key);
+      }
+    });
+
+    it("uses no computed access, which is the defect C1 fixed", () => {
+      expect(flat).not.toMatch(/process\.env\[/);
+    });
   });
 });

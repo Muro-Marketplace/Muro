@@ -48,7 +48,7 @@ interface FlagDef {
   description: string;
 }
 
-const FLAGS: Record<FeatureFlag, FlagDef> = {
+export const FLAGS: Record<FeatureFlag, FlagDef> = {
   WALL_VISUALIZER_V1: {
     envKey: "NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1",
     devDefault: true,
@@ -119,7 +119,7 @@ const FLAGS: Record<FeatureFlag, FlagDef> = {
  *
  * The map must list every FLAGS envKey. C4 adds the CI check for that.
  */
-const CLIENT_ENV: Record<string, string | undefined> = {
+export const CLIENT_ENV: Record<string, string | undefined> = {
   NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1: process.env.NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1,
   NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE: process.env.NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE,
   NEXT_PUBLIC_FLAG_PAID_LOAN_V2: process.env.NEXT_PUBLIC_FLAG_PAID_LOAN_V2,
