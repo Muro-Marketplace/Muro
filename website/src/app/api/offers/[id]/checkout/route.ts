@@ -11,6 +11,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
 import { canArtistAcceptOrders } from "@/lib/stripe-connect-status";
+import { isWorkSold } from "@/lib/work-stock";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,68 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
   if (offer.status !== "accepted") {
     return NextResponse.json({ error: "Offer is not in an accepted state" }, { status: 409 });
+  }
+
+  // D7: purchase_offers has no link to stock, so an offer accepted on Monday can
+  // still be paid on Friday for a work that sold through the cart on Wednesday.
+  // The cart checkout has re-validated at session creation all along; this branch
+  // never inherited it. Runs before the payout pre-flight so a dead offer costs
+  // no extra round trips and never reaches Stripe.
+  //
+  // Both offer shapes are covered. `chk_target_shape` in the live table enforces
+  // "work_ids non-empty XOR collection_id set", so the plan's `work_ids.length >
+  // 0` guard would have skipped every collection offer, which is precisely the
+  // half where the works are not named on the offer row.
+  let workIds: string[] = [...new Set(offer.work_ids)];
+  let collectionWithdrawn = false;
+  if (workIds.length === 0 && offer.collection_id) {
+    const { data: collection } = await db
+      .from("artist_collections")
+      .select("work_ids, available")
+      .eq("id", offer.collection_id)
+      .maybeSingle<{ work_ids: string[] | null; available: boolean | null }>();
+    if (!collection || collection.available === false) {
+      collectionWithdrawn = true;
+    } else {
+      workIds = [...new Set(collection.work_ids || [])];
+    }
+  }
+
+  let soldOrMissing = collectionWithdrawn;
+  if (!soldOrMissing && workIds.length > 0) {
+    const { data: works } = await db
+      .from("artist_works")
+      .select("id, title, available, quantity_available")
+      .in("id", workIds);
+    const found = (works || []) as Array<{
+      id: string;
+      title: string | null;
+      available: boolean | null;
+      quantity_available: number | null;
+    }>;
+    // A work deleted since the offer was accepted counts as gone too, hence the
+    // length comparison. work_ids is de-duplicated above so a repeated id cannot
+    // fake a shortfall and close a live offer.
+    soldOrMissing = found.length !== workIds.length || found.some(isWorkSold);
+  }
+
+  if (soldOrMissing) {
+    // Compare-and-set on `accepted`. Without it, a buyer paying in one tab while
+    // this runs in another would have their completed payment overwritten:
+    // the webhook sets 'paid', this would stamp 'expired' on top and the offer
+    // would no longer look like it had been paid for.
+    await db
+      .from("purchase_offers")
+      .update({ status: "expired", updated_at: new Date().toISOString() })
+      .eq("id", offer.id)
+      .eq("status", "accepted");
+    return NextResponse.json(
+      {
+        error: "One or more works on this offer have sold. The offer has been closed.",
+        code: "work_sold",
+      },
+      { status: 409 },
+    );
   }
 
   // E6: resolve the artist's payout capability and fee BEFORE taking any money.

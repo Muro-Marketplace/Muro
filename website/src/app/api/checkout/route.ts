@@ -4,6 +4,7 @@ import { checkoutSchema } from "@/lib/validations";
 import { calculateOrderShipping } from "@/lib/shipping-checkout";
 import { regionForCountry, isSupportedCountry, labelForCountry } from "@/lib/iso-countries";
 import { findUkOnlyArtists } from "@/lib/shipping-scope";
+import { isWorkSold } from "@/lib/work-stock";
 import { saveCartSession } from "@/lib/cart-sessions";
 import { canArtistAcceptOrders } from "@/lib/stripe-connect-status";
 import { getAuthenticatedUser } from "@/lib/api-auth";
@@ -143,10 +144,9 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
-      const sold =
-        row.available === false ||
-        (typeof row.quantity_available === "number" && row.quantity_available <= 0);
-      if (sold) {
+      // Shared with the offer checkout since D7, so the two paths cannot drift
+      // on what "sold" means.
+      if (isWorkSold(row)) {
         return NextResponse.json(
           {
             error: `"${row.title || line.title}" has just been sold.`,
