@@ -360,13 +360,35 @@ describe("startPaidLoanBilling()", () => {
 });
 
 describe("cancelPaidLoanBilling()", () => {
-  it("skips when flag is off", async () => {
+  // This test used to assert `{ status: "skipped" }` with the flag off, i.e. it
+  // pinned the defect E11 removes: refusing to cancel a subscription that already
+  // exists, because the flag that would create new ones is off, leaves the venue
+  // charged for a placement they have ended. Now it asserts the opposite.
+  it("cancels even with PAID_LOAN_V2 off, because the subscription already exists (E11)", async () => {
     isFlagOnMock.mockReturnValue(false);
+    subscriptionsUpdateMock.mockReset();
+    subscriptionsUpdateMock.mockResolvedValue({});
+    const { db } = buildDb({
+      liveBillings: [{ id: "row1", stripe_subscription_id: "sub_live", status: "active" }],
+    });
     const res = await cancelPaidLoanBilling(
       "p1",
-      buildDb().db as Parameters<typeof cancelPaidLoanBilling>[1],
+      db as Parameters<typeof cancelPaidLoanBilling>[1],
     );
-    expect(res).toEqual({ status: "skipped" });
+    expect(res).toEqual({ status: "cancelled" });
+    expect(subscriptionsUpdateMock).toHaveBeenCalledWith("sub_live", {
+      cancel_at_period_end: true,
+    });
+  });
+
+  it("still reports not_found with the flag off when there is nothing to cancel", async () => {
+    isFlagOnMock.mockReturnValue(false);
+    subscriptionsUpdateMock.mockReset();
+    const res = await cancelPaidLoanBilling(
+      "p1",
+      buildDb({ liveBillings: [] }).db as Parameters<typeof cancelPaidLoanBilling>[1],
+    );
+    expect(res).toEqual({ status: "not_found" });
     expect(subscriptionsUpdateMock).not.toHaveBeenCalled();
   });
 
@@ -645,5 +667,107 @@ describe("recordPaidLoanSubscription() handles the new unique index (E7c)", () =
     expect(res).toMatchObject({ ok: false, error: "monthly_amount_missing" });
     expect(touched).toBe(false);
     warn.mockRestore();
+  });
+});
+
+// ── E11: the flag gates creation, not reconciliation (04 §B6) ────────────────
+//
+// Every helper in this module short-circuited on PAID_LOAN_V2, which is off in
+// prod. So a failed venue card did nothing at all: no past_due, no paused, no
+// notification, and the placement kept displaying while nobody paid for it. A
+// subscription that already exists in Stripe has to be reconciled whatever the flag
+// says, because the flag only decides whether we would create a NEW one.
+describe("webhook reconcilers ignore PAID_LOAN_V2 (E11)", () => {
+  beforeEach(() => {
+    isFlagOnMock.mockReturnValue(false); // prod's state
+  });
+
+  it("handleInvoicePaid reconciles with the flag off", async () => {
+    const { db, updates } = buildDb({
+      billingForSubscription: {
+        id: "row1",
+        placement_id: "p1",
+        payer_user_id: "v1",
+        payee_user_id: "a1",
+        monthly_amount_pence: 5000,
+        current_period_end: null,
+      },
+      artistConnect: { stripe_connect_account_id: "acct_1", subscription_plan: "core", trial_end: null },
+    });
+    const handled = await handleInvoicePaid(
+      {
+        id: "in_1",
+        subscription: "sub_1",
+        period_start: 1_700_000_000,
+        period_end: 1_702_000_000,
+        lines: { data: [] },
+      } as unknown as Parameters<typeof handleInvoicePaid>[0],
+      db as Parameters<typeof handleInvoicePaid>[1],
+    );
+    expect(handled).toBe(true);
+    // The period bounds were written, which is the reconciliation the flag blocked.
+    expect(updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "placement_recurring_billings",
+          row: expect.objectContaining({ status: "active" }),
+        }),
+      ]),
+    );
+  });
+
+  it("handleInvoicePaymentFailed marks past_due with the flag off", async () => {
+    const { db, updates } = buildDb({
+      billingForSubscription: {
+        id: "row1",
+        placement_id: "p1",
+        payer_user_id: "v1",
+        payee_user_id: "a1",
+        monthly_amount_pence: 5000,
+        current_period_end: null,
+      },
+    });
+    const handled = await handleInvoicePaymentFailed(
+      {
+        id: "in_2",
+        subscription: "sub_1",
+        next_payment_attempt: null, // final attempt
+        lines: { data: [] },
+      } as unknown as Parameters<typeof handleInvoicePaymentFailed>[0],
+      db as Parameters<typeof handleInvoicePaymentFailed>[1],
+    );
+    expect(handled).toBe(true);
+    expect(updates.length).toBeGreaterThan(0);
+  });
+
+  it("handleSubscriptionDeleted marks cancelled with the flag off", async () => {
+    const { db, updates } = buildDb({
+      billingForSubscription: { id: "row1" },
+    });
+    const handled = await handleSubscriptionDeleted(
+      { id: "sub_1" } as unknown as Parameters<typeof handleSubscriptionDeleted>[0],
+      db as Parameters<typeof handleSubscriptionDeleted>[1],
+    );
+    expect(handled).toBe(true);
+    expect(updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "placement_recurring_billings",
+          row: expect.objectContaining({ status: "cancelled" }),
+        }),
+      ]),
+    );
+  });
+
+  it("startPaidLoanBilling is STILL gated, because creation is what the flag is for", async () => {
+    const res = await startPaidLoanBilling({
+      placementId: "p1",
+      venueUserId: "v1",
+      artistUserId: "a1",
+      arrangementType: "paid_loan",
+      monthlyFeePence: 5000,
+    }, buildDb().db as Parameters<typeof startPaidLoanBilling>[1]);
+    expect(res).toEqual({ status: "skipped" });
+    expect(subscriptionsCreateMock).not.toHaveBeenCalled();
   });
 });

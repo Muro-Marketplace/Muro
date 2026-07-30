@@ -25,9 +25,12 @@
 //   - Stripe webhook signature verification. The webhook route already
 //     verifies signatures; this module assumes inputs are trusted.
 //
-// All side-effect helpers return early when PAID_LOAN_V2 is off so a
-// placement.accept under the flag-off path is byte-for-byte the same
-// as Phase 1.
+// Flag gating, after E11: PAID_LOAN_V2 gates CREATION only
+// (startPaidLoanBilling). The webhook reconcilers (invoice.paid,
+// invoice.payment_failed, customer.subscription.deleted) and cancellation run
+// regardless, because a subscription that already exists in Stripe has to be
+// reconciled and has to be cancellable whatever the flag says. Gating them was
+// how a failed venue card came to do nothing at all.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
@@ -444,9 +447,12 @@ export async function startPaidLoanBilling(
 export async function cancelPaidLoanBilling(
   placementId: string,
   client?: SupabaseClient,
-): Promise<{ status: "skipped" | "cancelled" | "not_found" }> {
-  if (!isFlagOn("PAID_LOAN_V2")) return { status: "skipped" };
-
+): Promise<{ status: "cancelled" | "not_found" }> {
+  // E11: no flag check. Refusing to cancel a subscription that already exists,
+  // because the flag that would create new ones is off, is exactly the
+  // uncancellable-subscription failure mode: the venue keeps being charged for a
+  // placement they have ended. "skipped" is gone from the return type with it,
+  // since nothing else produced it.
   const db = client ?? getSupabaseAdmin();
   // E7c: find the LIVE row, and do it without .maybeSingle().
   //
@@ -489,7 +495,11 @@ export async function handleInvoicePaid(
   invoice: Stripe.Invoice,
   client?: SupabaseClient,
 ): Promise<boolean> {
-  if (!isFlagOn("PAID_LOAN_V2")) return false;
+  // E11: deliberately NOT gated on PAID_LOAN_V2. The flag decides whether we
+  // CREATE a subscription; a subscription that already exists in Stripe must be
+  // reconciled either way. Gating this meant a failed venue card did nothing at
+  // all: no past_due, no paused, no notification, and the placement kept
+  // displaying while nobody was paying for it.
   const subscriptionId = readSubscriptionIdFromInvoice(invoice);
   if (!subscriptionId) return false;
 
@@ -595,7 +605,11 @@ export async function handleInvoicePaymentFailed(
   invoice: Stripe.Invoice,
   client?: SupabaseClient,
 ): Promise<boolean> {
-  if (!isFlagOn("PAID_LOAN_V2")) return false;
+  // E11: deliberately NOT gated on PAID_LOAN_V2. The flag decides whether we
+  // CREATE a subscription; a subscription that already exists in Stripe must be
+  // reconciled either way. Gating this meant a failed venue card did nothing at
+  // all: no past_due, no paused, no notification, and the placement kept
+  // displaying while nobody was paying for it.
   const subscriptionId = readSubscriptionIdFromInvoice(invoice);
   if (!subscriptionId) return false;
 
@@ -633,7 +647,11 @@ export async function handleSubscriptionDeleted(
   subscription: Stripe.Subscription,
   client?: SupabaseClient,
 ): Promise<boolean> {
-  if (!isFlagOn("PAID_LOAN_V2")) return false;
+  // E11: deliberately NOT gated on PAID_LOAN_V2. The flag decides whether we
+  // CREATE a subscription; a subscription that already exists in Stripe must be
+  // reconciled either way. Gating this meant a failed venue card did nothing at
+  // all: no past_due, no paused, no notification, and the placement kept
+  // displaying while nobody was paying for it.
   const db = client ?? getSupabaseAdmin();
   const { data: billing } = await db
     .from("placement_recurring_billings")
