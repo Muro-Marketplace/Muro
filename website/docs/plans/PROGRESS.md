@@ -7299,3 +7299,50 @@ feature):
 The loop CONTINUES to these. Only after D55.2, D55.3 and E25 are done do just
 T9/N1/N2 (feature), D14 (product decision) and the two unpaid offers (D11 manual)
 remain — and the loop stops then.
+
+## `04` D55.3 — reconcile sweep keeps the unresolved order ids
+
+Commit `c172fa7` (supervisor D58 committed in isolation first, `c99cccd`). Code-only.
+
+**The defect.** `ReconcileResult.unresolved` was a bare `number`
+(`stripe-connect.ts`), so `reconcileOrdersWithoutLegs` discarded the id of every
+owed order with no resolvable artist (null `artist_user_id`). Prod: 5 of 11
+flagged orders land there; an operator saw `{flagged: 6, unresolved: 5}` and could
+not learn which to chase.
+
+**The fix.** `unresolved: string[]`; push `o.id` instead of `result.unresolved++`.
+The `process-pending` route now returns `reconciledUnresolved` (the ids) plus
+`reconciledUnresolvedCount`. No new table/surface.
+
+**Test.** The unresolved case asserts `res.unresolved` toEqual `["o2"]` (the id),
+not a count. Fail-before verified: reverting `stripe-connect.ts` to the counter
+fails both touched assertions; restored. `npm run check` → `EXIT=0`, `Tests 1846
+passed`, 0 lint/type errors. Code-only, no DB ladder.
+
+## SCOPE CORRECTION 2 (supervisor D58) — the plan is ~55% done, not ~95%
+
+My B10-complete correction (`b984cdc`) reinstated D55.2/D55.3/E25 but STILL
+understated the remaining work. Supervisor **D58** (and new **operating rule 6**,
+now hoisted at the top of EXECUTION-DECISIONS) enumerates **six ledger rows still
+`todo`**, spanning docs I have not touched — roughly **220 of the plan's 391
+subtasks**:
+
+| Row | Task | Doc |
+|---|---|---|
+| 7b | Schema-column guard, full form (generated schema-columns.json + scan every .select()) | `02` |
+| 7c | `placements/route.ts` phantom `requester_user_id` (~20 refs) | `01`/N3 |
+| 8 | `05` frontend saves + listing | `05` |
+| 9 | `03` auth/admin — create+backfill `admin_users` BEFORE dropping the user_metadata conjunct (or admins are locked out) | `03` |
+| 10 | `09` emails — artist-sale trigger first | `09` |
+| 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`,`09` |
+| 12 | `08` rewritten cull, last | `08` |
+
+Cause (per D58.3): I have been inside `04` for hours, so the `04` list felt like
+the plan; it is 1 of 9 docs. **Per operating rule 6, before ever concluding the
+loop is done I must re-read the ledger table at the top of PROGRESS.md and confirm
+every row reads done / void / owner-only.** Row 9 carries a DESTRUCTIVE ordering
+constraint (admin lockout) and row 12 (`08` cull) is partly an escalation item.
+
+Remaining loop order from here: **D55.2** (reconcile predicate), **E25** (bucket
+→ private), then the six rows above in dependency order. The loop does NOT stop
+after E25.
