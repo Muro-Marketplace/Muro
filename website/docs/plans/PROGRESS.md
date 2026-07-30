@@ -19,7 +19,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
-| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). Next: G-C Bug 10, then T3 offers (E6/E10) |
+| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). Next: T3 offers (E6/E10) |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -40,6 +40,11 @@ Owner decisions the loop is waiting on (none block the remaining queue):
   `dimensions` is pixel data (18 of 26 distinct values in prod)? Refuse to quote,
   clamp to a maximum, or fall back to a default size? Shipping currently prices a
   242 × 363cm parcel from "2420 × 3632 px". Detail in iteration 24.
+- **`orders.shipping->>'country'` holds two formats.** 6 rows say `GB`, 6 say
+  `United Kingdom`, all 12 of the live orders. Normalising means writing to real
+  order rows, which the loop's rules escalate rather than do. Say the word and it
+  becomes a one-line UPDATE plus a guard; leave it and any ISO-keyed report keeps
+  seeing half the orders. Detail in G-C / Bug 10.
 
 Owner actions blocking a merge, added as they surface:
 
@@ -2521,3 +2526,136 @@ PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
 ("ships to UK only" unenforced), then T3 offers, which is where E6 lives — the
 finding behind the two unpaid offers. Note E6's *code* fix is in scope; the £60
 reconciliation against Stripe stays a human task per D11.
+
+---
+
+## G-C / Bug 10 — delivery country vs the artist's shipping scope (owner: `04`)
+
+**The finding as written.** "Validate the delivery country against the work's
+shipping scope in `api/checkout/route.ts` before creating the session, and restrict
+the country dropdown. Test: UK-only item + AU address → 400, never reaches Stripe."
+
+**What the plan got wrong.** There was no shipping scope to validate against. This
+is the sixth phantom column of the same family as D9's list, and the biggest:
+
+- `artist_profiles.ships_internationally` and `international_shipping_price` exist
+  in no migration and were not in the live table. Confirmed by
+  `information_schema.columns`: the only shipping-ish column on the table was
+  `default_shipping_price`.
+- `artist-profiles-transform.ts:147` reads `profile.ships_internationally || false`,
+  so `shipsInternationally` was `false` for all 14 live artists, which is why
+  **every** artwork page rendered "Ships to UK only"
+  (`ArtworkPageClient.tsx:476`), not just the UK-only ones.
+- The artist portal's "Ships internationally" toggle
+  (`artist-portal/portfolio/page.tsx:1895`) PUT both names, and E44's
+  `writable-fields.ts` had deliberately left them off the allowlist, because
+  allowlisting a phantom column makes PostgREST reject the whole UPDATE and turns
+  one stray field into a total save failure. Correct at the time, and the cost was
+  that the toggle was decorative: no artist could ever record that they ship abroad.
+
+So the site made a promise it could not vary ("UK only", everywhere) and enforced
+nothing. `api/checkout:269` checked `isSupportedCountry(shipping.country)`, which is
+the platform's ~40-country list, not the artist's scope.
+
+Fixing this as code alone would have meant hard-coding "everyone is UK only",
+permanently blocking international sales with no route to re-enable them. That is a
+larger externally-visible change than the plan intended, so the column came first
+and the enforcement reads it.
+
+**What changed.**
+
+- `supabase/migrations/081_artist_international_shipping.sql` (04's range, 080 taken
+  by T10) adds `ships_internationally boolean not null default false` and
+  `international_shipping_price numeric`, typed to mirror `offers_pickup` and
+  `default_shipping_price` beside them. Applied to prod and verified.
+- `src/lib/shipping-scope.ts` (new) `findUkOnlyArtists(slugs)`. Reads the scope from
+  the database, never from the request: the cart is localStorage-backed, so a client
+  that could assert its own scope could assert its way past the check. Fails closed
+  on a missing profile row, a null flag, a read error, or a blank slug.
+- `src/app/api/checkout/route.ts` refuses a non-UK destination with
+  `400 shipping_scope` before the Stripe session is minted. Collection is exempt: a
+  buyer collecting in person may live abroad, and their country is not a delivery
+  destination.
+- `src/app/(pages)/checkout/page.tsx` restricts the country dropdown to the UK
+  unless **every** artist in the cart ships abroad, the same all-or-nothing rule as
+  pickup, and snaps a stale non-GB country back to GB when a cart edit removes the
+  artist who made it reachable. It reuses the existing `/api/browse-artists` fetch
+  that already resolves `offersPickup`, so no new route and no new cart field: the
+  dropdown and the enforcement read the same source and cannot disagree. Nine
+  add-to-cart call sites would otherwise all have needed the flag threaded through.
+- `src/lib/db/writable-fields.ts` allowlists both columns, so the artist portal's
+  toggle finally persists. The NOTE explaining why they were excluded is replaced,
+  not left to become a lie.
+- `src/app/api/artist-profile/route.ts` extends the negative-price guard to
+  `international_shipping_price`, which now reaches `updatePayload` again. Without
+  this an artist could save a negative international price, which is exactly the
+  discount-dressed-as-shipping bug the guard exists to stop.
+
+**Deleted, not left beside the new behaviour.** The route test
+`"accepts US (international) and creates a Stripe session"` asserted the bug: a
+supported country is not a country the artist ships to. Replaced with
+`"accepts US when the artist has opted in to international delivery"`. The
+allowlist guard `"excludes the three columns that do not exist in prod"` now names
+only `in_store_price`, which is still phantom, and a second test asserts the other
+two ARE allowlisted and says why the old reason expired.
+
+**Tests added.** 6 route tests (`src/app/api/checkout/route.test.ts`), 9 resolver
+tests (`src/lib/shipping-scope.test.ts`), 2 profile-route tests. The plan's named
+acceptance test is
+`"refuses a UK-only item shipped to AU with 400 and never reaches Stripe"`.
+
+**Verification, both directions.** With the guard disabled (`if (false && …)`),
+exactly the three refusal tests fail and the three permissive ones still pass, which
+proves they test the guard and not a blanket 400:
+
+```
+ × refuses a UK-only item shipped to AU with 400 and never reaches Stripe
+ × names the artist and the destination in the refusal
+ × refuses a mixed cart where only one artist ships abroad
+ Tests  3 failed | 31 passed (34)
+```
+
+Restored:
+
+```
+ Test Files  146 passed (146)
+      Tests  1383 passed (1383)
+✖ 252 problems (0 errors, 252 warnings)
+```
+
+**DB verification ladder.** `npm run audit:advisors` cannot run locally
+(`SUPABASE_ACCESS_TOKEN not set`, the D12 ruling 2 reason it lives in the nightly
+workflow). Advisor via the Supabase MCP instead: no new lints, and nothing on
+`artist_profiles`. The `pg_policies` assertion returns the same five known leaks and
+nothing new, confirming 081 touched no policy:
+
+```
+artist_applications | Authenticated users can read applications | (auth.role() = 'authenticated')
+contact_submissions | Authenticated can read contact            | (auth.role() = 'authenticated')
+enquiries           | Artists can read their enquiries          | true
+venue_registrations | Authenticated can read venue reg          | (auth.role() = 'authenticated')
+waitlist_signups    | Authenticated can read waitlist           | (auth.role() = 'authenticated')
+```
+
+**Prod facts established.** Worth recording because two of them contradict the docs:
+
+- `artist_profiles`: 14 rows, all slugs lower-case, `ships_internationally` false for
+  all 14 after the migration, so nothing visible changed for any buyer today.
+- `orders`: 12 rows, every one UK, but stored in **two different formats** in the
+  same column: 6 as `GB` and 6 as the free-text `United Kingdom`. No international
+  order has ever been placed, so enforcing UK-only removes no working revenue path.
+  The mixed format is a separate defect, logged below.
+
+**Commit:** a02c38e
+
+**New finding, not fixed here (would be bundling).** `api/checkout` passes the
+**client-supplied** `item.internationalShippingPrice` into `calculateOrderShipping`.
+Cart lines are re-validated against the DB for price, but this figure is not, so a
+crafted cart can set its own international shipping cost. Pre-existing and unchanged
+by this commit, but it stops being dead code the moment an artist opts in. Belongs
+with `04` T1 hardening.
+
+**Second new finding.** `orders.shipping->>'country'` holds both `GB` and
+`United Kingdom` (6 each). Any report or filter keyed on the ISO code silently sees
+half the orders. A backfill is a data write to real order rows, so per the loop's
+rules it is escalated rather than done: see the owner-decisions section.
