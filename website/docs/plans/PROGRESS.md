@@ -5134,3 +5134,76 @@ in the right range.
 
 **Still open in T6:** E7d (the `setup_intent.succeeded` branch, §C5's second half),
 E11, E11b.
+
+---
+
+## `04` T6 / E7d — a card attached, and nothing ever billed it (owner: `04` §B6, §C5's second branch)
+
+Commit `b4132fa`.
+
+**The finding.** `paid-loan-billing.ts` documents that the flow is "re-invoked after
+`setup_intent.succeeded` lands on the webhook". No such branch existed (confirmed:
+`grep -c setup_intent` on the webhook returned **0**), and the client cannot
+re-invoke by PATCH either, because that path requires status `pending` and the
+placement is already `active` by then. So a paid-loan placement whose venue had no
+card on file went live and never billed anyone.
+
+**What changed.** The branch guards on the three metadata keys
+`startPaidLoanBilling` stamps on the intent (`source:
+"wallplace_paid_loan_billing"`, `placement_id`, `venue_user_id`), makes the new
+card the customer's default so invoices can charge it off-session, then calls
+`startPaidLoanBilling`, which is idempotent (`already_started` on a redelivery).
+
+**Two departures from §C5, each with a test:**
+
+1. **`"skipped"` does not page the admin.** §C5 alerts on any status that is not
+   `started`/`already_started`. But `startPaidLoanBilling` short-circuits to
+   `"skipped"` whenever `PAID_LOAN_V2` is off, which is its state in prod, so §C5's
+   condition would have mailed the admin on **every single card attachment**. A
+   stall is the flag being ON, the card attached, and billing still not starting.
+   `skipped` is logged at warn with the reason instead.
+2. **An unknown placement returns 200 + `ignored`** rather than a non-2xx, matching
+   the treatment of permanent failures elsewhere in this webhook: Stripe would
+   otherwise retry a lookup that can never succeed.
+
+**§C5 calls a function that does not exist.** `notifyAdminBillingStalled` had zero
+matches anywhere in `src/`. Added to `lib/email.ts` beside the four existing
+`notifyAdmin*` helpers, using the same `ADMIN_EMAIL` and Resend shape, rather than
+inventing a new alerting channel.
+
+**Also verified, since §C5 asks:** the three placement columns it names all exist
+(`stripe_subscription_id`, `subscription_status`,
+`subscription_current_period_end`), so its "migration 086 is not needed" note holds
+and none was written.
+
+**Tests.** 10 cases in `src/app/api/webhooks/stripe/route.test.ts` (57 in the file).
+The Stripe mock grew `customers.update`, and `startPaidLoanBilling` /
+`notifyAdminBillingStalled` are stubbed so each status can be driven.
+
+**Two probes:**
+
+```
+PROBE 1 — E7d branch removed
+      Tests  7 failed | 50 passed (57)
+
+PROBE 2 — §C5's alert condition (skipped also pages the admin)
+ FAIL  ... > does NOT mail the admin when the helper skipped because the flag is off
+      Tests  1 failed | 56 passed (57)
+```
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  160 passed (160)
+Tests  1708 passed (1708)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Stripe drive not run**, same blocker. The branch is exercised through
+`constructEvent` returning a `setup_intent.succeeded` object, and the outcomes are
+asserted against the recorded `customers.update` and `startPaidLoanBilling` calls.
+
+**Still open in T6:** E11 (`PAID_LOAN_V2` off in prod, an owner decision on
+enabling it) and E11b (`subscription_period_end` stamped 1970, partly addressed
+because `periodFromSubscription` is now the single reader).
