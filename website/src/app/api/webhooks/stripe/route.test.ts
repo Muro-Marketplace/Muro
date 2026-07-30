@@ -471,6 +471,8 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     stockUpdates: Array<{ workId: string; updates: Record<string, unknown> }>;
     connect?: { stripe_connect_account_id: string | null; stripe_connect_onboarding_complete: boolean } | null;
     artistName?: string;
+    /** Row the D3 collision-check select returns on a 23505. */
+    orderClash?: { stripe_payment_intent_id: string | null } | null;
   };
 
   function setupOfferDb(state: OfferDbState) {
@@ -494,6 +496,10 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
             state.orderInsert.row = row;
             return Promise.resolve({ error: state.orderInsert.error });
           },
+          // D3: classifyOrderIdConflict reads the clashing row's payment intent.
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: state.orderClash ?? null }) }),
+          }),
         };
       }
       if (table === "purchase_offers") {
@@ -556,6 +562,7 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
       stockUpdates: [],
       connect: { stripe_connect_account_id: "acct_artist", stripe_connect_onboarding_complete: true },
       artistName: "Fin Coles",
+      orderClash: { stripe_payment_intent_id: "pi_test_1" },
       ...overrides,
     };
   }
@@ -676,7 +683,7 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     const state = freshState();
     setupOfferDb(state);
     await fireOffer();
-    expect(state.offerUpdate.row).toMatchObject({ status: "paid", paid_order_id: "OFR-W45tsGG1" });
+    expect(state.offerUpdate.row).toMatchObject({ status: "paid", paid_order_id: "OFR-W45TSGG1" });
   });
 
   it("leaves the offer unpaid and 500s when the order insert fails, so Stripe retries", async () => {
@@ -698,6 +705,19 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     const res = await fireOffer();
     expect(res.status).toBe(200);
     expect(state.offerUpdate.row).toMatchObject({ status: "paid" });
+  });
+
+  it("500s on an OFR- id collision instead of flipping the offer paid (D3)", async () => {
+    // 23505, but the clashing row belongs to a DIFFERENT payment. The old code
+    // proceeded and marked THIS offer paid against another payment's order.
+    const state = freshState({
+      orderInsert: { row: null, error: { code: "23505", message: "duplicate key value" } },
+      orderClash: { stripe_payment_intent_id: "pi_a_completely_different_payment" },
+    });
+    setupOfferDb(state);
+    const res = await fireOffer();
+    expect(res.status).toBe(500);
+    expect(state.offerUpdate.row, "the offer must NOT be marked paid on a collision").toBeNull();
   });
 
   // ── E6 part 3: the offer branch used to send nothing at all ──

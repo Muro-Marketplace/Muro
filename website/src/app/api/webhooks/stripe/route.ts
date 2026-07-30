@@ -38,6 +38,7 @@ import {
   handleSubscriptionDeleted as handleSubscriptionDeletedPaidLoan,
 } from "@/lib/placements/paid-loan-billing";
 import { sendOrderConfirmations, type OrderEmailItem } from "@/lib/orders/confirmations";
+import { orderIdFromSession, classifyOrderIdConflict } from "@/lib/orders/order-id";
 import type Stripe from "stripe";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -171,7 +172,7 @@ async function handleWebhookEvent(
     if (session.metadata?.checkout_kind === "purchase_offer") {
       const offerId = session.metadata.offer_id;
       if (offerId) {
-        const paidOrderId = `OFR-${session.id.slice(-8)}`;
+        const paidOrderId = orderIdFromSession("OFR", session.id);
         const nowIso = new Date().toISOString();
         const workIds = (session.metadata.offer_work_ids || "").split(",").filter(Boolean);
         const totalGbp = (session.amount_total || 0) / 100;
@@ -231,14 +232,26 @@ async function handleWebhookEvent(
         // carry on. Anything else means the money is captured and we have no
         // order, so fail loudly and let Stripe retry rather than marking the
         // offer paid against an order that isn't there.
-        if (insErr && (insErr as { code?: string }).code !== "23505") {
-          console.error("[offer order insert] failed, offer left unpaid for retry", {
-            offerId,
-            paidOrderId,
-            code: (insErr as { code?: string }).code,
-            message: insErr.message,
-          });
-          return NextResponse.json({ error: "Order save failed" }, { status: 500 });
+        const offerIntentId =
+          typeof session.payment_intent === "string" ? session.payment_intent : null;
+        if (insErr) {
+          if ((insErr as { code?: string }).code === "23505") {
+            // D3: only proceed if this is our own row (same payment intent). A
+            // collision on the OFR- id would otherwise flip THIS offer to paid
+            // against a different payment's order.
+            if ((await classifyOrderIdConflict(db, paidOrderId, offerIntentId)) === "collision") {
+              console.error("[offer order insert] order id collision", { offerId, paidOrderId });
+              return NextResponse.json({ error: "Order id collision" }, { status: 500 });
+            }
+          } else {
+            console.error("[offer order insert] failed, offer left unpaid for retry", {
+              offerId,
+              paidOrderId,
+              code: (insErr as { code?: string }).code,
+              message: insErr.message,
+            });
+            return NextResponse.json({ error: "Order save failed" }, { status: 500 });
+          }
         }
 
         await db
@@ -552,7 +565,7 @@ async function handleWebhookEvent(
         const cartItems = saved.cart as Array<{ price?: number; qty?: number; quantity?: number }>;
         const subtotal = cartItems.reduce((sum: number, i) => sum + (i.price || 0) * (Number(i.qty ?? i.quantity ?? 1)), 0) || total;
         const shippingCost = Math.max(0, total - subtotal);
-        const orderId = `WS-${session.id.slice(-8)}`;
+        const orderId = orderIdFromSession("WS", session.id);
         const source = saved.source || session.metadata?.source || "direct";
         const venueSlug = saved.venueSlug || session.metadata?.venue_slug || "";
         const artistSlugs = (saved.artistSlugs || []).join(",") || session.metadata?.artist_slugs || "";
@@ -739,11 +752,18 @@ async function handleWebhookEvent(
         // back to them. Pattern matches the placements POST retry.
         let { error } = await db.from("orders").insert(orderRow);
         if (error) {
-          // Unique-constraint violation = another concurrent delivery won the race.
-          // Treat as success so Stripe doesn't keep retrying.
+          // 23505 on orders.id. D3: distinguish a genuine redelivery (same payment
+          // intent) from an id collision between two different payments. The old
+          // code returned duplicate unconditionally, which dropped the second
+          // buyer's paid order on a collision. A collision now 500s so Stripe
+          // retries loudly rather than us losing the order.
           if ((error as { code?: string }).code === "23505") {
-            console.log("Order already exists (unique violation), treating webhook as processed");
-            return NextResponse.json({ received: true, duplicate: true });
+            if ((await classifyOrderIdConflict(db, orderId, paymentIntentId || null)) === "duplicate") {
+              console.log("Order already exists (same payment intent), treating webhook as processed");
+              return NextResponse.json({ received: true, duplicate: true });
+            }
+            console.error("[webhook] order id collision", { orderId, paymentIntentId });
+            return NextResponse.json({ error: "Order id collision" }, { status: 500 });
           }
           // Iterative strip-and-retry. Each loop drops only the columns
           // the error specifically called out, keeping attribution intact
@@ -791,7 +811,12 @@ async function handleWebhookEvent(
               break;
             }
             if ((retry.error as { code?: string }).code === "23505") {
-              return NextResponse.json({ received: true, duplicate: true });
+              // Same collision check as the first insert (D3).
+              if ((await classifyOrderIdConflict(db, orderId, paymentIntentId || null)) === "duplicate") {
+                return NextResponse.json({ received: true, duplicate: true });
+              }
+              console.error("[webhook] order id collision (on retry)", { orderId, paymentIntentId });
+              return NextResponse.json({ error: "Order id collision" }, { status: 500 });
             }
             lastError = retry.error;
           }
