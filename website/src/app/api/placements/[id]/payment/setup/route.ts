@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
 import { stripe } from "@/lib/stripe";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
+import { canArtistAcceptOrders } from "@/lib/stripe-connect-status";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +21,14 @@ const SETUP_IDEMPOTENCY_WINDOW_MS = 3_600_000;
  *
  * Creates a Stripe Checkout session in subscription mode for the paid-loan
  * monthly fee. The session collects card details and starts the recurring
- * charge. On completion Stripe fires the standard webhook → we stamp the
- * placement with stripe_subscription_id.
+ * charge. The webhook's paid_loan_monthly branch (E7a) records the resulting
+ * subscription in placement_recurring_billings and mirrors it onto the placement.
  *
- * The billing model (platform fee split, application fee rate, VAT) is a
- * product decision, scaffolded here with a 10% application fee placeholder.
- * Revise once the commercial policy is locked.
+ * Billing model, settled by §B6: the platform collects the whole monthly fee and
+ * the artist is paid by a separate transfer when each invoice is paid
+ * (handleInvoicePaid), so every payout lands in the stripe_transfers ledger. The
+ * destination-charge alternative is deleted, not configurable. This comment used
+ * to describe a "10% application fee placeholder" that no longer exists.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -79,13 +82,35 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: artistProfile } = await db
     .from("artist_profiles")
-    .select("name, stripe_connect_account_id, subscription_plan, trial_end")
+    .select("name, slug, stripe_connect_account_id, subscription_plan, trial_end")
     .eq("user_id", placement.artist_user_id)
     .maybeSingle();
 
-  // Application fee mirrors the artist's existing platform-fee tier, the
-  // same 5% / 8% / 15% that applies to their sales. Founding / trialling
-  // artists (trial_end in the future) pay 0% on recurring loan payments.
+  // E8: refuse to start a monthly charge we cannot pay out.
+  //
+  // The old gate was `artistProfile?.stripe_connect_account_id` being truthy,
+  // which is "the column is a non-empty string", not "this artist can be paid":
+  // the column defaults to '' and is set the moment onboarding *starts*. An
+  // account mid-KYC is not charges_enabled, so the money was collected monthly
+  // with no way to forward it. canArtistAcceptOrders checks charges_enabled with
+  // Stripe (60s cache) and fails closed, and is the same primitive the cart and
+  // offer checkouts use.
+  if (!artistProfile?.slug || !(await canArtistAcceptOrders(artistProfile.slug))) {
+    return NextResponse.json(
+      {
+        error:
+          "This artist isn't set up to receive payouts yet, so monthly payments can't start. " +
+          "Please try again once they have finished onboarding.",
+        reason: "payouts_unavailable",
+      },
+      { status: 422 },
+    );
+  }
+
+  // Recorded for audit: the tier quoted at setup. NOT what gets charged. The
+  // platform cut is taken when each invoice is paid, where handleInvoicePaid
+  // recomputes it from the artist's plan at that moment (their tier can change
+  // between setup and any given month).
   const feePct = platformFeePercentForArtist(artistProfile);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -109,6 +134,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           quantity: 1,
         },
       ],
+      // No application_fee_percent and no transfer_data: §B6's decision is to keep
+      // Path 1 (a separate transfer through the stripe_transfers ledger) and delete
+      // Path 2 (the destination charge). A destination charge pays the artist
+      // directly and bypasses the ledger, so refunds, reversals, the payout
+      // dashboard and admin/financials are all blind to the money.
+      //
+      // It had become a double-payment risk too. handleInvoicePaid finds the
+      // subscription in placement_recurring_billings and schedules a transfer for
+      // the artist's share; since E7a started recording setup-route subscriptions
+      // in that table, a destination charge here would pay the artist once through
+      // Stripe and again through the ledger. PAID_LOAN_V2 being off in prod is the
+      // only reason that has not happened, so this must land before the flag flips.
       subscription_data: {
         metadata: {
           placement_id: placement.id,
@@ -117,12 +154,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           kind: "paid_loan_monthly",
           platform_fee_percent: String(feePct),
         },
-        // Use the artist's tier fee; omit the field entirely when it's
-        // zero (Stripe rejects application_fee_percent: 0 on some APIs).
-        ...(feePct > 0 ? { application_fee_percent: feePct } : {}),
-        transfer_data: artistProfile?.stripe_connect_account_id
-          ? { destination: artistProfile.stripe_connect_account_id }
-          : undefined,
       },
       metadata: { placement_id: placement.id, kind: "paid_loan_monthly" },
       success_url: `${siteUrl}/venue-portal/placements?payment=setup-complete&placement=${placement.id}`,

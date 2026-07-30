@@ -9,11 +9,10 @@ interface Props {
   workTitle: string;
   monthlyFeeGbp: number;
   artistName: string;
-  artistReady: boolean;
   qrEnabled: boolean;
 }
 
-export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, artistName, artistReady, qrEnabled }: Props) {
+export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, artistName, qrEnabled }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,16 +56,6 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
         <Row label="QR sales" value={qrEnabled ? "On, a share of QR sales goes to your venue" : "Off"} />
         <Row label="Billing" value="Monthly, starting today. Cancels when you end the placement." />
       </div>
-
-      {!artistReady && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-sm">
-          <p className="text-xs font-medium text-amber-900 mb-1">Artist not yet ready for payouts</p>
-          <p className="text-xs text-amber-900/80">
-            {artistName} hasn&rsquo;t connected their Stripe payout account yet. We&rsquo;ll
-            still take the first month&rsquo;s payment and release it once they finish onboarding.
-          </p>
-        </div>
-      )}
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 

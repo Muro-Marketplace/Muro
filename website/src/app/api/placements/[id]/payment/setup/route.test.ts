@@ -7,12 +7,15 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { sessionsCreateMock, fromMock, getUserMock, assertNotDemoMock } = vi.hoisted(() => ({
-  sessionsCreateMock: vi.fn(async () => ({ id: "cs_1", url: "https://stripe.example/pay" })),
-  fromMock: vi.fn(),
-  getUserMock: vi.fn(),
-  assertNotDemoMock: vi.fn(() => null),
-}));
+const { sessionsCreateMock, fromMock, getUserMock, assertNotDemoMock, canAcceptMock } = vi.hoisted(
+  () => ({
+    sessionsCreateMock: vi.fn(async () => ({ id: "cs_1", url: "https://stripe.example/pay" })),
+    fromMock: vi.fn(),
+    getUserMock: vi.fn(),
+    assertNotDemoMock: vi.fn(() => null),
+    canAcceptMock: vi.fn(async () => true),
+  }),
+);
 
 vi.mock("@/lib/stripe", () => ({
   stripe: { checkout: { sessions: { create: sessionsCreateMock } } },
@@ -20,6 +23,7 @@ vi.mock("@/lib/stripe", () => ({
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: getUserMock }));
 vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: assertNotDemoMock }));
+vi.mock("@/lib/stripe-connect-status", () => ({ canArtistAcceptOrders: canAcceptMock }));
 
 import { POST } from "./route";
 
@@ -34,6 +38,7 @@ const PLACEMENT = {
 
 interface DbState {
   placement: Record<string, unknown> | null;
+  artistProfile: Record<string, unknown> | null;
   /** Rows the placement_recurring_billings lookup returns. */
   billings: Array<Record<string, unknown>>;
   /** Filters the billings query was scoped by, so the guard's shape is assertable. */
@@ -70,7 +75,7 @@ function setupDb() {
         select: () => ({
           eq: () => ({
             maybeSingle: async () => ({
-              data: { name: "Maya", stripe_connect_account_id: "acct_1", subscription_plan: "core", trial_end: null },
+              data: state.artistProfile,
             }),
           }),
         }),
@@ -86,10 +91,23 @@ const post = (id = "pl-1") =>
   });
 
 beforeEach(() => {
-  state = { placement: { ...PLACEMENT }, billings: [], billingFilters: [] };
+  state = {
+    placement: { ...PLACEMENT },
+    artistProfile: {
+      name: "Maya",
+      slug: "maya-chen",
+      stripe_connect_account_id: "acct_1",
+      subscription_plan: "core",
+      trial_end: null,
+    },
+    billings: [],
+    billingFilters: [],
+  };
   fromMock.mockReset();
   sessionsCreateMock.mockClear();
   assertNotDemoMock.mockReturnValue(null);
+  canAcceptMock.mockReset();
+  canAcceptMock.mockResolvedValue(true);
   getUserMock.mockReset();
   getUserMock.mockResolvedValue({
     user: { id: "u-venue", email: "venue@example.com" },
@@ -216,5 +234,100 @@ describe("POST /api/placements/[id]/payment/setup existing guards still hold", (
     );
     await post();
     expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── E8: gate on payout capability, and delete the destination charge ─────────
+//
+// The old gate was `artistProfile?.stripe_connect_account_id` being truthy, i.e.
+// "the column is a non-empty string". It defaults to '' and is set the moment
+// onboarding STARTS, so an account mid-KYC passed and the venue was charged
+// monthly with no way to forward the money.
+describe("POST /api/placements/[id]/payment/setup payout capability (E8)", () => {
+  it("refuses with 422 and creates no session when the artist cannot be paid", async () => {
+    canAcceptMock.mockResolvedValue(false);
+    const res = await post();
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({ reason: "payouts_unavailable" });
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("checks capability by slug, not by a non-empty account id", async () => {
+    await post();
+    expect(canAcceptMock).toHaveBeenCalledWith("maya-chen");
+  });
+
+  it("refuses when the artist has an account id but is not charges_enabled", async () => {
+    // The exact case the old check waved through: onboarding started, KYC not
+    // finished, so charges_enabled is false while the column is non-empty.
+    state.artistProfile = {
+      name: "Maya",
+      slug: "maya-chen",
+      stripe_connect_account_id: "acct_started_kyc",
+      subscription_plan: "core",
+      trial_end: null,
+    };
+    canAcceptMock.mockResolvedValue(false);
+    expect((await post()).status).toBe(422);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the artist profile has no slug to check", async () => {
+    state.artistProfile = null;
+    expect((await post()).status).toBe(422);
+    expect(canAcceptMock).not.toHaveBeenCalled();
+  });
+
+  it("says nothing about releasing a payment later, because nothing does that", async () => {
+    canAcceptMock.mockResolvedValue(false);
+    const body = await (await post()).json();
+    expect(body.error).not.toMatch(/releas/i);
+    expect(body.error).toMatch(/can't start/i);
+  });
+});
+
+describe("POST /api/placements/[id]/payment/setup billing model (E8, §B6 decision)", () => {
+  /** The subscription_data the session was created with. */
+  function subscriptionData(): Record<string, unknown> {
+    const [params] = sessionsCreateMock.mock.calls[0] as unknown as [
+      { subscription_data: Record<string, unknown> },
+    ];
+    return params.subscription_data;
+  }
+
+  it("sends no transfer_data, so the platform collects and the ledger pays out", async () => {
+    // A destination charge pays the artist directly and bypasses
+    // stripe_transfers, leaving refunds, reversals and admin/financials blind.
+    await post();
+    expect(subscriptionData()).not.toHaveProperty("transfer_data");
+  });
+
+  it("sends no application_fee_percent", async () => {
+    // The platform cut is taken from the transfer in handleInvoicePaid. Charging
+    // it here as well would take it twice.
+    await post();
+    expect(subscriptionData()).not.toHaveProperty("application_fee_percent");
+  });
+
+  it("would otherwise double-pay: handleInvoicePaid already transfers the artist's share", async () => {
+    // Since E7a records setup-route subscriptions in placement_recurring_billings,
+    // handleInvoicePaid finds them and schedules a transfer. A destination charge
+    // here would pay the artist through Stripe as well.
+    await post();
+    const data = subscriptionData();
+    expect(Object.keys(data)).toEqual(["metadata"]);
+  });
+
+  it("still carries the metadata the webhook branch reads", async () => {
+    await post();
+    const [params] = sessionsCreateMock.mock.calls[0] as unknown as [
+      { metadata: Record<string, string>; subscription_data: { metadata: Record<string, string> } },
+    ];
+    expect(params.metadata).toMatchObject({ kind: "paid_loan_monthly", placement_id: "pl-1" });
+    expect(params.subscription_data.metadata).toMatchObject({
+      kind: "paid_loan_monthly",
+      placement_id: "pl-1",
+      artist_user_id: "u-artist",
+    });
   });
 });
