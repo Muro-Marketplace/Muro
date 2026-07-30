@@ -5867,3 +5867,37 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 
 **Still open in T5:** D11 (non-active placements silently pay the venue nothing;
 log the miss so it is observable).
+
+---
+
+## `04` T5 / D11 — a QR sale with no active placement was silent (owner: `04` §B5)
+
+Commit `ff01100`. **T5 (B5) is complete** (D10 `6ab6338`, D11 `ff01100`).
+
+**The finding.** The venue-attributed branch filters `status = 'active'`. A
+placement in pending, paused or completed yields `pct = 0` with no log, so the venue
+saw a sale and no revenue and nobody could tell why.
+
+**What changed.** After the map fill, iterate the cart's unique artist slugs and
+`console.warn("[webhook] QR sale with no active placement", { orderId, venueSlug,
+artistSlug })` for any slug with no active placement at the attributed venue. Purely
+observability; the revenue maths is unchanged. Note this only runs when `venueSlug`
+is set (a venue-attributed sale), so a plain direct sale with no venue does not warn.
+
+**Tests.** 2 cases: warns when the artist has no active placement at the venue, does
+NOT warn when they do. Probe (remove the log) fails the first, 1 of 79.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  163 passed (163)
+Tests  1771 passed (1771)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**`04` status.** Done: Phase 0 (Bug 15, curation, G-C/Bug 10), B0 (D1-D3), T1 (D4-D6),
+T2 (E9), T3 (E6/E10 + D7), T4 (D8, D9), T5 (D10, D11), T6 (E7a-E7d, E8, E11, E11b).
+Remaining: T7 (D12-D15, artist subscription), T8 refunds (D16-D18), T9 (N1, N2),
+and the C-series payout helpers (C1 canReceivePayout, C3 recordBlockedLeg, C4 retry
+sweep) where the earlier tasks used simpler primitives.
