@@ -7014,3 +7014,55 @@ annotated RESOLVED (storage half).
 CHECK widened to add `past_due`/`paused`, the 04-range-exhausted migration → this
 is the escalation point). Re-read the invoice/subscription webhook handlers and
 verify the live `curation_requests_status_check` first.
+
+## `04` B10 / D20-complete — curation subscription id gets its own column
+
+Commit `14eafec` (migration 099 applied to prod). Supervisor D57 committed in
+isolation first (`402ebb8`).
+
+**Why re-opened.** D20 shipped the migration-free half (`stripe_payment_intent_id:
+paymentIntentId || null`) and escalated the missing column. Before I raised the
+escalation, supervisor **D57** landed in EXECUTION-DECISIONS: it **retires D1's
+per-doc migration ranges** (D57.2 — allocate sequentially above the highest
+existing number, 098 → 099; D57.3 — never backfill the 078/079, 090-097 gaps
+because a migration's filename is its apply order on a fresh DB) and **authorises**
+migration 099 (this column) and 100 (D21's status widen) as additive,
+non-destructive changes needing no owner input. D57 does not reorder the task
+dependency order, move money, or change grants, so per operating rule 4 it was
+committed in isolation and not re-escalated; the authority to apply an additive
+migration was already in the loop grant.
+
+**What shipped.** Migration `099_curation_requests_stripe_subscription_id.sql`:
+`ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT` + comment + schema reload.
+Applied to prod via the Supabase MCP; verified live (`text`, nullable). The
+webhook curation branch re-derives `subscriptionId` (null for a one-off) and
+writes it to the new column; `stripe_payment_intent_id` still holds a real `pi_…`
+or null.
+
+**Test.** The D20 webhook describe block now also asserts: subscription session →
+`stripe_subscription_id === "sub_live_123"` and payment-intent column null;
+one-off → `stripe_subscription_id === null`. Fail-before verified: deleting the
+`stripe_subscription_id: subscriptionId` write fails **both** cases (undefined ≠
+the expected value / null); restored byte-identical.
+
+**Verification.** `npm run check` → `EXIT=0`, `Test Files 164 passed (164)`,
+`Tests 1824 passed (1824)`. DB ladder: SELECT-leak assertion **0 rows**;
+`get_advisors` (MCP, since `npm run audit:advisors` needs SUPABASE_ACCESS_TOKEN
+which is absent here) shows **no new finding on curation_requests** — all lints
+pre-existing (`rls_enabled_no_policy` INFO on unrelated tables, `rls_policy_always_true`
+on public-insert forms, auth password-protection WARN). Payment task, but a live
+Stripe drive is impossible here; the test drives a simulated event through the
+real handler.
+
+**Next: D21** (managed curation subscriptions never reconcile). Now unblocked for
+its migration by D57. Scope: migration **100** widening `curation_requests_status_check`
+to add `past_due`,`paused` **plus** the columns D21's handlers write
+(`last_invoice_paid_at`, `cancelled_at` — the doc's D21 snippet uses them but D57.4
+named only the status widen; include them so the handlers don't 23514); a new
+`src/lib/curation/billing.ts` with the three reconcilers; wiring into the webhook's
+`invoice.paid` / `customer.subscription.deleted` / `invoice.payment_failed`
+branches; a `readSubscriptionIdFromInvoice` shared helper (extract from
+paid-loan-billing.ts); `notifyAdminCurationCancelled`; and a `curation_renewal_receipt`
+email. Larger build — re-read the paid-loan-billing handlers + verify the live
+status CHECK before writing. The curation **refund path** stays out of scope
+(feature, per D57.4).
