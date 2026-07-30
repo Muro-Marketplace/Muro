@@ -322,3 +322,77 @@ Run it **before** (expect 5 rows) and **after** (expect 0). Paste both as eviden
 - **The `/apply` service-role switch MUST ship in the same commit** as the `artist_applications` lockdown. `api/apply/route.ts` inserts via the anon client; lock the table first and artist applications break silently. This ordering trap is NOT relaxed by this decision.
 - Each dropped policy needs a scoped replacement where the table still needs legitimate reads (e.g. admin-only, or owner-scoped), not just a bare drop — check each route that reads these tables first.
 - `enquiries` already has a correct owner-scoped policy (`Users can read own enquiries`, matching `sender_email` to the JWT email, plus service-role). Dropping the permissive one should leave that intact — verify, don't assume.
+
+---
+
+## D16. Supervisor check #1 (2026-07-11) — two loop findings resolved
+
+Loop state: 57 commits, mid-iteration on **T3 offers (E6/E10)** — the highest-value money fix. Not stalled; the longer gap is task size. Migrations `080`/`081` correctly inside `04`'s D1 range. D15 received.
+
+### D16.1 — `orders.shipping->>'country'` format split: **normalise on read, do NOT backfill**
+
+The loop found 12 orders storing country in two formats (`GB` ×6, `United Kingdom` ×6) and escalated a backfill, correctly, as a write to real order rows.
+
+**Ruling: no backfill. Do not mutate historical order records.** Instead:
+1. **Write ISO-3166 alpha-2 going forward** — normalise at the write boundary in checkout before the order row is created.
+2. **Normalise on read** — a single `normaliseCountry()` helper used by every reader (reports, filters, admin, shipping logic) that maps known aliases (`United Kingdom`→`GB`, etc.) and passes through anything already ISO.
+3. Add a unit test covering both stored formats resolving to `GB`.
+
+Rationale: it fixes the reporting defect completely without touching order history, needs no escalation, and is resilient if a third format ever appears. Mutating settled order records to fix a reporting bug is the wrong trade — the risk is real and the benefit is zero once readers are tolerant.
+
+**Owner: `04` T1 hardening.** Not a blocker for T3.
+
+### D16.2 — Client-supplied `internationalShippingPrice` is a live money vulnerability once enabled
+
+The loop found `api/checkout` passing the **client-supplied** `item.internationalShippingPrice` into `calculateOrderShipping` without DB re-validation, while other cart prices *are* re-validated. A crafted cart sets its own international shipping cost.
+
+Currently latent only because `ships_internationally` is false for all 14 artists. **The moment one artist opts in, this becomes exploitable** — and the natural trigger for opting in is the shipping work in `04` itself, so it could go live in the same workstream that introduces the exposure.
+
+**Ruling: fix it as part of `04` T1, before any artist can enable international shipping.** Re-read `international_shipping_price` from the DB alongside the other price re-validation; never trust the cart's figure. Add it to the E40 price-drift test.
+
+Track as **E47** in the findings doc — it is a new finding, not a restatement.
+
+### D16.3 — No plan change needed elsewhere
+
+`074` remains next after T3 per D15. Nothing else in the queue is stale.
+
+---
+
+## D17. Supervisor check #2 (2026-07-11) — the `free_until` overcharge, verified and ruled
+
+**T3/E6+E10 landed (`b2c27ed`)** — accepted offers now write a complete order and pay the artist. The biggest money bug is closed. 59 commits.
+
+### D17.1 — The overcharge is REAL, and it is a bug fix, NOT an owner decision
+
+Verified against prod, not taken from the ledger:
+
+- `artist_profiles` has **67 columns and `free_until` is not one of them.** The real column is **`trial_end`** (and `is_founding_artist` exists separately).
+- **Mechanism — identical to Bug 15.** `webhooks/stripe/route.ts:302` runs `.select("user_id, subscription_plan, free_until")`. PostgREST rejects the whole select on the unknown column → `ap` is `null` → `platformFeePercentForArtist(null)` returns `DEFAULT_PLAN_FEE_PERCENT` = **15**. The query that would reveal the artist's plan *always fails*, so every artist is billed at the core rate.
+- **Evidence from `orders`: all 12 rows show `platform_fee_percent = 15`.** Ten belong to `fin-coles`, who is `premium/active` and should be charged **8%**.
+
+Recorded fees for `fin-coles` total **£127.18**; at 8% they would total **£67.83** — a **~£59.35** discrepancy.
+
+**Two honest caveats:**
+1. `fin-coles` is `premium` *today*; the orders span April–May and the upgrade date is unknown. The correct figure depends on when the plan started. **Do not quote £59.35 as settled.**
+2. `stripe_transfers` is **empty**, so these fees may have been *recorded* without cash ever moving. Whether the artist was actually short-paid is part of the D11 Stripe reconciliation — **add this to that human task**, alongside `off_1778`/`off_1779`.
+
+**Ruling — do this now, it needs no owner input:** remove `free_until` from every `.select()` (`webhooks/stripe/route.ts:302`, `placements/[id]/payment/setup/route.ts:47`). That alone restores correct per-plan fees. `platformFeePercentForArtist` already behaves correctly when the field is absent.
+
+**For the free-window concept: use `trial_end`, which exists.** Map the zero-fee window to `trial_end` in the future. Do not invent a new column.
+
+### D17.2 — The one genuine owner question (small)
+
+The referral path (`webhooks/stripe/route.ts:879-898`) *writes* to `free_until`, extending a referrer's free window by 30 days. `trial_end` is Stripe-managed, so writing app-side referral credit into it is questionable. **Owner decides:** drop referral credit, add a dedicated `referral_free_until` column, or accept writing to `trial_end`. **This does not block D17.1** — the read-path fix stands regardless.
+
+### D17.3 — Kill the phantom-column CLASS (three instances now)
+
+`orders.amount_cents` (Bug 15), the shipping-scope column (migration `081`), and now `free_until`. Same failure every time: a `.select()` names a column that does not exist, PostgREST rejects the entire query, the `|| []` / `null` fallback yields a **plausible but wrong** value, and nothing errors. This class is expensive precisely because it fails silently and looks like a data problem.
+
+**Mandate a structural guard — and note this replaces the expensive half of K11:**
+1. Generate `website/supabase/schema-columns.json` from prod (`information_schema.columns`, table → column list). Committed, regenerable, human-readable.
+2. Add a test that scans every `.from("X").select("...")` in `src/` and fails on any column absent from the snapshot.
+3. Run the sweep once now and fix every hit.
+
+This delivers K11's actual value (a committed, auditable schema record) far more cheaply than `supabase db dump`, and unlike the dump it *actively prevents* the bug. **X2/K11's pg_dump requirement is downgraded to optional.** Owner: `02`, but pull it forward — every payment task depends on selects being correct.
+
+Reference (prod, verified): `artist_profiles` 67 cols · `orders` 27 · `placements` 36 · `purchase_offers` 21 · `venue_profiles` 40 · `artist_works` 21 · `stripe_transfers` 11 · `curation_requests` 24.
