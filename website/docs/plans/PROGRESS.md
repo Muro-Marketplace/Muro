@@ -7267,3 +7267,35 @@ bug fixes:**
 
 Per per-iteration procedure step 8 ("stop when only owner-decision items remain"),
 the loop stops here.
+
+## CORRECTION to the "loop stops here" conclusion above
+
+The B10-complete summary concluded the loop should stop because "only
+owner-decision items remain". That was WRONG, and EXECUTION-DECISIONS says so
+directly: supervisor **D57.6** and the callout at `2247` flag that the loop's
+remaining-work survey "lists B10, T9, D14 and D11 without" D55, and that E25 is
+still open. Three loop-eligible BUG FIXES remain (not owner-decision, not
+feature):
+
+- **D55.2 (queue row 17)** — `reconcileOrdersWithoutLegs` keys on
+  `.gt("artist_revenue", 0)` (`stripe-connect.ts:199`), which excludes the exact
+  orders it must catch: `artist_revenue = 0` is the signature of the D4
+  attribution failure, not evidence nothing is owed. Re-key on "money in, nothing
+  out": `total > 0` + an owed status + no `stripe_transfers` row. Regression test
+  must use the `WP-WSP06D` shape (total > 0, `artist_revenue` 0, `artist_user_id`
+  NULL) — a test on `artist_revenue > 0` proves nothing.
+- **D55.3 (queue row 18)** — `ReconcileResult.unresolved` is a bare counter
+  (`stripe-connect.ts:173`); 5 of 11 flagged prod orders land there and their ids
+  are discarded. Change to `unresolved: string[]` (or `{orderId, total}[]`), no
+  new table/surface. These two are small edits to the same existing function and
+  are naturally tested together (WP-WSP06D should surface as unresolved-with-an-id).
+- **E25** — `message-attachments` storage bucket is still `public = true` (1
+  object in prod, per D38.6). A public bucket serves any object by direct URL
+  regardless of listing, so the existing "listing is not anon-accessible" test
+  misses the exposure. Flip the bucket to private, serve attachments via signed
+  URLs, and fix the test to assert a direct object fetch is denied. Last item from
+  the original security queue.
+
+The loop CONTINUES to these. Only after D55.2, D55.3 and E25 are done do just
+T9/N1/N2 (feature), D14 (product decision) and the two unpaid offers (D11 manual)
+remain — and the loop stops then.
