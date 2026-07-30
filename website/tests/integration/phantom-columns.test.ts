@@ -50,12 +50,6 @@ const GRANDFATHERED: Array<{ file: string; columns: string; phantom: string[]; w
     why: "D17.2: the referral path writes a free window and where it should write is an open owner question (trial_end is Stripe-managed). Left as the silent no-op it already is. Remove when D17.2 is answered.",
   },
   {
-    file: "app/api/placements/route.ts",
-    columns: "artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, requester_user_id",
-    phantom: ["requester_user_id"],
-    why: "N3 / ledger 7c. The real column is proposed_by_user_id, which lib/authz.ts already uses. This route integrates the phantom in ~20 places; untangling it is its own task.",
-  },
-  {
     file: "app/api/cron/onboarding-nudges/route.ts",
     columns: "user_id, name, slug, created_at, artist_statement, profile_photo, primary_medium, stripe_connect_account_id, venue_types_suited_for, themes",
     phantom: ["artist_statement", "profile_photo"],
@@ -230,7 +224,7 @@ describe("no .select() names a column the live schema lacks (D17.3, full form)",
   it("holds the grandfathered list at its recorded size, so new debt fails the build", () => {
     // A ratchet, not a cap on effort: shrink it by fixing a select, and lower the
     // number in the same commit. It must never grow.
-    expect(GRANDFATHERED).toHaveLength(12);
+    expect(GRANDFATHERED).toHaveLength(11);
     for (const g of GRANDFATHERED) {
       expect(g.phantom.length, "each entry lists the phantom column(s) it parks").toBeGreaterThan(0);
       expect(g.why.length, "each entry names the real column and why it is not fixed here").toBeGreaterThan(60);

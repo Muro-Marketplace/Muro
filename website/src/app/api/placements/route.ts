@@ -221,10 +221,10 @@ export async function GET(request: Request) {
 
     // Scan placement_request messages once and derive two things:
     //   1. inferredRequesters, the FIRST sender per placement, used
-    //      to backfill legacy rows where requester_user_id is NULL.
+    //      to backfill legacy rows where proposed_by_user_id is NULL.
     //   2. latestCountererByPlacement, the sender of the MOST RECENT
     //      counter message, which is the authoritative current
-    //      requester even if the placements.requester_user_id column
+    //      requester even if the placements.proposed_by_user_id column
     //      never got flipped. This is what prevents a counter-sender
     //      from accepting their own counter offer, the DB column can
     //      lag behind the message trail, but the messages are the
@@ -242,7 +242,7 @@ export async function GET(request: Request) {
         const pid = m.metadata?.placementId as string | undefined;
         if (!pid || !placementIds.includes(pid)) continue;
         // First sender is the original requester (when the row's own
-        // requester_user_id is missing).
+        // proposed_by_user_id is missing).
         if (!inferredRequesters[pid] && m.sender_id) {
           inferredRequesters[pid] = m.sender_id;
         }
@@ -262,8 +262,8 @@ export async function GET(request: Request) {
       // reads short-circuit the scan.
       for (const [pid, uid] of Object.entries(inferredRequesters)) {
         const row = placements.find((p) => p.id === pid);
-        if (row && !row.requester_user_id) {
-          db.from("placements").update({ requester_user_id: uid }).eq("id", pid).then(() => {}, () => {});
+        if (row && !row.proposed_by_user_id) {
+          db.from("placements").update({ proposed_by_user_id: uid }).eq("id", pid).then(() => {}, () => {});
         }
       }
     }
@@ -274,16 +274,16 @@ export async function GET(request: Request) {
       //   1. The latest counter message (source of truth, even if the
       //      DB column didn't flip, the counter sender should not be
       //      able to accept / decline their own counter).
-      //   2. The placements.requester_user_id column.
+      //   2. The placements.proposed_by_user_id column.
       //   3. The inferred original requester.
       const counterer = pid ? latestCountererByPlacement[pid] : null;
       const resolvedRequester = counterer?.userId
-        || p.requester_user_id
+        || p.proposed_by_user_id
         || (pid ? inferredRequesters[pid] : null)
         || null;
       return {
         ...p,
-        requester_user_id: resolvedRequester,
+        proposed_by_user_id: resolvedRequester,
         revenue_earned_gbp: pid && earnedByPlacement[pid]
           ? Math.round(earnedByPlacement[pid] * 100) / 100
           : 0,
@@ -455,7 +455,7 @@ export async function POST(request: Request) {
     }
 
     // Build rows. `baseRows` now keeps the critical ownership columns
-    // (artist_slug / venue_user_id / venue_slug / requester_user_id) so
+    // (artist_slug / venue_user_id / venue_slug / proposed_by_user_id) so
     // the fallback retry still produces rows the subsequent GET can
     // find via its .eq("venue_user_id", auth.user.id) filter. Previously
     // the fallback silently stripped venue_user_id and the placement
@@ -501,7 +501,7 @@ export async function POST(request: Request) {
       status: "pending",
       revenue: null,
       notes: p.notes || null,
-      requester_user_id: auth.user!.id,
+      proposed_by_user_id: auth.user!.id,
       created_at: new Date().toISOString(),
     }));
 
@@ -519,7 +519,7 @@ export async function POST(request: Request) {
     // Pattern-match the error message and strip only the columns the DB
     // actually rejected, so we don't silently drop payment info.
     const stripped = new Set<string>();
-    const candidates = ["requester_user_id", "venue_slug", "artist_slug", "monthly_fee_gbp", "qr_enabled", "message", "extra_works", "work_size"];
+    const candidates = ["proposed_by_user_id", "venue_slug", "artist_slug", "monthly_fee_gbp", "qr_enabled", "message", "extra_works", "work_size"];
     while (error) {
       const msg = error.message || "";
       const newStrip = candidates.filter((c) => !stripped.has(c) && new RegExp(`\\b${c}\\b`).test(msg));
@@ -801,22 +801,14 @@ export async function PATCH(request: Request) {
 
     const db = getSupabaseAdmin();
 
-    // Fetch the placement (include requester_user_id where available)
-    let { data: existing } = await db
+    // Fetch the placement. 7c: proposed_by_user_id is a real column, so the
+    // select succeeds; the old "retry without the column" fallback that this
+    // relied on (the phantom requester_user_id rejected the whole query) is gone.
+    const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, requester_user_id")
+      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id")
       .eq("id", id)
       .single();
-
-    // Retry without requester_user_id / venue_slug if the columns don't exist yet
-    if (!existing) {
-      const fallback = await db
-        .from("placements")
-        .select("artist_user_id, venue_user_id, artist_slug, venue, status")
-        .eq("id", id)
-        .single();
-      existing = fallback.data as typeof existing;
-    }
 
     if (!existing) {
       return NextResponse.json({ error: "Placement not found" }, { status: 404 });
@@ -892,10 +884,10 @@ export async function PATCH(request: Request) {
     //   1. Block only the requester from accepting their own request.
     //   2. Block a true self-placement (both parties are the same user).
     //   3. Any authenticated party that is NOT the requester may accept/decline.
-    // If requester_user_id is unknown (legacy row or missing column), we still
+    // If proposed_by_user_id is unknown (legacy row or missing column), we still
     // allow either party to accept, the previous "only venue accepts" fallback
     // was wrong for venue-initiated placements.
-    const requesterId = existing.requester_user_id || null;
+    const requesterId = existing.proposed_by_user_id || null;
     let isRequester = requesterId !== null && requesterId === auth.user!.id;
     const isSelfPlacement =
       !!existing.artist_user_id &&
@@ -1002,7 +994,7 @@ export async function PATCH(request: Request) {
       // Build the terms-only update (no role flip yet). We apply it with
       // .select() so the response tells us exactly which columns the DB
       // accepted, and we narrow the retry to the column that actually
-      // failed rather than blanket-stripping requester_user_id.
+      // failed rather than blanket-stripping proposed_by_user_id.
       const termsUpdates: Record<string, unknown> = {};
       if (counter.revenueSharePercent !== undefined) termsUpdates.revenue_share_percent = counter.revenueSharePercent;
       if (counter.qrEnabled !== undefined) termsUpdates.qr_enabled = counter.qrEnabled;
@@ -1051,17 +1043,17 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "Failed to save counter offer" }, { status: 500 });
       }
 
-      // Role flip, write separately so a missing requester_user_id column
+      // Role flip, write separately so a missing proposed_by_user_id column
       // on older environments doesn't roll back the terms update we just
       // confirmed. Fire-and-forget the retry; the terms are the critical
       // part of the counter.
       {
         const { error: flipErr } = await db
           .from("placements")
-          .update({ requester_user_id: auth.user!.id })
+          .update({ proposed_by_user_id: auth.user!.id })
           .eq("id", id);
         if (flipErr) {
-          console.warn("Counter role-flip failed (requester_user_id):", flipErr.message);
+          console.warn("Counter role-flip failed (proposed_by_user_id):", flipErr.message);
         }
       }
 
@@ -1691,7 +1683,7 @@ export async function PATCH(request: Request) {
     // assumption: the responder is by definition not the requester, so
     // the other side of the deal is the right notification target.
     // This stops "no email + no bell" from silently happening on
-    // placements with a NULL requester_user_id.
+    // placements with a NULL proposed_by_user_id.
     if (!notifyRequesterId) {
       if (auth.user!.id === existing.artist_user_id && existing.venue_user_id) {
         notifyRequesterId = existing.venue_user_id;
@@ -1706,7 +1698,7 @@ export async function PATCH(request: Request) {
     // to know the two slugs, and it's essential for the messages view
     // to reflect the latest decision. (Previously both were inside the
     // same `if (notifyRequesterId && …)`, so any placement with a
-    // missing requester_user_id AND no recoverable fallback silently
+    // missing proposed_by_user_id AND no recoverable fallback silently
     // left the messages panel stuck on Accept/Counter/Decline.)
     if (
       notifyRequesterId &&
@@ -2094,7 +2086,7 @@ export async function DELETE(request: Request) {
     const db = getSupabaseAdmin();
     // Fetch only the two ownership columns, these are the only ones we
     // need to authorise the archive action, and every env has them.
-    // requester_user_id was previously also requested here but some
+    // proposed_by_user_id was previously also requested here but some
     // Supabase instances predate migration 008 and don't have that
     // column; its absence made the SELECT error, `existing` come back
     // null, the endpoint return 404, and the client interpret 404 as
