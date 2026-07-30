@@ -7442,3 +7442,50 @@ worth the owner's attention soon.
 
 **Moving on:** the next unblocked loop task is D58 row **7b** (`02` schema-column
 guard, full form) — code-only, no prod cutover.
+
+## `02` D58 row 7b — phantom-column guard, full form
+
+Commit `7f556eb`. Code+tooling only, no prod change (schema was read-only).
+
+**What shipped.** `tests/integration/schema-columns.json` — a committed snapshot of
+every column of every public table (generated from prod
+`information_schema.columns`; regen query in the guard header). The guard
+(`phantom-columns.test.ts`) is rewritten from a 4-column denylist to an ALLOWLIST
+scan: every `.from().select()` is checked against the snapshot, so a select naming
+ANY absent column fails, not just the four already known. A paren-aware top-level
+comma split stops embed inner columns (`select("*, orders(total)")`) being
+mis-read as phantom columns of the parent (that was the one false-positive class,
+3 refund selects; now clean). `phantomColumns()` is exported + unit-tested.
+
+**Verification.** Fail-before: dropping a grandfather entry makes the guard flag
+that phantom as a build failure. `npm run check` → `EXIT=0`, `Tests 1854 passed`,
+0 lint/type errors.
+
+**What the guard found — 12 pre-existing phantom selects (22 columns), grandfathered
+as a ratchet.** These are REAL bugs (the select is rejected whole → silent
+null/`[]`), queued as follow-up. 7c fixes #2 next; the rest are open:
+
+| # | file | table.phantom | real column / fix |
+|---|---|---|---|
+| 1 | webhooks/stripe/route.ts:1207 | artist_profiles.free_until | D17.2 open (parked no-op) |
+| 2 | placements/route.ts:807 | placements.requester_user_id | proposed_by_user_id (7c, NEXT) |
+| 3 | cron/onboarding-nudges:51 | artist_profiles.artist_statement, profile_photo | extended_bio/short_bio, profile_image; nudges silently skipped |
+| 4 | cron/placement-ending-soon:30 | placements.end_date | no such col; the ending-soon cron never fires |
+| 5,6 | offers/route.ts:174,448 | artist_collections.title | name |
+| 7 | orders/[id]/events:39 | orders.venue_user_id, currency, placed_at | venue via venue_slug; no currency; created_at |
+| 8 | orders/track:80 | orders.buyer_name, total_amount, shipping_amount, currency, cart_items, tracking_url, shipped_at, delivered_at | order tracking cannot load an order at all |
+| 9 | placements/[id]/route:59 | artist_profiles.image | profile_image |
+| 10 | walls/my-works:72 | placements.work_id | no such col; my-works cannot list placed works |
+| 11 | sitemap.ts:74 | artist_works.updated_at | created_at |
+| 12 | paid-loan-billing.ts:200 | venue_profiles.contact_email | email; ensureVenueCustomer always falls back to auth email |
+
+**These 10 (excluding #1 parked, #2 = 7c) are genuine live bugs surfaced by the
+guard.** #8 (order tracking) and #7 (order events) and #4/#10 (whole-select
+rejections) are the most user-visible. They are not in the D58 ledger yet; the
+loop should work through them after the six ledger rows, or the owner may
+prioritise the user-facing ones (order tracking) sooner. Recorded here so they are
+not lost.
+
+**Next: 7c** (`01`/N3) — fix `placements/route.ts` phantom `requester_user_id`
+(~20 refs; real column proposed_by_user_id) and shrink the ratchet to 11. Re-read
+placements/route.ts + verify against the live placements columns first.
