@@ -383,10 +383,14 @@ export async function POST(request: Request) {
       db,
     );
     if (!recorded.ok) {
-      // A missing monthly amount can never succeed on retry, so it is reported as
-      // received and logged. Anything else is worth a retry.
-      if (recorded.error === "monthly_amount_missing") {
-        return NextResponse.json({ received: true, ignored: "monthly_amount_missing" });
+      // Permanent failures are reported as received: retrying cannot change a
+      // missing monthly amount, and cannot resolve a placement that already has a
+      // live billing row for another subscription (23505 on migration 083's partial
+      // unique index). Both are logged with the ids a human needs. Anything else is
+      // transient and worth Stripe's retry.
+      const permanent = ["monthly_amount_missing", "duplicate_live_billing"];
+      if (recorded.error && permanent.includes(recorded.error)) {
+        return NextResponse.json({ received: true, ignored: recorded.error });
       }
       return NextResponse.json({ error: "Billing record write failed" }, { status: 500 });
     }

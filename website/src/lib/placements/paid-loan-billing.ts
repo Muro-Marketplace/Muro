@@ -155,6 +155,22 @@ export async function recordPaidLoanSubscription(
     { onConflict: "stripe_subscription_id" },
   );
   if (billErr) {
+    // 23505 on the partial unique index from migration 083: this placement already
+    // has a live billing row for a DIFFERENT subscription. onConflict targets
+    // stripe_subscription_id, which cannot resolve that, and retrying never will,
+    // so it is reported as permanent. Two live subscriptions for one placement
+    // means the venue is being charged twice and a human has to pick one.
+    if (billErr.code === "23505") {
+      console.error(
+        "[paid-loan] a live billing row already exists for this placement with a different subscription",
+        {
+          placementId: input.placementId,
+          incomingSubscriptionId: input.subscriptionId,
+          detail: billErr.details,
+        },
+      );
+      return { ok: false, newlyLinked, error: "duplicate_live_billing" };
+    }
     console.error("[paid-loan] placement_recurring_billings upsert failed", billErr);
     return { ok: false, newlyLinked, error: billErr.message };
   }
@@ -432,19 +448,26 @@ export async function cancelPaidLoanBilling(
   if (!isFlagOn("PAID_LOAN_V2")) return { status: "skipped" };
 
   const db = client ?? getSupabaseAdmin();
-  const { data: billing } = await db
+  // E7c: find the LIVE row, and do it without .maybeSingle().
+  //
+  // Cancelled rows are archived rather than deleted, and migration 083's partial
+  // unique index deliberately allows a cancelled row to sit alongside a live one so
+  // a venue can restart after cancelling. So two rows for one placement_id is a
+  // normal state, and maybeSingle() would fail with PGRST116, hand back null, and
+  // this would return not_found while the subscription kept billing the venue.
+  const { data: billings } = await db
     .from("placement_recurring_billings")
     .select("id, stripe_subscription_id, status")
     .eq("placement_id", placementId)
-    .maybeSingle<{
-      id: string;
-      stripe_subscription_id: string | null;
-      status: string;
-    }>();
+    .neq("status", "cancelled")
+    .limit(2);
+  const billing = ((billings || []) as Array<{
+    id: string;
+    stripe_subscription_id: string | null;
+    status: string;
+  }>).find((b) => b.stripe_subscription_id);
 
-  if (!billing) return { status: "not_found" };
-  if (!billing.stripe_subscription_id) return { status: "not_found" };
-  if (billing.status === "cancelled") return { status: "cancelled" };
+  if (!billing?.stripe_subscription_id) return { status: "not_found" };
 
   await stripe.subscriptions.update(billing.stripe_subscription_id, {
     cancel_at_period_end: true,

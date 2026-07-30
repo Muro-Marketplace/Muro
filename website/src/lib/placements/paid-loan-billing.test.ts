@@ -44,6 +44,7 @@ import {
   handleInvoicePaid,
   handleInvoicePaymentFailed,
   handleSubscriptionDeleted,
+  recordPaidLoanSubscription,
 } from "./paid-loan-billing";
 
 beforeEach(() => {
@@ -77,6 +78,8 @@ function buildDb(opts: {
   existingTransfer?: unknown;
   /** placements row read by recordPaidLoanSubscription to decide newlyLinked. */
   placement?: unknown;
+  /** Live (non-cancelled) billing rows for the cancel path's list lookup. */
+  liveBillings?: unknown[];
 } = {}): { db: object; updates: unknown[]; upserts: unknown[] } {
   const updates: unknown[] = [];
   const upserts: unknown[] = [];
@@ -91,6 +94,16 @@ function buildDb(opts: {
                   col === "placement_id"
                     ? { data: opts.billingForPlacement ?? null, error: null }
                     : { data: opts.billingForSubscription ?? null, error: null },
+                // E7c: cancelPaidLoanBilling now filters cancelled rows out in SQL
+                // and takes a list, because a cancelled row may legitimately sit
+                // alongside a live one (migration 083) and maybeSingle would raise
+                // PGRST116 on the pair.
+                neq: () => ({
+                  limit: async () => ({
+                    data: opts.liveBillings ?? (opts.billingForPlacement ? [opts.billingForPlacement] : []),
+                    error: null,
+                  }),
+                }),
               }),
             }),
             upsert: async (row: unknown) => {
@@ -506,5 +519,131 @@ describe("handleSubscriptionDeleted()", () => {
     );
     expect(handled).toBe(true);
     expect(updates[0]).toMatchObject({ row: { status: "cancelled" } });
+  });
+});
+
+// ── E7c: the cancel path and the upsert conflict target (04 §B6) ─────────────
+//
+// Two defects. The upsert's onConflict targeted stripe_subscription_id, a NULLABLE
+// unique column, and NULLs do not conflict in Postgres, so nothing stopped one
+// placement accumulating live billing rows. Migration 083 adds a partial unique
+// index on placement_id WHERE status <> 'cancelled'. And cancelPaidLoanBilling read
+// the row with .maybeSingle(), which raises PGRST116 the moment a cancelled row
+// sits beside a live one, a state 083 deliberately permits so a venue can restart.
+describe("cancelPaidLoanBilling() finds the live row (E7c)", () => {
+  beforeEach(() => {
+    isFlagOnMock.mockReturnValue(true);
+    subscriptionsUpdateMock.mockReset();
+    subscriptionsUpdateMock.mockResolvedValue({});
+  });
+
+  it("cancels the live subscription when a cancelled row sits beside it", async () => {
+    // The exact pair that made maybeSingle raise PGRST116, return null, and leave
+    // the venue being billed by a subscription this function reported as absent.
+    const { db } = buildDb({
+      liveBillings: [{ id: "b2", stripe_subscription_id: "sub_live", status: "active" }],
+    });
+    const res = await cancelPaidLoanBilling(
+      "p1",
+      db as Parameters<typeof cancelPaidLoanBilling>[1],
+    );
+    expect(res).toEqual({ status: "cancelled" });
+    expect(subscriptionsUpdateMock).toHaveBeenCalledWith("sub_live", {
+      cancel_at_period_end: true,
+    });
+  });
+
+  it("reports not_found when every row for the placement is cancelled", async () => {
+    const { db } = buildDb({ liveBillings: [] });
+    const res = await cancelPaidLoanBilling(
+      "p1",
+      db as Parameters<typeof cancelPaidLoanBilling>[1],
+    );
+    expect(res).toEqual({ status: "not_found" });
+    expect(subscriptionsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores a live row that has no subscription id yet", async () => {
+    const { db } = buildDb({
+      liveBillings: [{ id: "b1", stripe_subscription_id: null, status: "active" }],
+    });
+    const res = await cancelPaidLoanBilling(
+      "p1",
+      db as Parameters<typeof cancelPaidLoanBilling>[1],
+    );
+    expect(res).toEqual({ status: "not_found" });
+    expect(subscriptionsUpdateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("recordPaidLoanSubscription() handles the new unique index (E7c)", () => {
+  beforeEach(() => {
+    isFlagOnMock.mockReturnValue(true);
+  });
+
+  it("reports duplicate_live_billing on 23505 rather than a generic failure", async () => {
+    // Migration 083 raises this when a placement already has a live row for a
+    // DIFFERENT subscription. onConflict targets stripe_subscription_id, which
+    // cannot resolve that, and a retry never will, so the caller must be able to
+    // tell it apart from a transient error.
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = {
+      from: (table: string) => {
+        if (table === "placements") {
+          return {
+            select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+            update: () => ({ eq: async () => ({ error: null }) }),
+          };
+        }
+        return {
+          upsert: async () => ({
+            error: { code: "23505", message: "duplicate key value", details: "sub_other" },
+          }),
+        };
+      },
+    };
+    const res = await recordPaidLoanSubscription(
+      {
+        placementId: "p1",
+        subscriptionId: "sub_new",
+        customerId: "cus_1",
+        payerUserId: "v1",
+        payeeUserId: "a1",
+        monthlyAmountPence: 4500,
+        cpStart: null,
+        cpEnd: null,
+      },
+      db as unknown as Parameters<typeof recordPaidLoanSubscription>[1],
+    );
+    expect(res).toMatchObject({ ok: false, error: "duplicate_live_billing" });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("refuses a zero monthly amount before touching the DB", async () => {
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    let touched = false;
+    const db = {
+      from: () => {
+        touched = true;
+        return { upsert: async () => ({ error: null }) };
+      },
+    };
+    const res = await recordPaidLoanSubscription(
+      {
+        placementId: "p1",
+        subscriptionId: "sub_new",
+        customerId: "cus_1",
+        payerUserId: "v1",
+        payeeUserId: "a1",
+        monthlyAmountPence: 0,
+        cpStart: null,
+        cpEnd: null,
+      },
+      db as unknown as Parameters<typeof recordPaidLoanSubscription>[1],
+    );
+    expect(res).toMatchObject({ ok: false, error: "monthly_amount_missing" });
+    expect(touched).toBe(false);
+    warn.mockRestore();
   });
 });
