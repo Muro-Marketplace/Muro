@@ -1083,12 +1083,38 @@ async function handleWebhookEvent(
     const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
     const priceId = subscription.items.data[0]?.price?.id || "";
 
-    // Map price ID to plan name (monthly + annual variants both normalise to
-    // the same plan name; billing cycle is reflected in Stripe itself).
-    let plan = "core";
-    if (priceId === process.env.STRIPE_PRICE_PREMIUM || priceId === process.env.STRIPE_PRICE_PREMIUM_ANNUAL) plan = "premium";
-    else if (priceId === process.env.STRIPE_PRICE_PRO || priceId === process.env.STRIPE_PRICE_PRO_ANNUAL) plan = "pro";
-    else if (priceId === process.env.STRIPE_PRICE_CORE || priceId === process.env.STRIPE_PRICE_CORE_ANNUAL) plan = "core";
+    // D12: map the price id to a plan, and NEVER guess. The old code defaulted to
+    // "core" and only bumped to premium/pro on a match, so an unset or mistyped
+    // STRIPE_PRICE_PRO wrote every Pro artist as core, and
+    // platformFeePercentForArtist then charged them 15% instead of 5% on every
+    // sale, silently and forever. An unrecognised price now stamps nothing.
+    //
+    // Built per-request (not module scope) so a test can set the envs before
+    // importing. Monthly and annual variants normalise to the same plan.
+    const PRICE_TO_PLAN: Record<string, "core" | "premium" | "pro"> = Object.fromEntries(
+      (
+        [
+          [process.env.STRIPE_PRICE_CORE, "core"],
+          [process.env.STRIPE_PRICE_CORE_ANNUAL, "core"],
+          [process.env.STRIPE_PRICE_PREMIUM, "premium"],
+          [process.env.STRIPE_PRICE_PREMIUM_ANNUAL, "premium"],
+          [process.env.STRIPE_PRICE_PRO, "pro"],
+          [process.env.STRIPE_PRICE_PRO_ANNUAL, "pro"],
+        ] as const
+      ).filter(([id]) => !!id) as Array<[string, "core" | "premium" | "pro"]>,
+    );
+    const plan = PRICE_TO_PLAN[priceId];
+    if (!plan) {
+      // Not a recognised SaaS price: a paid-loan or curation subscription (whose
+      // price is a dynamic price_data, handled by their own branches), or a
+      // misconfigured env. Either way we must not stamp a plan we did not
+      // recognise onto an artist profile.
+      console.error("[webhook] unrecognised subscription price id", {
+        priceId,
+        subscriptionId: subscription.id,
+      });
+      return NextResponse.json({ received: true, ignored: "unknown_price" });
+    }
 
     const { error } = await db
       .from("artist_profiles")

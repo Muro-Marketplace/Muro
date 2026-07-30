@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 // Hoisted mocks so the `vi.mock()` factories below can close over them.
 const {
@@ -1553,7 +1553,11 @@ describe("Stripe webhook — setup_intent.succeeded (E7d)", () => {
 describe("Stripe webhook — subscription period end (E11b)", () => {
   let profileUpdates: Array<Record<string, unknown>>;
 
-  function fireSubscription(item: Record<string, unknown> | null) {
+  // D12: the SaaS branch now ignores an unrecognised price, so the fired item must
+  // carry a known one for this branch to run at all. periodFromSubscription's
+  // no-items behaviour is covered by stripe-subscription-period.test.ts.
+  const PRICE = { id: "price_premium_test" };
+  function fireSubscription(periodFields: Record<string, unknown> | null) {
     constructEventMock.mockReturnValue({
       type: "customer.subscription.created",
       data: {
@@ -1562,13 +1566,18 @@ describe("Stripe webhook — subscription period end (E11b)", () => {
           customer: "cus_art",
           status: "active",
           trial_end: null,
-          items: { data: item ? [item] : [] },
+          items: { data: [{ ...(periodFields || {}), price: PRICE }] },
         },
       },
     });
   }
 
+  afterEach(() => {
+    delete process.env.STRIPE_PRICE_PREMIUM;
+  });
+
   beforeEach(() => {
+    process.env.STRIPE_PRICE_PREMIUM = "price_premium_test";
     profileUpdates = [];
     fromMock.mockImplementation((table: string) => {
       if (table === "stripe_webhook_events") return webhookEventsStub();
@@ -1593,7 +1602,7 @@ describe("Stripe webhook — subscription period end (E11b)", () => {
   });
 
   it("writes the real period end when Stripe sends one", async () => {
-    fireSubscription({ current_period_end: 1_702_000_000, price: { id: "price_x" } });
+    fireSubscription({ current_period_end: 1_702_000_000 });
     await POST(buildRequest());
     expect(profileUpdates[0].subscription_period_end).toBe(
       new Date(1_702_000_000 * 1000).toISOString(),
@@ -1601,21 +1610,21 @@ describe("Stripe webhook — subscription period end (E11b)", () => {
   });
 
   it("writes null, not 1970, when Stripe sends no period", async () => {
-    fireSubscription({ price: { id: "price_x" } });
+    fireSubscription({});
     await POST(buildRequest());
     expect(profileUpdates[0].subscription_period_end).toBeNull();
   });
 
-  it("writes null, not 1970, when the subscription has no items", async () => {
-    fireSubscription(null);
+  it("writes null, not 1970, when the item carries no period", async () => {
+    fireSubscription({}); // price present (added by fireSubscription), no period
     await POST(buildRequest());
     expect(profileUpdates[0].subscription_period_end).toBeNull();
   });
 
   it("never writes a 1970 date under any of those shapes", async () => {
-    for (const item of [{ price: { id: "p" } }, { current_period_end: 0, price: { id: "p" } }, null]) {
+    for (const periodFields of [{}, { current_period_end: 0 }]) {
       profileUpdates = [];
-      fireSubscription(item);
+      fireSubscription(periodFields);
       await POST(buildRequest());
       expect(String(profileUpdates[0].subscription_period_end)).not.toContain("1970");
     }
@@ -2052,5 +2061,81 @@ describe("Stripe webhook — QR sale with no active placement is observable (D11
     const d11Calls = warn.mock.calls.filter(([m]) => m === "[webhook] QR sale with no active placement");
     expect(d11Calls).toHaveLength(0);
     warn.mockRestore();
+  });
+});
+
+// ── D12: an unknown price id must not silently downgrade the artist ───────────
+//
+// The old mapping defaulted to "core" and only bumped up on a match, so an unset
+// or mistyped STRIPE_PRICE_PRO wrote every Pro artist as core, and the fee helper
+// then charged 15% instead of 5% on every sale. Now an unrecognised price stamps
+// nothing.
+describe("Stripe webhook — subscription plan mapping (D12)", () => {
+  let updates: Array<Record<string, unknown>>;
+
+  beforeEach(() => {
+    process.env.STRIPE_PRICE_PRO = "price_pro_live";
+    process.env.STRIPE_PRICE_PREMIUM = "price_premium_live";
+    process.env.STRIPE_PRICE_CORE = "price_core_live";
+    updates = [];
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
+      if (table === "artist_profiles") {
+        return {
+          update: (row: Record<string, unknown>) => {
+            updates.push(row);
+            return { eq: async () => ({ error: null }) };
+          },
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+    });
+  });
+  afterEach(() => {
+    delete process.env.STRIPE_PRICE_PRO;
+    delete process.env.STRIPE_PRICE_PREMIUM;
+    delete process.env.STRIPE_PRICE_CORE;
+  });
+
+  function fireWithPrice(priceId: string) {
+    constructEventMock.mockReturnValue({
+      type: "customer.subscription.created",
+      data: {
+        object: {
+          id: "sub_1",
+          customer: "cus_1",
+          status: "active",
+          trial_end: null,
+          items: { data: [{ price: { id: priceId }, current_period_end: 1_800_000_000 }] },
+        },
+      },
+    });
+  }
+
+  it("maps a recognised Pro price to pro", async () => {
+    fireWithPrice("price_pro_live");
+    expect((await POST(buildRequest())).status).toBe(200);
+    expect(updates[0].subscription_plan).toBe("pro");
+  });
+
+  it("ignores an unknown price and writes NO plan, rather than defaulting to core", async () => {
+    // The whole finding: a Pro artist whose price id we do not recognise must not
+    // be stamped core (which would overcharge them 15% vs 5%).
+    fireWithPrice("price_something_unconfigured");
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ ignored: "unknown_price" });
+    expect(updates, "no artist_profiles write on an unknown price").toHaveLength(0);
+  });
+
+  it("ignores a paid-loan subscription's dynamic price (not a SaaS plan)", async () => {
+    // startPaidLoanBilling creates subscriptions with a price_data, not a
+    // STRIPE_PRICE_* id, so they land here and must be left to their own handler.
+    fireWithPrice("price_dynamic_paid_loan");
+    await expect((await POST(buildRequest())).json()).resolves.toMatchObject({
+      ignored: "unknown_price",
+    });
+    expect(updates).toHaveLength(0);
   });
 });
