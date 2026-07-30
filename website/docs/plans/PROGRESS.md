@@ -6860,3 +6860,45 @@ managed tiers unbookable, orphan payment, subscription-id in the payment-intent
 column, reconcile, etc.) at Phase 7; then T9 (N1/N2 collect-from-venue) at Phase 8,
 which is net-new checkout FEATURE work — surface to the owner before building. D14
 blocked on a product decision; the two unpaid offers are D11 manual.
+
+---
+
+## `04` B10 / D25 — managed curation tiers bookable (mostly already done; guard added)
+
+Commit `1b6375c`. First curation finding.
+
+**Verified live before acting (the doc flagged UNCONFIRMED drift).** The live
+`curation_requests_tier_check` already permits all five tiers (`single_wall,
+full_space, bespoke, managed_monthly, managed_quarterly`) — migration
+`080_curation_managed_tiers.sql` widened it in an earlier iteration ("curation 7.0
+at Phase 0"). So the managed tiers (79.99/mo, 199.99/qtr) are bookable; D25's "live
+revenue outage" is NOT current. The regression guard the doc asks for also already
+exists: `src/lib/curation-tiers.test.ts` asserts the migration's tier CHECK equals
+`CURATION_TIER_KEYS` (5 tests, passing) and fails if code/schema tiers drift.
+
+**What I added.** A `23514` (check_violation) branch in the curation insert error
+path (`api/curation/route.ts`) so a tier/status the schema does not know about is
+logged as a distinct schema-drift error rather than a silent generic 500 — the
+runtime defence-in-depth the doc asked for. No route test harness exists and building
+one for one log line is disproportionate; the drift itself is already CI-guarded by
+curation-tiers.test.ts, so the 23514 path is verified by typecheck + inspection.
+
+**Verification.** `Test Files 163 passed (163)`, `Tests 1817 passed (1817)`, `0 lint
+errors`, allowlist PASS. Live tier CHECK = 5 tiers; live status CHECK =
+`pending_payment,awaiting_quote,paid,in_progress,shortlist_sent,completed,cancelled,refunded`
+(NO `past_due`/`paused`).
+
+**What the plan got wrong / deferred.** The doc's migration `083` (tier+status) is
+**redundant for the tier part** (080 did it). The **status** widen (add `past_due`,
+`paused`) is real and still needed — but by **D21's** reconcile handlers, so it
+ships with D21, not here. **04's migration range (080-089) is fully used**, so D21's
+status migration needs a number resolution (escalate the range when D21 lands).
+Doc D25 section annotated RESOLVED for the tier.
+
+**Also noticed (not this task).** Two tier modules coexist: `curated-tiers.ts`
+(`CURATED_TIER_KEYS`, marketing) and `curation-tiers.ts` (`CURATION_TIER_KEYS`, the
+route's source of truth). Possible `_v1/_v2` duplication worth a cleanup pass, but
+out of D25 scope.
+
+**Next: D19** (orphan payment: the curation error path deletes a row whose Stripe
+session is live, `api/curation/route.ts:196-233`).
