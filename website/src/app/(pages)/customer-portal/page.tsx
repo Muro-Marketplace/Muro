@@ -82,6 +82,10 @@ function CustomerPortalContent() {
   const [refundSubmitting, setRefundSubmitting] = useState(false);
   const [refundSuccess, setRefundSuccess] = useState(false);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
+  // E21: the buyer confirms delivery, because doing so releases the artist's
+  // escrow and the artist must not attest it themselves.
+  const [confirmingDelivery, setConfirmingDelivery] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   useEffect(() => {
     authFetch("/api/orders")
@@ -97,6 +101,29 @@ function CustomerPortalContent() {
       .then((data: RefundsListResponse) => { if (data.refundRequests) setRefundRequests(data.refundRequests); })
       .catch(() => {});
   }, []);
+
+  async function confirmDelivery(orderId: string) {
+    setConfirmingDelivery(true);
+    setConfirmError(null);
+    try {
+      const res = await authFetch("/api/orders", {
+        method: "PATCH",
+        body: JSON.stringify({ orderId, status: "delivered" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setConfirmError(data.error || "Could not confirm delivery. Please try again.");
+      } else {
+        // Reflect it immediately; the list is not re-fetched on this page.
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: "delivered" } : o)),
+        );
+      }
+    } catch {
+      setConfirmError("Could not confirm delivery. Please try again.");
+    }
+    setConfirmingDelivery(false);
+  }
 
   async function submitRefundRequest(orderId: string) {
     setRefundSubmitting(true);
@@ -250,6 +277,29 @@ function CustomerPortalContent() {
             <p className="text-sm text-foreground">{selected.shipping?.fullName}</p>
             <p className="text-sm text-muted">{selected.shipping?.addressLine1}, {selected.shipping?.city} {selected.shipping?.postcode}</p>
           </div>
+
+          {/* Confirm delivery (E21). Only the buyer may move an order to
+              `delivered`, because that release the artist's pending payout. An
+              order left unconfirmed still pays out on the 14-day cron, so this
+              is an accelerator for honest buyers, not a gate on the artist. */}
+          {selected.status === "shipped" && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <p className="text-xs text-muted uppercase tracking-wider mb-2">Delivery</p>
+              <p className="text-sm text-muted mb-3">
+                Has this arrived? Confirming releases payment to the artist.
+              </p>
+              <button
+                onClick={() => confirmDelivery(selected.id)}
+                disabled={confirmingDelivery}
+                className="px-4 py-2 min-h-11 text-sm font-medium bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {confirmingDelivery ? "Confirming..." : "Confirm delivery"}
+              </button>
+              {confirmError && (
+                <p className="text-xs text-red-600 mt-2">{confirmError}</p>
+              )}
+            </div>
+          )}
 
           {/* Refund section */}
           <div className="mt-6 pt-4 border-t border-border">

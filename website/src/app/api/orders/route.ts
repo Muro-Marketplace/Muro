@@ -8,6 +8,21 @@ import { notifyBuyerStatusUpdate } from "@/lib/email";
 // route and any future legacy webhook fallback.
 import { executeTransfer } from "@/lib/stripe-connect";
 import { canTransition, type OrderStatus, ORDER_STATUSES } from "@/lib/order-state-machine";
+import { assertOrderParty, handleAuthzError } from "@/lib/authz";
+
+// E21. Who may set what. `delivered` is deliberately absent from the seller's
+// set: it releases escrow, so the party who gets paid cannot self-attest it.
+// `cancelled` is on both because either side may call off an order that has not
+// shipped; canTransition still decides whether the move is legal from the
+// current status, and both gates must pass.
+const SELLER_STATUSES = new Set<string>([
+  "artist_notified",
+  "awaiting_dispatch",
+  "processing",
+  "shipped",
+  "cancelled",
+]);
+const BUYER_STATUSES = new Set<string>(["delivered", "disputed", "cancelled"]);
 import { recordOrderEvent } from "@/lib/orders/lifecycle";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -130,32 +145,44 @@ export async function PATCH(request: Request) {
 
     const db = getSupabaseAdmin();
 
-    // Verify the artist owns this order. Legacy orders (pre-migration)
-    // may have artist_user_id = NULL but artist_slug populated; fall back
-    // to matching the caller's artist_profiles.slug so those orders
-    // aren't locked out of the status transitions.
-    const { data: order } = await db
-      .from("orders")
-      .select("artist_user_id, artist_slug, buyer_email, status, status_history, placement_id, venue_revenue, shipping, items")
-      .eq("id", orderId)
-      .single();
-    if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    // E21. Both parties are resolved here, not just the artist. The buyer used
+    // to be unauthorised for every status, which left `delivered` self-attested
+    // by the party who gets paid by it.
+    //
+    // assertOrderParty matches the seller on artist_user_id OR artist_slug
+    // (legacy rows), and the buyer on buyer_user_id OR buyer_email against the
+    // caller's own email. The email arm matters: every one of the 12 live orders
+    // has buyer_email and NONE has buyer_user_id, because guest checkout is
+    // allowed, so a user-id-only match would have made the buyer role
+    // unreachable and stranded orders in `shipped`.
+    const order = await assertOrderParty(auth.user!, orderId, { as: "any" }, db);
 
-    let authorised = order.artist_user_id === auth.user!.id;
-    if (!authorised && order.artist_slug) {
-      const { data: myArtistProfile } = await db
-        .from("artist_profiles")
-        .select("slug, user_id")
-        .eq("user_id", auth.user!.id)
-        .single();
-      if (myArtistProfile?.slug === order.artist_slug) {
-        authorised = true;
-        // Back-fill the missing column so subsequent updates hit the
-        // fast path.
-        db.from("orders").update({ artist_user_id: auth.user!.id }).eq("id", orderId).then(() => {}, () => {});
-      }
+    // Back-fill the column the legacy slug match papers over, so later updates
+    // take the fast path. Only meaningful for a seller on a legacy row.
+    if (order.role === "seller" && order.artist_user_id === null) {
+      db.from("orders")
+        .update({ artist_user_id: auth.user!.id })
+        .eq("id", orderId)
+        .then(() => {}, () => {});
     }
-    if (!authorised) return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+
+    // The seller may drive dispatch; only the buyer may confirm the parcel
+    // arrived. `delivered` releases every pending stripe_transfers row for the
+    // order (see the executeTransfer block below), which is the platform's only
+    // chargeback buffer. canTransition blocks confirmed → delivered, but
+    // shipped → delivered is a legal edge and shipping is self-attested too, so
+    // before this the seller could walk confirmed → processing → shipped →
+    // delivered in three requests and be paid on day zero.
+    //
+    // Support overrides ("the carrier confirmed but the buyer never clicked")
+    // go through /api/admin/orders, which is the intended escape hatch.
+    const allowed = order.role === "seller" ? SELLER_STATUSES : BUYER_STATUSES;
+    if (!allowed.has(status)) {
+      return NextResponse.json(
+        { error: `A ${order.role} cannot move an order to ${status}.` },
+        { status: 403 },
+      );
+    }
 
     const transition = canTransition(order.status as OrderStatus, status as OrderStatus);
     if (!transition.ok) {
@@ -321,7 +348,11 @@ export async function PATCH(request: Request) {
     const responseBody: { success: true; payoutFailures?: number } = { success: true };
     if (payoutFailures > 0) responseBody.payoutFailures = payoutFailures;
     return NextResponse.json(responseBody);
-  } catch {
+  } catch (err) {
+    // E21 routes denials through AuthzError; without this the bare catch would
+    // flatten a 404 order_not_found into whatever this handler returns.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }

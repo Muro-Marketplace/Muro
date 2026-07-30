@@ -43,10 +43,15 @@ type RefundRequest = RefundRequestRow & {
   resolved_reason?: string;
 };
 
+// E21. The `shipped → delivered` action is gone, not disabled. Confirming
+// delivery releases the 14-day escrow hold, so the seller cannot attest it: the
+// API refuses it with a 403 and leaving the button would only produce an error
+// the artist cannot act on. The buyer confirms from the customer portal, and
+// support can force it via /api/admin/orders. An unconfirmed order still pays
+// out on the 14-day cron, which is the intended default.
 const statusActions: Record<string, { next: string; label: string; color: string }> = {
   confirmed: { next: "processing", label: "Mark as Processing", color: "bg-blue-600 hover:bg-blue-700" },
   processing: { next: "shipped", label: "Mark as Shipped", color: "bg-accent hover:bg-accent-hover" },
-  shipped: { next: "delivered", label: "Mark as Delivered", color: "bg-green-600 hover:bg-green-700" },
 };
 
 export default function ArtistOrdersPage() {
