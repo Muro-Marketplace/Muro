@@ -4186,3 +4186,107 @@ make the exemption a blanket bypass       → 2 fail
 
 `06` Phase A is now complete. Remaining in `06`: Phase C (C1-C5, gating and
 guardrails).
+
+---
+
+## 06 C1 (E16) — flag values now reach the client bundle
+
+`06-validation-massassign.md` Phase C item C1. Commit `a11fceb`.
+
+**What was wrong.** `readBoolEnv` read `process.env[key]` with a computed key.
+Webpack's DefinePlugin only substitutes statically-written member expressions, so
+that read survived into the client bundle as a call-time lookup. Confirmed in the
+pre-fix production build (`.next/static/chunks/15.vleg-g8sv8.js`, built 00:17):
+
+```js
+let n=function(e){let r=t.default.env[e];   // t = the bundled `process` polyfill
+return null!==n?n:i.prodDefault             // NODE_ENV folded to production
+```
+
+`t.default.env` is `{}` in the browser, so every client-side `isFlagOn` call
+returned null from `readBoolEnv` and fell through to `prodDefault`. The env var
+had no effect on the client **in either direction**, which is worse than §4.3
+describes: it documents gating staying invisible while the var is on, but the
+same defect makes a kill switch flipped to `0` keep rendering the feature it was
+meant to kill. Both directions now have a test.
+
+**Change.** `src/lib/feature-flags.ts`: added a `CLIENT_ENV` map with one static
+`process.env.NEXT_PUBLIC_FLAG_*` read per flag, and `readBoolEnv` now reads
+`process.env[key] ?? CLIENT_ENV[key]`.
+
+**Deviation from the doc, deliberate.** §4.3 proposes the reverse order,
+`CLIENT_ENV[key] ?? process.env[key]`. That pins each flag to whatever was set
+when the module was first evaluated: on the server `process.env` is real and
+current, and the existing test suite mutates it after import, so a snapshot-first
+read would make a later change to the var invisible. Live value first, snapshot
+second is identical in production (both come from the same build-time env) and
+strictly safer everywhere else. The fifth new test pins this ordering.
+
+**Test.** `src/lib/feature-flags.test.ts`, 5 new cases in
+`describe("E16: a flag resolves from a build-time snapshot, not a call-time lookup")`.
+
+§4.3 asserts "feature-flags.test.ts cannot catch this: every test runs in Node
+under Vitest, where `process.env[key]` works fine". That is wrong, and the doc
+should be read as "a test that tries to be a browser cannot catch this". What the
+two reads actually differ on is *when* the value is captured: a static read is
+frozen at build time, which under Vitest is module-evaluation time, while
+`process.env[key]` is read at call time. So the test sets the var, re-imports the
+module, then deletes the var before calling `isFlagOn`. That models the browser
+exactly and needs no bundler. 3 of the 4 behavioural assertions failed before the
+fix:
+
+```
+FAIL  src/lib/feature-flags.test.ts > E16 ... > GATING_V1=1 still resolves on once the runtime env is empty
+FAIL  src/lib/feature-flags.test.ts > E16 ... > the kill switch survives too: =0 beats an on-by-default prod flag
+FAIL  src/lib/feature-flags.test.ts > E16 ... > holds for every flag, so a new one cannot be added without its static read
+AssertionError: NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE is not statically read: expected false to be true
+ Tests  3 failed | 12 passed (15)
+```
+
+After: `Test Files 1 passed (1)`, `Tests 15 passed (15)`.
+
+**The doc's verification command is unsound.** §4.3 says to run
+`grep -rl "NEXT_PUBLIC_FLAG_GATING_V1" .next/static/chunks/ | head` and expect it
+"empty before the fix, non-empty after". It is non-empty before the fix: the
+`FLAGS` map ships `envKey: "NEXT_PUBLIC_FLAG_GATING_V1"` as a string literal into
+every client chunk that imports the module. Following the doc would have produced
+a false pass. The sound check is to grep for an inlined **key:value** pair, which
+can only exist if DefinePlugin substituted a static read.
+
+Before (pre-fix build):
+
+```
+$ grep -o 'NEXT_PUBLIC_FLAG_[A-Z_0-9]*:"[^"]*"' before-15.js | grep -v envKey
+(no output)
+```
+
+After (`NEXT_PUBLIC_FLAG_GATING_V1=1 npm run build`):
+
+```
+$ grep -rho 'NEXT_PUBLIC_FLAG_[A-Z_0-9]*:"[^"]*"' .next/static/chunks/ | sort -u
+NEXT_PUBLIC_FLAG_GATING_V1:"1"
+
+$ # .next/static/chunks/0awd0od__88t8.js
+n={NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1:t.default.env.NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1,
+   ...,NEXT_PUBLIC_FLAG_GATING_V1:"1",...};
+let i=function(e){let r=t.default.env[e]??n[e];
+```
+
+Only the flag that was set at build time is inlined; the four unset ones stay as
+polyfill reads, which is correct (unset means fall through to the default) and
+they will inline once Vercel defines them.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+tsc --noEmit → clean
+Test Files  156 passed (156)
+Tests  1579 passed (1579)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Note for C2.** The compiled resolver ends `return null!==i?i:a.prodDefault`,
+so on the client `prodDefault` is the whole default path. That makes C2 (flip
+`GATING_V1.prodDefault` to true) the change that actually aligns the client with
+production, now that C1 has made the env var reachable.
