@@ -24,7 +24,8 @@ Order of work: the "Corrected dependency order" at the end of
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **DONE**. Narrow form (6e0705e), then **full form** (7f556eb): `schema-columns.json` snapshots all 53 tables / 750 columns; the scan surfaced 12 phantom selects, parked in a shrinking `GRANDFATHERED` ratchet and queued as **row 19** |
 | 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
+| 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **NEXT** (sequenced before the next migration): add `npm run schema:snapshot`, name it in the guard header, mention it in the migration steps |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate`/`ApiError`/`NetworkError`/`isTransient` in api-client.ts, this commit). Remaining: §1.2 `useSaveAction` hook, then E41/E42/E43 caller migrations (one each), `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -7829,8 +7830,41 @@ are resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is parked 
 the ratchet floor of 1 per D14/D17.2, owner-gated). The `GRANDFATHERED` ratchet is
 now at 1 and cannot shrink further without an owner decision on free_until.
 
-**Next: doc-scale row 8 (`05` frontend saves + listing).** Re-read
-`docs/plans/implementation/05-*.md` to scope the specific sub-tasks (it depends on
-the D10 fixes) and take them one finding per iteration. Owner-gated items still
-outstanding and NOT loop-actionable: row 19 #2 placement-ending-soon (b)/(c), E25
-bucket cutover, the row-9 admin conjunct cutover.
+## row 8 (doc `05`) §1.1 — typed write primitive `mutate()` in api-client.ts
+
+Commit `<pending>`. Code-only. Foundation for the E41/E42/E43 caller migrations.
+
+**The defect class (05 §0).** `authFetch` returns the raw Response and never throws
+on a non-2xx, so ~a third of callers forget `res.ok` and report a save that never
+happened. Worse, `supabase.auth.getSession()` rejecting escaped *before* `fetch`
+ran, so a save could fire zero requests and surface no error anywhere (bug 12).
+
+**The fix (additive, no callers migrated yet).** Added to `src/lib/api-client.ts`:
+`ApiError` (status/code/payload), `NetworkError`, a shared `authHeaders()` that
+converts the getSession rejection into a typed `NetworkError`, `mutate<T>()` (the
+write primitive: throws ApiError on non-2xx, NetworkError when the request never
+lands, returns the parsed body on 2xx), and `isTransient()`. `authFetch` stays but
+now routes through `authHeaders`, so its pre-fetch rejection is typed too. No call
+sites changed this iteration — that is the E41/E42/E43 work, one per iteration.
+
+**Test.** New `api-client.test.ts` (7 tests): 2xx returns body; non-2xx throws
+ApiError with status+code; fetch-rejection and getSession-rejection both throw
+NetworkError; the getSession-rejection case asserts `fetch` was never called (the
+bug-12 zero-requests path); authFetch still returns a non-2xx Response without
+throwing; isTransient classification. Fail-before verified by reverting
+api-client.ts: 6 tests failed (`mutate is not a function`, `NetworkError is not a
+constructor`). Re-applied -> pass. `npm run check` green: 170 files, 1869 tests,
+audit:allowlist PASS, exit 0.
+
+**SUPERVISOR D61 (6ee3083): row 19 confirmed CLOSED; new ROW 20 inserted** — add an
+`npm run schema:snapshot` script for the phantom guard, sequenced BEFORE the next
+migration (not after the remaining docs), because docs `03`/`05`/`09` carry
+migrations that would leave the snapshot stale and break the guard. This reorders
+the plan (surfaced per operating rule 4); it is low-risk tooling (npm script + guard
+header line + a mention in the migration steps), no migration/money/prod-grant.
+
+**Next: ROW 20 (schema:snapshot script), per D61 — before any migration-bearing
+task.** Then resume doc `05`: §1.2 `useSaveAction` hook, then the E41/E42/E43 caller
+migrations (one finding each), with the `no-authfetch-mutation` eslint rule LAST
+(after all 70-odd call sites move to `mutate`). Owner-gated / NOT loop-actionable:
+row 19 #2 (b)/(c), E25 bucket cutover, the row-9 admin conjunct cutover, free_until.
