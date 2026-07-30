@@ -5928,12 +5928,16 @@ needs one) and vary only the period; the old no-items shape is an ignored event
 under D12 and its null-period behaviour is already covered by
 `stripe-subscription-period.test.ts`. Probe (restore guess-to-core) fails 2.
 
-**Not done, recorded.** The plan asks for "a startup assertion in src/env.ts that
-all six price envs are set in production". There is no `src/env.ts` (nor
-`env.test.ts`) in the tree, so there is nothing to hang it on, and the fail-closed
-behaviour already prevents the mis-charge (an unset env yields no mapping, so the
-event is ignored, not mis-stamped). A prod-config check for the six price envs is a
-deploy-time concern; left as an owner item.
+**Correction + done (`222eb60`).** I first recorded that `src/env.ts` does not
+exist and left the plan's requested startup assertion undone. That was wrong:
+`src/env.ts` and `env.test.ts` both exist. `assertStripePricesConfigured()` (throws
+in production if any of the six `STRIPE_PRICE_*` envs is unset, no-op elsewhere) and
+`missingStripePriceEnvs()` were added there with 4 tests, and the webhook's
+`unknown_price` log now carries the missing-envs list so the misconfiguration is
+diagnosable at the point it bites. Wiring the assertion into a fatal boot hook is
+left out deliberately: Next has no clean per-route boot, and the D12 code already
+fails closed, so a throw-at-module-load would be riskier than the fail-closed +
+loud-log it now has. Available for a deploy healthcheck.
 
 **Full gate.**
 
