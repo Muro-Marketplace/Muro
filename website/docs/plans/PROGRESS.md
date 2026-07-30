@@ -5803,3 +5803,67 @@ pairs, up to 18 rows at testing-venue) so the D9 active-uniqueness index can be
 added. All are fin-coles at test venues (april-venue, testing-venue, the-mayfield,
 the-venue-test), so they look like test data, but which to keep is a call for the
 owner. Until then the webhook determinism fix holds the line.
+
+---
+
+## `04` T5 / D10 — client-asserted venueSlug diverted artist revenue (owner: `04` §B5)
+
+Commit `6ab6338`.
+
+**The finding.** `api/checkout/route.ts` took `venueSlug` from the request body. A
+real slug for a venue where the artist holds an active placement moves the venue's
+revenue share out of the artist's net (E9's `buildArtistLegs` reads
+`placementByArtistSlug`, keyed off that venueSlug), so a venue operator could divert
+an artist's money on a sale that never came through their QR.
+
+**What changed (6 files).** The QR redirect resolves the venue server-side, so it
+now mints an HMAC token binding the venue to the scanned artist, and checkout
+verifies it instead of trusting a slug:
+- `src/lib/qr-attribution-token.ts` (new): `signQrAttribution` / `verifyQrAttribution`,
+  reusing `ORDER_TOKEN_SECRET`, mirroring `order-tracking-token.ts`.
+- `api/qr/[slug]/route.ts`: mints the token into the redirect as `va` (best-effort;
+  a missing secret does not break the redirect).
+- `lib/validations.ts`: `venueAttributionToken` on the checkout schema.
+- `api/checkout/route.ts`: verify the token, honour the venue only when the claim's
+  artist is in the cart.
+- `lib/qr-context.ts` + `browse/[slug]/ArtistProfileClient.tsx` +
+  `checkout/page.tsx`: thread the token through the existing localStorage bridge.
+
+**Behaviour preserved by default; the flip is the owner's.** The bare venueSlug is
+still accepted as a fallback for QR codes printed before the token existed, UNLESS
+`QR_ATTRIBUTION_ENFORCE=1`. That is the one-release transition the plan specifies,
+so this commit regresses nothing. **The hole is actually closed by turning
+enforcement on**, once old codes age out, which is an owner decision (like the
+GATING_V1 flip). Recorded under owner decisions.
+
+**Tests.** `qr-attribution-token.test.ts` (6: round-trip, tamper, wrong secret,
+expiry, malformed, unset secret). 6 checkout cases: valid in-cart token honoured,
+out-of-cart token ignored, forged token ignored, bare-slug fallback with
+enforcement off, bare-slug dropped with enforcement on, token beats a mismatched
+bare slug. Probe (trust the raw slug) fails 3.
+
+**Not verified here, recorded as owner actions.** The browser QR-scan ->
+localStorage -> checkout flow cannot be exercised end to end in this environment
+(no QR E2E), and the enforcement flip that closes the hole is the owner's. The
+server logic and the token are unit-tested; the frontend threading is additive
+(new optional field carried through the existing bridge) and typechecks.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  163 passed (163)
+Tests  1769 passed (1769)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**New owner decisions.**
+1. Flip `QR_ATTRIBUTION_ENFORCE=1` (a server env var) once QR codes printed before
+   this change have aged past their usefulness. Until then the venueSlug diversion
+   remains possible via the bare-slug fallback; the token path is the secure route
+   but the fallback is still open. This is the only thing that fully closes D10.
+2. E2E-verify the QR-scan -> browse -> checkout attribution once in a browser env,
+   since the localStorage threading was not exercised here.
+
+**Still open in T5:** D11 (non-active placements silently pay the venue nothing;
+log the miss so it is observable).
