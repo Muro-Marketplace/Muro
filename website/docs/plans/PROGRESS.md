@@ -6959,3 +6959,58 @@ mention the **managed** branch carried the same shape (`~:159-191`) — fixed bo
 is type-confused and breaks any refund keyed on it; D18 curation refund folds in).
 Re-read `api/curation/route.ts` + `webhooks/stripe/route.ts:116-160` and verify the
 live `curation_requests` columns first.
+
+## `04` B10 / D20 — subscription id no longer masquerades as a payment intent
+
+Commit `c2dcc8b`. Third curation finding (folds in the D18 storage half).
+
+**The defect (confirmed in source + prod).** The curation webhook branch wrote
+`stripe_payment_intent_id: paymentIntentId || subscriptionId`
+(`webhooks/stripe/route.ts`, was doc-cited `:84`, actually `:137`). A managed
+tier is a Stripe **subscription**: its `checkout.session.completed` has
+`payment_intent = null`, so `paymentIntentId` is `""` and the column received the
+`sub_…` id. Any refund keyed on that column would call
+`stripe.refunds.create({ payment_intent: "sub_…" })` and fail. Prod
+`curation_requests` has **no `stripe_subscription_id` column** (unlike
+`artist_profiles` and `placements`, which both have one) — that missing column is
+the root cause of the jam-it-into-the-PI-column hack.
+
+**Prod facts checked first (Supabase MCP, project uwkuhygwvasdzwsusiym).** 2 total
+rows, 0 managed, 0 `stripe_payment_intent_id LIKE 'sub_%'`, 0 `pi_%`. So the fix
+is purely forward-looking; **no backfill** (and no UPDATE of payment rows).
+
+**The fix.** `stripe_payment_intent_id: paymentIntentId || null`, and the dead
+`subscriptionId` derivation removed. The column now only ever holds a real `pi_…`
+or `null`. The subscription remains recoverable from the stored
+`stripe_checkout_session_id` (`→ session.subscription`) when a refund path is
+built. Migration-free by design: the correct data model (a
+`curation_requests.stripe_subscription_id` column) needs a migration and **04's
+range 080-089 is exhausted**, so it is escalated, not taken out of range.
+
+**Test added.** New `describe("Stripe webhook — curation payment id storage (D20)")`
+in `webhooks/stripe/route.test.ts` (the branch had zero coverage). It drives a
+curation `checkout.session.completed` through the real handler and asserts the DB
+update payload: subscription mode → `stripe_payment_intent_id === null` (not the
+sub id) and `status === "in_progress"`; one-off → `=== "pi_live_456"` and
+`status === "paid"`. Fail-before/pass-after verified: reintroducing the
+`|| subscriptionId` behaviour inline made **only** the subscription test fail
+(`Tests 1 failed | 1 passed`), the one-off stayed green (the bug only touches the
+subscription path); restoring the fix → both pass.
+
+**Verification.** `npm run check` → `EXIT=0`, `Test Files 164 passed (164)`,
+`Tests 1824 passed (1824)` (+2), 0 lint/type errors. Payment task, but a live
+Stripe test-mode drive is impossible here (no test key / webhook secret); the test
+drives a simulated event through the actual webhook handler, the available proxy.
+No penny-split in this finding. No schema/RLS change → advisor + `pg_policies`
+assertion N/A.
+
+**Escalations recorded (owner decision).** (1) `curation_requests.stripe_subscription_id`
+column — blocked on 04's exhausted migration range (080-089); bundle with D21's
+status-CHECK widen. (2) The actual curation **refund path** (endpoint / admin
+action) does not exist — that is D18's feature half, not a bug fix. Doc D18 section
+annotated RESOLVED (storage half).
+
+**Next: D21** (managed curation subscriptions never reconcile — needs the status
+CHECK widened to add `past_due`/`paused`, the 04-range-exhausted migration → this
+is the escalation point). Re-read the invoice/subscription webhook handlers and
+verify the live `curation_requests_status_check` first.
