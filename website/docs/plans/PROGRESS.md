@@ -6504,3 +6504,68 @@ artist keeps 5% for ever). Add `subscription_status` to `ArtistPlanState` AND to
 all five callers' `.select()`, or PostgREST rejects the query whole (phantom-column
 class). That is the last supervisor-queue row; after it, back to the 04 C-series
 (C3, C4).
+
+---
+
+## Supervisor-queue row 16 / D40 / E52 — platformFeePercentForArtist respects subscription_status (LAST queue row)
+
+Commit `d404864`. Owner-authorised security queue. **This completes the supervisor
+queue (rows 13-16).**
+
+**The finding (verified live).** `platformFeePercentForArtist` read
+`subscription_plan` only. `customer.subscription.deleted` writes
+`subscription_status='canceled'` but never resets `subscription_plan`, so a
+cancelled Pro artist kept 5% for ever. Prod shapes confirm the exposure: one
+`pro`/`none` profile (maya-chen-demo) and two `core`/`canceled` — all were getting
+their plan rate instead of the 15% default. `subscription_status` is a real `text`
+column. No artist has a future `trial_end`, so gating the trial 0% on status too
+changed no current fee.
+
+**What changed.**
+- `platform-fee.ts`: `ArtistPlanState` gained `subscription_status`; the helper now
+  returns the 15% default unless status is `active`/`trialing`, then applies the
+  trial 0% / plan rate. Stripe leaves status `active` through `cancel_at_period_end`
+  until the period ends, so this is paid-through-period-end with no proration.
+- All FOUR fee-relevant `.select()`s now fetch `subscription_status`:
+  `payouts/legs.ts` (the webhook sale path via buildArtistLegs),
+  `paid-loan-billing.ts`, `offers/[id]/checkout`, `placements/[id]/payment/setup`.
+  Omitting it hands the helper `undefined` and over-charges an active artist the
+  default (the inverse of the `free_until` phantom-column failure). Types updated
+  alongside each select; the offers comment (still referencing the long-removed
+  `free_until`) was corrected.
+
+**Design note.** Gated on the literal ruling: status must be `active`/`trialing`
+for ANY discount, including the trial 0%. A cancelled artist with a lingering
+future `trial_end` gets 15%, not 0% (there are none in prod). A legitimately
+trialing artist has status `trialing`, so the 0% still applies.
+
+**Tests (fail-before / pass-after, probe-verified).** New `platform-fee`
+`subscription_status gate` block: cancelled Pro -> 15, status `none` -> 15, missing
+status -> 15, cancelled-with-future-trial -> 15; probe (disable the gate) fails
+those 4 (they return the old 5/8/0). Existing plan/trial tests updated to pass
+`subscription_status: "active"`/`"trialing"`. Offers route: a cancelled artist's
+split asserted to the penny (`495` fee + `2805` net = `3300`). `legs` + webhook E9
+mock profiles set to `active`.
+
+**Gate.** `Test Files 163 passed (163)`, `Tests 1801 passed (1801)`,
+`176 problems (0 errors, 176 warnings)`, allowlist PASS.
+
+**Payment-drive limitation.** No live Stripe drive here; the split is asserted
+through the mocked webhook E9 ("splits to the penny") and offers-route paths, and
+the fee values directly in the unit test.
+
+---
+
+## Supervisor queue COMPLETE (rows 13-16)
+
+All four owner-authorised security-queue rows are done:
+- 13 (D38): artist_profiles anon+authenticated PII/Stripe revoke (migrations 076/077).
+- 14 (E50/D37): increment_placement_revenue locked to service_role (migration 075).
+- 15 (D39): QR enforcement fails closed (503) + ORDER_TOKEN_SECRET in env schema.
+- 16 (D40/E52): platformFeePercentForArtist respects subscription_status.
+
+**Next:** return to the `04` C-series in Phase-1 dependency order — C3
+(`recordBlockedLeg` + `scheduleTransfer` must throw) then C4 (retry sweep with
+`retry_count`). Then the remaining T8 D18 (curation refund path, B10), T9 (N1/N2),
+and any owner-decision items. D14 (referral credit) remains blocked on a product
+decision.
