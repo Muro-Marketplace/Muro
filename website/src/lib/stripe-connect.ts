@@ -107,11 +107,11 @@ export async function scheduleTransfer(params: ScheduleTransferParams): Promise<
  */
 export async function recordBlockedLeg(
   db: ReturnType<typeof getSupabaseAdmin>,
-  args: { orderId: string; recipientUserId: string; amountCents: number; reason: string },
+  args: { orderId: string; recipientType?: "artist" | "venue"; recipientUserId: string; amountCents: number; reason: string },
 ): Promise<void> {
   const { error } = await db.from("stripe_transfers").insert({
     order_id: args.orderId,
-    recipient_type: "artist",
+    recipient_type: args.recipientType ?? "artist",
     recipient_user_id: args.recipientUserId,
     stripe_transfer_id: "",
     stripe_connect_account_id: "",

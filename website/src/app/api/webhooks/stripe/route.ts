@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
+import { canReceivePayout } from "@/lib/payouts/capability";
 import { notifyCurationCustomerPaid, notifyAdminBillingStalled } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
@@ -293,35 +294,33 @@ async function handleWebhookEvent(
         // accepted offer and no stripe_transfers ledger row was ever written.
         if (artistUserId && netPence > 0) {
           try {
-            const { data: artistConnect } = await db
-              .from("artist_profiles")
-              .select("stripe_connect_account_id, stripe_connect_onboarding_complete")
-              .eq("user_id", artistUserId)
-              .single();
-            if (artistConnect?.stripe_connect_account_id && artistConnect.stripe_connect_onboarding_complete) {
+            // D52: gate on canReceivePayout (payouts_enabled + a fresh Stripe
+            // check), not the stale stripe_connect_onboarding_complete boolean C1
+            // replaced — that predicate cannot tell a mid-KYC payout hold from a
+            // live account, so it would schedule a transfer into an unpayable
+            // balance. On a block, record the owed payout with the real reason.
+            const cap = await canReceivePayout(db, { kind: "artist", userId: artistUserId });
+            if (cap.ok && cap.accountId) {
               await scheduleTransfer({
                 orderId: paidOrderId,
                 recipientType: "artist",
                 recipientUserId: artistUserId,
-                connectAccountId: artistConnect.stripe_connect_account_id,
+                connectAccountId: cap.accountId,
                 amountCents: netPence,
                 immediate: false,
               });
             } else {
-              // The checkout pre-flight should have stopped this, so it means
-              // onboarding lapsed between session creation and payment. Record
-              // the owed payout as a 'blocked' ledger row (C3) so it surfaces in
-              // reconciliation instead of vanishing into a log line.
               console.error("[offer] artist cannot be paid out, transfer skipped", {
                 paidOrderId,
                 artistUserId,
                 netPence,
+                reason: cap.reason,
               });
               await recordBlockedLeg(db, {
                 orderId: paidOrderId,
                 recipientUserId: artistUserId,
                 amountCents: netPence,
-                reason: "onboarding_incomplete",
+                reason: cap.reason ?? "unknown",
               });
             }
           } catch (transferErr) {
@@ -1023,19 +1022,38 @@ async function handleWebhookEvent(
           // Transfer venue revenue share
           if (venueSlug && venueRevenue > 0) {
             try {
-              const { data: venueConnect } = await db
+              // D52: gate on canReceivePayout, not the stale onboarding boolean.
+              const cap = await canReceivePayout(db, { kind: "venue", slug: venueSlug });
+              // canReceivePayout returns the account id + capability but not the
+              // venue's user_id, which the ledger row needs; resolve it here.
+              const { data: venueRow } = await db
                 .from("venue_profiles")
-                .select("user_id, stripe_connect_account_id, stripe_connect_onboarding_complete")
+                .select("user_id")
                 .eq("slug", venueSlug)
-                .single();
-              if (venueConnect?.stripe_connect_account_id && venueConnect.stripe_connect_onboarding_complete) {
+                .maybeSingle<{ user_id: string | null }>();
+              const venueUserId = venueRow?.user_id ?? null;
+              const venuePence = Math.round(venueRevenue * 100);
+              if (cap.ok && cap.accountId && venueUserId) {
                 await scheduleTransfer({
                   orderId,
                   recipientType: "venue",
-                  recipientUserId: venueConnect.user_id,
-                  connectAccountId: venueConnect.stripe_connect_account_id,
-                  amountCents: Math.round(venueRevenue * 100),
+                  recipientUserId: venueUserId,
+                  connectAccountId: cap.accountId,
+                  amountCents: venuePence,
                   immediate: isCollection,
+                });
+              } else if (venueUserId) {
+                console.error("[cart] venue cannot be paid out, transfer skipped", {
+                  orderId,
+                  venueSlug,
+                  reason: cap.reason,
+                });
+                await recordBlockedLeg(db, {
+                  orderId,
+                  recipientType: "venue",
+                  recipientUserId: venueUserId,
+                  amountCents: venuePence,
+                  reason: cap.reason ?? "unknown",
                 });
               }
             } catch (transferErr) {
@@ -1052,38 +1070,34 @@ async function handleWebhookEvent(
           for (const leg of legs) {
             if (leg.netPence <= 0) continue;
             try {
-              const { data: artistConnect } = await db
-                .from("artist_profiles")
-                .select("stripe_connect_account_id, stripe_connect_onboarding_complete")
-                .eq("user_id", leg.artistUserId)
-                .single();
-              if (artistConnect?.stripe_connect_account_id && artistConnect.stripe_connect_onboarding_complete) {
+              // D52: gate on canReceivePayout (payouts_enabled), not the stale
+              // stripe_connect_onboarding_complete boolean C1 replaced. A lapsed
+              // account passes the old gate and the money lands in an unpayable
+              // balance; the fresh capability check catches it and records the
+              // owed payout as a 'blocked' ledger row with the real reason.
+              const cap = await canReceivePayout(db, { kind: "artist", userId: leg.artistUserId });
+              if (cap.ok && cap.accountId) {
                 await scheduleTransfer({
                   orderId,
                   recipientType: "artist",
                   recipientUserId: leg.artistUserId,
-                  connectAccountId: artistConnect.stripe_connect_account_id,
+                  connectAccountId: cap.accountId,
                   amountCents: leg.netPence,
                   immediate: isCollection,
                 });
               } else {
-                // The checkout pre-flight (canReceivePayout) should have stopped
-                // this, so reaching here means onboarding lapsed between session
-                // creation and payment. Record the owed payout as a 'blocked'
-                // ledger row (C3) so it surfaces in reconciliation instead of
-                // vanishing into a log line; the money stays on the platform
-                // balance until ops resolve it.
                 console.error("[cart] artist cannot be paid out, transfer skipped", {
                   orderId,
                   artistSlug: leg.artistSlug,
                   artistUserId: leg.artistUserId,
                   netPence: leg.netPence,
+                  reason: cap.reason,
                 });
                 await recordBlockedLeg(db, {
                   orderId,
                   recipientUserId: leg.artistUserId,
                   amountCents: leg.netPence,
-                  reason: "onboarding_incomplete",
+                  reason: cap.reason ?? "unknown",
                 });
               }
             } catch (transferErr) {

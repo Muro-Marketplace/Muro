@@ -43,6 +43,13 @@ const {
   ),
 }));
 
+// D52: the webhook now gates payouts on canReceivePayout (not the onboarding
+// boolean) and records blocked legs. Both are mocked here.
+const { recordBlockedLegMock, canReceivePayoutMock } = vi.hoisted(() => ({
+  recordBlockedLegMock: vi.fn(async () => {}),
+  canReceivePayoutMock: vi.fn(),
+}));
+
 vi.mock("@/lib/stripe", () => ({
   stripe: {
     webhooks: { constructEvent: constructEventMock },
@@ -61,6 +68,11 @@ vi.mock("@/lib/supabase-admin", () => ({
 
 vi.mock("@/lib/stripe-connect", () => ({
   scheduleTransfer: scheduleTransferMock,
+  recordBlockedLeg: recordBlockedLegMock,
+}));
+
+vi.mock("@/lib/payouts/capability", () => ({
+  canReceivePayout: canReceivePayoutMock,
 }));
 
 vi.mock("@/lib/email", () => ({
@@ -300,12 +312,29 @@ function buildRequest() {
   });
 }
 
+// D52: userIds / venue slugs whose canReceivePayout should return a block.
+let blockedPayoutTargets = new Set<string>();
+
 beforeEach(() => {
   process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
   constructEventMock.mockReset();
   fromMock.mockReset();
   loadCartSessionMock.mockReset();
   scheduleTransferMock.mockClear();
+  // D52 payout gate: default every target payable, deriving the account id from
+  // the user id (u-alice -> acct_alice) or the venue slug. Tests add a userId or
+  // slug to blockedPayoutTargets to simulate a lapsed / non-payout-ready account.
+  recordBlockedLegMock.mockClear();
+  blockedPayoutTargets = new Set();
+  canReceivePayoutMock.mockReset();
+  canReceivePayoutMock.mockImplementation(
+    async (_db: unknown, target: { userId?: string; slug?: string }) => {
+      const key = target.userId ?? target.slug ?? "";
+      if (blockedPayoutTargets.has(key)) return { ok: false, accountId: null, reason: "payouts_disabled" };
+      const suffix = (target.userId ?? "").replace(/^u-/, "") || (target.slug ?? "");
+      return { ok: true, accountId: `acct_${suffix}`, reason: null };
+    },
+  );
   rpcMock.mockClear();
   rpcMock.mockResolvedValue({ data: null, error: null });
   // mockReset, not mockClear: a mockRejectedValueOnce that no test consumed
@@ -688,15 +717,19 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     );
   });
 
-  it("does not pay an artist whose Connect onboarding is incomplete", async () => {
-    const state = freshState({
-      connect: { stripe_connect_account_id: "acct_artist", stripe_connect_onboarding_complete: false },
-    });
+  it("does not pay an artist whose payout account is not ready, and records a blocked leg (D52)", async () => {
+    const state = freshState();
     setupOfferDb(state);
+    blockedPayoutTargets.add("u-artist"); // canReceivePayout -> { ok: false, reason: "payouts_disabled" }
     const res = await fireOffer();
     // The order still exists so the sale is recorded and recoverable.
     expect(state.orderInsert.row).not.toBeNull();
     expect(scheduleTransferMock).not.toHaveBeenCalled();
+    // The owed payout is recorded, not lost, with the real capability reason.
+    expect(recordBlockedLegMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ recipientUserId: "u-artist", reason: "payouts_disabled" }),
+    );
     expect(res.status).toBe(200);
   });
 
@@ -1106,24 +1139,24 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
     );
   });
 
-  it("pays the other artist when one artist's Connect account has lapsed", async () => {
+  it("pays the other artist when one artist's payout account has lapsed (D52)", async () => {
     // One leg failing must not strand the rest. The old single-transfer shape had
     // nothing to strand, so this behaviour is new and worth pinning.
     const insertCaptured = { row: null as Record<string, unknown> | null };
-    setupDbMock({
-      artistProfiles: [
-        { ...TWO_ARTISTS[0], stripe_connect_onboarding_complete: false },
-        TWO_ARTISTS[1],
-      ],
-      insertCaptured,
-    });
+    setupDbMock({ artistProfiles: TWO_ARTISTS, insertCaptured });
     twoArtistCart();
+    blockedPayoutTargets.add("u-alice"); // canReceivePayout -> blocked for alice only
 
     expect((await POST(buildRequest())).status).toBe(200);
 
     const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
     expect(artistTransfers).toHaveLength(1);
     expect(artistTransfers[0]).toMatchObject({ recipientUserId: "u-bob", amountCents: 9500 });
+    // Alice's owed payout is recorded as a blocked leg, not lost.
+    expect(recordBlockedLegMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ recipientUserId: "u-alice", reason: "payouts_disabled" }),
+    );
     // The order is still booked: the money is collected and owed, and ops need
     // the row to see it.
     expect(insertCaptured.row).not.toBeNull();
