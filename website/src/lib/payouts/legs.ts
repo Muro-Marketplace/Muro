@@ -136,7 +136,7 @@ export async function buildArtistLegs(
   //    reads.
   const { data: profiles, error } = await db
     .from("artist_profiles")
-    .select("user_id, slug, subscription_plan, trial_end")
+    .select("user_id, slug, subscription_plan, subscription_status, trial_end")
     .in("slug", slugs);
   if (error) throw new Error(`buildArtistLegs: profile lookup failed: ${error.message}`);
 
@@ -144,6 +144,7 @@ export async function buildArtistLegs(
     user_id: string;
     slug: string;
     subscription_plan: string | null;
+    subscription_status: string | null;
     trial_end: string | null;
   };
   const bySlug = new Map<string, ProfileRow>(

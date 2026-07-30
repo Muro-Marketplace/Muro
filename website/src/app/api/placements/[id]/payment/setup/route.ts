@@ -82,7 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: artistProfile } = await db
     .from("artist_profiles")
-    .select("name, slug, stripe_connect_account_id, subscription_plan, trial_end")
+    .select("name, slug, stripe_connect_account_id, subscription_plan, subscription_status, trial_end")
     .eq("user_id", placement.artist_user_id)
     .maybeSingle();
 

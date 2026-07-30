@@ -21,47 +21,72 @@ describe("platformFeePercentForArtist()", () => {
     expect(platformFeePercentForArtist(undefined)).toBe(15);
   });
 
-  it("maps each plan to the right percent", () => {
-    expect(platformFeePercentForArtist({ subscription_plan: "core" })).toBe(15);
-    expect(platformFeePercentForArtist({ subscription_plan: "premium" })).toBe(8);
-    expect(platformFeePercentForArtist({ subscription_plan: "pro" })).toBe(5);
+  // The discount requires an ACTIVE subscription (D40/E52). These pass
+  // subscription_status: "active" so they exercise the plan mapping.
+  it("maps each plan to the right percent for an active subscription", () => {
+    expect(platformFeePercentForArtist({ subscription_plan: "core", subscription_status: "active" })).toBe(15);
+    expect(platformFeePercentForArtist({ subscription_plan: "premium", subscription_status: "active" })).toBe(8);
+    expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "active" })).toBe(5);
   });
 
-  it("unknown plan falls back to 15%", () => {
-    expect(platformFeePercentForArtist({ subscription_plan: "platinum" })).toBe(15);
+  it("unknown plan falls back to 15% (even when active)", () => {
+    expect(platformFeePercentForArtist({ subscription_plan: "platinum", subscription_status: "active" })).toBe(15);
   });
 
-  it("is case-insensitive", () => {
-    expect(platformFeePercentForArtist({ subscription_plan: "PREMIUM" })).toBe(8);
-    expect(platformFeePercentForArtist({ subscription_plan: "Pro" })).toBe(5);
+  it("is case-insensitive on the plan", () => {
+    expect(platformFeePercentForArtist({ subscription_plan: "PREMIUM", subscription_status: "active" })).toBe(8);
+    expect(platformFeePercentForArtist({ subscription_plan: "Pro", subscription_status: "active" })).toBe(5);
+  });
+
+  // D40 / E52: the discount is only granted while the subscription is live. A
+  // cancelled Pro artist kept 5% for ever because customer.subscription.deleted
+  // writes subscription_status='canceled' but never resets subscription_plan.
+  describe("subscription_status gate (D40/E52)", () => {
+    it("drops a cancelled Pro artist to the 15% default (the bug)", () => {
+      expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "canceled" })).toBe(15);
+    });
+
+    it("gives the default to a plan with status 'none' (the maya-chen-demo shape)", () => {
+      expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "none" })).toBe(15);
+    });
+
+    it("gives the default when subscription_status is missing entirely", () => {
+      // A caller whose .select() omits subscription_status hands us undefined; fail
+      // safe to the default rather than granting an unverified discount.
+      expect(platformFeePercentForArtist({ subscription_plan: "premium" })).toBe(15);
+    });
+
+    it("honours the discount for an active premium artist (fin-coles' live shape)", () => {
+      expect(platformFeePercentForArtist({ subscription_plan: "premium", subscription_status: "active", trial_end: null })).toBe(8);
+    });
+
+    it("honours a trialing subscription", () => {
+      expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "trialing", trial_end: null })).toBe(5);
+    });
   });
 
   // D17.1. This block used to key on `free_until`, a column that exists in no
-  // migration and not in the live table. These tests passed the whole time,
-  // because they exercise the pure function and never touch the schema, while
-  // every caller's `.select("... free_until")` was rejected whole by PostgREST and
-  // handed this function a null profile. That is why a premium artist was charged
-  // 15% instead of 8% on all twelve live orders with a green test suite. Renamed,
-  // not duplicated: there is no free_until window to keep testing.
+  // migration and not in the live table, so every caller's `.select("... free_until")`
+  // was rejected whole by PostgREST and this function got a null profile. `trial_end`
+  // is the real column, and it only zeroes the fee for an active/trialing artist.
   describe("trial_end window", () => {
-    it("returns 0% when trial_end is in the future", () => {
+    it("returns 0% when trial_end is in the future for a trialing artist", () => {
       const future = new Date(Date.now() + 86_400_000).toISOString(); // +1 day
-      expect(platformFeePercentForArtist({ subscription_plan: "core", trial_end: future })).toBe(0);
+      expect(platformFeePercentForArtist({ subscription_plan: "core", subscription_status: "trialing", trial_end: future })).toBe(0);
     });
 
     it("returns the plan rate when trial_end has expired", () => {
       const past = new Date(Date.now() - 86_400_000).toISOString();
-      expect(platformFeePercentForArtist({ subscription_plan: "core", trial_end: past })).toBe(15);
+      expect(platformFeePercentForArtist({ subscription_plan: "core", subscription_status: "active", trial_end: past })).toBe(15);
     });
 
     it("ignores null trial_end", () => {
-      expect(platformFeePercentForArtist({ subscription_plan: "pro", trial_end: null })).toBe(5);
+      expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "active", trial_end: null })).toBe(5);
     });
 
-    it("charges premium 8% on a profile shaped like the live one, which is the bug", () => {
-      // fin-coles as prod actually holds them: premium, active, trial_end null.
-      // Ten of the twelve live orders are theirs, all recorded at 15%.
-      expect(platformFeePercentForArtist({ subscription_plan: "premium", trial_end: null })).toBe(8);
+    it("does not grant the trial 0% to a cancelled artist even if trial_end is future", () => {
+      const future = new Date(Date.now() + 86_400_000).toISOString();
+      expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "canceled", trial_end: future })).toBe(15);
     });
   });
 });

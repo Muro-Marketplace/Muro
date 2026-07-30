@@ -45,7 +45,7 @@ const OFFER = {
 
 /** Columns the profile select is allowed to name, mirroring the live table. */
 const LIVE_PROFILE_COLUMNS = [
-  "slug", "subscription_plan", "user_id", "name",
+  "slug", "subscription_plan", "subscription_status", "user_id", "name",
   "stripe_connect_account_id", "stripe_connect_onboarding_complete",
 ];
 
@@ -156,12 +156,24 @@ describe("POST /api/offers/[id]/checkout split (E6)", () => {
   });
 
   it("uses the artist's real plan rate, not a flat 15%", async () => {
-    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "pro" }); // 5%
+    // Pro AND active — the discount now requires a live subscription (D40/E52).
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "pro", subscription_status: "active" }); // 5%
     await post();
     expect(metadata()).toMatchObject({
       offer_platform_fee_percent: "5",
       offer_platform_fee_pence: "165",
       offer_artist_net_pence: "3135",
+    });
+  });
+
+  it("charges a cancelled artist the 15% default, not their old plan rate (D40/E52)", async () => {
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "pro", subscription_status: "canceled" });
+    await post();
+    expect(metadata()).toMatchObject({
+      offer_platform_fee_percent: "15",
+      // 3300 * 0.15 = 495; net 3300 - 495 = 2805.
+      offer_platform_fee_pence: "495",
+      offer_artist_net_pence: "2805",
     });
   });
 

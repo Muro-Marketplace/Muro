@@ -972,6 +972,7 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
       user_id: "u-alice",
       slug: "alice",
       subscription_plan: "core", // 15%
+      subscription_status: "active",
       stripe_connect_account_id: "acct_alice",
       stripe_connect_onboarding_complete: true,
     },
@@ -979,6 +980,7 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
       user_id: "u-bob",
       slug: "bob",
       subscription_plan: "pro", // 5%
+      subscription_status: "active",
       stripe_connect_account_id: "acct_bob",
       stripe_connect_onboarding_complete: true,
     },

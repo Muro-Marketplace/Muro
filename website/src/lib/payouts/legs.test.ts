@@ -27,8 +27,9 @@ const db = {
   }),
 } as unknown as Parameters<typeof buildArtistLegs>[0];
 
-const ALICE = { user_id: "u-alice", slug: "alice", subscription_plan: "core", trial_end: null }; // 15%
-const BOB = { user_id: "u-bob", slug: "bob", subscription_plan: "pro", trial_end: null }; //  5%
+// Active subscriptions: the discount only applies while active/trialing (D40/E52).
+const ALICE = { user_id: "u-alice", slug: "alice", subscription_plan: "core", subscription_status: "active", trial_end: null }; // 15%
+const BOB = { user_id: "u-bob", slug: "bob", subscription_plan: "pro", subscription_status: "active", trial_end: null }; //  5%
 
 beforeEach(() => {
   profileRows = [ALICE, BOB];
@@ -252,7 +253,7 @@ describe("buildArtistLegs, shipping attribution", () => {
   it("attributes every penny of shipping, remainder included", async () => {
     // 1000p across three equal artists is 333.33 each. The remainder must land
     // somewhere deterministic rather than evaporating.
-    profileRows = [ALICE, BOB, { user_id: "u-cat", slug: "cat", subscription_plan: "core", trial_end: null }];
+    profileRows = [ALICE, BOB, { user_id: "u-cat", slug: "cat", subscription_plan: "core", subscription_status: "active", trial_end: null }];
     const legs = await build(
       [
         { artistSlug: "alice", price: 100, quantity: 1 },

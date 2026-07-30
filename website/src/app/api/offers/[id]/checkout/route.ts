@@ -114,16 +114,17 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   // The old route charged the buyer and left the webhook with nothing to split,
   // so the artist was never paid.
   //
-  // Selecting only columns that exist. `platformFeePercentForArtist` also reads
-  // `free_until`, which is in no migration and not in the live table: naming it
-  // here would make PostgREST reject the whole select, null the profile, and
-  // (because the fee helper defaults a null profile to 15%) silently overcharge
-  // every artist. See PROGRESS.md, that bug is live on the cart path today.
+  // Select every column platformFeePercentForArtist reads: subscription_plan AND
+  // subscription_status (D40/E52 — the discount only applies while the sub is
+  // active/trialing). Omitting subscription_status would hand the helper undefined
+  // and over-charge an active artist the 15% default. trial_end is intentionally
+  // not selected here: offers have never honoured the trial 0% window, and adding
+  // it would change what trialing artists are charged on offers.
   const { data: artistProfile } = await db
     .from("artist_profiles")
-    .select("slug, subscription_plan")
+    .select("slug, subscription_plan, subscription_status")
     .eq("user_id", offer.artist_user_id)
-    .maybeSingle<{ slug: string; subscription_plan: string | null }>();
+    .maybeSingle<{ slug: string; subscription_plan: string | null; subscription_status: string | null }>();
 
   if (!artistProfile) {
     return NextResponse.json({ error: "Artist profile unavailable" }, { status: 500 });
