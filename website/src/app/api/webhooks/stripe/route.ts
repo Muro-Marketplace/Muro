@@ -120,6 +120,12 @@ async function handleWebhookEvent(
         const paymentIntentId = typeof session.payment_intent === "string"
           ? session.payment_intent
           : session.payment_intent?.id || "";
+        // D20-complete: a managed tier is a subscription; its id now has a
+        // dedicated column (migration 099) instead of contaminating the payment
+        // intent column. NULL for a one-off tier (no subscription).
+        const subscriptionId = typeof session.subscription === "string"
+          ? session.subscription
+          : (session.subscription?.id ?? null);
         const amountPaid = (session.amount_total || 0) / 100;
         const { data: existing } = await db
           .from("curation_requests")
@@ -134,14 +140,15 @@ async function handleWebhookEvent(
             .from("curation_requests")
             .update({
               status: newStatus,
-              // D20: this column is a Stripe payment intent, so it must hold a real
-              // pi_… id or null. A managed tier is a subscription with no top-level
-              // payment intent; the old `paymentIntentId || subscriptionId` wrote a
-              // sub_… id here, so any refund keyed on the column would call
-              // stripe.refunds.create({ payment_intent: "sub_…" }) and fail. The
-              // subscription stays recoverable from stripe_checkout_session_id
-              // (→ session.subscription) when the curation refund path is built.
+              // D20: stripe_payment_intent_id is a payment intent, so it holds a
+              // real pi_… id or null. A managed tier is a subscription with no
+              // top-level payment intent; its id goes in stripe_subscription_id
+              // (migration 099), NOT here. The old `paymentIntentId ||
+              // subscriptionId` stored a sub_… id in this column, so any refund
+              // keyed on it would call
+              // stripe.refunds.create({ payment_intent: "sub_…" }) and fail.
               stripe_payment_intent_id: paymentIntentId || null,
+              stripe_subscription_id: subscriptionId,
               amount_paid_gbp: amountPaid,
               paid_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),

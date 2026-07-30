@@ -2403,6 +2403,8 @@ describe("Stripe webhook — curation payment id storage (D20)", () => {
     // The crux: a subscription id must never masquerade as a payment intent.
     expect(curationUpdate!.stripe_payment_intent_id).toBeNull();
     expect(curationUpdate!.stripe_payment_intent_id).not.toBe("sub_live_123");
+    // D20-complete (migration 099): the sub id lands in its own column.
+    expect(curationUpdate!.stripe_subscription_id).toBe("sub_live_123");
     // Managed tier is an ongoing service.
     expect(curationUpdate!.status).toBe("in_progress");
   });
@@ -2414,6 +2416,8 @@ describe("Stripe webhook — curation payment id storage (D20)", () => {
 
     expect(res.status).toBe(200);
     expect(curationUpdate!.stripe_payment_intent_id).toBe("pi_live_456");
+    // A one-off has no subscription, so the column stays null.
+    expect(curationUpdate!.stripe_subscription_id).toBeNull();
     expect(curationUpdate!.status).toBe("paid");
   });
 });
