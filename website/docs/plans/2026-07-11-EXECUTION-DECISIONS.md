@@ -2013,3 +2013,60 @@ Per D49.2 — "I have been wrong every time I reasoned about a mechanism from it
 - E50 caller sweep: single call site, service-role bound. Clean.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
 - `message-attachments` bucket: still public. **E25 is now the only untouched item from the original security queue** — worth picking up after rows 15 and 16.
+
+---
+
+## D51. Row 15 verified. Correcting D40.2's mechanism claim and its call-site count, while row 16 is still in flight.
+
+*— supervisor. 167 commits. Row 15 done (`c509771` + `b40baf3`); row 16 uncommitted across `platform-fee.ts` and its callers.*
+
+### D51.1 — Row 15 verified, all three parts
+
+1. `src/env.ts:48` — `ORDER_TOKEN_SECRET: z.string().min(32).optional()`.
+2. `checkout/route.ts:74-82` — when `QR_ATTRIBUTION_ENFORCE === "1"` and the secret is unset, it logs a named error and returns **503**, refusing to price the sale rather than attributing to `""`.
+3. The PROGRESS owner instruction is rewritten as the ordered sequence: set the secret → confirm `va=` appears on a real QR redirect → only then flip.
+
+The loaded gun is unloaded. The flip remains the owner's, and is now safe to perform in that order.
+
+### D51.2 — CORRECTING D40.2: I described the wrong failure mechanism
+
+D40.2 said: *"Add `subscription_status` to `ArtistPlanState` **and to all five callers' `.select()`**, or PostgREST rejects the query whole."*
+
+**That is wrong, and it matters because it points at the wrong test.** PostgREST rejects a query only when the `.select()` names a column that does **not exist** — the `free_until` case. `subscription_status` is a real column, so omitting it from a `.select()` does not error at all. The field simply arrives `undefined`, `(undefined || "").toLowerCase()` is not `active`, and the helper returns the 15% default. **An artist with a genuinely live Pro subscription would be silently charged 15% instead of 5%** — the same class of harm as the bug being fixed, in the opposite direction.
+
+The loop reached this independently and stated it more accurately than I did, in `platform-fee.ts`'s own header: *"Every caller's `.select()` must therefore fetch `subscription_status` too, or the field is undefined here and an active artist is over-charged the default rate (the inverse of the `free_until` phantom-column failure this file's history documents)."* That framing is the correct one.
+
+**Also correcting the count: there are four call sites, not five.** I listed the Stripe webhook as the fifth; it only carries a *comment* referencing the helper at `route.ts:1090`. Its fee path runs through `buildArtistLegs`, which does its own profile fetch. The four real ones are all now covered:
+
+| Call site | select includes `subscription_status` |
+|---|---|
+| `payouts/legs.ts:139` | yes |
+| `placements/[id]/payment/setup/route.ts:85` | yes |
+| `placements/paid-loan-billing.ts:535` | yes |
+| `offers/[id]/checkout/route.ts:125` | yes |
+
+### D51.3 — The phantom-column guard cannot catch this class. Do not assume the net is there.
+
+`tests/integration/phantom-columns.test.ts` is a **denylist of columns proven absent** (`artist_profiles.free_until`, `orders.amount_cents`, `artist_works.in_store_price`, `placements.requester_user_id`). It scans selects for names that must never appear.
+
+A *missing* select of an *existing* column is structurally invisible to it. So there is no automated protection for the D51.2 failure, and there will not be until ledger item **7b**'s general form lands (a committed `schema-columns.json` plus a scan of every select). Until then the only defence is the per-call-site check in the table above, which is why it is written out rather than asserted.
+
+### D51.4 — OWNER QUESTION: trial artists are charged differently on offers than on cart checkout
+
+`offers/[id]/checkout/route.ts:117-121` deliberately omits `trial_end`, and says so:
+
+> *"trial_end is intentionally not selected here: offers have never honoured the trial 0% window, and adding it would change what trialing artists are charged on offers."*
+
+Preserving existing behaviour rather than silently changing what artists are charged is the right instinct, and the right call for the loop to make unilaterally. But it leaves a real divergence: **during a trial, the same artist pays 0% on a cart sale and the full plan rate on an offer sale.**
+
+**Currently unreachable, which is why this is a question and not a finding.** Prod: 3 artists have `trial_end` set, **0 are live**. Nobody is affected today.
+
+Owner decision, at leisure: should offers honour the trial 0% window like cart checkout does, or is the divergence intended? If intended, it belongs in the pricing copy rather than only in a route comment.
+
+### D51.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- E51 `artist_profiles`: 64 anon columns, closed and holding.
+- E50 `increment_placement_revenue`: `{postgres=X, service_role=X}`, closed and holding.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
+- `message-attachments` bucket: still public — **E25 is the last open item from the security queue.**
