@@ -25,7 +25,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
 | 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **NEXT** (sequenced before the next migration): add `npm run schema:snapshot`, name it in the guard header, mention it in the migration steps |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate`/`ApiError`/`NetworkError`/`isTransient` in api-client.ts, this commit). Remaining: §1.2 `useSaveAction` hook, then E41/E42/E43 caller migrations (one each), `no-authfetch-mutation` eslint rule LAST |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate`/`ApiError`/`NetworkError`/`isTransient` in api-client.ts, 80a7c41). Remaining: §1.2 `useSaveAction` hook, then E41/E42/E43 caller migrations (one each), `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -7832,7 +7832,7 @@ now at 1 and cannot shrink further without an owner decision on free_until.
 
 ## row 8 (doc `05`) §1.1 — typed write primitive `mutate()` in api-client.ts
 
-Commit `<pending>`. Code-only. Foundation for the E41/E42/E43 caller migrations.
+Commit `80a7c41`. Code-only. Foundation for the E41/E42/E43 caller migrations.
 
 **The defect class (05 §0).** `authFetch` returns the raw Response and never throws
 on a non-2xx, so ~a third of callers forget `res.ok` and report a save that never
