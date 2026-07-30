@@ -20,8 +20,9 @@ Order of work: the "Corrected dependency order" at the end of
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
 | 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). Next: T3 emails, then D7 |
-| 7a | `free_until` is a phantom column overcharging non-core artists 15% on every sale | new, surfaced by T3; ruled by **D17.1** | **mandated fix, not an owner decision**. Next task. Real column is `trial_end` |
-| 7b | Schema-column guard: commit `schema-columns.json`, fail CI on a `.select()` naming a column prod lacks | **D17.3**, owner `02`, pulled forward | todo, replaces the expensive half of K11 |
+| 7a | `free_until` overcharge: every sale billed 15% | D17.1 | **done** (6e0705e). Four sites, not the two D17 named. No fee changes today, no artist has a future `trial_end` |
+| 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **narrow form done** (6e0705e): `phantom-columns.test.ts`, table-aware, four probes. Full form (generated `schema-columns.json` covering ALL columns) still todo |
+| 7c | `placements/route.ts` integrates the phantom `requester_user_id` in ~20 places | N3 follow-up, found by 7b's guard | todo. Recorded in the guard's `KNOWN_UNFIXED` ratchet so it cannot be forgotten |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -2926,3 +2927,93 @@ free_until                                      ← absent, as D17 says
 Also logged for `04` T1: **D16.1** normalise country on read, no backfill of order
 history; **D16.2 / E47** re-read `international_shipping_price` from the DB instead
 of trusting the cart, before any artist can enable international shipping.
+
+---
+
+## D17.1 — the fee overcharge, and a guard for the whole phantom-column class
+
+**D17.1's site list was incomplete.** It named two selects; there are four, and the
+two it missed both matter:
+
+| Site | Consequence of the rejected select |
+|---|---|
+| `webhooks/stripe/route.ts:359` | cart sale fee: 15% for every artist (named by D17) |
+| `placements/[id]/payment/setup/route.ts:47` | paid-loan setup fee: 15% (named by D17) |
+| **`lib/placements/paid-loan-billing.ts:417`** | **paid-loan monthly payout: 15%. A second overcharge, on recurring money** |
+| **`lib/visualizer/tier-resolver.ts:95`** | **resolver returns null, silently downgrading every artist's visualizer tier** |
+
+The tier resolver selected `free_until` and never read it, so removing it there is a
+pure deletion. Hand-enumeration missing two of four sites is the argument for D17.3.
+
+**What changed.** `platform-fee.ts` keys the zero-fee window on `trial_end`, the real
+column. All four selects name `trial_end` (or drop the field). Verified against prod
+before doing it: `trial_end` and `is_founding_artist` exist, `free_until` does not,
+and **no artist has a `trial_end` in the future**, so no fee changes today. This
+restores per-plan rates and nothing else.
+
+Founding artists are deliberately **not** given a zero fee, though the old docstring
+implied they should be. `is_founding_artist` is a separate column, prod has one such
+artist (`maya-chen-demo`, pro), and switching it on would change what an artist is
+charged. That is a product call, not a mechanical one.
+
+The referral path is untouched by design: D17.2 is an open owner question, and half
+migrating it would turn a silent no-op into a failing update.
+
+**Why the existing unit test never caught this.** `platform-fee.test.ts` pinned the
+`free_until` window and passed the entire time, because it exercises the pure
+function and never touches the schema. The function was always correct; every
+caller's query was rejected before reaching it. A green unit test sat on top of a
+live overcharge for months. The window tests are renamed to `trial_end`, not
+duplicated, plus one that asserts a premium/`trial_end: null` profile (fin-coles'
+actual shape) gets 8%.
+
+**New: `tests/integration/phantom-columns.test.ts`**, the narrow form of D17.3. It
+scans every `.from(...).select(...)` pair and fails on a column proven absent from
+that specific table.
+
+**Four probes, because an unprobed guard is just a comment:**
+
+```
+A  reintroduce orders.amount_cents      → FAILS: "app/api/admin/stats/route.ts:56
+                                          selects orders.amount_cents (Bug 15)"
+B  fix a recorded site, keep the entry  → FAILS: "...is stale, delete it"
+C  revert this commit's fee fix         → FAILS: "route.ts:359 selects
+                                          artist_profiles.free_until (D17.1)"
+D  the tree as it stands                → PASSES (5 tests)
+```
+
+**Probe C passed on the first attempt, which was a hole in the guard**, not a pass.
+The referral-path exemption was file-level, so it un-guarded the fee select in the
+same file, the exact line D17.1 exists to protect. Exemptions now match the exact
+column list, so an exemption cannot shelter a different query. This is the reason to
+probe a guard rather than trust it.
+
+**Two things the guard found on its own:**
+
+1. **A false positive in my own first cut.** It matched column names without tables
+   and flagged `stripe_transfers.amount_cents`, which is a real column: only
+   `orders.amount_cents` was ever phantom. Checked prod instead of "fixing" working
+   code. The guard is now table-aware, because one that cries wolf trains people to
+   add exemptions.
+2. **`placements/route.ts` still integrates the phantom `requester_user_id`** in
+   roughly twenty places: reads, an insert, an update, a role-flip, a strip-candidate
+   list and a backfill. The real column is `proposed_by_user_id`, which `lib/authz.ts`
+   already uses, so this is an N3 follow-up rather than a new finding. Not a live
+   outage, because the route retries without the column, at the cost of one
+   guaranteed-rejected query per request. Untangling it is its own task.
+
+To avoid either hiding that or starting an unplanned twenty-site refactor, the guard
+keeps **two separate lists**: `EXEMPT` (parked by an explicit decision, currently
+just D17.2) and `KNOWN_UNFIXED` (real bugs, queued, each naming its finding). The
+second has a **ratchet on its size**, so newly introduced debt fails the build while
+existing debt stays visible and countable. Fixing an entry means lowering the number
+in the same commit.
+
+```
+ Test Files  148 passed (148)
+      Tests  1425 passed (1425)
+✖ 252 problems (0 errors, 252 warnings)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** 6e0705e
