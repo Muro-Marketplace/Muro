@@ -2122,3 +2122,52 @@ Do the re-entry with the gate replacement in D52.2, and the reconciliation as pa
 - **Payout-gate copies: 3 stale in the webhook + 1 cosmetic in `lib/email/`. NOT clean** — see D52.2. This is the same sweep that found the `lib/email/` reader last time; it has now found the three that matter.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged, and D52.3 explains why nothing currently detects that.
 - `message-attachments` bucket: still public. E25 outstanding.
+
+---
+
+## D53. Stopped again, and both stalls followed a docs-only commit
+
+*— supervisor. Short: no rulings, one observation and the outstanding queue.*
+
+**Status.** 173 commits, last `e917789` at 19:07:37; at 19:35 that is **28 minutes** with a clean tree and no file modified in 25. Same signature as D45.1: stopped, not mid-task. Every genuine mid-task gap this session had uncommitted source or an untracked file sitting in the tree.
+
+**The observation, offered as a pattern and not a diagnosis (n=2).** Both stalls began immediately after a **docs-only** commit:
+
+| Stall | Last commit | Contents |
+|---|---|---|
+| 12:31 → restart | `b97d3d8` | `docs(progress)` only |
+| 19:07 → now | `e917789` | `docs(execution-decisions)` only |
+
+Every commit that was followed by more work was a code commit. A plausible reading is that an iteration ending in a docs-only write reads as "task complete, nothing further" and the next wakeup is not armed. Worth the owner checking the loop's wakeup logic for that case; if it holds, the fix is in the loop prompt rather than anywhere in this plan.
+
+**Nothing is lost and nothing is broken.** The tree is clean, `npm run check` was green at the last code commit, and the queue below is unchanged.
+
+**Next on restart, in order** (all already specified, no new decisions needed):
+1. **D52.2** — replace the three stale `stripe_connect_onboarding_complete` payout gates (`webhooks/stripe/route.ts:301, :1031, :1060`) with `canReceivePayout`, using `PayoutCapability.reason` to pick between scheduling and `recordBlockedLeg`. Before C4.
+2. **D52.3** — re-enter the leg block on a `duplicate` classification instead of returning at `:810`.
+3. **C4** — the retry sweep, including the orders-with-no-ledger-row reconciliation.
+4. `lib/email/welcome.ts:66,82` — the cosmetic fourth reader, its own commit.
+5. **E25** — `message-attachments` is still a public bucket, the last item from the security queue.
+
+**Sweeps this run:** RLS SELECT-leak assertion **0 rows, clean**; `artist_profiles` 64 anon columns, closed and holding; orders / `stripe_transfers` **12 / 0**, unchanged; `stripe_transfers` with status `blocked` = **0**, as expected since `recordBlockedLeg` has had no new order to fire on.
+
+---
+
+## D54. D52.2 is in flight and correct. Recording why its three call sites are NOT the knot pattern.
+
+*— supervisor. Short: no rulings, one clarification to stop a future sweep "fixing" something that is right.*
+
+**Status.** The loop restarted and is working. 174 commits; `0dff874` records the owner's authorisation of the D52 ordering. Uncommitted and in progress: `webhooks/stripe/route.ts` and `lib/stripe-connect.ts`, replacing the three stale payout gates with `canReceivePayout` per D52.2. Correct task, correct order, owner-sanctioned.
+
+**The clarification.** The in-flight change leaves **three call sites** each invoking `canReceivePayout` — offer→artist, cart→venue, cart→artist. This document repeatedly warns about a predicate copied in three places (D31), and a later sweep could easily read these three calls as the same smell and try to collapse them. **It is not the same thing, and they should be left alone.**
+
+- **The knot was three copies of the *logic*:** `x?.stripe_connect_account_id && x.stripe_connect_onboarding_complete`, written out at each site, free to drift and duplicated in the one place it mattered.
+- **What replaces it is three *calls to one shared function*.** The logic lives once, in `payouts/capability.ts`. Three call sites invoking a shared helper is ordinary correct code, not duplication.
+
+The call-site checks are also *necessary* rather than incidental: each site needs the `PayoutCapability.reason` to decide between scheduling and `recordBlockedLeg`, which a gate buried inside `scheduleTransfer` could not express to the caller.
+
+**I nearly filed this as a finding and checked the diff first.** Per D49.2, the rule that keeps paying off is: read the executable change before writing the objection.
+
+**Optional, for after D52.2 lands, not part of it.** A capability assertion inside `scheduleTransfer` itself would be a cheap backstop, so a *future* call site that forgets the check cannot schedule an unpayable transfer. That is defence in depth, not a defect in the current change, and it should not expand this task. Raise it only if C4 or a later task adds a fourth scheduling site.
+
+**Sweeps this run:** RLS SELECT-leak assertion **0 rows, clean**; `artist_profiles` 64 anon columns, closed and holding; orders / `stripe_transfers` **12 / 0**, unchanged; `message-attachments` still public (E25, last of the security queue).
