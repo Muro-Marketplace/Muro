@@ -635,6 +635,20 @@ async function handleWebhookEvent(
               revenue_share_percent: row.revenue_share_percent || 0,
             });
           }
+          // D11: the sale is attributed to a venue (venueSlug set), but this
+          // artist has no ACTIVE placement there, so the venue's cut silently
+          // computes to 0 (pct defaults to 0 below). A placement in pending,
+          // paused or completed lands here. Log it so a venue seeing a sale with
+          // no revenue can be told why, instead of it being invisible.
+          for (const slug of uniqueLineSlugs) {
+            if (!placementByArtistSlug.has(slug)) {
+              console.warn("[webhook] QR sale with no active placement", {
+                orderId,
+                venueSlug,
+                artistSlug: slug,
+              });
+            }
+          }
           // Schema still records a single placement_id per order. Pick the
           // first cart line whose artist has a placement so the choice is
           // deterministic across replayed webhook deliveries.

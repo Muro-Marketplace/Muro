@@ -2005,3 +2005,52 @@ describe("Stripe webhook — deterministic venue share (D9)", () => {
     expect(insertCaptured.row!.placement_id).toBe("place-early");
   });
 });
+
+// ── D11: a QR sale with no active placement is logged, not silent (04 §B5) ────
+//
+// The venue-attributed branch filters status='active'. A pending/paused/completed
+// placement yields pct 0 with no log, so the venue saw a sale and no revenue and
+// nobody could tell why.
+describe("Stripe webhook — QR sale with no active placement is observable (D11)", () => {
+  function driveVenueSale(placements: Array<{ id: string; artist_slug: string; revenue_share_percent: number }>) {
+    setupDbMock({
+      artistProfiles: [{ user_id: "u-bob", slug: "bob", subscription_plan: "core" }] as never,
+      placements,
+      insertCaptured: { row: null },
+    });
+    loadCartSessionMock.mockResolvedValue({
+      cart: [{ workId: "w-b", artistSlug: "bob", title: "Sunrise", price: 100, qty: 1, image: "" }],
+      shipping: { fullName: "Buyer", email: "buyer@example.com", country: "GB", fulfilmentMethod: "ship" },
+      source: "qr",
+      venueSlug: "kings-arms",
+      artistSlugs: ["bob"],
+      expectedSubtotalPence: 10000,
+      expectedShippingPence: 0,
+      artistShippingPence: {},
+    });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: { object: buildSession({ amount_total: 10000, metadata: { kind: "cart_checkout", artist_slugs: "bob", venue_slug: "kings-arms", fulfilment_method: "ship", source: "qr" } }) },
+    });
+  }
+
+  it("warns when the artist has no active placement at the attributed venue", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    driveVenueSale([]); // no placement for bob at kings-arms
+    await POST(buildRequest());
+    expect(warn).toHaveBeenCalledWith(
+      "[webhook] QR sale with no active placement",
+      expect.objectContaining({ venueSlug: "kings-arms", artistSlug: "bob" }),
+    );
+    warn.mockRestore();
+  });
+
+  it("does NOT warn when the artist has an active placement", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    driveVenueSale([{ id: "place-bob", artist_slug: "bob", revenue_share_percent: 20 }]);
+    await POST(buildRequest());
+    const d11Calls = warn.mock.calls.filter(([m]) => m === "[webhook] QR sale with no active placement");
+    expect(d11Calls).toHaveLength(0);
+    warn.mockRestore();
+  });
+});
