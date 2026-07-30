@@ -24,6 +24,7 @@ import {
   reconcilePlatformFee,
   penceToGbp,
   type CartLine,
+  type ArtistLeg,
 } from "@/lib/payouts/legs";
 import { loadCartSession } from "@/lib/cart-sessions";
 import {
@@ -785,6 +786,11 @@ async function handleWebhookEvent(
             .maybeSingle();
           if (existingOrder) {
             console.log("Webhook duplicate suppressed for payment_intent:", paymentIntentId);
+            // D52.3: a redelivery of an order that already exists still re-attempts
+            // the payout legs, so any leg the first pass missed (a ledger insert
+            // that threw, a 500 after the order landed) gets scheduled now.
+            // Idempotent via scheduleTransfer's (order_id, recipient_user_id) 23505.
+            await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
             return NextResponse.json({ received: true, duplicate: true });
           }
         }
@@ -806,6 +812,8 @@ async function handleWebhookEvent(
           if ((error as { code?: string }).code === "23505") {
             if ((await classifyOrderIdConflict(db, orderId, paymentIntentId || null)) === "duplicate") {
               console.log("Order already exists (same payment intent), treating webhook as processed");
+              // D52.3: re-attempt the payout legs on a redelivery (idempotent).
+              await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
               return NextResponse.json({ received: true, duplicate: true });
             }
             console.error("[webhook] order id collision", { orderId, paymentIntentId });
@@ -1015,95 +1023,11 @@ async function handleWebhookEvent(
           });
 
           // ─── Stripe Connect transfers ───
-          // Collection orders are paid out immediately, the work is
-          // handed over at the venue counter so there's no shipping
-          // risk to insure against. Shipped orders keep the 14-day
-          // hold (released early on delivery confirmation).
-          // Transfer venue revenue share
-          if (venueSlug && venueRevenue > 0) {
-            try {
-              // D52: gate on canReceivePayout, not the stale onboarding boolean.
-              const cap = await canReceivePayout(db, { kind: "venue", slug: venueSlug });
-              // canReceivePayout returns the account id + capability but not the
-              // venue's user_id, which the ledger row needs; resolve it here.
-              const { data: venueRow } = await db
-                .from("venue_profiles")
-                .select("user_id")
-                .eq("slug", venueSlug)
-                .maybeSingle<{ user_id: string | null }>();
-              const venueUserId = venueRow?.user_id ?? null;
-              const venuePence = Math.round(venueRevenue * 100);
-              if (cap.ok && cap.accountId && venueUserId) {
-                await scheduleTransfer({
-                  orderId,
-                  recipientType: "venue",
-                  recipientUserId: venueUserId,
-                  connectAccountId: cap.accountId,
-                  amountCents: venuePence,
-                  immediate: isCollection,
-                });
-              } else if (venueUserId) {
-                console.error("[cart] venue cannot be paid out, transfer skipped", {
-                  orderId,
-                  venueSlug,
-                  reason: cap.reason,
-                });
-                await recordBlockedLeg(db, {
-                  orderId,
-                  recipientType: "venue",
-                  recipientUserId: venueUserId,
-                  amountCents: venuePence,
-                  reason: cap.reason ?? "unknown",
-                });
-              }
-            } catch (transferErr) {
-              console.error("Venue transfer error:", transferErr);
-            }
-          }
-
-          // Transfer each artist their own leg (E9). This used to send the whole
-          // pooled `artistRevenue` to the first artist, so in a two-artist cart
-          // artist A received the money owed to artist B.
-          //
-          // One leg fails independently of the others: a lapsed Connect account on
-          // one artist must not stop the rest being paid.
-          for (const leg of legs) {
-            if (leg.netPence <= 0) continue;
-            try {
-              // D52: gate on canReceivePayout (payouts_enabled), not the stale
-              // stripe_connect_onboarding_complete boolean C1 replaced. A lapsed
-              // account passes the old gate and the money lands in an unpayable
-              // balance; the fresh capability check catches it and records the
-              // owed payout as a 'blocked' ledger row with the real reason.
-              const cap = await canReceivePayout(db, { kind: "artist", userId: leg.artistUserId });
-              if (cap.ok && cap.accountId) {
-                await scheduleTransfer({
-                  orderId,
-                  recipientType: "artist",
-                  recipientUserId: leg.artistUserId,
-                  connectAccountId: cap.accountId,
-                  amountCents: leg.netPence,
-                  immediate: isCollection,
-                });
-              } else {
-                console.error("[cart] artist cannot be paid out, transfer skipped", {
-                  orderId,
-                  artistSlug: leg.artistSlug,
-                  artistUserId: leg.artistUserId,
-                  netPence: leg.netPence,
-                  reason: cap.reason,
-                });
-                await recordBlockedLeg(db, {
-                  orderId,
-                  recipientUserId: leg.artistUserId,
-                  amountCents: leg.netPence,
-                  reason: cap.reason ?? "unknown",
-                });
-              }
-            } catch (transferErr) {
-              console.error("Artist transfer error:", { slug: leg.artistSlug, transferErr });
-            }
-          }
+          // Extracted into scheduleOrderLegs so the D3 duplicate-redelivery paths
+          // can re-run it and schedule any legs the first pass missed (C4/D52.3);
+          // scheduleTransfer's (order_id, recipient_user_id) 23505 idempotency
+          // makes already-scheduled legs no-ops, so a redelivery only fills gaps.
+          await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
         }
       } catch (err) {
         console.error("Order processing error:", err);
@@ -1722,4 +1646,102 @@ async function handleWebhookEvent(
   }
 
   return NextResponse.json({ received: true });
+}
+
+/**
+ * Schedule the payout legs for a cart order: the venue revenue share and each
+ * artist's own net (E9), each gated on canReceivePayout (D52), with a blocked
+ * ledger row recorded when a recipient is not payout-ready.
+ *
+ * Extracted from the main handler so it can run on BOTH the first delivery and a
+ * D3 duplicate redelivery (C4/D52.3). scheduleTransfer treats a
+ * (order_id, recipient_user_id) 23505 as an idempotent replay (C3), so calling
+ * this again for an order that already has some legs only fills the gaps and
+ * never double-pays. Best-effort per leg: one failing recipient never stops the
+ * rest.
+ */
+async function scheduleOrderLegs(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  params: { orderId: string; legs: ArtistLeg[]; venueSlug: string; venueRevenue: number; isCollection: boolean },
+): Promise<void> {
+  const { orderId, legs, venueSlug, venueRevenue, isCollection } = params;
+
+  // Transfer venue revenue share.
+  if (venueSlug && venueRevenue > 0) {
+    try {
+      // D52: gate on canReceivePayout, not the stale onboarding boolean.
+      const cap = await canReceivePayout(db, { kind: "venue", slug: venueSlug });
+      // canReceivePayout returns the account id + capability but not the venue's
+      // user_id, which the ledger row needs; resolve it here.
+      const { data: venueRow } = await db
+        .from("venue_profiles")
+        .select("user_id")
+        .eq("slug", venueSlug)
+        .maybeSingle<{ user_id: string | null }>();
+      const venueUserId = venueRow?.user_id ?? null;
+      const venuePence = Math.round(venueRevenue * 100);
+      if (cap.ok && cap.accountId && venueUserId) {
+        await scheduleTransfer({
+          orderId,
+          recipientType: "venue",
+          recipientUserId: venueUserId,
+          connectAccountId: cap.accountId,
+          amountCents: venuePence,
+          immediate: isCollection,
+        });
+      } else if (venueUserId) {
+        console.error("[cart] venue cannot be paid out, transfer skipped", {
+          orderId,
+          venueSlug,
+          reason: cap.reason,
+        });
+        await recordBlockedLeg(db, {
+          orderId,
+          recipientType: "venue",
+          recipientUserId: venueUserId,
+          amountCents: venuePence,
+          reason: cap.reason ?? "unknown",
+        });
+      }
+    } catch (transferErr) {
+      console.error("Venue transfer error:", transferErr);
+    }
+  }
+
+  // Transfer each artist their own leg (E9). One leg fails independently of the
+  // others: a lapsed Connect account on one artist must not stop the rest.
+  for (const leg of legs) {
+    if (leg.netPence <= 0) continue;
+    try {
+      // D52: gate on canReceivePayout (payouts_enabled), not the stale
+      // stripe_connect_onboarding_complete boolean C1 replaced.
+      const cap = await canReceivePayout(db, { kind: "artist", userId: leg.artistUserId });
+      if (cap.ok && cap.accountId) {
+        await scheduleTransfer({
+          orderId,
+          recipientType: "artist",
+          recipientUserId: leg.artistUserId,
+          connectAccountId: cap.accountId,
+          amountCents: leg.netPence,
+          immediate: isCollection,
+        });
+      } else {
+        console.error("[cart] artist cannot be paid out, transfer skipped", {
+          orderId,
+          artistSlug: leg.artistSlug,
+          artistUserId: leg.artistUserId,
+          netPence: leg.netPence,
+          reason: cap.reason,
+        });
+        await recordBlockedLeg(db, {
+          orderId,
+          recipientUserId: leg.artistUserId,
+          amountCents: leg.netPence,
+          reason: cap.reason ?? "unknown",
+        });
+      }
+    } catch (transferErr) {
+      console.error("Artist transfer error:", { slug: leg.artistSlug, transferErr });
+    }
+  }
 }

@@ -1215,6 +1215,25 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
     expect(insertCaptured.row).toBeNull();
     expect(transfers().filter((t) => t.recipientType === "artist")).toHaveLength(0);
   });
+
+  it("re-attempts the payout legs on a duplicate redelivery, filling missed legs (D52.3)", async () => {
+    // existingOrderId set => the F30 payment-intent duplicate path fires: the
+    // order already exists, so the handler used to return WITHOUT scheduling any
+    // legs (the "12 orders, 0 transfers" blind spot). Now it re-runs
+    // scheduleOrderLegs so a leg the first delivery missed gets a second chance;
+    // already-scheduled legs are 23505 no-ops.
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({ artistProfiles: TWO_ARTISTS, existingOrderId: "WS-EXISTING", insertCaptured });
+    twoArtistCart();
+
+    const res = await POST(buildRequest());
+    await expect(res.json()).resolves.toMatchObject({ duplicate: true });
+    const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
+    expect(artistTransfers.length).toBeGreaterThan(0);
+    expect(artistTransfers.map((t) => t.recipientUserId)).toEqual(
+      expect.arrayContaining(["u-alice", "u-bob"]),
+    );
+  });
 });
 
 // ── E7a: the paid-loan subscription was recorded by nothing (04 §B6/§C5) ─────
