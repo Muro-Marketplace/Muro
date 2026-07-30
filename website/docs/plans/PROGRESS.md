@@ -7170,3 +7170,50 @@ the payment settles. Doc fix: add `notifyAdminCurationPaid` in the webhook curat
 branch next to `notifyCurationCustomerPaid`. Also folds in the D21-deferred
 customer renewal-paid signal (send on `invoice.paid billing_reason ===
 'subscription_cycle'`). Re-read the webhook curation branch + lib/email.ts first.
+
+## `04` B10 / D23 — the admin is told when a curation payment lands
+
+Commit `ed7a946`. Code-only, no migration. Folds in the D21-deferred renewal signal.
+
+**The defect.** `notifyAdminCurationRequest` fires at SUBMIT (before payment), and
+nothing fired when the payment settled. An admin could not tell a paid £49 brief
+from an abandoned checkout without opening Stripe, and managed renewals were silent.
+
+**The fix.** New `notifyAdminCurationPaid` in `lib/email.ts` (plain
+`resend.emails.send`, mirroring the other curation admin emails). Called from:
+- the webhook curation branch (`checkout.session.completed`), on settlement of a
+  one-off or a managed first payment. Placed OUTSIDE the `if (contact_email)` guard
+  so the admin is told even when the venue left no contact email.
+- `handleCurationInvoicePaid` (`src/lib/curation/billing.ts`) on a managed
+  renewal, guarded to `invoice.billing_reason === "subscription_cycle"` so the
+  first invoice (`subscription_create`) — already covered by the checkout webhook —
+  does not double-send. `isRenewal: true` flavours the email.
+
+**DRY.** Replaced the webhook's inline `tierLabels` map (a duplicate of the tier
+labels) with the single `CURATION_TIERS[tier].label` source, shared by the admin
+and customer notifications; `billing.ts` uses the same source for the renewal.
+
+**Tests.** `billing.test.ts` (+2): renewal pings on `subscription_cycle`, does NOT
+ping on `subscription_create` (still reconciles the row). Webhook test (+1): a
+settled curation payment calls `notifyAdminCurationPaid` with amount £79.99 and
+tier "Managed, monthly rotation". Fail-before verified both ways: neutering the
+renewal guard failed the renewal test; removing the webhook call failed the
+money-landed test; both restored byte-identical.
+
+**Verification.** `npm run check` → `EXIT=0`, `Test Files 165 passed`, `Tests 1842
+passed (1842)` (+3), 0 lint/type errors (no new warnings). No schema/RLS change →
+no DB ladder. Payment task; a live Stripe drive is impossible here, so tests drive
+simulated events through the real webhook + reconciler.
+
+**Out of scope (recorded).** The customer renewal receipt (the D21 doc snippet's
+`curation_renewal_receipt`) is a nicety, not the identified admin-awareness gap;
+the venue already gets its "underway" email at signup. Left for a future pass.
+
+**Next: D24** (the /curated/success page asserts payment that was never verified —
+04 §B10 doc ~:1890). `(pages)/curated/success/page.tsx` is a static component
+reading "Payment received." with no session lookup, though the success URL carries
+session_id (`api/curation/route.ts` success_url). Doc fix: make it a server
+component that retrieves the Stripe session and branches on `payment_status`,
+matching the checkout/confirmation pattern; a `processing` state must say so rather
+than claim receipt. Re-read the success page + the checkout/confirmation pattern
+first. Likely no migration.
