@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). Next: `01` Phase E items 13-16, and `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 pass 1 done** (37987e1): outward-facing routes guarded, 45 in-portal routes on a counted ratchet. Next: E23a pass 2, then items 14-16, and `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -3471,3 +3471,86 @@ valid RFC 4122 v4 UUID (the variant nibble was `4`, must be `8/9/a/b`), and zod 
 a lazily-typed test constant. Worth knowing that zod 4 is stricter than zod 3 was.
 
 **Commit:** fae5945
+
+---
+
+## E23a pass 1 of 2 — the demo guard had zero call sites (owner: `01` Phase E item 13)
+
+**The finding, and why it survived.** `src/lib/demo-guard.ts` was fully implemented
+and fully unwired. Zero call sites, while **two doc comments** asserted it was
+enforced at the API layer:
+
+```
+api/demo/login/route.ts:23  "The `assertNotDemo` helper in @/lib/demo-guard is what actually…"
+data/demo.ts:17             "Mutations get blocked at the API layer via a `assertNotDemo`…"
+```
+
+Anyone verifying "is demo write-protected?" by grepping found two confident
+statements that it was. A written control with no enforcement point is worse than no
+control, because it gets counted as mitigation.
+
+Anyone clicking "Try the demo" gets a real Supabase session for the demo artist or
+venue, so every mutating route was open to them. The one that actually escapes the
+platform is messaging: **a demo session could send messages to real venues**, making
+the demo a free outreach channel into real inboxes.
+
+**Split, per `01` §E23a** ("split across two PRs if the diff exceeds ~30 files"). 68
+routes were flagged. Pass one is the outward-facing set, where the harm leaves the
+platform:
+
+| Route | Why strict |
+|---|---|
+| `messages` POST | real messages to real venues |
+| `placements` POST + PATCH | both email real users |
+| `artwork-requests` POST | |
+| `artwork-requests/[id]/responses` POST | |
+| `offers` POST | |
+| `offers/[id]/checkout` POST | real money |
+| `checkout` POST | real money |
+
+All take the STRICT 403 variant. On `checkout` the guard sits **inside the
+authenticated branch only**, because guest checkout is supported and an anonymous
+caller has no id to test.
+
+**Where the doc's list needed adjusting.** It names `/api/enquiry` for the strict
+variant, but that route has no auth at all, so there is no user id to guard. Exempted
+with that reason recorded, rather than left looking unwired.
+
+**New: `tests/integration/demo-guard-coverage.test.ts`.** Enumerates every mutating
+service-role route and asserts each is guarded, exempt-by-decision, or on a counted
+not-yet-wired list. Two separate lists again, so debt is never read as a decision,
+and the count is a **ratchet**: it may shrink, never grow, so a newly added unguarded
+route fails the build.
+
+**The test caught three errors in its own allowlist as I wrote it**, which is exactly
+what the honesty assertions are for:
+
+1. `"demo/reset/route.ts"` does not exist. I had guessed it.
+2. The not-yet-wired count of 55 was a guess. The measured value is **45**.
+3. `"cron/"` matched nothing, because every cron route is GET-only and never reaches
+   the mutating filter. **Removed rather than kept**: an exemption matching nothing
+   today would silently un-guard the first cron route that ever gains a POST.
+
+**Verification, both directions.** Unwiring `messages` again:
+
+```
+ × has the guard wired on every outward-facing route
+ × uses the STRICT variant wherever real money or a real email can leave
+ × holds the unwired count at its recorded value, so new debt fails the build
+      Tests  3 failed | 3 passed (6)
+```
+
+Restored:
+
+```
+ Test Files  152 passed (152)
+      Tests  1486 passed (1486)
+✖ 239 problems (0 errors, 239 warnings)      ← demo-guard lint warnings 68 → 58
+```
+
+**Pass 2 is the remaining 45 in-portal routes** (soft `assertNotDemo`, 200 +
+`{demo:true}` so the UI can toast without unwinding optimistic state). Item 15's
+`warn → error` flip must wait for that, or CI goes red on known work, exactly as the
+doc says.
+
+**Commit:** 37987e1
