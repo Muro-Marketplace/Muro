@@ -75,6 +75,8 @@ function buildDb(opts: {
   /** Existing-transfer row keyed by (order_id, recipient_user_id) for
    *  the idempotency pre-check in handleInvoicePaid. */
   existingTransfer?: unknown;
+  /** placements row read by recordPaidLoanSubscription to decide newlyLinked. */
+  placement?: unknown;
 } = {}): { db: object; updates: unknown[]; upserts: unknown[] } {
   const updates: unknown[] = [];
   const upserts: unknown[] = [];
@@ -117,6 +119,21 @@ function buildDb(opts: {
                   }),
                 }),
               }),
+            }),
+          };
+        }
+        if (table === "placements") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: opts.placement ?? null, error: null }),
+              }),
+            }),
+            update: (row: unknown) => ({
+              eq: async () => {
+                updates.push({ table, row });
+                return { data: null, error: null };
+              },
             }),
           };
         }
@@ -280,18 +297,21 @@ describe("startPaidLoanBilling()", () => {
   it("creates a Stripe subscription when card is on file and inserts the billing row", async () => {
     isFlagOnMock.mockReturnValue(true);
     paymentMethodsListMock.mockResolvedValue({ data: [{ id: "pm_card" }] });
+    // SDK 22+ carries the period bounds on the first ITEM. The old fixture put
+    // them on the subscription, where the code has never read them, so it proved
+    // nothing about the dates.
     subscriptionsCreateMock.mockResolvedValue({
       id: "sub_new",
-      current_period_start: 1_700_000_000,
-      current_period_end: 1_702_000_000,
+      items: { data: [{ current_period_start: 1_700_000_000, current_period_end: 1_702_000_000 }] },
     });
-    const { db, upserts } = buildDb({
+    const { db, upserts, updates } = buildDb({
       venue: {
         user_id: "v1",
         stripe_customer_id: "cus_existing",
         contact_email: "v@e.com",
         name: "Venue",
       },
+      placement: { stripe_subscription_id: null },
     });
     const res = await startPaidLoanBilling(
       {
@@ -308,6 +328,20 @@ describe("startPaidLoanBilling()", () => {
     expect(upserts).toHaveLength(1);
     expect((upserts[0] as { stripe_subscription_id: string }).stripe_subscription_id).toBe(
       "sub_new",
+    );
+    // Period bounds come off the item, so no row is stamped 1970 (E11b).
+    expect((upserts[0] as { current_period_end: string }).current_period_end).toBe(
+      new Date(1_702_000_000 * 1000).toISOString(),
+    );
+    // E7a: this path did not mirror onto placements either, so the setup route's
+    // "already set up" guard stayed false for subscriptions started here too.
+    expect(updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "placements",
+          row: expect.objectContaining({ stripe_subscription_id: "sub_new", subscription_status: "active" }),
+        }),
+      ]),
     );
   });
 });

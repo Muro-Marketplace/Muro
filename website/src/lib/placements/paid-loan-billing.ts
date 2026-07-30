@@ -61,6 +61,124 @@ export interface StartBillingResult {
 
 const PAID_LOAN_TYPES = new Set(["paid_loan", "mixed"]);
 
+/**
+ * SDK 22+: `current_period_start` / `current_period_end` live on the first
+ * subscription item, not on the subscription itself. Reading them off the
+ * subscription yields undefined, and `new Date(undefined * 1000)` is how a period
+ * end gets stamped 1970-01-01 (E11b).
+ */
+export function periodFromSubscription(subscription: Stripe.Subscription): {
+  cpStart: number | null;
+  cpEnd: number | null;
+} {
+  const firstItem = subscription.items?.data?.[0] as
+    | { current_period_start?: number; current_period_end?: number }
+    | undefined;
+  return {
+    cpStart: firstItem?.current_period_start ?? null,
+    cpEnd: firstItem?.current_period_end ?? null,
+  };
+}
+
+/** Epoch seconds to ISO, treating 0 and null alike so no row is stamped 1970. */
+function epochToIso(seconds: number | null): string | null {
+  return seconds ? new Date(seconds * 1000).toISOString() : null;
+}
+
+export interface RecordSubscriptionInput {
+  placementId: string;
+  subscriptionId: string;
+  customerId: string;
+  payerUserId: string;
+  payeeUserId: string;
+  monthlyAmountPence: number;
+  cpStart: number | null;
+  cpEnd: number | null;
+}
+
+/**
+ * Record a live paid-loan subscription: one row in
+ * `placement_recurring_billings`, mirrored onto `placements` (E7a).
+ *
+ * Shared by `startPaidLoanBilling` and the webhook's `paid_loan_monthly` branch.
+ * Two callers, one ledger, because a second copy of this upsert is how the two
+ * paths would drift, and E7a exists precisely because the webhook path had no
+ * copy at all.
+ *
+ * NOT flag-gated, unlike `startPaidLoanBilling`. The flag decides whether we
+ * *start* billing; once Stripe has a live subscription, recording it is always
+ * correct. `api/placements/[id]/payment/setup` is not flag-gated either, so a
+ * venue can already be on a monthly subscription with the flag off, and refusing
+ * to record that would leave them billed with nothing to cancel.
+ *
+ * Returns `newlyLinked: false` when this placement already pointed at this
+ * subscription, which lets a caller avoid re-notifying on a Stripe redelivery.
+ */
+export async function recordPaidLoanSubscription(
+  input: RecordSubscriptionInput,
+  client?: SupabaseClient,
+): Promise<{ ok: boolean; newlyLinked: boolean; error?: string }> {
+  const db = client ?? getSupabaseAdmin();
+
+  // monthly_amount_pence carries a CHECK (> 0). Writing a zero would raise
+  // 23514, the webhook would answer 500, and Stripe would retry a request that
+  // can never succeed. The setup route already refuses a placement with no fee,
+  // so this is defence against the fee being cleared afterwards.
+  if (!Number.isFinite(input.monthlyAmountPence) || input.monthlyAmountPence <= 0) {
+    console.error("[paid-loan] refusing to record a subscription with no monthly amount", {
+      placementId: input.placementId,
+      subscriptionId: input.subscriptionId,
+      monthlyAmountPence: input.monthlyAmountPence,
+    });
+    return { ok: false, newlyLinked: false, error: "monthly_amount_missing" };
+  }
+
+  const { data: existing } = await db
+    .from("placements")
+    .select("stripe_subscription_id")
+    .eq("id", input.placementId)
+    .maybeSingle<{ stripe_subscription_id: string | null }>();
+  const newlyLinked = existing?.stripe_subscription_id !== input.subscriptionId;
+
+  const { error: billErr } = await db.from("placement_recurring_billings").upsert(
+    {
+      placement_id: input.placementId,
+      stripe_subscription_id: input.subscriptionId,
+      stripe_customer_id: input.customerId,
+      payer_user_id: input.payerUserId,
+      payee_user_id: input.payeeUserId,
+      monthly_amount_pence: input.monthlyAmountPence,
+      status: "active",
+      current_period_start: epochToIso(input.cpStart),
+      current_period_end: epochToIso(input.cpEnd),
+    },
+    { onConflict: "stripe_subscription_id" },
+  );
+  if (billErr) {
+    console.error("[paid-loan] placement_recurring_billings upsert failed", billErr);
+    return { ok: false, newlyLinked, error: billErr.message };
+  }
+
+  // Mirror onto placements. Until E7a nothing wrote this column, so the setup
+  // route's "already set up" guard was permanently false and a venue could mint
+  // a second subscription for the same placement.
+  const { error: mirrorErr } = await db
+    .from("placements")
+    .update({
+      stripe_subscription_id: input.subscriptionId,
+      subscription_status: "active",
+      subscription_current_period_end: epochToIso(input.cpEnd),
+    })
+    .eq("id", input.placementId);
+  if (mirrorErr) {
+    // The ledger row is the one that matters for billing and cancellation, so a
+    // failed mirror is logged rather than treated as a failure.
+    console.error("[paid-loan] placement subscription mirror failed", mirrorErr);
+  }
+
+  return { ok: true, newlyLinked };
+}
+
 function isPaidLoan(arrangementType: string | null | undefined): boolean {
   return PAID_LOAN_TYPES.has((arrangementType ?? "").toLowerCase());
 }
@@ -280,34 +398,20 @@ export async function startPaidLoanBilling(
     },
   });
 
-  // SDK 22+: current_period_start/end live on the first subscription
-  // item, not on the subscription itself.
-  const firstItem = subscription.items?.data?.[0] as
-    | { current_period_start?: number; current_period_end?: number }
-    | undefined;
-  const cpStart = firstItem?.current_period_start ?? null;
-  const cpEnd = firstItem?.current_period_end ?? null;
-
-  await db
-    .from("placement_recurring_billings")
-    .upsert(
-      {
-        placement_id: input.placementId,
-        stripe_subscription_id: subscription.id,
-        stripe_customer_id: customer.customerId,
-        payer_user_id: input.venueUserId,
-        payee_user_id: input.artistUserId,
-        monthly_amount_pence: input.monthlyFeePence,
-        status: "active",
-        current_period_start: cpStart
-          ? new Date(cpStart * 1000).toISOString()
-          : null,
-        current_period_end: cpEnd
-          ? new Date(cpEnd * 1000).toISOString()
-          : null,
-      },
-      { onConflict: "stripe_subscription_id" },
-    );
+  const { cpStart, cpEnd } = periodFromSubscription(subscription);
+  await recordPaidLoanSubscription(
+    {
+      placementId: input.placementId,
+      subscriptionId: subscription.id,
+      customerId: customer.customerId,
+      payerUserId: input.venueUserId,
+      payeeUserId: input.artistUserId,
+      monthlyAmountPence: input.monthlyFeePence,
+      cpStart,
+      cpEnd,
+    },
+    db,
+  );
 
   return {
     status: "started",

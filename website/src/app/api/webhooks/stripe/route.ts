@@ -26,6 +26,8 @@ import {
 } from "@/lib/payouts/legs";
 import { loadCartSession } from "@/lib/cart-sessions";
 import {
+  periodFromSubscription,
+  recordPaidLoanSubscription,
   handleInvoicePaid as handleInvoicePaidPaidLoan,
   handleInvoicePaymentFailed as handleInvoicePaymentFailedPaidLoan,
   handleSubscriptionDeleted as handleSubscriptionDeletedPaidLoan,
@@ -322,6 +324,88 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ received: true });
     }
+  }
+
+  // ─── Paid-loan monthly: subscription checkout completed (E7a) ───
+  //
+  // Owns the session created by api/placements/[id]/payment/setup. Nothing
+  // consumed it, so a venue could complete the Stripe subscription flow and be
+  // billed monthly while placements.stripe_subscription_id stayed null: the setup
+  // route's "already set up" guard never fired, so a second subscription could be
+  // minted for the same placement, and cancelPaidLoanBilling could never find the
+  // subscription to stop it. placement_recurring_billings has 0 rows in prod,
+  // which is what "written by nothing" looks like.
+  if (
+    (event.type === "checkout.session.completed" ||
+      event.type === "checkout.session.async_payment_succeeded") &&
+    (event.data.object as Stripe.Checkout.Session).metadata?.kind === "paid_loan_monthly"
+  ) {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const placementId = session.metadata?.placement_id;
+    const subscriptionId =
+      typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+
+    if (!placementId || !subscriptionId) {
+      console.error("[webhook] paid_loan_monthly session missing ids", {
+        sessionId: session.id,
+        placementId,
+        subscriptionId,
+      });
+      return NextResponse.json({ error: "Malformed paid-loan session" }, { status: 400 });
+    }
+
+    const { data: placement, error: plErr } = await db
+      .from("placements")
+      .select("id, venue_user_id, artist_user_id, monthly_fee_gbp")
+      .eq("id", placementId)
+      .maybeSingle();
+    if (plErr || !placement) {
+      console.error("[webhook] paid_loan_monthly unknown placement", { placementId, plErr });
+      return NextResponse.json({ error: "Unknown placement" }, { status: 500 });
+    }
+
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const { cpStart, cpEnd } = periodFromSubscription(subscription);
+    const customerId =
+      typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id;
+
+    const recorded = await recordPaidLoanSubscription(
+      {
+        placementId,
+        subscriptionId,
+        customerId: customerId || "",
+        payerUserId: placement.venue_user_id,
+        payeeUserId: placement.artist_user_id,
+        monthlyAmountPence: Math.round(Number(placement.monthly_fee_gbp) * 100),
+        cpStart,
+        cpEnd,
+      },
+      db,
+    );
+    if (!recorded.ok) {
+      // A missing monthly amount can never succeed on retry, so it is reported as
+      // received and logged. Anything else is worth a retry.
+      if (recorded.error === "monthly_amount_missing") {
+        return NextResponse.json({ received: true, ignored: "monthly_amount_missing" });
+      }
+      return NextResponse.json({ error: "Billing record write failed" }, { status: 500 });
+    }
+
+    // Only on the first link. Stripe redelivers, and both
+    // checkout.session.completed and checkout.session.async_payment_succeeded
+    // reach this branch for the same session, so notifying unconditionally would
+    // tell the artist their payments had started two or three times.
+    if (recorded.newlyLinked) {
+      await createNotification({
+        userId: placement.artist_user_id,
+        kind: "paid_loan_started",
+        title: `Monthly loan payments started, £${Number(placement.monthly_fee_gbp).toFixed(2)}/mo`,
+        body: "The venue's card is set up. Your first payout follows the first paid invoice.",
+        link: "/artist-portal/placements",
+      }).catch(() => {});
+    }
+
+    return NextResponse.json({ received: true });
   }
 
   // ─── Art purchase checkout ───

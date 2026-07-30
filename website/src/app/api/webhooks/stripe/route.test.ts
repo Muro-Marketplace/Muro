@@ -9,6 +9,7 @@ const {
   scheduleTransferMock,
   signOrderTokenMock,
   createNotificationMock,
+  subscriptionsRetrieveMock,
   sendEmailMock,
   resolveArtistNamesBulkMock,
   receiptPropsMock,
@@ -24,13 +25,17 @@ const {
   scheduleTransferMock: vi.fn(async () => {}),
   signOrderTokenMock: vi.fn(async () => "token-abc"),
   createNotificationMock: vi.fn(async () => {}),
+  subscriptionsRetrieveMock: vi.fn(),
   sendEmailMock: vi.fn(async () => {}),
   resolveArtistNamesBulkMock: vi.fn(async () => new Map<string, string>()),
   receiptPropsMock: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/stripe", () => ({
-  stripe: { webhooks: { constructEvent: constructEventMock } },
+  stripe: {
+    webhooks: { constructEvent: constructEventMock },
+    subscriptions: { retrieve: subscriptionsRetrieveMock },
+  },
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
@@ -95,7 +100,12 @@ vi.mock("@/emails/templates/artist-additions/ArtistStripeKycNeeded", () => ({ Ar
 vi.mock("@/lib/orders/lifecycle", () => ({
   recordOrderEvent: vi.fn(async () => ({ eventType: null, sent: 0, deduped: 0 })),
 }));
-vi.mock("@/lib/placements/paid-loan-billing", () => ({
+// The three invoice/subscription handlers stay stubbed (they make their own
+// Stripe calls), but recordPaidLoanSubscription and periodFromSubscription are the
+// REAL ones: E7a is about whether the ledger row and the placements mirror get
+// written, so stubbing them would test nothing.
+vi.mock("@/lib/placements/paid-loan-billing", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/placements/paid-loan-billing")>()),
   handleInvoicePaid: vi.fn(async () => false),
   handleInvoicePaymentFailed: vi.fn(async () => false),
   handleSubscriptionDeleted: vi.fn(async () => false),
@@ -268,6 +278,7 @@ beforeEach(() => {
   sendEmailMock.mockReset();
   sendEmailMock.mockResolvedValue(undefined);
   createNotificationMock.mockClear();
+  subscriptionsRetrieveMock.mockReset();
   authGetUserByIdMock.mockReset();
   authGetUserByIdMock.mockResolvedValue({ data: { user: null } });
   receiptPropsMock.mockClear();
@@ -1106,5 +1117,208 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
 
     expect(insertCaptured.row).toBeNull();
     expect(transfers().filter((t) => t.recipientType === "artist")).toHaveLength(0);
+  });
+});
+
+// ── E7a: the paid-loan subscription was recorded by nothing (04 §B6/§C5) ─────
+//
+// api/placements/[id]/payment/setup mints a real Stripe subscription, and no
+// webhook branch consumed the resulting session. So a venue could complete the
+// flow and be billed monthly while placements.stripe_subscription_id stayed null:
+// the setup route's "already set up" guard never fired, and cancelPaidLoanBilling
+// had no subscription id to cancel. placement_recurring_billings has 0 rows in
+// prod, which is what "written by nothing" looks like.
+describe("Stripe webhook — paid-loan subscription checkout (E7a)", () => {
+  interface PaidLoanState {
+    placement?: Record<string, unknown> | null;
+    upserts: Array<{ row: Record<string, unknown>; onConflict?: string }>;
+    placementUpdates: Array<Record<string, unknown>>;
+    orderInserts: Array<Record<string, unknown>>;
+  }
+
+  function setupPaidLoanDb(state: PaidLoanState) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "placements") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: state.placement ?? null, error: null }) }),
+          }),
+          update: (row: Record<string, unknown>) => {
+            state.placementUpdates.push(row);
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      if (table === "placement_recurring_billings") {
+        return {
+          upsert: async (row: Record<string, unknown>, opts?: { onConflict?: string }) => {
+            state.upserts.push({ row, onConflict: opts?.onConflict });
+            return { error: null };
+          },
+        };
+      }
+      if (table === "orders") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+          insert: (row: Record<string, unknown>) => {
+            state.orderInserts.push(row);
+            return Promise.resolve({ error: null });
+          },
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({ single: async () => ({ data: null }), maybeSingle: async () => ({ data: null }) }),
+        }),
+      };
+    });
+  }
+
+  const PLACEMENT = {
+    id: "pl-1",
+    venue_user_id: "u-venue",
+    artist_user_id: "u-artist",
+    monthly_fee_gbp: 45,
+    stripe_subscription_id: null,
+  };
+
+  /** Period bounds live on the first item in SDK 22+, not on the subscription. */
+  const SUBSCRIPTION = {
+    id: "sub_1",
+    customer: "cus_1",
+    items: { data: [{ current_period_start: 1_780_000_000, current_period_end: 1_782_678_400 }] },
+  };
+
+  function fireSession(
+    overrides: {
+      type?: string;
+      metadata?: Record<string, string>;
+      subscription?: string | null;
+    } = {},
+  ) {
+    constructEventMock.mockReturnValue({
+      type: overrides.type ?? "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_paid_loan",
+          mode: "subscription",
+          subscription: overrides.subscription === undefined ? "sub_1" : overrides.subscription,
+          metadata: overrides.metadata ?? { kind: "paid_loan_monthly", placement_id: "pl-1" },
+        },
+      },
+    });
+  }
+
+  let state: PaidLoanState;
+  beforeEach(() => {
+    state = { placement: PLACEMENT, upserts: [], placementUpdates: [], orderInserts: [] };
+    setupPaidLoanDb(state);
+    subscriptionsRetrieveMock.mockResolvedValue(SUBSCRIPTION);
+  });
+
+  it("writes the billing ledger row", async () => {
+    fireSession();
+    expect((await POST(buildRequest())).status).toBe(200);
+
+    expect(state.upserts).toHaveLength(1);
+    expect(state.upserts[0].row).toMatchObject({
+      placement_id: "pl-1",
+      stripe_subscription_id: "sub_1",
+      stripe_customer_id: "cus_1",
+      payer_user_id: "u-venue",
+      payee_user_id: "u-artist",
+      monthly_amount_pence: 4500,
+      status: "active",
+    });
+    // The UNIQUE index this relies on is on stripe_subscription_id, so a Stripe
+    // redelivery updates the row rather than duplicating it.
+    expect(state.upserts[0].onConflict).toBe("stripe_subscription_id");
+  });
+
+  it("reads the period bounds off the subscription ITEM, not the subscription", async () => {
+    // Reading them off the subscription gives undefined, and new Date(undefined *
+    // 1000) is how a period end gets stamped 1970-01-01 (E11b).
+    fireSession();
+    await POST(buildRequest());
+    expect(state.upserts[0].row.current_period_end).toBe(
+      new Date(1_782_678_400 * 1000).toISOString(),
+    );
+    expect(String(state.upserts[0].row.current_period_start)).not.toContain("1970");
+  });
+
+  it("mirrors the subscription onto the placement, which nothing used to write", async () => {
+    fireSession();
+    await POST(buildRequest());
+    expect(state.placementUpdates).toHaveLength(1);
+    expect(state.placementUpdates[0]).toMatchObject({
+      stripe_subscription_id: "sub_1",
+      subscription_status: "active",
+    });
+  });
+
+  it("notifies the artist once", async () => {
+    fireSession();
+    await POST(buildRequest());
+    expect(createNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u-artist", kind: "paid_loan_started" }),
+    );
+  });
+
+  it("does not re-notify when Stripe redelivers the same session", async () => {
+    // Stripe retries, and both checkout.session.completed and
+    // checkout.session.async_payment_succeeded reach this branch for one session,
+    // so an unconditional notify tells the artist twice.
+    state.placement = { ...PLACEMENT, stripe_subscription_id: "sub_1" };
+    fireSession();
+    await POST(buildRequest());
+    expect(state.upserts).toHaveLength(1); // still idempotently recorded
+    expect(createNotificationMock).not.toHaveBeenCalled();
+  });
+
+  it("handles async_payment_succeeded as well as completed", async () => {
+    fireSession({ type: "checkout.session.async_payment_succeeded" });
+    expect((await POST(buildRequest())).status).toBe(200);
+    expect(state.upserts).toHaveLength(1);
+  });
+
+  it("refuses a session with no subscription id and writes nothing", async () => {
+    fireSession({ subscription: null });
+    expect((await POST(buildRequest())).status).toBe(400);
+    expect(state.upserts).toHaveLength(0);
+    expect(state.placementUpdates).toHaveLength(0);
+  });
+
+  it("answers 500 on an unknown placement, so Stripe retries", async () => {
+    state.placement = null;
+    fireSession();
+    expect((await POST(buildRequest())).status).toBe(500);
+    expect(state.upserts).toHaveLength(0);
+  });
+
+  it("refuses a placement with no monthly fee instead of 500-looping", async () => {
+    // monthly_amount_pence carries a CHECK (> 0). Writing zero raises 23514, the
+    // webhook would answer 500, and Stripe would retry a request that can never
+    // succeed. 200 + ignored stops the loop; the log carries the detail.
+    state.placement = { ...PLACEMENT, monthly_fee_gbp: null };
+    fireSession();
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ ignored: "monthly_amount_missing" });
+    expect(state.upserts).toHaveLength(0);
+  });
+
+  it("does not fall through to the cart-order branch", async () => {
+    // The paid-loan session is mode: "subscription", and before this branch
+    // existed it reached the art-purchase branch and was dropped there.
+    fireSession();
+    await POST(buildRequest());
+    expect(state.orderInserts).toHaveLength(0);
+  });
+
+  it("ignores a subscription session that is not a paid loan", async () => {
+    fireSession({ metadata: { kind: "something_else" } });
+    await POST(buildRequest());
+    expect(state.upserts).toHaveLength(0);
+    expect(subscriptionsRetrieveMock).not.toHaveBeenCalled();
   });
 });
