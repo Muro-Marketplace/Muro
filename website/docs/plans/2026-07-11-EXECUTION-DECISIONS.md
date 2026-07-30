@@ -2171,3 +2171,58 @@ The call-site checks are also *necessary* rather than incidental: each site need
 **Optional, for after D52.2 lands, not part of it.** A capability assertion inside `scheduleTransfer` itself would be a cheap backstop, so a *future* call site that forgets the check cannot schedule an unpayable transfer. That is defence in depth, not a defect in the current change, and it should not expand this task. Raise it only if C4 or a later task adds a fourth scheduling site.
 
 **Sweeps this run:** RLS SELECT-leak assertion **0 rows, clean**; `artist_profiles` 64 anon columns, closed and holding; orders / `stripe_transfers` **12 / 0**, unchanged; `message-attachments` still public (E25, last of the security queue).
+
+---
+
+## D55. The reconciliation works, and it cannot see the single most broken order in the system
+
+*— supervisor. 181 commits. C4 part 1 (retry sweep) and part 2c (reconciliation) landed; leg re-entry still to come, so C4 is open and this is the moment to fix it.*
+
+### D55.1 — It does catch the blind spot it was built for. Verified against prod.
+
+`reconcileOrdersWithoutLegs` is well built: it records a **`blocked`** row rather than auto-scheduling a payout, which surfaces owed money to an operator without moving it — correctly leaving the D11 manual reconciliation the human's call. Idempotent through the `(order_id, recipient_user_id)` index, so it is safe on every sweep.
+
+Running its exact predicate against prod (`artist_revenue > 0` and `status in ('confirmed','processing','shipped','delivered')`, minus orders with ledger rows):
+
+```
+would_flag = 11 of 12 orders
+```
+
+So it genuinely turns the silent "12 orders, 0 transfers" into eleven visible blocked rows. That is the outcome C4's expanded scope was for.
+
+### D55.2 — GAP 1: the twelfth order is the one that matters most, and the predicate excludes it
+
+```
+invisible_zero_revenue = 1   →   WP-WSP06D
+  status confirmed · total £64.49 · artist_revenue 0 · artist_user_id NULL
+```
+
+This is the order from D42.3: **£64.49 taken from a buyer, no artist attributed, no fee recorded.** It is the clearest case of money owed in the entire dataset, and `.gt("artist_revenue", 0)` filters it out.
+
+The reason is structural, not incidental. `artist_revenue = 0` is not evidence that nothing is owed — it is the **signature of the D4 attribution failure**, the bug the loop fixed this morning. The reconciliation currently keys on the very field that the failure mode zeroes, so it is blind to exactly the orders it most needs to find.
+
+**Ruling: key the predicate on "money came in and nothing went out", not on the attribution field.** Something of the shape: `total > 0`, status in the owed set, and no `stripe_transfers` row. Then branch: if `artist_user_id` is present, record the blocked leg as now; if not, the order is unattributed and needs an operator. Note that `WP-WSP06D` *is* recoverable — `items[0].artistName` is "Finlay Coles" and the image path carries the artist folder id — but resolving it is a data decision for the owner (D42.4), not something the sweep should guess.
+
+### D55.3 — GAP 2: `unresolved` is a bare counter, so five orders produce nothing actionable
+
+```
+would_be_unresolved = 5 of the 11 flagged   (artist_user_id IS NULL)
+```
+
+`result.unresolved++` increments a number and discards the order. An operator running the sweep sees `{flagged: 6, unresolved: 5}` and has no way to learn *which* five, which for a tool whose entire purpose is surfacing owed money is a hole in the deliverable rather than a nicety.
+
+**Ruling: `unresolved` must carry the order ids** (`unresolved: string[]`, or an array of `{orderId, total}`). No new table, no new surface, just do not throw away the identifiers you already hold in the loop. Nearly half the flagged population lands in this branch, so it is the common path, not an edge case.
+
+### D55.4 — Both are small, and C4 is still open
+
+The function exists and is sound; these are a predicate change and a return-type change, plus the tests for each. Doing them now, while the leg re-entry is still outstanding under the same task, is cheaper than reopening C4 later. Neither needs owner input.
+
+**A caution for the tests.** A test asserting "the sweep flags orders with `artist_revenue > 0`" will still pass after the predicate change and prove nothing. The regression test that matters is the `WP-WSP06D` shape: **total > 0, `artist_revenue` 0, `artist_user_id` NULL, no ledger row** — it must appear in the result, currently as unresolved-with-an-id.
+
+### D55.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Payout gates: swept again post-D52.2, `canReceivePayout` at all three sites, no stale predicate left as a gate. Clean.
+- Orders / `stripe_transfers`: **12 / 0**; `stripe_transfers` is still empty, so nothing has run the new sweep against prod yet. Expected, and the reason D55.1 was verified by running the predicate directly rather than reading the counter.
+- `message-attachments` bucket: still public. E25 outstanding, last of the security queue.
