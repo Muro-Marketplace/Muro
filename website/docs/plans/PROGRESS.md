@@ -7640,3 +7640,27 @@ invocation + the pretence), remove its phantom-columns grandfather entry (ratche
 the owner's (b)-vs-(c) decision. This interim is fully reversible and does not
 foreclose (b); it just stops the pretence. Surface (b) to the owner. THEN continue
 row 19 #4 (walls/my-works placements.work_id).
+
+## row 19 #2 — placement-ending-soon cron honestly disabled (D60 option-c interim)
+
+Commit `2d52b98`. Code-only.
+
+Per supervisor D60 (don't leave a healthy-looking-but-dead cron running): the
+handler now returns `200 {ok, skipped:"..."}` after cron auth and no longer runs
+the phantom `placements.end_date` select. The dead body (query + runBatch + email
+loop) and now-unused imports are deleted; the vercel.json entry and the
+PlacementEndingSoon template stay for the owner's full (c). Ratchet 9 -> 8;
+`08-surface-cull.md` §302 annotated NON-FUNCTIONAL. `npm run check` green (1854),
+0 live `.from()`/`.select()` left.
+
+**OWNER DECISION still open (b vs c):** build a real `placements.end_date` data
+model (a feature: add the column, populate it on placement accept, decide what
+sets it) and re-enable, OR fully remove the cron + vercel entry + template. The
+interim stops the pretence and is reversible either way.
+
+**Next: row 19 #4** — `walls/my-works:72` selects `placements.work_id`, which does
+not exist (placements carries `work_title`/`work_image`/`current_placement_id`).
+Re-read the route to determine what it needs the work id FOR (likely joining to
+artist_works via current_placement_id, or it should select current_placement_id),
+fix the select + usages, remove the grandfather entry (ratchet 8 -> 7). Verify
+against the schema snapshot first.
