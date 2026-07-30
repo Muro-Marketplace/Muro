@@ -14,7 +14,16 @@ import { SubscriptionUpgraded } from "@/emails/templates/payments/SubscriptionUp
 import { SubscriptionCancelled } from "@/emails/templates/payments/SubscriptionCancelled";
 import { SubscriptionRenewalReceipt } from "@/emails/templates/payments/SubscriptionRenewalReceipt";
 import { ArtistStripeKycNeeded } from "@/emails/templates/artist-additions/ArtistStripeKycNeeded";
-import { platformFeePercentForArtist, DEFAULT_PLAN_FEE_PERCENT } from "@/lib/platform-fee";
+// Only the default remains here: the per-artist rate is resolved inside
+// buildArtistLegs, one artist at a time (E9).
+import { DEFAULT_PLAN_FEE_PERCENT } from "@/lib/platform-fee";
+import {
+  buildArtistLegs,
+  assertLegsReconcile,
+  reconcilePlatformFee,
+  penceToGbp,
+  type CartLine,
+} from "@/lib/payouts/legs";
 import { loadCartSession } from "@/lib/cart-sessions";
 import {
   handleInvoicePaid as handleInvoicePaidPaidLoan,
@@ -354,13 +363,12 @@ export async function POST(request: Request) {
         let placementId: string | null = null;
         let artistUserId: string | null = null;
 
-        // Look up artist profile for subscription plan (fee rate)
+        // The first artist is still recorded on the order row, which has a single
+        // artist_slug / artist_user_id column, but it no longer decides the fee
+        // rate or who gets paid. That is what the legs below are for (E9).
         if (firstArtistSlug) {
-          const { data: ap } = await db.from("artist_profiles").select("user_id, subscription_plan, trial_end").eq("slug", firstArtistSlug).single();
-          if (ap) {
-            artistUserId = ap.user_id;
-            platformFeePct = platformFeePercentForArtist(ap);
-          }
+          const { data: ap } = await db.from("artist_profiles").select("user_id").eq("slug", firstArtistSlug).single();
+          if (ap) artistUserId = ap.user_id;
         }
 
         // Per-line venue revenue share. Multi-artist carts can mix
@@ -398,15 +406,28 @@ export async function POST(request: Request) {
           }
         }
 
-        // Sum the per-line venue cut. Lines whose artist has no placement
-        // at the venue contribute 0.
-        venueRevenue = (cartItems as Array<{ artistSlug?: string; price?: number; qty?: number; quantity?: number }>).reduce((sum, item) => {
-          const slug = item.artistSlug || "";
-          const pct = placementByArtistSlug.get(slug)?.revenue_share_percent ?? 0;
-          const lineValue = (item.price || 0) * Number(item.qty ?? item.quantity ?? 1);
-          return sum + lineValue * (pct / 100);
-        }, 0);
-        venueRevenue = Math.round(venueRevenue * 100) / 100;
+        // E9: one payout leg per artist. Each leg carries that artist's own plan
+        // fee rate, their own venue cut, and the postage for the parcel they will
+        // actually post. Previously the fee came from the first artist's plan,
+        // every artist's money was pooled into one `artistRevenue`, and one
+        // transfer sent the whole pool to the first artist.
+        //
+        // Aggregated per artist, not per line: stripe_transfers is UNIQUE on
+        // (order_id, recipient_user_id), so two legs for one artist would silently
+        // become one and underpay them.
+        const totalPence = Math.round(total * 100);
+        const subtotalPence = Math.round(subtotal * 100);
+        const legs = await buildArtistLegs(db, {
+          cartItems: cartItems as CartLine[],
+          placementByArtistSlug,
+          artistShippingPence: saved.artistShippingPence || {},
+          shippingTotalPence: totalPence - subtotalPence,
+        });
+
+        // Every figure on the order row is now the sum of the legs, so what is
+        // reported and what is transferred cannot disagree.
+        const venuePence = legs.reduce((s, l) => s + l.venueCutPence, 0);
+        venueRevenue = penceToGbp(venuePence);
         // Blended effective rate against the subtotal, stored on the
         // order for dashboard / receipt display. Equals the single-rate
         // value when every line shares the same placement.
@@ -414,13 +435,23 @@ export async function POST(request: Request) {
           ? Math.round((venueRevenue / subtotal) * 100 * 100) / 100
           : 0;
 
-        // Platform fee stays at a single rate against subtotal (the
-        // first-artist plan). Multi-artist fee splitting is a separate
-        // concern from the venue split. Shipping is not subject to the
-        // cut and flows straight through to the artist, who pays the
-        // courier out of pocket.
-        platformFee = Math.round(subtotal * (platformFeePct / 100) * 100) / 100;
-        artistRevenue = Math.round((subtotal - venueRevenue - platformFee + shippingCost) * 100) / 100;
+        // Shipping is not fee-bearing: it flows through to the artist, who pays
+        // the courier out of pocket.
+        const platformFeePence = reconcilePlatformFee({
+          totalPence,
+          venuePence,
+          legs,
+          intendedFeePence: legs.reduce((s, l) => s + l.platformFeePence, 0),
+          orderId,
+        });
+        assertLegsReconcile({ totalPence, venuePence, platformFeePence, legs });
+        platformFee = penceToGbp(platformFeePence);
+        artistRevenue = penceToGbp(legs.reduce((s, l) => s + l.netPence, 0));
+        // Blended rate, for the order row's single column. The per-leg rates are
+        // what each artist is actually charged.
+        platformFeePct = subtotal > 0
+          ? Math.round((platformFee / subtotal) * 100 * 100) / 100
+          : DEFAULT_PLAN_FEE_PERCENT;
 
         const paymentIntentId = typeof session.payment_intent === "string"
           ? session.payment_intent
@@ -697,26 +728,44 @@ export async function POST(request: Request) {
             }
           }
 
-          // Transfer artist revenue
-          if (artistUserId && artistRevenue > 0) {
+          // Transfer each artist their own leg (E9). This used to send the whole
+          // pooled `artistRevenue` to the first artist, so in a two-artist cart
+          // artist A received the money owed to artist B.
+          //
+          // One leg fails independently of the others: a lapsed Connect account on
+          // one artist must not stop the rest being paid.
+          for (const leg of legs) {
+            if (leg.netPence <= 0) continue;
             try {
               const { data: artistConnect } = await db
                 .from("artist_profiles")
                 .select("stripe_connect_account_id, stripe_connect_onboarding_complete")
-                .eq("user_id", artistUserId)
+                .eq("user_id", leg.artistUserId)
                 .single();
               if (artistConnect?.stripe_connect_account_id && artistConnect.stripe_connect_onboarding_complete) {
                 await scheduleTransfer({
                   orderId,
                   recipientType: "artist",
-                  recipientUserId: artistUserId,
+                  recipientUserId: leg.artistUserId,
                   connectAccountId: artistConnect.stripe_connect_account_id,
-                  amountCents: Math.round(artistRevenue * 100),
+                  amountCents: leg.netPence,
                   immediate: isCollection,
+                });
+              } else {
+                // The checkout pre-flight (canArtistAcceptOrders) should have
+                // stopped this, so reaching here means onboarding lapsed between
+                // session creation and payment. The money stays on the platform
+                // balance until ops resolve it. C1's canReceivePayout and C3's
+                // recordBlockedLeg turn this log into a ledger row.
+                console.error("[cart] artist cannot be paid out, transfer skipped", {
+                  orderId,
+                  artistSlug: leg.artistSlug,
+                  artistUserId: leg.artistUserId,
+                  netPence: leg.netPence,
                 });
               }
             } catch (transferErr) {
-              console.error("Artist transfer error:", transferErr);
+              console.error("Artist transfer error:", { slug: leg.artistSlug, transferErr });
             }
           }
         }

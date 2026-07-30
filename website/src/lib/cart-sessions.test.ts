@@ -23,6 +23,7 @@ describe("saveCartSession()", () => {
       artistSlugs: ["alice"],
       expectedSubtotalPence: 1000,
       expectedShippingPence: 950,
+      artistShippingPence: { alice: 950 },
     });
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -30,6 +31,9 @@ describe("saveCartSession()", () => {
         artist_slugs: ["alice"],
         expected_subtotal_pence: 1000,
         expected_shipping_pence: 950,
+        // E9 / migration 082: the webhook needs postage per artist to pay each of
+        // them for the parcel they actually post.
+        artist_shipping_pence: { alice: 950 },
       }),
     );
   });
@@ -54,6 +58,9 @@ describe("loadCartSession()", () => {
       artistSlugs: undefined,
       expectedSubtotalPence: undefined,
       expectedShippingPence: undefined,
+      // Absent on rows written before migration 082, and normalised to {} so
+      // buildArtistLegs can fall back to a pro-rata split.
+      artistShippingPence: {},
     });
   });
 

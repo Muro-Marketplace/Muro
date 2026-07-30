@@ -11,7 +11,6 @@ const {
   createNotificationMock,
   sendEmailMock,
   resolveArtistNamesBulkMock,
-  platformFeePercentForArtistMock,
   receiptPropsMock,
 } = vi.hoisted(() => ({
   constructEventMock: vi.fn(),
@@ -27,7 +26,6 @@ const {
   createNotificationMock: vi.fn(async () => {}),
   sendEmailMock: vi.fn(async () => {}),
   resolveArtistNamesBulkMock: vi.fn(async () => new Map<string, string>()),
-  platformFeePercentForArtistMock: vi.fn(() => 15),
   receiptPropsMock: vi.fn(() => null),
 }));
 
@@ -64,11 +62,10 @@ vi.mock("@/emails/_helpers/resolve-artist-name", () => ({
   resolveArtistNamesBulk: resolveArtistNamesBulkMock,
 }));
 
-vi.mock("@/lib/platform-fee", () => ({
-  platformFeePercentForArtist: platformFeePercentForArtistMock,
-  DEFAULT_PLAN_FEE_PERCENT: 15,
-}));
-
+// @/lib/platform-fee is deliberately NOT mocked. It is a pure function over
+// { subscription_plan, trial_end } with no I/O, and the stub here returned a flat
+// 15 for every artist, which is exactly the behaviour E9 removes: it made a
+// two-artist cart with two different plans look correct at one rate.
 vi.mock("@/lib/cart-sessions", () => ({
   loadCartSession: loadCartSessionMock,
 }));
@@ -107,10 +104,25 @@ vi.mock("@/lib/placements/paid-loan-billing", () => ({
 import { POST } from "./route";
 
 type Placement = { id: string; artist_slug: string; revenue_share_percent: number };
-type ArtistProfile = { user_id: string; subscription_plan: string; free_until: string | null; name?: string; slug?: string };
+type ArtistProfile = {
+  user_id: string;
+  subscription_plan: string;
+  free_until?: string | null;
+  trial_end?: string | null;
+  name?: string;
+  slug?: string;
+  stripe_connect_account_id?: string | null;
+  stripe_connect_onboarding_complete?: boolean;
+};
 
 interface DbState {
   artistProfile?: ArtistProfile | null;
+  /**
+   * Slug-keyed profiles, which buildArtistLegs looks up with .in("slug", …) (E9).
+   * A cart artist missing from here makes buildArtistLegs throw, which is the
+   * intended behaviour: we must not pool an unknown artist's money.
+   */
+  artistProfiles?: ArtistProfile[];
   placements?: Placement[];
   insertCaptured: { row: Record<string, unknown> | null };
   existingOrderId?: string | null;
@@ -118,12 +130,27 @@ interface DbState {
 
 function setupDbMock(state: DbState) {
   const placements = state.placements || [];
+  const profiles: ArtistProfile[] =
+    state.artistProfiles ?? (state.artistProfile ? [state.artistProfile] : []);
   fromMock.mockImplementation((table: string) => {
     if (table === "artist_profiles") {
       return {
         select: () => ({
-          eq: () => ({
-            single: async () => ({ data: state.artistProfile ?? null }),
+          // buildArtistLegs: one round trip for every artist in the cart.
+          in: async (_col: string, slugs: string[]) => ({
+            data: profiles.filter((p) => slugs.includes((p.slug || "").toLowerCase())),
+            error: null,
+          }),
+          // The firstArtistSlug user_id lookup and the per-leg Connect lookup.
+          // Filtered by the actual column so a two-artist transfer test gets each
+          // artist's own Connect row rather than one shared answer.
+          eq: (col: string, val: string) => ({
+            single: async () => ({
+              data:
+                profiles.find((p) =>
+                  col === "user_id" ? p.user_id === val : (p.slug || "") === val,
+                ) ?? null,
+            }),
           }),
         }),
       };
@@ -243,7 +270,6 @@ beforeEach(() => {
   createNotificationMock.mockClear();
   authGetUserByIdMock.mockReset();
   authGetUserByIdMock.mockResolvedValue({ data: { user: null } });
-  platformFeePercentForArtistMock.mockReturnValue(15);
   receiptPropsMock.mockClear();
 });
 
@@ -255,7 +281,10 @@ describe("Stripe webhook — venue revenue split", () => {
     // Blended pct against subtotal: 100/400 = 25%.
     const insertCaptured = { row: null as Record<string, unknown> | null };
     setupDbMock({
-      artistProfile: { user_id: "u-alice", subscription_plan: "core", free_until: null },
+      artistProfiles: [
+        { user_id: "u-alice", slug: "alice", subscription_plan: "core" },
+        { user_id: "u-bob", slug: "bob", subscription_plan: "core" },
+      ],
       placements: [
         { id: "place-alice", artist_slug: "alice", revenue_share_percent: 20 },
         { id: "place-bob", artist_slug: "bob", revenue_share_percent: 30 },
@@ -273,6 +302,7 @@ describe("Stripe webhook — venue revenue split", () => {
       artistSlugs: ["alice", "bob"],
       expectedSubtotalPence: 40000,
       expectedShippingPence: 0,
+      artistShippingPence: {},
     });
     constructEventMock.mockReturnValue({
       type: "checkout.session.completed",
@@ -300,7 +330,7 @@ describe("Stripe webhook — venue revenue split", () => {
     // be credited.
     const insertCaptured = { row: null as Record<string, unknown> | null };
     setupDbMock({
-      artistProfile: { user_id: "u-bob", subscription_plan: "core", free_until: null },
+      artistProfiles: [{ user_id: "u-bob", slug: "bob", subscription_plan: "core" }],
       placements: [
         { id: "place-bob", artist_slug: "bob", revenue_share_percent: 25 },
       ],
@@ -316,6 +346,7 @@ describe("Stripe webhook — venue revenue split", () => {
       artistSlugs: ["bob"],
       expectedSubtotalPence: 30000,
       expectedShippingPence: 0,
+      artistShippingPence: {},
     });
     constructEventMock.mockReturnValue({
       type: "checkout.session.completed",
@@ -345,7 +376,7 @@ describe("Stripe webhook — venue revenue split", () => {
   it("records venue_revenue = 0 when no artist in the cart has a placement at the venue", async () => {
     const insertCaptured = { row: null as Record<string, unknown> | null };
     setupDbMock({
-      artistProfile: { user_id: "u-alice", subscription_plan: "core", free_until: null },
+      artistProfiles: [{ user_id: "u-alice", slug: "alice", subscription_plan: "core" }],
       placements: [], // none for any artist
       insertCaptured,
     });
@@ -359,6 +390,7 @@ describe("Stripe webhook — venue revenue split", () => {
       artistSlugs: ["alice"],
       expectedSubtotalPence: 15000,
       expectedShippingPence: 0,
+      artistShippingPence: {},
     });
     constructEventMock.mockReturnValue({
       type: "checkout.session.completed",
@@ -762,7 +794,7 @@ describe("Stripe webhook — cart confirmations, current behaviour pinned", () =
 
   async function runCartCheckout() {
     setupDbMock({
-      artistProfile: { user_id: "u-alice", subscription_plan: "core", free_until: null, name: "Alice Adams" },
+      artistProfiles: [{ user_id: "u-alice", slug: "alice", subscription_plan: "core", name: "Alice Adams" }],
       placements: [],
       insertCaptured: { row: null },
     });
@@ -778,6 +810,7 @@ describe("Stripe webhook — cart confirmations, current behaviour pinned", () =
       artistSlugs: ["alice"],
       expectedSubtotalPence: 20000,
       expectedShippingPence: 0,
+      artistShippingPence: {},
     });
     constructEventMock.mockReturnValue({
       type: "checkout.session.completed",
@@ -834,7 +867,7 @@ describe("Stripe webhook — cart confirmations, current behaviour pinned", () =
   it("sends nothing to the artist when the artist has no auth user", async () => {
     authGetUserByIdMock.mockResolvedValue({ data: { user: null } });
     setupDbMock({
-      artistProfile: { user_id: "u-alice", subscription_plan: "core", free_until: null, name: "Alice" },
+      artistProfiles: [{ user_id: "u-alice", slug: "alice", subscription_plan: "core", name: "Alice" }],
       placements: [],
       insertCaptured: { row: null },
     });
@@ -850,5 +883,228 @@ describe("Stripe webhook — cart confirmations, current behaviour pinned", () =
     });
     await POST(buildRequest());
     expect(sends().map((s) => s.template)).toEqual(["customer_order_receipt"]);
+  });
+});
+
+// ── E9: one payout leg per artist (04 §B2) ───────────────────────────────────
+//
+// The webhook resolved the fee tier from the FIRST artist's plan, pooled every
+// artist's money into one `artistRevenue`, and scheduled ONE transfer to the
+// first artist. In a two-artist cart, artist A received the money owed to B, and
+// B's sale was charged at A's plan rate.
+describe("Stripe webhook — per-artist payout legs (E9)", () => {
+  /** Both artists payable, on different plans. */
+  const TWO_ARTISTS = [
+    {
+      user_id: "u-alice",
+      slug: "alice",
+      subscription_plan: "core", // 15%
+      stripe_connect_account_id: "acct_alice",
+      stripe_connect_onboarding_complete: true,
+    },
+    {
+      user_id: "u-bob",
+      slug: "bob",
+      subscription_plan: "pro", // 5%
+      stripe_connect_account_id: "acct_bob",
+      stripe_connect_onboarding_complete: true,
+    },
+  ];
+
+  /** £100 of Alice + £100 of Bob, no venue, no shipping. */
+  function twoArtistCart(overrides: Record<string, unknown> = {}) {
+    loadCartSessionMock.mockResolvedValue({
+      cart: [
+        { workId: "w-a", artistSlug: "alice", title: "Sunset", price: 100, qty: 1, image: "" },
+        { workId: "w-b", artistSlug: "bob", title: "Sunrise", price: 100, qty: 1, image: "" },
+      ],
+      shipping: { fullName: "Buyer", email: "buyer@example.com", country: "GB", fulfilmentMethod: "ship" },
+      source: "direct",
+      venueSlug: "",
+      artistSlugs: ["alice", "bob"],
+      expectedSubtotalPence: 20000,
+      expectedShippingPence: 0,
+      artistShippingPence: {},
+      ...overrides,
+    });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: buildSession({
+          amount_total: 20000,
+          metadata: {
+            kind: "cart_checkout",
+            artist_slugs: "alice,bob",
+            venue_slug: "",
+            fulfilment_method: "ship",
+            source: "direct",
+          },
+        }),
+      },
+    });
+  }
+
+  const transfers = () =>
+    (scheduleTransferMock.mock.calls as unknown as Array<[Record<string, unknown>]>).map((c) => c[0]);
+
+  it("pays each artist their own net, at their own plan rate", async () => {
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({ artistProfiles: TWO_ARTISTS, insertCaptured });
+    twoArtistCart();
+
+    expect((await POST(buildRequest())).status).toBe(200);
+
+    const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
+    expect(artistTransfers).toHaveLength(2);
+    // Alice: 10000 - 15% = 8500. Bob: 10000 - 5% = 9500.
+    expect(artistTransfers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ recipientUserId: "u-alice", connectAccountId: "acct_alice", amountCents: 8500 }),
+        expect.objectContaining({ recipientUserId: "u-bob", connectAccountId: "acct_bob", amountCents: 9500 }),
+      ]),
+    );
+  });
+
+  it("does not send the pooled total to the first artist, which was the bug", async () => {
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({ artistProfiles: TWO_ARTISTS, insertCaptured });
+    twoArtistCart();
+
+    await POST(buildRequest());
+
+    const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
+    // The old code sent one transfer of (subtotal - fee) = 17000 to u-alice.
+    expect(artistTransfers.map((t) => t.amountCents)).not.toContain(17000);
+    expect(artistTransfers.filter((t) => t.recipientUserId === "u-alice")).toHaveLength(1);
+  });
+
+  it("splits to the penny: venue + fee + every leg equals what Stripe collected", async () => {
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({ artistProfiles: TWO_ARTISTS, insertCaptured });
+    twoArtistCart();
+
+    await POST(buildRequest());
+
+    const row = insertCaptured.row!;
+    const legTotal = transfers()
+      .filter((t) => t.recipientType === "artist")
+      .reduce((s, t) => s + Number(t.amountCents), 0);
+    const venuePence = Math.round(Number(row.venue_revenue) * 100);
+    const feePence = Math.round(Number(row.platform_fee) * 100);
+    expect(venuePence + feePence + legTotal).toBe(20000);
+    // The order row's blended figures are the sum of the legs, so what is
+    // reported and what is transferred cannot disagree.
+    expect(row.artist_revenue).toBe(180);
+    expect(row.platform_fee).toBe(20);
+    expect(row.platform_fee_percent).toBe(10); // blended 15% / 5%
+  });
+
+  it("attributes shipping to the artist who posts the parcel", async () => {
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({ artistProfiles: TWO_ARTISTS, insertCaptured });
+    twoArtistCart({ expectedShippingPence: 1400, artistShippingPence: { alice: 950, bob: 450 } });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: buildSession({
+          amount_total: 21400, // 20000 artwork + 1400 shipping
+          metadata: {
+            kind: "cart_checkout",
+            artist_slugs: "alice,bob",
+            venue_slug: "",
+            fulfilment_method: "ship",
+            source: "direct",
+          },
+        }),
+      },
+    });
+
+    await POST(buildRequest());
+
+    const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
+    // Shipping is not fee-bearing, so it is added on top of each net.
+    expect(artistTransfers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ recipientUserId: "u-alice", amountCents: 8500 + 950 }),
+        expect.objectContaining({ recipientUserId: "u-bob", amountCents: 9500 + 450 }),
+      ]),
+    );
+  });
+
+  it("pays the other artist when one artist's Connect account has lapsed", async () => {
+    // One leg failing must not strand the rest. The old single-transfer shape had
+    // nothing to strand, so this behaviour is new and worth pinning.
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({
+      artistProfiles: [
+        { ...TWO_ARTISTS[0], stripe_connect_onboarding_complete: false },
+        TWO_ARTISTS[1],
+      ],
+      insertCaptured,
+    });
+    twoArtistCart();
+
+    expect((await POST(buildRequest())).status).toBe(200);
+
+    const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
+    expect(artistTransfers).toHaveLength(1);
+    expect(artistTransfers[0]).toMatchObject({ recipientUserId: "u-bob", amountCents: 9500 });
+    // The order is still booked: the money is collected and owed, and ops need
+    // the row to see it.
+    expect(insertCaptured.row).not.toBeNull();
+  });
+
+  it("sends one transfer, not two, for an artist with two lines in the cart", async () => {
+    // stripe_transfers is UNIQUE on (order_id, recipient_user_id): a second leg
+    // for the same artist would be dropped by the index, underpaying them.
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({ artistProfiles: TWO_ARTISTS, insertCaptured });
+    loadCartSessionMock.mockResolvedValue({
+      cart: [
+        { workId: "w-a1", artistSlug: "alice", title: "One", price: 100, qty: 1, image: "" },
+        { workId: "w-a2", artistSlug: "alice", title: "Two", price: 100, qty: 1, image: "" },
+      ],
+      shipping: { fullName: "Buyer", email: "buyer@example.com", country: "GB", fulfilmentMethod: "ship" },
+      source: "direct",
+      venueSlug: "",
+      artistSlugs: ["alice"],
+      expectedSubtotalPence: 20000,
+      expectedShippingPence: 0,
+      artistShippingPence: {},
+    });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: buildSession({
+          amount_total: 20000,
+          metadata: {
+            kind: "cart_checkout",
+            artist_slugs: "alice",
+            venue_slug: "",
+            fulfilment_method: "ship",
+            source: "direct",
+          },
+        }),
+      },
+    });
+
+    await POST(buildRequest());
+
+    const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
+    expect(artistTransfers).toHaveLength(1);
+    expect(artistTransfers[0].amountCents).toBe(17000); // 20000 - 15%
+  });
+
+  it("books no order when an artist in the cart has no profile", async () => {
+    // buildArtistLegs throws rather than pooling the unknown artist's money into
+    // someone else's leg. Better to fail loudly than to pay the wrong person.
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({ artistProfiles: [TWO_ARTISTS[0]], insertCaptured });
+    twoArtistCart();
+
+    await POST(buildRequest());
+
+    expect(insertCaptured.row).toBeNull();
+    expect(transfers().filter((t) => t.recipientType === "artist")).toHaveLength(0);
   });
 });

@@ -358,7 +358,7 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
-    const { totalShipping } = calculateOrderShipping(
+    const { totalShipping, artistGroups } = calculateOrderShipping(
       items.map((it) => ({
         artistSlug: it.artistSlug || "",
         artistName: it.artistName || "Artist",
@@ -449,6 +449,11 @@ export async function POST(request: Request) {
       artistSlugs,
       expectedSubtotalPence: subtotalPence,
       expectedShippingPence: Math.round(totalShipping * 100),
+      // E9: per-artist postage, so the webhook can pay each artist for the parcel
+      // they actually post instead of pooling it onto the first one.
+      artistShippingPence: Object.fromEntries(
+        artistGroups.map((g) => [g.artistSlug.toLowerCase(), Math.round(g.shipping * 100)]),
+      ),
     });
 
     return NextResponse.json({ url: session.url });
