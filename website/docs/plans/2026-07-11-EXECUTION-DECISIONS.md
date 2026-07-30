@@ -2273,3 +2273,68 @@ Also still outstanding and unchanged: **D14** (referral credit, blocked on the p
 - Payout gates: `canReceivePayout` at all three sites; the only `stripe_connect_onboarding_complete` uses left are the `account.updated` **write** and the welcome-email **description**, both correct per D56.2. Clean.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged. Nothing has run the new sweep against prod yet.
 - `message-attachments` bucket: still public. **E25 remains the last untouched security item.**
+
+---
+
+## D57. BLOCKER RESOLVED: D1's migration ranges are retired. Take the next number above the highest, never backfill.
+
+*— supervisor. 192 commits. D19 and D20 landed; the loop escalated that `04`'s migration range is exhausted, which is blocking two real items.*
+
+### D57.1 — The blocker is real, and it is D1's fault, not the loop's
+
+`04` was allocated 080-089 by D1. All ten are used. The loop correctly stopped rather than reaching outside its range, and escalated two items that need a migration:
+
+1. A dedicated `curation_requests.stripe_subscription_id` column (D20's proper data model, matching `artist_profiles` and `placements`).
+2. D21's status-CHECK widen.
+
+Actual state on disk, verified rather than recalled:
+
+```
+taken : 074-077, 080-089, 098
+free  : 078, 079, 090-097, 099+
+```
+
+So there is no shortage of numbers — twelve free slots and everything above 098. The constraint is purely D1's bookkeeping, and it is now blocking correct work.
+
+### D57.2 — Why the ranges existed, and why they no longer apply
+
+D1 partitioned the number space per implementation doc (`02`→074-079, `04`→080-089, `07`→090-094, `09`→095-097) to stop **parallel** work colliding. The execution model turned out to be a single loop working **sequentially**, one task per iteration. The collision the ranges prevent cannot occur, and the partition has become pure overhead that has now cost an escalation.
+
+**Ruling: D1's per-doc ranges are RETIRED. Migrations are allocated sequentially from the next free number above the highest existing one. That is `099` today.** Record the retirement in the migration header so the next reader does not re-derive the blocker.
+
+### D57.3 — Never backfill 078, 079 or 090-097, even though they are free
+
+This matters more than the range retirement, and it is the reason not to simply hand `04` the gap at 078/079.
+
+Migrations apply in filename order on a fresh database. A migration written today but numbered `078` would run **before** `080-089` on any rebuild, while depending on objects those create. That is a latent build break that would not show up until someone provisions a clean environment.
+
+**So: always take the next number above the highest, never fill a gap.** The gaps stay as permanent holes. A migration's number should tell you when it was written; the moment that stops being true, ordering stops being trustworthy.
+
+### D57.4 — Both blocked items are unblocked, and both are mine to authorise
+
+Additive, non-destructive schema changes inside an already-approved plan. No owner input needed:
+
+- **`099`** — add `curation_requests.stripe_subscription_id` (nullable), and write the subscription id there instead of leaving it recoverable only via `session.subscription`. This completes D20 properly rather than working around the missing column.
+- **`100`** — D21's status-CHECK widen.
+
+The curation **refund path** the loop also flagged stays out of scope: it is a feature that does not exist, not a defect, and it belongs with the T9 scoping question in D56.3.
+
+### D57.5 — D20 verified independently against prod
+
+The loop claimed "0 managed rows, 0 `sub_%` values in the column, so nothing to backfill". I ran it myself rather than accepting it. Both curation rows:
+
+```
+9609798c…  pending_payment  single_wall  stripe_payment_intent_id = ''
+5eb004bf…  pending_payment  single_wall  stripe_payment_intent_id = ''
+```
+
+Zero `sub_%` values, so no backfill is needed and the fix (`paymentIntentId || null`, dropping the `|| subscriptionId` fallback) is purely forward-looking. The bug was real though: a refund keyed on a `sub_…` id would have called `stripe.refunds.create({ payment_intent: "sub_…" })` and failed.
+
+### D57.6 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
+- `curation_requests`: 2 rows, both `pending_payment`, both with an empty payment-intent column. No orphans, consistent with D19's fix being preventative.
+- `message-attachments` bucket: still public. **E25 remains the last untouched security item.**
+- Rows **17 and 18** (reconciliation predicate + `unresolved` ids) still outstanding, still unprioritised against B10, which is fine. They are in the queue at the top of this file.
