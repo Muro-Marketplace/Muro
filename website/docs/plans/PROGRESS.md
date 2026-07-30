@@ -7664,3 +7664,28 @@ Re-read the route to determine what it needs the work id FOR (likely joining to
 artist_works via current_placement_id, or it should select current_placement_id),
 fix the select + usages, remove the grandfather entry (ratchet 8 -> 7). Verify
 against the schema snapshot first.
+
+## row 19 #4 — walls/my-works joins via current_placement_id, not phantom work_id
+
+Commit `7f8f6d8`. Code-only (real column, no migration).
+
+**The defect.** The route selected `placements.work_id` to join `artist_works`
+for pricing. placements has no work_id, so the placements select was rejected
+whole and the venue "works on my wall" panel always returned `[]` (another live
+break).
+
+**The fix.** placements has no forward work link (only denormalised
+work_title/work_image); the real link is the REVERSE FK
+`artist_works.current_placement_id` (migration 038). Query artist_works by
+`current_placement_id IN (active placement ids)` and map placement -> work, keeping
+the denormalised fallback. Dropped work_id from the select + PlacementRow type.
+
+**Test.** New `walls/my-works/route.test.ts` drives the resolved-work path (real
+pricing + work id via current_placement_id). Fail-before verified against the old
+work_id join (fell back to denormalised fields). Ratchet 8 -> 7. `npm run check`
+green: 167 files, 1855 tests.
+
+**Next: row 19 #5** — `orders/[id]/events/route.ts:39` selects `venue_user_id`
+(orders has none; venue is via venue_slug), `currency` (none), `placed_at` (use
+created_at). Re-read the route (loadOrder + how these are used) to map/drop each
+correctly, fix the select + usages, remove grandfather (ratchet 7 -> 6).
