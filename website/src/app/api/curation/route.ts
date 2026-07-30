@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { notifyAdminCurationRequest, notifyCurationCustomerEnquiry } from "@/lib/email";
@@ -156,8 +157,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Managed curation is not yet available, please try a one-off tier." }, { status: 503 });
     }
 
+    let session: Stripe.Checkout.Session;
     try {
-      const session = await stripe.checkout.sessions.create({
+      session = await stripe.checkout.sessions.create({
         mode: "subscription",
         payment_method_types: ["card"],
         customer_email: d.contactEmail,
@@ -177,23 +179,45 @@ export async function POST(request: Request) {
         success_url: `${siteUrl}/curated/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${siteUrl}/curated?cancelled=1`,
       });
-
-      await db
-        .from("curation_requests")
-        .update({ stripe_checkout_session_id: session.id })
-        .eq("id", row.id);
-
-      return NextResponse.json({ mode: "checkout", url: session.url, id: row.id });
     } catch (err) {
+      // D19: no Stripe session exists yet, so nothing can be paid. Removing the
+      // row here is safe and keeps the table clean on a create failure.
       console.error("curation managed stripe session error:", err);
       await db.from("curation_requests").delete().eq("id", row.id);
       return NextResponse.json({ error: "Could not start checkout" }, { status: 500 });
     }
+
+    // D19: a payable session now exists. The row MUST survive from here — the
+    // webhook attributes the payment by metadata.curation_request_id (the row
+    // id), so a missing row means money taken with no record, email or refund
+    // trail. Log a link failure and keep the row rather than deleting it.
+    try {
+      const { error: linkErr } = await db
+        .from("curation_requests")
+        .update({ stripe_checkout_session_id: session.id })
+        .eq("id", row.id);
+      if (linkErr) {
+        console.error("curation managed session link failed, row retained", {
+          requestId: row.id,
+          sessionId: session.id,
+          linkErr,
+        });
+      }
+    } catch (linkErr) {
+      console.error("curation managed session link threw, row retained", {
+        requestId: row.id,
+        sessionId: session.id,
+        linkErr,
+      });
+    }
+
+    return NextResponse.json({ mode: "checkout", url: session.url, id: row.id });
   }
 
   // Pay-first one-off tiers: Stripe Checkout (one-time)
+  let session: Stripe.Checkout.Session;
   try {
-    const session = await stripe.checkout.sessions.create({
+    session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
       customer_email: d.contactEmail,
@@ -218,16 +242,37 @@ export async function POST(request: Request) {
       success_url: `${siteUrl}/curated/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/curated?cancelled=1`,
     });
-
-    await db
-      .from("curation_requests")
-      .update({ stripe_checkout_session_id: session.id })
-      .eq("id", row.id);
-
-    return NextResponse.json({ mode: "checkout", url: session.url, id: row.id });
   } catch (err) {
+    // D19: no Stripe session exists yet, so nothing can be paid. Removing the
+    // row here is safe and keeps the table clean on a create failure.
     console.error("curation stripe session error:", err);
     await db.from("curation_requests").delete().eq("id", row.id);
     return NextResponse.json({ error: "Could not start checkout" }, { status: 500 });
   }
+
+  // D19: a payable session now exists. The row MUST survive from here — the
+  // webhook attributes the payment by metadata.curation_request_id (the row
+  // id), so a missing row means money taken with no record, email or refund
+  // trail. Log a link failure and keep the row rather than deleting it.
+  try {
+    const { error: linkErr } = await db
+      .from("curation_requests")
+      .update({ stripe_checkout_session_id: session.id })
+      .eq("id", row.id);
+    if (linkErr) {
+      console.error("curation session link failed, row retained", {
+        requestId: row.id,
+        sessionId: session.id,
+        linkErr,
+      });
+    }
+  } catch (linkErr) {
+    console.error("curation session link threw, row retained", {
+      requestId: row.id,
+      sessionId: session.id,
+      linkErr,
+    });
+  }
+
+  return NextResponse.json({ mode: "checkout", url: session.url, id: row.id });
 }
