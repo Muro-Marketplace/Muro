@@ -17,12 +17,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const {
   sessionsCreateMock,
+  pricesRetrieveMock,
   fromMock,
   getUserMock,
   notifyAdminMock,
   notifyEnquiryMock,
 } = vi.hoisted(() => ({
   sessionsCreateMock: vi.fn(async () => ({ id: "cs_test_1", url: "https://stripe.example/pay" })),
+  pricesRetrieveMock: vi.fn(),
   fromMock: vi.fn(),
   getUserMock: vi.fn(async () => ({ data: { user: null } })),
   notifyAdminMock: vi.fn(async () => {}),
@@ -30,7 +32,10 @@ const {
 }));
 
 vi.mock("@/lib/stripe", () => ({
-  stripe: { checkout: { sessions: { create: sessionsCreateMock } } },
+  stripe: {
+    checkout: { sessions: { create: sessionsCreateMock } },
+    prices: { retrieve: pricesRetrieveMock },
+  },
 }));
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ auth: { getUser: getUserMock }, from: fromMock }),
@@ -103,10 +108,28 @@ const MANAGED_BODY = {
   contactEmail: "maya@example.com",
 };
 
+// D22: Stripe price fixtures keyed by price id. An id not in the map defaults to
+// a price that matches managed_monthly, so the D19 managed cases proceed to
+// session creation. A fixture value of "THROW" makes the retrieve reject. Tests
+// that need a specific outcome use a UNIQUE price id, because the route caches
+// prices in module scope for 5 minutes and that cache is not cleared between tests.
+const MATCHING_MONTHLY = {
+  recurring: { interval: "month", interval_count: 1 },
+  unit_amount: 7999,
+  currency: "gbp",
+};
+let priceFixtures: Record<string, unknown> = {};
+
 beforeEach(() => {
   vi.clearAllMocks();
   setupDb();
   sessionsCreateMock.mockResolvedValue({ id: "cs_test_1", url: "https://stripe.example/pay" });
+  priceFixtures = {};
+  pricesRetrieveMock.mockImplementation(async (id: string) => {
+    const fixture = priceFixtures[id];
+    if (fixture === "THROW") throw new Error("stripe prices retrieve down");
+    return fixture ?? MATCHING_MONTHLY;
+  });
 });
 
 describe("POST /api/curation, D19 orphan-payment guard", () => {
@@ -162,6 +185,71 @@ describe("POST /api/curation, D19 orphan-payment guard", () => {
     const res = await POST(req(MANAGED_BODY));
 
     expect(res.status).toBe(500);
+    expect(deletes).toContainEqual(["id", "cr_1"]);
+  });
+});
+
+const MANAGED_QUARTERLY_BODY = {
+  tier: "managed_quarterly",
+  venueName: "The Copper Kettle",
+  contactName: "Maya Chen",
+  contactEmail: "maya@example.com",
+};
+
+describe("POST /api/curation, D22 managed price validation", () => {
+  it("proceeds to checkout when the Stripe price matches the advertised tier", async () => {
+    process.env.STRIPE_PRICE_CURATION_MONTHLY = "price_d22_match";
+    priceFixtures["price_d22_match"] = MATCHING_MONTHLY;
+
+    const res = await POST(req(MANAGED_BODY));
+
+    expect(pricesRetrieveMock).toHaveBeenCalledWith("price_d22_match");
+    expect(sessionsCreateMock).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+    expect(deletes).toHaveLength(0);
+  });
+
+  it("503s and deletes the row when the price bills the wrong cadence", async () => {
+    process.env.STRIPE_PRICE_CURATION_QUARTERLY = "price_d22_cadence";
+    // Quarterly tier, but the price is configured monthly (interval_count 1).
+    priceFixtures["price_d22_cadence"] = {
+      recurring: { interval: "month", interval_count: 1 },
+      unit_amount: 19999,
+      currency: "gbp",
+    };
+
+    const res = await POST(req(MANAGED_QUARTERLY_BODY));
+
+    expect(res.status).toBe(503);
+    // No payable session must be created against a mispriced tier.
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+    expect(deletes).toContainEqual(["id", "cr_1"]);
+  });
+
+  it("503s and deletes the row when the price amount is wrong", async () => {
+    process.env.STRIPE_PRICE_CURATION_MONTHLY = "price_d22_amount";
+    // Right cadence, wrong amount (£99.99 instead of £79.99).
+    priceFixtures["price_d22_amount"] = {
+      recurring: { interval: "month", interval_count: 1 },
+      unit_amount: 9999,
+      currency: "gbp",
+    };
+
+    const res = await POST(req(MANAGED_BODY));
+
+    expect(res.status).toBe(503);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+    expect(deletes).toContainEqual(["id", "cr_1"]);
+  });
+
+  it("503s and deletes the row when the price retrieve fails", async () => {
+    process.env.STRIPE_PRICE_CURATION_MONTHLY = "price_d22_throw";
+    priceFixtures["price_d22_throw"] = "THROW";
+
+    const res = await POST(req(MANAGED_BODY));
+
+    expect(res.status).toBe(503);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
     expect(deletes).toContainEqual(["id", "cr_1"]);
   });
 });

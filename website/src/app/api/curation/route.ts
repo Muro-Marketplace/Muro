@@ -8,6 +8,7 @@ import {
   CURATION_TIERS as TIERS,
   CURATION_TIER_KEYS,
   type CurationTierKey as TierKey,
+  type ManagedTier,
 } from "@/lib/curation-tiers";
 
 const safe = (n: number) => z.string().trim().max(n);
@@ -43,6 +44,39 @@ const METHOD_LABEL: Record<string, string> = {
   paid_loan: "Paid loan",
   direct_purchase: "Direct purchase",
 };
+
+// D22: the managed-tier Stripe prices live in the dashboard behind the
+// STRIPE_PRICE_CURATION_* envs, and nothing checked that a price actually bills
+// the cadence and amount we advertise. A quarterly env pointing at a monthly
+// price would charge £199.99 every month while the page promises every quarter.
+// We validate the price against the tier at checkout, cached 5 minutes in module
+// scope so it is not a Stripe round trip on every submission.
+const CURATION_PRICE_CACHE_MS = 5 * 60 * 1000;
+const curationPriceCache = new Map<string, { price: Stripe.Price; expiresAt: number }>();
+
+async function retrieveCurationPrice(priceId: string): Promise<Stripe.Price> {
+  const cached = curationPriceCache.get(priceId);
+  if (cached && cached.expiresAt > Date.now()) return cached.price;
+  const price = await stripe.prices.retrieve(priceId);
+  curationPriceCache.set(priceId, { price, expiresAt: Date.now() + CURATION_PRICE_CACHE_MS });
+  return price;
+}
+
+/**
+ * Whether a Stripe price bills exactly what a managed tier advertises: the right
+ * cadence (Stripe models "quarterly" as monthly with interval_count 3), the right
+ * amount in pence, and GBP. This is what makes the tier's `interval` field
+ * authoritative instead of decorative.
+ */
+function curationPriceMatchesTier(price: Stripe.Price, tier: ManagedTier): boolean {
+  const expectedIntervalCount = tier.interval === "quarter" ? 3 : 1;
+  return (
+    price.recurring?.interval === "month" &&
+    (price.recurring?.interval_count ?? 1) === expectedIntervalCount &&
+    price.unit_amount === Math.round(tier.priceGbp * 100) &&
+    price.currency === "gbp"
+  );
+}
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -155,6 +189,34 @@ export async function POST(request: Request) {
       console.error(`Curation managed tier ${d.tier} missing env ${tier.priceEnvVar}`);
       await db.from("curation_requests").delete().eq("id", row.id);
       return NextResponse.json({ error: "Managed curation is not yet available, please try a one-off tier." }, { status: 503 });
+    }
+
+    // D22: the configured price must actually bill the cadence and amount this
+    // tier advertises, or a dashboard misconfiguration silently overcharges the
+    // venue. Validate before creating any session — deleting the row here is safe
+    // because nothing is payable yet (D19).
+    let curationPrice: Stripe.Price;
+    try {
+      curationPrice = await retrieveCurationPrice(priceId);
+    } catch (err) {
+      console.error("curation managed price retrieve failed", { priceId, tier: d.tier, err });
+      await db.from("curation_requests").delete().eq("id", row.id);
+      return NextResponse.json({ error: "Managed curation is temporarily unavailable. Please try a one-off tier." }, { status: 503 });
+    }
+    if (!curationPriceMatchesTier(curationPrice, tier)) {
+      console.error("curation managed price mismatch", {
+        priceId,
+        tier: d.tier,
+        expectedPence: Math.round(tier.priceGbp * 100),
+        expectedIntervalCount: tier.interval === "quarter" ? 3 : 1,
+        actual: {
+          unit_amount: curationPrice.unit_amount,
+          currency: curationPrice.currency,
+          recurring: curationPrice.recurring,
+        },
+      });
+      await db.from("curation_requests").delete().eq("id", row.id);
+      return NextResponse.json({ error: "Managed curation is temporarily unavailable. Please try a one-off tier." }, { status: 503 });
     }
 
     let session: Stripe.Checkout.Session;
