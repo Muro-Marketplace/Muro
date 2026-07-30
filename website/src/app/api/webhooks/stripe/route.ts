@@ -1307,14 +1307,14 @@ async function handleWebhookEvent(
       }>();
 
     const isStale = profile && profile.stripe_subscription_id && profile.stripe_subscription_id !== subscription.id;
-    if (isStale) {
-      // Old subscription being cancelled as part of an upgrade. The
-      // newer subscription has already been recorded against the
-      // profile; do nothing here. Skip the cancellation email too —
-      // the artist isn't really being cancelled.
-      return NextResponse.json({ received: true });
-    }
-
+    // D13: this used to `return` on isStale, which exited the WHOLE handler and so
+    // skipped the paid-loan `customer.subscription.deleted` block further down. An
+    // artist upgrading their plan (a stale SaaS deletion) could therefore leave a
+    // paid-loan billing row stuck `active` after Stripe cancelled it. Guard only the
+    // SaaS-specific work; execution falls through to the paid-loan block. isStale
+    // means the old subscription is being cancelled as part of an upgrade, the newer
+    // one is already recorded, so we touch neither the profile nor the email.
+    if (!isStale) {
     const { error } = await db
       .from("artist_profiles")
       .update({ subscription_status: "canceled" })
@@ -1352,6 +1352,7 @@ async function handleWebhookEvent(
     } catch (err) {
       console.error("Cancelled email error:", err);
     }
+    } // end if (!isStale) — D13
   }
 
   if (event.type === "invoice.payment_failed") {

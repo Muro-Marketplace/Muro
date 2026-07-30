@@ -12,6 +12,7 @@ const {
   subscriptionsRetrieveMock,
   customersUpdateMock,
   startPaidLoanBillingMock,
+  handleSubDeletedMock,
   notifyAdminBillingStalledMock,
   sendEmailMock,
   resolveArtistNamesBulkMock,
@@ -32,6 +33,7 @@ const {
   subscriptionsRetrieveMock: vi.fn(),
   customersUpdateMock: vi.fn(),
   startPaidLoanBillingMock: vi.fn(),
+  handleSubDeletedMock: vi.fn(async () => false),
   notifyAdminBillingStalledMock: vi.fn(),
   sendEmailMock: vi.fn(async () => {}),
   resolveArtistNamesBulkMock: vi.fn(async () => new Map<string, string>()),
@@ -122,7 +124,7 @@ vi.mock("@/lib/placements/paid-loan-billing", async (importOriginal) => ({
   startPaidLoanBilling: startPaidLoanBillingMock,
   handleInvoicePaid: vi.fn(async () => false),
   handleInvoicePaymentFailed: vi.fn(async () => false),
-  handleSubscriptionDeleted: vi.fn(async () => false),
+  handleSubscriptionDeleted: handleSubDeletedMock,
 }));
 
 /** D1: every branch now runs behind a global replay guard that claims event.id in
@@ -2137,5 +2139,54 @@ describe("Stripe webhook — subscription plan mapping (D12)", () => {
       ignored: "unknown_price",
     });
     expect(updates).toHaveLength(0);
+  });
+});
+
+// ── D13: a stale SaaS subscription.deleted must still run the paid-loan handler ─
+//
+// The SaaS block used to `return` on isStale, exiting the whole handler, so the
+// paid-loan customer.subscription.deleted handler below never ran. An artist
+// upgrading their plan could leave a paid-loan billing row stuck active.
+describe("Stripe webhook — subscription.deleted reaches the paid-loan handler (D13)", () => {
+  beforeEach(() => {
+    handleSubDeletedMock.mockClear();
+  });
+
+  function fireDeleted(profileSubId: string | null) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: profileSubId
+                  ? { user_id: null, name: null, subscription_plan: "pro", stripe_subscription_id: profileSubId }
+                  : null,
+              }),
+            }),
+          }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }), update: () => ({ eq: async () => ({ error: null }) }) };
+    });
+    constructEventMock.mockReturnValue({
+      type: "customer.subscription.deleted",
+      data: { object: { id: "sub_deleted", customer: "cus_1", cancel_at: null } },
+    });
+  }
+
+  it("runs the paid-loan handler even when the SaaS deletion is stale (upgrade race)", async () => {
+    // profile points at a DIFFERENT (newer) subscription => isStale true.
+    fireDeleted("sub_newer_active");
+    expect((await POST(buildRequest())).status).toBe(200);
+    expect(handleSubDeletedMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("also runs the paid-loan handler on a non-stale SaaS deletion", async () => {
+    fireDeleted("sub_deleted"); // same id => not stale
+    await POST(buildRequest());
+    expect(handleSubDeletedMock).toHaveBeenCalledTimes(1);
   });
 });
