@@ -18,7 +18,8 @@
     "audit:e2e-security": "playwright test tests/e2e/security-no-leaks.spec.ts",
     "depcheck": "depcruise src --config .dependency-cruiser.cjs",
     "audit:full": "npm run check && npm run audit:advisors && npm run audit:e2e-security",
-    "audit:allowlist": "tsx scripts/audit/check-public-routes.ts"
+    "audit:allowlist": "tsx scripts/audit/check-public-routes.ts",
+    "schema:snapshot": "tsx scripts/schema-snapshot.ts"
   },
   "dependencies": {
     "@react-email/components": "^1.0.12",

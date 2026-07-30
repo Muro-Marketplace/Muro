@@ -79,6 +79,7 @@ npm run audit:advisors # Supabase advisor snapshot + regression check
 npm run audit:e2e-security  # tests/e2e/security-no-leaks.spec.ts
 npm run depcheck       # dependency-cruiser
 npm run audit:full     # check + advisors + e2e-security
+npm run schema:snapshot # regenerate the phantom guard's schema-columns.json from the live DB (after a column migration; needs SUPABASE_ACCESS_TOKEN)
 ```
 
 **Established pattern for enforcing a rule:** a custom ESLint rule, verified by an integration test in `tests/integration/`. Precedents already in the repo:
@@ -114,7 +115,7 @@ Also apply the pending workflow change in `docs/ci/2026-06-15-required-checks.md
 - [ ] `npm run check` green
 - [ ] Regression test added, fails on the pre-fix commit
 - [ ] Security tasks: explicit negative test (unauthorised → 401/403; forged field → ignored/400)
-- [ ] DB tasks: migration idempotent + `npm run audit:advisors` clean
+- [ ] DB tasks: migration idempotent + `npm run audit:advisors` clean; if the migration adds, renames or drops a column, run `npm run schema:snapshot` to refresh the phantom guard's snapshot (never add the new real column to `GRANDFATHERED` instead, D61)
 - [ ] Money tasks: Stripe test-mode assertion of the exact split, to the penny
 - [ ] Traceability row updated in the remediation spec §7
 

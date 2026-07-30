@@ -16,7 +16,15 @@
 // uwkuhygwvasdzwsusiym) plus a scan of every select against it. Any select naming
 // a column the snapshot lacks is a phantom, whether or not anyone knew about it.
 //
-// Regenerate the snapshot after a migration:
+// Regenerate the snapshot after ANY migration that adds, renames or drops a column,
+// BEFORE committing (else the guard flags the new *real* column as a phantom):
+//
+//   SUPABASE_ACCESS_TOKEN=... npm run schema:snapshot
+//
+// That runs scripts/schema-snapshot.ts, which rebuilds this file from the live
+// schema via the query below. Do NOT instead add the new column to GRANDFATHERED —
+// that hollows out the guard (supervisor D61).
+//
 //   select jsonb_object_agg(table_name, cols) from (
 //     select table_name, jsonb_agg(column_name order by ordinal_position) cols
 //     from information_schema.columns where table_schema='public' group by table_name) t;

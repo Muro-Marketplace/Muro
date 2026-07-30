@@ -24,7 +24,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **DONE**. Narrow form (6e0705e), then **full form** (7f556eb): `schema-columns.json` snapshots all 53 tables / 750 columns; the scan surfaced 12 phantom selects, parked in a shrinking `GRANDFATHERED` ratchet and queued as **row 19** |
 | 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
-| 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **NEXT** (sequenced before the next migration): add `npm run schema:snapshot`, name it in the guard header, mention it in the migration steps |
+| 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (this commit): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate`/`ApiError`/`NetworkError`/`isTransient` in api-client.ts, 80a7c41). Remaining: §1.2 `useSaveAction` hook, then E41/E42/E43 caller migrations (one each), `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -7863,8 +7863,45 @@ migrations that would leave the snapshot stale and break the guard. This reorder
 the plan (surfaced per operating rule 4); it is low-risk tooling (npm script + guard
 header line + a mention in the migration steps), no migration/money/prod-grant.
 
-**Next: ROW 20 (schema:snapshot script), per D61 — before any migration-bearing
-task.** Then resume doc `05`: §1.2 `useSaveAction` hook, then the E41/E42/E43 caller
-migrations (one finding each), with the `no-authfetch-mutation` eslint rule LAST
-(after all 70-odd call sites move to `mutate`). Owner-gated / NOT loop-actionable:
-row 19 #2 (b)/(c), E25 bucket cutover, the row-9 admin conjunct cutover, free_until.
+## ROW 20 (supervisor D61) — schema:snapshot regeneration script for the phantom guard
+
+Commit `<pending>`. Tooling + docs.
+
+**Why (D61.3).** The phantom guard's snapshot (`tests/integration/schema-columns.json`)
+was maintained by a documented raw-SQL step with no npm script and nothing in
+`scripts/`. The next column migration would leave it stale, the guard would flag the
+new *real* column as a phantom, and the easy wrong fix under pressure is to add it to
+`GRANDFATHERED` (hollowing out the one guard against this codebase's dominant failure
+mode). Sequenced before the remaining docs because `03`/`05`/`09` carry migrations.
+
+**What.** (a) `scripts/schema-snapshot.lib.ts` — pure `toSnapshot()` (extracts the
+`{table:[cols]}` object from the query API's `[{snapshot:...}]` row array, validates,
+throws on garbage) + `serialize()` (emits the committed on-disk format byte-for-byte:
+2-space keys, inline `", "` column arrays, trailing newline) + `SNAPSHOT_SQL`.
+(b) `scripts/schema-snapshot.ts` — thin runner: POSTs `SNAPSHOT_SQL` to the Supabase
+Management API `database/query` (same `SUPABASE_ACCESS_TOKEN` + project ref as
+`snapshot-advisors.ts`), writes `tests/integration/schema-columns.json`; exits 2 if
+the token is unset. (c) `package.json`: `"schema:snapshot": "tsx scripts/schema-snapshot.ts"`.
+(d) guard header updated to name `npm run schema:snapshot` (and warn against the
+GRANDFATHERED shortcut). (e) MASTER-RUNBOOK: added to the scripts list and the
+DB-task definition-of-done.
+
+**Test.** `scripts/schema-snapshot.lib.test.ts` (8 tests): toSnapshot shape + throw
+cases; serialize format; a **byte-for-byte round-trip of the committed snapshot**
+(`serialize(JSON.parse(committed)) === committed`, proving the writer reproduces the
+file so a no-change regen is a git no-op); and wiring assertions (package.json script
++ guard header reference). Fail-before verified by reverting package.json + the guard
+header: the two wiring assertions failed. Re-applied -> pass. Runner not run
+end-to-end here (no `SUPABASE_ACCESS_TOKEN` locally, and Wallplace `.env.local` is a
+placeholder), but the live response shape was confirmed via the Supabase MCP
+(`[{snapshot:{...}}]`, 53 tables in the same order as the committed file — a clean
+no-op regen). `npm run check` green: 171 files, 1877 tests, audit:allowlist PASS,
+exit 0.
+
+**Next: resume doc `05` §1.2** — the `useSaveAction` hook (new file
+`src/hooks/useSaveAction.ts`; reference impl in the doc). Then the E41/E42/E43 caller
+migrations to `mutate`+`useSaveAction` (one finding each), with the
+`no-authfetch-mutation` eslint rule LAST (after all ~70 authFetch mutation call sites
+move to `mutate`). Then ledger rows 9(`03` admin — safe prep, surface the conjunct
+cutover), 10(`09`), 11(`07`), 12(`08` cull). Owner-gated / NOT loop-actionable: row
+19 #2 (b)/(c), E25 bucket cutover, the row-9 admin conjunct cutover, free_until.
