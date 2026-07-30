@@ -19,7 +19,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
-| 7 | `04` payments Phase 0→9 | `04` | **Bug 15 done** (ee7e888). Next in Phase 0: curation CHECK widening (D9 pulls 7.0 forward), then G-C Bug 10 |
+| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). Next: G-C Bug 10, then T3 offers (E6/E10) |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -2437,3 +2437,87 @@ code:
 
 Two of the five were breaking production behaviour, not just sitting in a plan: the
 placement accept/decline controls never render, and admin gross sales read £0.
+
+---
+
+## Iteration 26 — 2026-07-30
+
+### T10 — the managed curation tiers were unsellable. First migration of the run.
+
+Owner: `04` task 7.0, pulled into Phase 0 by D9.
+
+`curation_requests.tier` permitted only the three one-off tiers while
+`api/curation/route.ts` already accepted `managed_monthly` and `managed_quarterly`
+and inserts the submitted value directly. Every managed sign-up violated the
+constraint and returned a 500, so **£79.99/month and £199.99/quarter could not be
+sold at all**.
+
+**Changed:** new `supabase/migrations/080_curation_managed_tiers.sql`, new
+`src/lib/curation-tiers.ts`, and `api/curation/route.ts` now imports from it.
+
+**Migration number:** 080, the first free number inside `04`'s D1 range (080-089).
+Verified 080-082 were unused before taking it, and the numbering guard from
+iteration 4 still passes.
+
+**Checked the data before widening:** 2 rows, both `single_wall`. The new set is a
+strict superset of the old, so no existing row could be invalidated.
+
+**Applied to prod and verified in place:**
+
+```
+CHECK ((tier = ANY (ARRAY['single_wall'::text, 'full_space'::text, 'bespoke'::text,
+                          'managed_monthly'::text, 'managed_quarterly'::text])))
+rows_intact 2 | single_wall_intact 2
+```
+
+D9 was right that the CHECK was confirmed in prod (`04 §D25` had it as
+"UNCONFIRMED"), so pulling 7.0 forward was correct.
+
+**The real defect was the drift, not the constraint.** The route restated the five
+tier keys in a zod enum next to a `TIERS` table holding the same keys, and the DB
+held a third copy. So the fix removes the duplication: the tier table moves to
+`src/lib/curation-tiers.ts` as one definition, and the enum derives from
+`CURATION_TIER_KEYS`. A tier added to the table can no longer be rejected by the
+validator.
+
+**Verification, both directions.** Before: `Failed to load url ./curation-tiers`.
+After:
+
+```
+ ✓ tests/integration/migration-numbering.test.ts (4 tests) 10ms
+ ✓ src/lib/curation-tiers.test.ts (5 tests) 10ms
+```
+
+One of those five parses the tier CHECK out of the migration files and asserts it
+matches the code's tier list exactly, so adding a tier without a migration fails CI
+rather than 500ing in production.
+
+**DB verification ladder.** Advisor run **via the Supabase MCP, not the npm script**
+(D12 ruling 2, the token is absent): no new lints, the list is the known baseline of
+18 `rls_enabled_no_policy` INFO, 13 INSERT-only `rls_policy_always_true` WARN, and
+the leaked-password WARN. The `pg_policies` assertion still returns exactly the five
+known leaks and nothing new, confirming this change did not touch RLS:
+
+```
+artist_applications | Authenticated users can read applications | (auth.role() = 'authenticated')
+contact_submissions | Authenticated can read contact            | (auth.role() = 'authenticated')
+enquiries           | Artists can read their enquiries          | true
+venue_registrations | Authenticated can read venue reg          | (auth.role() = 'authenticated')
+waitlist_signups    | Authenticated can read waitlist           | (auth.role() = 'authenticated')
+```
+
+Full gate:
+
+```
+=== npm run check EXIT = 0 ===
+ Test Files  145 passed (145)
+      Tests  1365 passed (1365)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Commit:** 509d3c4
+
+`04` Phase 0 is now complete: Bug 15 (ee7e888) and T10 (509d3c4). Next is G-C / Bug 10
+("ships to UK only" unenforced), then T3 offers, which is where E6 lives — the
+finding behind the two unpaid offers. Note E6's *code* fix is in scope; the £60
+reconciliation against Stripe stays a human task per D11.
