@@ -299,7 +299,7 @@ Prefix-aware scan of all 119 route files returned 13 with zero in-repo callers. 
 |---|---|---|
 | `/api/cron/weekly-artist-digest` | 81 | `vercel.json` cron `0 9 * * 2` |
 | `/api/cron/weekly-venue-digest` | 70 | `vercel.json` cron `0 9 * * 3` |
-| `/api/cron/placement-ending-soon` | 72 | `vercel.json` cron `0 10 * * *` |
+| `/api/cron/placement-ending-soon` | 72 | `vercel.json` cron `0 10 * * *`. **NON-FUNCTIONAL** (row 19 #2 / D60): keyed on a phantom `placements.end_date`; has never sent an email. GATED OFF as a reversible interim pending the owner's (b) build the data model / (c) remove decision. "KEEP" here means the route file exists, not that it works. |
 | `/api/cron/placement-review-request` | 76 | `vercel.json` cron `0 11 * * *` |
 | `/api/cron/inactive-users` | 204 | `vercel.json` cron `0 10 * * *` |
 | `/api/cron/onboarding-nudges` | 317 | `vercel.json` cron `0 10 * * *` |

@@ -1,72 +1,34 @@
-// Vercel Cron, daily 10:00 UTC. Finds placements whose `end_date` is ~14 days
-// out and emails both parties once.
+// Vercel Cron, daily 10:00 UTC. GATED OFF — row 19 #2 / EXECUTION-DECISIONS D60.
+//
+// The "placement ending soon" reminder keyed on `placements.end_date`, a column
+// that does not exist. `placements` has no planned-end concept at all: every
+// date column on it is a PAST event (accepted_at, installed_at, collected_at,
+// cancelled_at) except `subscription_current_period_end`, which is Stripe-managed
+// and paid-loan-only. So a reminder 14 days BEFORE an end has nothing to fire on,
+// and this cron has never sent a single email (the phantom select was rejected
+// whole every run). Reworking onto `placement_records.collection_date` was ruled
+// out on the data: 1 of 37 active placements has one, 0 in the future (D60.2).
+//
+// This is the reversible interim (option c): the handler no longer runs the
+// phantom query and returns a clear skip, so the job stops appearing healthy while
+// doing nothing. The OWNER decides between (b) building a real
+// `placements.end_date` data model (populate on accept) and re-enabling, or (c)
+// removing this route + its vercel.json entry + the PlacementEndingSoon template.
 
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { sendEmail } from "@/lib/email/send";
-import { PlacementEndingSoon } from "@/emails/templates/placements/PlacementEndingSoon";
-import { requireCronAuth, runBatch } from "../_auth";
+import { requireCronAuth } from "../_auth";
 
 export const dynamic = "force-dynamic";
-
-const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 export async function GET(request: Request) {
   const unauth = requireCronAuth(request);
   if (unauth) return unauth;
 
-  const db = getSupabaseAdmin();
-  // Window: anything ending between 13.5 and 14.5 days from now. Catches a
-  // single daily run without risking double-sends across timezones.
-  const nowMs = Date.now();
-  const lower = new Date(nowMs + 13.5 * 24 * 60 * 60 * 1000).toISOString();
-  const upper = new Date(nowMs + 14.5 * 24 * 60 * 60 * 1000).toISOString();
-
-  // `end_date` is the column we document publicly, map from whichever DB
-  // column holds it. Common options: `end_date`, `ends_at`, `collected_at`.
-  // Adjust the column name if your schema differs.
-  const { data: placements } = await db
-    .from("placements")
-    .select("id, artist_user_id, venue_user_id, venue, venue_slug, end_date")
-    .eq("status", "active")
-    .gte("end_date", lower)
-    .lte("end_date", upper);
-
-  const result = await runBatch((placements || []), async (p) => {
-    const endLabel = p.end_date
-      ? new Date(p.end_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
-      : "soon";
-    const placementUrl = `${SITE}/placements/${encodeURIComponent(p.id)}`;
-
-    const parties: Array<{ userId: string | null; kind: "artist" | "venue" }> = [
-      { userId: p.artist_user_id, kind: "artist" },
-      { userId: p.venue_user_id, kind: "venue" },
-    ];
-
-    for (const party of parties) {
-      if (!party.userId) continue;
-      const { data: { user } } = await db.auth.admin.getUserById(party.userId);
-      if (!user?.email) continue;
-
-      await sendEmail({
-        idempotencyKey: `placement_ending_soon:${p.id}:${party.userId}`,
-        template: "placement_ending_soon",
-        category: "placements",
-        to: user.email,
-        subject: `Placement at ${p.venue || "your venue"} ends ${endLabel}`,
-        userId: party.userId,
-        react: PlacementEndingSoon({
-          firstName: user.user_metadata?.first_name || "there",
-          placementUrl,
-          venueName: p.venue || "your venue",
-          endDate: endLabel,
-          returnInstructionsUrl: `${placementUrl}?record=open`,
-          extendPlacementUrl: `${placementUrl}?extend=1`,
-        }),
-        metadata: { placementId: p.id, party: party.kind },
-      });
-    }
+  return NextResponse.json({
+    ok: true,
+    skipped:
+      "placements has no planned end-date column; the ending-soon reminder is not built "
+      + "(see EXECUTION-DECISIONS D60 / PROGRESS row 19 #2). Owner to decide (b) build "
+      + "placements.end_date, or (c) remove this cron.",
   });
-
-  return NextResponse.json({ ok: true, ...result });
 }
