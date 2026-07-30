@@ -264,30 +264,27 @@ async function handleWebhookEvent(
           })
           .eq("id", offerId);
 
-        // E10: the offer path never decremented stock, so a work sold via an
-        // accepted offer stayed on sale. Read-then-write to match the cart
-        // path; replacing that pattern with an atomic decrement is D5's task,
-        // and inventing a second mechanism here would just add a third.
+        // E10 decremented offer stock read-then-write; D5 moves it to the shared
+        // atomic RPC so the same race the cart path had is closed here too (E10's
+        // own comment deferred this to D5). The title read stays separate: it feeds
+        // the confirmation email and is display-only, so it need not be atomic and a
+        // failure just means a less specific email. Both are best-effort for the
+        // same reason as the cart path: the offer is already flipped to paid above,
+        // so a 500 here cannot cleanly unwind it.
         const workTitles: string[] = [];
         for (const workId of workIds) {
-          try {
-            const { data: work } = await db
-              .from("artist_works")
-              // title comes along for the confirmation emails, so naming the
-              // piece costs no extra round-trip.
-              .select("quantity_available, title")
-              .eq("id", workId)
-              .single();
-            if (work?.title) workTitles.push(work.title as string);
-            const current = work?.quantity_available;
-            if (typeof current === "number") {
-              const next = Math.max(0, current - 1);
-              const updates: Record<string, unknown> = { quantity_available: next };
-              if (next === 0) updates.available = false;
-              await db.from("artist_works").update(updates).eq("id", workId);
-            }
-          } catch (err) {
-            console.warn("[offer] quantity decrement skipped", { workId, err });
+          const { data: work } = await db
+            .from("artist_works")
+            .select("title")
+            .eq("id", workId)
+            .maybeSingle();
+          if (work?.title) workTitles.push(work.title as string);
+          const { error: stockErr } = await db.rpc("decrement_work_stock", {
+            p_work_id: workId,
+            p_qty: 1,
+          });
+          if (stockErr) {
+            console.warn("[offer] stock decrement failed", { workId, stockErr });
           }
         }
 
@@ -847,29 +844,33 @@ async function handleWebhookEvent(
           console.error("Supabase order save error:", error);
           return NextResponse.json({ error: "DB save failed" }, { status: 500 });
         } else {
-          // Decrement per-work quantity (F10). Best-effort: swallow any errors
-          // so a DB hiccup here doesn't abort the rest of the order flow.
-          try {
-            type CartItem = { workId?: string; id?: string; qty?: number; quantity?: number };
-            for (const item of cartItems as CartItem[]) {
-              const workId = item.workId || item.id;
-              const qty = Number(item.qty ?? item.quantity ?? 1);
-              if (!workId || !Number.isFinite(qty) || qty <= 0) continue;
-
-              const { data: work } = await db.from("artist_works")
-                .select("quantity_available")
-                .eq("id", workId)
-                .single();
-              const current = work?.quantity_available;
-              if (typeof current === "number") {
-                const next = Math.max(0, current - qty);
-                const updates: Record<string, unknown> = { quantity_available: next };
-                if (next === 0) updates.available = false;
-                await db.from("artist_works").update(updates).eq("id", workId);
-              }
+          // Decrement per-work quantity (D5). The old code was read-then-write:
+          // SELECT quantity_available, compute max(0, current - qty), UPDATE. Two
+          // concurrent orders for the last piece both read 1 and both wrote 0, so
+          // both buyers got it. decrement_work_stock does it in one UPDATE, which
+          // Postgres serialises, so the race is closed.
+          //
+          // Still best-effort, and deliberately NOT fatal, contra the plan. This
+          // runs AFTER the order insert, and the buyer's receipt is sent a few
+          // lines below. A 500 here would skip the receipt on the first delivery,
+          // and Stripe's retry would then hit the order's 23505, be classified a
+          // duplicate (D3), and return early, so the decrement AND the emails would
+          // be lost for good. True fatality needs the decrement inside the same
+          // transaction as the order insert, which is a larger change than D5. A
+          // failed decrement here oversells by at most the failed line, and the
+          // race, which is the actual finding, is now closed.
+          type CartItem = { workId?: string; id?: string; qty?: number; quantity?: number };
+          for (const item of cartItems as CartItem[]) {
+            const workId = item.workId || item.id;
+            const qty = Number(item.qty ?? item.quantity ?? 1);
+            if (!workId || !Number.isFinite(qty) || qty <= 0) continue;
+            const { error: stockErr } = await db.rpc("decrement_work_stock", {
+              p_work_id: workId,
+              p_qty: qty,
+            });
+            if (stockErr) {
+              console.error("[webhook] stock decrement failed", { workId, qty, stockErr });
             }
-          } catch (err) {
-            console.warn("Quantity decrement skipped:", err);
           }
 
           // Notification payload comes from the saved cart row; images

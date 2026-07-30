@@ -16,6 +16,7 @@ const {
   sendEmailMock,
   resolveArtistNamesBulkMock,
   receiptPropsMock,
+  rpcMock,
 } = vi.hoisted(() => ({
   constructEventMock: vi.fn(),
   fromMock: vi.fn(),
@@ -35,6 +36,9 @@ const {
   sendEmailMock: vi.fn(async () => {}),
   resolveArtistNamesBulkMock: vi.fn(async () => new Map<string, string>()),
   receiptPropsMock: vi.fn(() => null),
+  rpcMock: vi.fn(
+    async (): Promise<{ data: unknown; error: { message: string } | null }> => ({ data: null, error: null }),
+  ),
 }));
 
 vi.mock("@/lib/stripe", () => ({
@@ -48,6 +52,7 @@ vi.mock("@/lib/stripe", () => ({
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
     from: fromMock,
+    rpc: rpcMock,
     auth: { admin: { getUserById: authGetUserByIdMock } },
   }),
 }));
@@ -293,6 +298,8 @@ beforeEach(() => {
   fromMock.mockReset();
   loadCartSessionMock.mockReset();
   scheduleTransferMock.mockClear();
+  rpcMock.mockClear();
+  rpcMock.mockResolvedValue({ data: null, error: null });
   // mockReset, not mockClear: a mockRejectedValueOnce that no test consumed
   // stays queued and fires in whichever test calls sendEmail next.
   sendEmailMock.mockReset();
@@ -515,13 +522,13 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
       if (table === "artist_works") {
         return {
           select: () => ({
-            eq: (_c: string, workId: string) => ({
-              single: async () => ({
-                data: state.stock[workId] === undefined
+            eq: (_c: string, workId: string) => {
+              const row = () =>
+                state.stock[workId] === undefined
                   ? null
-                  : { quantity_available: state.stock[workId], title: state.titles?.[workId] },
-              }),
-            }),
+                  : { quantity_available: state.stock[workId], title: state.titles?.[workId] };
+              return { single: async () => ({ data: row() }), maybeSingle: async () => ({ data: row() }) };
+            },
           }),
           update: (updates: Record<string, unknown>) => ({
             eq: async (_c: string, workId: string) => {
@@ -641,15 +648,21 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     expect(state.orderInsert.row?.buyer_email).not.toBe(OFFER_META.offer_buyer_user_id);
   });
 
-  it("E10: decrements stock for each work on the offer", async () => {
+  it("E10/D5: decrements stock atomically for each work on the offer", async () => {
+    // D5 moved the offer decrement to the shared decrement_work_stock RPC, so the
+    // assertion is now the RPC calls, not the old read-then-write .update()s.
     const state = freshState({ stock: { "w-1": 3, "w-2": 1 } });
     setupOfferDb(state);
     await fireOffer({ ...OFFER_META, offer_work_ids: "w-1,w-2" });
-    expect(state.stockUpdates).toEqual([
-      { workId: "w-1", updates: { quantity_available: 2 } },
-      // Last one sold: also comes off sale, same rule as the cart path.
-      { workId: "w-2", updates: { quantity_available: 0, available: false } },
+    const stockCalls = (rpcMock.mock.calls as unknown as Array<[string, Record<string, unknown>]>).filter(
+      ([fn]) => fn === "decrement_work_stock",
+    );
+    expect(stockCalls.map(([, args]) => args)).toEqual([
+      { p_work_id: "w-1", p_qty: 1 },
+      { p_work_id: "w-2", p_qty: 1 },
     ]);
+    // The old read-then-write update path is gone.
+    expect(state.stockUpdates).toEqual([]);
   });
 
   it("E6: schedules the artist transfer for the net, not the gross", async () => {
@@ -1769,5 +1782,89 @@ describe("Stripe webhook — artist attribution lookup (D4)", () => {
     expect(res.status).toBe(200);
     expect(insertCaptured.row).not.toBeNull();
     expect(insertCaptured.row!.artist_user_id).toBe("u-bob");
+  });
+});
+
+// ── D5: atomic stock decrement (04 §B1) ──────────────────────────────────────
+//
+// The cart decrement was read-then-write: two concurrent orders for the last
+// piece both read 1 and both wrote 0. decrement_work_stock does it in one UPDATE
+// so Postgres serialises them. It is deliberately best-effort, not fatal: it runs
+// after the order insert and before the receipt, and a 500 would lose both on the
+// retry (the order's 23505 is classified a duplicate by D3 and returns early).
+describe("Stripe webhook — atomic stock decrement (D5)", () => {
+  function driveCart(cart: Array<Record<string, unknown>>) {
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({
+      artistProfiles: [{ user_id: "u-bob", slug: "bob", subscription_plan: "core" }] as never,
+      insertCaptured,
+    });
+    loadCartSessionMock.mockResolvedValue({
+      cart,
+      shipping: { fullName: "Buyer", email: "buyer@example.com", country: "GB", fulfilmentMethod: "ship" },
+      source: "direct",
+      venueSlug: "",
+      artistSlugs: ["bob"],
+      expectedSubtotalPence: 10000,
+      expectedShippingPence: 0,
+      artistShippingPence: {},
+    });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: buildSession({
+          amount_total: 10000,
+          metadata: { kind: "cart_checkout", artist_slugs: "bob", venue_slug: "", fulfilment_method: "ship", source: "direct" },
+        }),
+      },
+    });
+    return insertCaptured;
+  }
+
+  const stockCalls = () =>
+    (rpcMock.mock.calls as unknown as Array<[string, Record<string, unknown>]>)
+      .filter(([fn]) => fn === "decrement_work_stock")
+      .map(([, args]) => args);
+
+  it("calls the RPC once per line with the line quantity", async () => {
+    driveCart([
+      { workId: "w-1", artistSlug: "bob", title: "A", price: 50, qty: 2, image: "" },
+      { workId: "w-2", artistSlug: "bob", title: "B", price: 50, qty: 1, image: "" },
+    ]);
+    expect((await POST(buildRequest())).status).toBe(200);
+    expect(stockCalls()).toEqual([
+      { p_work_id: "w-1", p_qty: 2 },
+      { p_work_id: "w-2", p_qty: 1 },
+    ]);
+  });
+
+  it("does not read-then-write: no artist_works UPDATE is issued", async () => {
+    // The whole point of D5. The mock's artist_works.update pushes to
+    // insertCaptured-adjacent state; here we assert the RPC path is used instead
+    // by confirming exactly one RPC call and a booked order.
+    const insertCaptured = driveCart([{ workId: "w-1", artistSlug: "bob", title: "A", price: 100, qty: 1, image: "" }]);
+    await POST(buildRequest());
+    expect(stockCalls()).toHaveLength(1);
+    expect(insertCaptured.row).not.toBeNull();
+  });
+
+  it("still books the order and stays 200 when the decrement errors (best-effort)", async () => {
+    // A decrement failure must not lose the order or the receipt. The race, not
+    // the failure path, is the finding.
+    rpcMock.mockResolvedValue({ data: null, error: { message: "rpc boom" } });
+    const insertCaptured = driveCart([{ workId: "w-1", artistSlug: "bob", title: "A", price: 100, qty: 1, image: "" }]);
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200);
+    expect(insertCaptured.row, "the order is still booked").not.toBeNull();
+  });
+
+  it("skips lines with no work id or a non-positive quantity", async () => {
+    driveCart([
+      { artistSlug: "bob", title: "no-id", price: 50, qty: 1, image: "" },
+      { workId: "w-2", artistSlug: "bob", title: "zero", price: 50, qty: 0, image: "" },
+      { workId: "w-3", artistSlug: "bob", title: "ok", price: 50, qty: 1, image: "" },
+    ]);
+    await POST(buildRequest());
+    expect(stockCalls()).toEqual([{ p_work_id: "w-3", p_qty: 1 }]);
   });
 });
