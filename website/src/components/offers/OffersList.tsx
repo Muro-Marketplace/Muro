@@ -24,7 +24,7 @@ interface EnrichedWork {
 
 interface EnrichedCollection {
   id: string;
-  title: string;
+  name: string;
   work_ids: string[] | null;
 }
 
@@ -283,8 +283,8 @@ export default function OffersList({ viewerUserId, filter }: Props) {
         const formatted = `£${(o.amount_pence / 100).toFixed(2)}`;
         const works = o.works || [];
         const primaryWork = works[0];
-        const targetTitle = o.collection?.title
-          ? `Collection: ${o.collection.title}`
+        const targetTitle = o.collection?.name
+          ? `Collection: ${o.collection.name}`
           : works.length === 1
             ? primaryWork?.title || "Artwork"
             : works.length > 1

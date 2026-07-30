@@ -171,8 +171,8 @@ export async function GET(request: Request) {
       ? db.from("artist_works").select("id, title, image, dimensions, medium").in("id", allWorkIds)
       : Promise.resolve({ data: [] as Array<{ id: string; title: string; image: string | null; dimensions: string | null; medium: string | null }> }),
     collectionIds.length
-      ? db.from("artist_collections").select("id, title, work_ids").in("id", collectionIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; title: string; work_ids: string[] | null }> }),
+      ? db.from("artist_collections").select("id, name, work_ids").in("id", collectionIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string; work_ids: string[] | null }> }),
     venueIds.length
       ? db.from("venue_profiles").select("user_id, name, slug, location").in("user_id", venueIds)
       : Promise.resolve({ data: [] as Array<{ user_id: string; name: string; slug: string | null; location: string | null }> }),
@@ -445,10 +445,10 @@ export async function POST(request: Request) {
           if (collectionId) {
             const { data: collection } = await db
               .from("artist_collections")
-              .select("title")
+              .select("name")
               .eq("id", collectionId)
-              .maybeSingle<{ title: string | null }>();
-            collectionTitle = collection?.title ?? null;
+              .maybeSingle<{ name: string | null }>();
+            collectionTitle = collection?.name ?? null;
           }
 
           const primary = workDetails[0];
