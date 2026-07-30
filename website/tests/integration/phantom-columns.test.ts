@@ -74,12 +74,6 @@ const GRANDFATHERED: Array<{ file: string; columns: string; phantom: string[]; w
     why: "artist_profiles has profile_image, not image. The artist image reads null on the placement detail path. Fix: select profile_image.",
   },
   {
-    file: "app/api/walls/my-works/route.ts",
-    columns: "id, work_id, work_title, work_image, status, artist_user_id, artist_slug",
-    phantom: ["work_id"],
-    why: "placements has no work_id (it carries work_title / work_image / current_placement_id). The whole select is rejected, so my-works cannot list placed works.",
-  },
-  {
     file: "app/sitemap.ts",
     columns: "title, updated_at, artist_profiles!inner(slug)",
     phantom: ["updated_at"],
@@ -206,7 +200,7 @@ describe("no .select() names a column the live schema lacks (D17.3, full form)",
   it("holds the grandfathered list at its recorded size, so new debt fails the build", () => {
     // A ratchet, not a cap on effort: shrink it by fixing a select, and lower the
     // number in the same commit. It must never grow.
-    expect(GRANDFATHERED).toHaveLength(8);
+    expect(GRANDFATHERED).toHaveLength(7);
     for (const g of GRANDFATHERED) {
       expect(g.phantom.length, "each entry lists the phantom column(s) it parks").toBeGreaterThan(0);
       expect(g.why.length, "each entry names the real column and why it is not fixed here").toBeGreaterThan(60);
