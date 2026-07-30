@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). Next: Phase D items 10-12 (E20+E23b, E21, E22), then `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase D item 10 done**: E20+E23b (8f47841). Next: Phase D items 11 (E21) and 12 (E22), then `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -3217,3 +3217,84 @@ Restored:
 ```
 
 **Commit:** 1bed512
+
+---
+
+## E20 + E23b — force-activation and the burned-inventory path (owner: `01` Phase D item 10)
+
+**E20.** A rejected party could force their own deal live. `existing.status` was
+consulted only for two same-state no-ops, so `declined → active`,
+`cancelled → active` and `completed → active` fell through to an unconditional
+`updates.status = status`. The requester guard that should have caught it sat inside
+an `existing.status === "pending"` branch, so it never ran for exactly the rows the
+exploit used. Prod holds **5 declined and 7 cancelled** placements.
+
+The state flip is not the worst of it. Every downstream hook keys on
+`pending → active`, so a forced row went active with **no Stripe subscription, no
+inventory decrement and no `accepted_at`**: live in both portals, invisible to
+billing, advertising an artist's work as hanging at a venue that refused it.
+
+**E23b.** The inventory restore keyed on `stage === "collected"` instead of the
+resulting status, so a direct `{status:"completed"}` write skipped it:
+`quantity_available` never restored, `available` left false where the decrement had
+hit zero, `placed_at_venue` still pointing at a finished placement. Any party could
+burn an artist's stock with a legitimate-looking request, repeatable across a
+portfolio.
+
+**What changed.** `canPlacementTransition` gates every caller-supplied status write
+(422 on an illegal move); the requester guard is no longer pending-scoped;
+`becameCollected` keys on the effective resulting status; `placementUpdateSchema`
+drops `"completed"` so `stage:"collected"` is the only route there.
+
+**Scoping verified, not assumed.** The gate reads the `status` **body** field, so the
+stage path (`stage:"collected"` → completed) and the undo path
+(`unsetStage:"collected"` → active) still work: they write `updates.status` directly
+and are server-chosen rather than caller-asserted. This mattered, because `completed`
+has no outgoing transition, so gating the undo would have broken it. There is a test
+for the undo specifically.
+
+**Prod checked before enforcing**, per `01` §E20.6. Every live row is inside
+`PLACEMENT_STATUSES`, so no legitimate flow starts 422-ing:
+
+```
+active 37 | pending 33 | cancelled 7 | declined 5 | completed 4
+```
+
+**Tests.** New `src/app/api/placements/route.test.ts`, 12 cases. The state-machine
+unit tests the doc also asks for already exist from Phase A and already cover
+`declined → active` denial, so they were not rewritten.
+
+**Verification, both directions:**
+
+```
+disable the transition gate        → 4 fail, incl. "refuses to force a declined
+                                     placement live, and writes nothing"
+restore "completed" to the schema  → the direct-write test fails
+```
+
+Restored:
+
+```
+ Test Files  150 passed (150)
+      Tests  1462 passed (1462)
+✖ 250 problems (0 errors, 250 warnings)
+```
+
+**Found while writing the tests: half the requester guard is dead.**
+`const requesterId = existing.requester_user_id || null` reads the phantom column,
+so `isRequester` is always false from that source. What actually works is the
+**message-trail fallback** beneath it, which resolves the current requester from the
+latest counter sender or the original `placement_request` sender. My first draft of
+the test set `proposed_by_user_id` and the guard did not fire, which is how this
+surfaced. The tests now drive the trail, because that is the path that runs in prod.
+
+So E20(b)'s widening is correct but its column-based half stays inert until ledger
+7c lands. The message trail covers the real cases today. More evidence for 7c.
+
+**A fixture note worth keeping.** Three "still works" tests initially failed with a
+generic 400, which looks identical to "my new gate broke the happy path". It was
+`db.from(...).delete` missing from the fake, confirmed by temporarily logging the
+thrown error rather than by guessing. Worth doing every time a positive-path test
+fails against an incomplete fixture.
+
+**Commit:** 8f47841
