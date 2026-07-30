@@ -26,6 +26,12 @@ const PUBLIC_ROUTES = {
     "Public bespoke-curation enquiry. Associates a user only when a token is present.",
   "src/app/api/register-venue/route.ts":
     "Public venue registration. Creates a pending row for admin review.",
+  "src/app/api/apply/route.ts":
+    "Public artist application. Anyone may apply, so there is no user to authorise. " +
+    "It moved to the service-role client in 074/X3, which dropped both WITH CHECK (true) " +
+    "INSERT policies on artist_applications: the route is now the only writer. " +
+    "Alternative controls: applySchema validation, checkRateLimit, a pending status " +
+    "the applicant cannot set past, and an insert of nothing but the submitted form.",
   "src/app/api/analytics/track/route.ts":
     "Anonymous event ingest. Append-only, no row is read back to the caller.",
   "src/app/api/account/email/unsubscribe/route.ts":

@@ -472,3 +472,86 @@ ERROR  column analytics_events.venue_slug does not exist     ← NEW (×9 in one
 5. **Correct the email findings**: `09-emails.md`'s wired/unwired tally is unreliable until every trigger's select is schema-validated.
 
 **No owner input needed for any of this.**
+
+---
+
+## D20. Supervisor check #4 — 7a verified good; the referral promise is live and undeliverable
+
+**7a landed correctly (`6e0705e`).** Verified by grep, not by the ledger: sites 1–4 all now key on `trial_end` (`paid-loan-billing.ts:417`, `payment/setup:47`, `webhooks:359`, and `tier-resolver` dropped the column entirely). The only real `free_until` select left is site 5, the referral path, which D18 deferred. **The fix is complete and correct.** Credit where due: the loop also caught that its own Probe C "passed on the first attempt, which was a hole in the guard, not a pass" — that is the right instinct.
+
+**One D18 requirement missed (minor):** site 5 was left *silently*. D18 required it be "explicitly deferred with a comment, not silently left". Add a one-line comment at `webhooks/stripe/route.ts:819` pointing at D17.2/D20 so the next reader does not think it was overlooked.
+
+### D20.1 — 🔴 New finding (E48): the referral reward is advertised and cannot be delivered
+
+`artist-portal/billing/page.tsx:390` shows every artist with a referral code:
+
+> **"Refer another artist and get 30 days free when they upgrade to a paid plan."**
+
+The credit path that would honour it (`webhooks/stripe/route.ts:817-831`) `.select("id, free_until")` and then `.update({ free_until: ... })` on a column that **does not exist**. PostgREST rejects the select, `referrer` is null, the `if (referrer)` block never executes, and no credit is ever applied. Even if it ran, the update would fail too. **The reward has never been paid and, as written, never can be.**
+
+**Blast radius — verified in prod, and it is small:**
+- 7 artists have a referral code displayed to them
+- **0** artists have ever used one (`referred_by_code` is null on all 14)
+- **0** referrals ever credited (`referral_credited_at` null on all 14)
+
+**So nobody is owed restitution.** This is a promise that has not yet been tested, not a debt. But it fails the first time anyone uses it, and it fails *silently* — the referrer simply never gets their month and nothing errors.
+
+### D20.2 — Owner decision, reframed (supersedes D17.2)
+
+D17.2 asked "do you want a free-window concept". That was the wrong question. The right one:
+
+**You are advertising a 30-day reward in the product. Deliver it or stop advertising it.**
+
+- **(a) Deliver it** — add a real `referral_free_until` column (do **not** write app-side credit into `trial_end`, which Stripe manages), and have `platformFeePercentForArtist` honour whichever of `trial_end` / `referral_free_until` is later. Correct, ~one migration plus the webhook branch.
+- **(b) Remove the promise** — delete the block at `billing/page.tsx:383-407` and the dead webhook branch. One commit, honest immediately.
+
+**Not urgent** (zero claims), **but it must be resolved before any referral marketing or launch push** — the first successful referral is the one that breaks. Recommend (b) now and (a) later if referrals become a growth lever, since shipping a promise you can't keep is worse than not offering it.
+
+**Log as E48 in the findings doc.** No code change until the owner picks.
+
+---
+
+## D21. 7b's narrow guard is a DENYLIST — it cannot see the D19 columns. Full form is required.
+
+Loop idle 25 min (normal long wakeup). D19/D20 unconsumed. This cycle went to verifying the 7b guard rather than inventing work.
+
+### D21.1 — Credit where due
+
+`tests/integration/phantom-columns.test.ts` is well built, and two of its design choices are better than what D17.3 asked for:
+- **Exemptions match the exact column list, not the file.** The loop's own comment records why: a file-level exemption *silently un-guarded the fee select in the same file*, so reverting the D17.1 fix left the suite green. It found that **by probing the guard instead of trusting it** — the right instinct, and the same one that should be applied everywhere in this plan.
+- **`KNOWN_UNFIXED` is kept separate from `EXEMPT`** "so nobody reads a bug as a decision", with a ratchet that may shrink but never grow.
+
+It also found two phantom columns nobody had reported: **`artist_works.in_store_price`** and **`placements.requester_user_id`** (the latter woven through ~20 sites in `placements/route.ts`, costing one guaranteed-rejected query per request).
+
+### D21.2 — But it is a denylist, and that is the wrong shape
+
+`PHANTOM` is a hardcoded map of **four** known-bad columns. It flags only what someone already discovered. It therefore **does not contain, and cannot detect**, the four columns D19 confirmed failing in production:
+
+| Column | Consequence | In `PHANTOM`? |
+|---|---|---|
+| `placements.end_date` | `placement-ending-soon` cron dead | ❌ |
+| `artist_profiles.artist_statement` | `onboarding-nudges` artist branch dead | ❌ |
+| `artist_profiles.profile_photo` | same select, same cron | ❌ |
+| `analytics_events.venue_slug` | venue analytics reads nothing (4,889 rows) | ❌ |
+
+**So the suite is green today while two cron jobs are dead and venue analytics is broken.** A denylist can only ever ratify what you already knew — which is precisely how five phantom columns accumulated unnoticed in the first place.
+
+⚠️ **Ledger wording risk:** row 7b reads "narrow form done". That can be read as the class being handled. It is not. Amend it to "narrow form done — denylist only, does NOT detect unknown phantoms; full form outstanding".
+
+### D21.3 — Ruling: build the full allowlist form now
+
+The obstacle that justified going narrow is gone. The guard's own note says the naive version "cried wolf on `stripe_transfers.amount_cents`, which is a real column" — a table-awareness problem, and the parser is **already table-aware** (it captures `.from("x")` with its `.select(...)`). So an allowlist is now safe.
+
+1. Generate `website/supabase/schema-columns.json` from prod via the Supabase MCP:
+```sql
+select table_name, json_agg(column_name order by ordinal_position) as columns
+from information_schema.columns
+where table_schema = 'public'
+group by table_name order by table_name;
+```
+2. Invert the check: for each `.from(t).select(cols)`, **fail on any column not present in `schema-columns.json[t]`**. Keep `EXEMPT`, `KNOWN_UNFIXED` and the ratchet exactly as they are — they are the good parts.
+3. Handle the known parser edges explicitly rather than exempting broadly: `*`, embedded joins (`venue:venue_profiles(name)`), aliases (`x:y`), and computed aggregates.
+4. **Expect the four D19 columns to fail immediately.** That is the acceptance test for the guard: if switching to the allowlist does not surface them, the guard is still wrong. Fix the two dead crons (D19.2) and the analytics select (D19.3) as part of this.
+5. Regenerate `schema-columns.json` whenever a migration lands; note it in the migration checklist.
+
+No owner input needed.

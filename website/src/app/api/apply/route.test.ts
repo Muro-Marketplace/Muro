@@ -18,8 +18,13 @@ const {
   notifyAdminMock: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase", () => ({
-  supabase: {
+// 074/X3: the artist_applications insert moved OFF the anon client onto this one,
+// because 074 drops both WITH CHECK (true) INSERT policies on that table. The old
+// "@/lib/supabase" mock was deleted rather than left beside this one, so a route
+// that quietly went back to the anon client fails here instead of passing on a
+// stale mock.
+vi.mock("@/lib/supabase-admin", () => ({
+  getSupabaseAdmin: () => ({
     from: (table: string) => {
       if (table === "artist_applications") {
         return {
@@ -29,14 +34,6 @@ vi.mock("@/lib/supabase", () => ({
           },
         };
       }
-      return {};
-    },
-  },
-}));
-
-vi.mock("@/lib/supabase-admin", () => ({
-  getSupabaseAdmin: () => ({
-    from: (table: string) => {
       if (table === "artist_profiles") {
         return {
           // First call: lookup by user_id. Second/onwards: lookup by slug for

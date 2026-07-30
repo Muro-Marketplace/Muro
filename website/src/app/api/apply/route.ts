@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { applySchema } from "@/lib/validations";
@@ -106,7 +105,14 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     };
 
-    let { error } = await supabase.from("artist_applications").insert(fullRow);
+    // X3 / 074. Was the anon client. Migration 074 drops both
+    // `WITH CHECK (true)` INSERT policies on artist_applications, so an anon
+    // insert now fails RLS: this switch and that migration MUST ship together
+    // (D15.4), or public applications break silently. The route is the only
+    // legitimate writer, it validates through applySchema and is rate-limited
+    // above, so the service-role client is the right level of trust here.
+    const applyDb = getSupabaseAdmin();
+    let { error } = await applyDb.from("artist_applications").insert(fullRow);
     if (error) {
       const msg = String(error.message || "").toLowerCase();
       const dropOnLegacy: string[] = [];
@@ -119,7 +125,7 @@ export async function POST(request: Request) {
       if (dropOnLegacy.length > 0) {
         const safeRow = { ...fullRow };
         for (const k of dropOnLegacy) delete safeRow[k];
-        const retry = await supabase.from("artist_applications").insert(safeRow);
+        const retry = await applyDb.from("artist_applications").insert(safeRow);
         error = retry.error;
       }
     }
