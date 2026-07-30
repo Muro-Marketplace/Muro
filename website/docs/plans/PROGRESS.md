@@ -6902,3 +6902,60 @@ out of D25 scope.
 
 **Next: D19** (orphan payment: the curation error path deletes a row whose Stripe
 session is live, `api/curation/route.ts:196-233`).
+
+## `04` B10 / D19 — never delete a curation row once its Stripe session is live
+
+Commit `a92c94b`. Second curation finding.
+
+**The defect (confirmed in source).** Both checkout branches in
+`api/curation/route.ts` wrapped `stripe.checkout.sessions.create` AND the
+follow-up `curation_requests.update({ stripe_checkout_session_id })` in one
+`try` whose `catch` ran `db.from("curation_requests").delete().eq("id", row.id)`.
+If the link update **threw** after the session was created (e.g. a transient
+Postgres connection drop at the `await`), the row was deleted while a payable
+Stripe session stayed live. Verified the attribution path: the webhook keys a
+curation payment off `session.metadata.curation_request_id` and looks the row up
+by `.eq("id", requestId)` (`webhooks/stripe/route.ts:116-131`), so a deleted row
+means the buyer can pay and the webhook finds nothing → money taken with no
+record, no confirmation email, no refund trail. Present in **both** the one-off
+(one-time) and managed (subscription) branches.
+
+**The fix.** Split each branch into two steps. `stripe.checkout.sessions.create`
+sits in its own `try`; its `catch` deletes the pending row (safe — nothing is
+payable yet) and 500s. Once a session exists the row is **retained**: the
+`stripe_checkout_session_id` link update is wrapped so an `{ error }` return or a
+throw is logged (`... session link failed/threw, row retained`) but never
+deletes, and the buyer still gets the checkout URL. The webhook attributes the
+payment via metadata regardless of whether the link write landed. The managed
+branch's pre-session delete (missing `priceEnvVar`, 503) is unchanged — it fires
+before any session exists, so it stays safe.
+
+**Test added.** `src/app/api/curation/route.test.ts` (new; no curation route
+harness existed). Five cases across both branches:
+- one-off / managed, session-link update **throws** after create → status 200,
+  checkout URL returned, `deletes` length 0 (the regression assertion).
+- one-off, link update returns `{ error }` → 200, row retained.
+- one-off / managed, `sessions.create` itself rejects → 500, row deleted
+  (`["id","cr_1"]`) — the safe-cleanup path still works.
+The throw case is the fail-before/pass-after pin: reintroducing the
+delete-in-catch shape as a probe made *only* `one-off: ... session link update
+throws` fail (`Tests 1 failed | 4 passed`); restoring the fix → all pass. The
+`{ error }` and create-fail cases pass in both shapes by design (the old bare
+`await update()` ignored an `{ error }` return; only a throw reached the catch),
+so they are guards, not the regression.
+
+**Verification.** `npm run check` → `EXIT=0`, `Test Files 164 passed (164)`,
+`Tests 1822 passed (1822)`, 0 lint errors (only pre-existing warnings, none in
+the curation files), allowlist PASS. No schema/RLS change, so advisor + the
+`pg_policies` SELECT-leak assertion do not apply. A live Stripe test-mode drive
+remains impossible in this environment (no test key / webhook secret); the mocked
+route test exercising session-create + link-failure is the available proof.
+
+**Plan note.** The doc cited the bug at `:196-233`; after the earlier `23514`
+edit (D25) the one-off branch had shifted to `~:195-232`, and the doc did not
+mention the **managed** branch carried the same shape (`~:159-191`) — fixed both.
+
+**Next: D20** (a subscription id stored in `curation_requests.stripe_payment_intent_id`
+is type-confused and breaks any refund keyed on it; D18 curation refund folds in).
+Re-read `api/curation/route.ts` + `webhooks/stripe/route.ts:116-160` and verify the
+live `curation_requests` columns first.
