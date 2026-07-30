@@ -1491,3 +1491,79 @@ describe("Stripe webhook — setup_intent.succeeded (E7d)", () => {
     expect(startPaidLoanBillingMock).toHaveBeenCalled();
   });
 });
+
+// ── E11b: the 1970-01-01 subscription (04 §B6) ───────────────────────────────
+//
+// `new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000)` stamped
+// the Unix epoch whenever Stripe omitted the period, so the artist billing page
+// showed a subscription that had expired 56 years ago.
+describe("Stripe webhook — subscription period end (E11b)", () => {
+  let profileUpdates: Array<Record<string, unknown>>;
+
+  function fireSubscription(item: Record<string, unknown> | null) {
+    constructEventMock.mockReturnValue({
+      type: "customer.subscription.created",
+      data: {
+        object: {
+          id: "sub_art_1",
+          customer: "cus_art",
+          status: "active",
+          trial_end: null,
+          items: { data: item ? [item] : [] },
+        },
+      },
+    });
+  }
+
+  beforeEach(() => {
+    profileUpdates = [];
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        return {
+          update: (row: Record<string, unknown>) => {
+            profileUpdates.push(row);
+            return { eq: async () => ({ error: null }) };
+          },
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+    });
+  });
+
+  it("writes the real period end when Stripe sends one", async () => {
+    fireSubscription({ current_period_end: 1_702_000_000, price: { id: "price_x" } });
+    await POST(buildRequest());
+    expect(profileUpdates[0].subscription_period_end).toBe(
+      new Date(1_702_000_000 * 1000).toISOString(),
+    );
+  });
+
+  it("writes null, not 1970, when Stripe sends no period", async () => {
+    fireSubscription({ price: { id: "price_x" } });
+    await POST(buildRequest());
+    expect(profileUpdates[0].subscription_period_end).toBeNull();
+  });
+
+  it("writes null, not 1970, when the subscription has no items", async () => {
+    fireSubscription(null);
+    await POST(buildRequest());
+    expect(profileUpdates[0].subscription_period_end).toBeNull();
+  });
+
+  it("never writes a 1970 date under any of those shapes", async () => {
+    for (const item of [{ price: { id: "p" } }, { current_period_end: 0, price: { id: "p" } }, null]) {
+      profileUpdates = [];
+      fireSubscription(item);
+      await POST(buildRequest());
+      expect(String(profileUpdates[0].subscription_period_end)).not.toContain("1970");
+    }
+  });
+});

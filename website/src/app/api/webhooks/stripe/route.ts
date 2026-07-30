@@ -27,6 +27,10 @@ import {
 import { loadCartSession } from "@/lib/cart-sessions";
 import {
   periodFromSubscription,
+  epochToIso,
+  epochToUkDate,
+} from "@/lib/stripe-subscription-period";
+import {
   recordPaidLoanSubscription,
   startPaidLoanBilling,
   handleInvoicePaid as handleInvoicePaidPaidLoan,
@@ -955,7 +959,10 @@ export async function POST(request: Request) {
         stripe_subscription_id: subscription.id,
         subscription_status: subscription.status === "trialing" ? "trialing" : subscription.status,
         subscription_plan: plan,
-        subscription_period_end: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toISOString(),
+        // E11b: `?? 0` stamped 1970-01-01 whenever Stripe omitted the period,
+        // and the billing page then showed a subscription that expired 56 years
+        // ago. null is the honest value for "we do not know yet".
+        subscription_period_end: epochToIso(periodFromSubscription(subscription).cpEnd),
         trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
       })
       .eq("stripe_customer_id", customerId);
@@ -999,7 +1006,9 @@ export async function POST(request: Request) {
                 firstName: (profile.name || "there").split(" ")[0],
                 oldPlan: (profile.subscription_plan as string).charAt(0).toUpperCase() + (profile.subscription_plan as string).slice(1),
                 newPlan: plan.charAt(0).toUpperCase() + plan.slice(1),
-                billingDate: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+                // E11b: the same epoch bug in customer-facing copy. The upgrade
+                // email quoted "1 January 1970" as the next billing date.
+                billingDate: epochToUkDate(periodFromSubscription(subscription).cpEnd),
                 accountUrl: `${SITE}/artist-portal/billing`,
               }),
               metadata: { subscriptionId: subscription.id, oldPlan: profile.subscription_plan, newPlan: plan },

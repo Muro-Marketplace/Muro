@@ -39,6 +39,11 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isFlagOn } from "@/lib/feature-flags";
 import { scheduleTransfer } from "@/lib/stripe-connect";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
+// E11b: moved to a neutral home once the artist-subscription webhook branch needed
+// the same item-level read. Re-exported because callers already import it from here.
+import { periodFromSubscription, epochToIso } from "@/lib/stripe-subscription-period";
+
+export { periodFromSubscription };
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -63,30 +68,6 @@ export interface StartBillingResult {
 // ── Helpers ────────────────────────────────────────────────────────────
 
 const PAID_LOAN_TYPES = new Set(["paid_loan", "mixed"]);
-
-/**
- * SDK 22+: `current_period_start` / `current_period_end` live on the first
- * subscription item, not on the subscription itself. Reading them off the
- * subscription yields undefined, and `new Date(undefined * 1000)` is how a period
- * end gets stamped 1970-01-01 (E11b).
- */
-export function periodFromSubscription(subscription: Stripe.Subscription): {
-  cpStart: number | null;
-  cpEnd: number | null;
-} {
-  const firstItem = subscription.items?.data?.[0] as
-    | { current_period_start?: number; current_period_end?: number }
-    | undefined;
-  return {
-    cpStart: firstItem?.current_period_start ?? null,
-    cpEnd: firstItem?.current_period_end ?? null,
-  };
-}
-
-/** Epoch seconds to ISO, treating 0 and null alike so no row is stamped 1970. */
-function epochToIso(seconds: number | null): string | null {
-  return seconds ? new Date(seconds * 1000).toISOString() : null;
-}
 
 export interface RecordSubscriptionInput {
   placementId: string;
