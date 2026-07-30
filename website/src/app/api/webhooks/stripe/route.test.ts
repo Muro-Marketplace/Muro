@@ -2317,3 +2317,103 @@ describe("Stripe webhook — SaaS subscription scoped by kind (D15)", () => {
     expect(updates[0]?.subscription_plan).toBe("pro");
   });
 });
+
+// D20: the curation checkout branch wrote `paymentIntentId || subscriptionId`
+// into curation_requests.stripe_payment_intent_id. A managed tier is a Stripe
+// subscription whose checkout session has no top-level payment intent, so the
+// column ended up holding a sub_… id. Any refund keyed on it would call
+// stripe.refunds.create({ payment_intent: "sub_…" }) and fail. The column must
+// hold a real pi_… id or null; the subscription is recoverable from the stored
+// checkout session id when the curation refund path is built.
+describe("Stripe webhook — curation payment id storage (D20)", () => {
+  let curationUpdate: Record<string, unknown> | null;
+
+  function setupCurationDb(existingStatus = "pending_payment") {
+    curationUpdate = null;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
+      if (table === "curation_requests") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: "cr_1",
+                  tier: "managed_monthly",
+                  venue_name: "The Copper Kettle",
+                  contact_name: "Maya Chen",
+                  contact_email: "maya@example.com",
+                  status: existingStatus,
+                },
+                error: null,
+              }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            curationUpdate = payload;
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: null }),
+            maybeSingle: async () => ({ data: null }),
+          }),
+        }),
+      };
+    });
+  }
+
+  function fireCuration(opts: {
+    mode: "payment" | "subscription";
+    payment_intent: string | null;
+    subscription: string | null;
+    amount_total?: number;
+  }) {
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_curation_1",
+          mode: opts.mode,
+          amount_total: opts.amount_total ?? 4900,
+          customer_email: "maya@example.com",
+          payment_intent: opts.payment_intent,
+          subscription: opts.subscription,
+          metadata: {
+            kind: "curation_request",
+            curation_request_id: "cr_1",
+            tier: opts.mode === "subscription" ? "managed_monthly" : "single_wall",
+          },
+        },
+      },
+    });
+    return POST(buildRequest());
+  }
+
+  it("stores null, never the subscription id, for a managed subscription session", async () => {
+    setupCurationDb();
+
+    const res = await fireCuration({ mode: "subscription", payment_intent: null, subscription: "sub_live_123" });
+
+    expect(res.status).toBe(200);
+    expect(curationUpdate).not.toBeNull();
+    // The crux: a subscription id must never masquerade as a payment intent.
+    expect(curationUpdate!.stripe_payment_intent_id).toBeNull();
+    expect(curationUpdate!.stripe_payment_intent_id).not.toBe("sub_live_123");
+    // Managed tier is an ongoing service.
+    expect(curationUpdate!.status).toBe("in_progress");
+  });
+
+  it("stores the real payment intent for a one-off session", async () => {
+    setupCurationDb();
+
+    const res = await fireCuration({ mode: "payment", payment_intent: "pi_live_456", subscription: null });
+
+    expect(res.status).toBe(200);
+    expect(curationUpdate!.stripe_payment_intent_id).toBe("pi_live_456");
+    expect(curationUpdate!.status).toBe("paid");
+  });
+});

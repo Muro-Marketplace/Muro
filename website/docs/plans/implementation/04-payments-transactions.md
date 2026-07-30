@@ -1352,6 +1352,19 @@ managed tiers (`webhooks/stripe/route.ts:84`:
 tooling keyed on that column would call
 `stripe.refunds.create({ payment_intent: "sub_..." })` and fail. Fix in B10.
 
+**RESOLVED (storage half) — D20, commit pending.** The webhook now writes
+`stripe_payment_intent_id: paymentIntentId || null` (the `|| subscriptionId`
+fallback is gone, and the dead `subscriptionId` derivation with it). The column
+now only ever holds a real `pi_…` id or `null`, so no refund can be keyed onto a
+`sub_…` id. Prod check before the change: 0 managed rows, 0 `sub_%` values in the
+column, so nothing to backfill. The subscription stays recoverable from the
+stored `stripe_checkout_session_id` (`→ session.subscription`).
+**Still open:** (1) the actual curation *refund path* (an endpoint / admin action)
+does not exist — feature, not a bug fix; (2) the proper data model is a dedicated
+`curation_requests.stripe_subscription_id` column (as on `artist_profiles` and
+`placements`), but that needs a migration and **04's range 080-089 is exhausted**,
+so it is escalated to the owner alongside D21's status-CHECK widen.
+
 ## B9: T9 Collect from venue (N1, N2)
 
 Nothing here is a bug fix; it is a feature that was half-designed and needs

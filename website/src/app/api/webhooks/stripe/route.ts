@@ -120,9 +120,6 @@ async function handleWebhookEvent(
         const paymentIntentId = typeof session.payment_intent === "string"
           ? session.payment_intent
           : session.payment_intent?.id || "";
-        const subscriptionId = typeof session.subscription === "string"
-          ? session.subscription
-          : session.subscription?.id || "";
         const amountPaid = (session.amount_total || 0) / 100;
         const { data: existing } = await db
           .from("curation_requests")
@@ -137,7 +134,14 @@ async function handleWebhookEvent(
             .from("curation_requests")
             .update({
               status: newStatus,
-              stripe_payment_intent_id: paymentIntentId || subscriptionId,
+              // D20: this column is a Stripe payment intent, so it must hold a real
+              // pi_… id or null. A managed tier is a subscription with no top-level
+              // payment intent; the old `paymentIntentId || subscriptionId` wrote a
+              // sub_… id here, so any refund keyed on the column would call
+              // stripe.refunds.create({ payment_intent: "sub_…" }) and fail. The
+              // subscription stays recoverable from stripe_checkout_session_id
+              // (→ session.subscription) when the curation refund path is built.
+              stripe_payment_intent_id: paymentIntentId || null,
               amount_paid_gbp: amountPaid,
               paid_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
