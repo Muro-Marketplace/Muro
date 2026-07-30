@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | `06` **A+A2 done, B1 done** (a4142c2), **B2 void / B3+B4 done** (f657719). `01`: **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | `06` **A+A2 done, B1 done** (a4142c2), **B2 void / B3+B4 done** (f657719), **B5 done** (e53630d). Next: B6 (E46c framed pricing). `01`: **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -69,6 +69,12 @@ Owner decisions the loop is waiting on (none block the remaining queue):
   signup leaves no row), or add a verified/self-asserted distinction so the 51
   existing anonymous rows stop implying more than they can prove. The authenticated
   path, validation and rate limit are already fixed either way.
+
+- **The in-store-price feature is UI-only** (E46a / A8). `artist-portal/portfolio`
+  collects per-size in-store prices and `in_store_price` exists in no migration and
+  not in the live table, so every value an artist has typed there was silently
+  dropped. Add the column and finish it, or remove the UI. Eighth phantom column of
+  the session, and the only one with a user interface.
 
 Owner actions blocking a merge, added as they surface:
 
@@ -3992,3 +3998,62 @@ restore the old cap ordering  → 1 fails
 ```
 
 **Commit:** f657719
+
+---
+
+## `06` B5 / E46a — unvalidated write boundary on artist works (owner: `06` §3.1)
+
+**What was unguarded.** `POST /api/artist-works` destructured the body and passed it
+straight to `upsertWork`:
+
+| Field | Risk |
+|---|---|
+| `pricing` | no array cap, no per-tier price check |
+| `quantity_available` | no lower bound, and **checkout reads `<= 0` as sold**, so a negative value made a work permanently unbuyable |
+| `shipping_price` | stored unbounded; feeds `calculateOrderShipping` even though the checkout schema caps what a *cart* may claim |
+| `sort_order` | unbounded |
+
+`pricing` is the one that reaches money: checkout recomputes `unit_amount` from the
+stored tier. It is defended there too (a non-positive tier falls back to the client
+price), so this was a correctness and trust problem rather than direct theft. Fixed at
+the write boundary regardless, which is where it belongs.
+
+**The sanitiser is deleted, not left beside the schema.** 45 lines of hand-rolled
+`frameOptions` cleaning came out; `artistWorkInputSchema` enforces the same rules
+(label trimmed and capped, at most 20 frames, `pricesBySize` keys and values bounded).
+Keeping both would be two sources of truth for one rule, which is the pattern this
+plan exists to remove. The route is 45 lines shorter.
+
+**One deliberate behaviour change.** The sanitiser did `Math.max(0, priceUplift)`,
+quietly turning a `-50` uplift into `0`. The schema **refuses** it. Silently rewriting
+an artist's pricing is worse than telling them they typed a negative, and a floor that
+hides input errors is how bad data becomes permanent.
+
+**Stopped writing `in_store_price`.** The column exists in no migration and not in the
+live table, so `upsertWork`'s strip-and-retry dropped it on **every single save**: a
+guaranteed-failing column write per request. Already absent from
+`ARTIST_WORK_WRITABLE` for the same reason (A8). A client-supplied `inStorePrice` is
+accepted and ignored rather than rejected, because the portal still sends it and
+400ing would break saving a work outright.
+
+**New finding, escalated.** The artist portal has a **per-size in-store-price UI**
+(`inStorePrices` at `artist-portal/portfolio/page.tsx:61`), so artists have been
+typing values that were never stored anywhere. This is the **eighth phantom column**
+found this session and the first with a user interface behind it. Finishing the
+feature needs a migration; removing it needs a UI change. Either way it is a product
+call, so it is queued rather than decided.
+
+**Tests.** 15 new. Probed both halves:
+
+```
+bypass the schema (restore the raw destructure)  → 11 fail
+put in_store_price back in the write             → 2 fail
+```
+
+```
+ Test Files  155 passed (155)
+      Tests  1547 passed (1547)
+✖ 175 problems (0 errors, 175 warnings)
+```
+
+**Commit:** e53630d
