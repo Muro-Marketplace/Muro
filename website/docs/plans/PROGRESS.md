@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | `06` **A+A2 done, B1 done** (a4142c2), **B2 void / B3+B4 done** (f657719), **B5 done** (e53630d). Next: B6 (E46c framed pricing). `01`: **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | `06` **A+A2 done, B1 done** (a4142c2), **B2 void / B3+B4 done** (f657719), **B5 done** (e53630d), **B6 done** (1a79952). `06` **Phase B complete**. Remaining: A5/A7 assertNoServerOwned, Phase C. `01`: **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -4057,3 +4057,73 @@ put in_store_price back in the write             → 2 fail
 ```
 
 **Commit:** e53630d
+
+---
+
+## `06` B6 / E46c — "free frames": the uplift was client-trusted (owner: `06` §3.3)
+
+**The hole, and the source admitted it.** A comment in `checkout/route.ts` called the
+client-trusted uplift a "residual risk" while the hole stayed open with a warn log
+beside it. Observability is not a control.
+
+Framed lines carry size `"<base> + <frame label>"`, which never matches a DB pricing
+tier (tiers are bare base sizes), so the line-item builder found no tier and kept the
+**client's** price. The only guard was a floor at the bare unframed price:
+
+```
+DB tier A3 = £100, artist's oak frame = £85, legitimate total £185
+attacker posts { size: "A3 + Oak Frame", price: 100 }  →  charged £100
+```
+
+The frame was free, down to and including a zero uplift.
+
+**The fix.** The server computes the whole number from the work's own row:
+
+```
+base tier price + (frame.pricesBySize[tier] ?? frame.priceUplift)
+```
+
+and `item.price` is never used for a framed line. `frame_options` was already
+persisted per work, so the data was on the row all along; only the cart line lacked
+frame identity. `CartItem` now carries `frameLabel`, the artwork page sends it from
+both add-to-cart paths, and the checkout page forwards it. **Legacy carts already in
+localStorage still resolve** via the `" + "` split, so there is no migration window.
+A framed line naming a frame the work does not offer now 409s instead of being charged
+at the client's number.
+
+**This retires `price_below_base`.** That code existed only because the server knew
+the *floor* and had to reject anything under it while trusting anything over it. The
+server owns the whole number now, so a mismatch is a corrected charge plus a warn,
+exactly as unframed lines already behave.
+
+**Five pre-existing tests asserted the old contract and were rewritten, not kept.**
+Two pinned `price_below_base`; three relied on the client-price fallback that *was*
+the finding. The clearest was:
+
+> `it("accepts framed line where client price is at or above DB base (with warn log)")`
+
+That warn log was the vulnerability. The test now asserts the server's number is
+charged and the client's is ignored. Leaving these passing would have meant a green
+suite guarding an exploit.
+
+**Prod context.** `frame_options` is a real `jsonb` column and **6 of 35** works carry
+frames, so the exploit surface was real but small.
+
+**Tests.** 10 new, 5 rewritten. Probed both halves:
+
+```
+restore the client-price fallback     → 10 fail
+accept a frame the work doesn't offer → 2 fail
+```
+
+```
+ Test Files  155 passed (155)
+      Tests  1557 passed (1557)
+✖ 175 problems (0 errors, 175 warnings)
+```
+
+**Commit:** 1a79952
+
+**`06` Phase B is complete** (B1, B2 void, B3, B4, B5, B6). Remaining in `06`: A5/A7's
+`assertNoServerOwned` (needs the exemption design noted earlier) and Phase C
+(gating + guardrails).
