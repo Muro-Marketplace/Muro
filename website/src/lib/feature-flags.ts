@@ -20,8 +20,12 @@
  *
  * Convention:
  *   - One flag per major in-flight feature.
- *   - Off by default in production.
- *   - On in dev (so local testing doesn't need to touch .env).
+ *   - An in-flight feature is off in prod and on in dev, so local testing
+ *     needs no .env edit.
+ *   - Once a feature has shipped, its prodDefault flips to true and the env
+ *     var becomes a kill switch (set it to 0 to disable without a code
+ *     change). WALL_VISUALIZER_V1 and GATING_V1 are both at that stage, so
+ *     "off by default in production" is no longer true of every flag here.
  *
  * Usage:
  *   import { isFlagOn } from "@/lib/feature-flags";
@@ -78,11 +82,15 @@ const FLAGS: Record<FeatureFlag, FlagDef> = {
   GATING_V1: {
     envKey: "NEXT_PUBLIC_FLAG_GATING_V1",
     devDefault: false,
-    prodDefault: false,
+    prodDefault: true,
     description:
-      "Phase 2.5: subscription gating across publish, placements, and " +
-      "/browse visibility. Default off everywhere until the upgrade " +
-      "modal copy is locked.",
+      "Phase 2.5: subscription gating across publish, placements, " +
+      "artist-to-artist first contact, and /browse visibility. On in prod, " +
+      "where the env var is already set to 1, so this default now agrees " +
+      "with it instead of contradicting it. Set " +
+      "NEXT_PUBLIC_FLAG_GATING_V1=0 in Vercel to kill-switch, the same " +
+      "pattern WALL_VISUALIZER_V1 uses. Off in dev so local QA does not " +
+      "need a subscription.",
   },
   BLOGS_V1: {
     envKey: "NEXT_PUBLIC_FLAG_BLOGS_V1",

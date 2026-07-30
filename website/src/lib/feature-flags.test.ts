@@ -82,6 +82,29 @@ describe("feature flags, defaults", () => {
     setNodeEnv("production");
     expect(isFlagOn("OAUTH_GOOGLE_APPLE")).toBe(false);
   });
+
+  // C2 (E16). Gating is on in production, where the env var is set to 1, so the
+  // code default agrees with it rather than contradicting it. A build that loses
+  // the env var must keep gating on, not silently unpublish the paywall.
+  it("GATING_V1 prod default is on", () => {
+    delete process.env.NEXT_PUBLIC_FLAG_GATING_V1;
+    setNodeEnv("production");
+    expect(isFlagOn("GATING_V1")).toBe(true);
+  });
+
+  it("GATING_V1 dev default stays off, so local QA needs no subscription", () => {
+    // Pins the half of C2 that must NOT change: flipping both defaults would
+    // make every local run behave like a subscribed-only site.
+    delete process.env.NEXT_PUBLIC_FLAG_GATING_V1;
+    setNodeEnv("development");
+    expect(isFlagOn("GATING_V1")).toBe(false);
+  });
+
+  it("GATING_V1=0 still kills gating in prod, so the env var stays a kill switch", () => {
+    process.env.NEXT_PUBLIC_FLAG_GATING_V1 = "0";
+    setNodeEnv("production");
+    expect(isFlagOn("GATING_V1")).toBe(false);
+  });
 });
 
 describe("requireFlag", () => {
