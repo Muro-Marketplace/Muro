@@ -193,15 +193,21 @@ function setupDbMock(state: DbState) {
     if (table === "placements") {
       return {
         select: () => ({
-          // Per-line lookup (new): .in("artist_slug", slugs).eq("venue_slug").eq("status")
-          in: (_col: string, slugs: string[]) => ({
-            eq: () => ({
-              eq: async () => ({
-                data: placements.filter((p) => slugs.includes(p.artist_slug)),
-                error: null,
+          // Per-line lookup: .in("artist_slug", slugs).eq("venue_slug").eq("status")
+          //   .order("created_at", { ascending: true })  (D9 determinism)
+          in: (_col: string, slugs: string[]) => {
+            const result = { data: placements.filter((p) => slugs.includes(p.artist_slug)), error: null };
+            return {
+              eq: () => ({
+                eq: () => ({
+                  // Post-D9 the query ends in .order(); keep it awaitable both ways
+                  // so older call shapes in this file still resolve.
+                  order: async () => result,
+                  then: (fn: (v: typeof result) => unknown) => Promise.resolve(result).then(fn),
+                }),
               }),
-            }),
-          }),
+            };
+          },
           // First-artist lookup (legacy, the bug): .eq().eq().eq().limit().single()
           eq: (_col: string, val: string) => ({
             eq: () => ({
@@ -1956,5 +1962,46 @@ describe("Stripe webhook — strip-and-retry money-column guard (D6)", () => {
     // The money columns survived the strip.
     expect(inserted[1]).toHaveProperty("artist_revenue");
     expect(inserted[1]).toHaveProperty("platform_fee");
+  });
+});
+
+// ── D9: deterministic venue-share pick among duplicate active placements ──────
+//
+// A venue+artist can have several active placements (prod has real duplicates and
+// the unique index that would stop them is blocked on that data). The map fill had
+// no order and last-wins, so the venue's share could differ between two replays of
+// the same event. The query now orders by created_at and the fill is first-wins.
+describe("Stripe webhook — deterministic venue share (D9)", () => {
+  it("uses the first-created placement's rate when duplicates exist", async () => {
+    const insertCaptured = { row: null as Record<string, unknown> | null };
+    setupDbMock({
+      artistProfiles: [{ user_id: "u-alice", slug: "alice", subscription_plan: "core" }] as never,
+      // Two active placements for alice at kings-arms, earliest first (as the
+      // created_at order would return them). 20% must win over 40%.
+      placements: [
+        { id: "place-early", artist_slug: "alice", revenue_share_percent: 20 },
+        { id: "place-late", artist_slug: "alice", revenue_share_percent: 40 },
+      ],
+      insertCaptured,
+    });
+    loadCartSessionMock.mockResolvedValue({
+      cart: [{ workId: "w-a", artistSlug: "alice", title: "Sunset", price: 100, qty: 1, image: "" }],
+      shipping: { fullName: "Buyer", email: "buyer@example.com", country: "GB", fulfilmentMethod: "ship" },
+      source: "qr",
+      venueSlug: "kings-arms",
+      artistSlugs: ["alice"],
+      expectedSubtotalPence: 10000,
+      expectedShippingPence: 0,
+      artistShippingPence: {},
+    });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: { object: buildSession({ amount_total: 10000, metadata: { kind: "cart_checkout", artist_slugs: "alice", venue_slug: "kings-arms", fulfilment_method: "ship", source: "qr" } }) },
+    });
+
+    expect((await POST(buildRequest())).status).toBe(200);
+    // £100 at 20% = £20, not £40. The placement_id is the first one too.
+    expect(insertCaptured.row!.venue_revenue).toBe(20);
+    expect(insertCaptured.row!.placement_id).toBe("place-early");
   });
 });

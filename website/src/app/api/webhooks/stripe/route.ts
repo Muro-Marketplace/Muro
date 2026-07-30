@@ -616,12 +616,20 @@ async function handleWebhookEvent(
         const uniqueLineSlugs = Array.from(new Set(lineArtistSlugs));
         const placementByArtistSlug = new Map<string, { id: string; revenue_share_percent: number }>();
         if (venueSlug && uniqueLineSlugs.length > 0) {
+          // D9: a venue+artist can have several active placements (prod has real
+          // duplicates, and the unique index that would prevent them is blocked on
+          // that data). Without an explicit order the DB returns them arbitrarily
+          // and whichever landed last in the map won, so the venue's share could
+          // differ between two replays of the same event. Order by created_at and
+          // keep the FIRST, so the rate is stable across redeliveries.
           const { data: rows } = await db.from("placements")
-            .select("id, artist_slug, revenue_share_percent")
+            .select("id, artist_slug, revenue_share_percent, created_at")
             .in("artist_slug", uniqueLineSlugs)
             .eq("venue_slug", venueSlug)
-            .eq("status", "active");
+            .eq("status", "active")
+            .order("created_at", { ascending: true });
           for (const row of (rows || []) as Array<{ id: string; artist_slug: string; revenue_share_percent: number | null }>) {
+            if (placementByArtistSlug.has(row.artist_slug)) continue; // first-wins
             placementByArtistSlug.set(row.artist_slug, {
               id: row.id,
               revenue_share_percent: row.revenue_share_percent || 0,
