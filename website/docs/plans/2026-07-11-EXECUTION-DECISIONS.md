@@ -86,6 +86,28 @@ A coherence review of the nine independently-written plans found conflicts, dupl
    loop is finished, re-read the ledger table at the top of PROGRESS.md and confirm
    every row reads done, void or owner-only.** Stopping is correct only then.
 
+7. **ROW 19 — the ten live phantom-column bugs 7b's guard found. Work these IMMEDIATELY
+   after 7c, ahead of docs `05`/`03`/`09`/`07`/`08`.** Not "after the six ledger rows".
+   They are cheap (mostly a column rename in a `.select()`), the guard already names the
+   real column for most, and several sit inside those docs anyway. Ten known-live bugs
+   must not wait behind a surface cull. I spot-checked four against prod — `placements.end_date`,
+   `venue_profiles.contact_email`, `placements.work_id`, `artist_works.updated_at` are all
+   genuinely absent — so the list is trustworthy.
+
+   Highest impact first:
+   - `orders/track:80` (8 phantom columns) — **order tracking cannot load any order.** E49/D36.
+   - `cron/placement-ending-soon:30` `placements.end_date` — **this cron has never fired.**
+   - `cron/onboarding-nudges:51` `artist_statement`/`profile_photo` — **nudges silently skipped.**
+   - `walls/my-works:72` `placements.work_id` — cannot list placed works.
+   - `orders/[id]/events:39` `venue_user_id`/`currency`/`placed_at`.
+   - `paid-loan-billing.ts:200` `venue_profiles.contact_email` → `email` — **money path**: `ensureVenueCustomer` always falls back to the auth email, so the Stripe customer can carry the wrong address.
+   - `offers/route.ts:174,448` `artist_collections.title` → `name`.
+   - `placements/[id]/route:59` `artist_profiles.image` → `profile_image`.
+   - `sitemap.ts:74` `artist_works.updated_at` → `created_at`.
+
+   `webhooks/stripe/route.ts:1207` (`free_until`) stays parked — it is D14/D17.2, an owner
+   decision, and the block is already inert.
+
 ---
 
 ## D0. Owner decisions (recorded)
@@ -2408,3 +2430,49 @@ Row 9 (`03` auth/admin) carries the plan's sharpest ordering constraint: **`admi
 - **`SECURITY DEFINER` functions with anon EXECUTE: none.** Widened from the single-function E50 check to the whole class; clear including everything added since.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
 - `message-attachments` bucket: still public. E25, now correctly on the loop's own list.
+
+---
+
+## D59. 7b's guard is the highest-yield task of the run: one test found ten live bugs. Queued as row 19.
+
+*— supervisor. 214 commits. 7b (full-form guard) and 7c both landed.*
+
+### D59.1 — What the guard actually did
+
+`7f556eb` replaced the four-column denylist with an **allowlist scan** against a committed snapshot of every column of every public table. I verified the snapshot before the commit landed: **53 tables, 750 columns, matching prod exactly**, with `free_until`, `orders.amount_cents` and `placements.requester_user_id` correctly absent and `trial_end` correctly present.
+
+It then immediately found **12 phantom selects across 22 columns**, ten of which are genuine live bugs. That is the best return of any single task in this run, and it is the argument for having insisted on the full form rather than accepting the narrow version as "the part that pays for itself now".
+
+The paren-aware comma split is a good detail: without it, `select("*, orders(total)")` reads the embed's inner columns as phantom columns of the parent, which produced three false positives on the refund selects. A guard that cries wolf gets exemptions added until it means nothing.
+
+### D59.2 — The list is trustworthy; I checked rather than assuming
+
+Spot-checked four claims directly against `information_schema`:
+
+```
+placements.end_date            absent  ✓
+venue_profiles.contact_email   absent  ✓   (email present)
+placements.work_id             absent  ✓
+artist_works.updated_at        absent  ✓
+```
+
+All four confirmed. The remaining eight follow the same pattern and the guard's method is now demonstrated sound.
+
+### D59.3 — Sequencing ruling: row 19, immediately after 7c
+
+The loop proposed working these "after the six ledger rows, or the owner may prioritise the user-facing ones sooner". **Ruling: they go next, as row 19 in the hoisted queue, ahead of docs `05`/`03`/`09`/`07`/`08`.**
+
+Reasons: they are mostly a single column rename in a `.select()`; the guard already names the correct column for most; several live inside those docs anyway so doing them first removes work later; and ten known-live bugs should not queue behind a surface cull. This is a sequencing call inside an approved plan, so it is mine.
+
+### D59.4 — Two of these deserve the owner's attention as facts, not decisions
+
+- **Two cron jobs have never done anything.** `placement-ending-soon` selects `placements.end_date`, which does not exist, so the whole select is rejected and the cron has never notified anyone. `onboarding-nudges` is the same story via `artist_statement`/`profile_photo`. Both have presumably been "running" on schedule and silently doing nothing since they were written.
+- **`paid-loan-billing.ts:200` is a money path.** `ensureVenueCustomer` selects `venue_profiles.contact_email` (absent), so the profile comes back null and it always falls back to the auth email. Stripe customers for paid-loan billing may therefore carry the wrong address, which is where invoices and receipts go. No decision needed — it is on row 19 — but worth knowing it touched billing rather than display.
+
+### D59.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- **Phantom-column sweep: this is now automated.** The standing manual check is superseded by the guard, which runs in `npm run check` and ratchets. Better than anything I was doing by hand.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
+- `message-attachments`: still public, owner-blocked on the cutover.
