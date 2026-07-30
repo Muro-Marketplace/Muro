@@ -7532,3 +7532,36 @@ cart_items->items; drop/replace buyer_name, currency, tracking_url, shipped_at,
 delivered_at against the real schema + the DbOrder type + the response mapping),
 then remove that grandfather entry (ratchet 11 -> 10). Re-read the route + its
 test + the orders snapshot first.
+
+## row 19 #1 — order tracking selects real columns (was 500 on every request)
+
+Commit `66dc55a` (supervisor D59 committed in isolation first, `8cecbaa` — D59
+ratifies working row 19 ahead of docs 05/03/09/07/08, matching the loop's own call).
+
+**The defect.** `/api/orders/track` selected 8 columns absent from `orders`
+(total_amount, shipping_amount, currency, cart_items, buyer_name, tracking_url,
+shipped_at, delivered_at). PostgREST rejected the whole select → `error` set →
+the route returned 500 on EVERY request. Order tracking was fully broken in prod.
+
+**The fix.** Real columns: total_amount->total, shipping_amount->shipping_cost,
+cart_items->items, tracking_url dropped (only tracking_number exists; the page
+treats url as optional). buyer_name/shipped_at/delivered_at were never rendered
+(the page shows the status_history timeline) → dropped from the response, the
+DbOrder type, and the page's TrackedOrder type. currency hardcoded "gbp".
+
+**Test.** The mock returned the phantom columns (why the suite stayed green while
+the route 500'd); now it mirrors the real columns and the first test asserts the
+mapping (total/shipping/currency/items). Ratchet 11 -> 10. Fail-before: the old
+phantom route fails BOTH the mapping test and the guard.
+
+**Verification.** `npm run check` -> `EXIT=0`, `Tests 1854 passed`, 0 lint/type
+errors. The tracking page is browser-observable but driving it needs a real order
++ token against prod, so the browser step was not run; the unit test covers the
+mapping.
+
+**Next (row 19 #2, D59 impact order):** `cron/placement-ending-soon:30`
+`placements.end_date` — the column is absent, so the whole select is rejected and
+this cron has NEVER fired. Verify what "ending soon" should key on (placements has
+live_from / scheduled_for / collected_at, no explicit end), fix the select, remove
+the grandfather entry (ratchet 10 -> 9). Re-read the cron + the placements columns
+first.
