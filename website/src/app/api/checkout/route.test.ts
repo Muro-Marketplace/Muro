@@ -1239,3 +1239,43 @@ describe("POST /api/checkout venue attribution (D10)", () => {
     expect(savedVenueSlug()).toBe("april-venue");
   });
 });
+
+// ── D39: enforcement without the signing secret must fail CLOSED, not zero every
+// venue's revenue share ──────────────────────────────────────────────────────
+//
+// If QR_ATTRIBUTION_ENFORCE=1 but ORDER_TOKEN_SECRET is unset, verifyQrAttribution
+// throws on every token and the bare-slug fallback is off, so venueSlug would be
+// "" on every sale — silently zeroing every venue's revenue share. The route must
+// refuse to price the sale instead (503). The D10 test above ("ignores a bare
+// venueSlug once QR_ATTRIBUTION_ENFORCE=1") runs with the secret present and still
+// prices the sale, so it doubles as the "does not over-trigger" case.
+describe("POST /api/checkout QR enforcement fail-closed (D39)", () => {
+  let savedSecret: string | undefined;
+  beforeEach(() => {
+    savedSecret = process.env.ORDER_TOKEN_SECRET;
+  });
+  afterEach(() => {
+    if (savedSecret === undefined) delete process.env.ORDER_TOKEN_SECRET;
+    else process.env.ORDER_TOKEN_SECRET = savedSecret;
+    delete process.env.QR_ATTRIBUTION_ENFORCE;
+  });
+
+  it("503s and prices nothing when enforcement is on but ORDER_TOKEN_SECRET is missing (D39)", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.env.QR_ATTRIBUTION_ENFORCE = "1";
+    delete process.env.ORDER_TOKEN_SECRET;
+
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+
+    expect(res.status).toBe(503);
+    const bodyJson = await res.json();
+    expect(bodyJson.error).toMatch(/temporarily unavailable/i);
+    // Fails closed: no session minted, no Stripe call, nothing priced.
+    expect(saveCartSessionMock).not.toHaveBeenCalled();
+    expect(stripeCreate).not.toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+});

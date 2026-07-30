@@ -63,6 +63,23 @@ export async function POST(request: Request) {
     // codes printed before the token existed, UNLESS QR_ATTRIBUTION_ENFORCE=1. The
     // fallback is the transition the plan calls for; flipping enforcement on is
     // what actually closes the hole once old codes have aged out (owner decision).
+    //
+    // D39: enforcement is a loaded gun without the signing secret. If
+    // QR_ATTRIBUTION_ENFORCE=1 but ORDER_TOKEN_SECRET is unset, verifyQrAttribution
+    // throws on every token and the bare-slug fallback is disabled, so `venueSlug`
+    // would be "" for EVERY sale — silently zeroing every venue's revenue share on
+    // the order row, the placement lookup and the venue transfer. Fail closed and
+    // loud: refuse to price the sale. A 503 is recoverable in minutes; months of
+    // unpaid venue shares is not.
+    if (process.env.QR_ATTRIBUTION_ENFORCE === "1" && !process.env.ORDER_TOKEN_SECRET) {
+      console.error(
+        "[checkout] QR_ATTRIBUTION_ENFORCE=1 but ORDER_TOKEN_SECRET is unset. Refusing checkout so venue revenue shares are not silently zeroed. Set ORDER_TOKEN_SECRET before enabling enforcement.",
+      );
+      return NextResponse.json(
+        { error: "Checkout is temporarily unavailable due to a server configuration issue. Please try again shortly." },
+        { status: 503 },
+      );
+    }
     let venueSlug = "";
     const attributionToken = parsed.data.venueAttributionToken;
     if (attributionToken) {

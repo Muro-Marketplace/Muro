@@ -39,6 +39,14 @@ const serverSchema = z.object({
   // the individual route level with a clear 503 if missing.
   CRON_SECRET: z.string().min(16).optional(),
 
+  // HMAC signing secret for order-tracking tokens and QR venue-attribution
+  // tokens (order-tracking-token.ts, qr-attribution-token.ts). Optional here,
+  // but REQUIRED once QR_ATTRIBUTION_ENFORCE=1 — the checkout route fails closed
+  // (503) if enforcement is on and this is unset, so a misconfigured flip can't
+  // silently zero every venue's revenue share (D39). min(32) matches the other
+  // secrets in this schema.
+  ORDER_TOKEN_SECRET: z.string().min(32).optional(),
+
   // Stripe, required for checkout + webhooks. Only validated when actually used.
   STRIPE_SECRET_KEY: z.string().startsWith("sk_").optional(),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional(),
