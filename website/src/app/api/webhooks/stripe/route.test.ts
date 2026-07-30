@@ -1868,3 +1868,93 @@ describe("Stripe webhook — atomic stock decrement (D5)", () => {
     expect(stockCalls()).toEqual([{ p_work_id: "w-3", p_qty: 1 }]);
   });
 });
+
+// ── D6: the strip-and-retry loop must not drop money columns (04 §B1) ────────
+//
+// On a schema-drift insert error the loop stripped whatever column the error
+// named and retried. The list included venue_revenue, artist_revenue,
+// platform_fee and stripe_payment_intent_id, so the order could save with the
+// split silently missing while the code then scheduled transfers from in-memory
+// values that were never persisted. The list is now split: attribution may be
+// stripped, money columns and the payment intent may not.
+describe("Stripe webhook — strip-and-retry money-column guard (D6)", () => {
+  /** Order insert that errors "column X does not exist" until X is stripped. */
+  function driveWithMissingColumn(missing: string) {
+    const inserted: Array<Record<string, unknown>> = [];
+    setupDbMock({
+      artistProfiles: [{ user_id: "u-bob", slug: "bob", subscription_plan: "core" }] as never,
+      insertCaptured: { row: null },
+    });
+    // Override the orders branch to simulate the missing column.
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "orders") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+          insert: (row: Record<string, unknown>) => {
+            inserted.push(row);
+            if (row[missing] !== undefined) {
+              return Promise.resolve({
+                error: { code: "42703", message: `column "${missing}" of relation "orders" does not exist` },
+              });
+            }
+            return Promise.resolve({ error: null });
+          },
+          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        };
+      }
+      return base(table);
+    });
+    loadCartSessionMock.mockResolvedValue({
+      cart: [{ workId: "w-1", artistSlug: "bob", title: "A", price: 100, qty: 1, image: "" }],
+      shipping: { fullName: "Buyer", email: "buyer@example.com", country: "GB", fulfilmentMethod: "ship" },
+      source: "direct",
+      venueSlug: "",
+      artistSlugs: ["bob"],
+      expectedSubtotalPence: 10000,
+      expectedShippingPence: 0,
+      artistShippingPence: {},
+    });
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: {
+        object: buildSession({
+          amount_total: 10000,
+          metadata: { kind: "cart_checkout", artist_slugs: "bob", venue_slug: "", fulfilment_method: "ship", source: "direct" },
+        }),
+      },
+    });
+    return { inserted };
+  }
+
+  it("500s rather than stripping a money column (artist_revenue)", async () => {
+    const { inserted } = driveWithMissingColumn("artist_revenue");
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({ error: "Schema drift on money columns" });
+    // Exactly one insert attempt: it refused rather than retrying with the column dropped.
+    expect(inserted).toHaveLength(1);
+  });
+
+  it("500s rather than stripping stripe_payment_intent_id", async () => {
+    const { inserted } = driveWithMissingColumn("stripe_payment_intent_id");
+    const r = await POST(buildRequest());
+    expect(r.status).toBe(500);
+    await expect(r.json()).resolves.toMatchObject({ error: "Schema drift on money columns" });
+    // Only the first attempt; it never retried with the column removed.
+    expect(inserted).toHaveLength(1);
+  });
+
+  it("still strips an attribution column and books the order", async () => {
+    // placement_id is attribution, not money: dropping it keeps the order bookable.
+    const { inserted } = driveWithMissingColumn("placement_id");
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200);
+    // Two attempts: full row, then the retry with placement_id removed.
+    expect(inserted).toHaveLength(2);
+    expect(inserted[1].placement_id).toBeUndefined();
+    // The money columns survived the strip.
+    expect(inserted[1]).toHaveProperty("artist_revenue");
+    expect(inserted[1]).toHaveProperty("platform_fee");
+  });
+});

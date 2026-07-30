@@ -781,26 +781,46 @@ async function handleWebhookEvent(
             console.error("[webhook] order id collision", { orderId, paymentIntentId });
             return NextResponse.json({ error: "Order id collision" }, { status: 500 });
           }
-          // Iterative strip-and-retry. Each loop drops only the columns
-          // the error specifically called out, keeping attribution intact
-          // for any column the DB does know about.
-          const optionalCols = [
+          // D6: the strip list used to include the money columns and
+          // stripe_payment_intent_id. On schema drift the loop stripped them, the
+          // order saved with the split silently missing, and the code then
+          // scheduled transfers from in-memory values that were never persisted, so
+          // reconciliation was impossible. Split the list: attribution columns may
+          // be dropped to keep an order bookable, but money columns and the payment
+          // intent may not.
+          const strippableCols = [
             "source",
             "artist_slug",
             "artist_user_id",
             "venue_slug",
-            "venue_revenue_share_percent",
-            "venue_revenue",
-            "artist_revenue",
-            "platform_fee_percent",
-            "platform_fee",
             "placement_id",
             "fulfilment_method",
             "collection_notes",
             "delivered_at",
             "status_history",
-            "stripe_payment_intent_id",
           ];
+          const REQUIRED_MONEY_COLS = [
+            "venue_revenue_share_percent",
+            "venue_revenue",
+            "artist_revenue",
+            "platform_fee_percent",
+            "platform_fee",
+            "stripe_payment_intent_id",
+          ] as const;
+          // If the DB does not know a money column, this is a schema emergency and
+          // we must not book the order with the split missing. Fail loud; Stripe
+          // retries (idempotent via D1 + D3).
+          // `error` is non-null in this block, but the await in the 23505 branch
+          // above resets TS's narrowing on a `let`, so capture it.
+          const insertError = error;
+          if (
+            REQUIRED_MONEY_COLS.some((c) =>
+              new RegExp(`\\b${c}\\b`).test(String(insertError.message).toLowerCase()),
+            )
+          ) {
+            console.error("[webhook] schema is missing a money column, refusing to book", insertError);
+            return NextResponse.json({ error: "Schema drift on money columns" }, { status: 500 });
+          }
           const stripped = new Set<string>();
           const safeRow: Record<string, unknown> = { ...orderRow };
           // PostgrestError | null, the loop nulls it on success to break out.
@@ -809,7 +829,7 @@ async function handleWebhookEvent(
           let lastError: typeof error | null = error;
           while (lastError) {
             const msg = String(lastError.message || "").toLowerCase();
-            const newStrip = optionalCols.filter(
+            const newStrip = strippableCols.filter(
               (c) => !stripped.has(c) && new RegExp(`\\b${c}\\b`).test(msg),
             );
             if (newStrip.length === 0) break;
@@ -833,6 +853,16 @@ async function handleWebhookEvent(
               }
               console.error("[webhook] order id collision (on retry)", { orderId, paymentIntentId });
               return NextResponse.json({ error: "Order id collision" }, { status: 500 });
+            }
+            // D6: a retry that now surfaces a money column is the same schema
+            // emergency as the first insert. Never strip it; fail loud.
+            if (
+              REQUIRED_MONEY_COLS.some((c) =>
+                new RegExp(`\\b${c}\\b`).test(String(retry.error.message).toLowerCase()),
+              )
+            ) {
+              console.error("[webhook] schema is missing a money column on retry, refusing to book", retry.error);
+              return NextResponse.json({ error: "Schema drift on money columns" }, { status: 500 });
             }
             lastError = retry.error;
           }
