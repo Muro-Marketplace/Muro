@@ -19,7 +19,8 @@ Order of work: the "Corrected dependency order" at the end of
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | todo |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
-| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). Next: T3 offers (E6/E10) |
+| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). Next: T3 emails, then D7 |
+| 7a | `free_until` is a phantom column overcharging non-core artists 15% on every sale | new, surfaced by T3 | **owner decision**: add the column or delete the concept |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -46,12 +47,25 @@ Owner decisions the loop is waiting on (none block the remaining queue):
   becomes a one-line UPDATE plus a guard; leave it and any ISO-keyed report keeps
   seeing half the orders. Detail in G-C / Bug 10.
 
+- **`free_until` is phantom and non-core artists are being overcharged.** Add it as
+  a real column (it is referenced as a founding/trial concept and the referral path
+  wants to write to it), or delete the concept and all four references. Until then
+  every sale charges 15% regardless of plan, and prod has a `pro` and a `premium`
+  artist. Detail in the T3 entry. This one costs real money per sale, so it is the
+  most urgent of these.
+
 Owner actions blocking a merge, added as they surface:
 
 - **Add the `SUPABASE_ACCESS_TOKEN` repo secret** (Settings > Secrets and
   variables > Actions), a Supabase personal access token from
   https://supabase.com/dashboard/account/tokens. The `advisors` job added in 0b
   fails on every PR until it exists.
+- **Provide a real Stripe `sk_test` key and `STRIPE_WEBHOOK_SECRET`.** The local
+  values are placeholders (`sk_test_PLAC…`, and api.stripe.com returns 401) and the
+  Stripe CLI is not installed, so no payment task in this plan can satisfy the
+  runbook's "drive the Stripe test-mode event" step. Every payment fix so far is
+  verified by driving the handler's real code path with a synthetic event instead,
+  which is stated as such each time rather than presented as a Stripe drive.
 
 Human-owned, not code (do not attempt): D11 reconciliation of `off_1778` £33 and
 `off_1779` £27 against Stripe; all Stripe dashboard work (Connect activation,
@@ -2659,3 +2673,148 @@ with `04` T1 hardening.
 `United Kingdom` (6 each). Any report or filter keyed on the ISO code silently sees
 half the orders. A backfill is a data write to real order rows, so per the loop's
 rules it is escalated rather than done: see the owner-decisions section.
+
+---
+
+## T3 / E6 + E10 — offer paid, artist never paid, stock never moved (owner: `04` §B3)
+
+**What the plan got wrong, twice, fatally.** The doc's own fix would not have
+fixed this, and one half of it would have broken the flow outright.
+
+1. **Its `orders` insert omits `shipping`.** `orders.shipping` is `NOT NULL` with no
+   default. Verified against prod with a probe that cannot commit (an unconditional
+   `raise` at the end of a `DO` block, so the insert rolls back either way):
+
+   ```
+   PROBE RESULT >> INSERT FAILED: 23502 / null value in column "shipping"
+                   of relation "orders" violates not-null constraint
+   ```
+
+   Applied verbatim, the doc's replacement insert fails exactly as the old one did.
+2. **Its part-1 select names `free_until`**, which exists in no migration and not in
+   the live table. PostgREST rejects the whole statement, so `artistProfile` comes
+   back null and the doc's own guard returns `500 Artist profile unavailable` for
+   **every** offer checkout. A probe applying that select fails 7 of the 9 new route
+   tests.
+
+**What was actually happening in prod.** Worse than "a bare order row". There was
+**no order row**. The branch flipped `purchase_offers` to `paid` *first*, then
+attempted the insert, and swallowed the result with
+`.then(() => {}, (err) => console.warn(...))`. So:
+
+```
+off_1778801604152_05slql  paid  £33.00  paid_order_id OFR-W45tsGG1  → 0 orders rows
+off_1779401107177_33azhw  paid  £27.00  paid_order_id OFR-xifC3QjR  → 0 orders rows
+```
+
+These are D11's two offers. Money captured in Stripe, offer marked paid, order row
+absent, `paid_order_id` dangling, no payout, no `stripe_transfers` row, no stock
+movement, no email. Nothing in the code path would ever have surfaced it: the only
+signal was a `console.warn` in a serverless log.
+
+**What changed.**
+
+- `src/app/api/offers/[id]/checkout/route.ts`: resolves the artist profile
+  (`slug, subscription_plan` only, never `free_until`), refuses with **422** before
+  creating the session if `canArtistAcceptOrders` says the artist cannot be paid,
+  and computes the split in integer pence with the net as the remainder of a single
+  rounding, so fee + net is exactly the amount charged. Fee, net, percent and
+  `offer_buyer_email` now travel on the session metadata.
+- `src/app/api/webhooks/stripe/route.ts` purchase-offer branch: **order first, offer
+  second**. A real insert error logs loudly and returns 500 so Stripe retries,
+  rather than creating the dangling paid state above; `23505` counts as
+  already-done. The insert supplies `shipping` in the same nine-field shape the cart
+  path writes (blank address, `notes` recording that the offer flow collects none),
+  a guaranteed-non-null `buyer_email`, the three money columns and zeroed venue
+  columns. Then E10's per-work `quantity_available` decrement (last one also comes
+  off sale), then `scheduleTransfer` for the net, which is what finally writes the
+  missing ledger row.
+
+**Deliberately not in this commit.** The doc's part 3 (emails) requires extracting
+`sendOrderConfirmations` out of the cart branch's ~200-line block and calling it
+from both. That is a refactor of a second code path, so it is its own task rather
+than a bundle. The offer branch still sends no email.
+
+**Tests added.** 12 in `src/app/api/webhooks/stripe/route.test.ts`, 9 in
+`src/app/api/offers/[id]/checkout/route.test.ts` (new). The webhook fake **enforces
+the real NOT NULL set** on `orders`; without that it cannot see this bug at all,
+because a permissive insert stub passes whether or not `shipping` is supplied. The
+route fake likewise rejects a select naming a column the live table lacks.
+
+**Verification, both directions.** Removing just the `shipping` key from the insert
+collapses 11 of the 12 webhook tests, which is the prod failure reproduced:
+
+```
+ × writes an order row at all, which is the live E6 defect
+ × supplies shipping, the NOT NULL column that made every offer payment fail
+ × persists the split, and fee plus net is exactly the amount charged
+ × E10: decrements stock for each work on the offer
+ × E6: schedules the artist transfer for the net, not the gross
+ × marks the offer paid only after the order row lands
+ Tests  11 failed | 4 passed (15)
+```
+
+Restored:
+
+```
+ Test Files  147 passed (147)
+      Tests  1404 passed (1404)
+✖ 252 problems (0 errors, 252 warnings)
+PASS: 12 public route(s) and 14 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Blocker: the Stripe test-mode drive could not be run.** The runbook requires a
+payment task to "drive the Stripe test-mode event and assert DB rows + the split to
+the penny". Not possible in this environment, and I am not claiming otherwise:
+
+```
+STRIPE_SECRET_KEY = sk_test_PLAC…        (placeholder)
+curl https://api.stripe.com/v1/balance → HTTP 401
+STRIPE_WEBHOOK_SECRET                    unset
+stripe CLI                               not installed
+```
+
+The substitute is the 12 webhook tests, which drive the handler's real code path
+with a synthetic `checkout.session.completed` and assert the order row, the offer
+transition, the stock updates, the transfer amount and the split to the penny. A
+genuine test-mode drive needs a real `sk_test` key, so it stays owner-blocked
+alongside the `SUPABASE_ACCESS_TOKEN` secret.
+
+**Commit:** b2c27ed
+
+---
+
+### New finding, bigger than the task that surfaced it: `free_until` is phantom and it is overcharging artists
+
+`artist_profiles.free_until` exists in **no migration and not in the live table**,
+the seventh phantom column found so far. `platformFeePercentForArtist` reads it, and
+four live call sites name it in a `select`, which makes PostgREST reject the whole
+statement and hand back `null`:
+
+| Site | Effect of the null |
+|---|---|
+| `webhooks/stripe/route.ts:203` (**cart sale split**) | `ap` is null, so `platformFeePercentForArtist(null)` returns `DEFAULT_PLAN_FEE_PERCENT` = **15%** for every sale |
+| `api/placements/[id]/payment/setup/route.ts:47` | same, so paid-loan `application_fee_percent` is always 15% |
+| `webhooks/stripe/route.ts:793-804` (referral credit) | select nulls, then it UPDATEs `free_until`, so referral credit silently never applies |
+| `lib/platform-fee.ts:31` | the 0% founding/trial branch is unreachable dead code |
+
+This is not latent. Prod has a `pro` artist (should be 5%) and a `premium` artist
+(should be 8%):
+
+```
+plan     artists        fee_pct  orders  gross
+none           9             15      11  £1110.38
+core           3              0       1  £64.49
+pro            1
+premium        1
+```
+
+Eleven of the twelve orders were charged 15%. Non-core artists are being
+overcharged on the main revenue path right now.
+
+Not fixed here, because it is not this task and the fix has a decision in it: either
+add `free_until` as a real column (it is referenced as a founding/trial concept, and
+the referral path wants to write to it) or delete the concept and every reference.
+That is a product call, not a mechanical one. Recorded as its own queue item below;
+the offer path I wrote today already computes the correct per-plan rate because it
+selects `subscription_plan` alone.
