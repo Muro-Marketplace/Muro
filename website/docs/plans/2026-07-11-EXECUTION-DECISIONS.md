@@ -2476,3 +2476,55 @@ Reasons: they are mostly a single column rename in a `.select()`; the guard alre
 - **Phantom-column sweep: this is now automated.** The standing manual check is superseded by the guard, which runs in `npm run check` and ratchets. Better than anything I was doing by hand.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
 - `message-attachments`: still public, owner-blocked on the cutover.
+
+---
+
+## D60. The ending-soon cron blocker is real. Option (a) is dead on the data — here is the narrowed decision.
+
+*— supervisor. 218 commits. Row 19 #1 (order tracking) landed; #2 correctly escalated rather than guessed.*
+
+### D60.1 — The loop was right to stop, and right about why
+
+It investigated `cron/placement-ending-soon`, found the phantom `placements.end_date` is not a rename, recorded the blocker with evidence, and moved to the next bug instead of inventing a column. That is exactly the behaviour asked for.
+
+Confirmed independently against prod. Every date-ish column on `placements`:
+
+```
+accepted_at · cancelled_at · collected_at · created_at · installed_at
+proposed_at · responded_at · subscription_current_period_end · monthly_fee_gbp
+```
+
+**There is no planned-end column.** Every one of those is a past event, except `subscription_current_period_end`, which is Stripe-managed and exists only for paid-loan placements. So a reminder 14 days *before* an end date has nothing to key on. The blocker is genuine.
+
+### D60.2 — Option (a) is eliminated. The loop recommended it; the data says no.
+
+Its recommendation was to rework the cron onto `placement_records.collection_date`, with the caveat "verify population first — likely sparse". Verified:
+
+```
+placement_records total                     12
+  … with a collection_date                   2
+  … with a collection_date in the FUTURE     0
+placements active                           37
+  … having any record with a collection_date  1
+```
+
+**One active placement out of thirty-seven, and zero future dates.** Rewiring the cron onto that column would leave it firing for at most one placement and, today, for none at all. That is not a fix, it is the same silence with more code behind it. The loop could not have known without running the query and was right to flag rather than assume.
+
+### D60.3 — The owner's decision, now two-way instead of three
+
+**This is genuinely yours** — it asks whether a placement has a planned end at all, which is a question about how loans work commercially, not a technical one.
+
+- **(b) Build the data model.** Add `placements.end_date`, populate it on accept, and decide what sets it (a loan term? a default duration? venue choice at acceptance?). This is a feature with a migration. It makes the cron work and gives venues and artists a real "ending soon" signal.
+- **(c) Disable the cron honestly.** Remove it, or leave it gated off with a comment saying the data model does not exist. Costs nothing, ends the pretence.
+
+**Do not pick "leave it as is", which is the current state and the worst of the three:** a scheduled job that runs on Vercel's timer, costs an invocation, appears in the dashboard as healthy, and has never sent a single email since it was written.
+
+**One correction to `08`'s cull doc while this is decided.** `08 §302` lists this cron under "zero callers is correct — KEEP", which was judged on it being a legitimate Vercel cron rather than on whether it functions. That entry should record that it is non-functional pending this decision, so a future reader does not take "KEEP" as "working".
+
+### D60.4 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom columns: automated by 7b's guard, ratcheting. Row 19 #1 (order tracking, 8 phantom columns) is fixed; #2 blocked per above; eight remain.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
+- `message-attachments`: still public, owner-blocked on the cutover.
