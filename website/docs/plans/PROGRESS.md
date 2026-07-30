@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. Next: items 14 (bare catches), 15 (`warn` → `error`), 16 (E39 part 2), and `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **item 14 done** (99e8c83). Next: item 15 (`warn` → `error`), item 16 (E39 part 2), and `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -3620,3 +3620,73 @@ Probed by unwiring that handler: the behavioural test fails.
 ```
 
 **Commit:** 71b137f
+
+---
+
+## Phase E item 14 — bare catches were flattening AuthzError to 400 (owner: `01` §1.3)
+
+**The problem.** Every route phases B to D touched ended in a bare `catch {}`
+answering `{ error: "Invalid request" }` with 400. Three different things collapsed
+into that one response:
+
+- an **AuthzError**, meaning 403 or 404, which is the entire point of the `assert*`
+  helpers those phases introduced;
+- a genuine schema or JSON failure, which really is 400;
+- a **real server fault**, which nobody could see because the error object was
+  discarded.
+
+**What changed.** 12 handler-level catches across 7 routes now bind the error,
+consult `handleAuthzError` first so a denial keeps its status, and **log** the fault.
+Inner catches that fall back to a value (`catch { return [] }`) or swallow a
+best-effort side effect are deliberately untouched: they are a different thing.
+
+**The logging half is not decoration.** A fixture gap surfacing as a generic 400 is
+indistinguishable from "the new guard rejected this", and that cost real time three
+separate times while building phases C and D (E20's `db.from(...).delete`, E21's
+three missing `.maybeSingle()` branches, E22's invalid test UUID). Each time the only
+way to tell them apart was to temporarily add a `console.error` and re-run.
+
+It paid off in the very first full run after the change:
+
+```
+[messages] unhandled error TypeError: db.from(...).select(...).or is not a function
+```
+
+That is a pre-existing incomplete fixture which had been hiding behind a 400 for the
+whole session. The tests still pass because they assert a refusal and get one, but it
+is now visible instead of silent.
+
+**New: `tests/integration/authz-error-surfacing.test.ts`**, the CI gate the item asks
+for. Three probes:
+
+```
+A  restore a blanket bare catch        → 3 fail
+B  bind err but drop handleAuthzError  → 1 fails
+C  drop the log                        → 1 fails
+```
+
+**Probe B passed on the first attempt, which was a hole rather than a pass** — the
+third time this session that probing a guard found the guard wrong. The check used a
+400-character regex window after `catch (err) {` and then asked whether the **whole
+file** mentioned `handleAuthzError`. Both halves were wrong: the window was shorter
+than the explanatory comments now inside those catches, so it silently stopped
+matching, and a file-wide search would be satisfied by a mention anywhere. It is now
+**block-scoped**, walking braces from the catch.
+
+**Then the block-scoped version flagged its own comments**, because those comments
+contain the literal `` `} catch {` ``. It now strips comments before scanning, which
+is the **second time this session** a source-reading assertion has needed that: the
+CI-gates test needed the same treatment for YAML in iteration 2. Worth stating as a
+rule: an assertion over source must read *executable* source.
+
+**The stricter gate then found a real miss of its own.** A fourth `placements` catch
+already bound and logged the error but still flattened an AuthzError to 400. The
+`} catch {` sweep could not match it, because it was already bound. Converted.
+
+```
+ Test Files  153 passed (153)
+      Tests  1503 passed (1503)
+✖ 175 problems (0 errors, 175 warnings)      ← 181 → 175
+```
+
+**Commit:** 99e8c83
