@@ -6395,3 +6395,51 @@ covers the separate API-redaction layer and can't run here (no anon creds).
 **Next: row 14 (D37/E50, doc `02`, migration `075`)** — revoke PUBLIC/anon/
 authenticated EXECUTE on `increment_placement_revenue`, grant `service_role`. Do
 NOT churn the five trigger functions.
+
+---
+
+## Supervisor-queue row 14 / E50 / D37 — increment_placement_revenue locked to service_role
+
+Commit `ecd5fc5`, migration `075` (applied + registered). Owner-authorised
+security queue. Supervisor D49.5 confirmed this as next and reserved 075.
+
+**The finding (verified live).** `increment_placement_revenue(text, numeric)` was
+PUBLIC-executable and `SECURITY INVOKER`. Prod ACL before:
+`=X anon=X authenticated=X service_role=X` (the leading `=X` is PUBLIC);
+`has_function_privilege` = true for anon and authenticated. Because RLS on
+`placements` allows an artist to update their own placement, any authenticated
+artist could call it with any `p_amount` and inflate `revenue` / `delivery_count`
+(venue-facing, feeds analytics). anon can't (no auth.uid()).
+
+**What changed.** Migration 075: `revoke execute ... from public, anon,
+authenticated; grant execute ... to service_role`. Mirrors decrement_work_stock
+(085) / restock_work (087). Function body + SECURITY INVOKER unchanged (D37: grants
+only). The five trigger functions with PUBLIC EXECUTE are left untouched (D37.3:
+they take no args and error outside a trigger context).
+
+**Caller check (D37.2).** The only code caller is `api/orders/route.ts:340`
+(`db.rpc(...)` where `db = getSupabaseAdmin()`), i.e. service-role, so the revoke
+is invisible to the app. No client-side caller exists.
+
+**Verification (fail-before / pass-after).**
+```
+before: acl "=X anon=X authenticated=X service_role=X"; anon_exec=true, authd_exec=true
+after:  acl "postgres=X/postgres service_role=X/postgres"; anon_exec=false, authd_exec=false, service_exec=true
+gate: Test Files 163 passed (163); Tests 1794 passed (1794); allowlist PASS
+pg_policies SELECT-leak assertion = 0
+```
+No code changed (migration only), so the test count is unchanged from row 13's run.
+Proof is the has_function_privilege ACL assertion (same method as 085/087); there is
+no unit harness for function grants.
+
+**Follow-up recorded, not done (D37.4).** The periodic sweep should gain a
+function-grant check: any non-trigger `public.*` function that mutates and is
+executable by anon/authenticated/PUBLIC is a finding. That is a guard-script task
+(the function analogue of the phantom-columns column guard), separate from this
+revoke. Left as an owner/guard item.
+
+**Next: row 16 (D40/E52, doc `04`).** `platformFeePercentForArtist` must return the
+15% default unless `subscription_status` is `active`/`trialing` — today a cancelled
+Pro artist keeps 5% for ever. Add `subscription_status` to `ArtistPlanState` AND to
+all five callers' `.select()`, or PostgREST rejects the query whole (phantom-column
+class).
