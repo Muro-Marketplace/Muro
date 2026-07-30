@@ -4290,3 +4290,66 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 so on the client `prodDefault` is the whole default path. That makes C2 (flip
 `GATING_V1.prodDefault` to true) the change that actually aligns the client with
 production, now that C1 has made the env var reachable.
+
+---
+
+## 06 C2 (E16) — GATING_V1 defaults to on in prod
+
+`06-validation-massassign.md` Phase C item C2. Commit `7e6649a`.
+
+**What was wrong.** `GATING_V1.prodDefault` was `false` and its description read
+"Default off everywhere until the upgrade modal copy is locked". §4.1 records that
+the owner has since set `NEXT_PUBLIC_FLAG_GATING_V1=1`, so both the default and
+the description contradicted production.
+
+**Does this change prod behaviour?** No. An explicit env value wins over the
+default (`isFlagOn` checks `readBoolEnv` first), and prod has one set. What
+changes is the failure mode of a build that *lacks* the var: gating used to
+silently switch off, dropping the paywall for every artist, and now stays on. That
+is the WALL_VISUALIZER_V1 pattern: ship the feature, keep the env var as a kill
+switch.
+
+**Change.** `src/lib/feature-flags.ts`:
+- `GATING_V1.prodDefault: false → true`.
+- Description rewritten to say gating is on in prod and `=0` is the kill switch.
+- `devDefault` left at `false`, deliberately. Local QA must not need a
+  subscription. A test pins this so an over-broad fix cannot flip both.
+- The file-header convention block claimed "Off by default in production" of every
+  flag. Untrue of `WALL_VISUALIZER_V1` already and now of `GATING_V1` too, so it
+  now describes the two stages a flag goes through instead.
+
+**Test.** 3 cases added to `describe("feature flags, defaults")` in
+`src/lib/feature-flags.test.ts`. The doc names no test for C2, so these cover the
+change and its two boundaries.
+
+Probe, reverting only `GATING_V1.prodDefault` to `false`:
+
+```
+ FAIL  src/lib/feature-flags.test.ts > feature flags, defaults > GATING_V1 prod default is on
+AssertionError: expected false to be true // Object.is equality
+      Tests  1 failed | 17 passed (18)
+```
+
+Exactly one failure, so the test discriminates on the one line that changed. With
+the fix: `Tests 18 passed (18)`.
+
+**C5 is already satisfied for the two files it names.** The gating tests in
+`artist-works/route.test.ts` and `messages/route.test.ts` drive the flag through
+`isFlagOnMock.mockImplementation(...)`, i.e. `isFlagOn` is mocked wholesale, so no
+`prodDefault` change can reach them. The suite confirms it. Vitest also runs with
+`NODE_ENV=test`, which resolves to `devDefault`, so nothing outside
+`feature-flags.test.ts` could have seen this flip either way.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  156 passed (156)
+Tests  1582 passed (1582)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Note.** `listFlags()` is exported and has no caller anywhere in `src/`. The
+doc's comment points it at "/api/_internal/flags or dev pages", neither of which
+exists. Left in place: it is the natural consumer of C4's map check, and dead
+exports belong to the 08 cull, not here.
