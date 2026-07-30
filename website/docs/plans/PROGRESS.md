@@ -6569,3 +6569,63 @@ All four owner-authorised security-queue rows are done:
 `retry_count`). Then the remaining T8 D18 (curation refund path, B10), T9 (N1/N2),
 and any owner-decision items. D14 (referral credit) remains blocked on a product
 decision.
+
+---
+
+## `04` C3 — ledger write must throw + recordBlockedLeg (owner: `04` §C3)
+
+Commit `6dd4e40`, migration `089_stripe_transfers_payout_hardening` (applied +
+registered). Phase-1 payout primitive; the supervisor queue (13-16) is done, so
+back on the 04 C-series.
+
+**What changed.**
+- `scheduleTransfer` (was E37's silent-vanish): discarded the insert error and
+  returned void, so a failed ledger insert looked scheduled. Now validates
+  `connectAccountId` + `amountCents`, returns the row id, treats a
+  `(order_id, recipient_user_id)` 23505 as an idempotent replay (returns the
+  existing id), and throws on any other insert failure.
+- New `recordBlockedLeg(db, {orderId, recipientUserId, amountCents, reason})`:
+  writes an owed-but-unsendable payout as a `'blocked'` ledger row with
+  `last_error`, so a lapsed Connect account surfaces in reconciliation. Wired into
+  both webhook blocked-leg branches (cart + offer).
+- Migration 089: `retry_count`/`last_error`/`next_attempt_at`/`updated_at`, a
+  status CHECK (adds `'blocked'`), and the C4 retryable index.
+
+**Files.** `supabase/migrations/089_stripe_transfers_payout_hardening.sql`,
+`src/lib/stripe-connect.ts`, `src/lib/stripe-connect.test.ts`,
+`src/app/api/webhooks/stripe/route.ts`.
+
+**Tests (fail-before / pass-after).** scheduleTransfer: returns id, throws on
+insert failure (probe: swallow → the throw test fails "resolved instead of
+rejecting"), 23505 → existing id, input validation; recordBlockedLeg: blocked-row
+shape, swallows 23505, throws otherwise. `Tests 1809 passed (1809)`, `0 lint
+errors`, allowlist PASS, pg_policies leak = 0. 089 verified applied in prod
+(4 cols + status CHECK with 6 values + retryable index). No live Stripe drive.
+
+**What the plan got wrong / deliberately NOT done (flag for the owner/supervisor).**
+1. **The doc's webhook "500 → Stripe retries the legs" is likely inert and I did
+   not ship it.** C3 says the webhook catch should `return 500` so Stripe retries
+   and re-runs the legs. But on retry the order row already exists, and D3's
+   `classifyOrderIdConflict` returns `duplicate` → the handler **early-returns
+   before reaching the leg-scheduling block**. So a 500 would not give the legs a
+   second chance; it would just churn. The robust retry path is the **C4 sweep**
+   (retries `pending`/`failed` rows), not webhook re-delivery. Left the webhook
+   catches as log-and-continue; making scheduleTransfer throw already upgrades a
+   silent loss to a logged one. **Deeper gap:** if the ledger INSERT itself fails,
+   there is no row for the sweep to retry and (per the above) no webhook retry
+   either — genuinely unrecoverable. Recommend the owner decide whether to schedule
+   legs before the order insert, or make the retry re-enter the leg block. Not
+   guessed here.
+2. **`recordBlockedLeg` takes `amountCents`, not the doc's `netGbp`** — the ledger's
+   native unit, avoiding a lossy pounds round-trip. Webhook legs carry `netPence`,
+   passed straight through.
+3. **Migration numbering:** 04's 080-089 range had only 089 free, so 089 carries
+   C3's `last_error`/CHECK AND pre-provisions C4's `retry_count`/`next_attempt_at`.
+   C4 is now code-only (no migration). Noted so C4 does not try to take a number
+   outside 04's range.
+
+**Next: C4 (04 §C4)** — the retry sweep. `processPendingTransfers` must select
+`pending` AND retryable `failed` rows (by `next_attempt_at`), increment
+`retry_count` with backoff on failure, stop at MAX_RETRIES, and `executeTransfer`
+widened to accept `failed`. Columns already exist (089). Plus the exhausted-payout
+admin surface.
