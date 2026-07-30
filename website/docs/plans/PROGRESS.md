@@ -24,8 +24,9 @@ Order of work: the "Corrected dependency order" at the end of
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **DONE**. Narrow form (6e0705e), then **full form** (7f556eb): `schema-columns.json` snapshots all 53 tables / 750 columns; the scan surfaced 12 phantom selects, parked in a shrinking `GRANDFATHERED` ratchet and queued as **row 19** |
 | 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
-| 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (this commit): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot (08495ae) |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c). Remaining: E41/E42/E43 caller migrations to `mutate`+`useSaveAction` (one each, starting E41-a portfolio save), `no-authfetch-mutation` eslint rule LAST |
+| 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (08495ae): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot |
+| 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **NEXT**. D62.5 owner escalation: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (portfolio add/edit awaits the write, this commit). Remaining E4x caller migrations one each: E41-b/-d/-e/-f, E42-a/-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -7921,13 +7922,48 @@ once. Fail-before verified by mutating the hook's catch to report success (retur
 true + clearDirty): test (b) failed on `ret===false`. Restored -> pass. `npm run
 check` green: 172 files, 1880 tests, audit:allowlist PASS, exit 0.
 
-**Next: doc `05` E41-a** — the worst data-loss path. `artist-portal/portfolio/page.tsx`
-`saveWorks()` is fire-and-forget (`authFetch` in a `forEach`, no await, no `res.ok`),
-and `handleSubmit` closes the form + resets the dirty snapshot + toasts "Artwork
-added" before any request resolves, so a 402/403/500 loses the work silently. Route
-it through `mutate`+`useSaveAction`: keep the form open + restore `works` from the
-pre-save snapshot on failure, move the toast/`setShowForm(false)`/`initialFormJson`
-reset into `onSuccess`/`clearDirty`. Re-read the page + its test first. (E41-c "only
-changed works" diffing can be a follow-on finding; E41-a is the await+confirm fix.)
-Then E41-b (deletes), E41-d/-e (dropped fields), E41-f (delete the localStorage
-editor), E42-a/-b/-c, E43-a..k, then the `no-authfetch-mutation` eslint rule LAST.
+## row 8 (doc `05`) E41-a — portfolio add/edit save now awaits the write
+
+Commit `<pending>`. Code-only. The worst data-loss path in the app.
+
+**The defect.** `artist-portal/portfolio/page.tsx` `saveWorks()` was fire-and-forget
+(`authFetch` in a `forEach`, no `await`, no `res.ok`), and `handleSubmit` closed the
+form, reset the dirty snapshot, and toasted "Artwork added" BEFORE any request
+resolved. A 402 (subscription_required) / 403 (post_limit_reached) / 400 / 500 lost
+the work silently while the UI reported success.
+
+**The fix.** Extracted an awaitable `postWorks()` core (POST each work via `mutate`,
+reconcile the saved row, surface warnings, throw the first rejection via
+`Promise.allSettled`). `handleSubmit` now calls `saveWork.save(updated)`, a
+`useSaveAction` instance whose `optimistic` snapshots+sets `works` (rollback on
+failure), `run` awaits `postWorks`, `onSuccess` closes the form + clears
+`editingIndex`, `clearDirty` resets `initialFormJson`, and `successMessage` toasts
+only on a confirmed 2xx. The old `saveWorks` stays as a thin fire-and-forget wrapper
+(`setWorks` + `void postWorks().catch`) because 7 other callers (deletes E41-b, bulk
+reorders/edits E41-e) still use it — they migrate in their own findings; this keeps
+E41-a scoped and non-duplicative.
+
+**Test.** New `portfolio/page.test.tsx` (2 tests) renders the real page (mocking the
+IO + layout), opens the Add form, fills title + a size price, clicks Save: (1) on
+`mutate` reject `ApiError(403,...)` the error toast fires, NO "Artwork added" toast,
+and the form stays open; (2) on resolve the "Artwork added" toast fires once and the
+form closes. Fail-before verified by reverting `handleSubmit` to the old
+unconditional-success tail: test 1 failed (fired "Artwork added" instead of the
+error). `npm run check` green: 173 files, 1882 tests, audit:allowlist PASS, exit 0.
+
+**SUPERVISOR D62 (4798b20): row 20's schema:snapshot regenerator is inert here.** It
+needs `SUPABASE_ACCESS_TOKEN` (the Management API), which D12 verified is absent from
+this environment, so it exits 2 until a human adds the token. My row-20 PROGRESS
+entry omitted that dependency. **OWNER ESCALATION (D62.5):** adding
+`SUPABASE_ACCESS_TOKEN` locally now matters — it is what keeps the phantom guard
+maintainable across migrations (it joins the two CI secrets, but as a local export).
+
+**Next: ROW 20b (D62.4 follow-up), before more E4x.** (1) Record the token
+dependency in the guard header and here; (2) make `scripts/schema-snapshot.ts`'s
+exit-2 message point at the remedy ("SUPABASE_ACCESS_TOKEN not set; see
+EXECUTION-DECISIONS D12. Do NOT add the new column to GRANDFATHERED instead."), with
+a test asserting the message; (3) investigate whether a service-role / direct-Postgres
+path avoids the token — do NOT invent a SECURITY DEFINER catalogue helper (it would
+undo the function lockdown); if no clean path, the token stands, record that. THEN
+resume E41-b (deletes), E41-d/-e (dropped fields), E41-f (delete the localStorage
+editor), E42-a/-b/-c, E43-a..k, `no-authfetch-mutation` eslint rule LAST.

@@ -7,10 +7,11 @@ import Button from "@/components/Button";
 import { type ArtistWork, type SizePricing } from "@/data/artists";
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
+import { useSaveAction } from "@/hooks/useSaveAction";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import Combobox from "@/components/Combobox";
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
@@ -320,6 +321,27 @@ export default function PortfolioPage() {
   const formDirty = showForm && JSON.stringify(form) !== initialFormJson.current;
   useUnsavedWarning(formDirty);
 
+  // E41-a: the add/edit save now goes through the shared save control, so a failed
+  // POST (post_limit_reached, subscription_required, any 4xx/5xx) keeps the form
+  // open, rolls `works` back, and shows the real error, instead of the old
+  // fire-and-forget path that closed the form and toasted "Artwork added" first.
+  const saveWork = useSaveAction<[ArtistWork[]], void>({
+    optimistic: (updated) => {
+      const snapshot = works;
+      setWorks(updated);
+      return () => setWorks(snapshot);
+    },
+    run: (updated) => postWorks(updated),
+    onSuccess: () => {
+      setShowForm(false);
+      setEditingIndex(null);
+    },
+    clearDirty: () => {
+      initialFormJson.current = JSON.stringify(form);
+    },
+    successMessage: editingIndex !== null ? "Artwork updated" : "Artwork added",
+  });
+
   useEffect(() => {
     if (!artist || initialised) return;
     setWorks([...artist.works]);
@@ -401,48 +423,49 @@ export default function PortfolioPage() {
     );
   }
 
-  function saveWorks(updated: ArtistWork[]) {
-    setWorks(updated);
-
-    // Sync each work to Supabase. After the response lands, reconcile the
-    // work's description/images against what the DB actually returned so
-    // the UI reflects persisted state (not just the in-memory form).
+  // Awaitable core: POST each work via mutate(), reconcile the saved row back into
+  // local state, and surface any warnings. Throws the first failure (ApiError /
+  // NetworkError) so a caller that awaits it can keep the form open and roll back,
+  // instead of the old fire-and-forget path that reported success on a 402/403/500.
+  async function postWorks(updated: ArtistWork[]): Promise<void> {
     const shownWarnings = new Set<string>();
-    updated.forEach((work, index) => {
-      // priceUplift must be numeric for the API's Zod-like validator to
-      // accept the frame; previously we stringified, which caused frames
-      // to be silently sanitized away.
-      const frames = ((work as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions ?? [])
-        .map((f) => ({
-          label: f.label,
-          priceUplift: typeof f.priceUplift === "number" ? f.priceUplift : Number(f.priceUplift) || 0,
-          imageUrl: f.imageUrl,
-        }));
+    const results = await Promise.allSettled(
+      updated.map((work, index) => {
+        // priceUplift must be numeric for the API's Zod-like validator to
+        // accept the frame; previously we stringified, which caused frames
+        // to be silently sanitized away.
+        const frames = ((work as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions ?? [])
+          .map((f) => ({
+            label: f.label,
+            priceUplift: typeof f.priceUplift === "number" ? f.priceUplift : Number(f.priceUplift) || 0,
+            imageUrl: f.imageUrl,
+          }));
 
-      authFetch("/api/artist-works", {
-        method: "POST",
-        body: JSON.stringify({
-          id: work.id,
-          title: work.title,
-          medium: work.medium,
-          dimensions: work.dimensions,
-          priceBand: work.priceBand,
-          pricing: work.pricing,
-          available: work.available,
-          color: work.color || "#C17C5A",
-          image: work.image,
-          orientation: work.orientation || "landscape",
-          sortOrder: index,
-          shippingPrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).shippingPrice ?? null,
-          inStorePrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).inStorePrice ?? null,
-          quantityAvailable: (work as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable ?? null,
-          frameOptions: frames,
-          description: work.description || "",
-          images: work.images || [],
-        }),
-      })
-        .then((r) => r.json())
-        .then((res: { warnings?: string[]; savedRow?: { id?: string; description?: string; images?: string[] } }) => {
+        return mutate<{ warnings?: string[]; savedRow?: { id?: string; description?: string; images?: string[] } }>(
+          "/api/artist-works",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              id: work.id,
+              title: work.title,
+              medium: work.medium,
+              dimensions: work.dimensions,
+              priceBand: work.priceBand,
+              pricing: work.pricing,
+              available: work.available,
+              color: work.color || "#C17C5A",
+              image: work.image,
+              orientation: work.orientation || "landscape",
+              sortOrder: index,
+              shippingPrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).shippingPrice ?? null,
+              inStorePrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).inStorePrice ?? null,
+              quantityAvailable: (work as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable ?? null,
+              frameOptions: frames,
+              description: work.description || "",
+              images: work.images || [],
+            }),
+          },
+        ).then((res) => {
           // Reconcile DB state back into local works so subsequent edits
           // see what actually persisted.
           if (res.savedRow && res.savedRow.id) {
@@ -463,9 +486,19 @@ export default function PortfolioPage() {
               }
             });
           }
-        })
-        .catch((err) => console.error("Work sync error:", err));
-    });
+        });
+      }),
+    );
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) throw (failed as PromiseRejectedResult).reason;
+  }
+
+  // Legacy fire-and-forget wrapper, still used by the delete / bulk-edit callers
+  // (E41-b, E41-e migrate them next). handleSubmit no longer uses this — it awaits
+  // postWorks through useSaveAction so a failed add/edit can no longer report success.
+  function saveWorks(updated: ArtistWork[]) {
+    setWorks(updated);
+    void postWorks(updated).catch((err) => console.error("Work sync error:", err));
   }
 
   function handleDeleteWork(index: number) {
@@ -1802,12 +1835,11 @@ export default function PortfolioPage() {
       updated = [...works, newWork];
     }
 
-    saveWorks(updated);
-    // Clear dirty snapshot so the beforeunload guard drops after save
-    initialFormJson.current = JSON.stringify(form);
-    setShowForm(false);
-    showToast(editingIndex !== null ? "Artwork updated" : "Artwork added");
-    setEditingIndex(null);
+    // E41-a: await the write through useSaveAction. The optimistic setWorks, the
+    // dirty-snapshot reset, the form close and the success toast all live in the
+    // hook now and only run on a confirmed 2xx; a failure keeps the form open,
+    // rolls `works` back and surfaces the real error.
+    void saveWork.save(updated);
   }
 
   function deleteWork(index: number) {
