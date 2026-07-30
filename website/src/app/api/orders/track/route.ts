@@ -12,22 +12,23 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyOrderToken } from "@/lib/order-tracking-token";
 
+// 7b phantom-column fix: the select named 8 columns that do not exist on orders
+// (total_amount, shipping_amount, currency, cart_items, buyer_name, tracking_url,
+// shipped_at, delivered_at), so PostgREST rejected the whole query and the route
+// 500'd on every request. Mapped to the real schema: total, shipping_cost, items,
+// tracking_number. buyer_name/shipped_at/delivered_at were never rendered and are
+// dropped; currency is GBP-only; ship/deliver timing lives in status_history.
 interface DbOrder {
   id: string;
   order_number: string | null;
   status: string | null;
   buyer_email: string | null;
-  buyer_name: string | null;
   artist_slug: string | null;
-  total_amount: number | null;
-  shipping_amount: number | null;
-  currency: string | null;
-  cart_items: unknown;
+  total: number | null;
+  shipping_cost: number | null;
+  items: unknown;
   status_history: unknown;
   tracking_number: string | null;
-  tracking_url: string | null;
-  shipped_at: string | null;
-  delivered_at: string | null;
   created_at: string | null;
 }
 
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
   const { data, error } = await db
     .from("orders")
     .select(
-      "id, order_number, status, buyer_email, buyer_name, artist_slug, total_amount, shipping_amount, currency, cart_items, status_history, tracking_number, tracking_url, shipped_at, delivered_at, created_at",
+      "id, order_number, status, buyer_email, artist_slug, total, shipping_cost, items, status_history, tracking_number, created_at",
     )
     .eq("id", cleanedId)
     .maybeSingle<DbOrder>();
@@ -99,17 +100,15 @@ export async function POST(request: Request) {
       orderNumber: data.order_number,
       status: data.status || "confirmed",
       placedAt: data.created_at,
-      buyerName: data.buyer_name,
       artistSlug: data.artist_slug,
-      total: data.total_amount,
-      shipping: data.shipping_amount,
-      currency: data.currency || "gbp",
-      items: Array.isArray(data.cart_items) ? data.cart_items : [],
+      total: data.total,
+      shipping: data.shipping_cost,
+      currency: "gbp",
+      items: Array.isArray(data.items) ? data.items : [],
       history: Array.isArray(data.status_history) ? data.status_history : [],
-      shippedAt: data.shipped_at,
-      deliveredAt: data.delivered_at,
+      // orders stores no tracking_url; the tracking page treats url as optional.
       tracking: data.tracking_number
-        ? { number: data.tracking_number, url: data.tracking_url || null }
+        ? { number: data.tracking_number, url: null }
         : null,
     },
   });

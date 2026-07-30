@@ -26,15 +26,12 @@ interface TrackedOrder {
   id: string;
   status: string;
   placedAt: string | null;
-  buyerName: string | null;
   artistSlug: string | null;
   total: number | null;
   shipping: number | null;
   currency: string;
   items: OrderItem[];
   history: OrderHistoryEntry[];
-  shippedAt: string | null;
-  deliveredAt: string | null;
   tracking: { number: string; url: string | null } | null;
 }
 
