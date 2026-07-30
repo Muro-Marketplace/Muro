@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { handleAuthzError } from "@/lib/authz";
 import { getArtistProfileByUserId } from "@/lib/db/artist-profiles";
 import { getWorksByArtistProfileId, upsertWork, deleteWork } from "@/lib/db/artist-works";
 import { slugify } from "@/lib/slugify";
@@ -262,7 +263,15 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, warnings, savedRow });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[artist-works] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }

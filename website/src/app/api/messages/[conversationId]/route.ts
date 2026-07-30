@@ -40,6 +40,9 @@ export async function GET(
   } catch (err) {
     const denied = handleAuthzError(err);
     if (denied) return denied;
+    // Logged, not swallowed: a real fault here used to be
+    // indistinguishable from a malformed body (Phase E item 14).
+    console.error("[messages/conversation] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -86,6 +89,9 @@ export async function PATCH(
   } catch (err) {
     const denied = handleAuthzError(err);
     if (denied) return denied;
+    // Logged, not swallowed: a real fault here used to be
+    // indistinguishable from a malformed body (Phase E item 14).
+    console.error("[messages/conversation] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -128,6 +134,9 @@ export async function DELETE(
   } catch (err) {
     const denied = handleAuthzError(err);
     if (denied) return denied;
+    // Logged, not swallowed: a real fault here used to be
+    // indistinguishable from a malformed body (Phase E item 14).
+    console.error("[messages/conversation] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }

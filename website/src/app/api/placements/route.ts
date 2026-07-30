@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { handleAuthzError } from "@/lib/authz";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { startPaidLoanBilling, cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
 import { deriveArrangementType } from "@/lib/placements/arrangement";
@@ -291,7 +292,15 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ placements: enriched, userType: role.type });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[placements] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -754,7 +763,15 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[placements] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -2036,7 +2053,15 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: true, billingPrompt });
     }
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[placements] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -2178,6 +2203,12 @@ export async function DELETE(request: Request) {
       id,
     });
   } catch (err) {
+    // 01 §1.3, Phase E item 14. This one already bound and logged the error, so
+    // it was never silent, but it still flattened an AuthzError's 403/404 into a
+    // 400. Found by the surfacing gate rather than by the `} catch {` sweep,
+    // which could not match a catch that was already bound.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
     console.error("DELETE /api/placements exception:", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }

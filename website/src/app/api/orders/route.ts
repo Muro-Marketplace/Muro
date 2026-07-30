@@ -122,7 +122,15 @@ export async function GET(request: Request) {
       artistSlug: artistProfile?.slug || null,
       venueSlug: venueProfile?.slug || null,
     });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[orders] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -359,6 +367,9 @@ export async function PATCH(request: Request) {
     // flatten a 404 order_not_found into whatever this handler returns.
     const denied = handleAuthzError(err);
     if (denied) return denied;
+    // Logged, not swallowed: a real fault here used to be
+    // indistinguishable from a malformed body (Phase E item 14).
+    console.error("[orders] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
