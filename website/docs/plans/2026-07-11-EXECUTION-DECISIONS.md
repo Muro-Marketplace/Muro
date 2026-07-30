@@ -2070,3 +2070,55 @@ Owner decision, at leisure: should offers honour the trial 0% window like cart c
 - E50 `increment_placement_revenue`: `{postgres=X, service_role=X}`, closed and holding.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
 - `message-attachments` bucket: still public — **E25 is the last open item from the security queue.**
+
+---
+
+## D52. C1 built the right payout gate and the webhook never adopted it. Three stale gates are still live in the money path.
+
+*— supervisor. 172 commits. Supervisor queue 13-16 COMPLETE. C3 landed (`6dd4e40`, migration `089`); C4 is next per the loop's plan — but this should come first.*
+
+### D52.1 — Both of the loop's C3 escalations are correct. Verified, not taken on trust.
+
+**"The doc's 500 → Stripe retries the legs is inert."** Confirmed from source. The duplicate branch returns unconditionally at `webhooks/stripe/route.ts:808-810`, and leg scheduling does not begin until `:1032`. A redelivery of the same session classifies as `duplicate` and returns ~220 lines before any leg is touched. The plan's C3 retry story does not work, and the loop was right not to ship it.
+
+**"If the ledger INSERT itself fails there is nothing to retry."** Also confirmed. `:1088-1090` is `catch (transferErr) { console.error(...) }`. If `scheduleTransfer` throws, no `stripe_transfers` row is written; C4's sweep selects `pending`/`failed` **rows**, so it has nothing to find; and redelivery early-returns per the above. The artist is owed money and nothing in the system records it. Genuinely unrecoverable, exactly as flagged.
+
+### D52.2 — NEW, and the reason C4 should wait: three live payout gates still use the predicate C1 replaced
+
+`canReceivePayout` appears in `webhooks/stripe/route.ts` **only inside comments**, at `:1070` and `:1648`. It is never called. Every transfer the system actually schedules is still gated on the old boolean:
+
+| Line | Branch | Gate |
+|---|---|---|
+| `:301` | offer → artist | `artistConnect.stripe_connect_onboarding_complete` |
+| `:1031` | cart → venue | `venueConnect.stripe_connect_onboarding_complete` |
+| `:1060` | cart → artist | `artistConnect.stripe_connect_onboarding_complete` |
+
+C1 (`6d5c197`) was written precisely because that predicate is wrong: it cannot distinguish `payouts_enabled` from `charges_enabled`, so **an account on a mid-KYC payout hold passes the gate, gets a transfer scheduled, and the money lands in an unpayable balance.** That is the failure C1 exists to prevent, still live in the money path.
+
+Two things make it worse:
+
+- The comment at `:1070` reads *"The checkout pre-flight (canReceivePayout) should have stopped this"* — so the pre-flight is C1-aware while the gate ten lines above it is not. A pre-flight at session creation cannot protect a payout scheduled minutes later; that is the whole point of re-checking at transfer time.
+- `stripe_connect_onboarding_complete` is written by exactly one thing, the `account.updated` handler at `:1651`. Per D32.1 that event may not be enabled in the Stripe dashboard at all, so the boolean these three gates depend on may never be refreshed after initial onboarding.
+
+**Ruling: replace all three gates with `canReceivePayout` before C4.** C4 builds a retry sweep on top of these gates; retrying a transfer that should never have been scheduled just retries the wrong decision faster. This is the "new implementation ⇒ old one deleted in the same commit" rule, applied one commit late — C1 shipped the replacement and left the callers behind. Use the `PayoutCapability.reason` to choose between scheduling and `recordBlockedLeg`, which C3 has just made available: `no_account` / `charges_disabled` / `payouts_disabled` are all blocked-leg cases with a real reason string instead of the single `"onboarding_incomplete"` used today.
+
+**Fourth reader, lower priority, do not bundle:** `lib/email/welcome.ts:66,82` selects the same column and derives a `stripeConnected` flag for welcome-email copy. Cosmetic, not money. Fix it after the gates, in its own commit.
+
+### D52.3 — Ruling on the unrecoverable ledger gap. This is mine, not the owner's.
+
+The loop asked the owner to choose between "schedule legs before the order insert" or "make the retry re-enter the leg block". That is a technical sequencing decision inside an approved plan, so I am deciding it rather than sending it up.
+
+- **Scheduling legs before the order insert: no.** Ledger rows carry `order_id`. If the order insert then fails you have payout rows pointing at an order that does not exist, which is a worse state than the one being fixed.
+- **Re-entering the leg block on `duplicate`: yes, and it is small.** Instead of returning at `:810`, look up existing `stripe_transfers` for that `order_id`, schedule any missing legs, then return. It is safe to do repeatedly because `scheduleTransfer` already treats a `(order_id, recipient_user_id)` 23505 as an idempotent replay — C3 built that this hour.
+- **Add an orders-without-legs reconciliation to C4, and treat it as the primary fix.** C4 as specified retries existing rows. It should also select orders that have money owed and **no ledger row at all**, which is the only thing that catches a failed INSERT, a webhook that never ran, and a redelivery that early-returned. Note what this would have surfaced on day one: **12 orders, 0 transfers.** A sweep that only retries existing rows reports all-clear against that.
+
+Do the re-entry with the gate replacement in D52.2, and the reconciliation as part of C4.
+
+### D52.4 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- E51 `artist_profiles`: 64 anon columns, closed and holding.
+- E50 `increment_placement_revenue`: `{postgres=X, service_role=X}`, closed and holding.
+- **Payout-gate copies: 3 stale in the webhook + 1 cosmetic in `lib/email/`. NOT clean** — see D52.2. This is the same sweep that found the `lib/email/` reader last time; it has now found the three that matter.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged, and D52.3 explains why nothing currently detects that.
+- `message-attachments` bucket: still public. E25 outstanding.
