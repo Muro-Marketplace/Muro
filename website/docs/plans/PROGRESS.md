@@ -6078,3 +6078,78 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 T4 (D8, D9), T5 (D10, D11), T6 (E7a-E7d, E8, E11, E11b), T7 (D12, D13, D15; D14
 blocked). Remaining: T8 refunds (D16-D18), T9 (N1, N2), and the C-series payout
 helpers (C1 canReceivePayout, C3 recordBlockedLeg, C4 retry sweep).
+
+---
+
+## `04` T8 / D16 — partial reversal used the wrong denominator (owner: `04` §B8)
+
+Commit `2fdc567`. First of the three T8 refund findings (D17 restock, D18 curation
+still to do).
+
+**The finding (confirmed against prod).** `refunds/process/route.ts` pro-rated a
+partial transfer reversal against `order.total`:
+`round(amount_cents * refundCents / round(order.total*100))`. But shipping is not
+shared revenue: the artist keeps 100% of it and pays the courier from it. Verified
+in prod: `orders` money columns are real (`subtotal`, `shipping_cost`, `total`,
+`artist_revenue` all numeric), `total = subtotal + shipping_cost`, and
+`artist_revenue = 0.85*subtotal + shipping` (e.g. `WS-tHkhJLuA`: 29.99*0.85 + 3.50 =
+28.99). So reversing against total clawed back a slice of shipping the artist had
+already spent.
+
+**What changed.**
+- Partial reversal now pro-rates against `subtotal` (the artwork base), and reverses
+  the shipping portion of a shipping-inclusive refund against the **artist leg
+  only** (`recipient_type === "artist"`; `stripe_transfers.recipient_type` is a real
+  text column, values exactly `"artist" | "venue"`, confirmed via `scheduleTransfer`
+  in `lib/stripe-connect.ts`).
+- Added a process-time guard: `refundAmountCents > round(order.total*100)` → 400,
+  releasing the claim back to `pending`. The request route enforces this at
+  submission, but the total can be re-read between request and process.
+
+**Files.** `src/app/api/refunds/process/route.ts` (guard + subtotal-based
+`reverseAmount`), `src/app/api/refunds/process/route.test.ts` (+2 tests). The doc
+named `tests/transactions/t8-refunds.test.ts`; the repo convention is co-located
+`route.test.ts`, so the tests went there (doc path stale — noted).
+
+**Test (fails before, passes after — verified both directions).**
+- D16 regression: partial £90 refund on subtotal £180 / shipping £14.50, artist leg
+  13150 → reversal asserted `=== 6575` (`round(13150 * 9000/18000)`). Before the fix
+  it produced 6085 (`13150 * (9000/19450)`). Probe output pasted below.
+- D16 guard: £60 refund on a £50 order → 400, no Stripe calls, claim released.
+
+```
+# pre-fix (probe): both new tests fail
+- 6575  +6085          (reversal used total denominator)
+- 400   +200           (no over-total guard)
+# post-fix: whole file green
+✓ src/app/api/refunds/process/route.test.ts (12 tests)
+# full gate
+Test Files  163 passed (163)
+Tests  1786 passed (1786)
+✖ 175 problems (0 errors, 175 warnings)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Payment-drive limitation (stated, not hidden).** No live Stripe test drive is
+possible here (no test key / webhook secret, as every prior payment iteration).
+`stripe_transfers` is **empty in prod** (Connect not live), so this path is dormant
+and no externally-visible behaviour changes today. The penny-level split is asserted
+via the mocked `createReversal` call args (6575), which is the strongest check
+available without Connect.
+
+**What the plan got slightly wrong (recorded for the owner, not guessed around).**
+The doc's `ship` term is provably inert under the *current single-recipient money
+model*: `base = amount_cents * artworkRefundPence/subtotalPence` reaches the whole
+leg exactly when `shippingRefundPence > 0` (both require `refund >= subtotal`), so
+`min(amount_cents, base + ship)` always clamps `ship` away. Kept verbatim anyway
+because (a) it matches the doc's named regression to the penny, (b) it documents the
+shipping intent, and (c) a *perfectly* correct multi-artist decomposition would need
+each leg's shipping share stored on `stripe_transfers` (only `amount_cents` is
+stored today) — that's a schema/money-model decision, and moot until Connect is live
+with real transfer rows. Flagging it here rather than silently shipping an alternate
+formula that contradicts the doc's own test.
+
+**`04` status.** Done: Phase 0, B0 (D1-D3), T1 (D4-D6), T2 (E9), T3 (E6/E10 + D7),
+T4 (D8, D9), T5 (D10, D11), T6 (E7a-E7d, E8, E11, E11b), T7 (D12, D13, D15; D14
+blocked), **T8/D16**. Remaining: T8 D17 (restock on full refund), T8 D18 (curation
+refund path — deferred to B10), T9 (N1, N2), C-series payout helpers (C1, C3, C4).
