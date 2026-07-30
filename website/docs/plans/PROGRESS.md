@@ -4567,3 +4567,101 @@ listed under owner decisions.
 So `06` is complete except V3/V4. Checkboxes in the implementation docs are left
 as authored throughout this plan (0 of 25 ticked in `06`), since PROGRESS.md is
 the ledger.
+
+---
+
+## `04` D7 — an accepted offer was never re-validated against stock (owner: `04` §B3)
+
+Commit `95d7d93`.
+
+**The finding.** `purchase_offers` has no link to stock. An offer accepted on
+Monday could still be paid on Friday for a work that sold through the cart on
+Wednesday, so the buyer paid for something the artist no longer had. The cart
+checkout (`api/checkout/route.ts`) has re-validated at session creation all along;
+the offer branch never inherited it. Same drift as the T3 confirmation emails, and
+the same remedy: one shared implementation rather than a second copy.
+
+**What changed.**
+
+- `src/lib/work-stock.ts` (new) holds `isWorkSold`. The cart route's inline
+  predicate is **deleted** and now calls it, so the two paths cannot drift on what
+  "sold" means.
+- `api/offers/[id]/checkout/route.ts` re-validates before the payout pre-flight,
+  so a dead offer costs no extra round trips and never reaches Stripe. On a sold or
+  missing work it closes the offer and returns 409 `work_sold`.
+
+**Prod facts that shaped it** (project `uwkuhygwvasdzwsusiym`):
+
+| Fact | Consequence |
+|---|---|
+| `purchase_offers_status_check` includes `'expired'` | the plan's status value is valid, no migration needed |
+| `chk_target_shape`: `cardinality(work_ids) > 0 AND collection_id IS NULL` **OR** `cardinality(work_ids) = 0 AND collection_id IS NOT NULL` | a collection offer **always** has an empty `work_ids`, so the plan's `if (offer.work_ids.length > 0)` skipped every collection offer |
+| `artist_collections` has `work_ids` and `available` | the collection's works are resolvable in one extra query |
+| 23 of 35 `artist_works` rows have `quantity_available IS NULL`; 12 positive; **none** zero | null must read as untracked, not as zero, or two thirds of the catalogue becomes unbuyable |
+| all 35 works have `available = true` | the guard closes no live offer today |
+| the two `accepted` offers (£127.00, £18.02) both have their work present and on sale | ditto, verified per row |
+| `orders.items` is JSON with `size/image/title/quantity/lineTotal/artistName`, **no work id** | "has this work already been sold?" is not answerable from `orders`, so the stock flags are the only sound signal, exactly as the plan says |
+
+**Two departures from the plan's snippet**, both to avoid shipping a new bug:
+
+1. **Collection offers are covered.** Per `chk_target_shape` above, the snippet's
+   `work_ids.length > 0` guard fired for exactly the half of offers that name their
+   works, and skipped the half that does not. The route now resolves the
+   collection's `work_ids`, and treats a deleted or withdrawn collection as gone.
+2. **The expiry write is compare-and-set on `accepted`.** The snippet's unscoped
+   `.eq("id", offer.id)` would let this overwrite a concurrent success: buyer pays
+   in one tab, the webhook sets `'paid'`, this stamps `'expired'` on top, and a
+   paid offer stops looking paid. One `.eq("status", "accepted")` prevents it.
+
+Also de-duplicates `work_ids` before the `found.length !== workIds.length`
+comparison. Without that, one repeated id makes the lookup look short and closes a
+perfectly live offer.
+
+**Tests.** 14 cases added to `src/app/api/offers/[id]/checkout/route.test.ts` (22
+total in the file), plus `src/lib/work-stock.test.ts` (7). The existing mock
+returned `null` for every table other than offers and profiles, so it grew
+`artist_works`, `artist_collections`, and an update spy that records the `.eq()`
+filters, which is what makes the compare-and-set assertable.
+
+**Three probes**, one per claim:
+
+```
+PROBE 1 — D7 gate removed entirely
+      Tests  9 failed | 13 passed (22)
+
+PROBE 2 — dedupe removed
+ FAIL  ... > does not mistake a duplicated work id for a missing work
+      Tests  1 failed | 21 passed (22)
+
+PROBE 3 — compare-and-set removed
+ FAIL  ... > closes the offer, and only while it is still accepted
+      Tests  1 failed | 21 passed (22)
+```
+
+Probes 2 and 3 fail exactly one test each, so both departures are pinned
+individually rather than riding along on the main gate.
+
+`src/app/api/checkout/route.test.ts` still passes all 44 cases after the predicate
+swap, which is the regression that matters for the extraction.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  158 passed (158)
+Tests  1627 passed (1627)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Stripe drive not run, and it cannot be here.** The runbook asks every payment
+task to drive the Stripe test-mode event. `STRIPE_SECRET_KEY` is `sk_test_PLAC...`,
+api.stripe.com returns 401, and there is no webhook secret or Stripe CLI, as
+recorded earlier. What this change does is *prevent* session creation, so the
+assertions are that `stripe.checkout.sessions.create` was never called, which the
+mock proves directly. The money path itself is unchanged by this commit.
+
+**Adjacent gap, not fixed here.** For a collection offer the webhook decrements
+nothing: `offer_work_ids` metadata is empty by `chk_target_shape`, and the
+decrement loop iterates that list. So collection offers never move stock (E10's
+fix covers the named-works shape only). Recorded for `04` D5, which owns the
+decrement rewrite.
