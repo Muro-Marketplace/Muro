@@ -49,12 +49,6 @@ const GRANDFATHERED: Array<{ file: string; columns: string; phantom: string[]; w
     phantom: ["free_until"],
     why: "D17.2: the referral path writes a free window and where it should write is an open owner question (trial_end is Stripe-managed). Left as the silent no-op it already is. Remove when D17.2 is answered.",
   },
-  {
-    file: "app/sitemap.ts",
-    columns: "title, updated_at, artist_profiles!inner(slug)",
-    phantom: ["updated_at"],
-    why: "artist_works has created_at, not updated_at. The sitemap lastmod is null (the whole select is rejected). Fix: select created_at.",
-  },
 ];
 
 function walk(dir: string): string[] {
@@ -170,7 +164,7 @@ describe("no .select() names a column the live schema lacks (D17.3, full form)",
   it("holds the grandfathered list at its recorded size, so new debt fails the build", () => {
     // A ratchet, not a cap on effort: shrink it by fixing a select, and lower the
     // number in the same commit. It must never grow.
-    expect(GRANDFATHERED).toHaveLength(2);
+    expect(GRANDFATHERED).toHaveLength(1);
     for (const g of GRANDFATHERED) {
       expect(g.phantom.length, "each entry lists the phantom column(s) it parks").toBeGreaterThan(0);
       expect(g.why.length, "each entry names the real column and why it is not fixed here").toBeGreaterThan(60);

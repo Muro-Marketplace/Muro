@@ -71,7 +71,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .select("slug, updated_at");
     const { data: dbWorks } = await db
       .from("artist_works")
-      .select("title, updated_at, artist_profiles!inner(slug)");
+      .select("title, created_at, artist_profiles!inner(slug)");
     // Phase 2.7: published blog posts in the sitemap so SEO crawls
     // pick them up. Same source-of-truth as /blog.
     const { data: dbBlogs } = await db
@@ -88,12 +88,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.7,
       });
     }
-    for (const row of (dbWorks || []) as Array<{ title: string; updated_at?: string; artist_profiles: { slug: string } | { slug: string }[] }>) {
+    for (const row of (dbWorks || []) as Array<{ title: string; created_at?: string; artist_profiles: { slug: string } | { slug: string }[] }>) {
       const slug = Array.isArray(row.artist_profiles) ? row.artist_profiles[0]?.slug : row.artist_profiles?.slug;
       if (!slug || !row.title) continue;
       dbEntries.push({
         url: `${SITE_URL}/browse/${slug}/${slugify(row.title)}`,
-        lastModified: row.updated_at ? new Date(row.updated_at) : now,
+        // artist_works has no updated_at; created_at is the best available lastmod.
+        lastModified: row.created_at ? new Date(row.created_at) : now,
         changeFrequency: "weekly",
         priority: 0.5,
       });

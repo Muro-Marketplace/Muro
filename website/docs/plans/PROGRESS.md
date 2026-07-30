@@ -23,7 +23,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 7a | `free_until` overcharge: every sale billed 15% | D17.1 | **done** (6e0705e). Four sites, not the two D17 named. No fee changes today, no artist has a future `trial_end` |
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **DONE**. Narrow form (6e0705e), then **full form** (7f556eb): `schema-columns.json` snapshots all 53 tables / 750 columns; the scan surfaced 12 phantom selects, parked in a shrinking `GRANDFATHERED` ratchet and queued as **row 19** |
 | 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
-| 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased). Ratchet 12 → 2. Remaining: **#9** sitemap updated_at→created_at. `free_until` (webhooks/stripe) stays parked per D14/D17.2 (ratchet floor 1) |
+| 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (this commit). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | todo |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -7798,7 +7798,39 @@ the phantom guard failed on `route.ts:59`. Re-applied -> pass. Grandfather entry
 removed, ratchet 3 -> 2. `npm run check` green: 169 files, 1861 tests,
 audit:allowlist PASS, exit 0.
 
-**Next: row 19 #9** — `sitemap.ts:74` selects `artist_works.updated_at`; the real
-column is `created_at` (the whole select is rejected, so the sitemap lastmod is
-null). Fix updated_at -> created_at, remove the last-but-one grandfather entry,
-ratchet 2 -> 1. `free_until` (webhooks/stripe) is the parked floor at 1 (D14/D17.2).
+## row 19 #9 — sitemap selects artist_works.created_at, not phantom updated_at
+
+Commit `<pending>`. Code-only. **Closes row 19's active phantom queue.**
+
+**The defect.** The sitemap's artwork query selected `artist_works.updated_at`,
+which does not exist (the column is `created_at`). PostgREST rejected the whole
+select, so `dbWorks` was null and **no artwork URL made it into the sitemap** from
+the DB (only the static/seed entries survived). The sibling `artist_profiles` and
+`blogs` selects on nearby lines are fine: both those tables really have `updated_at`.
+
+**The fix.** `updated_at -> created_at` on the select, the inline row type, and the
+`lastModified` read (three edits, one file). The row object is internal to the
+sitemap builder (not an external response), and the old type mislabelled the field,
+so a plain rename is honest and self-contained. created_at is the best available
+lastmod for artist_works (it has no updated_at); noted inline.
+
+**Test.** Added to `sitemap.test.ts` (its Supabase mock refactored to a per-test
+`fromMock` so the existing fix-6.2 tests keep their empty-DB behaviour). The new
+test's `artist_works` mock models PostgREST faithfully (rejects a select naming an
+absent column, skips embeds/aliases), so it fails before the fix (the artwork URL is
+absent) and passes after, and asserts the entry's `lastModified` equals the row's
+created_at. Fail-before verified by reverting `sitemap.ts`: the test failed on
+`expect(work).toBeDefined()` and the guard flagged `sitemap.ts:74`. Re-applied ->
+pass. Grandfather entry removed, ratchet 2 -> 1. `npm run check` green: 169 files,
+1862 tests, audit:allowlist PASS, exit 0.
+
+**Row 19 phantom queue CLOSED.** All 10 live phantom selects the 7b guard surfaced
+are resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is parked at
+the ratchet floor of 1 per D14/D17.2, owner-gated). The `GRANDFATHERED` ratchet is
+now at 1 and cannot shrink further without an owner decision on free_until.
+
+**Next: doc-scale row 8 (`05` frontend saves + listing).** Re-read
+`docs/plans/implementation/05-*.md` to scope the specific sub-tasks (it depends on
+the D10 fixes) and take them one finding per iteration. Owner-gated items still
+outstanding and NOT loop-actionable: row 19 #2 placement-ending-soon (b)/(c), E25
+bucket cutover, the row-9 admin conjunct cutover.
