@@ -6690,3 +6690,48 @@ failed, exhausted-payout admin alert), PLUS the orders-without-legs reconciliati
 (catches the "12 orders, 0 transfers" blind spot) and the duplicate-redelivery
 leg re-entry. Columns exist (089). Given the scale, C4 may span 2 iterations
 (sweep first, then reconciliation + re-entry).
+
+---
+
+## `04` C4 (part 1) — retry sweep with backoff (owner: `04` §C4)
+
+Commit `779c588`. Code-only (columns from migration 089). First half of the
+owner-authorised C4; the D52.3 reconciliation + leg re-entry is part 2 (next).
+
+**What changed.** `processPendingTransfers` was terminal-fail: it selected only
+`status='pending'` and wrote `'failed'` on any throw, never looking again, so a
+transient Stripe blip permanently killed a payout. Now it selects `pending` AND
+retryable `failed` rows (`retry_count < 6`, `payout_after` elapsed), skips rows
+whose `next_attempt_at` backoff has not elapsed, re-schedules a failed attempt
+with exponential backoff `[1,4,15,60,240,960]` minutes (incrementing
+`retry_count`, recording `last_error`/`next_attempt_at`), and at `MAX_RETRIES`
+leaves the row `failed` and alerts an operator via `notifyAdminPayoutExhausted`
+(email, modelled on `notifyAdminBillingStalled`). It also cancels a due transfer
+whose order is cancelled/refunded. `executeTransfer` widened to accept a `failed`
+row; the stable Stripe idempotency key keeps the retry from double-paying.
+
+**Files.** `src/lib/stripe-connect.ts` (constants, `SweepResult`, sweep rewrite,
+`alertExhaustedPayout`, executeTransfer widen), `src/lib/stripe-connect.test.ts`
+(executeTransfer mock `.eq().in()`; 4 sweep tests), `src/lib/email.ts`
+(`notifyAdminPayoutExhausted`). Return type is now `SweepResult` (superset of the
+old `{processed}`; the process-pending route still typechecks).
+
+**Tests (probe-verified).** Re-schedules a failed row (retry_count 2→3, backoff +
+last_error set; probe: stop the increment → the test fails on retry_count); exhausts
+at 6 and alerts; cancels a cancelled-order transfer; skips a row still in backoff.
+`Tests 1812 passed (1812)`, `0 lint errors`, allowlist PASS. No live Stripe drive.
+
+**Plan deviation, flagged.** The doc expressed the backoff as a PostgREST
+`.or(next_attempt_at.is.null,next_attempt_at.lte.<now>)`. That trips the
+`wallplace/no-raw-or-filter` lint rule, and `orFilter()` cannot pass an ISO
+timestamp (its safe-charset excludes colons). Moved the backoff to a code-side
+`continue` instead. Trade-off: the query can fetch up to 200 rows including
+not-yet-due failed ones and skip them in code; acceptable at current (dormant)
+volume, and the sweep re-runs on the cron. Noted for the owner.
+
+**Next: C4 part 2 (D52.3).** (c) orders-without-legs reconciliation — select orders
+with money owed and NO stripe_transfers row (the "12 orders, 0 transfers" blind
+spot); (d) re-enter the leg block on a `duplicate` redelivery at the D3
+short-circuit (`webhooks/stripe/route.ts`), safe via scheduleTransfer's 23505
+idempotency. Then the D52.2 `lib/email/welcome.ts` cosmetic follow-up, then T8 D18
+/ T9.
