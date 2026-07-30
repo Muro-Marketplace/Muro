@@ -6319,3 +6319,79 @@ grant exists). Exclude `lat`/`lng` (still read via `select("*")` until
 this). This is a live anon PII/Stripe-ID exposure, verified in prod this session.
 Then rows 14 (revoke EXECUTE on `increment_placement_revenue`) and 16
 (`platformFeePercentForArtist` must respect `subscription_status`).
+
+---
+
+## Supervisor-queue row 13 / D38 — anon+authenticated PII leak on artist_profiles CLOSED
+
+Owner-authorised pivot (this session). Two commits:
+- `dc13688` — anon half: migration `076`, `getAllDatabaseArtists` repointed to
+  service-role, ADR 0004 amended.
+- `93f2047` — authenticated half: migration `077`, ADR updated.
+
+**The finding (verified live).** `artist_profiles` had a `USING(true)` public
+SELECT policy plus table-level SELECT grants to `anon` and `authenticated`, so any
+holder of the anon key (or any logged-in user) could read every artist's
+`postcode`, `stripe_customer_id`, `stripe_connect_account_id`,
+`stripe_subscription_id` straight off PostgREST. `has_column_privilege` for all
+four returned `true` for both roles beforehand.
+
+**What changed.**
+- `getAllDatabaseArtists` (the marketplace listing, and the LAST anon-client
+  `SELECT *` on the table, both the primary and the review_status-fallback call)
+  now reads via the service-role client. Server-side only, same rows (keeps the
+  explicit `review_status='approved'` filter), so the marketplace is unchanged and
+  is now immune to the column revokes. The unused anon `supabase` import was
+  removed.
+- Migrations 076 (anon) + 077 (authenticated): revoke the table SELECT, re-grant
+  column SELECT on all columns EXCEPT the four (071's DO-block exclusion pattern).
+  `lat`/`lng` kept granted (public map coords); `service_role` untouched.
+- ADR 0004 amended: the "artist_profiles not restricted" scope note is marked
+  superseded, with a dated amendment recording 076/077 and the reasoning.
+
+**Safety sweep (why no breakage).** The only browser-client (`@/lib/supabase`)
+reads of artist_profiles are `AuthContext` (`subscription_status`,
+`subscription_plan`) and `stats/public` (`id`) — none touch the four columns. No
+server-side user-JWT (authenticated-role) client reads the table (`api-auth`'s
+token client only calls `auth.getUser`; grep for `createClient`+artist_profiles is
+empty). The artist portal + `useCurrentArtist` load via `/api/artist-profile`
+(service-role).
+
+**Verification (fail-before / pass-after, both roles).**
+```
+before: has_column_privilege(anon|authenticated, artist_profiles, <4 cols>, SELECT) = true (all)
+after 076: anon    -> false for all 4; name/lat/lng/subscription_status stay true; table grant gone
+after 077: authd   -> false for all 4; name/lat/subscription_status stay true; table grant gone
+service_role: postcode SELECT still true (untouched)
+# gate
+Test Files 163 passed (163); Tests 1794 passed (1794); 176 problems (0 errors); allowlist PASS
+# DB task
+pg_policies SELECT-leak assertion = 0
+get_advisors(security): baseline unchanged, no new finding (it does NOT catch grant leaks; the
+  advisor never flagged this exposure at all, which is exactly why D12 says the grant assertion is the proof)
+```
+
+**Divergence from the doc, flagged for review (per "note what the plan got wrong").**
+D44.4 suggested repointing `getAllDatabaseArtists` to an *explicit column list* on
+the anon client (so it keeps running under the caller's role and respects RLS). I
+instead repointed it to the *service-role* client. Both close the leak and keep
+the marketplace working; I chose service-role because (a) it needs no ~45-column
+enumeration that would silently drift as the transform gains columns, and (b) it
+matches ADR 0004's own stated pattern ("the app's server routes read via the
+service-role client"). Trade-off: the marketplace list now bypasses RLS row
+policies (moot today: the policy is `qual=true` and the query keeps its explicit
+`review_status` filter). If the supervisor/owner prefers the RLS-respecting
+explicit-column mechanism for posture reasons, it is a self-contained swap in that
+one function; say the word.
+
+**Migration numbers.** 076 = row 13 anon (per D44.6). Authenticated needed a fresh
+number since 076 was already applied → 077. 075 stays reserved for row 14.
+
+**Limitation.** No anon-role `SELECT *` probe was run from here (the Supabase MCP
+runs as service-role and rejects `select *`); the `has_column_privilege` assertion
+is the ADR-0004-prescribed proof for this class. The e2e security-no-leaks spec
+covers the separate API-redaction layer and can't run here (no anon creds).
+
+**Next: row 14 (D37/E50, doc `02`, migration `075`)** — revoke PUBLIC/anon/
+authenticated EXECUTE on `increment_placement_revenue`, grant `service_role`. Do
+NOT churn the five trigger functions.
