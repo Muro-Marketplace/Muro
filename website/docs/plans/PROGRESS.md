@@ -6153,3 +6153,88 @@ formula that contradicts the doc's own test.
 T4 (D8, D9), T5 (D10, D11), T6 (E7a-E7d, E8, E11, E11b), T7 (D12, D13, D15; D14
 blocked), **T8/D16**. Remaining: T8 D17 (restock on full refund), T8 D18 (curation
 refund path — deferred to B10), T9 (N1, N2), C-series payout helpers (C1, C3, C4).
+
+---
+
+## `04` T8 / D17 — full refunds never restocked (owner: `04` §B8)
+
+Commit `e417cbd`, migration `087_restock_work` (applied to prod, registered in
+schema_migrations). Second of the three T8 findings (D18 curation refund path is
+deferred to B10 by the doc itself).
+
+**The finding, and what the doc got wrong.** `refunds/process/route.ts` never
+touched `artist_works`, so a refunded piece stayed sold forever. The doc's fix
+looped `order.items` keyed on `item.workId || item.id` — but prod order items
+**never carried a work id**: verified `0 of 66` items have `workId`/`id`/
+`work_id`/`workSlug`; the keys present are display-only (`title, image, size,
+price, qty, quantity, artistName, artistSlug, lineTotal`). So the doc's snippet
+would have restocked nothing (another inert phantom-field fix, same class as
+`free_until`). The webhook decrements from **cart items** (which have `workId`,
+route.ts:917) and offer metadata (`offer_work_ids`, route.ts:178), then persists
+an *enriched* items shape (route.ts:975) that dropped the id.
+
+**What changed (the complete, non-inert fix).**
+1. `restock_work(p_work_id text, p_qty integer)` — migration 087, the mirror of
+   `decrement_work_stock` (085): `quantity_available = GREATEST(0, coalesce)+
+   GREATEST(0,p_qty)`, `available` flips back to true when the count goes > 0.
+   SECURITY DEFINER, `REVOKE ... FROM anon, authenticated, PUBLIC`.
+2. Webhook now persists `workId` on each enriched cart item (route.ts ~965) and
+   `OrderEmailItem` gained an optional `workId` — so future cart orders can be
+   restocked. Offer orders already persist a `work_ids` array (route.ts:197).
+3. Refund route: for **full refunds only**, a loop that restocks both shapes
+   (`workId`+quantity per cart line; each id in `work_ids` at qty 1 for offers).
+   Best-effort: a failing rpc is logged, never fatal (money already moved).
+
+**Files.** `supabase/migrations/087_restock_work.sql` (new),
+`src/lib/orders/confirmations.ts` (`OrderEmailItem.workId?`),
+`src/app/api/webhooks/stripe/route.ts` (persist workId),
+`src/app/api/refunds/process/route.ts` (restock loop),
+`src/app/api/refunds/process/route.test.ts` (+3 tests, `rpcMock`).
+
+**Tests (fail before, pass after — both directions via a probe).** Full refund
+restocks each cart-line work once `[w1:1, w2:2]`; full refund restocks each id in
+an offer `work_ids` array `[w1:1, w2:1]`; partial refund does **not** restock.
+Probe (route `if (isFullRefund)` → `if (false)`): the two positive tests fail
+(`expected [] to have length 2`), the negative test stays green.
+
+**Migration / DB verification (evidence).**
+```
+apply_migration 087_restock_work -> {"success": true}
+# SECURITY DEFINER leak surface (the advisor does NOT catch this):
+restock_work:          anon_can_exec=false authd_can_exec=false service_can_exec=true
+decrement_work_stock:  anon_can_exec=false authd_can_exec=false service_can_exec=true
+restock_acl = "postgres=X/postgres service_role=X/postgres"
+# increment probe on a real row, rolled back:
+PROBE before=8/avail=t -> after=11/avail=t ; re-read after rollback = 8 (untouched)
+restock_work('missing-id', 5) -> NULL   # safe no-op on unknown work
+# plan's SELECT-policy leak assertion:
+authenticated_select_leaks = 0
+```
+
+**Full gate.**
+```
+Test Files  163 passed (163)
+Tests  1789 passed (1789)
+✖ 175 problems (0 errors, 175 warnings)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Limitations stated.** `npm run audit:advisors` needs `SUPABASE_ACCESS_TOKEN`
+(unset here — existing owner item); used the Supabase MCP `get_advisors(security)`
+instead, which showed only the pre-existing baseline (service-role-only
+`rls_enabled_no_policy` INFOs, intentional public-insert `rls_policy_always_true`
+WARNs, the auth leaked-password WARN) with **no new finding** from this change. No
+live Stripe drive possible; restock is asserted via the mocked `restock_work`
+rpc calls. Dormant in prod today (refunds/Connect not live, `stripe_transfers`
+empty), so no externally-visible behaviour change now.
+
+**Legacy gap (recorded, not fixed).** The 66 existing order items have no work
+id, so a refund on any *pre-D17* cart order still cannot restock. Backfilling
+would need to resolve each historical item back to a work (no stored linkage
+beyond the image path), which is not reliable; and it is moot until refunds go
+live. Left as-is; new cart orders carry the id from now on.
+
+**`04` status.** Done: Phase 0, B0 (D1-D3), T1 (D4-D6), T2 (E9), T3 (E6/E10 +
+D7), T4 (D8, D9), T5 (D10, D11), T6 (E7a-E7d, E8, E11, E11b), T7 (D12, D13, D15;
+D14 blocked), T8 **D16 + D17** (D18 curation-refund deferred to B10 by the doc).
+Remaining: T8 D18 (B10), T9 (N1, N2), C-series payout helpers (C1, C3, C4).
