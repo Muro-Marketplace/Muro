@@ -1555,6 +1555,17 @@ at `:628-643`.
 
 ### D25. The two managed tiers cannot be booked at all. The `tier` CHECK rejects them
 
+> **RESOLVED (tier) — verified live 2026-07-30.** Migration `080_curation_managed_tiers.sql`
+> already widened the `tier` CHECK; the live constraint permits all five tiers
+> (`single_wall, full_space, bespoke, managed_monthly, managed_quarterly`), so the
+> managed tiers are bookable. The regression guard the doc asks for already exists
+> as `src/lib/curation-tiers.test.ts` (asserts the migration's tier CHECK equals
+> `CURATION_TIER_KEYS`). The `23514` check-violation logging in `api/curation/route.ts`
+> was added on top. **The doc's migration `083` is redundant for the tier part.**
+> The `status` CHECK still lacks `past_due` / `paused` (verified live), which D21's
+> handlers need — that widen is deferred to D21. Note 04's migration range (080-089)
+> is now fully used, so D21's status migration needs a number resolution.
+
 This is the most serious finding of the curation audit, and it is not subtle.
 
 `supabase/migrations/013_curation_requests.sql:19`:

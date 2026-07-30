@@ -108,6 +108,16 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError || !row) {
+    // 23514 = check_violation. A tier or status the schema does not know about is a
+    // deploy error (code and DB constraint out of sync), not a user error. Log it
+    // loudly and distinctly so it pages instead of hiding inside a generic 500 —
+    // this is exactly how the managed tiers were unsellable for months (D25).
+    if ((insertError as { code?: string } | null)?.code === "23514") {
+      console.error("[curation] tier/status rejected by a CHECK constraint — schema drift, not user input", {
+        tier: d.tier,
+        insertError,
+      });
+    }
     console.error("curation insert error:", insertError);
     return NextResponse.json({ error: "Could not create request" }, { status: 500 });
   }
