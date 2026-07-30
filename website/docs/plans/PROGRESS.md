@@ -5465,3 +5465,68 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 **Stripe drive not run**, same blocker as the rest of `04`. The widening is asserted
 on the persisted `id` / `paid_order_id`, and the collision path on the recorded
 insert error plus the `orders.select` the check reads.
+
+---
+
+## `04` T1 / D4 — the artist lookup silently zeroed attribution (owner: `04` §B1)
+
+Commit `68885e8`.
+
+**First, Bug 15.** The dependency order and PROGRESS both mark D4 as "Bug 15, done
+at Phase 0 (ee7e888)". Bug 15 was a *different* D4-adjacent fix (the curation Phase
+0 work). The finding **D4 in §B1** (the `.single()` swallow on the cart artist
+lookup) was still live: `webhooks/stripe/route.ts:588` used `.single()` and
+discarded the error. Done now.
+
+**The finding, and how E9 shrank it.** `.single()` errors on 0 rows AND on >1 row.
+The old code took `const { data: ap } = ...` and dropped the error, so on either
+case `ap` was null, `artistUserId` stayed null, and the order booked unattributed.
+Pre-E9 this also skipped the artist transfer (`if (artistUserId && ...)`) and
+defaulted the fee to 15%. E9 moved payouts and the fee to per-artist legs, so those
+two consequences are gone; what remained is the order row's `artist_user_id`.
+
+**What changed.** `.maybeSingle()` with an explicit error/null check that 500s
+rather than booking an order it cannot attribute. The 500 is safe: this lookup runs
+at line ~588, well before the order insert at ~760, so nothing is half-written, and
+Stripe's retry is idempotent via D1's event dedup and D3's payment-intent check
+(both landed this session).
+
+**The plan's D4 snippet is stale.** It selects `user_id, subscription_plan,
+free_until` and restores the `platformFeePercentForArtist(ap)` fee assignment.
+`free_until` is the phantom column removed in D17.1, and the fee logic now lives in
+the legs. Kept the select to `user_id` only, which is all the order row's
+attribution needs.
+
+**Isolating D4 from buildArtistLegs in the test.** buildArtistLegs (line ~638) also
+throws on a missing artist, so a naive "missing artist" test would 500 from there,
+not from D4. The test sets the cart line's artist (bob) to resolve while
+`firstArtistSlug` (from `artistSlugs`) is "ghost", so buildArtistLegs succeeds and
+only the D4 lookup fails. That is the exact gap D4 covers: firstArtistSlug can
+differ from the cart-line slugs.
+
+**Tests.** 2 cases in `describe("Stripe webhook — artist attribution lookup
+(D4)")`. The shared mock's `artist_profiles.eq` grew a `maybeSingle`.
+
+**Probe** (revert to `.single()` with a swallowed error):
+
+```
+ FAIL  D4 > 500s and books no order when the first artist's profile is missing
+   → expected 200 to be 500
+      Tests  1 failed | 68 passed (69)
+```
+
+Under the old code the missing-artist order books with a 200 and a null
+`artist_user_id`, which is the defect.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  162 passed (162)
+Tests  1745 passed (1745)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Still open in T1:** D5 (read-then-write stock decrement → atomic RPC, migration
+in 04's range, next free is 085) and D6 (the strip-and-retry loop can drop money
+columns).
