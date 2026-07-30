@@ -317,6 +317,11 @@ const checkoutMetaShape = {
   // malicious source string DoSing the metadata column.
   source: optionalString(100),
   venueSlug: optionalString(100),
+  // D10: server-signed venue attribution from the QR redirect. When present it is
+  // verified and takes precedence over the bare venueSlug above, which is only a
+  // backward-compat fallback for QR codes printed before the token existed. Capped
+  // generously; a real token is ~200 chars.
+  venueAttributionToken: optionalString(600),
   // Client-computed shipping figure for divergence logging. Capped at
   // £10k as a sanity bound; real orders top out an order of magnitude
   // below that. Cleared on undefined so old callers still work.

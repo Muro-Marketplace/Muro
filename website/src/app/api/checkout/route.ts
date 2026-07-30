@@ -5,6 +5,7 @@ import { calculateOrderShipping } from "@/lib/shipping-checkout";
 import { regionForCountry, isSupportedCountry, labelForCountry } from "@/lib/iso-countries";
 import { findUkOnlyArtists } from "@/lib/shipping-scope";
 import { isWorkSold } from "@/lib/work-stock";
+import { verifyQrAttribution } from "@/lib/qr-attribution-token";
 import { saveCartSession } from "@/lib/cart-sessions";
 import { canArtistAcceptOrders } from "@/lib/stripe-connect-status";
 import { getAuthenticatedUser } from "@/lib/api-auth";
@@ -51,7 +52,36 @@ export async function POST(request: Request) {
     // `parsed.data` rather than the raw `body`, so they go through the
     // same trim + cap as the rest of the schema-validated input.
     const source = parsed.data.source || "direct";
-    const venueSlug = parsed.data.venueSlug || "";
+    // D10: never trust a raw venueSlug for revenue attribution. A real slug for a
+    // venue where the artist holds an active placement moves the venue's share out
+    // of the artist's net, so a venue operator could divert an artist's money on a
+    // sale that never came through their QR. The QR redirect mints a signed token
+    // binding the venue to the scanned artist; honour it only when that artist is
+    // in the cart.
+    //
+    // The bare venueSlug is still accepted as a backward-compat fallback for QR
+    // codes printed before the token existed, UNLESS QR_ATTRIBUTION_ENFORCE=1. The
+    // fallback is the transition the plan calls for; flipping enforcement on is
+    // what actually closes the hole once old codes have aged out (owner decision).
+    let venueSlug = "";
+    const attributionToken = parsed.data.venueAttributionToken;
+    if (attributionToken) {
+      try {
+        const claim = await verifyQrAttribution(attributionToken);
+        const cartArtistSlugs = new Set(items.map((i) => (i.artistSlug || "").toLowerCase()));
+        if (cartArtistSlugs.has(claim.artistSlug.toLowerCase())) {
+          venueSlug = claim.venueSlug;
+        } else {
+          console.warn("[checkout] venue attribution token artist not in cart", {
+            claimArtist: claim.artistSlug,
+          });
+        }
+      } catch (err) {
+        console.warn("[checkout] rejected venue attribution token", { err: String(err) });
+      }
+    } else if (process.env.QR_ATTRIBUTION_ENFORCE !== "1") {
+      venueSlug = parsed.data.venueSlug || "";
+    }
     const collectionNotes = parsed.data.collectionNotes || "";
     const expectedShippingCost = parsed.data.expectedShippingCost;
 

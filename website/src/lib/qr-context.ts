@@ -25,6 +25,9 @@ export interface QrContext {
   venueName?: string;
   /** Free-text attribution source. Currently always "qr". */
   source: string;
+  /** D10: server-signed venue attribution minted by the QR redirect. Preferred
+   *  over venueSlug at checkout; the bare slug is a backward-compat fallback. */
+  attributionToken?: string;
   /** Epoch ms when this entry was written. */
   ts: number;
 }
@@ -57,6 +60,8 @@ export function readQrContext(): QrContext | null {
       venueSlug: parsed.venueSlug,
       venueName: typeof parsed.venueName === "string" ? parsed.venueName : undefined,
       source: typeof parsed.source === "string" ? parsed.source : "qr",
+      attributionToken:
+        typeof parsed.attributionToken === "string" ? parsed.attributionToken : undefined,
       ts: parsed.ts,
     };
   } catch {

@@ -317,6 +317,9 @@ export default function ArtistProfileClient({
   const qrVenueSlug = isQrScan ? searchParams.get("venue") : null;
   const qrVenueNameParam = isQrScan ? searchParams.get("venueName") : null;
   const qrVenueName = qrVenueNameParam || qrVenueSlug;
+  // D10: the signed venue attribution minted by the QR redirect (`va`). Stored
+  // alongside the slug and preferred at checkout.
+  const qrAttributionToken = isQrScan ? searchParams.get("va") : null;
 
   // Stash the QR context in localStorage so the venue attribution
   // survives the navigation away from this page (buy buttons push
@@ -328,8 +331,9 @@ export default function ArtistProfileClient({
       venueSlug: qrVenueSlug,
       venueName: qrVenueNameParam || undefined,
       source: "qr",
+      attributionToken: qrAttributionToken || undefined,
     });
-  }, [isQrScan, qrVenueSlug, qrVenueNameParam]);
+  }, [isQrScan, qrVenueSlug, qrVenueNameParam, qrAttributionToken]);
 
   // Premium+ artists pick a profile theme via the artist portal; Core
   // artists see the picker locked behind an upsell, so render-side we

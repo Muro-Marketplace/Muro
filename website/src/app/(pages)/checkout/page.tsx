@@ -455,6 +455,9 @@ export default function CheckoutPage() {
           // legacy/non-QR direct deep-links working.
           source: (typeof window !== "undefined" && (readQrContext()?.source || new URLSearchParams(window.location.search).get("ref"))) || "direct",
           venueSlug: (typeof window !== "undefined" && (readQrContext()?.venueSlug || new URLSearchParams(window.location.search).get("venue"))) || "",
+          // D10: the server-signed attribution, preferred by the API over the bare
+          // slug above. From localStorage first, URL `va` as the fallback.
+          venueAttributionToken: (typeof window !== "undefined" && (readQrContext()?.attributionToken || new URLSearchParams(window.location.search).get("va"))) || undefined,
           fulfilmentMethod,
           collectionNotes: composedCollectionNotes,
         }),

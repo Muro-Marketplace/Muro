@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, beforeAll, afterEach } from "vitest";
 
 // vi.hoisted runs before vi.mock factories so refs in the factories
 // below are initialised when the factory is evaluated.
@@ -1162,5 +1162,80 @@ describe("POST /api/checkout framed uplift is server-side (E46c)", () => {
     }));
     expect(res.status).toBe(200);
     expect(unitAmount()).toBe(10000);
+  });
+});
+
+// ── D10: venue attribution must be a signed token, not a raw slug ────────────
+//
+// A raw venueSlug moved the venue's revenue share out of the artist's net, so a
+// venue operator could divert an artist's money on a sale that never came through
+// their QR. Checkout now verifies a token bound to the scanned artist.
+describe("POST /api/checkout venue attribution (D10)", () => {
+  let signQrAttribution: typeof import("@/lib/qr-attribution-token").signQrAttribution;
+
+  beforeAll(async () => {
+    process.env.ORDER_TOKEN_SECRET = "test-secret-not-for-prod";
+    ({ signQrAttribution } = await import("@/lib/qr-attribution-token"));
+  });
+  afterEach(() => {
+    delete process.env.QR_ATTRIBUTION_ENFORCE;
+  });
+
+  function setupOk() {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return profilesTable([]);
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }), in: async () => ({ data: [], error: null }) }) };
+    });
+  }
+  const savedVenueSlug = () => {
+    const calls = saveCartSessionMock.mock.calls as unknown as Array<[{ venueSlug?: string }]>;
+    return calls[0]?.[0]?.venueSlug;
+  };
+  const body = (extra: Record<string, unknown>) => ({
+    items: [{ ...baseItem, artistSlug: "alice" }],
+    shipping: { ...baseShipping, country: "GB" },
+    ...extra,
+  });
+
+  it("honours a valid token whose artist is in the cart", async () => {
+    setupOk();
+    const token = await signQrAttribution({ venueSlug: "kings-arms", artistSlug: "alice" });
+    expect((await POST(req(body({ venueAttributionToken: token })))).status).toBe(200);
+    expect(savedVenueSlug()).toBe("kings-arms");
+  });
+
+  it("ignores a valid token whose artist is NOT in the cart", async () => {
+    setupOk();
+    const token = await signQrAttribution({ venueSlug: "kings-arms", artistSlug: "someone-else" });
+    await POST(req(body({ venueAttributionToken: token })));
+    expect(savedVenueSlug()).toBe("");
+  });
+
+  it("ignores a forged/invalid token", async () => {
+    setupOk();
+    await POST(req(body({ venueAttributionToken: "garbage.token" })));
+    expect(savedVenueSlug()).toBe("");
+  });
+
+  it("still accepts a bare venueSlug when enforcement is off (backward compat)", async () => {
+    setupOk();
+    await POST(req(body({ venueSlug: "kings-arms" })));
+    expect(savedVenueSlug()).toBe("kings-arms");
+  });
+
+  it("ignores a bare venueSlug once QR_ATTRIBUTION_ENFORCE=1", async () => {
+    setupOk();
+    process.env.QR_ATTRIBUTION_ENFORCE = "1";
+    await POST(req(body({ venueSlug: "kings-arms" })));
+    expect(savedVenueSlug()).toBe("");
+  });
+
+  it("a token always beats a mismatched bare slug, even with enforcement off", async () => {
+    // The token names april-venue for alice; the body also carries a bogus bare
+    // slug. The verified token wins.
+    setupOk();
+    const token = await signQrAttribution({ venueSlug: "april-venue", artistSlug: "alice" });
+    await POST(req(body({ venueAttributionToken: token, venueSlug: "attacker-venue" })));
+    expect(savedVenueSlug()).toBe("april-venue");
   });
 });
