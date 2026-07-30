@@ -125,14 +125,40 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
   }
 
-  // Daily cap — shared bucket with placement requests + first-contact
-  // messages. Per spec: Core 2 / Premium 5 / Pro 10 across all three.
-  const cap = await checkArtistOutreachCap(db, auth.user!.id, 1);
-  if (!cap.ok) {
-    return NextResponse.json(cap.result, { status: cap.result.status });
+  // E46d (06 B3). THE ACTUAL GAP. The POST's gates were: valid token, has an
+  // artist profile, under the daily cap, request is open. Visibility and the
+  // invite list were never consulted, while the sibling LIST route did enforce
+  // them. So any signed-in artist could bid on a private brief they were never
+  // invited to, and chained with the then-unauthenticated GETs could read every
+  // rival bid first.
+  //
+  // The GET handlers above got this gate with 01's E17/E18 work. The POST did
+  // not, which is easy to miss because both handlers live in this file and a
+  // grep for the helper finds the GET's call.
+  //
+  // Placed after the artist-profile check so a non-artist still gets the clearer
+  // artist_only 403, and BEFORE the outreach cap so a refused attempt does not
+  // burn the artist's daily quota.
+  //
+  // Deviation from 06 §3.6, which asks for 403 not_invited: reusing
+  // assertCanViewArtworkRequest instead, which denies 404
+  // artwork_request_not_found. Same rule, one implementation rather than a second
+  // one, and 404 does not confirm that a given private id exists. Writing the
+  // doc's canArtistSeeRequest would have been a parallel copy of a rule that
+  // already has one.
+  try {
+    await assertCanViewArtworkRequest(auth.user!, id, db);
+  } catch (err) {
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    throw err;
   }
 
-  // Verify the request exists + is open.
+  // E46d ordering: the request state is checked BEFORE the outreach cap, so a
+  // rejected attempt does not burn the artist's daily quota. The visibility and
+  // invite gate already runs earlier still, via assertCanViewArtworkRequest, but
+  // this check sat after the cap, so responding to a CLOSED brief cost the artist
+  // one of their two-to-ten daily sends for nothing.
   const { data: req } = await db
     .from("artwork_requests")
     .select("id, venue_user_id, status, title")
@@ -140,6 +166,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     .maybeSingle();
   if (!req) return NextResponse.json({ error: "Request not found" }, { status: 404 });
   if (req.status !== "open") return NextResponse.json({ error: "Request is closed" }, { status: 409 });
+
+  // Daily cap — shared bucket with placement requests + first-contact
+  // messages. Per spec: Core 2 / Premium 5 / Pro 10 across all three.
+  const cap = await checkArtistOutreachCap(db, auth.user!.id, 1);
+  if (!cap.ok) {
+    return NextResponse.json(cap.result, { status: cap.result.status });
+  }
 
   // Normalise `workSelections` (new shape) and `workIds` (legacy). When
   // both are present, workSelections wins. Size labels are stashed in
