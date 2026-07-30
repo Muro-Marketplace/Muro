@@ -262,3 +262,63 @@ They are environmental: CI runs against `https://placeholder.supabase.co`, produ
 - Then Task 0d: require `check` + `e2e` in branch protection
 
 **Landing on main needs a PR and the owner's approval — do not push or merge autonomously.**
+
+---
+
+## D15. `074` is DECOUPLED from the base-schema dump (owner-approved, 2026-07-11)
+
+**Ruling: Task 4 (`074` RLS closure) is UNBLOCKED. Do it next.** It no longer waits on Task 1's base-schema dump.
+
+**Rationale.** D2 bundled two unrelated things. The genuine prerequisite was **K10 deterministic migration ordering — already done** (`800c02b`). The base-schema dump is *auditability bookkeeping*: valuable, but not a technical dependency for dropping bad policies. Leaving four live PII leaks open behind a documentation task was my sequencing error in D2, not a real constraint. `074` is applied via MCP `apply_migration`, which needs no CLI.
+
+**Base schema (X2/K11) → demoted to a later, non-blocking task.** When picked up, either install the CLI for a true `supabase db dump`, or generate an introspection-derived file **explicitly labelled as such** (never present introspection output as a real dump — the loop's original refusal to fake it was correct).
+
+### D15.1 — ⚠️ D12's canonical assertion is INCOMPLETE. Corrected here.
+
+Verified against prod. D12's assertion returns **4 rows** — but there are **5 leaking tables**. It misses `enquiries`, whose permissive policy uses `USING (true)` rather than `auth.role()='authenticated'`:
+
+| Table | Policy | `qual` | D12 catches it? |
+|---|---|---|---|
+| `artist_applications` | `Authenticated users can read applications` | `auth.role() = 'authenticated'` | ✅ |
+| `contact_submissions` | `Authenticated can read contact` | `auth.role() = 'authenticated'` | ✅ |
+| `venue_registrations` | `Authenticated can read venue reg` | `auth.role() = 'authenticated'` | ✅ |
+| `waitlist_signups` | `Authenticated can read waitlist` | `auth.role() = 'authenticated'` | ✅ |
+| **`enquiries`** | **`Artists can read their enquiries`** | **`true`** (to `authenticated`) | ❌ **MISSED** |
+
+**If you close only the 4 the assertion catches, `enquiries` still leaks and the gate reports green.** Drop all five.
+
+### D15.2 — 🚨 DO NOT drop every `USING (true)` SELECT policy
+
+Four other tables also carry `USING (true)` SELECT policies and these are **intentional** — they are the public marketplace. Dropping them breaks the entire public site:
+
+- `artist_profiles` (`artist_profiles_select`)
+- `artist_works` (`artist_works_select`)
+- `artist_collections` (`Anyone can read collections`)
+- `venue_profiles` (`venue_profiles_select_public`) — table-level read is deliberate; venue PII is restricted by **column** grants (migration `071`). Verify those column grants still hold; do **not** drop the policy.
+
+**Never write a blanket "drop all permissive SELECT policies" migration.**
+
+### D15.3 — Replacement assertion (use this instead of D12's)
+
+Denylist-based, so it cannot false-positive on the intentionally public tables:
+
+```sql
+-- Tables that must NEVER be readable by anon or any authenticated user at large.
+-- Must return 0 rows.
+select tablename, policyname, cmd, roles::text, qual
+from pg_policies
+where schemaname = 'public'
+  and cmd = 'SELECT'
+  and tablename in ('artist_applications','contact_submissions','venue_registrations',
+                    'waitlist_signups','enquiries','orders','messages',
+                    'customer_profiles','placement_record_versions','stripe_transfers')
+  and (qual ilike '%auth.role()%authenticated%' or btrim(qual) = 'true');
+```
+
+Run it **before** (expect 5 rows) and **after** (expect 0). Paste both as evidence. Extend the table list as new private tables appear.
+
+### D15.4 — Unchanged safety constraints
+
+- **The `/apply` service-role switch MUST ship in the same commit** as the `artist_applications` lockdown. `api/apply/route.ts` inserts via the anon client; lock the table first and artist applications break silently. This ordering trap is NOT relaxed by this decision.
+- Each dropped policy needs a scoped replacement where the table still needs legitimate reads (e.g. admin-only, or owner-scoped), not just a bare drop — check each route that reads these tables first.
+- `enquiries` already has a correct owner-scoped policy (`Users can read own enquiries`, matching `sender_email` to the JWT email, plus service-role). Dropping the permissive one should leave that intact — verify, don't assume.

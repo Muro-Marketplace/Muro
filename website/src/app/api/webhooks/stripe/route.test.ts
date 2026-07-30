@@ -373,3 +373,258 @@ describe("Stripe webhook — venue revenue split", () => {
     expect(row.placement_id).toBeNull();
   });
 });
+
+// ─── T3 / E6 + E10: purchase-offer payment ───
+//
+// E6 as the plan described it: "inserts a bare orders row with no artist_revenue,
+// platform_fee, venue_revenue or placement_id". Prod is worse. `orders.shipping`
+// is NOT NULL with no default and this branch never supplied it, so every
+// purchase-offer payment failed with 23502 and the failure was swallowed by
+// `.then(() => {}, err => console.warn(...))`. Both real paid offers in the live
+// table (£33 and £27) carry a paid_order_id pointing at an orders row that does
+// not exist. Money captured, no order, no payout, no ledger row, no email.
+//
+// The fake below therefore enforces the real NOT NULL set. Without that it cannot
+// see the bug at all: an insert fake that accepts anything passes either way.
+describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
+  const ORDERS_NOT_NULL = ["id", "buyer_email", "items", "shipping", "subtotal", "shipping_cost", "total"];
+
+  type OfferDbState = {
+    orderInsert: { row: Record<string, unknown> | null; error: { code?: string; message: string } | null };
+    offerUpdate: { row: Record<string, unknown> | null };
+    stock: Record<string, number | null>;
+    stockUpdates: Array<{ workId: string; updates: Record<string, unknown> }>;
+    connect?: { stripe_connect_account_id: string | null; stripe_connect_onboarding_complete: boolean } | null;
+  };
+
+  function setupOfferDb(state: OfferDbState) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "orders") {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            // Postgres, not a permissive stub: a missing NOT NULL column is 23502.
+            const missing = ORDERS_NOT_NULL.filter(
+              (c) => row[c] === undefined || row[c] === null,
+            );
+            if (missing.length > 0) {
+              return Promise.resolve({
+                error: {
+                  code: "23502",
+                  message: `null value in column "${missing[0]}" of relation "orders" violates not-null constraint`,
+                },
+              });
+            }
+            state.orderInsert.row = row;
+            return Promise.resolve({ error: state.orderInsert.error });
+          },
+        };
+      }
+      if (table === "purchase_offers") {
+        return {
+          update: (row: Record<string, unknown>) => ({
+            eq: async () => {
+              state.offerUpdate.row = row;
+              return { error: null };
+            },
+          }),
+        };
+      }
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            eq: (_c: string, workId: string) => ({
+              single: async () => ({
+                data: state.stock[workId] === undefined
+                  ? null
+                  : { quantity_available: state.stock[workId] },
+              }),
+            }),
+          }),
+          update: (updates: Record<string, unknown>) => ({
+            eq: async (_c: string, workId: string) => {
+              state.stockUpdates.push({ workId, updates });
+              return { error: null };
+            },
+          }),
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: state.connect ?? null }),
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+    });
+  }
+
+  function freshState(overrides: Partial<OfferDbState> = {}): OfferDbState {
+    return {
+      orderInsert: { row: null, error: null },
+      offerUpdate: { row: null },
+      stock: { "w-1": 3 },
+      stockUpdates: [],
+      connect: { stripe_connect_account_id: "acct_artist", stripe_connect_onboarding_complete: true },
+      ...overrides,
+    };
+  }
+
+  /** £33.00 offer, 15% platform fee: 495p fee, 2805p net. */
+  const OFFER_META = {
+    checkout_kind: "purchase_offer",
+    offer_id: "off_1778801604152_05slql",
+    offer_buyer_user_id: "11111111-2222-3333-4444-555555555555",
+    offer_buyer_email: "venue@example.com",
+    offer_artist_user_id: "u-artist",
+    offer_artist_slug: "fin-coles",
+    offer_work_ids: "w-1",
+    offer_collection_id: "",
+    offer_amount_pence: "3300",
+    offer_platform_fee_pence: "495",
+    offer_artist_net_pence: "2805",
+    offer_platform_fee_percent: "15",
+  };
+
+  function fireOffer(metadata: Record<string, string> = OFFER_META, amountTotal = 3300) {
+    constructEventMock.mockReturnValue({
+      type: "checkout.session.completed",
+      data: { object: buildSession({ id: "cs_offer_W45tsGG1", amount_total: amountTotal, metadata, customer_email: "" }) },
+    });
+    return POST(buildRequest());
+  }
+
+  it("writes an order row at all, which is the live E6 defect", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    const res = await fireOffer();
+    expect(res.status).toBe(200);
+    expect(state.orderInsert.row, "no orders row was written").not.toBeNull();
+  });
+
+  it("supplies shipping, the NOT NULL column that made every offer payment fail", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer();
+    const shipping = state.orderInsert.row?.shipping as Record<string, unknown> | undefined;
+    expect(shipping).toBeTruthy();
+    // Same nine-field shape the cart path writes, so the order views keep working.
+    for (const field of ["fullName", "email", "phone", "addressLine1", "addressLine2", "city", "postcode", "country", "notes"]) {
+      expect(shipping, `shipping.${field} missing`).toHaveProperty(field);
+    }
+  });
+
+  it("persists the split, and fee plus net is exactly the amount charged", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer();
+    const row = state.orderInsert.row!;
+    expect(row.platform_fee).toBe(4.95);
+    expect(row.platform_fee_percent).toBe(15);
+    expect(row.artist_revenue).toBe(28.05);
+    expect(row.total).toBe(33);
+    // To the penny, in integer pence, so no rounding leaks a penny either way.
+    expect(Math.round((row.platform_fee as number) * 100) + Math.round((row.artist_revenue as number) * 100))
+      .toBe(Math.round((row.total as number) * 100));
+  });
+
+  it("zeroes the venue columns rather than leaving them null", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer();
+    expect(state.orderInsert.row?.venue_revenue).toBe(0);
+    expect(state.orderInsert.row?.venue_revenue_share_percent).toBe(0);
+  });
+
+  it("puts an email in buyer_email, never the buyer's UUID", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer();
+    expect(state.orderInsert.row?.buyer_email).toBe("venue@example.com");
+    expect(state.orderInsert.row?.buyer_email).not.toBe(OFFER_META.offer_buyer_user_id);
+  });
+
+  it("E10: decrements stock for each work on the offer", async () => {
+    const state = freshState({ stock: { "w-1": 3, "w-2": 1 } });
+    setupOfferDb(state);
+    await fireOffer({ ...OFFER_META, offer_work_ids: "w-1,w-2" });
+    expect(state.stockUpdates).toEqual([
+      { workId: "w-1", updates: { quantity_available: 2 } },
+      // Last one sold: also comes off sale, same rule as the cart path.
+      { workId: "w-2", updates: { quantity_available: 0, available: false } },
+    ]);
+  });
+
+  it("E6: schedules the artist transfer for the net, not the gross", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer();
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientType: "artist",
+        recipientUserId: "u-artist",
+        connectAccountId: "acct_artist",
+        amountCents: 2805,
+      }),
+    );
+  });
+
+  it("does not pay an artist whose Connect onboarding is incomplete", async () => {
+    const state = freshState({
+      connect: { stripe_connect_account_id: "acct_artist", stripe_connect_onboarding_complete: false },
+    });
+    setupOfferDb(state);
+    const res = await fireOffer();
+    // The order still exists so the sale is recorded and recoverable.
+    expect(state.orderInsert.row).not.toBeNull();
+    expect(scheduleTransferMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+  });
+
+  it("marks the offer paid only after the order row lands", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer();
+    expect(state.offerUpdate.row).toMatchObject({ status: "paid", paid_order_id: "OFR-W45tsGG1" });
+  });
+
+  it("leaves the offer unpaid and 500s when the order insert fails, so Stripe retries", async () => {
+    // The exact prod failure mode: without this the offer flips to paid with a
+    // paid_order_id pointing at nothing, which is the state both live offers are in.
+    const state = freshState();
+    state.orderInsert.error = { code: "08006", message: "connection failure" };
+    setupOfferDb(state);
+    const res = await fireOffer();
+    expect(res.status).toBe(500);
+    expect(state.offerUpdate.row, "offer was marked paid despite no order row").toBeNull();
+    expect(scheduleTransferMock).not.toHaveBeenCalled();
+  });
+
+  it("treats a duplicate order id as already done, not as a failure", async () => {
+    const state = freshState();
+    state.orderInsert.error = { code: "23505", message: "duplicate key value violates unique constraint" };
+    setupOfferDb(state);
+    const res = await fireOffer();
+    expect(res.status).toBe(200);
+    expect(state.offerUpdate.row).toMatchObject({ status: "paid" });
+  });
+
+  it("charges a pro artist's real rate when the fee percent says 5", async () => {
+    // £27.00 at 5%: 135p fee, 2565p net. Guards the arithmetic against a
+    // hard-coded 15% creeping back in.
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer(
+      { ...OFFER_META, offer_amount_pence: "2700", offer_platform_fee_pence: "135", offer_artist_net_pence: "2565", offer_platform_fee_percent: "5" },
+      2700,
+    );
+    const row = state.orderInsert.row!;
+    expect(row.platform_fee).toBe(1.35);
+    expect(row.artist_revenue).toBe(25.65);
+    expect(row.platform_fee_percent).toBe(5);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 2565 }));
+  });
+});

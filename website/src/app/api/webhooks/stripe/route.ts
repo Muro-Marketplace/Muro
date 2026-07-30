@@ -120,40 +120,139 @@ export async function POST(request: Request) {
       const offerId = session.metadata.offer_id;
       if (offerId) {
         const paidOrderId = `OFR-${session.id.slice(-8)}`;
-        // Mark offer paid + persist a minimal order row so the order
-        // lifecycle (refunds, fulfilment, payouts) plumbing reuses the
-        // same primitives as a normal purchase.
+        const nowIso = new Date().toISOString();
+        const workIds = (session.metadata.offer_work_ids || "").split(",").filter(Boolean);
+        const totalGbp = (session.amount_total || 0) / 100;
+        const feePence = Number(session.metadata.offer_platform_fee_pence || 0);
+        const netPence = Number(session.metadata.offer_artist_net_pence || 0);
+        const artistUserId = session.metadata.offer_artist_user_id || null;
+
+        // E6. The order row is written FIRST and the offer is flipped to paid
+        // only once it lands. The old order was the other way round with the
+        // insert's failure swallowed into a console.warn, which is why both
+        // real paid offers in prod carry a paid_order_id pointing at an order
+        // row that does not exist: `orders.shipping` is NOT NULL and this
+        // insert omitted it, so every purchase-offer payment failed with 23502
+        // and nobody found out. Money in, no order, no payout, no email.
+        const { error: insErr } = await db.from("orders").insert({
+          id: paidOrderId,
+          stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : null,
+          buyer_email: session.customer_email || session.metadata.offer_buyer_email || "",
+          items: [{
+            offer_id: offerId,
+            work_ids: workIds,
+            collection_id: session.metadata.offer_collection_id || null,
+          }],
+          // NOT NULL, and the offer flow collects no delivery address. Same
+          // nine-field shape the cart path writes so the order views, which all
+          // read shipping?.fullName and friends, keep working.
+          shipping: {
+            fullName: "",
+            email: session.customer_email || session.metadata.offer_buyer_email || "",
+            phone: "",
+            addressLine1: "",
+            addressLine2: "",
+            city: "",
+            postcode: "",
+            country: "GB",
+            notes: `Accepted offer ${offerId}. No delivery address collected at checkout.`,
+          },
+          subtotal: totalGbp,
+          shipping_cost: 0,
+          total: totalGbp,
+          status: "confirmed",
+          // jsonb column — store the array raw (Plan B Task 13).
+          status_history: [{ status: "confirmed", timestamp: nowIso }],
+          source: "purchase_offer",
+          artist_slug: session.metadata.offer_artist_slug || null,
+          artist_user_id: artistUserId,
+          venue_revenue: 0,
+          venue_revenue_share_percent: 0,
+          platform_fee: feePence / 100,
+          platform_fee_percent: Number(session.metadata.offer_platform_fee_percent || 0),
+          artist_revenue: netPence / 100,
+          fulfilment_method: "ship",
+          created_at: nowIso,
+        });
+
+        // 23505 is our own retry landing on a row we already wrote: idempotent,
+        // carry on. Anything else means the money is captured and we have no
+        // order, so fail loudly and let Stripe retry rather than marking the
+        // offer paid against an order that isn't there.
+        if (insErr && (insErr as { code?: string }).code !== "23505") {
+          console.error("[offer order insert] failed, offer left unpaid for retry", {
+            offerId,
+            paidOrderId,
+            code: (insErr as { code?: string }).code,
+            message: insErr.message,
+          });
+          return NextResponse.json({ error: "Order save failed" }, { status: 500 });
+        }
+
         await db
           .from("purchase_offers")
           .update({
             status: "paid",
-            paid_at: new Date().toISOString(),
+            paid_at: nowIso,
             paid_order_id: paidOrderId,
-            updated_at: new Date().toISOString(),
+            updated_at: nowIso,
           })
           .eq("id", offerId);
 
-        await db.from("orders").insert({
-          id: paidOrderId,
-          stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : null,
-          buyer_email: session.customer_email || session.metadata.offer_buyer_user_id || null,
-          items: [{
-            offer_id: offerId,
-            work_ids: (session.metadata.offer_work_ids || "").split(",").filter(Boolean),
-            collection_id: session.metadata.offer_collection_id || null,
-          }],
-          subtotal: (session.amount_total || 0) / 100,
-          shipping_cost: 0,
-          total: (session.amount_total || 0) / 100,
-          status: "confirmed",
-          // jsonb column — store the array raw (Plan B Task 13).
-          status_history: [{ status: "confirmed", timestamp: new Date().toISOString() }],
-          source: "purchase_offer",
-          artist_slug: session.metadata.offer_artist_slug || null,
-          artist_user_id: session.metadata.offer_artist_user_id || null,
-          fulfilment_method: "ship",
-          created_at: new Date().toISOString(),
-        }).then(() => {}, (err) => console.warn("[offer order insert]", err));
+        // E10: the offer path never decremented stock, so a work sold via an
+        // accepted offer stayed on sale. Read-then-write to match the cart
+        // path; replacing that pattern with an atomic decrement is D5's task,
+        // and inventing a second mechanism here would just add a third.
+        for (const workId of workIds) {
+          try {
+            const { data: work } = await db
+              .from("artist_works")
+              .select("quantity_available")
+              .eq("id", workId)
+              .single();
+            const current = work?.quantity_available;
+            if (typeof current === "number") {
+              const next = Math.max(0, current - 1);
+              const updates: Record<string, unknown> = { quantity_available: next };
+              if (next === 0) updates.available = false;
+              await db.from("artist_works").update(updates).eq("id", workId);
+            }
+          } catch (err) {
+            console.warn("[offer] quantity decrement skipped", { workId, err });
+          }
+        }
+
+        // E6: pay the artist. Without this the platform kept 100% of every
+        // accepted offer and no stripe_transfers ledger row was ever written.
+        if (artistUserId && netPence > 0) {
+          try {
+            const { data: artistConnect } = await db
+              .from("artist_profiles")
+              .select("stripe_connect_account_id, stripe_connect_onboarding_complete")
+              .eq("user_id", artistUserId)
+              .single();
+            if (artistConnect?.stripe_connect_account_id && artistConnect.stripe_connect_onboarding_complete) {
+              await scheduleTransfer({
+                orderId: paidOrderId,
+                recipientType: "artist",
+                recipientUserId: artistUserId,
+                connectAccountId: artistConnect.stripe_connect_account_id,
+                amountCents: netPence,
+                immediate: false,
+              });
+            } else {
+              // The checkout pre-flight should have stopped this, so it means
+              // onboarding lapsed between session creation and payment.
+              console.error("[offer] artist cannot be paid out, transfer skipped", {
+                paidOrderId,
+                artistUserId,
+                netPence,
+              });
+            }
+          } catch (transferErr) {
+            console.error("[offer] artist transfer error:", transferErr);
+          }
+        }
       }
       return NextResponse.json({ received: true });
     }
