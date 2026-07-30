@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase D item 10 done**: E20+E23b (8f47841). Next: Phase D items 11 (E21) and 12 (E22), then `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase D items 10-11 done**: E20+E23b (8f47841), E21 (92e3dfe). Next: Phase D item 12 (E22), then `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -3298,3 +3298,83 @@ thrown error rather than by guessing. Worth doing every time a positive-path tes
 fails against an incomplete fixture.
 
 **Commit:** 8f47841
+
+---
+
+## E21 — the seller could release their own escrow on day zero (owner: `01` Phase D item 11)
+
+**The hole.** `PATCH /api/orders` authorised exactly one role, the artist. The buyer,
+the only party who knows whether the parcel arrived, could set no status at all.
+`canTransition` blocks `confirmed → delivered`, but `shipped → delivered` is a legal
+edge and shipping is self-attested by the same artist, so three requests back to
+back walked `confirmed → processing → shipped → delivered` and every pending
+`stripe_transfers` row executed immediately. The 14-day hold is the only chargeback
+buffer in the payout design, and it was bypassable by the party being paid.
+
+**What changed.** `assertOrderParty` resolves both parties. `SELLER_STATUSES` covers
+dispatch; `delivered` and `disputed` are buyer-only. The role gate and
+`canTransition` stay independent and both must pass. The bare catch runs
+`handleAuthzError`, so a third party gets `404 order_not_found` rather than a
+flattened 400.
+
+**A prod fact the fix depends on, checked before relying on it.** `assertOrderParty`
+matches the buyer on `buyer_user_id` **or** `buyer_email` against the caller's own
+email. That second arm is load-bearing:
+
+```
+status      orders  with_buyer_user_id  with_buyer_email
+confirmed        6                   0                 6
+processing       3                   0                 3
+delivered        3                   0                 3
+```
+
+**Zero of 12 live orders have `buyer_user_id`**, because guest checkout is allowed. A
+user-id-only buyer match would have made the buyer role unreachable and stranded
+every order in `shipped` with no way to confirm. This is the same shape of trap as
+E33's `canRespond`, caught the same way: by querying prod before trusting the helper.
+
+**UX in the same commit**, per `01` §E21.6, because the API change alone strands
+orders:
+
+- the artist portal's `shipped → delivered` action is **deleted**, not disabled. The
+  API 403s it now, so the button would only produce an error the artist cannot act
+  on.
+- the customer portal gains **"Confirm delivery"** on a shipped order, with the
+  consequence in the copy ("Confirming releases payment to the artist").
+
+An unconfirmed order still pays out on the 14-day cron, the intended default, and
+`/api/admin/orders` stays the support override. **No live order is in `shipped`
+today**, so the new control has nothing to act on until the next dispatch: it is
+correct but currently unexercised in prod.
+
+**Two pre-existing tests were updated, not left green on stale assumptions.**
+`"rejects confirmed → delivered with 422"` now asserts **403**: a seller is refused
+the status outright, before the state machine is consulted, which is the stronger
+answer and reached first. The 422 path still exists for a caller whose role permits
+the status, and the new suite covers it via the buyer. The payout side-effect tests
+now act as the buyer, because `delivered` is what releases the transfers they test.
+
+**Verification, both directions.** Putting `delivered` back in `SELLER_STATUSES`:
+
+```
+ × rejects confirmed → delivered, now at the role gate before the state machine
+ × refuses the seller marking their own order delivered, and pays nobody
+      Tests  2 failed | 15 passed (17)
+```
+
+Restored:
+
+```
+ Test Files  150 passed (150)
+      Tests  1468 passed (1468)
+✖ 249 problems (0 errors, 249 warnings)
+```
+
+**Method note, third time this has paid off.** Three fixture branches lacked
+`.maybeSingle()`, which `assertOrderParty` uses for the caller's
+`artist_profiles.slug`. Every one surfaced as a generic 400 that is
+indistinguishable from "my new gate broke the happy path". Logging the thrown error
+found each in seconds; guessing would have risked "fixing" working code or
+weakening a real assertion.
+
+**Commit:** 92e3dfe
