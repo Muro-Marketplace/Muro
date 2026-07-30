@@ -7489,3 +7489,46 @@ not lost.
 **Next: 7c** (`01`/N3) — fix `placements/route.ts` phantom `requester_user_id`
 (~20 refs; real column proposed_by_user_id) and shrink the ratchet to 11. Re-read
 placements/route.ts + verify against the live placements columns first.
+
+## `01`/N3 D58 row 7c — placements route uses the real proposed_by_user_id column
+
+Commit `96fc84b`. Code-only (the column already exists in prod, no migration).
+
+**The defect.** `placements/route.ts` referenced a phantom `requester_user_id` in
+23 snake_case sites (reads, an insert, an update, a role-flip, a strip-candidate
+list, a fetch select). Every such query was rejected whole by PostgREST and
+silently retried without the column, so the proposer was never resolved from the
+row (only from message metadata). Real column: `proposed_by_user_id` (in the 7b
+snapshot; already used by lib/authz.ts).
+
+**The fix.** Renamed all 23 snake_case column refs to `proposed_by_user_id`. The 6
+camelCase `requesterUserId` refs are a metadata-key contract, left untouched
+(verified: 0 touched). The primary fetch select now succeeds, so the dead "retry
+without the column" fallback it relied on is deleted (anti-knot rule) rather than
+left inert. Shrank the 7b ratchet: removed the placements grandfather entry,
+GRANDFATHERED 12 -> 11.
+
+**Verification.** Fail-before: reintroducing the phantom select fails the guard
+(no longer grandfathered). `npm run check` -> `EXIT=0`, `Tests 1854 passed`, 0
+lint/type errors; placements route suite 16 pass; phantom guard 10 pass.
+
+## Loop prioritisation note (after 7c)
+
+The 7b guard surfaced 10 open phantom-column bugs (PROGRESS 7b table #3-#12). Some
+are LIVE user-facing breaks — most notably **order tracking** (`orders/track`
+selects 8 non-existent columns, so PostgREST rejects the whole select and the route
+returns 500 on every lookup) and **order events**. These are small, well-defined
+fixes that each also shrink the ratchet. I am prioritising them ahead of the
+doc-scale D58 rows 8-12 (entire implementation docs), because fixing a known live
+break is higher value than starting a large unread doc row, and they clear the
+guard's debt. Order: order-tracking, order-events, the two broken crons
+(onboarding-nudges, placement-ending-soon), then the cosmetic ones (title->name,
+image->profile_image, work_id, updated_at->created_at, contact_email->email), then
+rows 8-12. The owner can re-order if the doc rows are more urgent.
+
+**Next: the order-tracking phantom fix** (`orders/track/route.ts:80`): map the 8
+phantom columns to real ones (total_amount->total, shipping_amount->shipping_cost,
+cart_items->items; drop/replace buyer_name, currency, tracking_url, shipped_at,
+delivered_at against the real schema + the DbOrder type + the response mapping),
+then remove that grandfather entry (ratchet 11 -> 10). Re-read the route + its
+test + the orders snapshot first.
