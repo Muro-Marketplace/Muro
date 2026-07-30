@@ -4884,3 +4884,72 @@ not exist), E7c (`cancelPaidLoanBilling` reading a table Path 2 never populated)
 E7d (`setup_intent.succeeded`, the second §C5 branch), E11 (`PAID_LOAN_V2` off in
 prod), E11b (`subscription_period_end` stamped 1970, now partly addressed by
 `periodFromSubscription` being the single reader).
+
+---
+
+## `04` T6 / E7b — two clicks, two subscriptions (owner: `04` §B6)
+
+Commit `b298ba5`.
+
+**The finding.** `api/placements/[id]/payment/setup` created the Stripe session
+with no idempotency key, so two clicks meant two live subscriptions and two monthly
+charges for one placement. The dedup guard that should have caught the second
+attempt read `placements.stripe_subscription_id`, which until E7a was written by
+nothing, so it was permanently false.
+
+**What changed.** The guard reads `placement_recurring_billings`, excluding
+cancelled rows, and **keeps** the `placements` check alongside it. The mirror is
+best-effort inside `recordPaidLoanSubscription` (a failed mirror is logged, not
+fatal), so either signal on its own has to be able to block a second subscription.
+The plan says to replace the old check; replacing it would have removed a guard
+that E7a had only just made functional. 400 becomes 409 as the plan specifies,
+which is safe because `PaymentClient.tsx` branches on `!res.ok` and renders
+`data.error`, never on the code.
+
+**Two departures from the plan's snippet, each with a test:**
+
+1. **Not `.maybeSingle()`.** There is no unique index on
+   `placement_recurring_billings.placement_id`; the UNIQUE is on
+   `stripe_subscription_id` (verified in prod). So two rows for one placement are
+   possible, and `maybeSingle()` would raise PGRST116, hand back `data: null`, and
+   the guard would wave through a **third** subscription. `.limit(2)` plus a `find`
+   cannot fail that way. The new test file's mock deliberately omits `maybeSingle`
+   from that chain, so reverting to the plan's shape fails loudly rather than
+   passing silently.
+2. **The idempotency key carries the amount**, not just the placement and the hour
+   bucket. A repeated key with *different* parameters is an idempotency error from
+   Stripe, which would surface as the route's generic 500, so a fee edited between
+   two attempts must produce a different key rather than a failure.
+
+**Test.** `src/app/api/placements/[id]/payment/setup/route.test.ts` (new, 14
+cases). The route had no test file at all.
+
+**Three probes:**
+
+```
+PROBE 1 — idempotency key removed
+      Tests  4 failed | 10 passed (14)
+
+PROBE 2 — old guard restored (placements mirror only, 400)
+      Tests  4 failed | 10 passed (14)
+
+PROBE 3 — .maybeSingle() instead of a limited list (the plan's shape)
+      Tests  10 failed | 4 passed (14)
+```
+
+Probe 3 fails widely because the mock has no `maybeSingle` on that chain, which is
+the point: the shape cannot be reintroduced quietly.
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  160 passed (160)
+Tests  1685 passed (1685)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+**Stripe drive not run**, same blocker. The key is asserted against the recorded
+`sessions.create` options, which is where Stripe would read it from.
+
+**Still open in T6:** E8, E7c, E7d, E11, E11b.
