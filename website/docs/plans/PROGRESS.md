@@ -6826,3 +6826,37 @@ from 3 places, verified by the existing E9 suite. So I did it rather than escala
 **Next:** the small D52.2 `lib/email/welcome.ts` `stripeConnected` cosmetic
 follow-up (own commit), then T8 D18 (curation refund, B10) and T9 (N1/N2). D14
 blocked on a product decision.
+
+---
+
+## D52.2 follow-up — welcome.ts stripeConnected: assessed, NO change (correct as-is)
+
+`lib/email/welcome.ts` derives `stripeConnected = !!profile.stripe_connect_onboarding_complete`
+and uses it for one welcome-email CHECKLIST step: `{ label: "Connect Stripe to get
+paid", done: stripeConnected }`.
+
+**Decision: leave it on `stripe_connect_onboarding_complete`.** Unlike the three
+webhook payout GATES (D52.2), which must know "can we send money now"
+(payouts_enabled) at transfer time, this is an onboarding-checklist signal: "has the
+artist finished connecting Stripe". `stripe_connect_onboarding_complete` is exactly
+that. Swapping to `canReceivePayout` would be **wrong** here:
+- Semantics: an artist who connected but is mid-KYC-review (payouts_enabled=false)
+  has connected Stripe — the checklist step is done. `canReceivePayout` would flip
+  it back to undone and read as "you haven't connected Stripe" when they have.
+- Cost: `canReceivePayout` does a synchronous `stripe.accounts.retrieve` (60s cache)
+  — an unnecessary Stripe round-trip on the welcome-email path for a cosmetic flag.
+
+So this is the right predicate for the right job; the D52.2 gate swap does not
+generalise here. The supervisor flagged it "cosmetic, fix after the gates" — the
+assessment is that it needs no fix. **No code change.**
+
+**Residual (pre-existing, not this task).** `stripe_connect_onboarding_complete` is
+written only by `account.updated` (D32.1: may not be enabled), so the checklist can
+show a false "not connected". The fix for that is the account.updated pipeline, not
+a predicate swap here. Left as-is.
+
+**Remaining 04 work.** Per the corrected dependency order: B10 curation (D19-D25:
+managed tiers unbookable, orphan payment, subscription-id in the payment-intent
+column, reconcile, etc.) at Phase 7; then T9 (N1/N2 collect-from-venue) at Phase 8,
+which is net-new checkout FEATURE work — surface to the owner before building. D14
+blocked on a product decision; the two unpaid offers are D11 manual.
