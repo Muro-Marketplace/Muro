@@ -55,6 +55,15 @@ A coherence review of the nine independently-written plans found conflicts, dupl
    | 15 | `ORDER_TOKEN_SECRET` into the `src/env.ts` schema (follow the `assertStripePricesConfigured()` pattern you just wrote); make `QR_ATTRIBUTION_ENFORCE` fail **closed and loud** when the secret is missing instead of attributing to `""`; rewrite the owner instruction at PROGRESS:5861 as an ordered sequence — set secret, confirm `va=` appears on a real QR redirect, *then* flip. Flipping first silently zeroes every venue's revenue share. | D39 | `04` |
    | 16 | `platformFeePercentForArtist` must respect `subscription_status`: return the 15% default unless status is `active`/`trialing`. Today a cancelled Pro artist keeps 5% for ever. Add `subscription_status` to `ArtistPlanState` **and to all five callers' `.select()`**, or PostgREST rejects the query whole. | D40 (E52) | `04` |
 
+   **Rows 13-16 are DONE.** Rows 17-18 below were raised while C4 was open, were not
+   picked up before "C-series complete" was declared, and are still outstanding.
+   Both are small edits to `reconcileOrdersWithoutLegs`, which already exists.
+
+   | # | Task | Ruling | Doc |
+   |---|---|---|---|
+   | 17 | `reconcileOrdersWithoutLegs` cannot see `WP-WSP06D` (£64.49 taken, no artist attributed) because `.gt("artist_revenue", 0)` excludes it. `artist_revenue = 0` is the **signature of the D4 attribution failure**, not evidence nothing is owed, so the sweep is blind to exactly the orders it most needs. Key on "money in, nothing out": `total > 0` + owed status + no `stripe_transfers` row. Regression test must use the `WP-WSP06D` shape (total > 0, `artist_revenue` 0, `artist_user_id` NULL) — a test on `artist_revenue > 0` passes either way and proves nothing. | D55.2 | `04` |
+   | 18 | `ReconcileResult.unresolved` is a bare counter; **5 of 11 flagged prod orders** land there and their ids are discarded. An operator sees `{flagged: 6, unresolved: 5}` and cannot learn which. Change to `unresolved: string[]` (or `{orderId, total}[]`). No new table or surface — just stop throwing away identifiers already in hand. | D55.3 | `04` |
+
 ---
 
 ## D0. Owner decisions (recorded)
@@ -2226,3 +2235,41 @@ The function exists and is sound; these are a predicate change and a return-type
 - Payout gates: swept again post-D52.2, `canReceivePayout` at all three sites, no stale predicate left as a gate. Clean.
 - Orders / `stripe_transfers`: **12 / 0**; `stripe_transfers` is still empty, so nothing has run the new sweep against prod yet. Expected, and the reason D55.1 was verified by running the predicate directly rather than reading the counter.
 - `message-attachments` bucket: still public. E25 outstanding, last of the security queue.
+
+---
+
+## D56. C-series complete. D55 was not picked up, so it is now rows 17-18. And an owner question the loop raised correctly.
+
+*— supervisor. 185 commits. C4 part 2d (leg re-entry) landed; the loop has declared the C-series complete and surveyed what remains.*
+
+### D56.1 — D55's two gaps are still open, and have been promoted to the hoisted queue
+
+`reconcileOrdersWithoutLegs` still reads `.gt("artist_revenue", 0)` at `stripe-connect.ts:199` and `unresolved: number` at `:173`. D55 was committed as a doc entry (`e03bf47`) but never became work, and the loop's remaining-work survey lists B10, T9, D14 and D11 without it.
+
+**This is the D37-D40 failure repeating**: an entry appended to the end of this document, read, committed, and never converted into a task. The mechanism that fixed it last time was the ledger-row queue in the operating-rules block at the top, so D55.2 and D55.3 are now **rows 17 and 18** there. I am not appending them here again; the table at the top is the queue.
+
+Both are small edits to a function that already exists and is otherwise sound. Neither needs owner input.
+
+### D56.2 — The `welcome.ts` assessment is right, and I was reflexive in flagging it
+
+D52.2 listed `lib/email/welcome.ts:66,82` as a "fourth reader" of `stripe_connect_onboarding_complete` to fix after the gates. The loop assessed it and concluded no change is needed. **That is correct and I endorse it.**
+
+The distinction matters and should stop future sweeps churning on this file: `stripe_connect_onboarding_complete` is the **right** signal for describing whether an artist has finished Stripe onboarding, which is exactly what a welcome-email checklist reports. It is the **wrong** signal for gating a payout, because an account can be fully onboarded and still have payouts held. Same column, two questions, one correct answer each. Not every reader of a column implicated in a bug is itself a bug — my "fix it after the gates" treated the reader list as a defect list, which it was not.
+
+The loop also recorded the genuine residual: because `account.updated` may not be enabled (D32.1), the column can be stale, so the checklist can show a false "not connected". Correctly identified as an `account.updated` pipeline problem rather than a predicate swap. Agreed, leave it.
+
+### D56.3 — ESCALATION: T9 is net-new feature work, not remediation
+
+The loop flagged this and it is right to. **T9 (N1/N2, collect-from-venue) is a new checkout capability, not a fix to something broken.** This plan exists to repair a stress-tested codebase; building a new fulfilment path is a different kind of work with a different risk profile, and it would be the first task here to add surface area rather than remove or repair it.
+
+**Owner decision, and genuinely yours:** build it now as part of this run, defer it to a separate piece of work, or drop it. My recommendation is **defer** — the remaining queue (rows 17-18, B10 curation, then docs `05`/`03`/`09`/`07`/`08`) is all repair work, and finishing the repair before adding a feature keeps the "is it fixed?" question answerable. But that is a scoping call, not a technical one.
+
+Also still outstanding and unchanged: **D14** (referral credit, blocked on the product decision — noting D41.2 established there are 0 referrals and nobody is owed, so deleting costs nothing), and **D11** (the £60 of unpaid offers, manual).
+
+### D56.4 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Payout gates: `canReceivePayout` at all three sites; the only `stripe_connect_onboarding_complete` uses left are the `account.updated` **write** and the welcome-email **description**, both correct per D56.2. Clean.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged. Nothing has run the new sweep against prod yet.
+- `message-attachments` bucket: still public. **E25 remains the last untouched security item.**
