@@ -88,6 +88,9 @@ export default function CheckoutPage() {
   // empty; the fetch below populates it. Until it resolves we render the
   // option but disable it, so a determined click can't beat the lookup.
   const [pickupBySlug, setPickupBySlug] = useState<Record<string, boolean>>({});
+  // G-C / Bug 10. Same source and the same fail-closed rule as pickup: the
+  // artist's own answer decides, and if we can't read it we assume UK only.
+  const [intlBySlug, setIntlBySlug] = useState<Record<string, boolean>>({});
   const [pickupLoaded, setPickupLoaded] = useState(false);
 
   // Pre-fill the email from a QR-scan ref so the buyer doesn't have to
@@ -152,6 +155,7 @@ export default function CheckoutPage() {
     if (slugs.length === 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPickupBySlug({});
+      setIntlBySlug({});
       setPickupLoaded(true);
       return;
     }
@@ -161,22 +165,32 @@ export default function CheckoutPage() {
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        const artists: Array<{ slug?: string; offersPickup?: boolean }> = Array.isArray(data?.artists) ? data.artists : [];
+        const artists: Array<{
+          slug?: string;
+          offersPickup?: boolean;
+          shipsInternationally?: boolean;
+        }> = Array.isArray(data?.artists) ? data.artists : [];
         const next: Record<string, boolean> = {};
+        const nextIntl: Record<string, boolean> = {};
         for (const slug of slugs) {
           const match = artists.find((a) => a.slug === slug);
           next[slug] = match?.offersPickup === true;
+          nextIntl[slug] = match?.shipsInternationally === true;
         }
         setPickupBySlug(next);
+        setIntlBySlug(nextIntl);
       })
       .catch(() => {
         if (cancelled) return;
         // Network failure means we can't confirm consent. Default to
         // "no pickup available" so we never accidentally book a buyer
         // into a collection arrangement the artist hasn't agreed to.
+        // Same for international delivery: no confirmation means UK only,
+        // which is what api/checkout would enforce anyway (G-C / Bug 10).
         const next: Record<string, boolean> = {};
         for (const slug of slugs) next[slug] = false;
         setPickupBySlug(next);
+        setIntlBySlug(next);
       })
       .finally(() => {
         if (!cancelled) setPickupLoaded(true);
@@ -198,6 +212,22 @@ export default function CheckoutPage() {
     cartArtistSlugs.length > 0 &&
     cartArtistSlugs.every((s) => pickupBySlug[s] === true);
 
+  // G-C / Bug 10. Non-UK delivery is offered only when EVERY artist in the cart
+  // ships abroad, the same all-or-nothing rule as pickup: one UK-only artist and
+  // the parcel can't go, because v1 doesn't split a cart across destinations.
+  // The dropdown is a courtesy, api/checkout is the gate. Until the artist data
+  // has loaded we show UK only, so the buyer is never offered a country that the
+  // submit would then refuse.
+  const internationalAvailable =
+    pickupLoaded &&
+    cartArtistSlugs.length > 0 &&
+    cartArtistSlugs.every((s) => intlBySlug[s] === true);
+
+  const countryOptions = useMemo(
+    () => (internationalAvailable ? COUNTRIES : COUNTRIES.filter((c) => c.code === "GB")),
+    [internationalAvailable],
+  );
+
   // If the user had collection selected and the cart changes such that
   // it's no longer available, snap them back to shipping so the order
   // can still be placed.
@@ -207,6 +237,23 @@ export default function CheckoutPage() {
       setFulfilmentMethod("ship");
     }
   }, [pickupLoaded, pickupAvailable, fulfilmentMethod]);
+
+  // Same snap-back for the destination. A cart edit can remove the artist who
+  // made the selected country reachable, and leaving a stale country in the form
+  // would send the buyer to a 400 from api/checkout on submit.
+  useEffect(() => {
+    if (pickupLoaded && !internationalAvailable && shipping.country !== "GB") {
+      // setShipping rather than updateField: updateField is declared further down
+      // the component and reading it here trips "cannot access variable before it
+      // is declared". Clearing the postcode format error matters as much as the
+      // country itself, because a valid AU postcode is not a valid UK one.
+      // Same snap-back shape as the fulfilment effect above, so the same
+      // cascading-render exemption applies.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShipping((prev) => ({ ...prev, country: "GB" }));
+      setErrors((prev) => ({ ...prev, country: false, postcodeFormat: false }));
+    }
+  }, [pickupLoaded, internationalAvailable, shipping.country]);
 
   function applySavedAddress(id: string) {
     setSavedAddressId(id);
@@ -697,12 +744,19 @@ export default function CheckoutPage() {
                         onChange={(e) => updateField("country", e.target.value)}
                         className={inputClass("country")}
                       >
-                      {COUNTRIES.map((c) => (
+                      {countryOptions.map((c) => (
                         <option key={c.code} value={c.code}>
                           {c.label}
                         </option>
                       ))}
                       </select>
+                      {!internationalAvailable && (
+                        <p className="text-xs text-muted mt-1">
+                          {cartArtistSlugs.length > 1
+                            ? "These artists ship within the UK only."
+                            : "This artist ships within the UK only."}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <textarea

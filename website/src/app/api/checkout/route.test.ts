@@ -90,14 +90,31 @@ const baseItem = {
 // returns the cart line as a "fresh" `artist_works` row at the price
 // the cart claimed (so the existing self-purchase / country / Connect
 // tests below don't trip the new G2-15 re-validation gate).
+/**
+ * G-C / Bug 10. The `artist_profiles` branch needs BOTH shapes now: `.eq().single()`
+ * for the self-purchase lookup, and `.in()` for the shipping-scope lookup. Default
+ * to the live default (ships_internationally false, i.e. UK only), which is what
+ * every one of the 14 prod profiles carries.
+ */
+function profilesTable(intlSlugs: string[] = []) {
+  return {
+    select: () => ({
+      eq: () => ({ single: async () => ({ data: null }) }),
+      in: async (_col: string, slugs: string[]) => ({
+        data: slugs.map((slug) => ({
+          slug,
+          ships_internationally: intlSlugs.includes(slug),
+        })),
+        error: null,
+      }),
+    }),
+  };
+}
+
 function setupDefaultDbMock() {
   fromMock.mockImplementation((table: string) => {
     if (table === "artist_profiles") {
-      return {
-        select: () => ({
-          eq: () => ({ single: async () => ({ data: null }) }),
-        }),
-      };
+      return profilesTable();
     }
     if (table === "artist_works") {
       return {
@@ -247,7 +264,28 @@ describe("POST /api/checkout country guard", () => {
     expect(args?.metadata?.shipping_country).toBeUndefined();
   });
 
-  it("accepts US (international) and creates a Stripe session", async () => {
+  // Was "accepts US (international) and creates a Stripe session". That assertion
+  // WAS the bug (G-C / Bug 10): a supported country is not the same thing as a
+  // country the artist ships to, and alice does not ship abroad. Replaced rather
+  // than kept beside its successor, so the old promise can't come back.
+  it("accepts US when the artist has opted in to international delivery", async () => {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return profilesTable(["alice"]);
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => ({
+                id, available: true, quantity_available: 10,
+                pricing: [{ label: "S", price: 100 }], title: "Untitled",
+              })),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+    });
     const res = await POST(req({
       items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "US" },
@@ -262,6 +300,112 @@ describe("POST /api/checkout country guard", () => {
       shipping: { ...baseShipping, country: "United Kingdom" },
     }));
     expect(res.status).toBe(400);
+  });
+});
+
+// G-C / Bug 10 — delivery country vs the artist's own shipping scope.
+//
+// Before this, api/checkout checked the country only against the platform-wide
+// supported list, so a buyer could pay for delivery to a country the artist had
+// never agreed to ship to, while the artwork page they bought from said "Ships to
+// UK only" (it said that for EVERY work, because ships_internationally lived in no
+// migration until 081 and so read false for all 14 artists).
+describe("POST /api/checkout shipping scope (G-C / Bug 10)", () => {
+  function mockScope(intlSlugs: string[]) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return profilesTable(intlSlugs);
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => ({
+                id, available: true, quantity_available: 10,
+                pricing: [{ label: "S", price: 100 }], title: "Untitled",
+              })),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+    });
+  }
+
+  // The acceptance test named in the plan.
+  it("refuses a UK-only item shipped to AU with 400 and never reaches Stripe", async () => {
+    mockScope([]); // alice ships UK only, the live default
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
+      shipping: { ...baseShipping, country: "AU" },
+    }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("shipping_scope");
+    expect(body.ukOnly).toEqual(["alice"]);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("names the artist and the destination in the refusal", async () => {
+    mockScope([]);
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
+      shipping: { ...baseShipping, country: "AU" },
+    }));
+    const body = await res.json();
+    expect(body.message).toContain("Alice");
+    expect(body.message).toContain("Australia");
+    // Public copy: no em or en dashes (AGENTS.md).
+    expect(body.message).not.toMatch(/[—–]/);
+  });
+
+  it("still allows GB when the artist ships UK only", async () => {
+    mockScope([]);
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    expect(stripeCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows AU once the artist has opted in", async () => {
+    mockScope(["alice"]);
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
+      shipping: { ...baseShipping, country: "AU" },
+    }));
+    expect(res.status).toBe(200);
+    expect(stripeCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a mixed cart where only one artist ships abroad", async () => {
+    // v1 does not split a cart across destinations, so one UK-only artist
+    // blocks the whole parcel rather than half-shipping it.
+    mockScope(["alice"]);
+    const res = await POST(req({
+      items: [
+        { ...baseItem, type: "work", workId: "w-1" },
+        { ...baseItem, artistSlug: "bob", artistName: "Bob", type: "work", workId: "w-2" },
+      ],
+      shipping: { ...baseShipping, country: "AU" },
+    }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ukOnly).toEqual(["bob"]);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("exempts collection, where there is no delivery to scope", async () => {
+    // A buyer collecting in person may well live abroad. Their country is not a
+    // delivery destination, so the artist's shipping scope does not apply.
+    mockScope([]);
+    const res = await POST(req({
+      fulfilmentMethod: "collection",
+      items: [{ ...baseItem, type: "work", workId: "w-1" }],
+      shipping: { ...baseShipping, country: "AU" },
+    }));
+    expect(res.status).toBe(200);
+    expect(stripeCreate).toHaveBeenCalledTimes(1);
   });
 });
 

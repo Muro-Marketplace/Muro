@@ -153,12 +153,21 @@ describe("allowlist integrity", () => {
     expect(Object.isFrozen(ARTIST_WORK_SERVER_OWNED)).toBe(true);
   });
 
-  it("excludes the three columns that do not exist in prod", () => {
-    // A8, verified against uwkuhygwvasdzwsusiym on 2026-07-29: these are written
-    // by code but exist in no migration and no live table. Allowlisting them
-    // would let a client's value reach the write and break the whole save.
-    expect(ARTIST_PROFILE_WRITABLE).not.toContain("ships_internationally");
-    expect(ARTIST_PROFILE_WRITABLE).not.toContain("international_shipping_price");
+  it("excludes the column that still does not exist in prod", () => {
+    // A8, verified against uwkuhygwvasdzwsusiym: written by code but present in no
+    // migration and not in the live table. Allowlisting it would let a client's
+    // value reach the write, and PostgREST would then reject the whole statement,
+    // so one stray field would fail the entire save.
     expect(ARTIST_WORK_WRITABLE).not.toContain("in_store_price");
+  });
+
+  it("allowlists the two shipping-scope columns that migration 081 created", () => {
+    // These were on the list above until 2026-07-30 for the same reason as
+    // in_store_price. Migration 081 created them, so the reason expired: the
+    // artist portal's "Ships internationally" toggle needs them to persist, and
+    // api/checkout reads the result to decide whether it can deliver abroad
+    // (G-C / Bug 10). Both must reach the write for the toggle to mean anything.
+    expect(ARTIST_PROFILE_WRITABLE).toContain("ships_internationally");
+    expect(ARTIST_PROFILE_WRITABLE).toContain("international_shipping_price");
   });
 });

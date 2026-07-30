@@ -76,10 +76,10 @@ export async function PUT(request: Request) {
     // Without this the artist UI can post any value through; the price
     // appears on the checkout flow as-is, which would let buyers see
     // an effective discount through a "negative" shipping line.
-    // Only default_shipping_price: international_shipping_price is absent from
-    // the live table and therefore absent from the allowlist, so it can no longer
-    // reach updatePayload at all.
-    for (const key of ["default_shipping_price"] as const) {
+    // Both prices, since migration 081 made international_shipping_price a real
+    // column and put it back on the allowlist. It reaches updatePayload again, so
+    // it needs the same guard the UK price has always had.
+    for (const key of ["default_shipping_price", "international_shipping_price"] as const) {
       const v = updatePayload[key];
       if (v === null || v === undefined || v === "") continue;
       const num = typeof v === "number" ? v : Number(v);

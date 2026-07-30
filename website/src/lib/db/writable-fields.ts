@@ -58,12 +58,15 @@ export const ARTIST_PROFILE_WRITABLE = Object.freeze([
   "venue_types_suited_for",
   "postcode", // validated + upper-cased by the route; drives lat/lng
   "default_shipping_price",
-  // NOTE: `ships_internationally` and `international_shipping_price` are read by
-  // artist-profiles-transform.ts:147-148 and validated by
-  // api/artist-profile/route.ts:67, but they exist in NO migration and NOT in the
-  // live table. Deliberately omitted: allowlisting them would pass a client value
-  // into the write and PostgREST would reject the whole statement, turning a
-  // stray field into a total save failure. The transform already defaults them.
+  // Migration 081 created both of the next two. Before it they existed in no
+  // migration and not in the live table, so they had to stay OFF this list:
+  // allowlisting a phantom column makes PostgREST reject the whole UPDATE,
+  // turning one stray field into a total save failure. The cost was that the
+  // artist portal's "Ships internationally" toggle silently dropped the answer
+  // on every save, so no artist could ever ship outside the UK. They persist
+  // now, and api/checkout enforces the scope (G-C / Bug 10).
+  "ships_internationally",
+  "international_shipping_price",
   // Notification preferences (001_analytics_events.sql, 050_notification_prefs.sql)
   "message_notifications_enabled",
   "email_digest_enabled",

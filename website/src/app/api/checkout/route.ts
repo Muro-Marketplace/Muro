@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { checkoutSchema } from "@/lib/validations";
 import { calculateOrderShipping } from "@/lib/shipping-checkout";
-import { regionForCountry, isSupportedCountry } from "@/lib/iso-countries";
+import { regionForCountry, isSupportedCountry, labelForCountry } from "@/lib/iso-countries";
+import { findUkOnlyArtists } from "@/lib/shipping-scope";
 import { saveCartSession } from "@/lib/cart-sessions";
 import { canArtistAcceptOrders } from "@/lib/stripe-connect-status";
 import { getAuthenticatedUser } from "@/lib/api-auth";
@@ -273,6 +274,33 @@ export async function POST(request: Request) {
       );
     }
     const region = regionForCountry(shipping.country);
+
+    // G-C / Bug 10: the check above is the platform's supported-country list,
+    // not the artist's scope, so it let a buyer pay for delivery to a country
+    // the artist had never agreed to ship to while the artwork page they bought
+    // from said "Ships to UK only". Scope is read from the database inside
+    // findUkOnlyArtists, never from the cart, and fails closed. Collection
+    // involves no delivery, so it is exempt.
+    if (region !== "uk" && fulfilmentMethod === "ship") {
+      const ukOnly = await findUkOnlyArtists(items.map((i) => i.artistSlug || ""));
+      if (ukOnly.length > 0) {
+        const destination = labelForCountry(shipping.country);
+        const named = items.find(
+          (i) => (i.artistSlug || "").trim().toLowerCase() === ukOnly[0],
+        );
+        return NextResponse.json(
+          {
+            error: "shipping_scope",
+            message:
+              ukOnly.length === 1
+                ? `${named?.artistName || "This artist"} ships to the UK only, so we can't deliver to ${destination}.`
+                : `${ukOnly.length} artists in this cart ship to the UK only, so we can't deliver to ${destination}.`,
+            ukOnly,
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     // Pre-flight Stripe Connect status — refuse to mint a session if any
     // artist in the cart isn't charges_enabled. Without this, money lands

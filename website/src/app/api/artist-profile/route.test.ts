@@ -165,6 +165,30 @@ describe("PUT /api/artist-profile mass-assignment (E44)", () => {
     expect(upsertMock).not.toHaveBeenCalled();
   });
 
+  it("rejects a negative international shipping price too", async () => {
+    // Migration 081 put international_shipping_price back on the allowlist, so it
+    // reaches updatePayload again and needs the same guard. A negative value here
+    // would show the buyer a discount dressed up as a shipping line (G-C / Bug 10).
+    const res = await PUT(put({ international_shipping_price: -5 }));
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: "invalid_shipping_price" });
+    expect(upsertMock).not.toHaveBeenCalled();
+  });
+
+  it("persists both shipping-scope fields the artist portal sends", async () => {
+    // The toggle PUT these into columns that did not exist, so pickWritable had to
+    // drop them and the artist's answer vanished on every save.
+    await PUT(put({
+      default_shipping_price: 6.5,
+      ships_internationally: true,
+      international_shipping_price: 19.95,
+    }));
+    expect(written()).toMatchObject({
+      ships_internationally: true,
+      international_shipping_price: 19.95,
+    });
+  });
+
   it("still strips theme fields for a plan that cannot customise", async () => {
     adminMock.mockReturnValue({
       from: () => ({
