@@ -6629,3 +6629,18 @@ errors`, allowlist PASS, pg_policies leak = 0. 089 verified applied in prod
 `retry_count` with backoff on failure, stop at MAX_RETRIES, and `executeTransfer`
 widened to accept `failed`. Columns already exist (089). Plus the exhausted-payout
 admin surface.
+
+---
+
+## OWNER DECISION (chat, this session): adopt D52's order
+
+Supervisor D52 flagged that C1's `canReceivePayout` was never adopted by the
+webhook — all three payout gates (offer→artist, cart→venue, cart→artist) still use
+the stale `stripe_connect_onboarding_complete` boolean C1 replaced. I escalated
+(rule 4: reorders the plan + money path). **Owner chose "Adopt D52's order":**
+1. NEXT: replace the 3 webhook payout gates with `canReceivePayout`, using
+   `PayoutCapability.reason` to drive `recordBlockedLeg` (real reason instead of the
+   single "onboarding_incomplete"). Completes C1 (the callers C1 left behind).
+2. THEN C4 = retry sweep + orders-without-legs reconciliation (catches the "12
+   orders, 0 transfers" blind spot) + duplicate-redelivery leg re-entry (D52.3).
+All dormant (Connect not live). Authorised.
