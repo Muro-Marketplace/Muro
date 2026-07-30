@@ -120,7 +120,12 @@ export async function PUT(request: Request) {
       }
     }
 
-    const { error } = await upsertArtistProfile(auth.user!.id, updatePayload);
+    // lat/lng are SERVER-derived, geocoded from the postcode above, never taken
+    // from the body. Declared so the A5 guard lets them through while still
+    // refusing everything else on the server-owned list.
+    const { error } = await upsertArtistProfile(auth.user!.id, updatePayload, {
+      allowServerOwned: ["lat", "lng"],
+    });
 
     if (error) {
       console.error("Profile update error:", error);
@@ -171,6 +176,11 @@ export async function POST(request: Request) {
       instagram: instagram || "",
       website: website || "",
       review_status: "pending",
+    }, {
+      // Creation-time only: the slug is chosen here and review_status MUST start
+      // at "pending" so a new profile cannot self-publish. Both are set by this
+      // route, not by the caller's body.
+      allowServerOwned: ["slug", "review_status"],
     });
 
     if (error) {

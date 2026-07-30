@@ -171,3 +171,77 @@ describe("allowlist integrity", () => {
     expect(ARTIST_PROFILE_WRITABLE).toContain("international_shipping_price");
   });
 });
+
+// ── A5/A7: the per-call-site exemption ───────────────────────────────────────
+//
+// assertNoServerOwned originally refused every server-owned column outright,
+// which made it unusable on three real call sites: the artist PUT derives lat/lng
+// from the postcode, and the two creation paths choose the slug and the initial
+// review_status. A guard that cannot be satisfied gets dropped, and a dropped
+// guard is E23a all over again (a control that exists and does nothing).
+//
+// So an entitlement is declared per call and enforced inside the upsert function,
+// where no caller can skip it.
+describe("assertNoServerOwned allowServerOwned (A5/A7)", () => {
+  it("still refuses a server-owned column that is not allowed", () => {
+    expect(() =>
+      assertNoServerOwned({ subscription_plan: "pro" }, ARTIST_PROFILE_SERVER_OWNED, "artist_profiles"),
+    ).toThrow(/subscription_plan/);
+  });
+
+  it("permits exactly the columns named in the allowlist", () => {
+    expect(() =>
+      assertNoServerOwned(
+        { lat: 51.5, lng: -0.1 },
+        ARTIST_PROFILE_SERVER_OWNED,
+        "artist_profiles",
+        ["lat", "lng"],
+      ),
+    ).not.toThrow();
+  });
+
+  it("does NOT widen to the rest of the list when something is allowed", () => {
+    // The important property: being entitled to set lat must not smuggle
+    // subscription_plan through on the same call.
+    expect(() =>
+      assertNoServerOwned(
+        { lat: 51.5, subscription_plan: "pro" },
+        ARTIST_PROFILE_SERVER_OWNED,
+        "artist_profiles",
+        ["lat"],
+      ),
+    ).toThrow(/subscription_plan/);
+  });
+
+  it("names every violation, not just the first", () => {
+    let msg = "";
+    try {
+      assertNoServerOwned(
+        { subscription_plan: "pro", stripe_connect_account_id: "acct_x" },
+        ARTIST_PROFILE_SERVER_OWNED,
+        "artist_profiles",
+      );
+    } catch (e) {
+      msg = (e as Error).message;
+    }
+    expect(msg).toMatch(/subscription_plan/);
+    expect(msg).toMatch(/stripe_connect_account_id/);
+  });
+
+  it("tells the caller how to fix it, including the exemption route", () => {
+    let msg = "";
+    try {
+      assertNoServerOwned({ slug: "squatted" }, VENUE_PROFILE_SERVER_OWNED, "venue_profiles");
+    } catch (e) {
+      msg = (e as Error).message;
+    }
+    expect(msg).toMatch(/pickWritable/);
+    expect(msg).toMatch(/allowServerOwned/);
+  });
+
+  it("an empty allowlist behaves exactly as the original blanket refusal", () => {
+    expect(() =>
+      assertNoServerOwned({ user_id: "someone-else" }, VENUE_PROFILE_SERVER_OWNED, "venue_profiles", []),
+    ).toThrow(/user_id/);
+  });
+});

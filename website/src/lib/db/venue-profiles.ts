@@ -4,6 +4,7 @@
 // without pulling the admin client into the browser bundle.
 import { supabase } from "@/lib/supabase";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { assertNoServerOwned, VENUE_PROFILE_SERVER_OWNED } from "@/lib/db/writable-fields";
 import type { DbVenueProfile } from "./venue-profiles-transform";
 
 // Re-export types and transform for server-side callers that used to import
@@ -42,8 +43,24 @@ export async function getVenueProfileBySlug(slug: string) {
 
 export async function upsertVenueProfile(
   userId: string,
-  data: Partial<Omit<DbVenueProfile, "id" | "user_id">>
+  data: Partial<Omit<DbVenueProfile, "id" | "user_id">>,
+  opts: { allowServerOwned?: readonly string[] } = {},
 ) {
+  // A7 (E45). Enforced HERE so no caller can skip it. A call site that
+  // legitimately sets a server-owned column with a server-computed value names it
+  // in allowServerOwned; everything else is refused.
+  //
+  // E45 was `{ ...body }` into a service-role update: squat another venue's slug,
+  // self-grant a paid subscription_plan, write the stripe_* columns, or set
+  // user_id, which lands in SET while the WHERE still matches the caller and hands
+  // your own row to another account.
+  assertNoServerOwned(
+    data as Record<string, unknown>,
+    VENUE_PROFILE_SERVER_OWNED,
+    "venue_profiles",
+    opts.allowServerOwned,
+  );
+
   const db = getSupabaseAdmin();
   const { data: existing } = await db
     .from("venue_profiles")

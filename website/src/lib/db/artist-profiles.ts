@@ -5,6 +5,7 @@
 // browser bundle.
 import { supabase } from "@/lib/supabase";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { assertNoServerOwned, ARTIST_PROFILE_SERVER_OWNED } from "@/lib/db/writable-fields";
 import type { Artist } from "@/data/artists";
 import {
   dbProfileToArtist,
@@ -98,8 +99,25 @@ export async function getAllDatabaseArtists(): Promise<Artist[]> {
 
 export async function upsertArtistProfile(
   userId: string,
-  data: Partial<Omit<DbArtistProfile, "id" | "user_id">>
+  data: Partial<Omit<DbArtistProfile, "id" | "user_id">>,
+  opts: { allowServerOwned?: readonly string[] } = {},
 ) {
+  // A5 (E44). The guard lives HERE, not at the call sites, so no caller can skip
+  // it: every write to artist_profiles goes through this function. A call site
+  // that legitimately sets a server-owned column names it in allowServerOwned,
+  // which is a reviewable declaration rather than a hole.
+  //
+  // E44 was exactly this shape: `{ ...body }` handed the client the whole row,
+  // including review_status (self-approve), subscription_plan (self-grant Pro)
+  // and stripe_connect_account_id (redirect payouts). pickWritable stops that at
+  // the route; this stops it at the boundary, for any future caller too.
+  assertNoServerOwned(
+    data as Record<string, unknown>,
+    ARTIST_PROFILE_SERVER_OWNED,
+    "artist_profiles",
+    opts.allowServerOwned,
+  );
+
   const db = getSupabaseAdmin();
   const { data: existing } = await db
     .from("artist_profiles")

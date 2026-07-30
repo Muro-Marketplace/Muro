@@ -757,3 +757,41 @@ D25.2's core point stands unchanged: **at `warn` the rule cannot fail a build, s
 **Recommendation: (b).** It is honest about what each row actually evidences, it does not lose data, and it retro-labels the 51 existing rows rather than leaving them silently overstated. (a) is stronger evidence per row but discards the acceptance moment, which is usually the thing you want to show.
 
 Not urgent, but settle before launch — this is the record you would produce if a consumer dispute ever turned on whether someone accepted the terms.
+
+---
+
+## D27. A green suite can guard an exploit — a third standing rule
+
+`06` Phase B is complete (B1, B3–B6; B2 void). E46c is the reason for this entry.
+
+### D27.1 — What happened
+
+Fixing the free-frames exploit required **rewriting five pre-existing tests that asserted the vulnerable contract**. Two pinned `price_below_base`; three relied on the client-price fallback that *was* the finding. The clearest:
+
+> `it("accepts framed line where client price is at or above DB base (with warn log)")`
+
+**That warn log was the vulnerability.** The test encoded "trust the client's number when it exceeds our floor" as the intended contract. The suite was green the whole time. In the loop's words: leaving them passing "would have meant a green suite guarding an exploit."
+
+This is distinct from D24. D24.1 is about assertions reading non-executable source; D24.2 is about guards that never fail. This is a third thing: **a correct, passing, well-written test that encodes a bug as the specification.** No amount of probing the *new* guard finds it — the old test is not the guard, it is the requirement.
+
+### D27.2 — Standing rule
+
+**When fixing any security finding, search the test suite for tests asserting the OLD behaviour before writing the fix. Rewrite them deliberately; never preserve them to keep the suite green.**
+
+Two practical tells:
+- **A security fix that leaves every existing test passing, untouched, is suspicious.** Either the fix is a no-op, or nothing covered the path. Both need explaining in the ledger entry, not assuming.
+- **Grep test *names* as well as bodies.** The vulnerability above was legible in the test's own title — `accepts …`, `allows …`, `falls back to …`, `with warn log`. On a security path, those verbs describe permissiveness, which is exactly what is being removed.
+
+### D27.3 — Where this applies next
+
+Every remaining workstream has security-adjacent work, so apply it in each:
+- **`05`** — the save-flow contract changes what a failed write does. Tests asserting "shows Saved" may encode the false-success bug itself.
+- **`07`** — collapsing duplicate implementations. Tests pinning the *losing* implementation's behaviour will fight the collapse; rewrite rather than accommodate.
+- **`09`** — email de-duplication. Tests asserting "2 emails sent" encode E4.
+- **`06` Phase C** — gating and guardrails, where a permissive assertion is the whole finding.
+
+### D27.4 — One retroactive sweep, cheap and worth it
+
+Before `05` starts, grep test titles across the suite for permissive verbs (`accepts`, `allows`, `falls back`, `warn`, `ignores`) on payment, auth and authz paths, and check each against its current finding. If a title says the system tolerates something the plan now forbids, that test is the next E46c.
+
+No owner input needed.

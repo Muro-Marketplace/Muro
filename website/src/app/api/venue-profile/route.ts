@@ -244,7 +244,10 @@ export async function POST(request: Request) {
       email: email || "",
       phone: phone || "",
       wall_space: wallSpace || "",
-    });
+    }, {
+      // Creation-time only: the slug is chosen by this route.
+      allowServerOwned: ["slug"],
+    })
 
     if (error) {
       console.error("Venue profile creation error:", error);

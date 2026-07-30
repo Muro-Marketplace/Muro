@@ -268,14 +268,30 @@ export function assertNoServerOwned(
   payload: Record<string, unknown>,
   serverOwned: readonly string[],
   table: string,
+  /**
+   * Server-owned columns THIS call site is entitled to set (A5/A7).
+   *
+   * Needed because a handful of writes legitimately set a server-owned column
+   * with a server-computed value: the artist PUT derives lat/lng from the
+   * postcode, and the two creation paths choose the slug and the initial
+   * review_status. A blanket refusal would have made the guard unusable and it
+   * would have been dropped, which is how controls end up existing and doing
+   * nothing (cf. E23a).
+   *
+   * It is an allowlist per call, not a global widening: everything not named
+   * here is still refused, so a client-supplied subscription_plan is caught even
+   * on a call site that is allowed to set lat.
+   */
+  allow: readonly string[] = [],
 ): void {
-  const violations = serverOwned.filter((k) =>
-    Object.prototype.hasOwnProperty.call(payload, k),
+  const violations = serverOwned.filter(
+    (k) => Object.prototype.hasOwnProperty.call(payload, k) && !allow.includes(k),
   );
   if (violations.length > 0) {
     throw new Error(
       `[writable-fields] Refusing to write server-owned column(s) on ${table}: ` +
-        `${violations.join(", ")}. Build the payload with pickWritable().`,
+        `${violations.join(", ")}. Build the payload with pickWritable(), or, if the ` +
+        `SERVER computes the value, name the column in the call's allowServerOwned.`,
     );
   }
 }
