@@ -178,6 +178,13 @@ describe("E16: a flag resolves from a build-time snapshot, not a call-time looku
     return mod;
   }
 
+  /** A client built with no flag env var set at all: nothing to inline. */
+  async function importWithNoFlagEnv(): Promise<typeof import("./feature-flags")> {
+    for (const def of Object.values(FLAGS)) delete process.env[def.envKey];
+    vi.resetModules();
+    return import("./feature-flags");
+  }
+
   it("GATING_V1=1 still resolves on once the runtime env is empty", async () => {
     const mod = await importWithBuildEnv("NEXT_PUBLIC_FLAG_GATING_V1", "1");
     setNodeEnv("production");
@@ -201,6 +208,30 @@ describe("E16: a flag resolves from a build-time snapshot, not a call-time looku
       setNodeEnv("production");
       expect(mod.isFlagOn(flag), `${def.envKey} is not statically read`).toBe(true);
       process.env = { ...SNAPSHOT };
+    }
+  });
+
+  // D28.1.3. The divergence that made C2 necessary: the client resolved
+  // GATING_V1 to false while the server enforced it as true in six places, so the
+  // UI offered gated actions and the server answered 402/403 instead of the
+  // upgrade prompt. This models a client built with the var absent, which is the
+  // case that produced it: nothing in process.env, nothing in the snapshot, so
+  // the resolver falls all the way through to prodDefault. Client and server read
+  // the same FLAGS table, so agreeing here is what stops them drifting apart.
+  it("the client resolves GATING_V1 on under prod defaults, matching the server", async () => {
+    const mod = await importWithNoFlagEnv();
+    setNodeEnv("production");
+    expect(mod.isFlagOn("GATING_V1")).toBe(true);
+  });
+
+  it("every prod-default-on flag agrees between client and server", async () => {
+    // Generalised so a future flag cannot reintroduce the split silently.
+    const mod = await importWithNoFlagEnv();
+    setNodeEnv("production");
+    for (const [flag, def] of Object.entries(FLAGS) as [FeatureFlag, { prodDefault: boolean }][]) {
+      expect(mod.isFlagOn(flag), `${flag} differs from its prodDefault on a bare client`).toBe(
+        def.prodDefault,
+      );
     }
   });
 
