@@ -126,7 +126,11 @@ export async function recordBlockedLeg(
 }
 
 /**
- * Execute a pending transfer immediately (e.g. when order is delivered).
+ * Execute a transfer immediately (e.g. when an order is delivered, or from the
+ * retry sweep). Accepts both `pending` and `failed` rows: `failed` is no longer
+ * terminal (C4), it is a retryable state the sweep re-attempts with backoff. The
+ * Stripe idempotency key is stable across attempts, so a retry after a timeout
+ * returns the original transfer rather than creating a second one.
  */
 export async function executeTransfer(transferId: string) {
   const db = getSupabaseAdmin();
@@ -135,7 +139,7 @@ export async function executeTransfer(transferId: string) {
     .from("stripe_transfers")
     .select("*")
     .eq("id", transferId)
-    .eq("status", "pending")
+    .in("status", ["pending", "failed"])
     .single();
 
   if (!pending) return null;
@@ -162,49 +166,122 @@ export async function executeTransfer(transferId: string) {
  * Process all pending transfers that are past their payout_after date.
  * Called by /api/stripe-connect/process-pending (cron or manual).
  */
-export async function processPendingTransfers() {
-  const db = getSupabaseAdmin();
+const MAX_RETRIES = 6;
+/** Exponential backoff in minutes between attempts: 1, 4, 15, 60, 240, 960 (16h). */
+const BACKOFF_MINUTES = [1, 4, 15, 60, 240, 960];
 
-  const { data: pending } = await db
+export interface SweepResult {
+  processed: number;
+  retried: number;
+  exhausted: number;
+  errors: string[];
+}
+
+/**
+ * Alert an operator that a payout has exhausted its retries (C4). Email only,
+ * matching the codebase's admin-notify pattern (notifyAdminBillingStalled).
+ * Best-effort: a mail failure must not break the sweep. Imported lazily so the
+ * transfer module does not pull the email stack into every caller.
+ */
+async function alertExhaustedPayout(
+  record: { id: string; order_id: string; recipient_type: string; recipient_user_id: string; amount_cents: number },
+  lastError: string,
+): Promise<void> {
+  try {
+    const { notifyAdminPayoutExhausted } = await import("@/lib/email");
+    await notifyAdminPayoutExhausted({
+      transferId: record.id,
+      orderId: record.order_id,
+      recipientType: record.recipient_type,
+      recipientUserId: record.recipient_user_id,
+      amountCents: record.amount_cents,
+      lastError,
+    });
+  } catch (err) {
+    console.error("[stripe-connect] exhausted-payout alert failed:", err);
+  }
+}
+
+/**
+ * Process transfers due for payout: 'pending' (hold expired, never attempted)
+ * and retryable 'failed' (a transient error whose backoff has elapsed). 'failed'
+ * is no longer terminal (C4) — the old sweep wrote it once and never looked
+ * again, so a Stripe rate-limit or a 30-second blip permanently killed a payout.
+ * On failure a row is re-scheduled with exponential backoff up to MAX_RETRIES,
+ * after which it is left 'failed' and an operator is alerted.
+ *
+ * Called by /api/stripe-connect/process-pending (cron or manual).
+ */
+export async function processPendingTransfers(): Promise<SweepResult> {
+  const db = getSupabaseAdmin();
+  const nowIso = new Date().toISOString();
+
+  const { data: due, error: selErr } = await db
     .from("stripe_transfers")
     .select("*")
-    .eq("status", "pending")
-    .lte("payout_after", new Date().toISOString());
+    .in("status", ["pending", "failed"])
+    .lt("retry_count", MAX_RETRIES)
+    .lte("payout_after", nowIso)
+    .order("payout_after", { ascending: true })
+    .limit(200);
 
-  if (!pending || pending.length === 0) return { processed: 0 };
+  if (selErr) throw new Error(`transfer sweep select failed: ${selErr.message}`);
+  if (!due || due.length === 0) return { processed: 0, retried: 0, exhausted: 0, errors: [] };
 
-  let processed = 0;
-  const errors: string[] = [];
+  const result: SweepResult = { processed: 0, retried: 0, exhausted: 0, errors: [] };
 
-  for (const record of pending) {
+  for (const record of due) {
+    // Respect the backoff. A failed row is retryable only once next_attempt_at
+    // has elapsed; a pending row has next_attempt_at null and is always due. This
+    // is a code-side check rather than a PostgREST .or() filter because a
+    // timestamp value cannot pass the orFilter injection guard (colons).
+    if (record.next_attempt_at && new Date(record.next_attempt_at as string) > new Date()) continue;
     try {
-      // Check the order hasn't been cancelled
       const { data: order } = await db
         .from("orders")
         .select("status")
         .eq("id", record.order_id)
-        .single();
-
-      if (order?.status === "cancelled") {
-        // Cancel the transfer instead of paying out
+        .maybeSingle();
+      // Placement payouts use a synthetic order_id with no orders row; a missing
+      // order is only a cancellation signal for real order ids.
+      if (order?.status === "cancelled" || order?.status === "refunded") {
         await db
           .from("stripe_transfers")
-          .update({ status: "cancelled" })
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
           .eq("id", record.id);
         continue;
       }
 
       await executeTransfer(record.id);
-      processed++;
+      result.processed++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      errors.push(`Transfer ${record.id}: ${msg}`);
+      const nextCount = (record.retry_count ?? 0) + 1;
+      const exhausted = nextCount >= MAX_RETRIES;
+      const backoff = BACKOFF_MINUTES[Math.min(nextCount - 1, BACKOFF_MINUTES.length - 1)];
+
       await db
         .from("stripe_transfers")
-        .update({ status: "failed" })
+        .update({
+          // 'failed' is a RETRYABLE state now. Only exhausted rows (retry_count
+          // == MAX_RETRIES) need an operator to look.
+          status: "failed",
+          retry_count: nextCount,
+          last_error: msg.slice(0, 500),
+          next_attempt_at: new Date(Date.now() + backoff * 60_000).toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", record.id);
+
+      result.errors.push(`Transfer ${record.id} (attempt ${nextCount}): ${msg}`);
+      if (exhausted) {
+        result.exhausted++;
+        await alertExhaustedPayout(record, msg);
+      } else {
+        result.retried++;
+      }
     }
   }
 
-  return { processed, errors };
+  return result;
 }

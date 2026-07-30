@@ -309,6 +309,45 @@ export async function notifyAdminBillingStalled(params: {
 }
 
 /**
+ * Notify admin that a payout has exhausted its retries and needs manual
+ * intervention (C4). The transfer will not be retried again by the sweep, so
+ * this is the only signal an operator gets that money is owed and stuck.
+ */
+export async function notifyAdminPayoutExhausted(params: {
+  transferId: string;
+  orderId: string;
+  recipientType: string;
+  recipientUserId: string;
+  amountCents: number;
+  lastError: string;
+}) {
+  const resend = getResend();
+  if (!resend) return;
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: ADMIN_EMAIL,
+      subject: `Payout exhausted its retries: ${params.orderId}`,
+      html: `
+        <h2>Payout stuck after all retries</h2>
+        <p>A Stripe Connect transfer failed on every attempt and will not be
+        retried automatically. The money is collected and owed but not sent.</p>
+        <ul>
+          <li><strong>Transfer:</strong> ${params.transferId}</li>
+          <li><strong>Order:</strong> ${params.orderId}</li>
+          <li><strong>Recipient:</strong> ${params.recipientType} ${params.recipientUserId}</li>
+          <li><strong>Amount:</strong> &pound;${(params.amountCents / 100).toFixed(2)}</li>
+          <li><strong>Last error:</strong> ${params.lastError}</li>
+        </ul>
+        <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin">Open the admin dashboard</a></p>
+      `,
+    });
+  } catch (err) {
+    console.error("Email send error (payout exhausted):", err);
+  }
+}
+
+/**
  * Notify artist when a new order is placed for their work.
  */
 export async function notifyArtistNewOrder(order: {
