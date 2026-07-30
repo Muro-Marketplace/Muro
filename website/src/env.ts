@@ -94,6 +94,39 @@ export function serverEnv(): z.infer<typeof serverSchema> {
   return _server;
 }
 
+/** The six Stripe subscription price envs the webhook maps to a plan (D12). */
+const STRIPE_PRICE_ENVS = [
+  "STRIPE_PRICE_CORE",
+  "STRIPE_PRICE_CORE_ANNUAL",
+  "STRIPE_PRICE_PREMIUM",
+  "STRIPE_PRICE_PREMIUM_ANNUAL",
+  "STRIPE_PRICE_PRO",
+  "STRIPE_PRICE_PRO_ANNUAL",
+] as const;
+
+/** Which of the six subscription price envs are unset. */
+export function missingStripePriceEnvs(): string[] {
+  return STRIPE_PRICE_ENVS.filter((k) => !process.env[k]);
+}
+
+/**
+ * Assert every subscription price env is set in production (D12). A missing one
+ * meant an artist's plan could not be resolved from their price id, and the old
+ * webhook silently stamped `core` and overcharged them. The webhook now fails
+ * closed (ignores the event), but this surfaces the misconfiguration loudly. Call
+ * at boot / from a deploy healthcheck. A no-op outside production.
+ */
+export function assertStripePricesConfigured(): void {
+  if (process.env.NODE_ENV !== "production") return;
+  const missing = missingStripePriceEnvs();
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing Stripe subscription price env(s) in production: ${missing.join(", ")}. ` +
+        `Artist plans cannot be resolved without them (D12).`,
+    );
+  }
+}
+
 /**
  * Public env accessor. Only exposes NEXT_PUBLIC_* keys, safe to call from
  * client components.

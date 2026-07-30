@@ -39,6 +39,7 @@ import {
 } from "@/lib/placements/paid-loan-billing";
 import { sendOrderConfirmations, type OrderEmailItem } from "@/lib/orders/confirmations";
 import { orderIdFromSession, classifyOrderIdConflict } from "@/lib/orders/order-id";
+import { missingStripePriceEnvs } from "@/env";
 import type Stripe from "stripe";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -1112,6 +1113,9 @@ async function handleWebhookEvent(
       console.error("[webhook] unrecognised subscription price id", {
         priceId,
         subscriptionId: subscription.id,
+        // D12: if any price env is unset, that is the likely cause of an
+        // otherwise-valid SaaS price not resolving.
+        missingPriceEnvs: missingStripePriceEnvs(),
       });
       return NextResponse.json({ received: true, ignored: "unknown_price" });
     }
