@@ -5858,10 +5858,22 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 ```
 
 **New owner decisions.**
-1. Flip `QR_ATTRIBUTION_ENFORCE=1` (a server env var) once QR codes printed before
-   this change have aged past their usefulness. Until then the venueSlug diversion
-   remains possible via the bare-slug fallback; the token path is the secure route
-   but the fallback is still open. This is the only thing that fully closes D10.
+1. **Enable QR attribution enforcement in this ORDER, never as a single flip (D39):**
+   1. Set `ORDER_TOKEN_SECRET` (min 32 chars) as a server env var. It signs both
+      the order-tracking and the QR venue-attribution tokens.
+   2. Confirm a `va=` parameter actually appears on a real QR redirect
+      (`GET /api/qr/<artist>?vs=<venue>` → the `Location` header should carry
+      `va=...`). No `va=` means signing is failing (secret unset or wrong), and
+      enabling enforcement would then reject every attribution.
+   3. Only THEN set `QR_ATTRIBUTION_ENFORCE=1`, once QR codes printed before D10
+      have aged past usefulness.
+
+   Flipping step 3 before step 1 used to set `venueSlug=""` on every sale,
+   silently zeroing every venue's revenue share on the order row, the placement
+   lookup and the venue transfer. Checkout now **fails closed (503)** in that
+   state (D39, `src/app/api/checkout/route.ts`), so the misconfiguration is loud
+   instead of silent, but the ordered sequence above is still the correct
+   operational procedure. This is the only thing that fully closes D10.
 2. E2E-verify the QR-scan -> browse -> checkout attribution once in a browser env,
    since the localStorage threading was not exercised here.
 
@@ -6443,3 +6455,52 @@ revoke. Left as an owner/guard item.
 Pro artist keeps 5% for ever. Add `subscription_status` to `ArtistPlanState` AND to
 all five callers' `.select()`, or PostgREST rejects the query whole (phantom-column
 class).
+
+---
+
+## Supervisor-queue row 15 / D39 — QR enforcement no longer a loaded gun
+
+Commit `c509771`. Owner-authorised security queue.
+
+**The finding.** D10 added signed QR venue-attribution, gated by
+`QR_ATTRIBUTION_ENFORCE`. But `ORDER_TOKEN_SECRET` (which signs those tokens) was
+declared in no schema and validated nowhere, and setting
+`QR_ATTRIBUTION_ENFORCE=1` without it was worse than the bug it closes: every
+token throws in `verifyQrAttribution`, the bare-slug fallback is off, so
+`venueSlug=""` on every sale, silently zeroing every venue's revenue share on the
+order row, the placement lookup and the venue transfer.
+
+**What changed.**
+1. `src/env.ts`: added `ORDER_TOKEN_SECRET: z.string().min(32).optional()` to the
+   server schema (D39.1). (Note: nothing calls `serverEnv()` today, so the schema
+   is documentation-only until it is wired to boot — the real guard is the route
+   check below. Flagged so the next reader knows.)
+2. `src/app/api/checkout/route.ts`: fail closed and loud — when
+   `QR_ATTRIBUTION_ENFORCE==="1"` and `ORDER_TOKEN_SECRET` is unset, `console.error`
+   and return **503** before pricing anything, instead of proceeding with
+   `venueSlug=""` (D39.2).
+3. PROGRESS owner instruction (was a single "flip `QR_ATTRIBUTION_ENFORCE=1`")
+   rewritten as the ordered sequence: set the secret -> confirm `va=` appears on a
+   real QR redirect -> then flip (D39.3 item 4).
+
+**Test (fails before, passes after — probe-verified).**
+`checkout/route.test.ts` "503s and prices nothing when enforcement is on but
+ORDER_TOKEN_SECRET is missing": asserts 503, no `saveCartSession`, no `stripe`
+call. Probe (guard -> `if (false && ...)`) → the route returns **200 and prices
+the sale**, so the test fails before and passes after. The existing D10 test
+(enforcement on WITH the secret still prices the sale) is the does-not-over-trigger
+case.
+
+**Gate.** `Test Files 163 passed (163)`, `Tests 1795 passed (1795)`,
+`176 problems (0 errors, 176 warnings)`, allowlist PASS.
+
+**Divergence flagged.** D39.3 suggested a 500; I returned **503** (Service
+Unavailable) — semantically apter for a missing-config state and distinct from a
+generic crash. Both satisfy "fail closed and loud."
+
+**Next: row 16 (D40/E52, doc `04`).** `platformFeePercentForArtist` must return the
+15% default unless `subscription_status` is `active`/`trialing` (a cancelled Pro
+artist keeps 5% for ever). Add `subscription_status` to `ArtistPlanState` AND to
+all five callers' `.select()`, or PostgREST rejects the query whole (phantom-column
+class). That is the last supervisor-queue row; after it, back to the 04 C-series
+(C3, C4).
