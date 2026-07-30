@@ -795,3 +795,45 @@ Every remaining workstream has security-adjacent work, so apply it in each:
 Before `05` starts, grep test titles across the suite for permissive verbs (`accepts`, `allows`, `falls back`, `warn`, `ignores`) on payment, auth and authz paths, and check each against its current finding. If a title says the system tolerates something the plan now forbids, that test is the next E46c.
 
 No owner input needed.
+
+---
+
+## D28. C2 is authorised (client gating currently disagrees with production), plus a fourth standing rule
+
+CC2 is now structurally complete — `assertNoServerOwned` enforces the write boundary at `A5/A7`, so mass-assignment is closed by construction rather than by review. `06` C1 (E16) landed.
+
+### D28.1 — C2 AUTHORISED: flip `GATING_V1.prodDefault` to `true`
+
+Verified in source: `feature-flags.ts` has `GATING_V1: { prodDefault: false }`, while **server-side gating is live in production** (`isSubscribed()` enforced in six places; six non-subscribed artists went invisible when the owner enabled it).
+
+The compiled client resolver ends `return null !== i ? i : a.prodDefault`, so unless `NEXT_PUBLIC_FLAG_GATING_V1` is set at **build** time, the client resolves `GATING_V1` to **false** while the server enforces it as **true**. That divergence is user-visible in the worst way: the UI offers gated actions, the server refuses them, and the user gets a 402/403 instead of the upgrade prompt that was supposed to appear.
+
+**This is implementing a decision the owner already made, not making a new one.** They turned GATING_V1 on in production; `prodDefault: false` simply means the code never reflected it. Requirements:
+1. Flip `GATING_V1.prodDefault` to `true`.
+2. Keep the env-var escape hatch and document it in the same style as `WALL_VISUALIZER_V1` — `set NEXT_PUBLIC_FLAG_GATING_V1=0 to disable`.
+3. Add a test asserting the **client** resolver returns `true` under prod defaults, so client and server cannot silently diverge again.
+4. Verify with the sound check in D28.2, not the doc's.
+
+*(Setting `NEXT_PUBLIC_FLAG_GATING_V1=1` in Vercel would also work, but leaves the code lying about its own default and breaks again on any environment that forgets the var. Flip the default.)*
+
+**Owner override:** if you deliberately want client gating **off** while server gating is **on**, say so — but that combination produces exactly the 402-instead-of-upgrade-prompt behaviour above, so I have treated it as unintended.
+
+### D28.2 — Fourth standing rule: a verification command must be proven to FAIL before the fix
+
+The doc's check for C1 was:
+
+```
+grep -rl "NEXT_PUBLIC_FLAG_GATING_V1" .next/static/chunks/   # "empty before, non-empty after"
+```
+
+**It is non-empty *before* the fix** — the `FLAGS` map ships `envKey: "NEXT_PUBLIC_FLAG_GATING_V1"` as a string literal into every client chunk importing the module. Following the doc would have produced a **false pass on an unfixed build**. The sound check greps for an inlined **key:value** pair, which can only exist if DefinePlugin substituted a static read:
+
+```
+grep -rho 'NEXT_PUBLIC_FLAG_[A-Z_0-9]*:"[^"]*"' .next/static/chunks/ | sort -u
+```
+
+**Rule: before trusting any verification command, run it against the pre-fix state and confirm it fails.** This is D24.2 applied to verification rather than guards, and it is now the **fourth** unsound-verification instance this session (the `EXEMPT` file-level match, item 14's Probe B, the phantom-column Probe C, and this). Treat "the doc gave me a command" as an untested claim.
+
+Note the loop already applied this correctly, and its evidence is the model to follow: only the flag set at build time inlined, the four unset ones correctly remaining polyfill reads.
+
+No owner input needed unless you want the override in D28.1.
