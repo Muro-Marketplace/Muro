@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **items 14-15 done** (99e8c83, 0fd8a4d). Item 15's flip is blocked on 43 inline-authorising routes, held by a ratchet. Next: item 16 (E39 part 2), then `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -3771,3 +3771,74 @@ convention work is worth it. The ratchet means the decision can wait without the
 widening.
 
 **Commit:** 0fd8a4d
+
+---
+
+## Phase E item 16 / E39 part 2 — assessed as void, decision locked instead (owner: `01`)
+
+**Not built.** Item 16 asks for a `sessionId` claim on the order token, minted into
+the Stripe `success_url`, with the full session payload restored behind a
+token-or-email check. Two reasons, both checked rather than reasoned about.
+
+**1. No consumer.** `/api/checkout/session` has exactly one caller,
+`checkout/confirmation/page.tsx`, and it reads only
+`id / status / amountTotal / lineItems`. The page already carries this comment:
+
+> The delivery address is deliberately not shown here. It used to come from the
+> unauthenticated /api/checkout/session response, which meant anyone with the
+> session id could read it (E39). The buyer has the address in their confirmation
+> email.
+
+Grepped the tree for other consumers: none. Restoring PII would widen the very
+disclosure surface E39 exists to close, for data nothing renders.
+
+**2. The prescribed mechanism has an ordering bug.** The token must be bound to the
+Stripe session id (the doc's check is `verified.sessionId === sessionId`), but
+`success_url` is fixed at **session-creation time, before that id exists**. Stripe
+only templates `{CHECKOUT_SESSION_ID}`, so a token derived from the id cannot be
+placed there. Making it work needs a second binding: a pre-generated nonce in the
+`success_url`, carried in session metadata, verified on read. Real machinery, for a
+feature with no consumer.
+
+`01` §E39 anticipates exactly this outcome. It offers "the minimum viable change is
+to drop the PII from the anonymous response", which is what part 1 shipped in Phase
+B. So part 1 was the doc's own fallback and it is sufficient.
+
+**One more trap for whoever revives it:** `verifyOrderToken` **throws** on an invalid
+token rather than returning null, so the doc's `const verified = await
+verifyOrderToken(token); authorised = !!verified && ...` would propagate the throw
+instead of falling through to the email check. It needs a try/catch.
+
+**What shipped instead**, so the decision is enforceable rather than a comment: the
+phase B test file now pins the response shape **exactly**. Any new field fails,
+including ones nobody thought to forbid by name, and each line item is pinned to its
+three display fields so expanded Stripe `price.product` metadata cannot ride along.
+
+**Probed twice:**
+
+```
+restore customerEmail        → 3 fail
+add an innocuous `currency`  → 2 fail, and every by-name assertion PASSES
+```
+
+That second probe is the argument for the lock. The existing tests forbade four
+fields by name, so an un-enumerated addition slipped past all of them.
+
+**Residual exposure, accepted and already documented in the route.** Anyone holding a
+leaked session id can still learn the order total and the line-item names. Closing
+that needs caller binding, which guests cannot provide, which is why part 1 stripped
+the payload rather than adding auth. If it ever matters, the cheap narrowing is to
+bound the endpoint by the `cart_sessions` TTL so an old id stops working, turning an
+indefinite capability into a short-lived one. Not done: it is a different change from
+what item 16 asks for, and scope drift is how the knot re-formed last time.
+
+```
+ Test Files  154 passed (154)
+      Tests  1514 passed (1514)
+✖ 175 problems (0 errors, 175 warnings)
+```
+
+**Commit:** 6c8e1d1
+
+**`01` is now complete** except item 15's `warn` → `error` flip, which is an owner
+decision held behind a ratchet.
