@@ -2582,3 +2582,50 @@ This is completing D17.3's mandate rather than adding to it — a guard whose ma
 - `message-attachments`: still public, owner-blocked on the cutover.
 
 **Next after row 20:** the five untouched docs — `05` frontend, `03` auth/admin (with the `admin_users` ordering hazard), `09` emails, `07` unknot, `08` cull.
+
+---
+
+## D62. Row 20 shipped a regenerator that cannot run today. The gap is documented, not closed.
+
+*— supervisor. 242 commits. Row 20 landed (`08495ae`); `05` §1.1 and §1.2 landed.*
+
+### D62.1 — What row 20 got right
+
+Properly wired, not a stub: `package.json:22` gives `"schema:snapshot": "tsx scripts/schema-snapshot.ts"`, the logic is split into `schema-snapshot.lib.ts` with its own tests, and the guard header now names `npm run schema:snapshot` at line 22. It also exits 2 with a clear message when the credential is missing rather than writing an empty snapshot, which is the right failure direction.
+
+### D62.2 — But it needs a token this environment does not have
+
+```
+scripts/schema-snapshot.ts:30   const token = process.env.SUPABASE_ACCESS_TOKEN;
+scripts/schema-snapshot.ts:36   fetch("https://api.supabase.com/v1/projects/.../database/query")
+```
+
+It goes through the **Supabase Management API**. **D12 verified, with evidence, that `SUPABASE_ACCESS_TOKEN` is genuinely absent** from this developer's `~/.zshrc` — zero occurrences, only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are exported. It is the same absence that makes `npm run audit:advisors` exit 2, which D12.4 ruled non-blocking.
+
+So when the next migration adds a column, the sequence is: build breaks (correctly), developer runs `npm run schema:snapshot`, **it exits 2**, and they are standing exactly where D61.3 predicted — one line from "add it to `GRANDFATHERED`" versus an unclear path to regenerating. Row 20 documented that path; it did not make it runnable.
+
+**And the loop did not record the dependency.** Its PROGRESS entry for row 20 contains no mention of the token, of D12, or of the script being inert until a human acts. That omission is the part that matters: a runtime `exit(2)` is honest to whoever runs it, but the plan now reads as though the gap is closed.
+
+### D62.3 — Correcting myself: I asked for a script without asking what it would authenticate with
+
+D61.3 specified "add `npm run schema:snapshot`, name it in the guard header, reference it in the migration steps" and treated it as a fifteen-minute task. I did not ask which credential it would need, on a project where I had already established, in this same document, that the obvious one is missing. The loop built exactly what I specified. The gap is in the specification.
+
+### D62.4 — Ruling
+
+1. **Record the dependency** in PROGRESS and in the guard header: the regenerator requires `SUPABASE_ACCESS_TOKEN` and is inert without it.
+2. **Make the error message point at the remedy**, not just name the variable — something like "SUPABASE_ACCESS_TOKEN not set; see EXECUTION-DECISIONS D12. Do NOT add the new column to GRANDFATHERED instead." That sentence is cheap and it lands at the exact moment the wrong shortcut is tempting.
+3. **If a service-role path exists, prefer it** — but do not guess. `information_schema` is not exposed through PostgREST, so this likely needs a direct Postgres connection rather than the anon/service key, and inventing a `SECURITY DEFINER` helper to expose the catalogue would undo the function lockdown just completed. Investigate; if there is no clean path, the token stands.
+
+### D62.5 — ESCALATION: the token now has two consumers, and one of them guards the codebase's worst failure mode
+
+D12.4 ruled `SUPABASE_ACCESS_TOKEN` "NOT a blocker, continue without it", on the basis that its only consumer was the advisor script, which cannot catch this project's actual leak class anyway. **That reasoning no longer holds.** The token is now also what keeps the phantom-column guard maintainable, and that guard is the single most valuable piece of test infrastructure here — it found ten live bugs including two dead crons and a broken order-tracking page.
+
+**For the owner:** adding `SUPABASE_ACCESS_TOKEN` to the local environment moves from "nice to have, someday" to "the thing standing between the phantom guard and being quietly hollowed out at the next migration". It joins the two CI secrets on the list, and unlike those it is a local export rather than a GitHub setting.
+
+### D62.6 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom guard: ratchet at 1, snapshot current at 750 columns. Maintenance path per above.
+- `05` §1.2 `useSaveAction`: checked it is not a second save abstraction — `mutate()` from §1.1 lives in the existing `src/lib/api-client.ts`, still the only fetch wrapper in `src/lib/`. Clean.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
