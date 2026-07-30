@@ -64,6 +64,28 @@ A coherence review of the nine independently-written plans found conflicts, dupl
    | 17 | `reconcileOrdersWithoutLegs` cannot see `WP-WSP06D` (£64.49 taken, no artist attributed) because `.gt("artist_revenue", 0)` excludes it. `artist_revenue = 0` is the **signature of the D4 attribution failure**, not evidence nothing is owed, so the sweep is blind to exactly the orders it most needs. Key on "money in, nothing out": `total > 0` + owed status + no `stripe_transfers` row. Regression test must use the `WP-WSP06D` shape (total > 0, `artist_revenue` 0, `artist_user_id` NULL) — a test on `artist_revenue > 0` passes either way and proves nothing. | D55.2 | `04` |
    | 18 | `ReconcileResult.unresolved` is a bare counter; **5 of 11 flagged prod orders** land there and their ids are discarded. An operator sees `{flagged: 6, unresolved: 5}` and cannot learn which. Change to `unresolved: string[]` (or `{orderId, total}[]`). No new table or surface — just stop throwing away identifiers already in hand. | D55.3 | `04` |
 
+6. **🛑 DO NOT STOP AFTER ROWS 17/18 AND E25. SIX LEDGER ROWS ARE STILL `todo`.**
+   You caught one premature stop yourself (`b984cdc`) and were right to. The corrected
+   list is still wrong: it says only T9, D14 and D11 remain afterwards. **It omits
+   every one of these, all still marked `todo` in your own ledger at the top of
+   PROGRESS.md, and together roughly 220 of the plan's 391 subtasks — the majority
+   of the remaining work:**
+
+   | Row | Task | Doc |
+   |---|---|---|
+   | 7b | Schema-column guard, **full form**: generated `schema-columns.json` covering every column + a scan of every `.select()`. Only the narrow denylist shipped. This is the guard that would catch the D51.2 class. | `02` |
+   | 7c | `placements/route.ts` references the phantom `requester_user_id` in ~20 places. Recorded in the guard's `KNOWN_UNFIXED` ratchet. | `01`/N3 |
+   | 8 | `05` frontend saves + listing | `05` |
+   | 9 | `03` auth/admin — create+backfill `admin_users` **before** dropping the `user_metadata` conjunct, or admins are locked out | `03` |
+   | 10 | `09` emails — artist-sale trigger first | `09` |
+   | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`,`09` |
+   | 12 | `08` rewritten cull, last | `08` |
+
+   The cause is context, not judgement: you have been inside `04` for hours, so the
+   `04` task list feels like the plan. It is one of nine docs. **Before concluding the
+   loop is finished, re-read the ledger table at the top of PROGRESS.md and confirm
+   every row reads done, void or owner-only.** Stopping is correct only then.
+
 ---
 
 ## D0. Owner decisions (recorded)
@@ -2338,3 +2360,51 @@ Zero `sub_%` values, so no backfill is needed and the fix (`paymentIntentId || n
 - `curation_requests`: 2 rows, both `pending_payment`, both with an empty payment-intent column. No orphans, consistent with D19's fix being preventative.
 - `message-attachments` bucket: still public. **E25 remains the last untouched security item.**
 - Rows **17 and 18** (reconciliation predicate + `unresolved` ids) still outstanding, still unprioritised against B10, which is fine. They are in the queue at the top of this file.
+
+---
+
+## D58. The loop is three tasks from stopping with half the plan untouched. Operating rule 6 added.
+
+*— supervisor. 204 commits. B10 curation complete (D22, D23, D24). Time-critical, which is why the substance is in the hoisted block rather than here.*
+
+### D58.1 — Credit where it is due: the loop caught its own premature stop
+
+`b984cdc` reverses a "loop stops here" conclusion the B10 summary had reached, and reinstates D55.2, D55.3 and E25 as loop-eligible bug fixes rather than owner items. It reproduced all three accurately from this document, including the `WP-WSP06D` regression shape and why the existing bucket-listing test misses the E25 exposure. Catching your own wrong conclusion one commit later is the behaviour this arrangement is for.
+
+### D58.2 — But the corrected stopping condition is still wrong, and by a lot
+
+The correction ends: *"Only after D55.2, D55.3 and E25 are done do just T9/N1/N2 (feature), D14 (product decision) and the two unpaid offers (D11 manual) remain — and the loop stops then."*
+
+**Six ledger rows in PROGRESS.md still read `todo`.** Verified in the ledger this cycle, and confirmed against the git log that none of these docs has been started:
+
+```
+7b  schema-column guard, full form      02
+7c  placements/route.ts phantom column  01/N3
+8   05 frontend saves + listing         05
+9   03 auth/admin                       03
+10  09 emails                           09
+11  07 K5a/K5b + 09 §4.1 harness        07/09
+12  08 rewritten cull                   08
+```
+
+By subtask count those docs are roughly **220 of the plan's 391** — more than half the total, and the majority of what remains. The loop is currently three tasks from declaring completion at about 55%.
+
+### D58.3 — The cause, and why the fix is placed where it is
+
+This is not a judgement failure. The loop has been inside `04` for hours; its working context is the `04` task list, and `04` is genuinely nearly finished. The ledger listing the other eight docs sits at the top of a 6,900-line PROGRESS.md that it has been appending to rather than re-reading.
+
+Every previous attempt to get a supervisor item actioned by appending to the end of this document failed (D37-D40, then D55). The one mechanism that has worked is the **hoisted operating-rules block at the top**. So the substance is now **operating rule 6**, with the six rows enumerated and a single instruction: before concluding the loop is finished, re-read the ledger table and confirm every row reads done, void or owner-only.
+
+Nothing here changes what those rows contain — they are the plan's original scope, unmodified. This only stops them being skipped.
+
+### D58.4 — One sequencing warning worth repeating, because it is destructive if got wrong
+
+Row 9 (`03` auth/admin) carries the plan's sharpest ordering constraint: **`admin_users` must be created and backfilled BEFORE the `user_metadata` conjunct is removed, or every admin is locked out of the live site.** It is in the ledger row text and in the corrected dependency order, but it is the one item on the remaining list where getting the order wrong is not a failed test, it is an outage.
+
+### D58.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- **`SECURITY DEFINER` functions with anon EXECUTE: none.** Widened from the single-function E50 check to the whole class; clear including everything added since.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
+- `message-attachments` bucket: still public. E25, now correctly on the loop's own list.
