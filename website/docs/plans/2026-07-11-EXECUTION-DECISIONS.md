@@ -638,3 +638,36 @@ This changes pacing only. **It does not relax any standard:** one task per itera
 **Rule unchanged:** before writing a migration, `ls website/supabase/migrations/ | tail -5` and take the next free number **inside your doc's range**. If your doc has no range, it now does — do not improvise into Reserved.
 
 No owner input needed.
+
+---
+
+## D24. Two standing rules the loop earned the hard way — apply them to 7b BEFORE writing it
+
+Not new work. Two lessons the loop paid for three times over this session, promoted to rules because **the next guard in the queue (7b's allowlist form) will hit both**.
+
+### D24.1 — An assertion over source must read *executable* source
+
+Any test that greps the codebase must **strip comments (and ideally string literals) before scanning**. This has now bitten twice:
+- Iteration 2, the CI-gates test, needed it for YAML.
+- Item 14, the authz-error gate: once block-scoped, it **flagged its own explanatory comments**, because those comments contain the literal `` `} catch {` ``.
+
+**This lands directly on 7b.** The full allowlist guard parses `.from("x").select("...")` out of source. Un-stripped, it will match selects inside comments, doc blocks and the very `PHANTOM`/`KNOWN_UNFIXED` tables that document phantom columns by name — producing false positives that make the guard look broken and invite someone to weaken it. **Strip comments first. Prefer block-scoped brace-walking over a fixed character window** (item 14's original 400-char window silently stopped matching once the comments grew).
+
+### D24.2 — A guard that passes on the first probe is suspect until proven otherwise
+
+**Three times this session, a probe passing immediately meant the guard was wrong, not that the code was right:**
+1. The `EXEMPT` file-level match silently un-guarded the fee select in the same file — reverting D17.1 left the suite green.
+2. Item 14's Probe B passed because the window was too short *and* it searched the whole file rather than the catch block.
+3. Probe C on the phantom-column guard, recorded earlier as "a hole in the guard, not a pass".
+
+**Rule: when you add a guard, revert the thing it protects and confirm it fails.** If it does not fail, the guard is wrong — fix the guard before trusting it. A green suite is evidence only when you have seen it go red for the right reason.
+
+Both rules are already the loop's practice. They are written down so they survive into `05`, `07`, `08` and `09`, where several more source-reading assertions are planned.
+
+### D24.3 — Credit, and one thing to carry forward
+
+Item 14 is a good example of the payoff: the stricter gate immediately found **a real miss of its own** (a fourth `placements` catch that bound and logged the error but still flattened `AuthzError` to a blanket 400), and surfaced a pre-existing hidden failure — `db.from(...).select(...).or is not a function`, an incomplete test fixture that had been masked behind a 400 for the whole session. Tests still passed because they asserted a refusal and got one, for the wrong reason.
+
+**Carry forward:** a test asserting "it refused" is weaker than one asserting "it refused *with this status, for this reason*". Where cheap, assert the reason.
+
+No owner input needed.

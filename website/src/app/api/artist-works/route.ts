@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemo } from "@/lib/demo-guard";
 import { handleAuthzError } from "@/lib/authz";
 import { getArtistProfileByUserId } from "@/lib/db/artist-profiles";
 import { getWorksByArtistProfileId, upsertWork, deleteWork } from "@/lib/db/artist-works";
@@ -26,6 +27,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a. Missed by the pass-2 sweep, which filtered on a getSupabaseAdmin
+  // import: this route writes through @/lib/db/artist-works instead, the same
+  // blind spot that hid E32. Caught by item 15's rule extension.
+  const demoResp = assertNotDemo(auth.user!.id);
+  if (demoResp) return demoResp;
 
   const result = await getArtistProfileByUserId(auth.user!.id);
   if (!result) {
@@ -280,6 +286,11 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a. Missed by the pass-2 sweep, which filtered on a getSupabaseAdmin
+  // import: this route writes through @/lib/db/artist-works instead, the same
+  // blind spot that hid E32. Caught by item 15's rule extension.
+  const demoResp = assertNotDemo(auth.user!.id);
+  if (demoResp) return demoResp;
 
   const result = await getArtistProfileByUserId(auth.user!.id);
   if (!result) {

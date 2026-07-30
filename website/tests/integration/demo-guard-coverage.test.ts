@@ -85,10 +85,22 @@ const MUTATING = /export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\b/;
 
 type Route = { rel: string; source: string };
 
-/** Every route that mutates AND uses the service-role client. */
+/**
+ * Every route that mutates AND writes past RLS.
+ *
+ * "Writes past RLS" includes a @/lib/db/* import, not just getSupabaseAdmin:
+ * those helpers use the admin client internally. The first version of this file
+ * filtered on getSupabaseAdmin alone and therefore missed
+ * api/artist-works/route.ts, which writes through @/lib/db/artist-works. That is
+ * the same blind spot that hid E32, and item 15's eslint extension is what
+ * surfaced it here.
+ */
+const writesPastRls = (source: string) =>
+  source.includes("getSupabaseAdmin") || /from "@\/lib\/db\//.test(source);
+
 const mutatingRoutes: Route[] = walk(API)
   .map((full) => ({ rel: path.relative(API, full), source: readFileSync(full, "utf8") }))
-  .filter((r) => MUTATING.test(r.source) && r.source.includes("getSupabaseAdmin"));
+  .filter((r) => MUTATING.test(r.source) && writesPastRls(r.source));
 
 const isExempt = (rel: string) =>
   [...DEMO_EXEMPT].some((e) => (e.endsWith("/") ? rel.startsWith(e) : rel === e));

@@ -25,6 +25,10 @@ function lint(code: string, filename = "src/app/api/thing/route.ts") {
 const ids = (messages: Linter.LintMessage[]) => messages.map((m) => m.messageId).sort();
 
 const SERVICE_ROLE = `import { getSupabaseAdmin } from "@/lib/supabase-admin";`;
+// A @/lib/db/* helper is service-role-equivalent: those modules use the admin
+// client internally, so a route importing one writes past RLS without ever
+// naming supabase-admin. This is E32's exact shape (01 Phase E item 15).
+const DB_HELPER = `import { upsertWork } from "@/lib/db/artist-works";`;
 const AUTHZ = `import { assertOwnsWork } from "@/lib/authz";`;
 const DEMO = `import { assertNotDemo } from "@/lib/demo-guard";`;
 // No type annotations in these fixtures: the Linter runs the default parser, so
@@ -69,6 +73,36 @@ export async function DELETE() { return new Response(); }`;
   });
 
   // --- must NOT be flagged ---
+
+  it("treats a @/lib/db/* import as service-role-equivalent, which is E32's shape", () => {
+    // E32 was invisible to this rule: api/artist-works never imported
+    // supabase-admin, it called lib/db/artist-works.ts, so the unscoped update
+    // went unflagged. A route of that shape must now be caught.
+    const messages = lint(`${DB_HELPER}\n${DEMO}\n${POST}`);
+    expect(ids(messages)).toEqual(["missingAuthz"]);
+  });
+
+  it("flags a @/lib/db/* route for both requirements when neither import is present", () => {
+    const messages = lint(`${DB_HELPER}\n${POST}`);
+    expect(ids(messages)).toEqual(["missingAuthz", "missingDemoGuard"]);
+  });
+
+  it("still ignores a @/lib/db/* route that only reads", () => {
+    const messages = lint(`${DB_HELPER}\nexport async function GET() { return new Response(); }`);
+    expect(messages).toEqual([]);
+  });
+
+  it("accepts a @/lib/db/* route that does import authz and the demo guard", () => {
+    const messages = lint(`${DB_HELPER}\n${AUTHZ}\n${DEMO}\n${POST}`);
+    expect(messages).toEqual([]);
+  });
+
+  it("does not treat a non-db lib import as service-role-equivalent", () => {
+    // The match is scoped to @/lib/db/, not any @/lib/ path, or every route in
+    // the app would be flagged and the rule would be noise.
+    const messages = lint(`import { slugify } from "@/lib/slugify";\n${POST}`);
+    expect(messages).toEqual([]);
+  });
 
   it("accepts an @/lib/authz import", () => {
     expect(lint(`${SERVICE_ROLE}\n${AUTHZ}\n${DEMO}\n${POST}`)).toHaveLength(0);

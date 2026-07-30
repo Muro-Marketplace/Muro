@@ -67,6 +67,13 @@ module.exports = {
       ImportDeclaration(node) {
         const src = node.source.value;
         if (src === "@/lib/supabase-admin") usesServiceRole = true;
+        // E32's blind spot (01 Phase E item 15). A route that never names
+        // supabase-admin but imports a @/lib/db/* helper is still writing with
+        // the service-role client, because that is what those helpers use
+        // internally. E32 itself was exactly this shape: api/artist-works never
+        // touched supabase-admin, it called lib/db/artist-works.ts, so the rule
+        // could not see it and the unscoped update went unflagged.
+        if (/^@\/lib\/db\//.test(src)) usesServiceRole = true;
         if (src === "@/lib/authz") hasAuthzImport = true;
         if (src === "@/lib/admin-auth") hasAdminAuthImport = true;
         if (src === "@/lib/demo-guard") hasDemoGuardImport = true;
