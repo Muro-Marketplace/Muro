@@ -5736,3 +5736,70 @@ PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
 duplicate placements: a bounded CHECK migration and a determinism fix in the
 webhook's placement map, with an UNCONFIRMED about the unique-index key given
 multi-work placements).
+
+---
+
+## `04` T4 / D9 — unbounded share + non-deterministic duplicate placements (owner: `04` §B4)
+
+Commit `5de53c3`. Migration `086`. **T4 (B4) is complete** (D8 `420739f`, D9
+`5de53c3`), with one owner decision carved out (below).
+
+**Two halves, and where the plan was stale.**
+
+**(a) Bounds.** `placements.revenue_share_percent` had no CHECK (the constraint the
+grep matched, `placements_arrangement_type_check`, only lists `revenue_share` as an
+arrangement_type enum value). So a 150% counter-offer made the artist's net negative
+in buildArtistLegs (`venueCut = gross * 1.5`). Migration 086 adds
+`CHECK (revenue_share_percent IS NULL OR 0..100)`, with clamp UPDATEs first for
+replay-safety (prod had **0** out-of-bounds rows, so no live row was touched).
+Proved with a rolled-back `DO` block: `150 rejected | -5 rejected | 50 accepted`.
+Bounds check live, `out_of_bounds_now = 0`.
+
+**(b) Determinism.** The webhook filled `placementByArtistSlug` with no ordering and
+last-wins, so with duplicate active placements the venue's share could differ
+between two replays of the same event. The query now
+`.order("created_at", { ascending: true })` and the fill skips a slug already
+present (first-wins). Test: two active placements for one artist+venue at 20% and
+40%, earliest first, and the order books at 20% with the first placement_id. Probe
+(remove the skip) → 40 wins, 1 test fails.
+
+**The unique index is BLOCKED and is an owner decision.** §D9 pairs the bounds with a
+partial unique index on active placements and flags "UNCONFIRMED: whether work_title
+is the right third key given multi-work placements". Resolved **against** it:
+
+- 4 (artist_slug, venue_slug) pairs have multiple active placements.
+- `the-mayfield` has **two** active placements with the **same** work_title
+  ("Vietnamese Village"); `testing-venue` has **18** active rows across only 4
+  titles.
+
+So `(artist_slug, venue_slug, COALESCE(work_title,''))` is not unique in the live
+data and the index cannot be created without retiring duplicates first. That is a
+data decision (which of 18 near-identical active placements to keep, flag not
+delete), so it is the owner's, not the loop's. The determinism fix removes the
+*symptom* (non-deterministic rate) without the index, which is exactly what the plan
+says to do "regardless". Added to owner decisions.
+
+**Migration numbering, wrong again.** Plan says `077` (in `02`'s range); `04` is
+080-089, 080-085 taken, so **086**. (Tally: 076→E9/082, 078→E7c/083, 074→D1/084,
+075→D5/085, 077→D9/086.)
+
+**Full gate.**
+
+```
+✖ 175 problems (0 errors, 175 warnings)
+Test Files  162 passed (162)
+Tests  1757 passed (1757)
+PASS: 13 public route(s) and 21 demo-exempt route(s) all resolve, with reasons.
+```
+
+migration-numbering gate: 4 passed. SELECT-leak assertion: 0 rows.
+
+**Still open in `04`:** T5 (D10, D11), T7 (D12-D15), T8 refunds (D16-D18), T9 (N1,
+N2), and the C-series payout helpers (C1 canReceivePayout, C3 recordBlockedLeg, C4
+retry sweep).
+
+**New owner decision:** retire the duplicate active placements (4 artist+venue
+pairs, up to 18 rows at testing-venue) so the D9 active-uniqueness index can be
+added. All are fin-coles at test venues (april-venue, testing-venue, the-mayfield,
+the-venue-test), so they look like test data, but which to keep is a call for the
+owner. Until then the webhook determinism fix holds the line.
