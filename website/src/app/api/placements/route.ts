@@ -1345,8 +1345,20 @@ export async function PATCH(request: Request) {
     // defensive in case a malformed PATCH lands.
     try {
       const goingActive = existing.status === "pending" && status === "active";
-      const goingCancelled =
-        existing.status === "active" && status === "cancelled";
+      // D8: billing must stop whenever a placement leaves 'active' for a terminal
+      // state, not only on an explicit cancel. A collection is the important case
+      // and the one the plan's fix would miss: it arrives as stage: "collected",
+      // which sets updates.status = "completed" rather than the body `status`, so
+      // this reads the EFFECTIVE new status (the same `updates.status ?? existing`
+      // the inventory block below already uses). `sold` is covered for the same
+      // reason. Otherwise the venue keeps paying a monthly fee for a piece that has
+      // come off the wall.
+      const effectiveNewStatus = (updates.status as string | undefined) ?? existing.status;
+      const goingInactive =
+        existing.status === "active" &&
+        (effectiveNewStatus === "cancelled" ||
+          effectiveNewStatus === "completed" ||
+          effectiveNewStatus === "sold");
       if (goingActive) {
         const { data: full } = await db
           .from("placements")
@@ -1381,7 +1393,7 @@ export async function PATCH(request: Request) {
             };
           }
         }
-      } else if (goingCancelled) {
+      } else if (goingInactive) {
         await cancelPaidLoanBilling(id);
       }
     } catch (billingErr) {

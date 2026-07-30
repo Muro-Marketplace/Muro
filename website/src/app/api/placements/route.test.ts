@@ -17,10 +17,11 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { authMock, fromMock, isFlagOnMock } = vi.hoisted(() => ({
+const { authMock, fromMock, isFlagOnMock, cancelBillingMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
   fromMock: vi.fn(),
   isFlagOnMock: vi.fn(() => false),
+  cancelBillingMock: vi.fn(async () => ({ status: "cancelled" as const })),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
@@ -45,7 +46,7 @@ vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}
 vi.mock("@/lib/stripe", () => ({ stripe: {} }));
 vi.mock("@/lib/placements/paid-loan-billing", () => ({
   startPaidLoanBilling: vi.fn(async () => ({ ok: true })),
-  cancelPaidLoanBilling: vi.fn(async () => ({ ok: true })),
+  cancelPaidLoanBilling: cancelBillingMock,
 }));
 vi.mock("@/lib/subscriptions", () => ({ isSubscribed: vi.fn(async () => true) }));
 vi.mock("@/lib/outreach-cap", () => ({ checkArtistOutreachCap: vi.fn(async () => null) }));
@@ -156,6 +157,7 @@ beforeEach(() => {
   fromMock.mockReset();
   isFlagOnMock.mockReturnValue(false);
   authMock.mockResolvedValue({ user: { id: ARTIST, email: "a@example.com" }, error: null });
+  cancelBillingMock.mockClear();
 });
 
 describe("PATCH /api/placements state machine (E20)", () => {
@@ -328,5 +330,54 @@ describe("PATCH /api/placements completion path (E23b)", () => {
     const res = await patch({ id: "pl-1", unsetStage: "collected" });
     expect(res.status).toBeLessThan(400);
     expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
+  });
+});
+
+// ── D8: billing stops when a placement leaves 'active', not only on cancel ────
+//
+// cancelPaidLoanBilling fired only on active → cancelled. A collection arrives as
+// stage: "collected", which sets updates.status = "completed" (not the body
+// `status`), so the plan's fix, which widened the body `status` comparison, would
+// have missed the real collection path. The venue would keep paying a monthly fee
+// for a piece off the wall.
+describe("PATCH /api/placements stops billing on a terminal transition (D8)", () => {
+  const ACTIVE = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+    proposed_by_user_id: null,
+  };
+
+  it("cancels billing when the work is collected via stage:collected", async () => {
+    setupDb(ACTIVE);
+    const res = await patch({ id: "pl-1", stage: "collected" });
+    expect(res.status).toBeLessThan(400);
+    expect(cancelBillingMock).toHaveBeenCalledWith("pl-1");
+  });
+
+  it("still cancels billing on a direct status:cancelled (unchanged)", async () => {
+    setupDb(ACTIVE);
+    const res = await patch({ id: "pl-1", status: "cancelled" });
+    expect(res.status).toBeLessThan(400);
+    expect(cancelBillingMock).toHaveBeenCalledWith("pl-1");
+  });
+
+  it("does NOT cancel billing on a non-terminal stage advance (installed)", async () => {
+    // The placement is still on the wall; billing must continue.
+    setupDb(ACTIVE);
+    const res = await patch({ id: "pl-1", stage: "installed" });
+    expect(res.status).toBeLessThan(400);
+    expect(cancelBillingMock).not.toHaveBeenCalled();
+  });
+
+  it("does NOT cancel billing when undoing a collection back to active", async () => {
+    // updates.status becomes "active" here, which must not trip the terminal check.
+    setupDb({ ...ACTIVE, status: "completed" });
+    const res = await patch({ id: "pl-1", unsetStage: "collected" });
+    expect(res.status).toBeLessThan(400);
+    expect(cancelBillingMock).not.toHaveBeenCalled();
   });
 });
