@@ -24,6 +24,20 @@ A coherence review of the nine independently-written plans found conflicts, dupl
 3. **Read the newest decisions first.** This document is append-only and long. The most
    recent D-number is the most likely to change what you are about to do.
 
+4. **SUPERVISOR QUEUE — these are TASKS, not commentary. Add them to the PROGRESS ledger
+   and work them.** Four findings were ruled in D37-D40 and none reached the queue, because
+   this doc's D-numbers collide with `04`'s own task ids D1-D18 (`04`'s "D12" is the
+   subscription task; this doc's D12 is the advisor ruling). They are therefore restated
+   here as ledger rows, in the loop's own numbering. **Rows 13 and 14 are live prod
+   exposures and outrank the remaining `04` correctness work; take them next.**
+
+   | # | Task | Ruling | Doc |
+   |---|---|---|---|
+   | 13 | Revoke anon `SELECT` on `artist_profiles.postcode` + `stripe_customer_id` + `stripe_connect_account_id` + `stripe_subscription_id`. Migration `076`, copying `071`'s DO-block pattern (a bare column REVOKE is a **silent no-op** while a table grant exists). Then update ADR 0004, which currently argues against this. `lat`/`lng` are deliberately excluded until `getAllDatabaseArtists` stops using `select("*")`. | D38 | `02` |
+   | 14 | Revoke PUBLIC/anon/authenticated EXECUTE on `increment_placement_revenue`, grant `service_role`. Migration `075`. Do NOT churn the five trigger functions. | D37 (E50) | `02` |
+   | 15 | `ORDER_TOKEN_SECRET` into the `src/env.ts` schema (follow the `assertStripePricesConfigured()` pattern you just wrote); make `QR_ATTRIBUTION_ENFORCE` fail **closed and loud** when the secret is missing instead of attributing to `""`; rewrite the owner instruction at PROGRESS:5861 as an ordered sequence — set secret, confirm `va=` appears on a real QR redirect, *then* flip. Flipping first silently zeroes every venue's revenue share. | D39 | `04` |
+   | 16 | `platformFeePercentForArtist` must respect `subscription_status`: return the 15% default unless status is `active`/`trialing`. Today a cancelled Pro artist keeps 5% for ever. Add `subscription_status` to `ArtistPlanState` **and to all five callers' `.select()`**, or PostgREST rejects the query whole. | D40 (E52) | `04` |
+
 ---
 
 ## D0. Owner decisions (recorded)
@@ -837,3 +851,796 @@ grep -rho 'NEXT_PUBLIC_FLAG_[A-Z_0-9]*:"[^"]*"' .next/static/chunks/ | sort -u
 Note the loop already applied this correctly, and its evidence is the model to follow: only the flag set at build time inlined, the four unset ones correctly remaining polyfill reads.
 
 No owner input needed unless you want the override in D28.1.
+
+---
+
+## D29. E44 forensics (clean), an empty-string trap, and a `canReceivePayout` definition that would block the only real artist
+
+`06` is complete except V3/V4. Loop fully resumed, 105 commits, 0–4 minute gaps.
+
+### D29.1 — ✅ E44 was never exploited. Forensic result, prod.
+
+E44 let any artist self-grant `subscription_status`, `subscription_plan`, `review_status` and `is_founding_artist`. **It was live for months. It was not used.**
+
+Evidence: **every paid subscription is backed by a real Stripe subscription.** `fin-coles` (premium/active), `sass-test` (core/active), `mark-smith` and `sam-test` (core/canceled) all have both `stripe_customer_id` and `stripe_subscription_id` populated. **Zero rows have `subscription_status in ('active','trialing')` with a null `stripe_subscription_id`** — which is precisely the shape a self-grant would leave. The only `is_founding_artist: true` is `maya-chen-demo`, a seeded demo profile with no Stripe customer, created on the demo seed date.
+
+No restitution or revocation needed. Worth recording so nobody re-litigates it later.
+
+### D29.2 — ⚠️ `stripe_connect_account_id` is `''`, not NULL — any null-check is wrong
+
+**13 of 14 artists have an empty string.** Only `fin-coles` has a real id (`acct_1TX8D3FSpfTYHV9I`).
+
+*(My own first query used `stripe_connect_account_id is not null` and reported all 14 as having Connect accounts. That was wrong — `''` is not null. Correcting it here because the same mistake in code is a live payout bug.)*
+
+Consequences to enforce in the payments work:
+- `if (profile.stripe_connect_account_id)` → `''` is **falsy** → correct. This is what `payment/setup:86-89` does today, so E8's truthiness check is sound.
+- `!== null`, `!= null`, `IS NOT NULL`, `.filter(x => x.stripe_connect_account_id !== null)` → **`''` passes** → treats 13 artists as payable when none of them are.
+
+**Rule for `canReceivePayout()` (CC6): test emptiness, not nullness.** Use `Boolean(id?.trim())`. Add a test with `''` as an explicit case — the null case alone will not catch this.
+
+### D29.3 — 🔴 The CC6 `canReceivePayout()` definition would block the only real artist
+
+CC6 specified `charges_enabled && payouts_enabled && onboarding_complete && !requirements.disabled_reason`. Prod says:
+
+| slug | connect id | onboarding_complete | charges_enabled |
+|---|---|---|---|
+| `fin-coles` | `acct_1TX8D3FSpfTYHV9I` | **false** | **true** |
+| all 13 others | `''` | false | null |
+
+`fin-coles` — the only artist with a real Connect account, 10 orders and £127 of platform fees — has **`charges_enabled: true` but `onboarding_complete: false`.** Under CC6 as written, `canReceivePayout()` returns **false** for them, so every payout gate would refuse the only artist who can actually be paid.
+
+**Ruling: `stripe_charges_enabled` is the authoritative signal; `stripe_connect_onboarding_complete` is not.** The column is a local cache that was evidently never updated after onboarding, while `stripe_charges_enabled` has `stripe_charges_checked_at` set and is verified against Stripe. Define:
+
+```ts
+canReceivePayout(p) = Boolean(p.stripe_connect_account_id?.trim()) && p.stripe_charges_enabled === true
+```
+
+Re-check `payouts_enabled` live from Stripe at payout time rather than trusting a cached column. **Do not gate on `stripe_connect_onboarding_complete` until something actually maintains it** — and if nothing does, treat it as a phantom-adjacent column and either backfill or drop it (7b's sweep should flag it).
+
+### D29.4 — V3/V4 are genuinely owner-blocked. Exactly what is needed:
+
+- **V3** — replay the §1.3 E44 body against a running dev server. Needs real Supabase credentials in `.env.local` (currently placeholders).
+- **V4** — confirm Stripe receives `unit_amount: 18500` for the §3.3 framed line. Needs a real `sk_test_...` key (currently `sk_test_PLAC...`, api.stripe.com 401s), a webhook secret, and ideally the Stripe CLI.
+
+Both are covered by route-level tests, so this is belt-and-braces rather than a gap. Correctly parked with the other Stripe owner actions. **Everything else in `06` is done.**
+
+---
+
+## D30. Collection-offer stock gap is LATENT — do not pull `04` D5 forward
+
+D7 landed (stock re-validated before charging an accepted offer). Both departures from the doc's snippet were improvements and each is pinned by its own probe — a compare-and-set `.eq("status","accepted")` that stops a paid offer being stamped `expired` by a racing expiry, and a `work_ids` de-duplication that stops one repeated id making the lookup look short and closing a live offer. Probes 2 and 3 each fail exactly one test, so neither rides along on the main gate. No correction needed.
+
+**The adjacent gap the loop flagged, sized against prod:**
+
+For a *collection* offer the webhook decrements nothing — `offer_work_ids` metadata is empty by `chk_target_shape` and the decrement loop iterates that list, so E10/D7's fix covers the named-works shape only.
+
+| Probe | Result |
+|---|---|
+| `purchase_offers` total | 12 |
+| **with `collection_id`** | **0** |
+| collection offers by status | none |
+| `artist_collections` rows | 1 |
+| works with finite stock | 12 |
+| **works with stock ≤ 1** | **2** |
+
+**No collection offer has ever been created.** The capability exists (one collection is defined), but the path has never been exercised, so the gap is **latent, not live**.
+
+**Ruling: leave it with `04` D5, which owns the decrement rewrite. Do not pull D5 forward.** Fixing the decrement loop piecemeal here would duplicate work D5 is going to redo anyway, and D24/D27's lesson applies in reverse — a partial fix to a shared loop invites a green suite that covers one shape and misses the other. D5 must cover **both** shapes, and its acceptance test should assert stock movement for a collection offer explicitly, since that is the shape with no production traffic to catch a regression.
+
+**Where the real exposure is:** the **2 works with `quantity_available <= 1`** are the genuine double-sell surface, and they are on the named-works path that D7 has now protected. That was the right order.
+
+No owner input needed.
+
+---
+
+## D31. 🔴 STOP — every payout gate blocks the only payable artist. Fix before T6 copies it.
+
+**Read this before writing any more of `04`.** E9 (T2) is correct and E7a has started T6, but both sit on top of a gate that cannot pass in production.
+
+### D31.1 — The measurement
+
+Three payout gates in `webhooks/stripe/route.ts` — lines **245**, **800**, **829** — all read:
+
+```ts
+if (x?.stripe_connect_account_id && x.stripe_connect_onboarding_complete) { … scheduleTransfer(…) }
+```
+
+Run against prod, for every row that has a Connect id or charges enabled:
+
+| slug | connect id | `onboarding_complete` | `charges_enabled` | **passes CURRENT gate** | passes D29 gate |
+|---|---|---|---|---|---|
+| `fin-coles` | ✅ | **false** | **true** | **❌ NO** | ✅ yes |
+
+`fin-coles` is the **only** artist with a Connect account, and the only one with `charges_enabled`. They have 10 orders and £127 of platform fees. **Every `scheduleTransfer` call in the sale path is unreachable for them.** That is consistent with the other measurement from earlier: `stripe_transfers` has **0 rows against 12 orders**.
+
+So E9's per-artist legs are correct *and unreachable*. The split logic is right; nothing downstream of the gate ever runs.
+
+### D31.2 — Attribution and cause
+
+**E9 did not introduce this** — `git show 7dffb33` touches none of those lines. The gates are pre-existing, and D29.3 already ruled on them. **D29 is on disk but not yet in the loop's committed HEAD**, so the loop has not had the chance to apply it. No fault; this entry exists to make sure it is not missed now that T6 is live.
+
+`stripe_connect_onboarding_complete` is a local cache that **nothing maintains** — it is `false` even for an account Stripe reports as `charges_enabled: true`, with `stripe_charges_checked_at` set. Gating on it is gating on a column that is never written.
+
+### D31.3 — Ruling (restating D29.3 as an action, because T6 is being written now)
+
+1. **Replace all three gates** with the D29.3 predicate:
+   ```ts
+   Boolean(p.stripe_connect_account_id?.trim()) && p.stripe_charges_enabled === true
+   ```
+   Extract it as the shared `canReceivePayout()` CC6 asks for, so T6 and every later route consume one definition rather than copying the wrong one a fourth time.
+2. **Do not gate on `stripe_connect_onboarding_complete` anywhere.** Until something maintains it, treat it as phantom-adjacent — 7b's sweep should flag it, and it should be backfilled from Stripe or dropped.
+3. **Empty-string, not null** (D29.2): 13 of 14 artists have `''`, so `!== null` / `IS NOT NULL` passes for all of them. Test `''` explicitly.
+4. **Acceptance test:** with `fin-coles`'s real shape — connect id set, `onboarding_complete: false`, `charges_enabled: true` — a completed sale must schedule a transfer leg. That single case would have caught this, and it is the case no existing test covers.
+5. **Per D24.2, probe it:** revert the predicate to the old gate and confirm that test reddens.
+
+### D31.4 — Sequencing
+
+**Do this before continuing T6.** T6 is the paid-loan path and `paid-loan-billing.ts` already has its own copy of the same shape. Landing T6 on the old predicate means fixing it in four places instead of three, and the paid-loan flow is exactly where trapped funds (E8) were already a finding.
+
+No owner input needed.
+
+---
+
+## D32. Correction to D29.3/D31, a stale dependency nobody had looked at, and a standing sweep duty
+
+Produced by a deliberate collateral-damage sweep rather than by reading the latest commit. It found three things, including an error of mine.
+
+### D32.1 — ❌ CORRECTION: `stripe_connect_onboarding_complete` IS maintained. I said it wasn't.
+
+D29.3 and D31 both asserted "nothing maintains it". **Wrong.** `webhooks/stripe/route.ts:1352` handles `account.updated` and writes it to both `artist_profiles` and `venue_profiles`:
+
+```ts
+const isComplete = account.charges_enabled && account.details_submitted;
+```
+
+So the writer exists. It is `false` for `fin-coles` for one of two reasons, and they need different fixes:
+- **(a) The `account.updated` event is not enabled in Stripe.** `OUTSTANDING.md §1.3` lists `account.updated` among the events to switch on, unticked. If it never fires, the column is frozen at its initial `false` — which matches the evidence, since `stripe_charges_enabled` *is* populated with a `checked_at` timestamp by a separate polling path that does not depend on the webhook.
+- **(b) `details_submitted` is genuinely false** — the account can take charges but has not completed onboarding.
+
+**Owner action added:** enable `account.updated` in the Stripe dashboard alongside the other events in `OUTSTANDING.md §1.3`. Until then this column cannot self-heal.
+
+### D32.2 — ⚠️ Refine D31.3: do not treat `charges_enabled` as proof of payability
+
+Because (b) is possible, `charges_enabled: true` does **not** imply `payouts_enabled: true` — Stripe distinguishes them. D31.3's predicate is still right for **deciding whether to schedule** a transfer, but the payout step must **verify `payouts_enabled` live against Stripe** before executing, exactly as D29.3 said. Do not let D31.3's shorter predicate replace that check; scheduling and executing have different bars.
+
+### D32.3 — 🆕 A stale dependency in a place nobody had looked: onboarding emails
+
+`src/lib/email/welcome.ts:82`:
+
+```ts
+const stripeConnected = !!profile.stripe_connect_onboarding_complete;
+```
+
+The artist onboarding checklist decides "have they connected Stripe?" from the **same frozen column**. So `fin-coles` — who has a Connect account with `charges_enabled: true` — is told by email to go and connect Stripe. Every artist in that state gets a nudge for a step they have already completed.
+
+This is not in any finding, not in any implementation doc, and no commit touched it. It surfaced only because the sweep asked "what *else* reads this column?" rather than "is the bug fixed?". **Fix it with the same predicate** and add it to the `09` email work.
+
+### D32.4 — Standing duty: sweep for collateral damage, not just correctness
+
+Verifying that a fix works is not the same as verifying that nothing else depended on the old behaviour. Every fix from here must also answer:
+
+1. **Who else reads this?** `grep` the column, function, flag or route name across `src/` — including `lib/`, `emails/`, crons and tests, not just the route being changed.
+2. **Who else writes it?** A column can be stale because its writer never runs (D32.1) rather than because it has no writer.
+3. **Is the same predicate copied elsewhere?** D31 found three copies in one file; this sweep found a fourth reader in `lib/email/`. Extract the shared helper *before* fixing the copies, or the fourth is missed.
+4. **Did any doc, comment or test just become false?** Comments asserting old behaviour are the next reader's bug (see D19's "the source comment admits the guess").
+
+Record the sweep in the ledger entry, even when it finds nothing — "swept X, no other readers" is evidence; silence is not.
+
+---
+
+## D33. ❌ CORRECTION to D31.3 — do NOT extract `canReceivePayout`. The helper already exists.
+
+T6 moving fast: E7a, E7b, E7c and E8 all landed. **E8 reached the right predicate independently** — neither D31 nor D32 is in the loop's committed HEAD, yet it gated setup on `canArtistAcceptOrders` and reasoned out the empty-string default on its own ("the column defaults to `''` and is set the moment onboarding *starts*. An account mid-KYC is not charges_enabled, so the money was collected monthly with no way to forward it"). That is D29.2 and D31 arrived at from the code rather than from the plan.
+
+### D33.1 — The correction
+
+D31.3 told the loop to "extract it as the shared `canReceivePayout()` CC6 asks for". **That would have created a duplicate of a helper that already exists**, which is precisely the knot this plan exists to remove.
+
+`src/lib/stripe-connect-status.ts` → `canArtistAcceptOrders(slug)` already does everything D29.3/D31.3/D32.2 asked for:
+- `if (!profile?.stripe_connect_account_id) return false` — **empty-string safe** (D29.2) ✅
+- reads `stripe_charges_enabled`, **not** `onboarding_complete` (D29.3) ✅
+- on cache miss or stale TTL, **re-fetches live from Stripe** and writes the value back (D32.2's "verify live, don't trust the cache") ✅
+
+**Ruling: `canArtistAcceptOrders` is the single payout-capability definition. Do not write a second one. CC6's `canReceivePayout` is satisfied by it — treat that name as an alias for work already done.**
+
+### D33.2 — Good news the sweep confirmed: every payment ENTRY point is already correctly gated
+
+| Path | Pre-flight | Correct predicate? |
+|---|---|---|
+| Cart checkout | `checkout/route.ts:346` | ✅ |
+| Offer checkout | `offers/[id]/checkout:134` | ✅ |
+| Paid-loan setup | `payment/setup:98` (new, E8) | ✅ |
+
+So no payment can *start* for an artist who cannot be paid. That is the important half, and it is done.
+
+### D33.3 — The remaining gap is narrower than D31 stated: only the POST-payment transfer legs
+
+Still on the stale column — three sites, all in `webhooks/stripe/route.ts` (`:245`, `:804`, `:833`), plus one non-payment reader:
+
+- `:245`, `:804`, `:833` — the `scheduleTransfer` gates. These decide whether the artist/venue actually gets a transfer leg after the money has already been taken. **This is where `fin-coles` fails** (`onboarding_complete: false`, `charges_enabled: true`), and it is consistent with `stripe_transfers` holding 0 rows against 12 orders.
+- `lib/email/welcome.ts:66,82` — the onboarding checklist (D32.3), telling connected artists to connect Stripe.
+
+**Fix, without adding a duplicate:** extract the *pure* half of `canArtistAcceptOrders` into a sibling in the same module, e.g.
+
+```ts
+export function hasPayoutCapability(p: { stripe_connect_account_id?: string | null; stripe_charges_enabled?: boolean | null }): boolean {
+  return Boolean(p.stripe_connect_account_id?.trim()) && p.stripe_charges_enabled === true;
+}
+```
+
+then have `canArtistAcceptOrders` call it, and have the three webhook gates pass their already-loaded profile row to it. **One definition, two entry points** — the async slug-based one for pre-flights that may need a live Stripe fetch, the sync row-based one for the webhook, which already has the row and should not make a Stripe call per transfer leg.
+
+Update the three `.select(...)` lists to fetch `stripe_charges_enabled` instead of `stripe_connect_onboarding_complete`, and fix `welcome.ts` the same way.
+
+**Acceptance test unchanged from D31.3:** `fin-coles`'s real shape — connect id set, `onboarding_complete: false`, `charges_enabled: true` — must schedule a transfer leg. Probe it per D24.2.
+
+---
+
+## D34. T6 complete · standing sweep results · and FOUR owner decisions taken off the owner
+
+**T6 (paid loan) is COMPLETE** — E7a-d, E8, E11, E11b. That closes the last of the two remaining criticals in `04`.
+
+### D34.1 — Standing sweep, this run
+
+| Sweep | Result |
+|---|---|
+| RLS denylist assertion (D15.3) | **0 rows — clean** ✅ |
+| `PAID_LOAN_V2` scope (E11) | **Correct** — gates creation only; reconciliation deliberately ungated at `:479/:589/:631`, so a flag flip cannot strand live billings ✅ |
+| Epoch bug (E11b) | **Clean** — no remaining `current_period_end ?? 0` anywhere ✅ |
+| Payout-leg gates (D33.3) | ❌ **Still stale** — 8 refs in the webhook, 2 in `welcome.ts` |
+| `stripe_transfers` vs `orders` | ❌ **0 / 12** — still no artist has ever been paid |
+| Public storage buckets | ❌ `message-attachments` **still public** (E25) |
+| `placement_recurring_billings` | 0 rows — T6's work has **no production traffic**, so its tests are the only safety net |
+
+**D33.3 remains the highest-value unstarted item.** Every payment entry is gated; the payout leg still is not. `0 transfers / 12 orders` is the single number that says the money does not move.
+
+### D34.2 — RULING (was owner): N-K2 implausible dimensions
+
+Prod is worse than reported: **19 of 27 distinct `dimensions` values contain `px`** — 70%, not 18/26. Shipping currently prices a 242 × 363 cm parcel from `"2420 × 3632 px"`.
+
+The plan offered refuse-to-quote / clamp / default. **All three are wrong**, and the right answer is already in the data:
+
+**Use the selected pricing row's size, not `work.dimensions`.** Each pricing row carries a real, human-authored size (`12×8" (30×20 cm)`) that the buyer explicitly selects. `work.dimensions` is a free-text field polluted with export metadata and is not the shipping input. Fall back to `work.dimensions` **only** when a work has no pricing rows, and in that case refuse to quote and surface it to the artist rather than inventing a size.
+
+Refusing outright would block ~70% of works; clamping would still ship the wrong box and lose money silently. **Owner: `04` T1** (with the `parseDimensions` collapse, `07 §13.2`).
+
+### D34.3 — RULING (was owner): G-B part 2, the venue slug
+
+Framed as "paywall strength vs click-through". It is a false trade-off: **render no name-bearing href for unentitled viewers, render the real one for entitled viewers.** Entitled users lose nothing; unentitled users were never supposed to have the name. No opaque-id infrastructure, no route resolution, no migration.
+
+Unentitled cards link to the paywall/upgrade page instead of `/venues/<slug>`. **Owner: whoever holds G-B.**
+
+### D34.4 — RULING (was owner): migration ledger divergence
+
+**Accept the numbered files as documentation.** Migrations are applied via the Supabase MCP, which maintains its own `supabase_migrations.schema_migrations` with timestamps and idempotency keys. Rewriting prod's ledger to match local filenames is a write to migration history with no functional benefit and real risk. Local numbering stays a human-readable index; prod's ledger stays authoritative. Note this in `02` so it is not revisited.
+
+### D34.5 — RULING (was owner): B4 admin conjunct
+
+**Add the admin check.** D6 asked for "admin + non-prod"; iteration 21 shipped non-prod only. `/email-preview` renders the internal template library, so gating it on admin as well is a two-line change with no downside. Do it when `09` is touched.
+
+### D34.6 — What genuinely still needs the owner
+
+Only two are real product/legal calls:
+- **E48** — the referral promise: deliver it or delete the copy (recommendation: delete now, build later).
+- **E46b** — terms-acceptance record: `verified` / `self_asserted` distinction (recommended) vs record-after-confirmation.
+
+Everything else on their list is an external action, not a decision: the CI secrets, branch protection, enabling `account.updated`, Connect activation, the "Wallspace"→"Wallplace" rename, live Stripe keys, V3/V4 credentials, and the £60 reconciliation.
+
+---
+
+## D35. RULING (was deferred to owner): the `payment_status` guard can land now, narrowly, without a Stripe drive
+
+D1 landed well — a global replay guard on `event.id` with release-on-failure, and Probe A (claim-only, the plan's snippet) fails exactly the release test, so the departure is pinned as load-bearing. 1,731 tests green, RLS assertion still 0 rows, advisor clean.
+
+The loop deferred the second half — requiring `payment_status` before creating orders — on the grounds that proving it does not reject a legitimate subscription needs a Stripe test-mode drive, which is impossible here (`sk_test_PLAC...`, api 401). **That caution was right, and the deferral is resolvable without the drive.**
+
+### D35.1 — Sweep result: the gap is live but currently unreachable
+
+`grep payment_status src/app/api/webhooks/stripe/route.ts` → **zero references.** So an order can be created from a session that was never paid.
+
+**But every session-creating route is card-only:**
+
+```
+placements/[id]/payment/setup:122   payment_method_types: ["card"]
+offers/[id]/checkout:162            payment_method_types: ["card"]
+curation:152, :188                  payment_method_types: ["card"]
+checkout:426                        payment_method_types: ["card"]
+```
+
+Card payments settle synchronously: a card session that reaches `checkout.session.completed` is `paid`. `payment_status: "unpaid"` at completion is produced by **delayed** methods — BACS Direct Debit, SEPA, boleto — none of which are enabled. So E40's unpaid-order path is **not currently reachable**.
+
+It becomes reachable the moment anyone adds a non-card method, and BACS Direct Debit is a natural fit for UK paid loans, so this is a "when", not an "if".
+
+### D35.2 — Why no Stripe drive is needed
+
+The loop's fear was rejecting a legitimate subscription. That is a real Stripe behaviour — a trialling subscription completes with `payment_status: "no_payment_required"`, not `"paid"` — and a blanket `=== "paid"` guard **would** break trials. But the answer is documented semantics plus the code's existing branch separation, not an empirical drive:
+
+1. **Order-creating branches only** (`session.mode === "payment"`, i.e. cart, offer, curation one-off): require `payment_status === "paid"`.
+2. **Subscription branches** (`mode === "subscription"`: artist plans, paid loan): accept `"paid"` **or** `"no_payment_required"` — never require `"paid"` alone, or every trial breaks.
+3. **Reconciliation paths**: do not gate at all. Per E11's precedent, a guard on creation must not become a guard on reconciling something already live.
+
+The branches are already separated in the handler by `mode` and `checkout_kind`, so this is a local change with no cross-branch risk. **Land it.**
+
+### D35.3 — Make the prerequisite explicit, so it cannot be forgotten
+
+Add to the payment-methods checklist, wherever `payment_method_types` is next touched: **the `payment_status` guard must be in place before any non-card method is enabled.** Enabling BACS/SEPA without it turns an unreachable defect into an order-for-free. A comment at each of the five `payment_method_types: ["card"]` sites pointing at this decision is the cheapest way to make the coupling visible to whoever adds the second method.
+
+**Removed from the owner-decisions list.** No Stripe drive, no owner input.
+
+---
+
+## D36. 🔴 `/api/orders/track` is dead — EIGHT phantom columns in one select (E49)
+
+D3 (widened order ids, collision vs redelivery) and D4 (fail loud on unattributable artist) landed; `04` B0 complete, T1 started.
+
+### D36.1 — Order-number sweep: CLEAN
+
+D3 changes an id format, so the collateral question is whether anything parses it. Swept all of `src/`: **nothing validates, regexes or slices `order_number`.** Every reader displays `order_number || id`. The only `WP-` literals are **email-template preview props** (sample data), not validation. Widening is safe for the 12 existing rows. Evidence, not assumption.
+
+### D36.2 — 🆕 But the sweep found E49: the public order-tracking route cannot work
+
+`src/app/api/orders/track/route.ts:81` selects 16 columns from `orders`. **Eight do not exist** (verified against `information_schema`):
+
+| Selected | Exists? | Real column |
+|---|---|---|
+| `buyer_name` | ❌ | — (no such column) |
+| `total_amount` | ❌ | `total` |
+| `shipping_amount` | ❌ | `shipping_cost` |
+| `cart_items` | ❌ | `items` |
+| `currency` | ❌ | — |
+| `tracking_url` | ❌ | — |
+| `shipped_at` | ❌ | — |
+| `delivered_at` | ❌ | — |
+| `id`, `order_number`, `status`, `buyer_email`, `artist_slug`, `status_history`, `tracking_number`, `created_at` | ✅ | |
+
+PostgREST rejects the whole statement on the first unknown column, so `data` is null and **the route returns nothing for every order, always**. This is the same failure mode as Bug 15 and `free_until`: the query never runs, the null-fallback looks like "no data", and nothing errors.
+
+**This is the customer-facing "track my order" endpoint.** Guest buyers have no portal — tracking is how they check an order. It has never worked.
+
+**Severity: high.** Not a money bug, but a core customer journey that is 100% broken, and invisible because it degrades to an empty result rather than a 500.
+
+### D36.3 — Why nothing caught it
+
+- `phantom-columns.test.ts` is a **denylist** — it only knows four named columns. D21.3 already ruled the allowlist form mandatory; this is the third concrete case it would have caught (after the two dead crons in D19).
+- No test covers this route.
+- Prod logs would show it, but only when someone actually tries to track an order — and with 12 orders and no guest tracking traffic, nobody has.
+
+### D36.4 — Rulings
+
+1. **Fix the select** — map to the real columns (`total`, `shipping_cost`, `items`) and drop the four with no equivalent (`buyer_name`, `currency`, `tracking_url`, `shipped_at`, `delivered_at`). Where the response shape promises a field that has no column, either derive it (`shipped_at`/`delivered_at` from `status_history`) or remove it from the contract — do not invent columns.
+2. **Add a route test** asserting a real order resolves. **Probe it per D24.2** by restoring one phantom column and confirming it reddens.
+3. **This raises 7b (the allowlist guard) again.** Three separate live defects have now been found by hand that a schema-diff would have surfaced automatically in one run. **It should be the next task after T1**, not later — every hour it waits, another select like this can land.
+4. Log as **E49** in the findings doc.
+
+No owner input needed.
+
+---
+
+## D37. E50 — `increment_placement_revenue` is PUBLIC-executable: any artist can inflate their own revenue
+
+D5 landed (atomic stock decrement, closing the double-sell race). **The loop got the new function exactly right**, verified in prod:
+
+```
+decrement_work_stock(p_work_id text, p_qty integer)
+  security_definer = true
+  grants           = postgres=X | service_role=X        ← NOT anon, NOT authenticated ✅
+```
+
+`SECURITY DEFINER` so it can bypass RLS to decrement, with EXECUTE withheld from every client role. That is the correct shape, and the loop flagged the grant question itself.
+
+### D37.1 — But the function sitting next to it is wrong (E50)
+
+```
+increment_placement_revenue(p_placement_id text, p_amount numeric)
+  security_definer = false
+  grants           = =X/postgres | anon=X | authenticated=X | service_role=X   ← PUBLIC
+```
+
+Body:
+```sql
+UPDATE placements
+   SET revenue = COALESCE(revenue,0) + p_amount,
+       delivery_count = delivery_count + 1
+ WHERE id = p_placement_id;
+```
+
+It is `SECURITY INVOKER`, so RLS still applies — which is what stops this being critical. But `placements` RLS permits:
+
+```
+"Users can update own placements"  roles={authenticated}  qual=(auth.uid() = artist_user_id)
+```
+
+**So any authenticated artist can call it against their own placement with any `p_amount` they like**, inflating `revenue` and `delivery_count` arbitrarily. `anon` cannot (no `auth.uid()`), so the blast radius is authenticated artists acting on their own rows.
+
+**Severity: medium.** No direct money movement — payouts derive from `orders`/`stripe_transfers`, not this column — but placement revenue is venue-facing and feeds analytics, so reported figures are forgeable by the party they flatter. It is also one permissive policy away from being worse.
+
+### D37.2 — Ruling
+
+Mirror what `decrement_work_stock` already does. New migration in **`02`'s range → `075`**:
+
+```sql
+revoke execute on function public.increment_placement_revenue(text, numeric) from public, anon, authenticated;
+grant  execute on function public.increment_placement_revenue(text, numeric) to service_role;
+```
+
+Confirm no client-side caller exists first (it should only be called from a service-role path); if a client path does call it, that call is itself the bug and must move server-side.
+
+### D37.3 — Do NOT churn on the other PUBLIC-EXECUTE functions
+
+The sweep found six more with PUBLIC EXECUTE. Five are **trigger functions** (`blogs_set_updated_at`, `orders_set_order_number`, `placement_recurring_billings_set_updated_at`, `wall_layouts_set_updated_at`, `walls_set_updated_at`) — they take no arguments and error outside a trigger context, so a direct grant is not usefully exploitable. Leave them; revoking adds churn and risk for no gain.
+
+`get_email_preferences(p_user_id uuid)` is worth a look but is lower risk: it is a read, `SECURITY INVOKER`, so RLS on `email_preferences` governs it. Check that table has an owner-scoped policy; if it does, no action.
+
+### D37.4 — Standing addition to the sweep
+
+Add **function grants** to the periodic sweep list:
+
+```sql
+select p.proname, p.prosecdef, p.proacl
+from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+where n.nspname='public';
+```
+
+Any non-trigger function that mutates and is executable by `anon`/`authenticated`/PUBLIC is a finding. This class was not on the list until now, and it took a hand sweep to surface — the same gap that D21.3's allowlist guard closes for columns.
+
+Log as **E50**. No owner input needed.
+
+---
+
+## D38. The Bug 1 fix closed the route and left the table open (E51), and ADR 0004 is now stale
+
+D9 verified in prod: `placements_revenue_share_bounds CHECK (revenue_share_percent IS NULL OR (>= 0 AND <= 100))` is live. 136 commits, 7-minute gaps, healthy.
+
+The sweep around it found the following. **This is the highest-value item currently on the queue and it should be taken next**, ahead of `04` T5/T7/T8/T9. It is small, it is proven against prod, and unlike the payments work it is a live data exposure rather than a correctness risk.
+
+### D38.1 — E51 (HIGH, live in prod): `artist_profiles` is fully readable with the public anon key
+
+`artist_profiles` has SELECT policy `USING (true)` for `{public}` **and** a table-level SELECT grant to `anon`, covering all **67** columns. The anon key ships in the browser bundle, so anyone can query PostgREST directly.
+
+Executable proof, run as the `anon` role in a rolled-back transaction against prod:
+
+```
+rows_anon_can_see | postcodes_visible | lats_visible | connect_ids | customer_ids | user_ids
+       14         |         3         |      2       |      1      |      5       |    14
+```
+
+So `postcode` for 3 artists, `lat`/`lng` for 2, `stripe_connect_account_id`, `stripe_customer_id` for 5, `stripe_subscription_id`, and the auth `user_id` for all 14.
+
+**This is Bug 1, still open.** G-A (`3a13aab`) fixed `/api/browse-artists` by adding `toPublicArtist()`, which strips `postcode` and coarsens coordinates. Its own commit message states the case: for a solo artist working from home, the postcode is their home address. That reasoning is right, and the fix is real, but it applies at the route only. The same rows are served by PostgREST one layer down, unredacted. **Ledger row 5's "G-A done" is therefore wrong and must be corrected: G-A is half-done.**
+
+### D38.2 — The mechanism already exists in this repo. Copy it, do not invent one.
+
+Migration `071_defence_in_depth_venue_pii.sql` did exactly this job for `venue_profiles`: revoke the table-level SELECT from `anon`, then re-grant column-level SELECT on every column except a named PII list. Result today: venue has **34** anon-selectable columns, artist has **67**. `email`, `phone`, `contact_name`, `address_line1`, `address_line2`, `postcode` are all correctly denied to anon on venues.
+
+**The trap 071 documents, and the loop must not fall into it:** a bare `REVOKE SELECT (col) ... FROM anon` is a **silent no-op** while `anon` still holds a table-level SELECT grant, because the table grant implicitly covers every column. Revoke the table grant first, then re-grant the explicit column list. 071 does this with a `DO` block that builds the list by exclusion, which also stops new columns silently defaulting to exposed. Reuse that block verbatim with a different exclusion list.
+
+### D38.3 — ADR 0004 explicitly excluded `artist_profiles`, and its rationale is now contradicted
+
+This is not an oversight, which is why it needs a ruling rather than a quiet fix. `docs/adr/0004-defence-in-depth-view.md` says, under Scope and follow-ups:
+
+> `artist_profiles` / `artist_works` / `artist_collections` not restricted. They hold no contact PII. The only arguably-sensitive fields are `location`, `postcode` and `lat`/`lng`, which are public by design for a listed artist ... Restricting them would break the public marketplace for no clear privacy gain.
+
+The project has since decided the opposite, in code, via G-A. Two positions cannot both stand. **The newer one wins on the privacy question**: an ADR from 2026-06-15 asserting "no clear privacy gain" was written before the stress test demonstrated the home-address case, and it is now documentation actively licensing a leak.
+
+**But ADR 0004's breakage claim is factually correct and must be respected.** `getAllDatabaseArtists` (`src/lib/db/artist-profiles.ts:60`) does `supabase.from("artist_profiles").select("*")` on the **anon-key client**, despite living in a file headed "Server-only". A `select=*` that expands to a revoked column fails in PostgREST, so a blanket revoke would break the marketplace listing. That is a real constraint, not a stale one.
+
+### D38.4 — Ruling: split it. Revoke what has no reader now; repoint the client before touching the rest.
+
+**Step 1, take it next. Migration `076` (`02` range; `074` taken, `075` is D37's E50 revoke).** Revoke table-level SELECT from `anon` on `artist_profiles`, re-grant column-level on everything except:
+
+```
+postcode, stripe_customer_id, stripe_connect_account_id, stripe_subscription_id
+```
+
+Zero breakage risk, verified: nothing reads `artist_profiles.postcode` anywhere. Every `postcode` hit in `src/` outside tests is a buyer-entered checkout or search postcode, never the artist's stored one, which is what G-A already relied on when it deleted the field from the API projection. The three Stripe ids have no anon reader either.
+
+**Deliberately NOT in step 1: `lat`, `lng`, `user_id`.** `lat`/`lng` are consumed by the marketplace map and delivery-radius display through the `select("*")` above, and they are already coarsened to 2dp on the way out by `toPublicArtist`/`geo-precision.ts`, so the residual exposure is bounded. `user_id` is in `venue_profiles`' anon allowlist too, so removing it on one table only would be inconsistent. Both belong to step 2.
+
+**Step 2, sequence after, same doc:** repoint `getAllDatabaseArtists` off `select("*")` onto an explicit column list, exactly as 071 did for `getVenueProfileBySlug`. Then revoke `lat`/`lng`. Do not switch it to `getSupabaseAdmin()` as a shortcut: the service role ignores column grants, so that would restore the data to the response while removing the very layer being added, and it would also drop the anon-role check that currently keeps unapproved profiles out.
+
+**Also required, or the fix will be re-reverted by the next person reading the docs:** rewrite ADR 0004's "Scope and follow-ups" paragraph to record that the artist exclusion was reversed, why, and that `lat`/`lng` remain granted pending step 2. An ADR that still reads "no clear privacy gain" is worse than no ADR.
+
+**Test:** extend `tests/e2e/security-no-leaks.spec.ts`. It already has "GET /api/browse-artists publishes no postcode and no exact coordinates", which passes today and will keep passing regardless, because it tests the route. Add a sibling that hits **PostgREST directly with the anon key** and asserts the column is denied. Route-level tests cannot catch this class, which is precisely why it survived G-A.
+
+### D38.5 — Correcting my own method. Two catalogue queries gave me opposite wrong answers.
+
+Worth recording, because it nearly produced a false finding in both directions:
+
+- `information_schema.role_table_grants` reported **no** anon SELECT on `venue_profiles`, which would mean venue PII was unreachable. Incomplete.
+- `select count(*) from venue_profiles` as `anon` returned **9**, which I briefly read as "anon reads all venue rows". Also wrong: `count(*)` succeeds on column-level grants alone and reveals nothing about which columns.
+- Only selecting the **actual PII columns** as the `anon` role settled it: `ERROR 42501: permission denied for table venue_profiles`. Venues are protected. Artists are not.
+
+**Canonical probe for this class**, to be added to the standing sweep. Never conclude from a catalogue view alone:
+
+```sql
+begin;
+set local role anon;
+select <the specific sensitive columns> from public.<table> limit 1;
+rollback;
+```
+
+### D38.6 — E25 confirmed in prod, with a gap in its existing test
+
+`storage.buckets`: `message-attachments` is `public = true` (1 object). `wall-photos` and `contracts` are correctly private. `avatars`, `artworks`, `collections`, `wall-renders` are public and that is fine.
+
+The existing e2e case is "Storage bucket message-attachments listing is not anon-accessible". **Listing is not the exposure.** A public bucket serves any object by direct URL whether or not listing is allowed, and attachment paths are guessable if they embed ids. When E25 is taken, flip the bucket to private and serve through signed URLs; and fix the test to assert direct object fetch is denied, not just listing.
+
+### D38.7 — Standing sweeps this run
+
+- RLS SELECT-leak denylist (D15.3): the five `074` tables are **gone**. Clean. Four `qual = true` SELECT policies remain (`artist_profiles`, `artist_works`, `artist_collections`, `venue_profiles`) and are intentional per ADR 0004, subject to D38.4 above.
+- Function grants (D37): `increment_placement_revenue` still `SECURITY INVOKER` with PUBLIC EXECUTE. E50 open as expected, the loop has not reached it.
+- `stripe_transfers`: **0 rows against 12 orders**. Unchanged. No artist has ever been paid through the system.
+- Storage buckets: see D38.6.
+
+No owner input needed for any of D38. The privacy direction was already set by G-A; this applies it consistently and reverses a stale ADR that contradicts it.
+
+---
+
+## D39. D10 is sound, but its enforcement flip is a loaded gun: the secret it depends on is validated nowhere
+
+141 commits, 4-minute gaps. T4 and T5 both complete (D9 `5de53c3`, D10 `6ab6338`, D11 `ff01100`).
+
+### D39.1 — D10 verified, and it is good work
+
+Read the executable source, not the ledger. `src/lib/qr-attribution-token.ts` is correct: HMAC-SHA256, signature checked with `timingSafeEqual` **before** the payload is parsed, expiry enforced, 24h TTL, and the claim binds the venue to the **scanned artist** so a token is only honoured when that artist is actually in the cart. The plumbing is clean too: both the Stripe metadata write (`checkout/route.ts:462`) and the cart-session write (`:478`) read the single verified `venueSlug` local, so there is no unsigned bypass through `session.metadata.venue_slug` when the webhook falls back to it at `route.ts:567`. I went looking for that bypass specifically and it is not there.
+
+### D39.2 — The defect: `ORDER_TOKEN_SECRET` is not a validated env var, and enforcement fails silently open then silently closed
+
+`ORDER_TOKEN_SECRET` appears **zero times** in `src/env.ts`. It exists only as `ORDER_TOKEN_SECRET=""` in `.env.example`. Nothing validates it, at startup or anywhere else.
+
+Both `signQrAttribution` and `verifyQrAttribution` throw when it is unset. The QR route swallows that with a `console.warn` and redirects with the bare slug only (`api/qr/[slug]/route.ts:103-110`). So:
+
+**If the secret is unset in prod today, D10 is completely inert.** No token is minted, no token would verify, and every sale runs on the bare-slug fallback. The vulnerability is exactly as open as before the commit, and nothing says so.
+
+**And flipping `QR_ATTRIBUTION_ENFORCE=1` without setting the secret is worse than the bug it closes.** `venueSlug` becomes `""` for every checkout. Tracing where that lands in the webhook: `venue_slug` on the order row (`:758`), the placement lookup (`:628`), and the venue revenue transfer (`:1011-1016`). **Every venue's revenue share silently goes to zero, on every sale, with no error.** The pre-D10 bug let a venue take a share it had not earned; this would stop every venue being paid at all. Same money path, larger blast radius, and invisible.
+
+PROGRESS currently presents the flip to the owner as "the only thing that fully closes D10", with no mention of the dependency. That is the sentence that makes this dangerous, so it must be corrected.
+
+### D39.3 — Ruling (mine, not the owner's: this is a correctness precondition, not a product trade-off)
+
+Take this as a small task before T7, in `04`:
+
+1. **Add `ORDER_TOKEN_SECRET` to the `src/env.ts` server schema.** `z.string().min(32).optional()` matches how `CRON_SECRET` and the Stripe keys are handled there.
+2. **Make enforcement fail-closed and loud.** When `QR_ATTRIBUTION_ENFORCE === "1"` and the secret is absent, throw at the checkout route rather than proceeding with `venueSlug = ""`. A misconfigured revenue-attribution path must refuse to price a sale, not quietly price it wrong. A 500 on checkout is recoverable in minutes; months of unpaid venue shares is not.
+3. **Distinguish the two failure modes in the QR mint's `catch`.** "Secret not configured" is a deployment fault and deserves its own message that can be grepped in logs; a signing error is something else. Today both produce the same warn.
+4. **Rewrite the owner action as an ordered sequence, never as a single flip:** set `ORDER_TOKEN_SECRET` → confirm a `va=` parameter actually appears on a real QR redirect → *then* set `QR_ATTRIBUTION_ENFORCE=1`. Flipping first is the failure case above.
+5. **Test:** enforcement on with the secret unset must fail loudly, not attribute to `""`. That case does not exist in the current 6.
+
+### D39.4 — The same secret gates order tracking, and D36 is about to make that matter
+
+`src/lib/order-tracking-token.ts:17-18` reads the identical `ORDER_TOKEN_SECRET` with the identical throw. `/api/orders/track` is currently broken anyway on the 8 phantom columns (E49, D36), so its dependency on the secret is masked. **When D36 fixes the columns, order tracking starts exercising this secret too.** Do D39.3 item 1 before D36 lands, or the phantom-column fix will simply expose the next failure underneath it.
+
+### D39.5 — The "fixed but inert" pile now needs one owner-facing list
+
+Four remediations are complete in code but disabled in prod, each individually reasonable, collectively a growing gap between "the plan is done" and "the site is fixed":
+
+- `QR_ATTRIBUTION_ENFORCE` (D10) — off; the diversion hole is open until it is on
+- `require-authz-on-mutation` `warn` → `error` (`01` item 15) — still `warn`, 43 routes inline
+- `PAID_LOAN_V2` (E11) — off in prod
+- the `payment_status` gate (D1) — deferred, currently unreachable per the `card`-only session routes
+
+**Ruling:** when the queue is otherwise clear, the loop must produce a single consolidated flip-list at the top of PROGRESS, each with its precondition and its verification step, rather than leaving these scattered across per-task entries. A remediation that ships disabled and is never enabled is indistinguishable from one that never shipped.
+
+### D39.6 — Standing sweeps this run
+
+- RLS SELECT-leak assertion (D15.3): **0 rows. Clean.**
+- E50 `increment_placement_revenue` PUBLIC EXECUTE: **still 1.** Open as expected, D37 not yet reached.
+- E51 `artist_profiles` anon-selectable columns: **still 67.** Open as expected, D38 not yet reached.
+- `stripe_transfers` 0 against 12 orders: unchanged.
+- Stripe metadata bypass of the D10 token: **swept, clean** (see D39.1).
+
+**Sequencing reminder, unchanged from D38:** E51 (migration `076`) and E50 (migration `075`) are both live prod exposures and should be taken ahead of `04` T7/T8/T9, which are correctness work on paths carrying no money today. D39.3 is small and can ride alongside.
+
+---
+
+## D40. Three of my rulings are queued nowhere, a numbering collision is why, and a new fee bug the D12 fix walked past
+
+147 commits, 2-6 minute gaps. T7 in progress (D12 `62f8fed` + `222eb60`, D13 `9922c98`).
+
+### D40.1 — STRUCTURAL: D37, D38 and D39 have been ruled and none of them is in the queue
+
+`ORDER_TOKEN_SECRET` still appears **zero times** in `src/env.ts`. `increment_placement_revenue` still has PUBLIC EXECUTE. `artist_profiles` still exposes all 67 columns to anon. PROGRESS contains no reference to D37, D38 or D39, and the dangerous sentence at PROGRESS:5861 telling the owner to flip `QR_ATTRIBUTION_ENFORCE` still stands unamended.
+
+**The cause is a numbering collision, and it is my fault.** The `04` doc has its own task ids D1-D18 (D12 = artist subscription, D13 = the deleted-handler fallthrough). This decisions doc numbers its rulings D1-D40. **The loop's "D12" and my "D12" are different things**, so a ruling written as "D38" reads as commentary next to a task list that already has its own D-numbers. The loop has correctly treated this doc as guidance to apply *within* a task, which is what it is for, and my three items never became tasks.
+
+**Ruling: supervisor-raised work gets ledger rows, not decision numbers.** Add these to the PROGRESS ledger table and work them in this order once T7 closes:
+
+| # | Task | Source | Owner doc |
+|---|---|---|---|
+| 13 | Revoke anon SELECT on `artist_profiles.postcode` + the three Stripe id columns (migration `076`), copying `071`'s DO-block pattern. Update ADR 0004. | D38 | `02` |
+| 14 | Revoke PUBLIC EXECUTE on `increment_placement_revenue`, grant `service_role` (migration `075`) | D37 (E50) | `02` |
+| 15 | `ORDER_TOKEN_SECRET` in the env schema + fail-closed enforcement + rewrite the owner flip instruction as an ordered sequence | D39 | `04` |
+| 16 | Fee predicate must respect `subscription_status` (see D40.2) | D40 | `04` |
+
+Rows 13 and 14 are live prod exposures and outrank the remaining `04` correctness work. Row 15 is small and blocks a dangerous owner action. **From here on I will write supervisor findings as ledger rows with numbers in the loop's own sequence, not as D-numbers in this doc.**
+
+### D40.2 — NEW (E52): a cancelled artist keeps their discounted platform fee for ever
+
+D12 fixed the over-charge direction: an unknown price id downgraded the artist to `core` and charged 15% instead of 5%. Good fix, verified. But nobody checked the read path, and it has the opposite bug.
+
+`platformFeePercentForArtist` (`src/lib/platform-fee.ts:36-41`) reads **`subscription_plan` only**. It never looks at `subscription_status`:
+
+```ts
+const plan = (profile.subscription_plan || "core").toLowerCase();
+return PLAN_FEE_PERCENT[plan] ?? DEFAULT_PLAN_FEE_PERCENT;   // core 15, premium 8, pro 5
+```
+
+And the `customer.subscription.deleted` handler (`webhooks/stripe/route.ts:1317-1320`) writes **only** `subscription_status: "canceled"`. It never resets `subscription_plan`.
+
+**So an artist who subscribes to Pro, then cancels, stops paying Wallplace and keeps the 5% commission rate permanently.** Premium keeps 8%. There is no expiry and nothing reconciles it.
+
+**Blast radius today: nil, but only by luck.** Prod has two cancelled artists and both are `core`, whose 15% equals the default, so the bug is invisible. It bites the first time a paying Pro or Premium artist cancels. `fin-coles` is premium/active and is the one account it would apply to.
+
+**Ruling.** `platformFeePercentForArtist` must return `DEFAULT_PLAN_FEE_PERCENT` unless `subscription_status` is one of `active`, `trialing`. Note the Stripe semantics so the loop does not get this backwards: `cancel_at_period_end` leaves the status `active` until the period actually ends, and only then does Stripe send `customer.subscription.deleted` with status `canceled`. So keying on `active`/`trialing` already gives paid-through-period-end behaviour for free. No proration question arises.
+
+`ArtistPlanState` needs `subscription_status` added, and **every caller's `.select()` must be checked to include it** or PostgREST rejects the query whole and the profile comes back null, which is exactly the `free_until` failure this same file's header comment documents. Five call sites: `payment/setup/route.ts:114`, `offers/[id]/checkout/route.ts:146`, `paid-loan-billing.ts:542`, `payouts/legs.ts`, and the webhook. The `phantom-columns` guard should catch a miss, but check by hand too.
+
+Test: a `pro`/`canceled` profile pays 15%, a `pro`/`active` profile pays 5%.
+
+### D40.3 — Correcting D29.1: my E44 forensic assertion was too narrow
+
+D29.1 concluded E44 was never exploited, on the assertion that zero rows have `subscription_status in ('active','trialing')` with a null `stripe_subscription_id`. **That assertion misses the shape actually present in prod:** `maya-chen-demo` is `plan: pro`, `status: none`, no Stripe customer, `is_founding_artist: true`. A self-granted plan with `status` left alone would look exactly like that and my query would not have seen it.
+
+Widened to "any non-core plan, or any plan without a Stripe subscription", prod returns two rows: `fin-coles` (premium/active, real Stripe subscription, legitimate) and `maya-chen-demo` (the 2026-04-30 seed). **The conclusion of D29.1 still holds, E44 was not exploited**, but it held for a weaker reason than I gave. The widened query is the one to keep.
+
+### D40.4 — D12 and D13 verified, both sound
+
+D12: `PRICE_TO_PLAN` built from the six envs, unknown price returns `{ ignored: "unknown_price" }` and **stamps nothing**, so a misconfigured env fails closed rather than mis-charging. Correctly ignores paid-loan and curation subscriptions, whose prices are dynamic `price_data`. The loop also self-corrected a wrong claim that `src/env.ts` does not exist, then added `assertStripePricesConfigured()` and `missingStripePriceEnvs()` there. That is the exact pattern D39.3 item 1 should follow for `ORDER_TOKEN_SECRET`, so row 15 now has a template sitting next to it.
+
+D13: the `isStale` early `return` became `if (!isStale) { ... }`, so execution falls through to the paid-loan handler. Read the block, the fallthrough is real and the paid-loan handler no-ops for subscriptions it does not own. Its deferral of the duplicate-`event.type` consolidation is the right call: that is a refactor across six blocks and bundling it would have made the fix unreviewable.
+
+### D40.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `subscription_plan` writers: swept all of `src/`. Only two write it, the checkout-completed branch (`:1128`) and nothing on cancellation. That absence is D40.2.
+- `platformFeePercentForArtist` readers: five call sites, all listed in D40.2. No copied predicate, it is already a shared helper, so this is a one-place fix.
+- E50 PUBLIC EXECUTE: still open. E51 67 anon columns: still open. `stripe_transfers` 0 against 12 orders: unchanged.
+
+---
+
+## D41. The queue is hoisted to the top, because I kept making the mistake I already knew about
+
+150 commits. T7 code-complete bar D14 (D15 `0d08a01`). D15 verified in source: the guard reads `subscription.metadata.kind || .source`, matches the three non-SaaS kinds, and returns before any profile write. Sound, and it composes correctly with D12 rather than duplicating it (D12 catches paid-loan's *dynamic* price, D15 catches by kind regardless of price, so a curation tier priced via a `STRIPE_PRICE_*` id is caught only by D15).
+
+### D41.1 — Method correction, mine
+
+D37, D38, D39 and D40 were all appended to the **end** of this document, and none of them entered the queue. I already knew that does not work: the pacing fix sat unread at the end as D22 until it was hoisted into the OPERATING RULES block at the top, at which point gaps went 30 → 5 minutes within two iterations. I diagnosed the numbering collision in D40 and then filed the remedy in exactly the place that had already failed four times.
+
+The queue is now **rule 4 in the OPERATING RULES block at the top of this file**, as ledger rows 13-16 in the loop's own numbering. Future supervisor findings go there, not here. This section exists only to record why.
+
+### D41.2 — D14's blocker confirmed, and the referral feature is dead at a specific line
+
+The loop recorded D14 blocked because the referral credit writes the phantom `free_until`. **Verified, and the loop is right.** I initially suspected it died a step earlier at `.select("id, referred_by_code, referral_credited_at")`, which would have made the loop's note wrong. It does not: all three of those columns **do** exist on `artist_profiles`. Only `free_until` is absent (0 rows in `information_schema`).
+
+So the block dies at `webhooks/stripe/route.ts:1223`, `.select("id, free_until")` → rejected whole by PostgREST → `referrer` is null → `if (referrer)` false → neither the credit nor the `referral_credited_at` guard is ever written. Recording the exact line because "blocked on a phantom column" was nearly filed against the wrong query, by me.
+
+**New fact for the owner's E48 decision.** `artist_referrals` exists, is well-formed (`referrer_user_id, referrer_slug, referral_code, referred_email, referred_user_id, status, converted_at`) and has **0 rows**. The webhook does not use that table at all — it uses a parallel set of columns on `artist_profiles`. So there are two referral implementations, one unused table and one dead column path, which is the knot pattern this plan exists to remove. **Nobody has ever been referred and nobody is owed credit**, so deleting the feature costs nothing and owes nobody. That strengthens the standing recommendation to delete rather than build.
+
+One latent note if the owner instead chooses to build it: because the block dies before stamping `referral_credited_at`, every referred artist currently has that guard null. Adding `free_until` later would make all historical referrals creditable on their next `customer.subscription.created`. Immaterial at 0 rows, but it is why the guard and the credit must ship together.
+
+### D41.3 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- Storage buckets: `avatars, artworks, collections, wall-renders, message-attachments` public. The first four are correct; `message-attachments` is E25, unchanged and queued.
+- E50 PUBLIC EXECUTE: still 1. E51 `artist_profiles` anon columns: still 67. Both awaiting rows 14 and 13.
+- Orders vs transfers: **12 / 0**, unchanged. No artist has been paid through the system.
+- `free_until` readers swept across all of `src/`: five sites, and every one is already either a comment recording the phantom-column history (`platform-fee.ts:9`, `legs.ts:131`, `offers/[id]/checkout:118`) or the deny-list entry that stops it being written (`writable-fields.ts:120-123`). Only the referral block still names it live. Clean, bar D14.
+
+---
+
+## D42. D16 verified against all 12 real orders, and the same denominator bug shows up in two historical sales
+
+152 commits. D16 landed (`2fdc567`), D17 in flight (migration `087_restock_work.sql` uncommitted).
+
+### D42.1 — D16's load-bearing claim holds on every order in prod
+
+D16 pro-rates partial reversals against `subtotal` instead of `total`, on the premise that `total = subtotal + shipping_cost` and that the artist keeps 100% of shipping. I checked that against all 12 orders rather than the one the loop sampled:
+
+```
+total - (subtotal + shipping_cost) = 0.00 on all 12 rows
+```
+
+Exact everywhere. And the reversal code reads correctly: `artworkRefundPence = min(refund, subtotal)`, `shippingRefundPence = max(0, refund - subtotal)`, with the leg pro-rated on the artwork portion only. The over-total guard releases the claim back to `pending` rather than stranding it in `processing`. Good fix, correctly reasoned, and the doc-path staleness it flagged (`tests/transactions/t8-refunds.test.ts` vs the repo's co-located convention) is a real correction.
+
+### D42.2 — NEW: two historical orders took the platform fee on shipping. The code is already right; this is reconciliation, not a bug to fix.
+
+Checking `artist_revenue` against `0.85 × subtotal + shipping` across all 12 orders, nine match to the penny. Three do not:
+
+| Order | Subtotal | Shipping | Fee taken | Fee should be | Artist short by |
+|---|---|---|---|---|---|
+| `WP-WSAGEX` | 50.00 | 8.00 | 8.70 | 7.50 | **£1.20** |
+| `WP-WSQ0G0` | 159.95 | 9.95 | 25.48 | 23.99 | **£1.49** |
+
+Both are 15% of **`total`**, not 15% of `subtotal`: `0.15 × 58.00 = 8.70` and `0.15 × 169.90 = 25.485`. So the platform charged commission on the shipping the artist had already spent on the courier. Exactly the error D16 just fixed on the refund side, committed earlier on the sale side.
+
+**The current code is correct and needs no change.** `payouts/legs.ts:173` computes `platformFeePence = round(grossPence × pct/100)` on the artwork gross, and shipping is added afterwards at `:183` (`net = gross − venueCut − platformFee + shipping`). I read it rather than assuming. So these two rows are residue from the pre-E9 path, not a live defect. **No loop task. Do not open one.** It is an owner reconciliation line, recorded below.
+
+### D42.3 — NEW: the orphaned order is attributable after all
+
+`WP-WSP06D` (2026-05-17, £64.49, status `confirmed`, real payment intent) has `artist_slug = null`, `artist_revenue = 0`, `platform_fee = 0`, `platform_fee_percent = 0`. Money taken, nothing attributed to anyone. This is the fingerprint of the D4 bug the loop fixed this morning, which now fails loud instead of silently zeroing.
+
+It is **not** unrecoverable: the `items` JSON carries `artistName: "Finlay Coles"`, title `Mt. Fitz Roy`, and an image path under artist folder `08f9481e-2785-4ce9-a184-8042905036d1`. So the artist is `fin-coles` and the owed amount is `0.85 × 49.99 + 14.50 = £57.00`.
+
+### D42.4 — Consolidated reconciliation list for the owner (money movement, escalated, not actioned)
+
+Every outstanding money item now traces to the same artist, `fin-coles`, which makes this cheap to settle. Nothing here is a code change and the loop must not touch any of it.
+
+| Item | Amount | Cause |
+|---|---|---|
+| `off_1778` accepted offer, never paid | £33.00 | pre-existing (D11) |
+| `off_1779` accepted offer, never paid | £27.00 | pre-existing (D11) |
+| `WP-WSP06D` orphaned order, zero attribution | £57.00 owed | D4 (now fixed) |
+| `WP-WSAGEX` fee taken on shipping | £1.20 | pre-E9 fee base |
+| `WP-WSQ0G0` fee taken on shipping | £1.49 | pre-E9 fee base |
+
+Standing context, unchanged: `stripe_transfers` is **0 rows against 12 orders**, so no artist has been paid for any of it regardless. The reconciliation is bounded by that fact rather than made worse by it.
+
+### D42.5 — Rows 13-16: no conclusion yet, and deliberately no change to the channel
+
+The hoisted supervisor queue landed at **11:52:23**. The D16 iteration had already read its docs and was mid-gate by then, committing at 11:55, so it could not have seen rule 4. The currently in-flight iteration (D17 restock) is the first that could. It is finishing T8 rather than jumping to row 13, which is defensible mid-phase.
+
+**So the channel is untested, not failed. I am changing nothing about it this cycle.** If rows 13-16 are still absent from the PROGRESS ledger after T8 closes, that is the signal to act, and the next step would be writing the rows into PROGRESS.md directly and accepting the concurrent-write risk.
+
+### D42.6 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- Denominator bug copied elsewhere: swept all of `src/` for pro-rating against `order.total`. Only `refunds/request/route.ts:120-123` uses `order.total`, and correctly — that is a **ceiling check** on the refund amount, not a pro-rating base. No second copy. Clean.
+- Sale-side fee base: swept, `legs.ts` is the single implementation, correct. Clean.
+- E50 PUBLIC EXECUTE: still 1. E51 anon columns: still 67. Orders/transfers: 12 / 0. `message-attachments` still public. All awaiting queued rows.
+
+---
+
+## D43. D33 was wrong: `charges_enabled` is not `payouts_enabled`. The loop is right and I am overruling myself.
+
+154 commits, D17 landed (`e417cbd`), C1 in flight (uncommitted: `src/lib/payouts/capability.ts`, its test, migration `088`, and four route edits).
+
+### D43.1 — Correcting D33, my third error on this branch
+
+**D33 ruled that `canArtistAcceptOrders` in `lib/stripe-connect-status.ts` already satisfied CC6's `canReceivePayout`, and instructed the loop not to write a second helper.** The loop has written one anyway, and it is right to. The reason is a Stripe semantic I conflated:
+
+> `charges_enabled` is NOT sufficient. A Connect account can accept charges while payouts are disabled (mid-KYC, failed verification, restricted for review). Transfers to such an account succeed and then sit in an unpayable balance.
+
+That is correct and it is not a distinction the old helper could make: it read only `stripe_charges_enabled`. Gating orders on "can this account take a charge" while the money then cannot be forwarded is precisely the failure this project already has 12 orders and 0 transfers' worth of. The old helper was also **artist-only**, and after E9 made per-artist/venue legs real, venues are first-class payout targets, so it could not answer the question for half the recipients.
+
+**D33 is void. `payouts/capability.ts` is the correct implementation. Do not revert it.** My "do not write a second helper" instinct was the right instinct applied to the wrong pair: the rule exists to stop `_v2` living beside `_v1`, and that is not what happened here.
+
+### D43.2 — The loop applied the anti-knot rule correctly, which is why this is not a duplicate
+
+`git status` shows both the old module **and its test** staged for deletion:
+
+```
+D  website/src/lib/stripe-connect-status.test.ts
+D  website/src/lib/stripe-connect-status.ts
+```
+
+New implementation in, old one out, same commit, no `_v2` beside `_v1`. That is the rule from the loop prompt followed exactly. Three route test files still `vi.mock("@/lib/stripe-connect-status")` and must be repointed in the same commit or the suite breaks; the routes themselves are already `M`, so this looks in hand. Flagging only so it is not missed at commit time.
+
+### D43.3 — Method correction, mine, same cycle
+
+I first ran `find` and `git log` from inside `website/` while passing a repo-root pathspec, got nothing back, and briefly concluded the old module "never existed" — which would have turned a correct fix into a fabricated finding. `git status --short` with the right path settled it in one call. Recording it because the standing instruction warns about exactly this and I did it anyway.
+
+### D43.4 — Migration `088` is already applied to prod, and code and schema are in step
+
+Verified directly. All six columns exist: `stripe_payouts_enabled` on `artist_profiles`, and `stripe_charges_enabled` + `stripe_payouts_enabled` + `stripe_charges_checked_at` on `venue_profiles`. So `canReceivePayout`'s `.select()` will not hit the phantom-column trap. The numbering rationale in the migration header is also right: `04` owns 080-089 and 080-087 were taken.
+
+Behaviour reads sound for money: falsy check on the account id (correct, the column defaults to `''`), 60s cache, live `accounts.retrieve` on staleness, and **fail-closed** on any Stripe error. One cosmetic note, not a defect: `decide()` can never return `requirements_due`, so that arm of `payoutBlockMessage` and the `currentlyDue` field are unreachable. Either populate it or drop it when C1 is finalised.
+
+### D43.5 — NEW EVIDENCE for row 13: the artist leak grows on its own, and it grew this cycle
+
+Migration `088` added columns to both profile tables. The anon-visible counts moved like this:
+
+| Table | Total columns | anon can SELECT | Effect of `088` |
+|---|---|---|---|
+| `venue_profiles` | 43 | **34** (unchanged) | 3 columns added, anon got **none** |
+| `artist_profiles` | 68 | **68** (was 67) | 1 column added, anon got **it, automatically** |
+
+Because `artist_profiles` still carries a **table-level** anon grant, every column added from now on is published to anon the moment the migration runs. E51 is therefore not a fixed-size leak to be tidied up whenever; **it widens with every schema change**, and it widened by one while this cycle was in progress. `venue_profiles`, hardened by `071`, absorbed three new columns and exposed nothing.
+
+That is the fix and the failure demonstrated side by side, in the same migration, on the same day. **Row 13 should be taken as soon as T8/T9 closes**, and this table belongs in its commit message.
+
+### D43.6 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- Payout-gate copies: swept. The old artist-only predicate is being deleted rather than duplicated, so after C1 lands there is **one** implementation. Re-sweep next cycle to confirm no caller still reaches for `stripe_charges_enabled` directly.
+- E50 PUBLIC EXECUTE: still 1. Orders/transfers: **12 / 0**, unchanged.
+- E51: **67 → 68.** See D43.5.

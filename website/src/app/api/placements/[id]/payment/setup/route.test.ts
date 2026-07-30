@@ -13,7 +13,7 @@ const { sessionsCreateMock, fromMock, getUserMock, assertNotDemoMock, canAcceptM
     fromMock: vi.fn(),
     getUserMock: vi.fn(),
     assertNotDemoMock: vi.fn(() => null),
-    canAcceptMock: vi.fn(async () => true),
+    canAcceptMock: vi.fn(async (): Promise<{ ok: boolean; reason?: string }> => ({ ok: true })),
   }),
 );
 
@@ -23,7 +23,7 @@ vi.mock("@/lib/stripe", () => ({
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: getUserMock }));
 vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: assertNotDemoMock }));
-vi.mock("@/lib/stripe-connect-status", () => ({ canArtistAcceptOrders: canAcceptMock }));
+vi.mock("@/lib/payouts/capability", () => ({ canReceivePayout: canAcceptMock }));
 
 import { POST } from "./route";
 
@@ -107,7 +107,7 @@ beforeEach(() => {
   sessionsCreateMock.mockClear();
   assertNotDemoMock.mockReturnValue(null);
   canAcceptMock.mockReset();
-  canAcceptMock.mockResolvedValue(true);
+  canAcceptMock.mockResolvedValue({ ok: true });
   getUserMock.mockReset();
   getUserMock.mockResolvedValue({
     user: { id: "u-venue", email: "venue@example.com" },
@@ -245,7 +245,7 @@ describe("POST /api/placements/[id]/payment/setup existing guards still hold", (
 // monthly with no way to forward the money.
 describe("POST /api/placements/[id]/payment/setup payout capability (E8)", () => {
   it("refuses with 422 and creates no session when the artist cannot be paid", async () => {
-    canAcceptMock.mockResolvedValue(false);
+    canAcceptMock.mockResolvedValue({ ok: false, reason: "payouts_disabled" });
     const res = await post();
     expect(res.status).toBe(422);
     await expect(res.json()).resolves.toMatchObject({ reason: "payouts_unavailable" });
@@ -254,7 +254,10 @@ describe("POST /api/placements/[id]/payment/setup payout capability (E8)", () =>
 
   it("checks capability by slug, not by a non-empty account id", async () => {
     await post();
-    expect(canAcceptMock).toHaveBeenCalledWith("maya-chen");
+    expect(canAcceptMock).toHaveBeenCalledWith(expect.anything(), {
+      kind: "artist",
+      slug: "maya-chen",
+    });
   });
 
   it("refuses when the artist has an account id but is not charges_enabled", async () => {
@@ -267,7 +270,7 @@ describe("POST /api/placements/[id]/payment/setup payout capability (E8)", () =>
       subscription_plan: "core",
       trial_end: null,
     };
-    canAcceptMock.mockResolvedValue(false);
+    canAcceptMock.mockResolvedValue({ ok: false, reason: "payouts_disabled" });
     expect((await post()).status).toBe(422);
     expect(sessionsCreateMock).not.toHaveBeenCalled();
   });
@@ -279,7 +282,7 @@ describe("POST /api/placements/[id]/payment/setup payout capability (E8)", () =>
   });
 
   it("says nothing about releasing a payment later, because nothing does that", async () => {
-    canAcceptMock.mockResolvedValue(false);
+    canAcceptMock.mockResolvedValue({ ok: false, reason: "payouts_disabled" });
     const body = await (await post()).json();
     expect(body.error).not.toMatch(/releas/i);
     expect(body.error).toMatch(/can't start/i);

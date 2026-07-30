@@ -2,10 +2,10 @@ import { describe, expect, it, vi, beforeEach, beforeAll, afterEach } from "vite
 
 // vi.hoisted runs before vi.mock factories so refs in the factories
 // below are initialised when the factory is evaluated.
-const { stripeCreate, fromMock, canArtistAcceptOrdersMock, saveCartSessionMock } = vi.hoisted(() => ({
+const { stripeCreate, fromMock, canReceivePayoutMock, saveCartSessionMock } = vi.hoisted(() => ({
   stripeCreate: vi.fn(async () => ({ id: "sess_test", url: "https://stripe.example/session" })),
   fromMock: vi.fn(),
-  canArtistAcceptOrdersMock: vi.fn(async () => true),
+  canReceivePayoutMock: vi.fn(async (): Promise<{ ok: boolean; reason?: string }> => ({ ok: true })),
   saveCartSessionMock: vi.fn(async () => undefined),
 }));
 
@@ -26,8 +26,8 @@ vi.mock("@/lib/stripe", () => ({
   stripe: { checkout: { sessions: { create: stripeCreate } } },
 }));
 
-vi.mock("@/lib/stripe-connect-status", () => ({
-  canArtistAcceptOrders: canArtistAcceptOrdersMock,
+vi.mock("@/lib/payouts/capability", () => ({
+  canReceivePayout: canReceivePayoutMock,
 }));
 
 vi.mock("@/lib/shipping-checkout", () => ({
@@ -49,8 +49,8 @@ import { POST } from "./route";
 beforeEach(() => {
   stripeCreate.mockClear();
   fromMock.mockReset();
-  canArtistAcceptOrdersMock.mockReset();
-  canArtistAcceptOrdersMock.mockResolvedValue(true);
+  canReceivePayoutMock.mockReset();
+  canReceivePayoutMock.mockResolvedValue({ ok: true });
   saveCartSessionMock.mockClear();
 });
 
@@ -412,7 +412,7 @@ describe("POST /api/checkout shipping scope (G-C / Bug 10)", () => {
 // Plan B Task 8 — Stripe Connect pre-flight.
 describe("POST /api/checkout Stripe Connect pre-flight", () => {
   it("rejects with 422 when an artist isn't charges_enabled", async () => {
-    canArtistAcceptOrdersMock.mockResolvedValue(false);
+    canReceivePayoutMock.mockResolvedValue({ ok: false, reason: "payouts_disabled" });
     const res = await POST(req({
       items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "GB" },
@@ -425,7 +425,7 @@ describe("POST /api/checkout Stripe Connect pre-flight", () => {
   });
 
   it("permits checkout when all artists are ready", async () => {
-    canArtistAcceptOrdersMock.mockResolvedValue(true);
+    canReceivePayoutMock.mockResolvedValue({ ok: true });
     const res = await POST(req({
       items: [{ ...baseItem, type: "work", workId: "w-1" }],
       shipping: { ...baseShipping, country: "GB" },

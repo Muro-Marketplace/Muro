@@ -17,7 +17,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const { sessionsCreateMock, fromMock, canAcceptMock, getUserMock } = vi.hoisted(() => ({
   sessionsCreateMock: vi.fn(async () => ({ url: "https://stripe.example/pay", id: "cs_1" })),
   fromMock: vi.fn(),
-  canAcceptMock: vi.fn(async () => true),
+  canAcceptMock: vi.fn(async (): Promise<{ ok: boolean; reason?: string }> => ({ ok: true })),
   getUserMock: vi.fn(async () => ({ user: { id: "u-buyer", email: "venue@example.com" }, error: null })),
 }));
 
@@ -25,7 +25,7 @@ vi.mock("@/lib/stripe", () => ({
   stripe: { checkout: { sessions: { create: sessionsCreateMock } } },
 }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
-vi.mock("@/lib/stripe-connect-status", () => ({ canArtistAcceptOrders: canAcceptMock }));
+vi.mock("@/lib/payouts/capability", () => ({ canReceivePayout: canAcceptMock }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: getUserMock }));
 
 import { POST } from "./route";
@@ -132,7 +132,7 @@ beforeEach(() => {
   sessionsCreateMock.mockClear();
   fromMock.mockReset();
   canAcceptMock.mockReset();
-  canAcceptMock.mockResolvedValue(true);
+  canAcceptMock.mockResolvedValue({ ok: true });
   getUserMock.mockReset();
   getUserMock.mockResolvedValue({ user: { id: "u-buyer", email: "venue@example.com" }, error: null });
   setupDb();
@@ -191,7 +191,7 @@ describe("POST /api/offers/[id]/checkout split (E6)", () => {
 
 describe("POST /api/offers/[id]/checkout payout pre-flight (E6)", () => {
   it("refuses with 422 and takes no money when the artist cannot be paid out", async () => {
-    canAcceptMock.mockResolvedValue(false);
+    canAcceptMock.mockResolvedValue({ ok: false, reason: "payouts_disabled" });
     const res = await post();
     expect(res.status).toBe(422);
     await expect(res.json()).resolves.toMatchObject({ reason: "payouts_unavailable" });

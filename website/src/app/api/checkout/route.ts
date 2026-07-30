@@ -7,7 +7,7 @@ import { findUkOnlyArtists } from "@/lib/shipping-scope";
 import { isWorkSold } from "@/lib/work-stock";
 import { verifyQrAttribution } from "@/lib/qr-attribution-token";
 import { saveCartSession } from "@/lib/cart-sessions";
-import { canArtistAcceptOrders } from "@/lib/stripe-connect-status";
+import { canReceivePayout } from "@/lib/payouts/capability";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -372,8 +372,12 @@ export async function POST(request: Request) {
     // artist in the cart isn't charges_enabled. Without this, money lands
     // in Stripe but can't be paid out (escrow) until KYC completes.
     const uniqueArtistSlugs = [...new Set(items.map((i) => i.artistSlug || "").filter(Boolean))];
+    const payoutDb = getSupabaseAdmin();
     const checks = await Promise.all(
-      uniqueArtistSlugs.map(async (slug) => ({ slug, ok: await canArtistAcceptOrders(slug) })),
+      uniqueArtistSlugs.map(async (slug) => ({
+        slug,
+        ok: (await canReceivePayout(payoutDb, { kind: "artist", slug })).ok,
+      })),
     );
     const blocked = checks.filter((c) => !c.ok).map((c) => c.slug);
     if (blocked.length > 0) {

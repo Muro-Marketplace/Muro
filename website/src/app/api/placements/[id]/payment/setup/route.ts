@@ -4,7 +4,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
 import { stripe } from "@/lib/stripe";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
-import { canArtistAcceptOrders } from "@/lib/stripe-connect-status";
+import { canReceivePayout } from "@/lib/payouts/capability";
 
 export const dynamic = "force-dynamic";
 
@@ -92,10 +92,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // which is "the column is a non-empty string", not "this artist can be paid":
   // the column defaults to '' and is set the moment onboarding *starts*. An
   // account mid-KYC is not charges_enabled, so the money was collected monthly
-  // with no way to forward it. canArtistAcceptOrders checks charges_enabled with
-  // Stripe (60s cache) and fails closed, and is the same primitive the cart and
-  // offer checkouts use.
-  if (!artistProfile?.slug || !(await canArtistAcceptOrders(artistProfile.slug))) {
+  // with no way to forward it. canReceivePayout gates on payouts_enabled (not
+  // just charges_enabled) with Stripe (60s cache) and fails closed, and is the
+  // same primitive the cart and offer checkouts use.
+  if (!artistProfile?.slug || !(await canReceivePayout(db, { kind: "artist", slug: artistProfile.slug })).ok) {
     return NextResponse.json(
       {
         error:

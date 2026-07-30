@@ -10,7 +10,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
-import { canArtistAcceptOrders } from "@/lib/stripe-connect-status";
+import { canReceivePayout } from "@/lib/payouts/capability";
 import { isWorkSold } from "@/lib/work-stock";
 
 export const runtime = "nodejs";
@@ -131,7 +131,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   // Refuse to take the money if we cannot pay it out. Same primitive and the
   // same fail-closed behaviour as the cart checkout's pre-flight.
-  if (!(await canArtistAcceptOrders(artistProfile.slug))) {
+  if (!(await canReceivePayout(db, { kind: "artist", slug: artistProfile.slug })).ok) {
     return NextResponse.json(
       {
         error: "This artist isn't set up to receive payouts yet. Try again shortly.",

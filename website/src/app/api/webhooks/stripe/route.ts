@@ -1059,11 +1059,11 @@ async function handleWebhookEvent(
                   immediate: isCollection,
                 });
               } else {
-                // The checkout pre-flight (canArtistAcceptOrders) should have
+                // The checkout pre-flight (canReceivePayout) should have
                 // stopped this, so reaching here means onboarding lapsed between
                 // session creation and payment. The money stays on the platform
-                // balance until ops resolve it. C1's canReceivePayout and C3's
-                // recordBlockedLeg turn this log into a ledger row.
+                // balance until ops resolve it. C3's recordBlockedLeg will turn
+                // this log into a ledger row.
                 console.error("[cart] artist cannot be paid out, transfer skipped", {
                   orderId,
                   artistSlug: leg.artistSlug,
@@ -1629,15 +1629,24 @@ async function handleWebhookEvent(
     const account = event.data.object as Stripe.Account;
     const isComplete = account.charges_enabled && account.details_submitted;
 
-    // Update whichever profile has this account ID
+    // Update whichever profile has this account ID, and warm the
+    // payout-capability cache (C1) so canReceivePayout can serve the fresh
+    // charges/payouts state without a synchronous Stripe round-trip at checkout.
+    const patch = {
+      stripe_connect_onboarding_complete: isComplete,
+      stripe_charges_enabled: account.charges_enabled ?? false,
+      stripe_payouts_enabled: account.payouts_enabled ?? false,
+      stripe_charges_checked_at: new Date().toISOString(),
+    };
+
     await db
       .from("venue_profiles")
-      .update({ stripe_connect_onboarding_complete: isComplete })
+      .update(patch)
       .eq("stripe_connect_account_id", account.id);
 
     await db
       .from("artist_profiles")
-      .update({ stripe_connect_onboarding_complete: isComplete })
+      .update(patch)
       .eq("stripe_connect_account_id", account.id);
 
     // KYC-needed email: Stripe populates `requirements.currently_due` when
