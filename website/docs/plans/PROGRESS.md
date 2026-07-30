@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 pass 1 done** (37987e1): outward-facing routes guarded, 45 in-portal routes on a counted ratchet. Next: E23a pass 2, then items 14-16, and `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. Next: items 14 (bare catches), 15 (`warn` → `error`), 16 (E39 part 2), and `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -3554,3 +3554,69 @@ Restored:
 doc says.
 
 **Commit:** 37987e1
+
+---
+
+## E23a pass 2 of 2 — the demo guard is now wired everywhere (owner: `01` Phase E item 13)
+
+**Done.** Every mutating service-role route either calls the guard or carries an
+explicit exemption with a reason. It had **zero** call sites when this started.
+
+- **37 routes** took a uniform insertion after `if (auth.error) return auth.error;`,
+  scoped **per handler** so GET handlers are untouched. Reads stay open in the demo,
+  which is the point of a demo.
+- **6 needed bespoke handling** because their auth shape differs from the standard
+  anchor. Enumerating first and finding these rather than blind-patching 45 files is
+  what stopped a broken insertion:
+
+  | Route | Shape | Variant |
+  |---|---|---|
+  | `walls/[id]` PATCH+DELETE | `resolveAndAuthorize()` returns `userId` | soft |
+  | `feature-requests` | anonymous posting allowed, id may be null | soft |
+  | `moderation` | same | soft |
+  | `terms/accept` | unauthenticated-by-email supported | soft |
+  | `stripe-connect/onboard` | `const { user, error } = ...` | **strict** |
+  | `stripe-connect/dashboard` | same | **strict** |
+
+  The two Connect routes are strict on purpose: they create or open a real Stripe
+  Connect account, which is an external identity and a payout destination.
+
+- **2 are exemptions, not debt.** `auth/oauth-finalize` and `auth/welcome` are signup
+  finalisation authenticated by a one-time token. A demo session never traverses them
+  (the demo ids are pre-seeded and entered via `demo/login`), so a guard there could
+  only ever block a real signup.
+
+**The ratchet is now 0**, which converts the coverage test from a debt counter into a
+real gate: a new mutating service-role route must call the guard or earn an exemption.
+
+**Reconciled two allowlists that disagreed.** `eslint-rules/public-routes.js` and the
+coverage test exempted different sets, differing on exactly six routes. Two
+vocabularies for one rule is the drift this whole plan exists to remove, so
+`DEMO_EXEMPT_ROUTES` now carries the four admin surfaces and the two auth routes with
+per-entry reasons.
+
+```
+demo-guard lint warnings: 58 → 0
+total lint warnings:      239 → 181
+audit:allowlist:          13 public route(s) and 21 demo-exempt route(s), all with reasons
+```
+
+**Added behavioural proof, and this matters.** Everything else in that file checks
+wiring by reading source, which is the right shape across 60-odd routes but would
+**pass if the guard were imported and never called** — a near-miss of the original
+finding, where the control existed and did nothing. Two tests now drive
+`artist-profile` PUT for real:
+
+- a demo id gets `200 + {demo:true}`, with a **throwing** db mock proving nothing
+  below the guard executes
+- a non-demo id reaches the write, so the guard is not simply blocking everyone
+
+Probed by unwiring that handler: the behavioural test fails.
+
+```
+ Test Files  152 passed (152)
+      Tests  1488 passed (1488)
+✖ 181 problems (0 errors, 181 warnings)
+```
+
+**Commit:** 71b137f
