@@ -300,7 +300,7 @@ describe("reconcileOrdersWithoutLegs() (D52.3)", () => {
     });
     const res = await reconcileOrdersWithoutLegs();
     expect(res.flagged).toBe(1);
-    expect(res.unresolved).toBe(0);
+    expect(res.unresolved).toEqual([]);
     expect(inserts[0]).toMatchObject({
       order_id: "o1",
       recipient_user_id: "u1",
@@ -320,13 +320,14 @@ describe("reconcileOrdersWithoutLegs() (D52.3)", () => {
     expect(inserts).toHaveLength(0);
   });
 
-  it("counts an owed order with no resolvable artist as unresolved, not flagged", async () => {
+  it("records the id of an owed order with no resolvable artist as unresolved, not flagged (D55.3)", async () => {
     setupReconcile({
       owed: [{ id: "o2", artist_user_id: null, artist_revenue: 10, status: "processing" }],
       existing: [],
     });
     const res = await reconcileOrdersWithoutLegs();
-    expect(res.unresolved).toBe(1);
+    // D55.3: the id must survive, not just a count, or the operator cannot chase it.
+    expect(res.unresolved).toEqual(["o2"]);
     expect(res.flagged).toBe(0);
     expect(inserts).toHaveLength(0);
   });

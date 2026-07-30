@@ -169,8 +169,13 @@ export async function executeTransfer(transferId: string) {
 export interface ReconcileResult {
   /** Owed orders with no ledger row, now recorded as a blocked leg. */
   flagged: number;
-  /** Owed orders with no resolvable artist recipient (null artist_user_id). */
-  unresolved: number;
+  /**
+   * Ids of owed orders with no resolvable artist recipient (null
+   * artist_user_id). D55.3: this used to be a bare count, so an operator saw
+   * "unresolved: 5" with no way to learn which orders to chase. Nearly half the
+   * flagged population lands here, so the ids are the deliverable, not a nicety.
+   */
+  unresolved: string[];
   errors: string[];
 }
 
@@ -201,7 +206,7 @@ export async function reconcileOrdersWithoutLegs(): Promise<ReconcileResult> {
     .limit(500);
 
   if (error) throw new Error(`reconcile select failed: ${error.message}`);
-  if (!owed || owed.length === 0) return { flagged: 0, unresolved: 0, errors: [] };
+  if (!owed || owed.length === 0) return { flagged: 0, unresolved: [], errors: [] };
 
   const orderIds = owed.map((o) => o.id);
   const { data: existing } = await db
@@ -210,12 +215,13 @@ export async function reconcileOrdersWithoutLegs(): Promise<ReconcileResult> {
     .in("order_id", orderIds);
   const haveLegs = new Set((existing || []).map((r) => r.order_id));
 
-  const result: ReconcileResult = { flagged: 0, unresolved: 0, errors: [] };
+  const result: ReconcileResult = { flagged: 0, unresolved: [], errors: [] };
   for (const o of owed) {
     if (haveLegs.has(o.id)) continue; // a ledger row exists; the sweep/webhook owns it
     if (!o.artist_user_id) {
       // No recipient to attribute the owed money to; an operator must resolve it.
-      result.unresolved++;
+      // D55.3: keep the id, not just a count, so the operator knows which order.
+      result.unresolved.push(o.id);
       continue;
     }
     try {

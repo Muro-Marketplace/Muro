@@ -34,7 +34,9 @@ async function handle(request: Request) {
       retried: result.retried,
       exhausted: result.exhausted,
       reconciledFlagged: reconciled.flagged,
+      // D55.3: the order ids, not just a count, so an operator can chase them.
       reconciledUnresolved: reconciled.unresolved,
+      reconciledUnresolvedCount: reconciled.unresolved.length,
       errors: [...result.errors, ...reconciled.errors].length
         ? [...result.errors, ...reconciled.errors]
         : undefined,
