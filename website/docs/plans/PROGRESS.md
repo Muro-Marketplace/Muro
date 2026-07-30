@@ -7066,3 +7066,67 @@ paid-loan-billing.ts); `notifyAdminCurationCancelled`; and a `curation_renewal_r
 email. Larger build — re-read the paid-loan-billing handlers + verify the live
 status CHECK before writing. The curation **refund path** stays out of scope
 (feature, per D57.4).
+
+## `04` B10 / D21 — managed-curation subscriptions now reconcile
+
+Commit `dfa2f06` (migration 100 applied to prod). Larger build; unblocked by D57.
+
+**The defect.** A managed curation tier is a Stripe subscription, but the webhook
+had no branch for its lifecycle: `invoice.paid` (line ~1030) looked up
+`artist_profiles` and found nothing; `customer.subscription.deleted` touched only
+`artist_profiles`; `invoice.payment_failed` the same. So a renewal produced no
+signal, a cancellation left `status='in_progress'` forever (curator works unpaid),
+and a failed card did nothing.
+
+**The fix (mirrors paid-loan-billing).** New `src/lib/curation/billing.ts` with
+three handlers, each finding the row by `.eq('stripe_subscription_id', subId)`
+(the column added in D20-complete/099) and returning `false` when the sub is not a
+curation one so the router falls through:
+- `handleCurationInvoicePaid` -> `in_progress` + `last_invoice_paid_at`.
+- `handleCurationSubscriptionDeleted` -> `cancelled` + `cancelled_at` +
+  `notifyAdminCurationCancelled`.
+- `handleCurationInvoiceFailed` -> `past_due` while `next_payment_attempt` is set,
+  `paused` once it is null.
+Wired into the webhook's `invoice.paid` / `invoice.payment_failed` /
+`customer.subscription.deleted` branches, right after the paid-loan block.
+
+**Schema — migration `100_curation_requests_reconcile_columns.sql`** (applied to
+prod, verified live): widened `curation_requests_status_check` to add `past_due`,
+`paused` (drop+add, additive superset so no row can violate it) and added
+`last_invoice_paid_at`, `cancelled_at` TIMESTAMPTZ. Numbered 100 per D57 (next
+above 099, no gap backfill).
+
+**Refactor (DRY, precedent-following).** `readSubscriptionIdFromInvoice` moved
+from `paid-loan-billing.ts` to the neutral `stripe-subscription-period.ts` (where
+`periodFromSubscription` already lives for the same reason); the private copy was
+deleted and both reconcilers import the one export.
+
+**Admin surface.** `admin/curation/page.tsx` renders the two new states (labels +
+amber/red badges). Left `STATUS_ORDER` and the admin PUT enum
+(`api/admin/curation/route.ts`) alone: `past_due`/`paused` are Stripe-derived, not
+admin-settable.
+
+**Tests.** `src/lib/curation/billing.test.ts` (8 unit tests) pins each handler's
+transitions + `not-found -> false`. The webhook test adds 3 wiring tests
+(`describe D21 curation reconcile wiring`) mocking the billing module and
+asserting each event reaches its handler. Fail-before/pass-after proven both
+ways: inverting the `past_due`/`paused` branch failed 2 unit tests; removing the
+webhook wiring failed all 3 wiring tests; both restored byte-identical.
+
+**Verification.** `npm run check` -> `EXIT=0`, `Test Files 165 passed (165)`,
+`Tests 1835 passed (1835)` (+11), 0 lint/type errors (no warnings in the changed
+files). DB ladder: SELECT-leak assertion `0 rows`; migration 100 is additive with
+no RLS/policy change, so the advisor surface is unchanged from the D20-complete
+snapshot (no `curation_requests` findings). Payment task, but a live Stripe drive
+is impossible here; the unit tests exercise the handler logic and the webhook
+tests drive simulated events through the real router.
+
+**Out of scope (recorded).** The customer renewal-paid receipt is D23's
+territory ("nobody told the money landed"); `handleCurationInvoicePaid` does the
+reconcile only. The curation refund path stays a feature (D57.4/D56.3).
+
+**Next: D22** (declared billing interval decorative — `api/curation/route.ts:18-19`
+`interval` field never read; code-only). Then D23 (curation-paid customer
+notification, folds in the renewal receipt deferred here), D24 (/curated/success
+asserts payment never verified). Re-read api/curation/route.ts + the curated
+success page first.
