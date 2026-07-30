@@ -529,6 +529,8 @@ export default function ArtworkPageClient({
                     internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
                     dimensions: selectedPricing.label || work.dimensions,
                     framed: !!selectedFrame,
+                    // E46c: identity, not just the flag, so checkout can price it.
+                    frameLabel: selectedFrame?.label,
                   });
                   if (!r.ok) {
                     showToast(r.reason === "out-of-stock" ? "This size is sold out" : `Only ${r.available} left at this size`);
@@ -562,6 +564,8 @@ export default function ArtworkPageClient({
                     internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
                     dimensions: selectedPricing.label || work.dimensions,
                     framed: !!selectedFrame,
+                    // E46c: identity, not just the flag, so checkout can price it.
+                    frameLabel: selectedFrame?.label,
                   });
                   if (!r.ok) {
                     showToast(r.reason === "out-of-stock" ? "This size is sold out" : `Only ${r.available} left at this size`);

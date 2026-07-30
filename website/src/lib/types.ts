@@ -23,6 +23,9 @@ export interface CartItem {
   dimensions?: string;
   /** True when this is the framed variant, affects weight + tier. */
   framed?: boolean;
+  /** E46c: which frame, so checkout can resolve the uplift server-side from the
+      work's own frame_options instead of trusting the line's total. */
+  frameLabel?: string;
 }
 
 export interface ShippingInfo {

@@ -442,7 +442,7 @@ describe("POST /api/checkout Stripe Connect pre-flight", () => {
 // before minting a Stripe session.
 describe("POST /api/checkout cart re-validation (G2-15)", () => {
   // Helper: build a `from` mock that returns the works the test wants.
-  function mockWorks(rows: Array<{ id: string; available?: boolean; quantity_available?: number | null; pricing?: Array<{ label: string; price: number }>; title?: string }>) {
+  function mockWorks(rows: Array<{ id: string; available?: boolean; quantity_available?: number | null; pricing?: Array<{ label: string; price: number }>; title?: string; frame_options?: Array<{ label: string; priceUplift: number; pricesBySize?: Record<string, number> }> }>) {
     const map = new Map(rows.map((r) => [r.id, r]));
     fromMock.mockImplementation((table: string) => {
       if (table === "artist_profiles") {
@@ -574,13 +574,20 @@ describe("POST /api/checkout cart re-validation (G2-15)", () => {
   // step falls back to the client price. The floor check parses the
   // base size out of the cart line, looks up the DB base tier, and
   // refuses to checkout if the cart's total is below today's base.
-  it("rejects framed line where client price is below DB base price", async () => {
+  // E46c retired `price_below_base`. It existed because the server only knew the
+  // FLOOR (the bare base tier) and had to reject anything under it while trusting
+  // anything over it. The server now computes the whole framed price, so a client
+  // figure that is too low is simply corrected, exactly as unframed lines already
+  // behave. Rewritten rather than kept: the old assertion pinned the contract that
+  // made the frame free.
+  it("corrects a framed line priced below base instead of rejecting it (E46c)", async () => {
     mockWorks([{
       id: "w-1",
       available: true,
       quantity_available: 10,
       pricing: [{ label: "A3", price: 100 }],
       title: "Untitled",
+      frame_options: [{ label: "Black Wood Frame", priceUplift: 85 }],
     }]);
     const res = await POST(req({
       items: [{
@@ -594,20 +601,25 @@ describe("POST /api/checkout cart re-validation (G2-15)", () => {
       shipping: { ...baseShipping, country: "GB" },
       fulfilmentMethod: "collection",
     }));
-    expect(res.status).toBe(409);
-    const body = await res.json();
-    expect(body.code).toBe("price_below_base");
-    expect(body.workId).toBe("w-1");
-    expect(stripeCreate).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    const calls = stripeCreate.mock.calls as unknown as Array<
+      [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
+    >;
+    // 100 base + 85 uplift, not the 80 the client asked for.
+    expect(calls[0]?.[0]?.line_items?.[0]?.price_data?.unit_amount).toBe(18500);
   });
 
-  it("accepts framed line where client price is at or above DB base (with warn log)", async () => {
+  // Was "accepts framed line where client price is at or above DB base (with warn
+  // log)". That warn log WAS the finding: the client's number went to Stripe. Now
+  // asserts the server's number is charged and the client's is ignored.
+  it("charges base + server-side uplift and ignores the client price (E46c)", async () => {
     mockWorks([{
       id: "w-1",
       available: true,
       quantity_available: 10,
       pricing: [{ label: "A3", price: 100 }],
       title: "Untitled",
+      frame_options: [{ label: "Black Wood Frame", priceUplift: 85 }],
     }]);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const res = await POST(req({
@@ -623,13 +635,14 @@ describe("POST /api/checkout cart re-validation (G2-15)", () => {
       fulfilmentMethod: "collection",
     }));
     expect(res.status).toBe(200);
+    const calls = stripeCreate.mock.calls as unknown as Array<
+      [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
+    >;
+    // 100 + 85 = 185, not the client's 120.
+    expect(calls[0]?.[0]?.line_items?.[0]?.price_data?.unit_amount).toBe(18500);
     expect(warn).toHaveBeenCalledWith(
-      "[checkout] framed line uses client price",
-      expect.objectContaining({
-        workId: "w-1",
-        clientPence: 12000,
-        dbBasePence: 10000,
-      }),
+      "[checkout] framed line price corrected",
+      expect.objectContaining({ workId: "w-1", clientPence: 12000, serverPence: 18500 }),
     );
     warn.mockRestore();
   });
@@ -697,7 +710,7 @@ describe("POST /api/checkout cart re-validation (G2-15)", () => {
 // falling through and trusting the client price.
 describe("POST /api/checkout framed line unresolvable-base rejection (Task 2.4)", () => {
   // Helper: same pattern as the G2-15 suite above.
-  function mockWorks(rows: Array<{ id: string; available?: boolean; quantity_available?: number | null; pricing?: Array<{ label: string; price: number }> | null; title?: string }>) {
+  function mockWorks(rows: Array<{ id: string; available?: boolean; quantity_available?: number | null; pricing?: Array<{ label: string; price: number }> | null; title?: string; frame_options?: Array<{ label: string; priceUplift: number; pricesBySize?: Record<string, number> }> }>) {
     const map = new Map(rows.map((r) => [r.id, r]));
     fromMock.mockImplementation((table: string) => {
       if (table === "artist_profiles") {
@@ -726,6 +739,8 @@ describe("POST /api/checkout framed line unresolvable-base rejection (Task 2.4)"
       quantity_available: 10,
       pricing: [{ label: "A3", price: 100 }],
       title: "The Piece",
+      // E46c: the frame must be ON the work for the line to resolve at all.
+      frame_options: [{ label: "Oak Frame", priceUplift: 85 }],
     }]);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const res = await POST(req({
@@ -859,7 +874,7 @@ describe("POST /api/checkout framed line unresolvable-base rejection (Task 2.4)"
 // These three tests fix the exact " + " split semantics and case-insensitive
 // base resolution so any refactor of the parse logic trips a test.
 describe("POST /api/checkout framed line split/match edge cases (Task 2.3)", () => {
-  function mockWorks(rows: Array<{ id: string; available?: boolean; quantity_available?: number | null; pricing?: Array<{ label: string; price: number }> | null; title?: string }>) {
+  function mockWorks(rows: Array<{ id: string; available?: boolean; quantity_available?: number | null; pricing?: Array<{ label: string; price: number }> | null; title?: string; frame_options?: Array<{ label: string; priceUplift: number; pricesBySize?: Record<string, number> }> }>) {
     const map = new Map(rows.map((r) => [r.id, r]));
     fromMock.mockImplementation((table: string) => {
       if (table === "artist_profiles") {
@@ -879,7 +894,11 @@ describe("POST /api/checkout framed line split/match edge cases (Task 2.3)", () 
     });
   }
 
-  it("rejects 409 price_below_base for multi-segment size ('A3 + Oak + Gold') when client price is below the A3 base tier", async () => {
+  // Was asserting price_below_base, which E46c retired. The split still yields
+  // base "A3" and frame "Oak" from "A3 + Oak + Gold", so the line resolves and the
+  // price is computed rather than floored. What matters is that the client's 80 is
+  // NOT what Stripe sees.
+  it("computes the price for a multi-segment size ('A3 + Oak + Gold') (E46c)", async () => {
     // Size has two " + " separators; split(" + ")[0] must still yield "A3" and
     // the floor check must fire because client price (80) < DB base (100).
     mockWorks([{
@@ -888,6 +907,7 @@ describe("POST /api/checkout framed line split/match edge cases (Task 2.3)", () 
       quantity_available: 10,
       pricing: [{ label: "A3", price: 100 }],
       title: "Multi-segment",
+      frame_options: [{ label: "Oak", priceUplift: 40 }],
     }]);
     const res = await POST(req({
       items: [{
@@ -901,11 +921,11 @@ describe("POST /api/checkout framed line split/match edge cases (Task 2.3)", () 
       }],
       shipping: { ...baseShipping, country: "GB" },
     }));
-    expect(res.status).toBe(409);
-    const body = await res.json();
-    expect(body.code).toBe("price_below_base");
-    expect(body.workId).toBe("w-1");
-    expect(stripeCreate).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    const calls = stripeCreate.mock.calls as unknown as Array<
+      [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
+    >;
+    expect(calls[0]?.[0]?.line_items?.[0]?.price_data?.unit_amount).toBe(14000);
   });
 
   it("accepts checkout for lowercase base 'a3 + Oak Frame' at or above the DB 'A3' tier (case-insensitive match)", async () => {
@@ -917,6 +937,7 @@ describe("POST /api/checkout framed line split/match edge cases (Task 2.3)", () 
       quantity_available: 10,
       pricing: [{ label: "A3", price: 100 }],
       title: "Case test",
+      frame_options: [{ label: "Oak Frame", priceUplift: 85 }],
     }]);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const res = await POST(req({
@@ -1002,5 +1023,144 @@ describe("POST /api/checkout no-digital", () => {
     } else {
       expect([400, 409]).toContain(res.status);
     }
+  });
+});
+
+// ── E46c "free frames": the uplift was fully client-trusted (06 B6) ──────────
+//
+// Framed cart lines carry size "<base> + <frame label>", which never matches a DB
+// pricing tier, so the line-item builder found no tier and kept the CLIENT's
+// price. The only guard was a floor at the bare unframed price. So: DB tier £100,
+// artist's oak frame £85, legitimate total £185, and a buyer posting price: 100
+// with size "A3 + Oak Frame" was charged £100 and got the frame free. A warn log
+// fired, which made it observable but not prevented.
+//
+// The server now computes base + uplift from the work's own frame_options and the
+// client's number is never used for a framed line.
+describe("POST /api/checkout framed uplift is server-side (E46c)", () => {
+  function mockFramedWork(over: Partial<{
+    pricing: Array<{ label: string; price: number }>;
+    frame_options: Array<{ label: string; priceUplift: number; pricesBySize?: Record<string, number> }>;
+  }> = {}) {
+    const row = {
+      id: "w-1",
+      available: true,
+      quantity_available: 10,
+      title: "Harbour Light",
+      pricing: over.pricing ?? [{ label: "A3", price: 100 }],
+      frame_options: over.frame_options ?? [{ label: "Oak Frame", priceUplift: 85 }],
+    };
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return profilesTable();
+      if (table === "artist_works") {
+        return { select: () => ({ in: async () => ({ data: [row], error: null }) }) };
+      }
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }) }) };
+    });
+  }
+
+  const unitAmount = () => {
+    const calls = stripeCreate.mock.calls as unknown as Array<
+      [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
+    >;
+    return calls[0]?.[0]?.line_items?.[0]?.price_data?.unit_amount;
+  };
+
+  function framedReq(over: Record<string, unknown> = {}) {
+    return req({
+      items: [{
+        ...baseItem,
+        type: "work",
+        workId: "w-1",
+        title: "Harbour Light",
+        size: "A3 + Oak Frame",
+        framed: true,
+        price: 100,
+        ...over,
+      }],
+      shipping: { ...baseShipping, country: "GB" },
+    });
+  }
+
+  it("charges base + uplift when the client posts only the base price", async () => {
+    // The exact exploit from 06 §3.3.
+    mockFramedWork();
+    const res = await POST(framedReq({ price: 100 }));
+    expect(res.status).toBe(200);
+    expect(unitAmount(), "the frame was free").toBe(18500);
+  });
+
+  it("ignores an inflated client price too, so the number is the server's either way", async () => {
+    mockFramedWork();
+    await POST(framedReq({ price: 999 }));
+    expect(unitAmount()).toBe(18500);
+  });
+
+  it("prefers the explicit frameLabel over splitting the size string", async () => {
+    mockFramedWork({
+      frame_options: [
+        { label: "Oak Frame", priceUplift: 85 },
+        { label: "Gilt", priceUplift: 200 },
+      ],
+    });
+    await POST(framedReq({ size: "A3 + Oak Frame", frameLabel: "Gilt" }));
+    expect(unitAmount()).toBe(30000);
+  });
+
+  it("uses a pricesBySize override in preference to the flat uplift", async () => {
+    mockFramedWork({
+      frame_options: [{ label: "Oak Frame", priceUplift: 85, pricesBySize: { A3: 120 } }],
+    });
+    await POST(framedReq());
+    expect(unitAmount()).toBe(22000);
+  });
+
+  it("falls back to the flat uplift when the size has no override", async () => {
+    mockFramedWork({
+      pricing: [{ label: "A2", price: 150 }],
+      frame_options: [{ label: "Oak Frame", priceUplift: 85, pricesBySize: { A3: 120 } }],
+    });
+    await POST(framedReq({ size: "A2 + Oak Frame" }));
+    expect(unitAmount()).toBe(23500);
+  });
+
+  it("409s a framed line naming a frame the work does not offer", async () => {
+    // Previously this was charged at the client's number.
+    mockFramedWork({ frame_options: [{ label: "Oak Frame", priceUplift: 85 }] });
+    const res = await POST(framedReq({ size: "A3 + Invented Frame" }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("size_label_unresolvable");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("409s a framed line on a work with no frame options at all", async () => {
+    mockFramedWork({ frame_options: [] });
+    const res = await POST(framedReq());
+    expect(res.status).toBe(409);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("matches the frame label case-insensitively, since the cart's copy is client-held", async () => {
+    mockFramedWork();
+    await POST(framedReq({ frameLabel: "oak frame" }));
+    expect(unitAmount()).toBe(18500);
+  });
+
+  it("resolves a legacy cart with no frameLabel, so no migration window is needed", async () => {
+    mockFramedWork();
+    const res = await POST(framedReq()); // size split only
+    expect(res.status).toBe(200);
+    expect(unitAmount()).toBe(18500);
+  });
+
+  it("leaves unframed lines on the existing tier-match path", async () => {
+    mockFramedWork({ pricing: [{ label: "A3", price: 100 }] });
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-1", size: "A3", framed: false, price: 100 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    expect(unitAmount()).toBe(10000);
   });
 });

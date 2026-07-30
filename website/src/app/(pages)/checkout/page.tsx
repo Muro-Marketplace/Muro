@@ -303,6 +303,8 @@ export default function CheckoutPage() {
         internationalShippingPrice: it.internationalShippingPrice ?? null,
         dimensions: it.dimensions || null,
         framed: it.framed,
+        // E46c: forwarded so the API can resolve the uplift server-side.
+        frameLabel: it.frameLabel,
         price: it.price,
         quantity: it.quantity,
       })),

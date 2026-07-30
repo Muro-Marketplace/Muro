@@ -23,6 +23,13 @@ type WorkRow = {
   quantity_available: number | null;
   pricing: Array<{ label: string; price: number }> | null;
   title: string | null;
+  // E46c: the uplift is resolved from here, server-side, instead of trusting the
+  // client's framed total. Real jsonb column; 6 of 35 live works carry frames.
+  frame_options: Array<{
+    label: string;
+    priceUplift: number;
+    pricesBySize?: Record<string, number> | null;
+  }> | null;
 };
 
 export async function POST(request: Request) {
@@ -106,7 +113,7 @@ export async function POST(request: Request) {
     if (workIds.length > 0) {
       const { data: rows, error: worksErr } = await getSupabaseAdmin()
         .from("artist_works")
-        .select("id, available, quantity_available, pricing, title")
+        .select("id, available, quantity_available, pricing, title, frame_options")
         .in("id", workIds);
       if (worksErr) {
         console.error("[checkout] cart re-validation lookup failed:", worksErr);
@@ -160,23 +167,26 @@ export async function POST(request: Request) {
     // DB ("8x10" vs "8X10"), and we'd rather charge the DB price than
     // refuse to checkout because of a cosmetic mismatch.
     //
-    // Frame uplift edge case: cart lines for framed orders carry size
-    // "<base> + <frame label>" which won't match any DB pricing tier
-    // (DB tiers are bare base sizes). For these lines:
-    // - Availability gate (sold/deleted/out-of-stock) STILL fires — the
-    //   workId lookup is size-independent.
-    // - Price-recompute is partial: we parse the base size, look up the
-    //   base tier, and reject 409 ("price_below_base") if the client's
-    //   total is below the DB base. Above-base lines fall back to the
-    //   client price for unit_amount and emit a warn log so we can
-    //   observe how often the fallback runs.
-    // Residual risk: the frame UPLIFT itself remains fully client-trusted
-    // for resolvable lines — a buyer can obtain the frame at or below cost
-    // (down to the bare base price). Fully closing this gap requires
-    // server-side uplift resolution (either carrying frame identity on the
-    // cart line or resolving the uplift from a server-held price table).
-    // Full price-correction for framed lines requires either parsing the
-    // uplift server-side or carrying frame identity on the cart line.
+    // E46c (06 B6). The frame uplift used to be fully client-trusted.
+    //
+    // Framed lines carry size "<base> + <frame label>", which never matches a DB
+    // pricing tier (tiers are bare base sizes), so the line-item builder found no
+    // tier and kept the CLIENT's price. The only guard was a floor at the bare
+    // unframed price, which meant a buyer could post the base price for a framed
+    // piece and get the frame free: DB tier £100 plus an £85 oak frame, charged
+    // £100. The old comment here called that a "residual risk"; it was an open
+    // hole with a warn log next to it.
+    //
+    // Now the server computes the whole number from the work's own row:
+    //   base tier price + (frame.pricesBySize[tier] ?? frame.priceUplift)
+    // and the client's figure is never used for a framed line. Frame identity
+    // comes from the new frameLabel field, falling back to splitting `size` on
+    // " + " so carts already in localStorage keep working with no migration
+    // window.
+    //
+    // This retires the price_below_base special case: the server owns the number,
+    // so a mismatch is a corrected charge plus a warn, exactly as unframed lines
+    // already behave.
     const unresolvableFramed = (workId: string) =>
       NextResponse.json(
         {
@@ -186,6 +196,10 @@ export async function POST(request: Request) {
         },
         { status: 409 },
       );
+
+    /** workId -> server-computed unit price in pence, for framed lines only. */
+    const framedPence = new Map<string, number>();
+
     for (const item of items) {
       if (!item.workId) continue;
       const isFramedLine = item.framed === true || (typeof item.size === "string" && item.size.includes(" + "));
@@ -204,15 +218,38 @@ export async function POST(request: Request) {
       if (!dbBaseTier || typeof dbBaseTier.price !== "number" || dbBaseTier.price <= 0) {
         return unresolvableFramed(item.workId);
       }
-      if (item.price < dbBaseTier.price) {
-        return NextResponse.json(
-          {
-            error: `"${row.title || item.title}" has been re-priced. Please refresh your cart.`,
-            code: "price_below_base",
-            workId: item.workId,
-          },
-          { status: 409 },
-        );
+
+      // Frame identity: explicit field first, then the legacy " + " split.
+      const rawLabel =
+        item.frameLabel ??
+        (typeof item.size === "string" ? item.size.split(" + ")[1] : "") ??
+        "";
+      const frameLabel = rawLabel.trim().toLowerCase();
+      const frame = (row.frame_options ?? []).find(
+        (f) => typeof f?.label === "string" && f.label.trim().toLowerCase() === frameLabel,
+      );
+      // A framed line naming a frame the artist does not offer is refused rather
+      // than charged at the client's number.
+      if (!frameLabel || !frame || typeof frame.priceUplift !== "number") {
+        return unresolvableFramed(item.workId);
+      }
+
+      const sizeOverride = frame.pricesBySize?.[dbBaseTier.label];
+      const uplift = typeof sizeOverride === "number" ? sizeOverride : frame.priceUplift;
+      if (!Number.isFinite(uplift) || uplift < 0) {
+        return unresolvableFramed(item.workId);
+      }
+
+      const serverPence = Math.round((dbBaseTier.price + uplift) * 100);
+      framedPence.set(item.workId, serverPence);
+
+      const clientPence = Math.round(item.price * 100);
+      if (clientPence !== serverPence) {
+        console.warn("[checkout] framed line price corrected", {
+          workId: item.workId,
+          clientPence,
+          serverPence,
+        });
       }
     }
 
@@ -240,17 +277,9 @@ export async function POST(request: Request) {
           // price so we can prioritise the full server-side uplift fix.
           const isFramedLine = item.framed === true || (typeof item.size === "string" && item.size.includes(" + "));
           if (isFramedLine) {
-            const baseSize = typeof item.size === "string" ? item.size.split(" + ")[0] : "";
-            const dbBaseTier = baseSize
-              ? row.pricing.find((p) => p?.label?.toLowerCase?.() === baseSize.toLowerCase())
-              : undefined;
-            if (dbBaseTier && typeof dbBaseTier.price === "number") {
-              console.warn("[checkout] framed line uses client price", {
-                workId: item.workId,
-                clientPence: Math.round(item.price * 100),
-                dbBasePence: Math.round(dbBaseTier.price * 100),
-              });
-            }
+            // E46c: the server-computed price, set above. Never item.price.
+            const server = item.workId ? framedPence.get(item.workId) : undefined;
+            if (typeof server === "number") unitPence = server;
           }
         }
       }

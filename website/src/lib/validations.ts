@@ -264,6 +264,10 @@ const checkoutItemSchema = z.object({
   internationalShippingPrice: z.number().min(0).max(1000).optional(),
   dimensions: optionalString(200),
   framed: z.boolean().optional(),
+  // E46c (06 B6). Frame identity on the cart line, so checkout can resolve the
+  // uplift from the work's own frame_options instead of trusting the client's
+  // total. Optional: legacy carts fall back to splitting `size` on " + ".
+  frameLabel: z.string().trim().max(80).optional(),
   // Cart line identity — `workId` for individual artworks, `collectionId`
   // for bundles. Both optional because legacy localStorage carts may
   // pre-date the field, but G2-15 cart re-validation needs at least
