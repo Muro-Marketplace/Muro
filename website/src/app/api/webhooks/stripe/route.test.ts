@@ -10,6 +10,9 @@ const {
   signOrderTokenMock,
   createNotificationMock,
   subscriptionsRetrieveMock,
+  customersUpdateMock,
+  startPaidLoanBillingMock,
+  notifyAdminBillingStalledMock,
   sendEmailMock,
   resolveArtistNamesBulkMock,
   receiptPropsMock,
@@ -26,6 +29,9 @@ const {
   signOrderTokenMock: vi.fn(async () => "token-abc"),
   createNotificationMock: vi.fn(async () => {}),
   subscriptionsRetrieveMock: vi.fn(),
+  customersUpdateMock: vi.fn(),
+  startPaidLoanBillingMock: vi.fn(),
+  notifyAdminBillingStalledMock: vi.fn(),
   sendEmailMock: vi.fn(async () => {}),
   resolveArtistNamesBulkMock: vi.fn(async () => new Map<string, string>()),
   receiptPropsMock: vi.fn(() => null),
@@ -35,6 +41,7 @@ vi.mock("@/lib/stripe", () => ({
   stripe: {
     webhooks: { constructEvent: constructEventMock },
     subscriptions: { retrieve: subscriptionsRetrieveMock },
+    customers: { update: customersUpdateMock },
   },
 }));
 
@@ -53,6 +60,7 @@ vi.mock("@/lib/email", () => ({
   notifyArtistNewOrder: vi.fn(async () => {}),
   notifyVenueOrderFromPlacement: vi.fn(async () => {}),
   notifyCurationCustomerPaid: vi.fn(async () => {}),
+  notifyAdminBillingStalled: notifyAdminBillingStalledMock,
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -106,6 +114,7 @@ vi.mock("@/lib/orders/lifecycle", () => ({
 // written, so stubbing them would test nothing.
 vi.mock("@/lib/placements/paid-loan-billing", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/placements/paid-loan-billing")>()),
+  startPaidLoanBilling: startPaidLoanBillingMock,
   handleInvoicePaid: vi.fn(async () => false),
   handleInvoicePaymentFailed: vi.fn(async () => false),
   handleSubscriptionDeleted: vi.fn(async () => false),
@@ -1320,5 +1329,165 @@ describe("Stripe webhook — paid-loan subscription checkout (E7a)", () => {
     await POST(buildRequest());
     expect(state.upserts).toHaveLength(0);
     expect(subscriptionsRetrieveMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── E7d: no setup_intent.succeeded branch (04 §B6, §C5's second branch) ──────
+//
+// paid-loan-billing.ts documents that the flow is re-invoked when
+// setup_intent.succeeded lands on the webhook. There was no such branch, and the
+// client cannot re-invoke by PATCH either (that path needs status 'pending' and the
+// placement is already 'active'). So a paid-loan placement whose venue had no card
+// on file went live and never billed anyone.
+describe("Stripe webhook — setup_intent.succeeded (E7d)", () => {
+  interface SetupState {
+    placement: Record<string, unknown> | null;
+    customerUpdates: Array<[string, Record<string, unknown>]>;
+  }
+  let sstate: SetupState;
+
+  function fireSetupIntent(
+    overrides: { metadata?: Record<string, string> | null; payment_method?: string | null } = {},
+  ) {
+    constructEventMock.mockReturnValue({
+      type: "setup_intent.succeeded",
+      data: {
+        object: {
+          id: "seti_1",
+          customer: "cus_venue",
+          payment_method: overrides.payment_method === undefined ? "pm_new" : overrides.payment_method,
+          metadata:
+            overrides.metadata === undefined
+              ? {
+                  placement_id: "pl-1",
+                  venue_user_id: "u-venue",
+                  source: "wallplace_paid_loan_billing",
+                }
+              : overrides.metadata,
+        },
+      },
+    });
+  }
+
+  beforeEach(() => {
+    sstate = {
+      placement: {
+        id: "pl-1",
+        venue_user_id: "u-venue",
+        artist_user_id: "u-artist",
+        arrangement_type: "paid_loan",
+        monthly_fee_gbp: 45,
+      },
+      customerUpdates: [],
+    };
+    customersUpdateMock.mockReset();
+    customersUpdateMock.mockImplementation(async (id: string, params: Record<string, unknown>) => {
+      sstate.customerUpdates.push([id, params]);
+      return {};
+    });
+    startPaidLoanBillingMock.mockReset();
+    startPaidLoanBillingMock.mockResolvedValue({ status: "started", subscriptionId: "sub_1" });
+    notifyAdminBillingStalledMock.mockReset();
+    notifyAdminBillingStalledMock.mockResolvedValue(undefined);
+    fromMock.mockImplementation((table: string) => {
+      if (table === "placements") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: sstate.placement }) }) }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({ single: async () => ({ data: null }), maybeSingle: async () => ({ data: null }) }),
+        }),
+      };
+    });
+  });
+
+  it("starts billing for the placement the card was attached for", async () => {
+    fireSetupIntent();
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ billing: "started" });
+    expect(startPaidLoanBillingMock).toHaveBeenCalledWith({
+      placementId: "pl-1",
+      venueUserId: "u-venue",
+      artistUserId: "u-artist",
+      arrangementType: "paid_loan",
+      monthlyFeePence: 4500,
+    });
+  });
+
+  it("makes the new card the customer's default so invoices can charge it", async () => {
+    fireSetupIntent();
+    await POST(buildRequest());
+    expect(sstate.customerUpdates).toEqual([
+      ["cus_venue", { invoice_settings: { default_payment_method: "pm_new" } }],
+    ]);
+  });
+
+  it("ignores a setup intent that is not ours", async () => {
+    fireSetupIntent({ metadata: { source: "something_else" } });
+    const res = await POST(buildRequest());
+    await expect(res.json()).resolves.toMatchObject({ ignored: "not_paid_loan" });
+    expect(startPaidLoanBillingMock).not.toHaveBeenCalled();
+    expect(customersUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores a setup intent with no metadata at all", async () => {
+    fireSetupIntent({ metadata: null });
+    await expect((await POST(buildRequest())).json()).resolves.toMatchObject({
+      ignored: "not_paid_loan",
+    });
+  });
+
+  it("reports an unknown placement without retrying forever", async () => {
+    sstate.placement = null;
+    fireSetupIntent();
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200); // a 500 would have Stripe retry a lookup that cannot succeed
+    await expect(res.json()).resolves.toMatchObject({ ignored: "unknown_placement" });
+    expect(startPaidLoanBillingMock).not.toHaveBeenCalled();
+  });
+
+  it("does NOT mail the admin when the helper skipped because the flag is off", async () => {
+    // §C5 alerts on anything that is not started/already_started.
+    // startPaidLoanBilling short-circuits to "skipped" whenever PAID_LOAN_V2 is
+    // off, which is its state in prod, so that would mail the admin on every
+    // single card attachment.
+    startPaidLoanBillingMock.mockResolvedValue({ status: "skipped" });
+    fireSetupIntent();
+    const res = await POST(buildRequest());
+    expect(res.status).toBe(200);
+    expect(notifyAdminBillingStalledMock).not.toHaveBeenCalled();
+  });
+
+  it("mails the admin when the card is attached and billing still did not start", async () => {
+    // The genuine revenue hole: the flag is on, the card is there, and billing
+    // did not begin. Nothing else in the system notices.
+    startPaidLoanBillingMock.mockResolvedValue({ status: "missing_payment_method" });
+    fireSetupIntent();
+    await POST(buildRequest());
+    expect(notifyAdminBillingStalledMock).toHaveBeenCalledWith({
+      placementId: "pl-1",
+      status: "missing_payment_method",
+    });
+  });
+
+  it("treats already_started as success, so a redelivery is quiet", async () => {
+    startPaidLoanBillingMock.mockResolvedValue({ status: "already_started", subscriptionId: "sub_1" });
+    fireSetupIntent();
+    // Deliver twice: Stripe redelivers, and the second must be as quiet as the first.
+    expect((await POST(buildRequest())).status).toBe(200);
+    expect((await POST(buildRequest())).status).toBe(200);
+    expect(notifyAdminBillingStalledMock).not.toHaveBeenCalled();
+  });
+
+  it("still starts billing when the payment method is missing from the intent", async () => {
+    // No pm id means we cannot set a default, but the card attach itself succeeded,
+    // so billing must still be attempted rather than abandoned.
+    fireSetupIntent({ payment_method: null });
+    await POST(buildRequest());
+    expect(customersUpdateMock).not.toHaveBeenCalled();
+    expect(startPaidLoanBillingMock).toHaveBeenCalled();
   });
 });
