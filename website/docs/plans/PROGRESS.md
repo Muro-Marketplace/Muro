@@ -15,7 +15,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 0e | Go green on main (D14) | D14 | **done** (4f83d3a, f612159, edacda3, e38e698). Full suite exit 0: 0 failed, 13 skipped, 18 passed |
 | 1 | `02` prereqs: base schema committed, K10 renumber (D2), reconcile | `02` §8.3 | **K10 renumber done** (800c02b). Reconcile §8.4 **void** (false premise). Base schema (X2/K11) **blocked**: no supabase CLI here |
 | 2 | Vehicles + `01` Phase A | `06`, `01` | **Phase A complete** (8d99498, 9427aab, 3a73a80, eb2acd9). Guard at `warn`, flips to `error` as the Phase 2 exit |
-| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | `06` **A+A2 done, B1 done** (a4142c2), **B2 void / B3+B4 done** (f657719), **B5 done** (e53630d), **B6 done** (1a79952). `06` **Phase B complete**. Remaining: A5/A7 assertNoServerOwned, Phase C. `01`: **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
+| 3 | Route fixes `01 Phase B–D`, `06 A2/B` | `01`, `06` | `06` **A+A2 done, B1 done** (a4142c2), **B2 void / B3+B4 done** (f657719), **B5 done** (e53630d), **B6 done** (1a79952). `06` **Phases A + B complete** (A5/A7: 083a966). Remaining: Phase C (C1-C5). `01`: **Phase B complete** (E32, E44, E45, E19, E39, E17/E18). **Phase C complete**: E32, E31, E33 (1bed512). **Phase C + D complete**: E32, E31, E33 (1bed512), E20+E23b (8f47841), E21 (92e3dfe), E22 (fae5945, migration 098). **Phase E item 13 DONE** (37987e1 + 71b137f): every mutating route guarded or exempt-with-reason, ratchet at 0, demo-guard lint warnings 58 → 0. **`01` COMPLETE** (items 13-16: 37987e1, 71b137f, 99e8c83, 0fd8a4d, 6c8e1d1). Item 15's flip and item 16's restore are both owner decisions, both held by guards. Next: `06` Phase B |
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
@@ -4127,3 +4127,62 @@ accept a frame the work doesn't offer → 2 fail
 **`06` Phase B is complete** (B1, B2 void, B3, B4, B5, B6). Remaining in `06`: A5/A7's
 `assertNoServerOwned` (needs the exemption design noted earlier) and Phase C
 (gating + guardrails).
+
+---
+
+## `06` A5 + A7 — `assertNoServerOwned` at the write boundary (owner: `06` §5.1)
+
+**The state before.** The guard existed with full unit coverage and **no call site**.
+E44 and E45 were both fixed at the route via `pickWritable`, which stops today's
+payloads but leaves the boundary itself open: any future caller of
+`upsertArtistProfile` or `upsertVenueProfile` can still hand over `review_status`,
+`subscription_plan`, `stripe_connect_account_id` or `user_id`.
+
+**Now enforced inside both upsert functions**, so no caller can skip it. Every write
+to `artist_profiles` and `venue_profiles` goes through one of the two.
+
+**The exemption design that was blocking this.** Three call sites legitimately set a
+server-owned column with a **server-computed** value:
+
+| Call site | Columns | Why |
+|---|---|---|
+| artist PUT | `lat`, `lng` | geocoded from the postcode, never from the body |
+| artist POST | `slug`, `review_status` | chosen at creation; `pending` must be forced so a new profile cannot self-publish |
+| venue POST | `slug` | chosen at creation |
+
+A blanket refusal would have made the guard **unsatisfiable**, and an unsatisfiable
+guard gets deleted. That is E23a all over again, so the shape matters: the guard has
+to be usable or it will not survive.
+
+`assertNoServerOwned` now takes an `allow` list, declared per call at the call site
+via `{ allowServerOwned: [...] }` and enforced inside the function. **It is a per-call
+entitlement, not a global widening**: being allowed to set `lat` does not let
+`subscription_plan` through on the same call. That is the property that makes it safe,
+so it has its own test, and a probe that converts the exemption into a blanket bypass
+fails it.
+
+The error message now names the exemption route as well as `pickWritable`, so the next
+caller who trips it is told both correct answers rather than only one.
+
+**Tests.** 6 for the exemption semantics, plus a new `profile-upsert-guard.test.ts`
+with 12 that prove the guard **fires from the upsert**. That distinction is the point:
+`writable-fields.test.ts` already covered the helper in isolation, and isolated
+coverage of an uncalled control is exactly what E23a was.
+
+**Probed twice:**
+
+```
+remove the guard from upsertArtistProfile → 4 fail
+make the exemption a blanket bypass       → 2 fail
+```
+
+```
+ Test Files  156 passed (156)
+      Tests  1575 passed (1575)
+✖ 175 problems (0 errors, 175 warnings)
+```
+
+**Commit:** 083a966
+
+`06` Phase A is now complete. Remaining in `06`: Phase C (C1-C5, gating and
+guardrails).
