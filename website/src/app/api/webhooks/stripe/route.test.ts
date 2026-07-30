@@ -2190,3 +2190,76 @@ describe("Stripe webhook — subscription.deleted reaches the paid-loan handler 
     expect(handleSubDeletedMock).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── D15: the SaaS subscription branch must be scoped by metadata.kind ─────────
+//
+// It writes artist_profiles by stripe_customer_id, so a paid-loan or
+// managed-curation subscription must be left to its own handler rather than
+// stamping a plan onto whatever profile shares that customer id.
+describe("Stripe webhook — SaaS subscription scoped by kind (D15)", () => {
+  let updates: Array<Record<string, unknown>>;
+
+  beforeEach(() => {
+    process.env.STRIPE_PRICE_PRO = "price_pro_live";
+    updates = [];
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
+      if (table === "artist_profiles") {
+        return {
+          update: (row: Record<string, unknown>) => {
+            updates.push(row);
+            return { eq: async () => ({ error: null }) };
+          },
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+        };
+      }
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) };
+    });
+  });
+  afterEach(() => {
+    delete process.env.STRIPE_PRICE_PRO;
+  });
+
+  function fire(metadata: Record<string, string>) {
+    constructEventMock.mockReturnValue({
+      type: "customer.subscription.created",
+      data: {
+        object: {
+          id: "sub_1",
+          customer: "cus_1",
+          status: "active",
+          trial_end: null,
+          metadata,
+          items: { data: [{ price: { id: "price_pro_live" }, current_period_end: 1_800_000_000 }] },
+        },
+      },
+    });
+  }
+
+  it("ignores a paid-loan subscription even when its price is a known SaaS price", async () => {
+    // The exact near-miss D15 guards: a dedicated-kind sub whose price would
+    // otherwise map to a plan must NOT write artist_profiles.
+    fire({ kind: "paid_loan_monthly" });
+    const res = await POST(buildRequest());
+    await expect(res.json()).resolves.toMatchObject({ ignored: "not_saas_subscription" });
+    expect(updates).toHaveLength(0);
+  });
+
+  it("ignores a curation subscription", async () => {
+    fire({ kind: "curation_request" });
+    await POST(buildRequest());
+    expect(updates).toHaveLength(0);
+  });
+
+  it("ignores the paid-loan billing source label too", async () => {
+    fire({ source: "wallplace_paid_loan_billing" });
+    await POST(buildRequest());
+    expect(updates).toHaveLength(0);
+  });
+
+  it("still processes a genuine platform SaaS subscription (no dedicated kind)", async () => {
+    fire({}); // no kind/source => platform SaaS
+    await POST(buildRequest());
+    expect(updates[0]?.subscription_plan).toBe("pro");
+  });
+});

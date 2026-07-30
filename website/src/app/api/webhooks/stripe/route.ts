@@ -1081,6 +1081,24 @@ async function handleWebhookEvent(
   // ─── Subscription events ───
   if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
     const subscription = event.data.object as Stripe.Subscription;
+
+    // D15: this branch writes artist_profiles by stripe_customer_id, so it must
+    // only handle the platform SaaS subscription. A paid-loan or managed-curation
+    // subscription is owned by its own handler; today it is a near-miss (those
+    // flows create fresh customers rather than reusing an artist's customer id),
+    // but it is one refactor away from stamping a plan onto the wrong profile.
+    // Scope it explicitly. (D12's unknown-price guard also catches paid-loan's
+    // dynamic price, but a curation tier priced via a STRIPE_PRICE_* would slip
+    // past that; the kind check does not depend on the price.)
+    const subKind = subscription.metadata?.kind || subscription.metadata?.source || "";
+    if (
+      subKind === "paid_loan_monthly" ||
+      subKind === "wallplace_paid_loan_billing" ||
+      subKind === "curation_request"
+    ) {
+      return NextResponse.json({ received: true, ignored: "not_saas_subscription" });
+    }
+
     const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
     const priceId = subscription.items.data[0]?.price?.id || "";
 
