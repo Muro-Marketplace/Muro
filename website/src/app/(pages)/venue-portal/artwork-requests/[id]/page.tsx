@@ -165,13 +165,25 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
   }
 
   async function setStatus(status: "open" | "closed" | "fulfilled") {
+    // E43-c: this used to skip the res.ok check and swallow the catch, so a
+    // 403/500/network failure on "Mark fulfilled" / "Close" silently did
+    // nothing with no feedback. authFetch resolves for non-2xx, so the failure
+    // has to be checked explicitly. Mirrors act()/fulfillResponse() above.
+    setError(null);
     try {
-      await authFetch(`/api/artwork-requests/${id}`, {
+      const res = await authFetch(`/api/artwork-requests/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Could not update the request status. Please try again.");
+        return;
+      }
       await load();
-    } catch { /* swallow */ }
+    } catch {
+      setError("Network error. Please try again.");
+    }
   }
 
   // D3 (Phase 2.9): "Mark fulfilled" routes through the new fulfill

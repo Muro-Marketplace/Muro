@@ -29,7 +29,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **todo, AFTER `05` closes** (not owner-gated). Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
 | 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **todo, AFTER `05` (alongside row 21)**. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
 | 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **todo, AFTER `05` (with rows 21/22)**. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). Remaining: E43-c..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, this commit). Remaining: E43-d..k, bug-12; `no-authfetch-mutation` eslint rule (**supervisor D67 (10fc64d) proposes moving this FIRST — ESCALATED to owner per rule 4, not yet actioned; order below is the pre-D67 plan pending the owner's steer**) |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8403,3 +8403,49 @@ green: 181 files (+1), 1913 tests (+2), audit:allowlist PASS, exit 0.
 `setStatus` swallows the catch and never checks `res.ok`, so a failed status change reads
 as done. Await + check `res.ok` (or `useSaveAction`), and reload via `load()` only on
 success.
+
+## row 8 (doc `05`) E43-c — artwork-request setStatus: check res.ok, surface the error
+
+Commit `<pending>`. Code + test.
+
+**The defect.** In `src/app/(pages)/venue-portal/artwork-requests/[id]/page.tsx`,
+`setStatus` (behind the "Mark fulfilled" and "Close" buttons) was
+`try { await authFetch(...PATCH...); await load(); } catch { /* swallow */ }`. It never
+checked `res.ok` and the catch was empty. Since `authFetch` resolves for non-2xx, a
+403/500 fell through to `load()` (which re-fetches the true, unchanged state) and a
+network error was swallowed — either way the click silently did nothing and no error
+surfaced. It was the only handler in the file not following the `act()` /
+`fulfillResponse()` shape.
+
+**The fix.** `setStatus` now mirrors those two: `setError(null)` up front, check
+`res.ok`, on failure `setError(data.error || "Could not update the request status. Please
+try again.")` and return without reloading, on success `await load()`, and a network-error
+`setError` in the catch. The file already renders `{error && <p ...>}` (line ~261) right
+by the buttons.
+
+**Plan divergence (noted per the non-negotiable).** The doc said "show an error toast
+(via `useToast`)". This file does not import `useToast`; its two sibling handlers surface
+errors via `setError` + an inline banner. I used the file's own `setError` idiom for
+consistency rather than introducing `useToast` into one handler. Same user-visible
+outcome: the failure is shown, the status does not advance.
+
+**Test.** New `venue-portal/artwork-requests/[id]/page.test.tsx` (jsdom; the page unwraps
+`params` via `use()`, so the render is wrapped in `<Suspense>` and flushed inside
+`act()`): (1) PATCH 403 → the error banner shows and the open-only "Mark fulfilled"
+button remains (status did not advance); (2) PATCH 2xx → the reload returns `fulfilled`
+so the button disappears, with no error. Fail-before verified by restoring the swallowing
+`setStatus`: the 403 test failed (no error banner appeared). `npm run check` green: 182
+files (+1), 1915 tests (+2), audit:allowlist PASS, exit 0.
+
+**SUPERVISOR D67 (10fc64d) — plan reorder, ESCALATED to owner (rule 4), not yet
+actioned.** While this iteration ran, the supervisor ruled that the
+`no-authfetch-mutation` lint rule should move from LAST to FIRST in the remaining E43
+work (land at `warn` with a grandfathered ratchet like the 7b phantom guard; the rule's
+output becomes the real E43 list; work the union, shrink the ratchet per fix, flip to
+`error` at zero). Operating rule 4 requires escalating a plan reorder regardless of
+signature, so I committed D67 in isolation and surfaced the decision to the owner rather
+than acting on it. Until the owner steers, the pre-D67 order stands (next would be E43-d).
+
+**Next (pending the owner's D67 decision): either write the `no-authfetch-mutation` rule
+now (D67), or continue with E43-d** — save shipping settings in
+`artist-portal/portfolio/page.tsx`: no `res.ok`, `.catch(()=>{})`, no feedback.
