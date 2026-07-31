@@ -49,4 +49,25 @@ describe("venue profile editing (E42-a)", () => {
     const body = JSON.parse((putCall![1] as RequestInit).body as string);
     expect(body.type).toBe("Cafe");
   });
+
+  it("sends null (not undefined) when a field is cleared, so it can be blanked (E42-d)", async () => {
+    // A venue that HAS a type, so clearing it must reach the server as null.
+    venueState.venue = { name: "Kings Arms", type: "Cafe", location: "London" };
+    render(<VenueProfilePage />);
+
+    fireEvent.click(screen.getAllByText("Edit")[0]);
+    const typeInput = screen.getByPlaceholderText("e.g. Independent cafe") as HTMLInputElement;
+    expect(typeInput.value).toBe("Cafe"); // hydrated from the venue
+
+    fireEvent.change(typeInput, { target: { value: "" } }); // clear it
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+
+    await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
+    const putCall = authFetchMock.mock.calls.find((c) => c[0] === "/api/venue-profile");
+    const body = JSON.parse((putCall![1] as RequestInit).body as string);
+    // Fail-before: `|| undefined` dropped the key from the JSON, so the field could
+    // never be blanked. `|| null` sends null and the DAO writes NULL.
+    expect(body.type).toBeNull();
+    expect("type" in body).toBe(true);
+  });
 });

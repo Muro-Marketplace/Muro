@@ -28,7 +28,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **DONE** (2131d2a): dependency recorded in guard header + runner; `MISSING_TOKEN_MESSAGE` points at the remedy (tested); service-role path investigated — none clean, token stands. **D62.5 owner escalation OPEN**: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
 | 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **todo, AFTER `05` closes** (not owner-gated). Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
 | 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **todo, AFTER `05` (alongside row 21)**. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c). **E42-b BLOCKED** (owner: `interested_in_local_artists`/`preferred_sizes` do NOT exist in prod — add a migration to complete the feature, or drop it). Remaining: E42-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, this commit). **E42-b BLOCKED** (owner: `interested_in_local_artists`/`preferred_sizes` do NOT exist in prod — add a migration to complete the feature, or drop it). Remaining: E42-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8231,9 +8231,33 @@ retrying to a false success (and calls update once, not twice). Fail-before veri
 by restoring the strip version: both failed. `npm run check` green: 179 files, 1905
 tests, audit:allowlist PASS, exit 0. (Code-only, no migration/RLS change.)
 
-**Next: doc `05` E42-d** — the venue PUT payload uses `detailName || undefined` etc.
-(`venue-portal/profile/page.tsx` ~:330); `JSON.stringify` omits `undefined`, so a
-venue can never blank out a field once set. Send `?? null` so the DAO writes NULL.
-Then E42-e (replace the hand-rolled `beforeunload` with `useUnsavedWarning`),
-E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST. (E42-b stays BLOCKED on
-the owner column decision above.)
+## row 8 (doc `05`) E42-d — venue fields can be blanked (`|| null`, not `|| undefined`)
+
+Commit `<pending>`. Code-only.
+
+**The defect.** The venue PUT payload sent `detailName || undefined` (and 8 more
+clearable text fields). `JSON.stringify` omits `undefined` keys, so once a field had a
+value a venue could never blank it: clearing the input made the state `""`, `"" ||
+undefined` was `undefined`, the key was dropped from the JSON, and the DAO's UPDATE
+never touched the column, so the old value stuck.
+
+**The fix.** Changed the 9 clearable text fields (`name`, `type`, `location`,
+`wall_space`, `approximate_footfall`, `display_wall_space`, `display_lighting`,
+`display_install_notes`, `display_rotation_frequency`) from `|| undefined` to `||
+null`, so an emptied field sends `null` and the DAO writes NULL. Left the arrays
+(`preferred_styles`/`themes`/`images`) and booleans untouched. E42-c already removed
+the server strip, so the NULL lands cleanly.
+
+**Test.** Extended `venue-portal/profile/page.test.tsx`: a venue with `type: "Cafe"`,
+enter edit, clear the type input, Save — the PUT body has `type: null` and the key is
+present. Fail-before verified by reverting the `type` field to `|| undefined`: the key
+was dropped and the assertion failed. `npm run check` green: 179 files, 1906 tests,
+audit:allowlist PASS, exit 0.
+
+**Next: doc `05` E42-e** — `venue-portal/profile/page.tsx` hand-rolls a `beforeunload`
+handler with only `e.preventDefault()` (no `e.returnValue = ""`, and no capture-phase
+anchor interception for Next.js client nav). Replace it with
+`useUnsavedWarning(hasUnsavedChanges)` from `@/lib/use-unsaved-warning` (which sets
+both and catches client nav). Re-read the effect first. That closes the E42 venue
+findings that are loop-actionable (E42-b stays BLOCKED on the owner column decision).
+Then E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST.

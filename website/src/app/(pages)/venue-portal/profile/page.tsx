@@ -327,21 +327,24 @@ export default function VenueProfilePage() {
       const res = await authFetch("/api/venue-profile", {
         method: "PUT",
         body: JSON.stringify({
-          name: detailName || undefined,
-          type: detailType || undefined,
-          location: detailLocation || undefined,
-          wall_space: detailWallSpace || undefined,
-          approximate_footfall: detailFootfall || undefined,
+          // E42-d: `|| null`, not `|| undefined` — JSON.stringify omits undefined, so
+          // an emptied field used to be dropped from the payload and never cleared.
+          // Sending null writes NULL (E42-c removed the server strip, so it lands).
+          name: detailName || null,
+          type: detailType || null,
+          location: detailLocation || null,
+          wall_space: detailWallSpace || null,
+          approximate_footfall: detailFootfall || null,
           preferred_styles: styles,
           preferred_themes: themes,
           images: venueImages,
           interested_in_free_loan: freeLoan,
           interested_in_revenue_share: revenueShare,
           interested_in_direct_purchase: directPurchase,
-          display_wall_space: displayWallSpace || undefined,
-          display_lighting: displayLighting || undefined,
-          display_install_notes: displayInstall || undefined,
-          display_rotation_frequency: displayRotation || undefined,
+          display_wall_space: displayWallSpace || null,
+          display_lighting: displayLighting || null,
+          display_install_notes: displayInstall || null,
+          display_rotation_frequency: displayRotation || null,
         }),
       });
 
