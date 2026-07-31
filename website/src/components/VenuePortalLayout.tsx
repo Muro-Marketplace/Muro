@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate } from "@/lib/api-client";
 
 // Nav order: Dashboard → Profile → Messages → Placements → rest (plan #8).
 const navItems = [
@@ -68,6 +68,7 @@ export default function VenuePortalLayout({
   const router = useRouter();
   const { user, loading, userType, displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selfHealFailed, setSelfHealFailed] = useState(false);
 
   useEffect(() => {
     if (!loading && (!user || userType !== "venue")) {
@@ -91,13 +92,31 @@ export default function VenuePortalLayout({
   // row if the original orphan was never created / got lost. Without
   // this, every venue-only API call (placements, offers, artwork
   // requests) errors with a misleading "Artist profile not found".
-  useEffect(() => {
+  const runSelfHeal = useCallback(async () => {
     if (!user || !user.email_confirmed_at) return;
-    authFetch("/api/venue-profile", {
-      method: "PATCH",
-      body: JSON.stringify({ ensureProfile: true }),
-    }).catch(() => {});
+    try {
+      // mutate() throws on a non-2xx, so a failed self-heal is no longer silent.
+      await mutate("/api/venue-profile", {
+        method: "PATCH",
+        body: JSON.stringify({ ensureProfile: true }),
+      });
+      setSelfHealFailed(false);
+    } catch {
+      // E43-j: surface the failure instead of swallowing it. Without a successful
+      // self-heal, every venue-only API call (placements, offers, artwork requests)
+      // fails with a misleading "Artist profile not found", so the venue needs to
+      // know and retry rather than hitting confusing errors elsewhere.
+      setSelfHealFailed(true);
+    }
   }, [user]);
+
+  useEffect(() => {
+    // runSelfHeal only setStates after an await (mutate resolves/rejects), so this
+    // is not the synchronous-cascade the rule guards against — same pattern the
+    // context providers use for async effects.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    runSelfHeal();
+  }, [runSelfHeal]);
 
   if (loading) {
     return (
@@ -228,7 +247,21 @@ export default function VenuePortalLayout({
           <span className="text-sm font-medium text-foreground">Venue Portal</span>
         </div>
 
-        <div className="px-4 sm:px-6 lg:px-8 pt-4 pb-6 lg:pb-8">{children}</div>
+        <div className="px-4 sm:px-6 lg:px-8 pt-4 pb-6 lg:pb-8">
+          {selfHealFailed && (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span>We couldn&rsquo;t finish setting up your venue portal, so some features may not work yet.</span>
+              <button
+                type="button"
+                onClick={() => runSelfHeal()}
+                className="shrink-0 text-xs font-medium underline hover:no-underline"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {children}
+        </div>
       </div>
     </div>
   );

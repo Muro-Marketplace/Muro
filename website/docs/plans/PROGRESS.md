@@ -8664,3 +8664,33 @@ contract is tested in `api-client`, and the swap is typechecked. Ratchet `LITERA
 
 **Next: E43-j** — `components/VenuePortalLayout.tsx` self-heal: surface a blocking error
 instead of swallowing it (migrate the flagged `authFetch` mutation to `mutate`).
+
+## row 8 (doc `05`) E43-j — VenuePortalLayout self-heal → mutate, surface instead of swallow (floor 75→74)
+
+Commit `<pending>`. `components/VenuePortalLayout.tsx` + new test.
+
+The venue portal self-heals its `venue_profiles` row on load (`PATCH /api/venue-profile
+{ensureProfile:true}` — links the registration orphan or inserts a minimal row). The
+write was `authFetch(...).catch(() => {})`, so a failed self-heal was invisible; the
+comment itself notes that without it, every venue-only API call then fails with a
+misleading "Artist profile not found". Migrated to `mutate` (throws on a non-2xx) inside a
+`runSelfHeal` useCallback; on failure it sets `selfHealFailed`, which renders a
+dismissible amber banner above the portal content with a **Retry** (re-runs the heal).
+Chose a non-blocking banner over a hard portal block so a transient network blip doesn't
+lock the venue out, while still surfacing the failure. `authFetch` dropped from the import
+(no reads in this file).
+
+The `runSelfHeal()` call in the effect needed
+`// eslint-disable-next-line react-hooks/set-state-in-effect` — its setState runs only
+after the `await`, not synchronously, which is the same async-effect pattern the context
+providers (`CartContext`, `SavedContext`, checkout) already disable that rule for.
+
+Test: `VenuePortalLayout.test.tsx` (jsdom, mocks useAuth as a confirmed venue + mutate):
+a rejected self-heal shows the "finish setting up your venue portal" banner + Retry; a
+resolved one shows no banner. Fail-before verified by restoring the swallowing catch (the
+banner never appeared). Ratchet `LITERAL_FLOOR` 75 → 74. `npm run check` green: 189 files
+(+1), 1940 tests (+2), exit 0.
+
+**Next: bug-12** — `components/BlogEditor.tsx` (×3 mutating `authFetch` → `mutate`). Its
+OTHER half (flag-gate + `notFound()` on the 3 blog pages + nav gated by
+`isFlagOn("BLOGS_V1")`) is a SEPARATE iteration, not an authFetch migration.
