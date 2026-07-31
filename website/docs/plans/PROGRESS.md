@@ -8861,3 +8861,41 @@ back and toasts the generic "Network error…" message. The three paths are the 
 **Next: the next flagged file** — measure with `npx eslint`; largest remaining non-owner-gated
 are artist-portal/placements (5) and venue-portal/placements (5), then artwork-requests/[id] (3),
 OffersList (3), and a long tail of 1–2-site files. Plus the 3 owner-gated orders refund sites.
+
+## row 8 (doc `05`) artist-portal/placements/page.tsx — 5 handlers → mutate (floor 53→48)
+
+Commit `<pending>`. `src/app/(pages)/artist-portal/placements/page.tsx` (no test — see note).
+
+Five flagged mutating `authFetch` sites migrated; the four read GETs (archived count, engaged
+counts, loadPlacements, venues) stay on `authFetch`:
+- **`respond`** (PATCH `/api/placements`, accept/decline): the optimistic row update and the
+  cross-portal `wallplace:placement-changed` event now run only on a confirmed 2xx; a non-2xx
+  surfaces the server reason via `ApiError.message` into `respondError` (was: authFetch resolved,
+  so `res.ok` gated it — behaviour preserved, error text improved).
+- **`handleSubmit`** (POST `/api/placements`, create): the `!res.ok` branch collapses into the
+  catch. NOTE a latent bug this fixes: the old catch only `console.error`'d, so a genuine network
+  drop on submit showed nothing (spinner just stopped). Now an `ApiError` sets `submitError` and a
+  non-`ApiError` sets a network `submitError` too — a failed submit is always visible.
+- **`bulkArchiveSelected`** (DELETE loop): the old guard treated `res.status === 404` as "already
+  gone = success". Preserved by `if (err instanceof ApiError && err.status === 404) continue;`
+  before counting a failure.
+- **`archivePlacement`** (DELETE): 404 kept the optimistic removal with no rollback and no reload.
+  Preserved by an early `return` on `ApiError.status === 404`; other `ApiError`s roll back + toast
+  the server message; network errors roll back + toast the generic message.
+- **`cancelPlacement`** (PATCH cancel): rollback + toast on failure, event + reload only on success;
+  `ApiError.message` preferred for the toast.
+
+Ratchet `LITERAL_FLOOR` 53 → 48 (file went 5 → 0). Measured with
+`npx eslint "src/**/*.{ts,tsx}" -f json` filtered for the rule: total 48, file no longer listed.
+
+Test: NONE added, stated honestly per the plan's render-heavy allowance. This is a 1926-line page
+with no existing test harness, needing `useCurrentArtist` + Auth/Toast/Confirm contexts + ~10 child
+mocks to render a row and reach these closures. The shared status path (`updateStatus` →
+`updatePlacementStatus`) is already pinned by `src/lib/placements/status-update.test.ts` (E43-a);
+the five swaps here are uniform transport changes with behaviour preserved (the subtle 404-DELETE
+semantics kept via explicit `err.status === 404` guards mirroring the old `res.status` checks).
+Verified via `npm run check`: typecheck (confirms `ApiError.status`/`.message` usage), lint (zero
+remaining rule violations in the file), full suite 192 files / 1945 tests green, route audit PASS.
+
+**Next: venue-portal/placements/page.tsx (5)** — the symmetric page; then artwork-requests/[id] (3),
+OffersList (3), and the 1–2-site tail. The 3 owner-gated orders refund sites remain last.
