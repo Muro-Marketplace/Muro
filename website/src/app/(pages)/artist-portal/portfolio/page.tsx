@@ -12,6 +12,7 @@ import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { useSaveAction } from "@/hooks/useSaveAction";
+import { buildFramePayload, type FramePayloadInput } from "./frame-payload";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import Combobox from "@/components/Combobox";
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
@@ -451,15 +452,12 @@ export default function PortfolioPage() {
     const shownWarnings = new Set<string>();
     const results = await Promise.allSettled(
       updated.map((work, index) => {
-        // priceUplift must be numeric for the API's Zod-like validator to
-        // accept the frame; previously we stringified, which caused frames
-        // to be silently sanitized away.
-        const frames = ((work as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions ?? [])
-          .map((f) => ({
-            label: f.label,
-            priceUplift: typeof f.priceUplift === "number" ? f.priceUplift : Number(f.priceUplift) || 0,
-            imageUrl: f.imageUrl,
-          }));
+        // E41-d: buildFramePayload coerces priceUplift to a number AND carries
+        // pricesBySize through — the inline map here used to drop it, wiping the
+        // artist's per-size frame pricing on every save.
+        const frames = buildFramePayload(
+          (work as ArtistWork & { frameOptions?: FramePayloadInput[] }).frameOptions,
+        );
 
         return mutate<{ warnings?: string[]; savedRow?: { id?: string; description?: string; images?: string[] } }>(
           "/api/artist-works",
