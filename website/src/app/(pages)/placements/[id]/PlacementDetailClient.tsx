@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import PlacementLoanForm from "./PlacementLoanForm";
@@ -286,11 +286,10 @@ export default function PlacementDetailClient({ placementId }: Props) {
     try {
       const body: Record<string, unknown> = { id: placement.id, stage };
       if (explicitDate) body.stageDate = explicitDate;
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify(body),
       });
-      if (!res.ok) return;
       await load({ silent: true });
       setSchedulePickerOpen(false);
     } catch { /* ignore; next load will reconcile */ }
@@ -346,18 +345,16 @@ export default function PlacementDetailClient({ placementId }: Props) {
     });
     if (!ok) return;
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: placement.id, unsetStage: stage }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        showToast(data.error || "Could not undo stage.", { variant: "error" });
-        return;
-      }
       await load({ silent: true });
-    } catch {
-      showToast("Network error. Please try again.", { variant: "error" });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.message || "Could not undo stage." : "Network error. Please try again.",
+        { variant: "error" },
+      );
     }
   }
 
@@ -366,21 +363,20 @@ export default function PlacementDetailClient({ placementId }: Props) {
     setResponding(accept ? "accept" : "decline");
     setRespondError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: placement.id, status: accept ? "active" : "declined" }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setRespondError(data.error || "Could not update placement");
-        return;
-      }
       await load({ silent: true });
       if (typeof window !== "undefined") {
+        // Only on a confirmed change (mutate throws on a non-2xx), so a rejected
+        // accept/decline no longer fans the cross-portal event out (E43-a class).
         window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: placement.id, action: accept ? "accept" : "decline" } }));
       }
-    } catch {
-      setRespondError("Network error. Please try again.");
+    } catch (err) {
+      setRespondError(
+        err instanceof ApiError ? err.message || "Could not update placement" : "Network error. Please try again.",
+      );
     } finally {
       setResponding(null);
     }
@@ -392,14 +388,11 @@ export default function PlacementDetailClient({ placementId }: Props) {
     try {
       for (const file of Array.from(files)) {
         const url = await uploadImage(file, "artworks");
-        const res = await authFetch(`/api/placements/${encodeURIComponent(placementId)}/photos`, {
-          method: "POST",
-          body: JSON.stringify({ url }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setPhotos((prev) => [data.photo, ...prev]);
-        }
+        const data = await mutate<{ photo: (typeof photos)[number] }>(
+          `/api/placements/${encodeURIComponent(placementId)}/photos`,
+          { method: "POST", body: JSON.stringify({ url }) },
+        );
+        setPhotos((prev) => [data.photo, ...prev]);
       }
     } catch (e) {
       console.error(e);
@@ -410,10 +403,17 @@ export default function PlacementDetailClient({ placementId }: Props) {
   }
 
   async function handleDeletePhoto(photoId: string) {
-    const res = await authFetch(`/api/placements/${encodeURIComponent(placementId)}/photos?photoId=${encodeURIComponent(photoId)}`, {
-      method: "DELETE",
-    });
-    if (res.ok) setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    try {
+      await mutate(`/api/placements/${encodeURIComponent(placementId)}/photos?photoId=${encodeURIComponent(photoId)}`, {
+        method: "DELETE",
+      });
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.message || "Could not remove photo." : "Could not remove photo.",
+        { variant: "error" },
+      );
+    }
   }
 
   if (loading || authLoading) {
@@ -448,21 +448,24 @@ export default function PlacementDetailClient({ placementId }: Props) {
       if (typeof placement.monthly_fee_gbp === "number" && placement.monthly_fee_gbp > 0) {
         body.monthlyDisplayFeeGbp = placement.monthly_fee_gbp;
       }
-      const res = await authFetch(`/api/placements/${encodeURIComponent(placementId)}/record`, {
+      await mutate(`/api/placements/${encodeURIComponent(placementId)}/record`, {
         method: "PUT",
         body: JSON.stringify(body),
       });
-      if (res.ok) {
-        await load({ silent: true });
-        // Keep the user in place on the record section instead of
-        // letting the re-render move scroll. A silent load + smooth
-        // scroll to the record anchor makes this feel like the record
-        // just "appeared" under the Add button.
-        setLoanRecordOpen(true);
-        requestAnimationFrame(() => {
-          loanRecordRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-      }
+      await load({ silent: true });
+      // Keep the user in place on the record section instead of
+      // letting the re-render move scroll. A silent load + smooth
+      // scroll to the record anchor makes this feel like the record
+      // just "appeared" under the Add button.
+      setLoanRecordOpen(true);
+      requestAnimationFrame(() => {
+        loanRecordRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.message || "Could not create the loan record." : "Could not create the loan record.",
+        { variant: "error" },
+      );
     } finally {
       setCreatingRecord(false);
     }
