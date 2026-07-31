@@ -9083,3 +9083,32 @@ The terminal ratchet floor is therefore **6**. The rule stays at `warn` until th
 
 **Next: placements/[id]/PlacementLoanForm.tsx (2)** — then venue-portal/settings (2), PlacementStepper
 (2), SavedContext (2), then the 1-site tail. The 6 owner-gated money sites remain last.
+
+## row 8 (doc `05`) placements/[id]/PlacementLoanForm.tsx — 2 handlers → mutate (floor 34→32)
+
+Commit `<pending>`. `src/app/(pages)/placements/[id]/PlacementLoanForm.tsx` (no test — see note).
+
+Both flagged sites read + confirmed NOT money handlers (checked against the boundary), then migrated;
+this file has no read GET, so `authFetch` is dropped from the import entirely:
+- **loan-record save** (PUT `/api/placements/:id/record`): records the agreed loan terms (dates,
+  condition, agreed/insured/sale values, payout terms, per-role approvals) — documentation/CRUD, it does
+  NOT execute any Stripe charge/payout. → `mutate`. The old `!res.ok` branch (which read `body.error` +
+  `body.fieldErrors`) collapses into the catch: on `ApiError`, `err.code` (mirrors the old `body.error`)
+  sets the message and `err.payload.fieldErrors` restores the per-field errors; the `approvalsReset`
+  success handling is unchanged.
+- **view-contract** (POST `/api/contracts/sign`): despite the name, this mints a short-lived **signed
+  storage URL** so the viewer can open the attached contract PDF (file access, not an e-signature or
+  payment). → `mutate`; a 2xx without a `signedUrl` is still treated as a failure.
+
+Ratchet `LITERAL_FLOOR` 34 → 32 (both flagged sites migrated). Measured: total 32, file no longer listed.
+
+Test: NONE added, stated honestly per the render-heavy allowance. This is a 625-line dense multi-section
+form whose props require a full `PlacementRecord` object + an `onSaved` callback (imported types), with no
+existing harness; exercising either handler needs the whole form rendered and submitted. The two swaps are
+transport changes with behaviour preserved (the `fieldErrors` extraction now via `ApiError.payload`, the
+`err.code` fallback, the `approvalsReset` flow, the signed-URL-or-fail branch). Verified via `npm run
+check`: typecheck (the removed `authFetch` import + the `ApiError.payload` casts) + lint (zero remaining
+violations in the file) + 193 files / 1948 tests green + route audit PASS.
+
+**Next: venue-portal/settings/page.tsx (2)** — then PlacementStepper (2), SavedContext (2), then the
+1-site tail. The 6 owner-gated money sites remain last.
