@@ -166,7 +166,13 @@ export default function OffersList({ viewerUserId, filter }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, offers]);
 
-  async function act(id: string, action: "accept" | "decline" | "withdraw") {
+  // E43-a/E43-b: returns true only when the server confirmed the change. The
+  // withdraw caller used to fire a success toast right after `await act(...)`
+  // regardless of the outcome, so a 403/500 or network error showed "Offer
+  // withdrawn." while the offer stayed put. authFetch resolves for non-2xx, so
+  // the success side-effects must be gated on this boolean, not on the promise
+  // merely resolving.
+  async function act(id: string, action: "accept" | "decline" | "withdraw"): Promise<boolean> {
     setBusyId(id);
     setError(null);
     try {
@@ -177,22 +183,24 @@ export default function OffersList({ viewerUserId, filter }: Props) {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Could not update offer.");
-      } else {
-        // When a venue (buyer) accepts an artist's counter, jump
-        // straight to Stripe rather than making them click a separate
-        // "Complete payment" button. Lookup the offer locally first
-        // so we know whether the actor was the buyer.
-        if (action === "accept") {
-          const accepted = offers.find((o) => o.id === id);
-          if (accepted && accepted.buyer_user_id === viewerUserId) {
-            await pay(id);
-            return;
-          }
-        }
-        await load();
+        return false;
       }
+      // When a venue (buyer) accepts an artist's counter, jump
+      // straight to Stripe rather than making them click a separate
+      // "Complete payment" button. Lookup the offer locally first
+      // so we know whether the actor was the buyer.
+      if (action === "accept") {
+        const accepted = offers.find((o) => o.id === id);
+        if (accepted && accepted.buyer_user_id === viewerUserId) {
+          await pay(id);
+          return true;
+        }
+      }
+      await load();
+      return true;
     } catch {
       setError("Network error. Please try again.");
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -563,8 +571,15 @@ export default function OffersList({ viewerUserId, filter }: Props) {
           if (!withdrawFor) return;
           const target = withdrawFor;
           setWithdrawFor(null);
-          await act(target.id, "withdraw");
-          showToast("Offer withdrawn.");
+          // E43-b: only claim success when the server confirmed it. act() also
+          // sets the inline error banner on failure; the toast is the louder
+          // signal for this dialog-driven action.
+          const ok = await act(target.id, "withdraw");
+          if (ok) {
+            showToast("Offer withdrawn.");
+          } else {
+            showToast("Could not withdraw the offer. Please try again.", { variant: "error" });
+          }
         }}
         onClose={() => setWithdrawFor(null)}
       />
