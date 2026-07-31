@@ -8934,7 +8934,7 @@ SavedContext) and the 1-site tail. The 3 owner-gated orders refund sites remain 
 
 ## row 8 (doc `05`) venue-portal/artwork-requests/[id]/page.tsx — 3 handlers → mutate (floor 43→40)
 
-Commit `<pending>`. `src/app/(pages)/venue-portal/artwork-requests/[id]/page.tsx` + its existing test.
+Commit `ebe2f2c`. `src/app/(pages)/venue-portal/artwork-requests/[id]/page.tsx` + its existing test.
 
 The venue's single artwork-request detail page. Three flagged mutating `authFetch` sites migrated;
 the one read GET (`load`, `GET /api/artwork-requests/:id`) stays on `authFetch`:
