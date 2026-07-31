@@ -9086,7 +9086,7 @@ The terminal ratchet floor is therefore **6**. The rule stays at `warn` until th
 
 ## row 8 (doc `05`) placements/[id]/PlacementLoanForm.tsx — 2 handlers → mutate (floor 34→32)
 
-Commit `<pending>`. `src/app/(pages)/placements/[id]/PlacementLoanForm.tsx` (no test — see note).
+Commit `be273ea`. `src/app/(pages)/placements/[id]/PlacementLoanForm.tsx` (no test — see note).
 
 Both flagged sites read + confirmed NOT money handlers (checked against the boundary), then migrated;
 this file has no read GET, so `authFetch` is dropped from the import entirely:
