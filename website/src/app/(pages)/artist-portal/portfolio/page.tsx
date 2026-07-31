@@ -7,7 +7,7 @@ import Button from "@/components/Button";
 import { type ArtistWork, type SizePricing } from "@/data/artists";
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch, mutate } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
@@ -1996,15 +1996,28 @@ export default function PortfolioPage() {
                   onClick={async () => {
                     if (hasError) return;
                     setSavingDefault(true);
-                    await authFetch("/api/artist-profile", {
-                      method: "PUT",
-                      body: JSON.stringify({
-                        default_shipping_price: ukVal,
-                        ships_internationally: shipsInternationally,
-                        international_shipping_price: intlVal,
-                      }),
-                    }).catch(() => {});
-                    setSavingDefault(false);
+                    // E43-d: the old `authFetch(...).catch(() => {})` swallowed every
+                    // failure and gave no feedback, so a rejected shipping save looked
+                    // successful. mutate() throws on a non-2xx, so success and failure
+                    // are now distinct and each shows a toast.
+                    try {
+                      await mutate("/api/artist-profile", {
+                        method: "PUT",
+                        body: JSON.stringify({
+                          default_shipping_price: ukVal,
+                          ships_internationally: shipsInternationally,
+                          international_shipping_price: intlVal,
+                        }),
+                      });
+                      showToast("Shipping settings saved");
+                    } catch (err) {
+                      showToast(
+                        err instanceof ApiError ? err.message : "Could not save shipping settings. Please try again.",
+                        { variant: "error" },
+                      );
+                    } finally {
+                      setSavingDefault(false);
+                    }
                   }}
                   disabled={savingDefault || hasError}
                   className="px-4 py-2 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

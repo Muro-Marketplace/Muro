@@ -163,3 +163,33 @@ describe("artist portfolio save posts only changed works (E41-c)", () => {
     expect(mutateMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("shipping settings save (05 E43-d)", () => {
+  it("shows a success toast only after a confirmed save", async () => {
+    mutateMock.mockResolvedValue({});
+    render(<PortfolioPage />);
+    const saveBtn = await screen.findByText("Save Shipping Settings");
+
+    fireEvent.click(saveBtn);
+
+    await waitFor(() =>
+      expect(mutateMock).toHaveBeenCalledWith("/api/artist-profile", expect.objectContaining({ method: "PUT" })),
+    );
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Shipping settings saved"));
+  });
+
+  it("shows an error toast and no success when the save fails", async () => {
+    mutateMock.mockRejectedValue(new ApiError(500, "server exploded", "server_error", {}));
+    render(<PortfolioPage />);
+    const saveBtn = await screen.findByText("Save Shipping Settings");
+
+    fireEvent.click(saveBtn);
+
+    // Fail-before: the old `authFetch(...).catch(() => {})` swallowed the failure and
+    // gave no feedback at all, so the save silently no-op'd.
+    await waitFor(() =>
+      expect(showToastMock).toHaveBeenCalledWith("server exploded", { variant: "error" }),
+    );
+    expect(showToastMock).not.toHaveBeenCalledWith("Shipping settings saved");
+  });
+});
