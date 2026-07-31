@@ -8997,7 +8997,7 @@ placements/[id]/PlacementLoanForm, venue-portal/settings, PlacementStepper, Save
 
 ## row 8 (doc `05`) artist-portal/collections/page.tsx — 3 handlers → mutate (floor 38→36)
 
-Commit `<pending>`. `src/app/(pages)/artist-portal/collections/page.tsx` (no test — see note).
+Commit `5f522af`. `src/app/(pages)/artist-portal/collections/page.tsx` (no test — see note).
 
 The ratchet flagged 2 sites, but the file had **3** mutating `authFetch` handlers — the third
 (`handleSave`) is a mutation the rule cannot see because its verb is a ternary
