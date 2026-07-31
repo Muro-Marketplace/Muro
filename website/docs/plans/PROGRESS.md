@@ -9112,3 +9112,33 @@ violations in the file) + 193 files / 1948 tests green + route audit PASS.
 
 **Next: venue-portal/settings/page.tsx (2)** — then PlacementStepper (2), SavedContext (2), then the
 1-site tail. The 6 owner-gated money sites remain last.
+
+## row 8 (doc `05`) venue-portal/settings/page.tsx — 2 Stripe Connect handlers → mutate (floor 32→30)
+
+Commit `<pending>`. `src/app/(pages)/venue-portal/settings/page.tsx` + new test.
+
+Both flagged sites are Stripe **Connect** handlers. Read them against the money boundary and confirmed
+NEITHER moves money — both just mint a redirect URL and `window.location.href` to it — so they are
+account-setup/access ("settings") transport swaps, not fund movements, and are migrated (not gated):
+- **`handleConnectOnboard`** (POST `/api/stripe-connect/onboard`): returns a Stripe account-onboarding
+  link (payout ACCOUNT setup / KYC). No charge/payout happens here.
+- **`handleConnectDashboard`** (POST `/api/stripe-connect/dashboard`): returns an Express dashboard
+  login link (access only).
+Both → `mutate<{ url? }>`; a 2xx without a `url` still shows the failure toast; a non-2xx surfaces
+`err.code` (mirrors the old `data.error`) and a network error keeps the "Something went wrong" copy.
+The read GET (`/api/stripe-connect/status`) stays on `authFetch`. (Distinct from the plan's owner-gated
+"Stripe dashboard CHANGES" item, which is about altering Stripe's own config, not linking to it.)
+
+Ratchet `LITERAL_FLOOR` 32 → 30 (both flagged migrated). Measured: total 30, file no longer listed.
+
+Test: NEW `page.test.tsx` (jsdom). Mocks supabase + api-client (importActual → real `ApiError`, override
+`authFetch` for the status GET and `mutate` for the writes) + Toast/Auth contexts + useCurrentVenue +
+useNotificationPrefs + the layout/danger-zone/payout-modal. Status GET returns no account → the "Set Up
+Payouts" button renders; clicking it: (1) a rejected `mutate` toasts "Something went wrong. Please try
+again." and calls `mutate` with the onboard POST; (2) a 2xx with no `url` toasts "Failed to start payout
+setup". (Success navigates via `window.location`, so only the reject/no-url paths are exercised.)
+Fail-before verified by changing the network toast string (the reject case failed), then restored.
+`npm run check` green: 194 files (+1), 1950 tests (+2), route audit PASS.
+
+**Next: PlacementStepper.tsx (2)** — then SavedContext (2), then the 1-site tail. The 6 owner-gated
+money sites remain last.

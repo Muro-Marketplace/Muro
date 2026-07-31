@@ -7,7 +7,7 @@ import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import {
   useNotificationPrefs,
   type NotificationPrefField,
@@ -99,19 +99,23 @@ export default function VenueSettingsPage() {
   async function handleConnectOnboard() {
     setConnectRedirecting(true);
     try {
-      const res = await authFetch("/api/stripe-connect/onboard", {
+      // Returns a Stripe account-onboarding link (payout ACCOUNT setup / KYC), not a
+      // money movement. mutate throws on a non-2xx; a 2xx without a url is still a failure.
+      const data = await mutate<{ url?: string }>("/api/stripe-connect/onboard", {
         method: "POST",
         body: JSON.stringify({ accountType: "venue" }),
       });
-      const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
       } else {
-        showToast(data.error || "Failed to start payout setup", { variant: "error" });
+        showToast("Failed to start payout setup", { variant: "error" });
         setConnectRedirecting(false);
       }
-    } catch {
-      showToast("Something went wrong. Please try again.", { variant: "error" });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.code || "Failed to start payout setup" : "Something went wrong. Please try again.",
+        { variant: "error" },
+      );
       setConnectRedirecting(false);
     }
   }
@@ -119,16 +123,19 @@ export default function VenueSettingsPage() {
   async function handleConnectDashboard() {
     setConnectRedirecting(true);
     try {
-      const res = await authFetch("/api/stripe-connect/dashboard", { method: "POST" });
-      const data = await res.json();
+      // Returns a Stripe Express dashboard login link (access, not a money movement).
+      const data = await mutate<{ url?: string }>("/api/stripe-connect/dashboard", { method: "POST" });
       if (data.url) {
         window.location.href = data.url;
       } else {
-        showToast(data.error || "Failed to open Stripe dashboard", { variant: "error" });
+        showToast("Failed to open Stripe dashboard", { variant: "error" });
         setConnectRedirecting(false);
       }
-    } catch {
-      showToast("Something went wrong. Please try again.", { variant: "error" });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.code || "Failed to open Stripe dashboard" : "Something went wrong. Please try again.",
+        { variant: "error" },
+      );
       setConnectRedirecting(false);
     }
   }
