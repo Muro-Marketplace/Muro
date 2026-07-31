@@ -9029,7 +9029,7 @@ owner-gated money sites remain last.
 
 ## row 8 (doc `05`) customer-portal/addresses/page.tsx — 3 handlers → mutate (floor 36→34)
 
-Commit `<pending>`. `src/app/(pages)/customer-portal/addresses/page.tsx` + new test.
+Commit `5ac20c6`. `src/app/(pages)/customer-portal/addresses/page.tsx` + new test.
 
 The ratchet flagged 2 sites but the file had **3** mutating `authFetch` handlers — `submit` is a
 mutation the rule cannot see because its verb is the `method` variable, not a literal. Migrated all
