@@ -8,7 +8,7 @@ import type { ArtistWork } from "@/data/artists";
 import { slugify } from "@/lib/slugify";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
 import ArtworkThumb from "@/components/ArtworkThumb";
@@ -1143,7 +1143,12 @@ export default function ArtistProfileClient({
                       // so the messaging UI can read it without
                       // contaminating the human-readable content.
                       const enquiryType = (data.get("enquiryType") as string) || "general";
-                      await authFetch("/api/messages", {
+                      // E43-h: the primary send goes through mutate (throws on a
+                      // non-2xx), so the "enquiry sent" confirmation is shown ONLY when
+                      // the message actually lands. The old code used authFetch (resolves
+                      // on a 403/500) AND set enquirySent in the catch, so a failed
+                      // enquiry told the visitor it had been sent.
+                      await mutate("/api/messages", {
                         method: "POST",
                         body: JSON.stringify({
                           senderId: user?.id || null,
@@ -1154,22 +1159,29 @@ export default function ArtistProfileClient({
                           metadata: { enquiryType },
                         }),
                       });
-                      // Also save to enquiries table for backward compatibility
-                      await fetch("/api/enquiry", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          senderName,
-                          senderEmail: data.get("senderEmail") || user?.email || "",
-                          artistSlug,
-                          workTitle: currentWork?.title || null,
-                          enquiryType: data.get("enquiryType"),
-                          message: data.get("message"),
-                        }),
-                      });
+                      // Also save to the enquiries table for backward compatibility.
+                      // Best-effort: a failure here must not undo the confirmation, since
+                      // the message itself already landed.
+                      try {
+                        await fetch("/api/enquiry", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            senderName,
+                            senderEmail: data.get("senderEmail") || user?.email || "",
+                            artistSlug,
+                            workTitle: currentWork?.title || null,
+                            enquiryType: data.get("enquiryType"),
+                            message: data.get("message"),
+                          }),
+                        });
+                      } catch { /* best-effort secondary notification */ }
                       setEnquirySent(true);
-                    } catch {
-                      setEnquirySent(true);
+                    } catch (err) {
+                      showToast(
+                        err instanceof ApiError ? err.message : "Could not send your enquiry. Please try again.",
+                        { variant: "error" },
+                      );
                     }
                   }}
                   className="space-y-3"
