@@ -9026,3 +9026,33 @@ tests green, route audit PASS.
 **Next: customer-portal/addresses/page.tsx (2)** — then customer-portal (2), PlacementLoanForm (2),
 venue-portal/settings (2), PlacementStepper (2), SavedContext (2), then the 1-site tail. The 4
 owner-gated money sites remain last.
+
+## row 8 (doc `05`) customer-portal/addresses/page.tsx — 3 handlers → mutate (floor 36→34)
+
+Commit `<pending>`. `src/app/(pages)/customer-portal/addresses/page.tsx` + new test.
+
+The ratchet flagged 2 sites but the file had **3** mutating `authFetch` handlers — `submit` is a
+mutation the rule cannot see because its verb is the `method` variable, not a literal. Migrated all
+three; the read GET (`loadAddresses`) stays on `authFetch`:
+- **`submit`** (POST/PATCH, variable verb, unflagged): the address create/edit save. It extracted zod
+  field errors from the response body (`err.issues.fieldErrors`); with `mutate` those live on
+  `ApiError.payload`, so the extraction reads `err.payload`. Used `err.code` (mirrors the old
+  `body.error`) as the fallback so the friendly "Couldn't save address." default still wins when the
+  server sent neither a field error nor an error string.
+- **`setDefault`** (PATCH, flagged): preserved the distinct messages — `ApiError` → "Couldn't set
+  default. Try again.", `NetworkError` → "Network error, please try again.".
+- **`confirmDelete`** (DELETE, flagged): same split — `ApiError` → "Couldn't delete address.",
+  network → the generic message.
+
+Ratchet `LITERAL_FLOOR` 36 → 34 (the 2 flagged sites; `submit` was invisible to the rule). Measured.
+
+Test: NEW `page.test.tsx` (jsdom). Mocks `@/lib/supabase` + api-client (importActual → real `ApiError`,
+override `authFetch` for the read GET and `mutate` for the write) + ToastContext + the layout/EmptyState/
+ConfirmDialog. Renders the page with one non-default address, clicks "Set default": (1) a rejected
+`mutate` (ApiError) shows "Couldn't set default. Try again." and NOT the success toast, and calls
+`mutate` with the PATCH; (2) a resolve shows "Default address updated". Fail-before verified by making
+the catch emit the success message (the failure case failed), then restored. `npm run check` green:
+193 files (+1), 1948 tests (+2), route audit PASS.
+
+**Next: customer-portal/page.tsx (2)** — then PlacementLoanForm (2), venue-portal/settings (2),
+PlacementStepper (2), SavedContext (2), then the 1-site tail. The 4 owner-gated money sites remain last.
