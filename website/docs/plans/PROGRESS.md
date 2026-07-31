@@ -8837,7 +8837,7 @@ includes collections (2), addresses (2), admin pages, dialogs, SavedContext, etc
 
 ## row 8 (doc `05`) lib/placements/status-update.ts — E43-a helper → mutate (floor 54→53)
 
-Commit `<pending>`. `src/lib/placements/status-update.ts` + its test.
+Commit `b4ce0b4`. `src/lib/placements/status-update.ts` + its test.
 
 The shared `updatePlacementStatus<P>` helper (called by both placement portals to change
 a placement's status from a dropdown) was itself still on `authFetch` + a manual `if (!res.ok)`
