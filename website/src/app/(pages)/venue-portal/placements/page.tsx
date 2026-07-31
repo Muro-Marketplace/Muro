@@ -12,6 +12,7 @@ import { authFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import { canRespond, isRequester } from "@/lib/placement-permissions";
 import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, arrangementLabel } from "@/lib/placements/status";
+import { updatePlacementStatus } from "@/lib/placements/status-update";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -730,25 +731,10 @@ export default function VenuePlacementsPage() {
     }
   }
 
-  function updateStatus(id: string, newStatus: PlacementStatus) {
-    const statusMap: Record<string, string> = {
-      Active: "active", Pending: "pending", Declined: "declined",
-      Completed: "completed", Sold: "completed",
-    };
-    const apiStatus = statusMap[newStatus] || "active";
-    setPlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
-    authFetch("/api/placements", {
-      method: "PATCH",
-      body: JSON.stringify({ id, status: apiStatus }),
-    })
-      .then(() => {
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("wallplace:placement-changed", {
-            detail: { placementId: id, action: apiStatus === "declined" ? "decline" : apiStatus === "active" ? "accept" : "status" },
-          }));
-        }
-      })
-      .catch((err) => console.error("Status update error:", err));
+  // E43-a: the status logic lives in one shared helper both portals call, so a
+  // rejected change rolls back and only a confirmed one fires the cross-portal event.
+  async function updateStatus(id: string, newStatus: PlacementStatus) {
+    await updatePlacementStatus({ id, newStatus, placements, setPlacements, showToast });
   }
 
   // Bulk archive, fires one DELETE per selected id, then reloads.

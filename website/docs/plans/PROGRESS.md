@@ -29,7 +29,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **todo, AFTER `05` closes** (not owner-gated). Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
 | 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **todo, AFTER `05` (alongside row 21)**. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
 | 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **todo, AFTER `05` (with rows 21/22)**. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. Remaining: E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, this commit). Remaining: E43-b..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8315,3 +8315,55 @@ per operating rule 4; the row-23 ledger entry above reflects it.
 `updateStatus`): optimistic `setPlacements` with no `res.ok` check, and it dispatches a
 `wallplace:placement-changed` event even on a 403/500. Route through `mutate` +
 `useSaveAction`, snapshot-rollback on failure, fire the event only in `onSuccess`.
+
+## row 8 (doc `05`) E43-a — placement status update: rollback + success-only event, in one shared helper
+
+Commit `<pending>`. Code + new lib + test.
+
+**The defect (both portals).** `artist-portal/placements/page.tsx` and
+`venue-portal/placements/page.tsx` had byte-for-byte identical `updateStatus` handlers:
+an optimistic `setPlacements(...)` with no snapshot, then
+`authFetch("/api/placements", { method: "PATCH", ... }).then(() => window.dispatchEvent(new
+CustomEvent("wallplace:placement-changed", ...)))`. `authFetch` resolves for non-2xx
+(it never throws on a bad status), so the `.then` fired the cross-portal refresh event
+on a 403/500 too — a rejected status change looked successful on BOTH portals, the
+optimistic row stuck with no rollback, and every other open surface refreshed as if the
+change had landed. The `.catch` handled only network errors, logging to console with no
+rollback either.
+
+**The fix.** Extracted the logic into one shared helper,
+`src/lib/placements/status-update.ts` → `updatePlacementStatus<P>({ id, newStatus,
+placements, setPlacements, showToast })`, and both `updateStatus` handlers are now a
+one-line call to it (the duplicated inline logic is deleted in the same commit — no
+`_v2` beside `_v1`). The helper snapshots the list before the optimistic write, `await`s
+the PATCH, checks `res.ok`, and on failure rolls back to the snapshot + shows an error
+toast + returns false; on a network error it does the same in `catch`; the
+`wallplace:placement-changed` event fires ONLY on a 2xx. This mirrors the correct
+`cancelPlacement`/`archivePlacement` handlers already in both files. (I mirrored the
+file's own `authFetch`+`res.ok` idiom rather than introducing `mutate`/`useSaveAction`
+into one handler while its three siblings still use raw `authFetch`; the whole file
+migrates to `mutate` together at the final `no-authfetch-mutation` step. Same net
+behaviour — throws-free, res.ok-checked, rollback on failure.)
+
+**Test.** New `src/lib/placements/status-update.test.ts` (jsdom, mocks `authFetch`):
+(1) non-2xx (403) → returns false, `setPlacements` called twice (optimistic then the
+exact snapshot = full rollback), event NOT fired, error toast with the server message;
+(2) 2xx → returns true, `setPlacements` called once (no rollback), event fired exactly
+once, no toast; (3) network reject → rollback + toast, no event. Plus an `apiStatusFor`
+mapping test. Fail-before verified by stripping the `res.ok` guard from the helper (old
+behaviour): the 403 test failed (`expected true to be false` — it returned true and
+would have fired the event without rolling back). Restored. `npm run check` green: 180
+files (+1), 1911 tests (+4), audit:allowlist PASS, exit 0.
+
+**Why a shared helper, not a per-page render test.** Both pages are ~1900-line client
+components with heavy multi-call load flows; seeding one placement row through that to
+fire a `<select>` onChange would be fragile. The two handlers were identical, so lifting
+them into one tested helper (the same extract-and-test pattern used for the E41 portfolio
+libs `frame-payload.ts`/`changed-works.ts`, and matching the existing
+`lib/placements/*.ts` + `*.test.ts` pairs) is DRY, deterministic, and removes the
+duplication that let the two copies drift.
+
+**Next: doc `05` E43-b** — withdraw offer in `components/offers/OffersList.tsx`: `act()`
+returns void so the success toast fires regardless of the response. Make `act` return
+`Promise<boolean>` (false in the `!res.ok` and catch branches) and gate the toast, or
+route it through `useSaveAction`.

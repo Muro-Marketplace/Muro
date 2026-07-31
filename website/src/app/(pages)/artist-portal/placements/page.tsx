@@ -12,6 +12,7 @@ import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, arrangementLabel } from "@/lib/placements/status";
+import { updatePlacementStatus } from "@/lib/placements/status-update";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -623,27 +624,10 @@ export default function PlacementsPage() {
     }
   }
 
-  function updateStatus(id: string, newStatus: PlacementStatus) {
-    const statusMap: Record<string, string> = {
-      Active: "active", Pending: "pending", Declined: "declined",
-      Completed: "completed", Sold: "completed",
-    };
-    const apiStatus = statusMap[newStatus] || "active";
-    setPlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
-    authFetch("/api/placements", {
-      method: "PATCH",
-      body: JSON.stringify({ id, status: apiStatus }),
-    })
-      .then(() => {
-        if (typeof window !== "undefined") {
-          // Fan out so the inbox and any other open surface refreshes
-          // immediately instead of waiting for the next poll.
-          window.dispatchEvent(new CustomEvent("wallplace:placement-changed", {
-            detail: { placementId: id, action: apiStatus === "declined" ? "decline" : apiStatus === "active" ? "accept" : "status" },
-          }));
-        }
-      })
-      .catch((err) => console.error("Status update error:", err));
+  // E43-a: the status logic lives in one shared helper both portals call, so a
+  // rejected change rolls back and only a confirmed one fires the cross-portal event.
+  async function updateStatus(id: string, newStatus: PlacementStatus) {
+    await updatePlacementStatus({ id, newStatus, placements, setPlacements, showToast });
   }
 
   // Bulk archive / unarchive, mirrors the single-row bin, just
