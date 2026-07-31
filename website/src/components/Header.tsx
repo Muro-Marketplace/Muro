@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CartIndicator from "./CartIndicator";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate } from "@/lib/api-client";
 
 // When the user is inside the marketplace area (/browse or /spaces)
 // the top-level "Marketplace" link is replaced by these inline tabs.
@@ -526,7 +526,10 @@ export default function Header() {
                                 setConversations((prev) =>
                                   prev.map((c) => ({ ...c, unreadCount: 0 })),
                                 );
-                                authFetch("/api/messages", {
+                                // E43-i: fire-and-forget mark-read via mutate (throws on
+                                // a non-2xx); the .catch keeps it best-effort, the next
+                                // poll reconciles if the server rejected it.
+                                mutate("/api/messages", {
                                   method: "PATCH",
                                   body: JSON.stringify({ all: true }),
                                 }).catch(() => {});
@@ -615,7 +618,8 @@ export default function Header() {
                               // reconcile.
                               setNotifications((prev) => prev.map((x) => ({ ...x, readAt: x.readAt || new Date().toISOString() })));
                               setUnreadNotifCount(0);
-                              authFetch("/api/notifications", {
+                              // E43-i: fire-and-forget mark-read via mutate; best-effort.
+                              mutate("/api/notifications", {
                                 method: "PATCH",
                                 body: JSON.stringify({ all: true }),
                               }).catch(() => {});
@@ -662,7 +666,8 @@ export default function Header() {
                                   setUnreadNotifCount((c) => Math.max(0, c - 1));
                                 }
                                 if (n.id && !n.id.startsWith("msg-")) {
-                                  authFetch("/api/notifications", {
+                                  // E43-i: fire-and-forget mark-read via mutate; best-effort.
+                                  mutate("/api/notifications", {
                                     method: "PATCH",
                                     body: JSON.stringify({ id: n.id }),
                                   }).catch(() => {});
