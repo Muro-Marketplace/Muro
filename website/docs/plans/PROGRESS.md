@@ -8963,7 +8963,7 @@ tail. The 3 owner-gated orders refund sites remain last.
 
 ## row 8 (doc `05`) components/offers/OffersList.tsx — PARTIAL: 2 of 3 → mutate; checkout OWNER-GATED (floor 40→38)
 
-Commit `<pending>`. `src/components/offers/OffersList.tsx` + its test. **2 of 3 flagged sites migrated;
+Commit `77549d8`. `src/components/offers/OffersList.tsx` + its test. **2 of 3 flagged sites migrated;
 1 held for the owner (money boundary).**
 
 The file had 3 flagged mutating `authFetch` sites. Split by the money boundary:
