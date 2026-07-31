@@ -14,6 +14,7 @@ import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { useSaveAction } from "@/hooks/useSaveAction";
 import { buildFramePayload, type FramePayloadInput } from "./frame-payload";
 import { mergeBulkPricing, copySizesPricing } from "./bulk-pricing";
+import { worksToPost } from "./changed-works";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import Combobox from "@/components/Combobox";
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
@@ -320,6 +321,10 @@ export default function PortfolioPage() {
   // each time it opens, then compare on every change. The beforeunload
   // guard only fires when the form is open AND currently dirty.
   const initialFormJson = useRef<string>("");
+  // E41-c: last set of works we know is persisted, so a save POSTs only the works
+  // that actually changed instead of re-POSTing the whole portfolio. Seeded from the
+  // loaded artist below and advanced after each successful postWorks().
+  const persistedWorks = useRef<ArtistWork[]>([]);
   const formDirty = showForm && JSON.stringify(form) !== initialFormJson.current;
   useUnsavedWarning(formDirty);
 
@@ -361,12 +366,18 @@ export default function PortfolioPage() {
       const failed = results.find((r) => r.status === "rejected");
       if (failed) throw (failed as PromiseRejectedResult).reason;
     },
+    onSuccess: (_res, ids) => {
+      // E41-c: keep the persisted baseline in step with the delete so a later edit
+      // doesn't re-POST works whose index merely shifted.
+      persistedWorks.current = persistedWorks.current.filter((w) => !ids.includes(w.id));
+    },
     errorMessage: "Could not delete. Please try again.",
   });
 
   useEffect(() => {
     if (!artist || initialised) return;
     setWorks([...artist.works]);
+    persistedWorks.current = [...artist.works];
     setInitialised(true);
     // Fetch default shipping price
     authFetch("/api/artist-profile")
@@ -451,8 +462,11 @@ export default function PortfolioPage() {
   // instead of the old fire-and-forget path that reported success on a 402/403/500.
   async function postWorks(updated: ArtistWork[]): Promise<void> {
     const shownWarnings = new Set<string>();
+    // E41-c: POST only the works that changed since the last persisted snapshot
+    // (new, moved, or field-changed), not the whole portfolio on every save.
+    const changed = worksToPost(updated, persistedWorks.current);
     const results = await Promise.allSettled(
-      updated.map((work, index) => {
+      changed.map(({ work, index }) => {
         // E41-d: buildFramePayload coerces priceUplift to a number AND carries
         // pricesBySize through — the inline map here used to drop it, wiping the
         // artist's per-size frame pricing on every save.
@@ -510,6 +524,8 @@ export default function PortfolioPage() {
     );
     const failed = results.find((r) => r.status === "rejected");
     if (failed) throw (failed as PromiseRejectedResult).reason;
+    // Every changed work saved; this set is the new persisted baseline.
+    persistedWorks.current = updated;
   }
 
   // Legacy fire-and-forget wrapper, still used by the delete / bulk-edit callers

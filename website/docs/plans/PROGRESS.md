@@ -26,7 +26,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
 | 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (08495ae): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot |
 | 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **DONE** (2131d2a): dependency recorded in guard header + runner; `MISSING_TOKEN_MESSAGE` points at the remedy (tested); service-role path investigated — none clean, token stands. **D62.5 owner escalation OPEN**: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c = NEXT** (per D63: re-POSTs whole portfolio, TOCTOU at artist-works/route.ts:70). **E41-g = void** (already correct; mirror removed in E41-f). Remaining after E41-c: E42-a/-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, this commit; residual server-side TOCTOU at artist-works/route.ts surfaced to owner). **E41-g = void** (already correct; mirror removed in E41-f). Remaining: E42-a/-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8110,5 +8110,51 @@ just record it):
   its only nit, the `wallplace-artist-profile` localStorage mirror, was removed in
   E41-f above. Nothing to do.
 
-**Next: doc `05` E41-c** (per D63), then E42-a/-b/-c, E43-a..k, bug-12;
+## row 8 (doc `05`) E41-c — a save POSTs only the changed works
+
+Commit `<pending>`. Code-only.
+
+**The defect.** `postWorks(updated)` mapped over ALL of `updated` and POSTed each
+work, so editing one work in a 20-work portfolio fired 20 concurrent
+`mutate("/api/artist-works", POST)` calls (each a SELECT+UPDATE+read-back). It also
+turned the per-tier post-limit check into a TOCTOU (below).
+
+**The fix (client-side diff).** Extracted a pure `worksToPost(updated, persisted)` to
+`changed-works.ts`: returns only the works that are new (no persisted match by id),
+moved (index/sortOrder changed), or field-changed (a canonical `postKey` over the
+POSTed fields differs), each with its new index. Added a `persistedWorks` ref seeded
+from the loaded artist and advanced to `updated` after each successful `postWorks`;
+`postWorks` now POSTs only `worksToPost(...)`. The delete path advances the baseline
+too (drops deleted ids) so a later edit does not re-POST index-shifted works.
+
+**Test.** `changed-works.test.ts` (5): only the field-changed work returned (with its
+index); a new work included; `[]` when nothing changed; moved works returned on a
+reorder but not the unmoved one; a per-size shipping change detected. Plus a render
+test in `portfolio/page.test.tsx`: adding one work to a 2-work portfolio calls
+`mutate` ONCE, not three times. Fail-before verified by making `worksToPost` return
+every work: 4 unit tests + the mutate-once render test failed. `npm run check` green:
+177 files, 1902 tests, audit:allowlist PASS, exit 0.
+
+**SURFACED — residual server-side TOCTOU (owner / not loop-fixable client-side).**
+`src/app/api/artist-works/route.ts` reads `existingWorks = getWorksByArtistProfileId(...)`
+then checks `isNewWork` + `existingWorks.length >= postLimit` and inserts — a
+read-then-write with no DB-level guard, so two concurrent new-work POSTs can both pass
+the cap. E41-c removes the CLIENT's habit of firing N concurrent POSTs (the usual
+trigger), which greatly narrows the window, but the server check is still not atomic.
+A proper fix is a DB-level constraint/transaction (e.g. count-in-a-transaction or a
+partial unique/exclusion guard) — a migration + owner call, out of scope for this
+client finding. Recorded for the owner.
+
+**Reorder batch:** the doc suggested a lightweight `{id, sortOrder}` batch for pure
+reorders; the route has no such batch endpoint, so a reorder simply marks the moved
+works "changed" and POSTs them normally (far fewer than the whole portfolio). A
+dedicated reorder endpoint is a possible future optimisation, not built here.
+
+**Next: doc `05` E42-a** — venue-portal profile: the display-fallback chain (e.g.
+`detailType || venue?.type || "Not set"`) is bound straight into the controlled
+`<input value>`, so entering edit mode puts the literal "Not set" (or "Your Venue"
+for the name) in the field, and typing yields "Not setCafe"; the number footfall field
+gets an invalid `value="Not set"`. Split display from value: `value` = the state,
+`placeholder` = the hint, and render "Not set" only in the read-only view. Re-read
+`venue-portal/profile/page.tsx` first. Then E42-b/-c, E43-a..k, bug-12;
 `no-authfetch-mutation` eslint rule LAST.

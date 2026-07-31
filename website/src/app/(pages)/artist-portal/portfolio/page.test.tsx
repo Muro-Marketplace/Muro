@@ -143,3 +143,23 @@ describe("artist portfolio delete (E41-b)", () => {
     await waitFor(() => expect(screen.queryAllByText("My Work")).toHaveLength(0));
   });
 });
+
+describe("artist portfolio save posts only changed works (E41-c)", () => {
+  it("adding one work to an existing portfolio POSTs only the new work, not all of them", async () => {
+    mutateMock.mockResolvedValue({ savedRow: { id: "wnew" } });
+    artistState.works = [
+      { ...WORK, id: "w1", title: "Existing One" },
+      { ...WORK, id: "w2", title: "Existing Two" },
+    ];
+    render(<PortfolioPage />);
+    await screen.findAllByText("Existing One");
+
+    openAddAndFill();
+    fireEvent.click(screen.getAllByText("Save Work")[0]);
+
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Artwork added"));
+    // Fail-before: the old postWorks re-POSTed the whole portfolio (3 calls). Now the
+    // two unchanged existing works are diffed out and only the new one is POSTed.
+    expect(mutateMock).toHaveBeenCalledTimes(1);
+  });
+});
