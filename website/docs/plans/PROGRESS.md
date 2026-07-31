@@ -8931,3 +8931,32 @@ violations in the file) + 192 files / 1945 tests green + route audit PASS.
 **Next: venue-portal/artwork-requests/[id]/page.tsx (3)** — then OffersList (3), then the 2-site
 files (collections, addresses, customer-portal, PlacementLoanForm, venue settings, PlacementStepper,
 SavedContext) and the 1-site tail. The 3 owner-gated orders refund sites remain last.
+
+## row 8 (doc `05`) venue-portal/artwork-requests/[id]/page.tsx — 3 handlers → mutate (floor 43→40)
+
+Commit `<pending>`. `src/app/(pages)/venue-portal/artwork-requests/[id]/page.tsx` + its existing test.
+
+The venue's single artwork-request detail page. Three flagged mutating `authFetch` sites migrated;
+the one read GET (`load`, `GET /api/artwork-requests/:id`) stays on `authFetch`:
+- **`act`** (PATCH `…/responses/:responseId`, accept/decline): `mutate<{ nextStepLink? }>` returns the
+  parsed body on 2xx, so the accept-navigate / reload only runs on success; a non-2xx surfaces
+  `ApiError.message`.
+- **`setStatus`** (PATCH `…/:id`, the E43-c handler for Mark fulfilled / Close): the manual `!res.ok`
+  branch collapses into the catch; reload only on a confirmed 2xx. (E43-c already fixed the silent
+  swallow; this keeps that and drops the now-redundant `res.ok` plumbing.)
+- **`fulfillResponse`** (POST `…/fulfill`): `mutate<{ route_to? }>`; navigate/reload only on 2xx;
+  dropped the explicit `Content-Type` header (mutate's authHeaders sets it when a body is present).
+
+Ratchet `LITERAL_FLOOR` 43 → 40 (file 3 → 0, measured; total 40, file no longer listed).
+
+Test: `page.test.tsx` updated (mutate migration + one new case). It previously mocked `authFetch`
+fully; now mocks `@/lib/supabase` + api-client (importActual → real `ApiError`, override `authFetch`
+for the read GET and `mutate` for the writes). Kept both E43-c `setStatus` cases (403 → error, no
+advance; 2xx → advances) now driven through `mutate`, and ADDED an `act()` decline case: a
+`ApiError(409)` reject surfaces "Response already handled" and leaves the response's actions in place.
+Fail-before verified for the new case by dropping `err.message` from `act`'s catch (assertion failed),
+then restored. `npm run check` green: 192 files, 1946 tests (+1), exit 0, route audit PASS.
+
+**Next: components/offers/OffersList.tsx (3)** — then the 2-site files (collections, addresses,
+customer-portal, PlacementLoanForm, venue settings, PlacementStepper, SavedContext) and the 1-site
+tail. The 3 owner-gated orders refund sites remain last.

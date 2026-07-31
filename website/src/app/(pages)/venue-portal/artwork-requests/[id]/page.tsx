@@ -6,7 +6,7 @@
 import { use, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { getRecentRequestById } from "@/lib/recent-artwork-requests";
 
 // Display label for an artist response. The API returns the artist's
@@ -145,20 +145,19 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
     setBusy(responseId);
     setError(null);
     try {
-      const res = await authFetch(`/api/artwork-requests/${id}/responses/${responseId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Could not update response.");
-      } else if (action === "accept" && data.nextStepLink) {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the
+      // navigate/reload only happens on a confirmed 2xx.
+      const data = await mutate<{ nextStepLink?: string }>(
+        `/api/artwork-requests/${id}/responses/${responseId}`,
+        { method: "PATCH", body: JSON.stringify({ action }) },
+      );
+      if (action === "accept" && data?.nextStepLink) {
         window.location.href = data.nextStepLink;
       } else {
         await load();
       }
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not update response." : "Network error. Please try again.");
     } finally {
       setBusy(null);
     }
@@ -167,22 +166,18 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
   async function setStatus(status: "open" | "closed" | "fulfilled") {
     // E43-c: this used to skip the res.ok check and swallow the catch, so a
     // 403/500/network failure on "Mark fulfilled" / "Close" silently did
-    // nothing with no feedback. authFetch resolves for non-2xx, so the failure
-    // has to be checked explicitly. Mirrors act()/fulfillResponse() above.
+    // nothing with no feedback. It now goes through mutate, which throws on a
+    // non-2xx (ApiError) or a dropped request, so the reload only runs on a
+    // confirmed 2xx and the reason always surfaces. Mirrors act()/fulfillResponse().
     setError(null);
     try {
-      const res = await authFetch(`/api/artwork-requests/${id}`, {
+      await mutate(`/api/artwork-requests/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Could not update the request status. Please try again.");
-        return;
-      }
       await load();
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not update the request status. Please try again." : "Network error. Please try again.");
     }
   }
 
@@ -199,21 +194,19 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
     setBusy(responseId);
     setError(null);
     try {
-      const res = await authFetch(`/api/artwork-requests/${id}/fulfill`, {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the
+      // navigate/reload only happens on a confirmed 2xx.
+      const data = await mutate<{ route_to?: string }>(`/api/artwork-requests/${id}/fulfill`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ response_id: responseId, action }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Could not fulfil response.");
-      } else if (data.route_to) {
+      if (data?.route_to) {
         window.location.href = data.route_to;
       } else {
         await load();
       }
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not fulfil response." : "Network error. Please try again.");
     } finally {
       setBusy(null);
       setExistingWorksPrompt(null);
