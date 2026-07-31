@@ -7,6 +7,7 @@ import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
+import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 
 const STYLE_TAGS = [
   "Contemporary",
@@ -300,13 +301,11 @@ export default function VenueProfilePage() {
   // Track unsaved changes
   const markDirty = useCallback(() => setHasUnsavedChanges(true), []);
 
-  // Warn on unload if unsaved changes
-  useEffect(() => {
-    if (!hasUnsavedChanges) return;
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [hasUnsavedChanges]);
+  // E42-e: warn on unsaved changes via the shared hook. The old hand-rolled
+  // effect only called e.preventDefault() (no e.returnValue = "", which some
+  // browsers still need to show the prompt) and did not intercept Next.js
+  // client-side <Link> navigation. useUnsavedWarning does both.
+  useUnsavedWarning(hasUnsavedChanges);
 
   const toggleStyle = (s: string) => {
     setStyles((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);

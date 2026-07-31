@@ -28,7 +28,8 @@ Order of work: the "Corrected dependency order" at the end of
 | 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **DONE** (2131d2a): dependency recorded in guard header + runner; `MISSING_TOKEN_MESSAGE` points at the remedy (tested); service-role path investigated — none clean, token stands. **D62.5 owner escalation OPEN**: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
 | 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **todo, AFTER `05` closes** (not owner-gated). Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
 | 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **todo, AFTER `05` (alongside row 21)**. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9). **E42-b BLOCKED** (owner: `interested_in_local_artists`/`preferred_sizes` do NOT exist in prod — add a migration to complete the feature, or drop it). Remaining: E42-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
+| 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **todo, AFTER `05` (with rows 21/22)**. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, this commit). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. Remaining: E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8185,7 +8186,18 @@ concurrent POSTs).
 
 ## row 8 (doc `05`) E42-b — BLOCKED: the two venue columns do not exist in prod (OWNER decision)
 
-**The plan is wrong about prod.** E42-b asks to add `interested_in_local_artists` and
+**RESOLVED by supervisor D66 (c1e5f12) — no longer owner-gated; reassigned to row 23.**
+D66 ruled the two halves are different problems with different answers, both the loop's:
+(a) `interested_in_local_artists` is a genuinely rendered, state-bound checkbox
+(`page.tsx:212/:249/:616`) whose value is discarded — **build it** (one nullable boolean
+column + allowlist entry; persisting a shipped control is completion, not a feature
+call); (b) `preferred_sizes` is **vestigial** — its only non-test reference is a comment
+at `writable-fields.ts:170`, no UI/reader/data, so **drop the dead refs**. This corrects
+my note below: there is NO sizes selector in the UI (I over-assumed symmetry with the
+Local-artists toggle), and `preferred_styles` DOES exist in prod, so the pair was an
+incomplete migration, not a deliberate dormant feature. Tracked as row 23, after `05`.
+
+**(Original block note, superseded — kept for the trail.) The plan is wrong about prod.** E42-b asks to add `interested_in_local_artists` and
 `preferred_sizes` to the venue PUT payload, on the doc's premise that "both columns
 exist". They do NOT: `tests/integration/schema-columns.json` venue_profiles lacks
 both, and a live query against prod (`information_schema.columns ... venue_profiles`,
@@ -8261,3 +8273,45 @@ anchor interception for Next.js client nav). Replace it with
 both and catches client nav). Re-read the effect first. That closes the E42 venue
 findings that are loop-actionable (E42-b stays BLOCKED on the owner column decision).
 Then E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST.
+
+## row 8 (doc `05`) E42-e — venue unsaved-changes guard uses the shared hook
+
+Commit `<pending>`. Code-only.
+
+**The defect.** `venue-portal/profile/page.tsx` hand-rolled its own unsaved-changes
+guard: a `useEffect` that added a `beforeunload` listener whose handler only called
+`e.preventDefault()`. It never set `e.returnValue = ""` (some browsers still need the
+pair to actually show the native "leave without saving?" dialog), and it did nothing
+about Next.js client-side `<Link>` navigation — so clicking any in-app link with a
+dirty form left silently, no warning. The shared `useUnsavedWarning`
+(`src/lib/use-unsaved-warning.ts`) sets both `preventDefault` + `returnValue` AND adds
+a capture-phase document click listener that `confirm()`s before same-origin `<Link>`
+navigation.
+
+**The fix.** Deleted the hand-rolled `useEffect` and replaced it with a single
+`useUnsavedWarning(hasUnsavedChanges)` call (import added from
+`@/lib/use-unsaved-warning`), mirroring `artist-portal/profile/page.tsx:403` and
+`portfolio/page.tsx:329`. No `_v2`-beside-`_v1`: the old effect is gone in the same
+commit. `useEffect` stays imported (still used by the load effect at line ~243).
+
+**Test.** Extended `venue-portal/profile/page.test.tsx`: mocked
+`@/lib/use-unsaved-warning` with a spy, rendered the page (spy called with `false` on
+the clean first render), entered edit mode and changed the type field (→ `markDirty()`
+→ `hasUnsavedChanges = true`), and asserted the spy was then called with `true`.
+Fail-before verified by restoring the pre-fix hand-rolled effect: the spy was called 0
+times and the assertion failed (`Number of calls: 0`). `npm run check` green: 179
+files, 1907 tests (+1), audit:allowlist PASS, exit 0.
+
+**E42 status.** With E42-e done, every E42 venue finding under this doc is resolved
+(a, c, d, e). **E42-b was un-blocked by supervisor D66** while this iteration ran: it
+is no longer owner-gated. D66 split it into row 23 (loop-actionable, after `05` with
+rows 21/22): build `interested_in_local_artists` (a shipped, state-bound checkbox at
+`page.tsx:616` whose value is currently discarded) as one nullable boolean column, and
+drop the vestigial `preferred_sizes` references. D66 committed in isolation (c1e5f12)
+per operating rule 4; the row-23 ledger entry above reflects it.
+
+**Next: doc `05` E43-a** — placement status update in BOTH portals
+(`artist-portal/placements/page.tsx` + `venue-portal/placements/page.tsx`
+`updateStatus`): optimistic `setPlacements` with no `res.ok` check, and it dispatches a
+`wallplace:placement-changed` event even on a 403/500. Route through `mutate` +
+`useSaveAction`, snapshot-rollback on failure, fire the event only in `onSuccess`.

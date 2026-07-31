@@ -7,15 +7,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-const { authFetchMock, venueState } = vi.hoisted(() => ({
+const { authFetchMock, venueState, unsavedWarningMock } = vi.hoisted(() => ({
   authFetchMock: vi.fn(),
   venueState: { venue: null as unknown },
+  unsavedWarningMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/useCurrentVenue", () => ({ useCurrentVenue: () => ({ venue: venueState.venue, refetch: vi.fn() }) }));
 vi.mock("@/context/ToastContext", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("@/lib/api-client", () => ({ authFetch: authFetchMock }));
 vi.mock("@/lib/upload", () => ({ uploadImage: vi.fn(async () => "https://cdn/x.png") }));
+vi.mock("@/lib/use-unsaved-warning", () => ({ useUnsavedWarning: unsavedWarningMock }));
 vi.mock("@/components/VenuePortalLayout", () => ({ default: ({ children }: { children: unknown }) => children }));
 vi.mock("next/image", () => ({ default: () => null }));
 
@@ -24,6 +26,7 @@ import VenueProfilePage from "./page";
 afterEach(() => cleanup());
 beforeEach(() => {
   authFetchMock.mockReset();
+  unsavedWarningMock.mockReset();
   authFetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
   // A venue with a name but NO type — the row whose value used to fall to "Not set".
   venueState.venue = { name: "Kings Arms", type: undefined, location: "London" };
@@ -69,5 +72,23 @@ describe("venue profile editing (E42-a)", () => {
     // never be blanked. `|| null` sends null and the DAO writes NULL.
     expect(body.type).toBeNull();
     expect("type" in body).toBe(true);
+  });
+
+  it("delegates the unsaved-changes guard to useUnsavedWarning, dirty once a field changes (E42-e)", async () => {
+    venueState.venue = { name: "Kings Arms", type: "Cafe", location: "London" };
+    render(<VenueProfilePage />);
+
+    // Clean on first render: the shared hook is called with false.
+    expect(unsavedWarningMock).toHaveBeenCalledWith(false);
+
+    // Enter edit mode and change a field -> markDirty() -> hasUnsavedChanges = true.
+    fireEvent.click(screen.getAllByText("Edit")[0]);
+    const typeInput = screen.getByPlaceholderText("e.g. Independent cafe") as HTMLInputElement;
+    fireEvent.change(typeInput, { target: { value: "Bar" } });
+
+    // Fail-before: the page hand-rolled its own window.addEventListener("beforeunload")
+    // and never called useUnsavedWarning, so the hook was never invoked with true (and
+    // there was no capture-phase <Link> interception). The shared hook does both.
+    await waitFor(() => expect(unsavedWarningMock).toHaveBeenCalledWith(true));
   });
 });
