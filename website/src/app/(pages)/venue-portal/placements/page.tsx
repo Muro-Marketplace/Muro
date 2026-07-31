@@ -8,7 +8,7 @@ import VenuePortalLayout from "@/components/VenuePortalLayout";
 import PlacementStepper, { type PlacementStepperData } from "@/components/PlacementStepper";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import PlacementActionItems from "@/components/PlacementActionItems";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import { canRespond, isRequester } from "@/lib/placement-permissions";
 import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, arrangementLabel } from "@/lib/placements/status";
@@ -646,7 +646,9 @@ export default function VenuePlacementsPage() {
     }];
 
     try {
-      const res = await authFetch("/api/placements", {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the
+      // optimistic insert below only runs on a confirmed 2xx.
+      await mutate("/api/placements", {
         method: "POST",
         body: JSON.stringify({
           placements: newPlacements.map((p) => ({
@@ -657,14 +659,6 @@ export default function VenuePlacementsPage() {
           artistSlug,
         }),
       });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const msg: string = body?.error || `Could not send request (HTTP ${res.status})`;
-        setSubmitError(msg);
-        setSubmitting(false);
-        return;
-      }
 
       const mapped: PlacementRequest[] = newPlacements.map((p) => ({
         id: p.id,
@@ -694,8 +688,12 @@ export default function VenuePlacementsPage() {
       setMessage("");
       setRevenuePercent(0);
     } catch (err) {
-      console.error("Placement request error:", err);
-      setSubmitError("Network error, please try again.");
+      if (err instanceof ApiError) {
+        setSubmitError(err.message || "Could not send request. Please try again.");
+      } else {
+        console.error("Placement request error:", err);
+        setSubmitError("Network error, please try again.");
+      }
     }
     setSubmitting(false);
   }
@@ -704,28 +702,29 @@ export default function VenuePlacementsPage() {
     setResponding(id);
     setRespondError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the
+      // optimistic write and the cross-portal event only run on a confirmed 2xx.
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id, status: accept ? "active" : "declined" }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setPlacements((prev) =>
-          prev.map((p) =>
-            p.id === id
-              ? { ...p, status: accept ? "Active" : "Declined", respondedAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }
-              : p
-          )
-        );
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: id, action: accept ? "accept" : "decline" } }));
-        }
-      } else {
-        setRespondError(data.error || "Could not update placement. Please try again.");
+      setPlacements((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, status: accept ? "Active" : "Declined", respondedAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }
+            : p
+        )
+      );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: id, action: accept ? "accept" : "decline" } }));
       }
     } catch (err) {
-      console.error("Response error:", err);
-      setRespondError("Network error. Please try again.");
+      if (err instanceof ApiError) {
+        setRespondError(err.message || "Could not update placement. Please try again.");
+      } else {
+        console.error("Response error:", err);
+        setRespondError("Network error. Please try again.");
+      }
     } finally {
       setResponding(null);
     }
@@ -758,9 +757,13 @@ export default function VenuePlacementsPage() {
     for (const id of ids) {
       try {
         const url = `/api/placements?id=${encodeURIComponent(id)}${showArchived ? "&unarchive=1" : ""}`;
-        const res = await authFetch(url, { method: "DELETE" });
-        if (!res.ok && res.status !== 404) failed++;
-      } catch { failed++; }
+        await mutate(url, { method: "DELETE" });
+      } catch (err) {
+        // A 404 means the row is already gone, so it counts as done, not a
+        // failure (mirrors the old `!res.ok && res.status !== 404` guard).
+        if (err instanceof ApiError && err.status === 404) continue;
+        failed++;
+      }
     }
     setSelectedIds(new Set());
     setBulkBusy(false);
@@ -790,22 +793,23 @@ export default function VenuePlacementsPage() {
     setPlacements(placements.filter((p) => p.id !== id));
     try {
       const url = `/api/placements?id=${encodeURIComponent(id)}${unarchive ? "&unarchive=1" : ""}`;
-      const res = await authFetch(url, { method: "DELETE" });
-      if (res.status === 404) return;
-      if (!res.ok) {
-        setPlacements(snapshot);
-        const body = await res.json().catch(() => ({}));
-        showToast(body?.error || `Could not ${unarchive ? "unarchive" : "archive"} placement (HTTP ${res.status})`, { variant: "error" });
-        return;
-      }
+      await mutate(url, { method: "DELETE" });
       // Reload so the current tab (main / archived) picks up the
       // change, and refresh the archived-count badge on the tab row.
       loadPlacements();
       loadArchivedCount();
     } catch (err) {
+      // A 404 means the row is already gone, so the optimistic removal above
+      // is already correct: leave it, don't roll back (old res.status === 404
+      // early return).
+      if (err instanceof ApiError && err.status === 404) return;
       setPlacements(snapshot);
-      console.error("Placement archive error:", err);
-      showToast("Network error, placement not archived. Please try again.", { variant: "error" });
+      if (err instanceof ApiError) {
+        showToast(err.message || `Could not ${unarchive ? "unarchive" : "archive"} placement.`, { variant: "error" });
+      } else {
+        console.error("Placement archive error:", err);
+        showToast("Network error, placement not archived. Please try again.", { variant: "error" });
+      }
     }
   }
 
@@ -817,24 +821,22 @@ export default function VenuePlacementsPage() {
     const snapshot = placements;
     setPlacements((prev) => prev.map((p) => p.id === id ? { ...p, status: "Cancelled" } : p));
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id, status: "cancelled" }),
       });
-      if (!res.ok) {
-        setPlacements(snapshot);
-        const body = await res.json().catch(() => ({}));
-        showToast(body?.error || `Could not cancel placement (HTTP ${res.status})`, { variant: "error" });
-        return;
-      }
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: id, action: "cancel" } }));
       }
       loadPlacements();
     } catch (err) {
       setPlacements(snapshot);
-      console.error("Placement cancel error:", err);
-      showToast("Network error, placement not cancelled. Please try again.", { variant: "error" });
+      if (err instanceof ApiError) {
+        showToast(err.message || "Could not cancel placement.", { variant: "error" });
+      } else {
+        console.error("Placement cancel error:", err);
+        showToast("Network error, placement not cancelled. Please try again.", { variant: "error" });
+      }
     }
   }
 

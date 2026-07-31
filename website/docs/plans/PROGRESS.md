@@ -8899,3 +8899,35 @@ remaining rule violations in the file), full suite 192 files / 1945 tests green,
 
 **Next: venue-portal/placements/page.tsx (5)** — the symmetric page; then artwork-requests/[id] (3),
 OffersList (3), and the 1–2-site tail. The 3 owner-gated orders refund sites remain last.
+
+## row 8 (doc `05`) venue-portal/placements/page.tsx — 5 handlers → mutate (floor 48→43)
+
+Commit `<pending>`. `src/app/(pages)/venue-portal/placements/page.tsx` (no test — see note).
+
+The venue side of the placements portal, structurally symmetric to artist-portal/placements
+(migrated in `d0b5855`). Same five flagged mutating `authFetch` sites migrated; the six read GETs
+(`/api/saved`, `/api/messages`, `/api/placements` ×3, archived count) stay on `authFetch`:
+- **`request`** (POST `/api/placements`, `fromVenue: true`): `!res.ok` branch collapses into the
+  catch; optimistic insert runs only on a confirmed 2xx; `ApiError.message` preferred for
+  `submitError`, network drop still falls to the generic message (this side already set it).
+- **`respond`** (PATCH accept/decline): optimistic write + cross-portal event only on 2xx;
+  `ApiError.message` into `respondError`, else `console.error` + network message.
+- **`bulkArchiveSelected`** (DELETE loop): 404 counted as done, not failure —
+  `if (err instanceof ApiError && err.status === 404) continue;`.
+- **`archivePlacement`** (DELETE): 404 early-returns keeping the optimistic removal; other
+  `ApiError`s roll back + toast the server message; network errors roll back + generic toast.
+- **`cancelPlacement`** (PATCH cancel): rollback + toast on failure, event + reload only on success.
+
+Ratchet `LITERAL_FLOOR` 48 → 43 (file 5 → 0, measured via `npx eslint … -f json`, total 43, file
+no longer listed).
+
+Test: NONE added, stated honestly per the render-heavy allowance (same call as the artist page).
+This is a 2057-line page with no existing harness; the shared status path (`updateStatus` →
+`updatePlacementStatus`) is pinned by `status-update.test.ts` (E43-a), and the five swaps are
+uniform transport changes with behaviour preserved (404-DELETE semantics kept via explicit
+`err.status === 404` guards). Verified via `npm run check`: typecheck + lint (zero remaining
+violations in the file) + 192 files / 1945 tests green + route audit PASS.
+
+**Next: venue-portal/artwork-requests/[id]/page.tsx (3)** — then OffersList (3), then the 2-site
+files (collections, addresses, customer-portal, PlacementLoanForm, venue settings, PlacementStepper,
+SavedContext) and the 1-site tail. The 3 owner-gated orders refund sites remain last.
