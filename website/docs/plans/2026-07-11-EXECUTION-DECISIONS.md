@@ -2806,3 +2806,56 @@ I confirmed the control is genuinely rendered (`checked={localArtists}`) rather 
 - Strip-and-retry: `upsertVenueProfile` now fixed (E42-c); the five `placements/route.ts` sites remain, queued as row 22. Unchanged.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
 - `message-attachments`: still public, owner-blocked on the cutover.
+
+---
+
+## D67. RE-SEQUENCE: run `no-authfetch-mutation` FIRST, not last. 7b already proved why.
+
+*— supervisor. 274 commits. E43-a and E43-b landed; E43-c in flight. This is a sequencing ruling and it is time-sensitive, so it is also going in the hoisted block.*
+
+### D67.1 — The pattern E43 is fixing is bigger than the list E43 enumerates
+
+E43-a and E43-b are the same defect: `authFetch` **resolves on non-2xx rather than throwing**, so a `.then()` runs on a 403 or 500 and success is reported for a write that never happened. E43-a's own commit records how bad that gets — a rejected status change looked successful on *both* portals, the optimistic row stuck with no rollback, and every other open surface refreshed as if it had landed.
+
+Sizing the surface:
+
+```
+authFetch call sites (non-test)                            182  across 71 files
+… of which mutating (POST/PUT/PATCH/DELETE)                 ~92
+… mutating with NO ok-check within 6 lines (indicative)      ~22
+E43 items the doc enumerates (E43-a … E43-k)                 11
+```
+
+**Treat the 22 as indicative, not as 22 confirmed bugs.** A check can sit further than six lines away, or be handled by a wrapper the grep cannot see. I am not claiming a count. What the numbers do support is the shape: the hand-written list is **roughly half** the plausible surface, and it was written by reading rather than by detecting.
+
+### D67.2 — The row-8 plan puts the detector last, and 7b is the precedent for why that is backwards
+
+Ledger row 8 ends: *"E43-a..k, bug-12; `no-authfetch-mutation` eslint rule **LAST**"*.
+
+That means: fix eleven hand-found sites, declare `05` done, then add the rule that tells you which sites were actually broken. Whatever the rule then finds arrives after the doc is closed — and this run has already shown what happens to findings that arrive after a doc is marked complete.
+
+**7b is the direct precedent and it is decisive.** The narrow phantom-column guard carried four hand-known columns. The full guard, built from a live snapshot, immediately found **12 phantom selects across 22 columns, ten of them live bugs** — including two crons that had never run and an order-tracking page that could not load an order. The docs had enumerated almost none of them. Building the detector first is what turned a guessed list into a real one.
+
+The same argument applies here, with the same mechanism: a lint rule is cheap, it is exhaustive where reading is not, and it converts "which sites are broken" from a judgement into a list.
+
+### D67.3 — Ruling
+
+**Move `no-authfetch-mutation` to the front of the remaining E43 work.** Land it at `warn` with a grandfathered ratchet, exactly as 7b's guard does:
+
+1. Write the rule; run it; **that output is the real E43 list.**
+2. Reconcile it against E43-c..k. Items the rule does not flag are either already correct (record as void, like E41-g) or outside its reach (record why).
+3. Work the union, shrinking the ratchet in the same commit as each fix, with `toHaveLength` holding it so it can never grow.
+4. Flip to `error` when the ratchet reaches zero.
+
+The remaining hand-enumerated items are not wasted — they are a cross-check on the rule's coverage, which is worth having in both directions.
+
+**This does not change what E43 fixes, only the order.** No owner input; re-sequencing inside an approved plan is mine.
+
+### D67.4 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- `SECURITY DEFINER` functions with anon EXECUTE: **none.**
+- Phantom guard: ratchet at 1, snapshot current at 750 columns.
+- **Unchecked-mutation sweep (new): ~22 indicative sites against 11 enumerated.** See above; this is now a standing sweep until the lint rule lands and supersedes it, as the phantom guard superseded the manual column sweep.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
