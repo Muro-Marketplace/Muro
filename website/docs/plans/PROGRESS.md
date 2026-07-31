@@ -8994,3 +8994,35 @@ green: 192 files, 1946 tests, exit 0, route audit PASS.
 **Next: the 2-site files** — artist-portal/collections, customer-portal/addresses, customer-portal,
 placements/[id]/PlacementLoanForm, venue-portal/settings, PlacementStepper, SavedContext; then the
 1-site tail. The 4 owner-gated sites (3 orders refund + 1 offers checkout) remain last.
+
+## row 8 (doc `05`) artist-portal/collections/page.tsx — 3 handlers → mutate (floor 38→36)
+
+Commit `<pending>`. `src/app/(pages)/artist-portal/collections/page.tsx` (no test — see note).
+
+The ratchet flagged 2 sites, but the file had **3** mutating `authFetch` handlers — the third
+(`handleSave`) is a mutation the rule cannot see because its verb is a ternary
+(`method: editingId ? "PATCH" : "POST"`), not a string literal. Migrated all three so no latent
+mutating `authFetch` is left behind; the one read GET (`/api/collections`) stays on `authFetch`:
+- **`handleSave`** (POST/PATCH, unflagged ternary verb): → `mutate`. It already checked `res.ok`, so no
+  E43 false-success here; the 2xx-without-a-`collection` case is still treated as a failure, and a
+  non-2xx now surfaces `ApiError.message`. Also collapsed a redundant `editingId ? "/api/collections" :
+  "/api/collections"` (both branches identical) to the plain string.
+- **`handleDelete`** (DELETE, flagged): optimistic remove; the old `!res.ok`-revert and catch-revert
+  collapse into a single catch that reverts on any throw (no 404 special-case existed, so none added).
+- **`toggleAvailability`** (PATCH, flagged): optimistic toggle; revert on any throw; on 2xx reconcile
+  with the server's returned row if present.
+
+Ratchet `LITERAL_FLOOR` 38 → 36 (the 2 flagged sites; the 3rd was already invisible to the rule).
+Measured: total 36, file no longer listed.
+
+Test: NONE added, stated honestly per the render-heavy allowance. This is an 881-line page (create/edit
+form + confirm-dialog delete + optimistic list) with no existing harness, gated behind `useCurrentArtist`;
+reaching these `useCallback` closures needs the full render + a collections GET. The three swaps are
+uniform transport changes with behaviour preserved (optimistic revert on failure, server reconcile on
+success, the save's `!data.collection` guard). Verified via `npm run check`: typecheck (the typed
+`mutate<{ collection? }>` narrowing), lint (zero remaining violations in the file), 192 files / 1946
+tests green, route audit PASS.
+
+**Next: customer-portal/addresses/page.tsx (2)** — then customer-portal (2), PlacementLoanForm (2),
+venue-portal/settings (2), PlacementStepper (2), SavedContext (2), then the 1-site tail. The 4
+owner-gated money sites remain last.
