@@ -2661,3 +2661,45 @@ Same applies to E41-f (the legacy `localStorage("wallplace-artist-works")` path)
 - Phantom guard: ratchet at 1, snapshot current at 750 columns, regenerator dependency now documented with the anti-GRANDFATHERED warning (row 20b). Clean.
 - Save-path duplication: `useSaveAction` and `mutate()` remain the single control and the single fetch wrapper; `bulk-pricing.ts` is an extraction out of the portfolio page rather than a parallel implementation. Clean.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
+
+---
+
+## D64. E41 is complete. The TOCTOU residual is NOT the owner's — de-escalating it to row 21.
+
+*— supervisor. 258 commits. D63 worked: the loop recorded E41-c, then fixed it. E41 a-f done, g void.*
+
+### D64.1 — D63 landed and E41 closed properly
+
+`642a3f5` extracts a `changed-works.ts` diff module with five tests and POSTs only genuinely changed works, with the delete path advancing the baseline so a later edit does not re-POST index-shifted rows. Ledger row 8 now reads a, b, c, d, e, f done and g void, with commit shas. The gap D63 flagged is closed and the record is straight.
+
+Its reorder deviation is also sound and recorded: the doc wanted a `{id, sortOrder}` batch endpoint, none exists, so a reorder marks moved works changed and POSTs those normally. Far fewer than the whole portfolio, no new endpoint invented. Correct call.
+
+### D64.2 — But the TOCTOU escalation is wrong, and I am overruling it
+
+The loop surfaced the residual race to the owner:
+
+> `artist-works/route.ts` reads `existingWorks` then checks `existingWorks.length >= postLimit` and inserts — a read-then-write with no DB-level guard... A proper fix is a DB-level constraint/transaction — **a migration + owner call, out of scope**.
+
+**The analysis is exactly right. The routing is not.**
+
+- The loop's standing authority explicitly covers migrations: *"Full authority to edit code, write migrations, and run SQL against the Supabase project."* A migration is not by itself an owner matter.
+- **This codebase already contains the pattern.** D5 closed an identical read-then-write race on stock with `decrement_work_stock`: an atomic `SECURITY DEFINER` RPC, `SET search_path = public`, EXECUTE revoked from `anon`/`authenticated`/PUBLIC and left to `postgres` + `service_role`. `restock_work` (087) then repeated it correctly. The post-limit cap is the same shape and should use the same solution.
+- **There is no product question inside it.** The cap already exists and is already intended to bind; the check is simply unreliable. Making an existing rule enforce correctly is not a change of policy. If the cap itself were being introduced or its value changed, that would be the owner's — this is not that.
+
+Over-escalating adds to an owner list that is already six items long, for a decision the owner would only hand straight back.
+
+### D64.3 — Row 21, and where it sits
+
+Added as **row 21**: close the `postLimit` TOCTOU with an atomic check-and-insert, following `085`/`087`'s pattern exactly — new migration number above the highest, `SECURITY DEFINER`, `SET search_path = public`, EXECUTE revoked from `anon`/`authenticated`/PUBLIC and granted to `service_role` only. Then run the standing function-grant sweep to confirm the ACL reads `postgres=X | service_role=X`.
+
+**Priority: after `05` closes, not ahead of it.** The consequence of the race is an artist exceeding their plan's work cap by one or two under concurrent submission. Real, worth fixing, and nobody is harmed while it waits. It should not jump E42/E43.
+
+**Note for whoever writes it:** E41-c has already removed the usual trigger, since the client no longer fires N concurrent POSTs on one save. The remaining window is narrow. That lowers the urgency; it does not make the guard unnecessary, because the route is a public API and a client is not the only thing that can call it twice.
+
+### D64.4 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom guard: ratchet at 1, snapshot current at 750 columns. Clean.
+- Save-path duplication: `changed-works.ts` and `bulk-pricing.ts` are both extractions out of the portfolio page, not parallel implementations; `useSaveAction` and `mutate()` remain the single control and single wrapper. Clean.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
