@@ -2933,3 +2933,49 @@ Every commit followed by further work has been a code commit; every stall has be
 **On restart, in order:** E43-d (or the `no-authfetch-mutation` rule first if the owner has answered D67), then E43-e..k and bug-12, then rows 21/22/23, then docs `03`, `09`, `07`, `08`.
 
 **Sweeps this run:** RLS SELECT-leak assertion **0 rows, clean**; `artist_profiles` 64 anon columns, closed and holding; phantom guard ratchet at 1 with the snapshot current at 750 columns; orders / `stripe_transfers` **12 / 0**, unchanged; `message-attachments` still public and owner-blocked.
+
+---
+
+## D70. The rule found 94, not 11 and not my 22. Three corrections and a batching ruling.
+
+*— supervisor. 281 commits. `no-authfetch-mutation` landed at `warn` with a measured ratchet (`468e3f1`); the first migration is in flight.*
+
+### D70.1 — The detector's answer, against two guesses
+
+```
+E43 items the doc enumerated, by reading      11
+my grep estimate in D67 ("~22, indicative")   22
+the rule, run over all of src/                94  mutating authFetch calls across 44 files
+```
+
+D67's argument was that reading finds a fraction of the surface and a detector finds all of it. That holds, and more strongly than I put it. **But my own number was wrong by more than 4x, and in the direction that understated my case.** The six-line window I used missed every site where the check sits further away or is absent in a shape the grep did not anticipate. I flagged it as indicative rather than a count, which was right, but "indicative" should not be read as "roughly correct" — record it as a caution against grep-derived estimates generally, including mine.
+
+### D70.2 — CORRECTION, important: 94 is a migration surface, not 94 live bugs
+
+I checked the rule rather than assuming. `no-authfetch-mutation` **has no exemption for a `res.ok` check** — it reports on any `authFetch` call carrying a mutating method, whether or not the result is inspected. So the 94 includes sites that already check correctly and are merely non-standard.
+
+**Nobody should report "94 bugs", including me in a status update.** The live-bug subset is the unchecked ones, which my ~22 was a poor estimate of and which nothing has yet counted precisely. What 94 measures is how many call sites must move to `mutate()`.
+
+That design is right, and better than fixing sites individually: `mutate()` throws on non-2xx, so migrating a site makes the defect *impossible* there rather than fixed there. It is the "new implementation ⇒ old one deleted" rule applied across a whole class instead of one file.
+
+### D70.3 — Ruling: batch by FILE, not by call site
+
+94 sites at one per iteration is 94 iterations. **44 files at one per iteration is 44**, and sites inside a file overwhelmingly share a shape, an import and a test file — so per-file batching amortises the setup that dominates each iteration.
+
+Per file: migrate every mutating `authFetch` in it, lower `LITERAL_FLOOR` by that file's count in the same commit, and keep the existing rule that it may only ever fall. The ratchet is per-count rather than per-site, so this needs no change to the test.
+
+This is a sequencing decision inside approved scope, so it is mine under rule 4 as amended by D68.
+
+### D70.4 — CORRECTION to my own remaining-work estimate
+
+I told the owner "roughly 5 to 6 hours" remaining at the last percentage check. **That predates this discovery and is now wrong.** 44 files at ~6 minutes each is ~4.5 hours for this one item, on top of rows 21/22/23, bug-12, and docs `03`, `09`, `07`, `08`.
+
+I am not issuing a new total until the batching rate is observable — one guessed number has already been shown up this cycle. The honest statement to the owner is that the E43 migration is substantially larger than the plan implied, the loop found that rather than it being missed, and the next percentage figure will be measured against files migrated rather than estimated.
+
+### D70.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom guard: ratchet at 1, snapshot current at 750 columns.
+- **Unchecked-mutation sweep: retired.** Superseded by the rule, exactly as the manual column sweep was superseded by 7b's guard. My grep is no longer the measurement; `LITERAL_FLOOR` is.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
