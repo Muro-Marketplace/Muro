@@ -2703,3 +2703,60 @@ Added as **row 21**: close the `postLimit` TOCTOU with an atomic check-and-inser
 - Phantom guard: ratchet at 1, snapshot current at 750 columns. Clean.
 - Save-path duplication: `changed-works.ts` and `bulk-pricing.ts` are both extractions out of the portfolio page, not parallel implementations; `useSaveAction` and `mutate()` remain the single control and single wrapper. Clean.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
+
+---
+
+## D65. ROW 22 — five more strip-and-retry paths in `placements/route.ts`. A write-path class the phantom guard cannot see.
+
+*— supervisor. 261 commits. E42-a landed; E42-c (the venue-profile strip-and-retry) in flight, and it is what led me here.*
+
+### D65.1 — E42-c is right, and it has four or five siblings nobody has recorded
+
+E42-c's in-flight comment states the mechanism exactly: *"on any error, drop those columns and retry"* was **pure data-loss — a constraint failure on an unrelated field silently dropped the venue's photos and display details and STILL returned success.**
+
+That is the same defect D6 fixed for the order insert. Sweeping for the pattern across `src/lib/` and `src/app/api/` finds it is not confined to those two. **`src/app/api/placements/route.ts` carries five more:**
+
+```
+:104   "Retry without any envs where the hidden_for_* columns don't exist"
+:519   "Pattern-match the error message and strip only the columns the DB…"
+:754   "Retry without message_type/metadata if columns missing"
+:1021  "Retry by progressively stripping columns that the DB doesn't…"
+:1294  "Retry without the new lifecycle / proposal / archive columns if the…"
+```
+
+### D65.2 — Not covered by anything already in the plan. Checked, not assumed.
+
+- **No implementation doc names them.** `04 §D6` covers the order insert only.
+- **The recorded follow-up does not reach them.** PROGRESS:1677 *"Follow-up noted, not done: the strip-and-retry dance"* is scoped explicitly to `upsertVenueProfile`, which is exactly what E42-c is now fixing. Nothing extends it to placements.
+- **7b's guard structurally cannot catch this.** The guard scans `.select()` calls against the schema snapshot. Strip-and-retry lives on the **write** path, dropping keys from an UPDATE/INSERT payload. Different mechanism, identical silent-loss outcome, and no automated cover.
+
+### D65.3 — All ten stripped columns exist in prod, and that does NOT make it safe
+
+Verified every column these five retries drop:
+
+```
+placements: hidden_for_artist, hidden_for_venue, extra_works, qr_enabled,
+            monthly_fee_gbp, proposed_by_user_id, work_size, accepted_at   — all present
+messages:   message_type, metadata                                        — both present
+```
+
+So the *stated* trigger ("the column may not exist in an older schema") is unreachable against this schema. **The danger is that the actual trigger is broader than the stated one.** Where the retry fires on *any* error — the shape E42-c describes — a constraint violation, an RLS rejection or a type error on an unrelated field still drops those columns and can then report success. Columns existing removes the documented path and leaves the real one.
+
+**What I have established, and what I have not.** Established: five sites, all stripping columns that exist, unrecorded anywhere, invisible to the guard. **Not established: which of the five trigger on any error versus a pattern-matched message.** `:519` reads as the narrow, safer form; the others read broader. Severity per site depends on that, and it should be checked per site rather than assumed — do not take my word for the breadth.
+
+### D65.4 — Row 22
+
+Delete the dance and surface the error, with the same justification E42-c uses: the `01`/`06` write allowlists mean every key that can arrive is already known to exist, so the fallback is dead weight against prod and a data-loss hazard against error paths. One site at a time, each with the trigger breadth confirmed first, and a test that an unrelated failure now surfaces instead of silently succeeding with fields missing.
+
+**Priority: after `05`, alongside row 21.** Both are correctness work on placements-adjacent surfaces, neither is a live exposure, and neither should jump E42/E43.
+
+**Worth noting for scope:** `placements/route.ts` belongs to `01`/N3, which is already marked complete, and 7c touched this very file for the phantom `requester_user_id` without these surfacing. A file being "done" under one doc does not mean it is clean under another.
+
+### D65.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- `SECURITY DEFINER` functions with anon EXECUTE: **none.**
+- Phantom guard: ratchet at 1, snapshot current at 750 columns.
+- **Strip-and-retry sweep (new): NOT clean — five sites, see above.** Adding this to the standing list; the guard does not cover it.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
