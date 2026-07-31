@@ -27,7 +27,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (08495ae): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot |
 | 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **DONE** (2131d2a): dependency recorded in guard header + runner; `MISSING_TOKEN_MESSAGE` points at the remedy (tested); service-role path investigated — none clean, token stands. **D62.5 owner escalation OPEN**: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
 | 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **todo, AFTER `05` closes** (not owner-gated). Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile: input `value` split from the "Not set" display fallback, 6b67966). Remaining: E42-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, this commit). **E42-b BLOCKED** (owner: `interested_in_local_artists`/`preferred_sizes` do NOT exist in prod — add a migration to complete the feature, or drop it). Remaining: E42-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8182,10 +8182,57 @@ owner background-task chip was dismissed. Row 21 (below) is loop-actionable, seq
 AFTER doc `05` closes (real but low-urgency; E41-c already removed the client's N
 concurrent POSTs).
 
-**Next: doc `05` E42-b** — the venue `localArtists` (`interested_in_local_artists`)
-and `sizes` (`preferred_sizes`) toggles are absent from the PUT payload
-(`venue-portal/profile/page.tsx` ~:330), so flipping them saves nothing and reloads
-to the old state; `setSizes` is also hydrated from a hard-coded literal (~:251) rather
-than `venue.preferredSizes`. Add both keys to the payload and hydrate sizes from the
-record (literal only as an empty fallback). Then E42-c/-d/-e, E43-a..k, bug-12;
-`no-authfetch-mutation` eslint rule LAST.
+## row 8 (doc `05`) E42-b — BLOCKED: the two venue columns do not exist in prod (OWNER decision)
+
+**The plan is wrong about prod.** E42-b asks to add `interested_in_local_artists` and
+`preferred_sizes` to the venue PUT payload, on the doc's premise that "both columns
+exist". They do NOT: `tests/integration/schema-columns.json` venue_profiles lacks
+both, and a live query against prod (`information_schema.columns ... venue_profiles`,
+project uwkuhygwvasdzwsusiym) returned zero matches for local_artist / preferred_size /
+size / artist. Adding them to the payload would make the save error (unknown column)
+the moment the server strip is gone.
+
+**Owner decision needed.** The venue-profile UI DOES have the "Local artists" toggle
+and a sizes selector, and the DAO named the columns — so the feature was built but the
+migration to create the columns was never applied. Either (A) add an additive
+migration creating `interested_in_local_artists boolean default false` and
+`preferred_sizes text[]` on venue_profiles (then wire the payload + hydrate sizes from
+`venue.preferredSizes` + regenerate the guard snapshot), completing the built feature;
+or (B) treat it as intentionally dormant and drop E42-b. Recording as BLOCKED (loop
+rule: record + move to the next unblocked task) rather than migrating prod schema for a
+possibly-dormant feature without a steer. **E42-a's `sizes` state stays hydrated from
+the existing literal until this is decided.**
+
+## row 8 (doc `05`) E42-c — venue-profiles DAO no longer strips columns that DO exist
+
+Commit `<pending>`. Code-only. Done AHEAD of E42-b (E42-b blocked).
+
+**The defect.** `upsertVenueProfile` (`src/lib/db/venue-profiles.ts`) stripped 7
+columns before writing: the UPDATE branch retried-without-them on ANY error and
+returned success (so a constraint failure elsewhere silently dropped the venue's
+photos + display details), and the INSERT branch stripped them UNCONDITIONALLY (a new
+venue could never persist photos on first save). Five of the seven — `images`,
+`display_wall_space`, `display_lighting`, `display_install_notes`,
+`display_rotation_frequency` — exist in prod (migrations 022/028 applied), so the
+strip is pure data-loss.
+
+**The fix.** Deleted both strip-lists: the UPDATE branch is a single update that
+returns its error (no strip-and-retry-to-false-success); the INSERT branch inserts the
+data as-is. Safe now because the current payload does NOT contain the two non-existent
+columns (E42-b blocked) — so nothing errors. **Doc-vs-prod divergence noted:** the doc
+said "delete both strip-lists" assuming all 7 columns exist; 2 do not, but since they
+are absent from the payload the deletion is correct, and once E42-b's migration adds
+them they will persist rather than being stripped.
+
+**Test.** New `venue-profiles.test.ts` (2): the insert branch keeps `images` +
+`display_wall_space`; the update branch surfaces a first-attempt error instead of
+retrying to a false success (and calls update once, not twice). Fail-before verified
+by restoring the strip version: both failed. `npm run check` green: 179 files, 1905
+tests, audit:allowlist PASS, exit 0. (Code-only, no migration/RLS change.)
+
+**Next: doc `05` E42-d** — the venue PUT payload uses `detailName || undefined` etc.
+(`venue-portal/profile/page.tsx` ~:330); `JSON.stringify` omits `undefined`, so a
+venue can never blank out a field once set. Send `?? null` so the DAO writes NULL.
+Then E42-e (replace the hand-rolled `beforeunload` with `useUnsavedWarning`),
+E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST. (E42-b stays BLOCKED on
+the owner column decision above.)

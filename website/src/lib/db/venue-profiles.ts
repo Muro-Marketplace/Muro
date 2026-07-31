@@ -69,49 +69,28 @@ export async function upsertVenueProfile(
     .single();
 
   if (existing) {
-    let { error } = await db
-      .from("venue_profiles")
-      // user_id is pinned in the SET as well as matched in the WHERE (E45, A7).
-      // The WHERE alone does not stop a caller-supplied user_id landing in SET
-      // and reassigning the row; pinning it makes that impossible even if a
-      // future caller forgets the allowlist.
-      .update({ ...data, user_id: userId, updated_at: new Date().toISOString() })
-      .eq("user_id", userId);
-    // Retry without potentially missing columns if update fails. `images`
-    // is added in migration 022 and may not exist in older environments.
-    if (error) {
-      // Strip columns that may not exist in older schemas (added in migrations 022, 028).
-      const {
-        preferred_sizes,
-        interested_in_local_artists,
-        images,
-        display_wall_space,
-        display_lighting,
-        display_install_notes,
-        display_rotation_frequency,
-        ...safeData
-      } = data as Record<string, unknown>;
-      const retry = await db
-        .from("venue_profiles")
-        .update({ ...safeData, user_id: userId, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
-      error = retry.error;
-    }
-    return { error };
-  } else {
-    const {
-      preferred_sizes,
-      interested_in_local_artists,
-      images,
-      display_wall_space,
-      display_lighting,
-      display_install_notes,
-      display_rotation_frequency,
-      ...safeData
-    } = data as Record<string, unknown>;
+    // E42-c: no strip-and-retry. Migrations 022/028 are applied (images + display_*
+    // exist in prod), so the old "on any error, drop those columns and retry" path
+    // was pure data-loss — a constraint failure on an unrelated field silently
+    // dropped the venue's photos and display details and STILL returned success.
+    // Surface the error instead.
+    //
+    // user_id is pinned in the SET as well as matched in the WHERE (E45, A7). The
+    // WHERE alone does not stop a caller-supplied user_id landing in SET and
+    // reassigning the row; pinning it makes that impossible even if a future caller
+    // forgets the allowlist.
     const { error } = await db
       .from("venue_profiles")
-      .insert({ ...safeData, user_id: userId });
+      .update({ ...data, user_id: userId, updated_at: new Date().toISOString() })
+      .eq("user_id", userId);
+    return { error };
+  } else {
+    // E42-c: the insert branch used to strip those same columns UNCONDITIONALLY, so a
+    // brand-new venue could never persist photos or display details on first save.
+    // Insert the data as-is.
+    const { error } = await db
+      .from("venue_profiles")
+      .insert({ ...data, user_id: userId });
     return { error };
   }
 }
