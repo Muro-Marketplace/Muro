@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch } from "@/lib/api-client";
+import { submitFlagAction } from "@/lib/messages/flag-action";
 import { uploadMessageAttachment, type MessageAttachment } from "@/lib/upload";
 import type { ArtistWork } from "@/data/artists";
 import PlacementContextPanel from "@/components/PlacementContextPanel";
@@ -1683,19 +1684,22 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     onClick={async () => {
                       const reason = prompt(`What's the issue with ${selectedConvData?.otherPartyDisplayName || "this user"}?`);
                       if (!reason) return;
-                      setFlagSubmitting(true);
-                      try {
-                        await authFetch("/api/messages/report", {
-                          method: "POST",
-                          body: JSON.stringify({
-                            otherParty: selectedConvData?.otherParty,
-                            conversationId: selectedConvData?.conversationId,
-                            reason,
-                          }),
-                        });
-                      } catch { /* swallow, UX still confirms */ }
-                      setFlagSubmitted("reported");
-                      setFlagSubmitting(false);
+                      // E43-e: submitFlagAction sets the confirmation ONLY after the
+                      // server accepts it (mutate throws on a non-2xx / network failure).
+                      await submitFlagAction({
+                        url: "/api/messages/report",
+                        method: "POST",
+                        body: {
+                          otherParty: selectedConvData?.otherParty,
+                          conversationId: selectedConvData?.conversationId,
+                          reason,
+                        },
+                        outcome: "reported",
+                        errorMessage: "Could not submit the report. Please try again.",
+                        setSubmitting: setFlagSubmitting,
+                        setSubmitted: setFlagSubmitted,
+                        showToast,
+                      });
                     }}
                     className="w-full text-left block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors disabled:opacity-50"
                   >
@@ -1714,15 +1718,17 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                         confirmLabel: "Archive",
                       });
                       if (!ok) return;
-                      setFlagSubmitting(true);
-                      try {
-                        await authFetch("/api/messages", {
-                          method: "DELETE",
-                          body: JSON.stringify({ conversationId: selectedConvData?.conversationId }),
-                        });
-                      } catch { /* fall through to confirmation UX */ }
-                      setFlagSubmitted("deleted");
-                      setFlagSubmitting(false);
+                      // E43-e: only confirm the archive once the server accepted it.
+                      await submitFlagAction({
+                        url: "/api/messages",
+                        method: "DELETE",
+                        body: { conversationId: selectedConvData?.conversationId },
+                        outcome: "deleted",
+                        errorMessage: "Could not archive the conversation. Please try again.",
+                        setSubmitting: setFlagSubmitting,
+                        setSubmitted: setFlagSubmitted,
+                        showToast,
+                      });
                     }}
                     className="w-full text-left block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors disabled:opacity-50"
                   >
@@ -1742,15 +1748,20 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                         destructive: true,
                       });
                       if (!ok) return;
-                      setFlagSubmitting(true);
-                      try {
-                        await authFetch("/api/messages/block", {
-                          method: "POST",
-                          body: JSON.stringify({ otherParty: selectedConvData?.otherParty }),
-                        });
-                      } catch { /* fall through */ }
-                      setFlagSubmitted("blocked");
-                      setFlagSubmitting(false);
+                      // E43-e: the most serious of the trio. The old code confirmed
+                      // "User blocked" even on a 403/500/network failure, so someone
+                      // could believe a harasser was blocked when the block never
+                      // persisted. submitFlagAction sets "blocked" ONLY on success.
+                      await submitFlagAction({
+                        url: "/api/messages/block",
+                        method: "POST",
+                        body: { otherParty: selectedConvData?.otherParty },
+                        outcome: "blocked",
+                        errorMessage: "Could not block this user. Please try again.",
+                        setSubmitting: setFlagSubmitting,
+                        setSubmitted: setFlagSubmitted,
+                        showToast,
+                      });
                     }}
                     className="w-full text-left block px-5 py-3 text-sm text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50"
                   >

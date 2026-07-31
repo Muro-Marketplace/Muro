@@ -29,7 +29,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **todo, AFTER `05` closes** (not owner-gated). Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
 | 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **todo, AFTER `05` (alongside row 21)**. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
 | 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **todo, AFTER `05` (with rows 21/22)**. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, 4339efd). Remaining (**order per D67, OWNER-APPROVED 2026-07-31**): (1) **DONE — `no-authfetch-mutation` rule + grandfathered ratchet landed at `warn`, floor 94 across 44 files (468e3f1).** The rule's 94-site list IS the real E43 surface (vs 11 hand-enumerated — D67 vindicated). (2) NEXT — work the union ONE file/handler per iteration, migrating each `authFetch` mutation to `mutate()` (which throws on non-2xx) + fixing the false-success handling, LOWERING `LITERAL_FLOOR` in `authfetch-mutation-ratchet.test.ts` in the same commit. Hand items E43-d/e/g/h/i/j + bug-12 are all IN the 94; **E43-f is OUT of the rule's reach** (dead View buttons, no authFetch — still needs its own fix). (3) Flip the rule to `error` when the floor hits zero. (4) bug-12's flag-gate/notFound half is separate from its authFetch sites |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, 4339efd). Remaining (**order per D67, OWNER-APPROVED 2026-07-31**): (1) **DONE — `no-authfetch-mutation` rule + grandfathered ratchet landed at `warn`, floor 94 across 44 files (468e3f1).** The rule's 94-site list IS the real E43 surface (vs 11 hand-enumerated — D67 vindicated). (2) IN PROGRESS — work the union, batching **by FILE not by call site** (supervisor D70.3: 44 files vs 94 sites; sites in a file share a shape/import/test). **E43-e done** (MessageInbox report/delete/block trio → shared `submitFlagAction` helper, floor 94→91, this commit). NEXT per D70.3: finish `MessageInbox.tsx`'s remaining ~9 mutating `authFetch` sites, then the other 42 files, LOWERING `LITERAL_FLOOR` by each file's count in the same commit. **D70.2: 94 is a MIGRATION surface, not 94 bugs** (the rule has no res.ok exemption); the live-bug subset is the unchecked ones. Hand items E43-d/e/g/h/i/j + bug-12 are all IN the 94; **E43-f is OUT** (dead View buttons, no authFetch — own fix). (3) Flip the rule to `error` when the floor hits zero. (4) bug-12's flag-gate/notFound half is separate from its authFetch sites |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8511,3 +8511,53 @@ to `mutate` is a mechanical simplification.
 delete / block trust-and-safety trio is the priority) OR the highest-value cluster**, one
 per iteration, each lowering the floor. Task 0 (`continue-on-error` in ci.yml) still
 pending as its own change.
+
+## row 8 (doc `05`) E43-e — MessageInbox report/delete/block via a shared submitFlagAction helper
+
+Commit `<pending>`. Code + new lib + test. First migration under the D67 rule; ratchet floor 94 → 91.
+
+**The defect.** The Report / Delete / Block actions in the message flag popup
+(`components/MessageInbox.tsx`) each did `try { await authFetch(url, { method }) } catch
+{ /* swallow */ } setFlagSubmitted(outcome)`. `authFetch` resolves on a non-2xx and the
+catch swallowed network errors, so the confirmation ("Report submitted" / archive done /
+"User blocked") was shown regardless. **Block was the worst**: a user could believe a
+harasser was blocked when the block never persisted.
+
+**The fix.** Extracted the shared shape into `src/lib/messages/flag-action.ts` →
+`submitFlagAction({ url, method, body, outcome, errorMessage, setSubmitting, setSubmitted,
+showToast })`, which calls `mutate()` (throws ApiError on non-2xx, NetworkError when the
+request never lands), sets the confirmation ONLY after it resolves, and shows an error
+toast on failure. All three handlers are now one call to it; the inline try/catch blocks
+are deleted (no `_v2`). `mutate` is no longer imported into MessageInbox directly.
+
+**Why a helper, not a render test.** MessageInbox is 1768 lines; driving the block flow
+through a render (seed conversations → select one → open the flag popup → confirm) is
+fragile. The three handlers were identical, so extracting + unit-testing mirrors the
+E43-a (`updatePlacementStatus`) precedent.
+
+**Test.** New `src/lib/messages/flag-action.test.ts` (mocks `mutate`): success sets the
+outcome + no error toast; a rejected block does NOT set the outcome, shows the error
+toast, returns false; the method + JSON body are passed through. Fail-before verified by
+setting the outcome unconditionally (old behaviour): the reject test failed. A subtle
+harness bug surfaced and is worth recording: `beforeEach(() => mutateMock.mockReset())`
+returns the mock, and **vitest registers a function returned from a hook as a teardown
+callback**, so it called the (throwing) mock during teardown. Fixed with a block-body
+`beforeEach(() => { mutateMock.mockReset(); })`.
+
+**Ratchet.** Migrated 3 of MessageInbox's 12 sites → measured 91 remaining, lowered
+`LITERAL_FLOOR` 94 → 91 in `authfetch-mutation-ratchet.test.ts`. `npm run check` green:
+185 files (+1), 1930 tests (+3), the rule's 91 hits are warnings, audit PASS, exit 0.
+
+**Batching change (supervisor D70.3, actioned — sequencing within approved scope, no
+escalation under amended rule 4).** Go-forward is **per FILE, not per call site**: 44
+files vs 94 sites, and sites in a file share a shape/import/test. This E43-e iteration did
+only the trust-and-safety trio (a pre-D70 sub-unit); from here each iteration migrates
+every mutating `authFetch` in one file and lowers the floor by that file's count. Also
+**D70.2: 94 is a migration surface, not 94 bugs** — the rule has no `res.ok` exemption, so
+it includes already-correct-but-non-standard sites; the live-bug subset is the unchecked
+ones.
+
+**Next: finish `MessageInbox.tsx`** — its remaining ~9 mutating `authFetch` sites
+(message send ×2, mark-read PATCH, delete conversation/message, pin, offer accept/decline,
+placement PATCH), migrated to `mutate` with proper success/error handling, lowering the
+floor by ~9.
