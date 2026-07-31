@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
 
@@ -86,21 +86,14 @@ export default function ArtistOrdersPage() {
       const body: Record<string, string> = { orderId, status: newStatus };
       if (newStatus === "shipped" && trackingInput) body.trackingNumber = trackingInput;
 
-      const res = await authFetch("/api/orders", {
+      // Order STATUS update only (shipped/tracking). Not a refund/money path —
+      // mutate throws on a non-2xx, so a rejected update surfaces the real reason
+      // (the common cause is a legacy order missing artist_user_id, which the 403
+      // check can't authorise) instead of the old authFetch resolving.
+      await mutate("/api/orders", {
         method: "PATCH",
         body: JSON.stringify(body),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        // Surface the real reason. The most common failure here is the
-        // order not having artist_user_id set (legacy rows predating
-        // migration 0XX), without it the 403 check can't authorise
-        // the artist. Now the user at least sees *why* it silently
-        // failed previously.
-        setStatusError(data.error || `Could not update order (HTTP ${res.status}). Contact support if this keeps happening.`);
-        setUpdating(false);
-        return;
-      }
       setOrders((prev) => prev.map((o) =>
         o.id === orderId ? {
           ...o,
@@ -112,7 +105,11 @@ export default function ArtistOrdersPage() {
       setTrackingInput("");
     } catch (err) {
       console.error("Status update failed:", err);
-      setStatusError("Network error. Please try again.");
+      setStatusError(
+        err instanceof ApiError
+          ? err.message || "Could not update order. Contact support if this keeps happening."
+          : "Network error. Please try again.",
+      );
     }
     setUpdating(false);
   }
