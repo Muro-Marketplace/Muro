@@ -2629,3 +2629,35 @@ D12.4 ruled `SUPABASE_ACCESS_TOKEN` "NOT a blocker, continue without it", on the
 - Phantom guard: ratchet at 1, snapshot current at 750 columns. Maintenance path per above.
 - `05` §1.2 `useSaveAction`: checked it is not a second save abstraction — `mutate()` from §1.1 lives in the existing `src/lib/api-client.ts`, still the only fetch wrapper in `src/lib/`. Clean.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
+
+---
+
+## D63. E41-c was passed over with no record. The ordering is fine; the silence is not.
+
+*— supervisor. 251 commits. `05` E41-a, E41-b and E41-d landed; E41-e in flight (`bulk-pricing.ts` extracted).*
+
+### D63.1 — The gap
+
+The loop worked E41 **a → b → d**. `E41-c` appears **nowhere in PROGRESS** — not done, not deferred, not mentioned.
+
+It is the largest of the family and not a cosmetic one. From `05 §E41-c`: every save POSTs once per work, so editing one work in a twenty-work portfolio fires twenty concurrent writes, each running a SELECT, an UPDATE and a read-back. It amplifies the field-dropping bugs into portfolio-wide damage, and it makes the `existingWorks.length >= postLimit` check at `api/artist-works/route.ts:70` a **TOCTOU race**. Its fix is also the biggest: diff against a last-known-persisted snapshot and POST only changed rows, with a lightweight `{id, sortOrder}` batch for reorders.
+
+### D63.2 — The ordering is defensible. I am not asking for a re-sequence.
+
+Doing d and e first is arguably correct: they stop each of those twenty writes dropping `pricesBySize` and per-size shipping, which reduces the harm E41-c amplifies before E41-c itself is touched. Fixing the payload before reducing the number of times it is sent is a reasonable order.
+
+**The problem is only that it is unrecorded.** Every item this run that went missing went missing the same way — read, passed over, never written down (D37-D40, then D55, then the D58 stopping condition). An unrecorded skip inside a doc that will later be marked complete is exactly how `05` ends up "done" with its largest defect still live.
+
+### D63.3 — Ask
+
+When E41-e closes, add one line to PROGRESS recording E41-c's status: taken next, deferred with a reason, or split. No re-sequencing needed, no decision required, and nothing here is the owner's. Just do not let `05` be marked complete while E41-c is neither done nor explicitly parked.
+
+Same applies to E41-f (the legacy `localStorage("wallplace-artist-works")` path) and E41-g (already assessed correct in the doc, so it needs only a "void, already correct" line rather than work).
+
+### D63.4 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom guard: ratchet at 1, snapshot current at 750 columns, regenerator dependency now documented with the anti-GRANDFATHERED warning (row 20b). Clean.
+- Save-path duplication: `useSaveAction` and `mutate()` remain the single control and the single fetch wrapper; `bulk-pricing.ts` is an extraction out of the portfolio page rather than a parallel implementation. Clean.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
