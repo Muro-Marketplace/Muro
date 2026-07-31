@@ -13,6 +13,7 @@ import { useConfirm } from "@/context/ConfirmContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { useSaveAction } from "@/hooks/useSaveAction";
 import { buildFramePayload, type FramePayloadInput } from "./frame-payload";
+import { mergeBulkPricing, copySizesPricing } from "./bulk-pricing";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import Combobox from "@/components/Combobox";
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
@@ -1108,12 +1109,9 @@ export default function PortfolioPage() {
     const next = works.map((w) => {
       if (!byWork.has(w.id)) return w;
       const rowsForWork = byWork.get(w.id)!;
-      const newPricing = rowsForWork
-        .filter((r) => r.label.trim() && r.price > 0)
-        .map((r) => ({
-          label: r.label.trim(),
-          price: Math.round(r.price * 100) / 100,
-        }));
+      // E41-e: merge onto the existing rows so per-size shippingPrice / inStorePrice
+      // / quantityAvailable survive a price tweak, instead of rebuilding {label,price}.
+      const newPricing = mergeBulkPricing(w.pricing ?? [], rowsForWork);
       if (newPricing.length === 0) {
         // Don't accidentally wipe a work's only sizes if the artist
         // emptied them all, leave the original pricing intact.
@@ -1283,16 +1281,9 @@ export default function PortfolioPage() {
     const next = works.map((w) => {
       if (!bulkEditTargetIds.has(w.id)) return w;
       if (kind === "sizes") {
-        const nextPricing: SizePricing[] = source.pricing.map((s) => {
-          const existing = w.pricing.find(
-            (x) => x.label.toLowerCase() === s.label.toLowerCase(),
-          );
-          return {
-            label: s.label,
-            price: existing?.price ?? 0,
-            quantityAvailable: existing?.quantityAvailable ?? null,
-          };
-        });
+        // E41-e: preserve the target's per-size shippingPrice / inStorePrice for
+        // matching labels (the old rebuild kept only price + quantityAvailable).
+        const nextPricing: SizePricing[] = copySizesPricing(source.pricing, w.pricing);
         const prices = nextPricing.map((p) => p.price).filter((n) => n > 0);
         const lowest = prices.length > 0 ? Math.min(...prices) : 0;
         return {

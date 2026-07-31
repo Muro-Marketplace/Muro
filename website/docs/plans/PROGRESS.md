@@ -26,7 +26,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
 | 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (08495ae): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot |
 | 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **DONE** (2131d2a): dependency recorded in guard header + runner; `MISSING_TOKEN_MESSAGE` points at the remedy (tested); service-role path investigated — none clean, token stands. **D62.5 owner escalation OPEN**: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c). Remaining E4x caller migrations one each: E41-e/-f, E42-a/-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, this commit). Remaining E4x caller migrations one each: E41-f, E42-a/-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8039,13 +8039,39 @@ priceUplift coerced (and non-numeric → 0); pricesBySize stays undefined when a
 `pricesBySize` key: the retention test failed. `npm run check` green: 174 files, 1889
 tests, audit:allowlist PASS, exit 0.
 
-**Next: doc `05` E41-e** — the bulk price editor rebuilds each work's `pricing` array
-as `{label, price}` only (portfolio page ~:1060), discarding the other `SizePricing`
-fields (per-size `shippingPrice`, `inStorePrice`, `quantityAvailable`); the "copy
-sizes" variant keeps `quantityAvailable` but drops `shippingPrice`/`inStorePrice`.
-Tweaking one price wipes per-size shipping + in-store pricing for every row of every
-work (and kills the "Collect from venue" CTA). Fix: merge into the existing row
-(`{ ...existingRowByIndex, label, price }`) rather than replacing it. Re-read the two
-bulk-save sites first; unit-test the merge (given a row with shippingPrice + inStorePrice,
-assert both survive). Then E41-f (delete the localStorage editor), E42-a/-b/-c,
-E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST.
+## row 8 (doc `05`) E41-e — bulk price editor preserves per-size shipping / in-store
+
+Commit `<pending>`. Code-only.
+
+**The defect.** Both bulk-editor paths rebuilt each size row from scratch:
+`saveBulkPrices` kept only `{label, price}`, and the "copy sizes" action kept
+`{label, price, quantityAvailable}` — both discarding per-size `shippingPrice` and
+`inStorePrice` (stored in the `artist_works.pricing` JSON). So tweaking one price in
+the bulk editor wiped per-size shipping + in-store pricing for every row of every
+work, killing the "Collect from venue" CTA.
+
+**The fix.** Extracted both merges to a pure sibling `bulk-pricing.ts`:
+`mergeBulkPricing(existing, rows)` (matches by `sizeIndex`, so a rename keeps the
+fields; spreads the existing row then overrides label/price; drops empty/£0 rows;
+skips the merge for `isNew` rows) and `copySizesPricing(source, target)` (matches by
+label, spreads the target row then overrides). `saveBulkPrices` and the copy-sizes
+handler now call them.
+
+**Test.** New `bulk-pricing.test.ts` (6 tests): shipping/in-store/quantity survive a
+price tweak; survive a rename (by sizeIndex); a brand-new size does not inherit an
+existing row; empty/£0 rows dropped; copy-sizes keeps the target's shipping/in-store
+for a matching label and defaults price/quantity for an unmatched one. Fail-before
+verified by dropping the merge spreads: the 3 preserve tests failed. `npm run check`
+green: 175 files, 1895 tests, audit:allowlist PASS, exit 0.
+
+**Next: doc `05` E41-f** — DELETE the localStorage-only artwork editor on
+`artist-portal/profile/page.tsx` (a dead second editor: its `saveWorks` writes
+`localStorage.setItem("wallplace-artist-works", ...)`, which nothing reads back, and
+the profile refetch discards it — an artist who adds artwork there loses it). Remove
+that `saveWorks`, the "+ Add Work" / work-modal UI block and `openEditWork`, the
+`wallplace-artist-works` key, and E41-g's unread `wallplace-artist-profile` mirror;
+replace with a link to /artist-portal/portfolio. Deleting beats fixing (do NOT rewire
+it to the API — a second editor for the same entity is the defect). Verify nothing
+reads the keys back (`grep -rn wallplace-artist-works src/`). Test: assert no "+ Add
+Work" control renders and `localStorage.setItem` is never called with those keys.
+Then E42-a/-b/-c, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST.
