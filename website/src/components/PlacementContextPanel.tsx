@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { useConfirm } from "@/context/ConfirmContext";
 import type { ArtistWork } from "@/data/artists";
 import {
@@ -248,13 +248,13 @@ export default function PlacementContextPanel({
     setBusyAction("accept");
     setError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: (current as RemotePlacement).id, status: "active" }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not accept");
-      else await loadPlacements();
+      await loadPlacements();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not accept" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -271,13 +271,13 @@ export default function PlacementContextPanel({
     setBusyAction("decline");
     setError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: (current as RemotePlacement).id, status: "declined" }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not decline");
-      else await loadPlacements();
+      await loadPlacements();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not decline" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -294,18 +294,18 @@ export default function PlacementContextPanel({
     setBusyAction(`undo-${stage}`);
     setError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: (current as RemotePlacement).id, unsetStage: stage }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not undo stage");
-      else {
-        await loadPlacements();
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: (current as RemotePlacement).id, action: "undo", stage } }));
-        }
+      await loadPlacements();
+      if (typeof window !== "undefined") {
+        // Success-only: mutate throws on a non-2xx, so a rejected undo no longer
+        // fans the cross-portal event out (E43-a class).
+        window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: (current as RemotePlacement).id, action: "undo", stage } }));
       }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not undo stage" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -321,16 +321,14 @@ export default function PlacementContextPanel({
         stage,
       };
       if (explicitDate) body.stageDate = explicitDate;
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify(body),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not update stage");
-      else {
-        await loadPlacements();
-        setSchedulePickerOpen(false);
-      }
+      await loadPlacements();
+      setSchedulePickerOpen(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not update stage" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -394,14 +392,12 @@ export default function PlacementContextPanel({
           message: counterNote.trim() || undefined,
         },
       };
-      const res = await authFetch("/api/placements", { method: "PATCH", body: JSON.stringify(body) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not send counter");
-      else {
-        setCounterOpen(false);
-        setCounterNote("");
-        await loadPlacements();
-      }
+      await mutate("/api/placements", { method: "PATCH", body: JSON.stringify(body) });
+      setCounterOpen(false);
+      setCounterNote("");
+      await loadPlacements();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not send counter" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -434,15 +430,13 @@ export default function PlacementContextPanel({
           message: reqNote.trim() || undefined,
         })),
       };
-      const res = await authFetch("/api/placements", { method: "POST", body: JSON.stringify(body) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not send request");
-      else {
-        setReqSelected(new Set());
-        setReqNote("");
-        await loadPlacements();
-        onRequestSent?.();
-      }
+      await mutate("/api/placements", { method: "POST", body: JSON.stringify(body) });
+      setReqSelected(new Set());
+      setReqNote("");
+      await loadPlacements();
+      onRequestSent?.();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not send request" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
