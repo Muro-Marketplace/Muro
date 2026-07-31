@@ -8864,7 +8864,7 @@ OffersList (3), and a long tail of 1–2-site files. Plus the 3 owner-gated orde
 
 ## row 8 (doc `05`) artist-portal/placements/page.tsx — 5 handlers → mutate (floor 53→48)
 
-Commit `<pending>`. `src/app/(pages)/artist-portal/placements/page.tsx` (no test — see note).
+Commit `d0b5855`. `src/app/(pages)/artist-portal/placements/page.tsx` (no test — see note).
 
 Five flagged mutating `authFetch` sites migrated; the four read GETs (archived count, engaged
 counts, loadPlacements, venues) stay on `authFetch`:
