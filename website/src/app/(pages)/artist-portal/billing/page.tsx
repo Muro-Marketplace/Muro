@@ -6,7 +6,7 @@ import Button from "@/components/Button";
 import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 
 interface ProfileSubscription {
   subscription_status: string;
@@ -187,22 +187,24 @@ export default function BillingPage() {
   async function handleSubscribe(plan: string, billing: "monthly" | "annual" = billingCycle) {
     setRedirecting(true);
     try {
-      const res = await authFetch("/api/subscribe", {
+      const data = await mutate<{ url?: string }>("/api/subscribe", {
         method: "POST",
         body: JSON.stringify({ plan, billing }),
       });
-      const data = await res.json();
       if (data.url) {
         // Full-page redirect to Stripe Checkout, mutating an external
         // global from an event handler (not during render) is fine.
         // eslint-disable-next-line react-hooks/immutability
         window.location.href = data.url;
       } else {
-        showToast(data.error || "Failed to start checkout", { variant: "error" });
+        showToast("Failed to start checkout", { variant: "error" });
         setRedirecting(false);
       }
-    } catch {
-      showToast("Something went wrong. Please try again.", { variant: "error" });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.message || "Failed to start checkout" : "Something went wrong. Please try again.",
+        { variant: "error" },
+      );
       setRedirecting(false);
     }
   }
@@ -211,25 +213,22 @@ export default function BillingPage() {
     setConnectError(null);
     setConnectRedirecting(true);
     try {
-      const res = await authFetch("/api/stripe-connect/onboard", {
+      const data = await mutate<{ url?: string }>("/api/stripe-connect/onboard", {
         method: "POST",
         body: JSON.stringify({ accountType: "artist" }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.url) {
+      if (data.url) {
         window.location.href = data.url;
         // Leave `connectRedirecting` true so the button stays in the
         // "Redirecting..." state during the browser navigation.
         return;
       }
-      setConnectError(
-        typeof data?.error === "string"
-          ? data.error
-          : "Couldn't start payout setup. Please try again.",
-      );
+      setConnectError("Couldn't start payout setup. Please try again.");
       setConnectRedirecting(false);
-    } catch {
-      setConnectError("Network error. Check your connection and try again.");
+    } catch (err) {
+      setConnectError(
+        err instanceof ApiError && err.message ? err.message : "Network error. Check your connection and try again.",
+      );
       setConnectRedirecting(false);
     }
   }
@@ -238,20 +237,17 @@ export default function BillingPage() {
     setConnectError(null);
     setConnectRedirecting(true);
     try {
-      const res = await authFetch("/api/stripe-connect/dashboard", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.url) {
+      const data = await mutate<{ url?: string }>("/api/stripe-connect/dashboard", { method: "POST" });
+      if (data.url) {
         window.location.href = data.url;
         return;
       }
-      setConnectError(
-        typeof data?.error === "string"
-          ? data.error
-          : "Couldn't open Stripe dashboard. Please try again.",
-      );
+      setConnectError("Couldn't open Stripe dashboard. Please try again.");
       setConnectRedirecting(false);
-    } catch {
-      setConnectError("Network error. Check your connection and try again.");
+    } catch (err) {
+      setConnectError(
+        err instanceof ApiError && err.message ? err.message : "Network error. Check your connection and try again.",
+      );
       setConnectRedirecting(false);
     }
   }
@@ -259,16 +255,18 @@ export default function BillingPage() {
   async function handleManage() {
     setRedirecting(true);
     try {
-      const res = await authFetch("/api/subscribe/portal", { method: "POST" });
-      const data = await res.json();
+      const data = await mutate<{ url?: string }>("/api/subscribe/portal", { method: "POST" });
       if (data.url) {
         window.location.href = data.url;
       } else {
-        showToast(data.error || "Failed to open billing portal", { variant: "error" });
+        showToast("Failed to open billing portal", { variant: "error" });
         setRedirecting(false);
       }
-    } catch {
-      showToast("Something went wrong. Please try again.", { variant: "error" });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.message || "Failed to open billing portal" : "Something went wrong. Please try again.",
+        { variant: "error" },
+      );
       setRedirecting(false);
     }
   }

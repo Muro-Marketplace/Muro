@@ -28,7 +28,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
  * Typed as number, not the literal, so the zero comparison below stays meaningful
  * to the typechecker rather than being narrowed away.
  */
-const LITERAL_FLOOR: number = 59;
+const LITERAL_FLOOR: number = 55;
 
 type EslintFile = { filePath: string; messages: { ruleId?: string; message?: string }[] };
 
