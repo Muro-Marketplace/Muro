@@ -9115,7 +9115,7 @@ violations in the file) + 193 files / 1948 tests green + route audit PASS.
 
 ## row 8 (doc `05`) venue-portal/settings/page.tsx — 2 Stripe Connect handlers → mutate (floor 32→30)
 
-Commit `<pending>`. `src/app/(pages)/venue-portal/settings/page.tsx` + new test.
+Commit `823971b`. `src/app/(pages)/venue-portal/settings/page.tsx` + new test.
 
 Both flagged sites are Stripe **Connect** handlers. Read them against the money boundary and confirmed
 NEITHER moves money — both just mint a redirect URL and `window.location.href` to it — so they are
