@@ -9059,7 +9059,7 @@ PlacementStepper (2), SavedContext (2), then the 1-site tail. The 4 owner-gated 
 
 ## row 8 (doc `05`) customer-portal/page.tsx — BOTH sites OWNER-GATED (surfaced, not migrated; floor stays 34)
 
-Commit `<pending>`. `src/app/(pages)/customer-portal/page.tsx` (comments only; no migration).
+Commit `e944e7e`. `src/app/(pages)/customer-portal/page.tsx` (comments only; no migration).
 
 Read both flagged handlers; both are money handlers, not plain status swaps, so per the money
 boundary and the "don't guess, surface" rule they are SURFACED and left on `authFetch` (grandfathered),
