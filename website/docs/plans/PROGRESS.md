@@ -26,7 +26,8 @@ Order of work: the "Corrected dependency order" at the end of
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
 | 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (08495ae): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot |
 | 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **DONE** (2131d2a): dependency recorded in guard header + runner; `MISSING_TOKEN_MESSAGE` points at the remedy (tested); service-role path investigated — none clean, token stands. **D62.5 owner escalation OPEN**: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU at artist-works/route.ts surfaced to owner). **E41-g = void** (already correct; mirror removed in E41-f). Remaining: E42-a/-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
+| 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **todo, AFTER `05` closes** (not owner-gated). Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile: input `value` split from the "Not set" display fallback, this commit). Remaining: E42-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8150,11 +8151,41 @@ reorders; the route has no such batch endpoint, so a reorder simply marks the mo
 works "changed" and POSTs them normally (far fewer than the whole portfolio). A
 dedicated reorder endpoint is a possible future optimisation, not built here.
 
-**Next: doc `05` E42-a** — venue-portal profile: the display-fallback chain (e.g.
-`detailType || venue?.type || "Not set"`) is bound straight into the controlled
-`<input value>`, so entering edit mode puts the literal "Not set" (or "Your Venue"
-for the name) in the field, and typing yields "Not setCafe"; the number footfall field
-gets an invalid `value="Not set"`. Split display from value: `value` = the state,
-`placeholder` = the hint, and render "Not set" only in the read-only view. Re-read
-`venue-portal/profile/page.tsx` first. Then E42-b/-c, E43-a..k, bug-12;
+## row 8 (doc `05`) E42-a — venue profile: display split from input value
+
+Commit `<pending>`. Code-only.
+
+**The defect.** The venue detail rows bound a display fallback chain
+(`detailType || venue?.type || "Not set"`, `detailName || venue?.name || "Your Venue"`)
+straight into the controlled `<input value>`. The `detail*` states ARE hydrated from
+the venue, so the fallback only fired when a field was empty — but then edit mode
+seeded the input with the literal "Not set"/"Your Venue", the first keystroke made it
+"Not setCafe", and the footfall `type=number` got an invalid `value="Not set"`.
+
+**The fix.** Each row now carries `value` (the editable state only) and `display`
+(the `|| "Not set"` fallback). The edit `<input value>` uses `value`; the read-only
+`<p>` uses `display` (with muted-italic styling when unset). The "Not set"/"Your
+Venue" strings can no longer enter the input. Added real placeholders per row.
+
+**Test.** New `venue-portal/profile/page.test.tsx` (jsdom, venue with `type`
+undefined): enter edit mode, assert the type input's `value === ""` (its placeholder
+"e.g. Independent cafe", not "Not set"), type "Cafe", assert the PUT body carries
+`type: "Cafe"` (not "Not setCafe"). Fail-before verified by restoring the fallback in
+the type row's `value`: the input read "Not set" and the assertion failed. `npm run
+check` green: 178 files, 1903 tests, audit:allowlist PASS, exit 0.
+
+**SUPERVISOR D64 (aa4cf10): the post-limit TOCTOU is NOT owner-gated — reassigned to
+ROW 21.** D64 overruled the E41-c escalation: the loop's standing authority covers
+migrations, the codebase already has the atomic pattern (D5 `decrement_work_stock`,
+`restock_work`/087), and enforcing an existing cap correctly is no policy change. The
+owner background-task chip was dismissed. Row 21 (below) is loop-actionable, sequenced
+AFTER doc `05` closes (real but low-urgency; E41-c already removed the client's N
+concurrent POSTs).
+
+**Next: doc `05` E42-b** — the venue `localArtists` (`interested_in_local_artists`)
+and `sizes` (`preferred_sizes`) toggles are absent from the PUT payload
+(`venue-portal/profile/page.tsx` ~:330), so flipping them saves nothing and reloads
+to the old state; `setSizes` is also hydrated from a hard-coded literal (~:251) rather
+than `venue.preferredSizes`. Add both keys to the payload and hydrate sizes from the
+record (literal only as an empty fallback). Then E42-c/-d/-e, E43-a..k, bug-12;
 `no-authfetch-mutation` eslint rule LAST.

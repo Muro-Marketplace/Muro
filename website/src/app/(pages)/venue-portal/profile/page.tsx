@@ -421,12 +421,16 @@ export default function VenueProfilePage() {
           </div>
           <div className="p-5 space-y-4">
             {([
-              { label: "Venue Name", value: detailName || venue?.name || "Your Venue", setter: setDetailName, placeholder: "", inputType: "text" as const },
-              { label: "Venue Type", value: detailType || venue?.type || "Not set", setter: setDetailType, placeholder: "", inputType: "text" as const },
-              { label: "Location", value: detailLocation || venue?.location || "Not set", setter: setDetailLocation, placeholder: "", inputType: "text" as const },
-              { label: "Wall Space", value: detailWallSpace || venue?.wallSpace || "Not set", setter: setDetailWallSpace, placeholder: "", inputType: "text" as const },
-              { label: "Visitors per day (approx.)", value: detailFootfall || venue?.approximateFootfall || "Not set", setter: setDetailFootfall, placeholder: "e.g. 250", inputType: "number" as const },
-            ] as const).map(({ label, value, setter, placeholder, inputType }) => (
+              // E42-a: `value` is the editable state ONLY (never the "Not set" /
+              // "Your Venue" display string, which used to leak into the controlled
+              // input and produce "Not setCafe" on the first keystroke). `display` is
+              // the read-only fallback chain.
+              { label: "Venue Name", value: detailName, display: detailName || venue?.name || "Your Venue", setter: setDetailName, placeholder: "Your venue's name", inputType: "text" as const },
+              { label: "Venue Type", value: detailType, display: detailType || venue?.type || "Not set", setter: setDetailType, placeholder: "e.g. Independent cafe", inputType: "text" as const },
+              { label: "Location", value: detailLocation, display: detailLocation || venue?.location || "Not set", setter: setDetailLocation, placeholder: "e.g. Hackney, London", inputType: "text" as const },
+              { label: "Wall Space", value: detailWallSpace, display: detailWallSpace || venue?.wallSpace || "Not set", setter: setDetailWallSpace, placeholder: "e.g. 3 walls, 12 linear metres", inputType: "text" as const },
+              { label: "Visitors per day (approx.)", value: detailFootfall, display: detailFootfall || venue?.approximateFootfall || "Not set", setter: setDetailFootfall, placeholder: "e.g. 250", inputType: "number" as const },
+            ] as const).map(({ label, value, display, setter, placeholder, inputType }) => (
               <div key={label}>
                 <p className="text-xs font-medium text-muted mb-1">{label}</p>
                 {editing === "details" ? (
@@ -452,7 +456,7 @@ export default function VenueProfilePage() {
                     className="w-full px-3 py-2 border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 bg-background"
                   />
                 ) : (
-                  <p className="text-sm text-foreground">{value}</p>
+                  <p className={`text-sm ${value ? "text-foreground" : "text-muted italic"}`}>{display}</p>
                 )}
               </div>
             ))}
