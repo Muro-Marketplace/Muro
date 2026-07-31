@@ -26,7 +26,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
 | 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (08495ae): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot |
 | 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **DONE** (2131d2a): dependency recorded in guard header + runner; `MISSING_TOKEN_MESSAGE` points at the remedy (tested); service-role path investigated — none clean, token stands. **D62.5 owner escalation OPEN**: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5). Remaining E4x caller migrations one each: E41-f, E42-a/-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, this commit). **E41-c = NEXT** (per D63: re-POSTs whole portfolio, TOCTOU at artist-works/route.ts:70). **E41-g = void** (already correct; mirror removed in E41-f). Remaining after E41-c: E42-a/-b/-c/-d/-e, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8064,14 +8064,51 @@ for a matching label and defaults price/quantity for an unmatched one. Fail-befo
 verified by dropping the merge spreads: the 3 preserve tests failed. `npm run check`
 green: 175 files, 1895 tests, audit:allowlist PASS, exit 0.
 
-**Next: doc `05` E41-f** — DELETE the localStorage-only artwork editor on
-`artist-portal/profile/page.tsx` (a dead second editor: its `saveWorks` writes
-`localStorage.setItem("wallplace-artist-works", ...)`, which nothing reads back, and
-the profile refetch discards it — an artist who adds artwork there loses it). Remove
-that `saveWorks`, the "+ Add Work" / work-modal UI block and `openEditWork`, the
-`wallplace-artist-works` key, and E41-g's unread `wallplace-artist-profile` mirror;
-replace with a link to /artist-portal/portfolio. Deleting beats fixing (do NOT rewire
-it to the API — a second editor for the same entity is the defect). Verify nothing
-reads the keys back (`grep -rn wallplace-artist-works src/`). Test: assert no "+ Add
-Work" control renders and `localStorage.setItem` is never called with those keys.
-Then E42-a/-b/-c, E43-a..k, bug-12; `no-authfetch-mutation` eslint rule LAST.
+## row 8 (doc `05`) E41-f — deleted the dead localStorage-only artwork editor
+
+Commit `<pending>`. Code-only. Deleting beats fixing (−292 lines).
+
+**The defect.** `artist-portal/profile/page.tsx` carried a second artwork editor: an
+inline add/edit form whose `saveWorks` wrote only
+`localStorage.setItem("wallplace-artist-works", ...)` — never `/api/artist-works` —
+which nothing reads back and the profile refetch discards, so an artist who edited a
+work here lost it. (A prior partial migration had already pointed "+ Add Work" at
+`/artist-portal/portfolio` as a `<Link>`, but left the edit form live.)
+
+**The fix (delete, not rewire).** Removed the `WorkImageDropzone` component, the work
+editor state (`showWorkForm`/`editingWorkIndex`/`workForm`/`workImageRef`), the
+handlers (`saveWorks`/`openAddWork`/`openEditWork`/`handleWorkImageUpload`/`submitWork`),
+the inline edit modal, the `Combobox` import, the now-orphaned `uploading` state, the
+`wallplace-artist-works` key, and (E41-g nit) the unread `wallplace-artist-profile`
+mirror in the profile save. The works grid is now a read-only preview; the "+ Add
+Work" portfolio link stays as the single authoritative editor.
+
+**Doc correction.** The doc's suggested test ("assert no '+ Add Work' control
+renders") is stale: that control is a legitimate `<Link>` to the portfolio and should
+stay. The real regression is that no inline editor opens and the dead keys are never
+written — that is what the test pins.
+
+**Test.** New `profile/page.test.tsx` (jsdom, real `artists[0]` fixture so the
+profile-build effect has every field): renders, shows the work read-only, clicking a
+card opens NO "Edit Work"/"Add New Work" modal, and `localStorage.setItem` is never
+called with either key. Fail-before verified by restoring the pre-delete editor: the
+click opened the "Edit Work" modal and the test failed. `npm run check` green: 176
+files, 1896 tests, audit:allowlist PASS, exit 0.
+
+**SUPERVISOR D63 (7e9fee4): record E41-c's status; E41-g void.** E41-c was worked
+around (a→b→d→e→f) with no PROGRESS record. Per D63 (ordering fine, no re-sequence,
+just record it):
+- **E41-c — TAKE NEXT.** Real, loop-actionable, and the largest E41 defect: every save
+  re-POSTs the entire portfolio (one write per work), so editing one work in a 20-work
+  portfolio fires 20 concurrent SELECT+UPDATE+read-back writes, and it makes the
+  `existingWorks.length >= postLimit` check at `api/artist-works/route.ts:70` a TOCTOU
+  race. Fix: in `postWorks`/`saveWorks`, diff against a last-known-persisted snapshot
+  and POST only genuinely changed works (a lightweight `{id, sortOrder}` batch for
+  pure reorders). Doc `05 §E41-c`.
+- **E41-g — VOID (already correct).** The artist-profile `handleSave` awaits, checks
+  `!res.ok`, toasts on failure and only then clears the dirty flag (SAFE per the doc);
+  its only nit, the `wallplace-artist-profile` localStorage mirror, was removed in
+  E41-f above. Nothing to do.
+
+**Next: doc `05` E41-c** (per D63), then E42-a/-b/-c, E43-a..k, bug-12;
+`no-authfetch-mutation` eslint rule LAST.
