@@ -7,12 +7,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-const { authFetchMock, showToastMock } = vi.hoisted(() => ({
+const { authFetchMock, mutateMock, showToastMock } = vi.hoisted(() => ({
   authFetchMock: vi.fn(),
+  mutateMock: vi.fn(),
   showToastMock: vi.fn(),
 }));
 
-vi.mock("@/lib/api-client", () => ({ authFetch: authFetchMock }));
+vi.mock("@/lib/supabase", () => ({ supabase: { auth: {}, from: () => ({}) } }));
+vi.mock("@/lib/api-client", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api-client")>();
+  return { ...actual, authFetch: authFetchMock, mutate: mutateMock };
+});
 vi.mock("@/context/ToastContext", () => ({ useToast: () => ({ showToast: showToastMock }) }));
 vi.mock("@/lib/dimensions", () => ({ displayPhysicalDimensions: () => "" }));
 vi.mock("next/image", () => ({ default: () => null }));
@@ -25,6 +30,7 @@ vi.mock("@/components/ConfirmDialog", () => ({
 }));
 
 import OffersList from "./OffersList";
+import { ApiError } from "@/lib/api-client";
 
 const OFFER = {
   id: "o1",
@@ -58,7 +64,11 @@ function mockLoadOk() {
 afterEach(() => cleanup());
 beforeEach(() => {
   authFetchMock.mockReset();
+  mutateMock.mockReset();
   showToastMock.mockReset();
+  // The read GET (load) stays on authFetch; return a fresh Response each call so
+  // the body can be re-read across the mount load + any post-action reload.
+  authFetchMock.mockImplementation(() => Promise.resolve(mockLoadOk()));
 });
 
 async function renderAndOpenWithdraw() {
@@ -69,14 +79,10 @@ async function renderAndOpenWithdraw() {
   fireEvent.click(screen.getByText("MOCK_CONFIRM"));
 }
 
-describe("OffersList withdraw (E43-b)", () => {
+describe("OffersList withdraw (E43-b, mutate)", () => {
   it("does NOT toast success when the withdraw request fails (403)", async () => {
-    authFetchMock.mockImplementation((_url: string, opts?: { method?: string }) => {
-      if (opts?.method === "PATCH") {
-        return Promise.resolve(new Response(JSON.stringify({ error: "Not allowed" }), { status: 403 }));
-      }
-      return Promise.resolve(mockLoadOk());
-    });
+    // act()'s PATCH now goes through mutate, which throws ApiError on a non-2xx.
+    mutateMock.mockRejectedValue(new ApiError(403, "Not allowed", "Not allowed", {}));
 
     await renderAndOpenWithdraw();
 
@@ -94,12 +100,7 @@ describe("OffersList withdraw (E43-b)", () => {
   });
 
   it("toasts success when the withdraw request succeeds (2xx)", async () => {
-    authFetchMock.mockImplementation((_url: string, opts?: { method?: string }) => {
-      if (opts?.method === "PATCH") {
-        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-      }
-      return Promise.resolve(mockLoadOk());
-    });
+    mutateMock.mockResolvedValue({ ok: true });
 
     await renderAndOpenWithdraw();
 

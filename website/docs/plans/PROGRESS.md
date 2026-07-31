@@ -8960,3 +8960,37 @@ then restored. `npm run check` green: 192 files, 1946 tests (+1), exit 0, route 
 **Next: components/offers/OffersList.tsx (3)** — then the 2-site files (collections, addresses,
 customer-portal, PlacementLoanForm, venue settings, PlacementStepper, SavedContext) and the 1-site
 tail. The 3 owner-gated orders refund sites remain last.
+
+## row 8 (doc `05`) components/offers/OffersList.tsx — PARTIAL: 2 of 3 → mutate; checkout OWNER-GATED (floor 40→38)
+
+Commit `<pending>`. `src/components/offers/OffersList.tsx` + its test. **2 of 3 flagged sites migrated;
+1 held for the owner (money boundary).**
+
+The file had 3 flagged mutating `authFetch` sites. Split by the money boundary:
+- **MIGRATED — `act`** (PATCH `/api/offers/:id`, accept/decline/withdraw): a STATUS transition on the
+  offer, not a payment. → `mutate`; still returns the E43-a/E43-b boolean (true only on a confirmed
+  2xx) so the withdraw caller keeps gating its "Offer withdrawn." toast on it; a non-2xx now surfaces
+  `ApiError.message`.
+- **MIGRATED — `submitCounter`** (POST `/api/offers`, `parentOfferId` set): creates a child counter-offer
+  row, a negotiation action, not a payment. → `mutate`; dialog closes + reloads only on 2xx.
+- **NOT migrated — OWNER-GATED (SURFACED per the money boundary):** `pay` (POST
+  `/api/offers/:id/checkout`) — this starts a **Stripe checkout** (creates the session and redirects to
+  pay). The iteration NOTE was explicit: a handler that POSTs to a payment/refund/**checkout** endpoint
+  is surfaced, not silently migrated. Left on `authFetch`, grandfathered in the ratchet, until the owner
+  signs off on the transport-only swap (it would not change any amount or the redirect, only that a
+  non-2xx throws instead of resolving) — exactly like the orders refund handlers.
+
+Consequence for the endgame: there are now **4 owner-gated flagged sites**, not 3 — the 3
+`artist-portal/orders` refund sites PLUS this 1 `OffersList` checkout site. When every other file is
+migrated the ratchet floor will be **4** (not 3), and the rule stays at `warn` until the owner rules on
+all four. Ratchet `LITERAL_FLOOR` 40 → 38 (OffersList now 1-flagged, down from 3).
+
+Test: `OffersList.test.tsx` updated to mock both `authFetch` (the read GET `load`) and `mutate` (the
+`act` PATCH) via importActual (real `ApiError`). Kept the two E43-b withdraw cases (403 → error toast,
+no false "Offer withdrawn.", offer stays; 2xx → success toast) now driven through `mutate`. Fail-before
+re-verified by making `act`'s catch `return true` (the 403 case failed), then restored. `npm run check`
+green: 192 files, 1946 tests, exit 0, route audit PASS.
+
+**Next: the 2-site files** — artist-portal/collections, customer-portal/addresses, customer-portal,
+placements/[id]/PlacementLoanForm, venue-portal/settings, PlacementStepper, SavedContext; then the
+1-site tail. The 4 owner-gated sites (3 orders refund + 1 offers checkout) remain last.
