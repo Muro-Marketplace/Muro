@@ -8902,7 +8902,7 @@ OffersList (3), and the 1–2-site tail. The 3 owner-gated orders refund sites r
 
 ## row 8 (doc `05`) venue-portal/placements/page.tsx — 5 handlers → mutate (floor 48→43)
 
-Commit `<pending>`. `src/app/(pages)/venue-portal/placements/page.tsx` (no test — see note).
+Commit `ea0e0ba`. `src/app/(pages)/venue-portal/placements/page.tsx` (no test — see note).
 
 The venue side of the placements portal, structurally symmetric to artist-portal/placements
 (migrated in `d0b5855`). Same five flagged mutating `authFetch` sites migrated; the six read GETs
