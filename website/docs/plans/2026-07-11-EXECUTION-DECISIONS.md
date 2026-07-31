@@ -2760,3 +2760,49 @@ Delete the dance and surface the error, with the same justification E42-c uses: 
 - Phantom guard: ratchet at 1, snapshot current at 750 columns.
 - **Strip-and-retry sweep (new): NOT clean — five sites, see above.** Adding this to the standing list; the guard does not cover it.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
+
+---
+
+## D66. E42-b is two different problems with two different answers. Neither is the owner's. Row 23.
+
+*— supervisor. 267 commits. Row 22 accepted into the ledger; E42-a/-c/-d landed; E42-b blocked to the owner.*
+
+### D66.1 — The block, and why I am lifting most of it
+
+The loop blocked E42-b: *"`interested_in_local_artists`/`preferred_sizes` do NOT exist in prod — add a migration to complete the feature, or drop it."* Confirmed in prod, both absent. But treating them as one question hides that they are in completely different states.
+
+**`interested_in_local_artists` — a rendered checkbox that throws the answer away.**
+
+```
+venue-portal/profile/page.tsx:212   const [localArtists, setLocalArtists] = useState(false);
+venue-portal/profile/page.tsx:249   setLocalArtists(venue.interestedInLocalArtists ?? false);
+venue-portal/profile/page.tsx:616   checked={localArtists}
+```
+
+A real control, shipped, bound to state, hydrated from the profile. Nine venues can tick it, save, see success, and the value goes nowhere — and on reload it reads back `false`, so it silently un-ticks itself.
+
+**`preferred_sizes` — vestigial.** Its only reference outside tests is a *comment* in `writable-fields.ts:170`. No UI, no consumer, no reader.
+
+**And the pair was an incomplete migration, not a decision.** `preferred_styles` **exists** in prod; `preferred_sizes` does not. The sibling shipped and this one did not.
+
+### D66.2 — Ruling: both halves are the loop's
+
+- **`interested_in_local_artists`: build it.** One nullable boolean column, migration at the next number above the highest, plus the write-allowlist entry. There is no design question inside it — the semantics are "the venue ticked a box that already exists in the product". Making a shipped control persist what the user chose is completing what is there, not adding a feature.
+- **`preferred_sizes`: drop the dead references.** No UI, no reader, no data. Deleting beats fixing.
+
+**This is deliberately a different call from D60**, and the distinction is worth stating so it is applied consistently. The ending-soon cron went to the owner because no data model existed *and building one required deciding what a placement's "end" means* — a term, a default, a venue choice. There is no equivalent question here. A boolean the venue ticked means the venue ticked it.
+
+Added as **row 23**, sequenced with rows 21 and 22 after `05` closes. Nothing here goes on the owner's list, which is already seven items long.
+
+### D66.3 — Checked before ruling
+
+I confirmed the control is genuinely rendered (`checked={localArtists}`) rather than inferring it from a state setter, and confirmed `preferred_sizes` has no UI reference at all rather than assuming the two were symmetric. The two halves looked identical in the block and are not.
+
+### D66.4 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom guard: ratchet at 1, snapshot current at 750 columns.
+- Strip-and-retry: `upsertVenueProfile` now fixed (E42-c); the five `placements/route.ts` sites remain, queued as row 22. Unchanged.
+- Orders / `stripe_transfers`: **12 / 0**, unchanged.
+- `message-attachments`: still public, owner-blocked on the cutover.
