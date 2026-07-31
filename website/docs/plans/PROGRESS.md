@@ -9056,3 +9056,30 @@ the catch emit the success message (the failure case failed), then restored. `np
 
 **Next: customer-portal/page.tsx (2)** — then PlacementLoanForm (2), venue-portal/settings (2),
 PlacementStepper (2), SavedContext (2), then the 1-site tail. The 4 owner-gated money sites remain last.
+
+## row 8 (doc `05`) customer-portal/page.tsx — BOTH sites OWNER-GATED (surfaced, not migrated; floor stays 34)
+
+Commit `<pending>`. `src/app/(pages)/customer-portal/page.tsx` (comments only; no migration).
+
+Read both flagged handlers; both are money handlers, not plain status swaps, so per the money
+boundary and the "don't guess, surface" rule they are SURFACED and left on `authFetch` (grandfathered),
+not silently migrated. Added an in-code OWNER-GATED marker to each so future iterations don't re-attempt:
+- **`confirmDelivery`** (PATCH `/api/orders` → status `delivered`): the E21 note on this page states the
+  buyer confirming delivery **releases the artist's escrow** — a fund movement/payout. Gated exactly
+  like the orders refund handlers and the OffersList checkout.
+- **`submitRefundRequest`** (POST `/api/refunds/request`): the refund flow, the same path the
+  artist-orders refund handlers (which are already owner-gated) use. NB flagged for the owner: migrating
+  it would ALSO fix a latent silent failure — a non-2xx currently shows the customer nothing (there is no
+  `!res.ok` branch and the catch only `console.error`s), so a rejected refund request looks like it did
+  nothing. Worth doing when the owner approves the refund transport swaps.
+
+The read GETs (`/api/orders`, `/api/refunds`) are unaffected. Ratchet `LITERAL_FLOOR` UNCHANGED at 34
+(nothing migrated); both sites stay flagged/grandfathered. Verified: total still 34, file still 2-flagged;
+`npm run check` green: 193 files, 1948 tests, route audit PASS.
+
+**Owner-gated money sites are now SIX**, not four: (1-3) the 3 artist-orders refund sites; (4) the
+OffersList checkout; (5) customer confirmDelivery (escrow release); (6) customer submitRefundRequest.
+The terminal ratchet floor is therefore **6**. The rule stays at `warn` until the owner rules on all six.
+
+**Next: placements/[id]/PlacementLoanForm.tsx (2)** — then venue-portal/settings (2), PlacementStepper
+(2), SavedContext (2), then the 1-site tail. The 6 owner-gated money sites remain last.

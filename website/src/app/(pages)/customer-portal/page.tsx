@@ -105,6 +105,11 @@ function CustomerPortalContent() {
   async function confirmDelivery(orderId: string) {
     setConfirmingDelivery(true);
     setConfirmError(null);
+    // OWNER-GATED (money boundary, 05): confirming delivery RELEASES the artist's
+    // escrow (a fund movement/payout, per the E21 note above), so this is NOT
+    // migrated to mutate() until the owner signs off on the transport swap, exactly
+    // like the orders refund handlers and the OffersList checkout. It stays on
+    // authFetch and remains flagged/grandfathered in the no-authfetch-mutation ratchet.
     try {
       const res = await authFetch("/api/orders", {
         method: "PATCH",
@@ -127,6 +132,12 @@ function CustomerPortalContent() {
 
   async function submitRefundRequest(orderId: string) {
     setRefundSubmitting(true);
+    // OWNER-GATED (money boundary, 05): posts to the refund flow (/api/refunds/request),
+    // the same path the artist-orders refund handlers use, so it is NOT migrated to
+    // mutate() until the owner rules on the refund transport swaps. NB: migrating it
+    // would ALSO fix a latent silent failure here (a non-2xx currently shows the customer
+    // nothing, and the catch only console.errors) — flag that for the owner. Stays on
+    // authFetch, flagged/grandfathered in the ratchet.
     try {
       const body: Record<string, unknown> = { orderId, reason: refundReason, type: refundType };
       if (refundType === "partial" && refundAmount) body.amount = parseFloat(refundAmount);
