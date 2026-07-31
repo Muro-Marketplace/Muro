@@ -7,7 +7,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-const { mutateMock, showToastMock } = vi.hoisted(() => ({ mutateMock: vi.fn(), showToastMock: vi.fn() }));
+const { mutateMock, showToastMock, artistState } = vi.hoisted(() => ({
+  mutateMock: vi.fn(),
+  showToastMock: vi.fn(),
+  artistState: { works: [] as unknown[] },
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), prefetch: vi.fn() }),
@@ -25,7 +29,7 @@ vi.mock("@/context/ConfirmContext", () => ({ useConfirm: () => ({ confirm: vi.fn
 vi.mock("@/lib/upload", () => ({ uploadImage: vi.fn(async () => "https://cdn/x.png") }));
 vi.mock("@/components/ArtistPortalLayout", () => ({ default: ({ children }: { children: unknown }) => children }));
 vi.mock("@/hooks/useCurrentArtist", () => ({
-  useCurrentArtist: () => ({ artist: { slug: "alice", name: "Alice", works: [] }, loading: false }),
+  useCurrentArtist: () => ({ artist: { slug: "alice", name: "Alice", works: artistState.works }, loading: false }),
 }));
 
 import PortfolioPage from "./page";
@@ -35,7 +39,25 @@ afterEach(() => cleanup());
 beforeEach(() => {
   mutateMock.mockReset();
   showToastMock.mockReset();
+  artistState.works = [];
 });
+
+// A work complete enough for the portfolio grid to render a card for it.
+const WORK = {
+  id: "w1",
+  title: "My Work",
+  medium: "Oil",
+  dimensions: "50x50cm",
+  priceBand: "",
+  pricing: [{ label: "Medium", price: 200 }],
+  available: true,
+  color: "#C17C5A",
+  image: "https://cdn/a.png",
+  orientation: "landscape",
+  images: [],
+  description: "",
+  frameOptions: [],
+};
 
 // The form renders in two layout variants (desktop + mobile), so controls appear
 // twice; they all drive the same component state, so targeting the first is fine.
@@ -81,5 +103,43 @@ describe("artist portfolio add/edit save (E41-a)", () => {
     // The Add form closes once the confirmed save resolves.
     await waitFor(() => expect(formIsOpen()).toBe(false));
     expect(mutateMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+const errorToastFired = () =>
+  showToastMock.mock.calls.some((c) => c[1] && (c[1] as { variant?: string }).variant === "error");
+
+describe("artist portfolio delete (E41-b)", () => {
+  it("keeps the work and surfaces the error when the delete fails", async () => {
+    mutateMock.mockRejectedValue(new ApiError(500, "Server error", "server_error", {}));
+    artistState.works = [WORK];
+    render(<PortfolioPage />);
+    expect(screen.getAllByText("My Work").length).toBeGreaterThan(0);
+
+    // The card's Remove is confirm-gated; confirm is mocked to resolve true.
+    // Reveal the per-card hover overlay that holds Edit / Duplicate / Remove.
+    fireEvent.mouseOver(screen.getAllByText("My Work")[0]);
+    fireEvent.click((await screen.findAllByText("Remove"))[0]);
+
+    await waitFor(() => expect(errorToastFired()).toBe(true));
+    // Fail-before: the old fire-and-forget delete removed the card regardless. Now
+    // the rejected DELETE rolls the removal back, so the work is still listed.
+    expect(screen.getAllByText("My Work").length).toBeGreaterThan(0);
+  });
+
+  it("removes the work only after the delete confirms", async () => {
+    mutateMock.mockResolvedValue({ ok: true });
+    artistState.works = [WORK];
+    render(<PortfolioPage />);
+    expect(screen.getAllByText("My Work").length).toBeGreaterThan(0);
+
+    // Reveal the per-card hover overlay that holds Edit / Duplicate / Remove.
+    fireEvent.mouseOver(screen.getAllByText("My Work")[0]);
+    fireEvent.click((await screen.findAllByText("Remove"))[0]);
+
+    await waitFor(() =>
+      expect(mutateMock).toHaveBeenCalledWith("/api/artist-works?id=w1", { method: "DELETE" }),
+    );
+    await waitFor(() => expect(screen.queryAllByText("My Work")).toHaveLength(0));
   });
 });

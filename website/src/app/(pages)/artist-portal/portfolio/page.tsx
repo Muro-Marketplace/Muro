@@ -342,6 +342,26 @@ export default function PortfolioPage() {
     successMessage: editingIndex !== null ? "Artwork updated" : "Artwork added",
   });
 
+  // E41-b: deletes were fire-and-forget (authFetch DELETE, no await/res.ok), so the
+  // card left the grid whether or not the DELETE succeeded — a failed delete left the
+  // work live on /browse while the artist thought it was gone. Now the removal is
+  // optimistic and rolls back if the DELETE fails, with the real error surfaced.
+  const deleteWorksSave = useSaveAction<[string[]], void>({
+    optimistic: (ids) => {
+      const snapshot = works;
+      setWorks((prev) => prev.filter((w) => !ids.includes(w.id)));
+      return () => setWorks(snapshot);
+    },
+    run: async (ids) => {
+      const results = await Promise.allSettled(
+        ids.map((id) => mutate(`/api/artist-works?id=${encodeURIComponent(id)}`, { method: "DELETE" })),
+      );
+      const failed = results.find((r) => r.status === "rejected");
+      if (failed) throw (failed as PromiseRejectedResult).reason;
+    },
+    errorMessage: "Could not delete. Please try again.",
+  });
+
   useEffect(() => {
     if (!artist || initialised) return;
     setWorks([...artist.works]);
@@ -503,10 +523,11 @@ export default function PortfolioPage() {
 
   function handleDeleteWork(index: number) {
     const work = works[index];
-    // Delete from Supabase
-    authFetch(`/api/artist-works?id=${work.id}`, { method: "DELETE" })
-      .catch((err) => console.error("Work delete error:", err));
-    saveWorks(works.filter((_, i) => i !== index));
+    if (!work) return;
+    // E41-b: optimistically remove the card and await the DELETE through the shared
+    // save control. On failure the card comes back and the real error is shown,
+    // instead of the old fire-and-forget path that removed it regardless.
+    void deleteWorksSave.save([work.id]);
   }
 
   /**
@@ -573,16 +594,15 @@ export default function PortfolioPage() {
     });
     if (!ok) return;
 
-    // Best-effort: fire the API delete for each. saveWorks(filtered)
-    // also POSTs the remaining works which is harmless.
-    Array.from(selectedIds).forEach((id) => {
-      authFetch(`/api/artist-works?id=${id}`, { method: "DELETE" }).catch(
-        (err) => console.error("Bulk delete error:", err),
-      );
-    });
-    saveWorks(works.filter((w) => !selectedIds.has(w.id)));
-    showToast(`Deleted ${count} work${count === 1 ? "" : "s"}`);
-    exitSelectMode();
+    // E41-b: await all the DELETEs through the shared save control. The toast and
+    // exit only fire on a confirmed success; a failure rolls the removed cards back
+    // and surfaces the error, instead of the old unconditional "Deleted N works".
+    const ids = Array.from(selectedIds);
+    const deleted = await deleteWorksSave.save(ids);
+    if (deleted) {
+      showToast(`Deleted ${count} work${count === 1 ? "" : "s"}`);
+      exitSelectMode();
+    }
   }
 
   /**
