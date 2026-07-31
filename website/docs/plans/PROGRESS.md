@@ -29,7 +29,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **todo, AFTER `05` closes** (not owner-gated). Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
 | 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **todo, AFTER `05` (alongside row 21)**. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
 | 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **todo, AFTER `05` (with rows 21/22)**. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
-| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, 4339efd). Remaining (**order per D67, OWNER-APPROVED 2026-07-31**): (1) NEXT — build `no-authfetch-mutation` at `warn` with a grandfathered ratchet (7b phantom-guard style); its output is the real E43 list. (2) Reconcile against E43-d..k: items the rule flags → fix, shrinking the ratchet in the same commit (`toHaveLength` holds it); items it does NOT flag → already-correct (void) or out-of-reach (record why). (3) bug-12. (4) Flip the rule to `error` when the ratchet hits zero. E43-d..k are now a cross-check on the rule's coverage, not the primary driver |
+| 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, 4339efd). Remaining (**order per D67, OWNER-APPROVED 2026-07-31**): (1) **DONE — `no-authfetch-mutation` rule + grandfathered ratchet landed at `warn`, floor 94 across 44 files (this commit).** The rule's 94-site list IS the real E43 surface (vs 11 hand-enumerated — D67 vindicated). (2) NEXT — work the union ONE file/handler per iteration, migrating each `authFetch` mutation to `mutate()` (which throws on non-2xx) + fixing the false-success handling, LOWERING `LITERAL_FLOOR` in `authfetch-mutation-ratchet.test.ts` in the same commit. Hand items E43-d/e/g/h/i/j + bug-12 are all IN the 94; **E43-f is OUT of the rule's reach** (dead View buttons, no authFetch — still needs its own fix). (3) Flip the rule to `error` when the floor hits zero. (4) bug-12's flag-gate/notFound half is separate from its authFetch sites |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
@@ -8460,3 +8460,54 @@ old text and the owner approved it. D69 (e80f9aa) is a diagnostic flagging a
 stall-after-docs-only-commit pattern for the owner to check in the loop's wakeup logic
 (no code action on this side; the loop keeps re-arming after every iteration incl.
 docs-only ones).
+
+## row 8 (doc `05`) E43 rule — `no-authfetch-mutation` at warn + grandfathered ratchet (D67, owner-approved)
+
+Commit `<pending>`. Rule + config + 2 tests.
+
+**Why this ran first (owner-approved D67).** The E43 family is one defect: `authFetch`
+returns the raw Response and RESOLVES on a non-2xx (it never throws), so a mutation
+written with it runs its success path on a 403/500. The hand-written list was 11 items
+(E43-a..k). The rule, run over all of `src`, finds **94 mutating `authFetch` calls across
+44 files** — roughly 8x the hand list. That gap is exactly D67's argument (a read finds
+~half the surface; a detector finds all of it), and the 7b phantom guard is the
+precedent (4 hand-known columns → 10 live bugs once the snapshot-built guard ran).
+
+**What landed.**
+- `eslint-rules/no-authfetch-mutation.js`: flags `authFetch(url, { method: "POST"|"PUT"|"PATCH"|"DELETE" })` (string-literal verb, case-insensitive). Registered in `eslint-rules/index.js` and set to **`warn`** in `eslint.config.mjs` (build stays green). Documented limits: a non-literal verb or a variable options object is not visible to the AST (the ratchet count is the backstop); GET/HEAD and method-less options are reads.
+- `tests/integration/eslint-no-authfetch-mutation.test.ts`: 10 RuleTester cases (flags PATCH/POST/PUT/DELETE, case-insensitive, spread options, one-per-call; does not flag GET, method-less, `mutate()`, dynamic verb, or test files).
+- `tests/integration/authfetch-mutation-ratchet.test.ts`: runs `npx eslint src/**/*.{ts,tsx} -f json`, counts the rule's messages, asserts `=== LITERAL_FLOOR (94)` and that the rule severity is `warn` while the floor is non-zero. Mirrors the authz-import ratchet. Teeth verified: setting the floor to 93 fails with "Expected 93, found 94".
+
+**Verification.** `npm run check` green: 184 files (+2), 1927 tests (+12), the 94 rule hits
+appear as **warnings** (not errors) in the lint pass, audit:allowlist PASS, exit 0.
+
+**Reconciliation of the 94 against the hand-enumerated E43-d..k + bug-12** (D67.3 step 4):
+| Hand item | In the 94? | Notes |
+|---|---|---|
+| E43-d artist-portal/portfolio | yes (1) | shipping save |
+| E43-e components/MessageInbox | yes (12) | report/delete/block among them (trust & safety) |
+| E43-g artist-portal/saved + customer-portal/saved | yes (1 + 1) | |
+| E43-h browse/[slug]/ArtistProfileClient | yes (1) | public enquiry |
+| E43-i components/Header | yes (3) | mark-as-read |
+| E43-j components/VenuePortalLayout | yes (1) | self-heal |
+| bug-12 components/BlogEditor | yes (3) | authFetch half; the flag-gate/`notFound()` half is a SEPARATE change the rule can't see |
+| **E43-f venue-portal/enquiries** | **NO** | **out of the rule's reach — dead View buttons with no onClick/href, not an authFetch mutation. Still needs its own fix.** |
+
+The other ~70 sites (billing, orders, collections, addresses, admin pages, placement
+detail/loan/stepper, SavedContext, dialogs, etc.) were never in the hand list — they are
+the surface D67 predicted the reading missed.
+
+**Go-forward (D67 steps 2-3).** Work the union ONE file (or one handler) per iteration:
+migrate each `authFetch` mutation to `mutate()` and fix the false-success handling
+(await + the thrown ApiError/NetworkError, rollback, success-only side-effects), then
+LOWER `LITERAL_FLOOR` by the number migrated in the SAME commit. When it reaches 0, flip
+the rule to `error` in `eslint.config.mjs` and delete the ratchet file. E43-f is handled
+separately (no authFetch to migrate). Note: `mutate()` throwing is a bigger change than
+the minimal res.ok checks used in E43-a/b/c — those three are already correct on the
+res.ok axis and remain in the 94 only because they still call `authFetch`; migrating them
+to `mutate` is a mechanical simplification.
+
+**Next: begin the union — E43-e (`components/MessageInbox.tsx`, 12 sites, the report /
+delete / block trust-and-safety trio is the priority) OR the highest-value cluster**, one
+per iteration, each lowering the floor. Task 0 (`continue-on-error` in ci.yml) still
+pending as its own change.

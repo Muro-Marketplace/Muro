@@ -34,6 +34,12 @@ const eslintConfig = defineConfig([
       // shows "error" while the task checklist says "warn"; "error" today would
       // fail lint on every route not yet converted.
       "wallplace/require-authz-on-mutation": "warn",
+      // 05 E43 / supervisor D67: mutations must go through mutate() (which throws
+      // on non-2xx), not authFetch (which resolves on non-2xx = the false-success
+      // class). "warn" with a grandfathered ratchet
+      // (tests/integration/authfetch-mutation-ratchet.test.ts); flip to "error"
+      // when the ratchet reaches zero.
+      "wallplace/no-authfetch-mutation": "warn",
     },
   },
   // The eslint-rules/ plugin files are CommonJS by design — they cannot use
