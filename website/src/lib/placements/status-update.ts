@@ -1,4 +1,4 @@
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import type { ToastOptions } from "@/context/ToastContext";
 
 // The artist and venue placement portals both let a party change a placement's
@@ -52,19 +52,12 @@ export async function updatePlacementStatus<P extends { id: string; status: stri
     placements.map((p) => (p.id === id ? ({ ...p, status: newStatus } as P) : p)),
   );
   try {
-    const res = await authFetch("/api/placements", {
+    // mutate throws on a non-2xx (ApiError) or a dropped request (NetworkError),
+    // so the old manual res.ok check collapses into the catch below.
+    await mutate("/api/placements", {
       method: "PATCH",
       body: JSON.stringify({ id, status: apiStatus }),
     });
-    if (!res.ok) {
-      setPlacements(snapshot);
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      showToast(
-        body?.error || `Could not update placement status (HTTP ${res.status})`,
-        { variant: "error" },
-      );
-      return false;
-    }
     if (typeof window !== "undefined") {
       // Fan out so the inbox and any other open surface refreshes immediately
       // instead of waiting for the next poll. Success path only.
@@ -86,7 +79,12 @@ export async function updatePlacementStatus<P extends { id: string; status: stri
   } catch (err) {
     setPlacements(snapshot);
     console.error("Status update error:", err);
-    showToast("Network error, status not updated. Please try again.", { variant: "error" });
+    showToast(
+      err instanceof ApiError
+        ? err.message || "Could not update placement status."
+        : "Network error, status not updated. Please try again.",
+      { variant: "error" },
+    );
     return false;
   }
 }

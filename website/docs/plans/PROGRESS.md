@@ -8834,3 +8834,30 @@ green: 192 files (+1), 1945 tests (+2), exit 0.
 **Next: the next flagged file** — measure with `npx eslint`; remaining non-owner-gated set
 includes collections (2), addresses (2), admin pages, dialogs, SavedContext, etc. Plus the
 3 owner-gated refund sites above (need owner sign-off before the rule can flip to error).
+
+## row 8 (doc `05`) lib/placements/status-update.ts — E43-a helper → mutate (floor 54→53)
+
+Commit `<pending>`. `src/lib/placements/status-update.ts` + its test.
+
+The shared `updatePlacementStatus<P>` helper (called by both placement portals to change
+a placement's status from a dropdown) was itself still on `authFetch` + a manual `if (!res.ok)`
+check — the last authFetch mutation in my own E43-a fix. It is a plain status PATCH
+(`/api/placements`, no payment path), so this is a clean transport swap: `mutate` throws on a
+non-2xx (`ApiError`) or a dropped request, so the manual `res.ok`/`res.json()` branch collapses
+into the existing `catch`. Behaviour is unchanged and already pinned — optimistic write, roll
+back to the snapshot on failure, and dispatch `wallplace:placement-changed` ONLY on success.
+The error toast now prefers the server's reason (`ApiError.message`) and falls back to the
+generic network message for a non-`ApiError` reject. Ratchet `LITERAL_FLOOR` 54 → 53.
+
+Test: `src/lib/placements/status-update.test.ts` rewritten to mock `mutate` (importActual keeps
+the real `ApiError`; `@/lib/supabase` mocked so the real api-client module loads): (1) an
+`ApiError(403, "not allowed")` reject rolls back (setPlacements twice, last call === the exact
+snapshot), toasts "not allowed", and does NOT fire the event; (2) a resolve keeps the optimistic
+write, fires the event once with `action: "status"`, no toast; (3) a non-`ApiError` reject rolls
+back and toasts the generic "Network error…" message. The three paths are the same ones the prior
+(authFetch) version of this test pinned — this commit only swaps the mocked transport.
+`npm run check` green: 192 files, 1945 tests, exit 0.
+
+**Next: the next flagged file** — measure with `npx eslint`; largest remaining non-owner-gated
+are artist-portal/placements (5) and venue-portal/placements (5), then artwork-requests/[id] (3),
+OffersList (3), and a long tail of 1–2-site files. Plus the 3 owner-gated orders refund sites.

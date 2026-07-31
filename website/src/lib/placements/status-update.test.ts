@@ -4,20 +4,30 @@
 // `wallplace:placement-changed` event even on a 403/500 — so a rejected change
 // looked successful on both portals with no rollback. updatePlacementStatus is
 // the single shared implementation; these tests pin the three paths.
+//
+// 05 (authFetch->mutate). The helper now calls mutate(), which throws ApiError on
+// a non-2xx and NetworkError on a dropped request, so the manual res.ok check is
+// gone. These tests drive mutate's reject/resolve instead of a raw Response.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authFetchMock } = vi.hoisted(() => ({ authFetchMock: vi.fn() }));
-vi.mock("@/lib/api-client", () => ({ authFetch: authFetchMock }));
+const { mutateMock } = vi.hoisted(() => ({ mutateMock: vi.fn() }));
+
+vi.mock("@/lib/supabase", () => ({ supabase: { auth: {}, from: () => ({}) } }));
+vi.mock("@/lib/api-client", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api-client")>();
+  return { ...actual, mutate: mutateMock };
+});
 
 import { updatePlacementStatus, apiStatusFor } from "./status-update";
+import { ApiError } from "@/lib/api-client";
 
 type Row = { id: string; status: string; note?: string };
 
 let eventSpy: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  authFetchMock.mockReset();
+  mutateMock.mockReset();
   eventSpy = vi.fn();
   window.addEventListener("wallplace:placement-changed", eventSpy);
 });
@@ -39,10 +49,8 @@ describe("updatePlacementStatus (E43-a)", () => {
     { id: "p2", status: "Active" },
   ];
 
-  it("on a non-2xx response: rolls back, toasts, and does NOT fire the event", async () => {
-    authFetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ error: "not allowed" }), { status: 403 }),
-    );
+  it("on an ApiError (non-2xx): rolls back, toasts the server reason, no event", async () => {
+    mutateMock.mockRejectedValue(new ApiError(403, "not allowed", "forbidden", { error: "not allowed" }));
     const setPlacements = vi.fn();
     const showToast = vi.fn();
 
@@ -65,7 +73,7 @@ describe("updatePlacementStatus (E43-a)", () => {
   });
 
   it("on success: keeps the optimistic write, fires the event once, no toast", async () => {
-    authFetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    mutateMock.mockResolvedValue({});
     const setPlacements = vi.fn();
     const showToast = vi.fn();
 
@@ -85,8 +93,8 @@ describe("updatePlacementStatus (E43-a)", () => {
     expect(showToast).not.toHaveBeenCalled();
   });
 
-  it("on a network error: rolls back, toasts, and does NOT fire the event", async () => {
-    authFetchMock.mockRejectedValue(new Error("offline"));
+  it("on a network error (non-ApiError reject): rolls back, generic toast, no event", async () => {
+    mutateMock.mockRejectedValue(new Error("offline"));
     const setPlacements = vi.fn();
     const showToast = vi.fn();
 
