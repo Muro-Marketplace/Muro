@@ -9145,7 +9145,7 @@ money sites remain last.
 
 ## row 8 (doc `05`) components/PlacementStepper.tsx — 2 handlers → mutate (floor 30→28)
 
-Commit `<pending>`. `src/components/PlacementStepper.tsx` + new test.
+Commit `13a3dc5`. `src/components/PlacementStepper.tsx` + new test.
 
 Both flagged sites are placement lifecycle STAGE transitions (not money), and both `authFetch` in the
 file are mutations, so `authFetch` drops from the import entirely:
