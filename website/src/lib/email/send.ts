@@ -18,6 +18,7 @@
 import { Resend } from "resend";
 import { render } from "@react-email/components";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { isProductionRuntime } from "@/lib/email/env";
 import { STREAMS } from "./streams";
 import { CATEGORY_RULES, preferenceKeyFor, type EmailCategory } from "./categories";
 import type { ReactElement } from "react";
@@ -59,7 +60,10 @@ export type SkipReason =
   | "vacation_mode"
   | "throttled"
   | "no_api_key"
-  | "missing_config";
+  | "missing_config"
+  // 09 §E.2: the send was fully exercised but deliberately not handed to the
+  // provider, because EMAIL_DRY_RUN is set.
+  | "dry_run";
 
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const rules = CATEGORY_RULES[input.category];
@@ -154,6 +158,19 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   const client = resend();
   if (!client) {
     await logEvent(db, input, to, rules.stream, "skipped_no_api_key");
+    // 09 §A.6 layer 2 (E1). An unset key used to return ok:true, so the one
+    // environment where dropping mail is fatal was also the one that reported
+    // success. In production this is now a hard failure that surfaces in error
+    // monitoring and to any caller that inspects the result; dev and preview
+    // keep the soft skip so `npm run dev` does not error on every signup.
+    // The result union is unchanged: no_api_key was always a distinct outcome,
+    // it was simply classified as ok:true.
+    if (isProductionRuntime()) {
+      console.error(
+        `[email] RESEND_API_KEY unset in production, dropped ${input.template} to ${to}`,
+      );
+      return { ok: false, error: "email_not_configured" };
+    }
     return { ok: true, skipped: true, reason: "no_api_key" };
   }
 
@@ -184,6 +201,19 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return { ok: true, skipped: true, reason: "duplicate" };
   }
   const queuedRow = claimed;
+
+  // 09 §E.2 level 2. EMAIL_DRY_RUN exercises everything up to and including the
+  // provider call: recipient resolution, category/consent rules, render, and the
+  // idempotency claim. It sits AFTER the claim on purpose, so a dry run proves the
+  // dedup key behaves as it will in production rather than skipping the one step
+  // most likely to be wrong. Nothing reaches Resend and no real inbox is touched.
+  if (process.env.EMAIL_DRY_RUN === "1" || process.env.EMAIL_DRY_RUN === "true") {
+    await db
+      .from("email_events")
+      .update({ status: "dry_run", sent_at: new Date().toISOString() })
+      .eq("id", queuedRow?.id);
+    return { ok: true, skipped: true, reason: "dry_run" };
+  }
 
   try {
     const res = await client.emails.send({
