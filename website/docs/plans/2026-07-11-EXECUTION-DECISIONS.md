@@ -2979,3 +2979,188 @@ I am not issuing a new total until the batching rate is observable — one guess
 - Phantom guard: ratchet at 1, snapshot current at 750 columns.
 - **Unchecked-mutation sweep: retired.** Superseded by the rule, exactly as the manual column sweep was superseded by 7b's guard. My grep is no longer the measurement; `LITERAL_FLOOR` is.
 - Orders / `stripe_transfers`: **12 / 0**, unchanged.
+
+---
+
+## D71. The refund gate is correct. Here is the evidence that makes it a one-line decision.
+
+*— supervisor. 308 commits, ratchet 94 → 53. `artist-portal/orders/page.tsx` migrated 1 of 4 sites; 3 refund handlers held for the owner.*
+
+### D71.1 — I am NOT overruling this one, and the distinction matters
+
+I have de-escalated three of the loop's referrals now: the post-limit TOCTOU (D64), E42-b's toggles (D66), and the D67 reorder. **This one stays with the owner.** Those three touched no payment path; `processRefund` and `issueProactiveRefund` execute real Stripe refunds server-side, and the loop's own standing instruction is to stop on "anything touching real orders/payments". It applied its rule correctly and split the file properly along the money boundary — migrating the plain order-status PATCH while holding the three refund sites. That is exactly the judgement I want it making.
+
+A supervisor who de-escalates by reflex is as useless as one who escalates by reflex. Three prior de-escalations do not make the fourth referral wrong.
+
+### D71.2 — But the owner should not have to research it. The facts are these.
+
+**The only substantive risk of a transport swap is a double refund**, via this chain: `authFetch` resolves on a 500, the operator sees success and does not retry; `mutate` throws, the operator sees an error and *does* retry; if the first call had partially succeeded, the retry refunds twice. That chain is broken at two independent layers:
+
+```
+api/refunds/process/route.ts:12    claimPending / releaseClaim  (claim-based guard)
+api/refunds/process/route.ts:109   "Refund request has already been processed"
+api/refunds/process/route.ts:264   idempotencyKey: refund:${refundRequestId}:refund
+api/refunds/process/route.ts:225   idempotencyKey: refund:${refundRequestId}:reversal:${transfer.id}
+```
+
+A second call is rejected by the claim guard before reaching Stripe, and **even if it did reach Stripe, the idempotency key makes the refund and the transfer reversal no-ops.** Double refund is not reachable.
+
+**Blast radius today: nil.** `refund_requests` holds 2 rows, both `pending`. **No refund has ever been processed through this system.**
+
+**And the current behaviour is the worse one.** On `authFetch`, a failed refund shows the operator a success: the customer does not get their money and nobody finds out. On `mutate`, the failure surfaces and can be retried safely, because of the guards above.
+
+### D71.3 — Recommendation, and what it unblocks
+
+**Recommended: approve the transport swap on all three sites.** It changes no amount, no split, and nothing about whether a refund executes — only that a non-2xx throws instead of resolving silently. The idempotency evidence above is the reason it is safe, and the false-success behaviour is the reason it is worth doing.
+
+**It also unblocks the guard.** The ratchet cannot reach zero and `no-authfetch-mutation` cannot flip from `warn` to `error` while these three sites remain grandfathered. So leaving this undecided does not merely defer three call sites — it leaves the rule permanently advisory, and a rule at `warn` does not stop the next unchecked mutation being written.
+
+If the owner would rather not touch the refund path at all, the honest alternative is to say so explicitly and accept the rule staying at `warn`, with the three sites recorded as a permanent exemption rather than a pending one. **What should not happen is the question sitting open while the loop finishes `05` and the ratchet stalls one step from done.**
+
+### D71.4 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom guard: ratchet at 1, snapshot current at 750 columns.
+- authFetch migration: **94 → 53**, honest per-file deltas, no drift between the ratchet and the work (checked again this cycle).
+- Orders / `stripe_transfers`: **12 / 0**, unchanged. `refund_requests`: 2, both pending.
+
+---
+
+## D72. Session-creation is not money movement. The billing precedent already settled this — apply it to the offer checkout.
+
+*— supervisor. 316 commits, ratchet 94 → 38. Four sites now owner-gated; this reduces it to three.*
+
+### D72.1 — The same shape got two different answers, an hour apart
+
+**`artist-portal/billing/page.tsx` (953e121): MIGRATED**, with the loop's own justification:
+
+> these are **TRANSPORT SWAPS only**. Each POST asks the SERVER to create a Stripe-hosted session and returns a `{ url }`; the client just `window.location.href = url`. No amount/split math, no Stripe dashboard/webhook config, and no fund transfer runs in the client.
+
+**`components/offers/OffersList.tsx` (77549d8): GATED**, described as:
+
+> `pay` (POST `/api/offers/:id/checkout`) — this starts a **Stripe checkout** (creates the session and redirects to pay).
+
+That is the identical mechanism: POST, receive a URL, redirect. The caution is understandable — "checkout" reads as money in a way "subscribe" does not — but **a boundary applied inconsistently is not a boundary**, and the cost here is real: the ratchet now has four gated sites instead of three, and every one of them blocks the flip from `warn` to `error`.
+
+### D72.2 — The line, stated so it can be applied without re-deciding each file
+
+- **Session-creation endpoints — MIGRATE.** The server creates a Stripe-hosted session and returns a URL; the client redirects. **No money moves on this call.** Covers billing subscribe/portal/onboard *and* the offer checkout. The transport swap changes no amount, no split, and not whether payment happens — only that a non-2xx throws instead of resolving.
+- **Execution endpoints — GATE.** The server actually moves money on this call: `/api/refunds/process`, `/api/refunds/request`. The three `artist-portal/orders` sites stay with the owner (D71), and I am not weakening that.
+
+The test is "does money move on *this* request", not "does the word checkout appear in the URL".
+
+### D72.3 — And the offer checkout is a stronger case for migrating than billing was
+
+Today, if `/api/offers/:id/checkout` returns a 500, `authFetch` resolves, and the handler proceeds to `window.location.href = data.url` with `data.url` undefined. The buyer gets a dead navigation or nothing at all, having clicked Pay, with no error shown. **The current behaviour is already broken in a user-facing way**; `mutate()` turns it into a visible failure. Leaving it gated preserves a bug on the buyer's payment entry point in the name of payment caution.
+
+**Ruling: migrate the `pay` handler under the session-creation rule.** This is not overruling the money boundary — it is defining where it falls, which is my job, and applying the precedent the loop itself set and justified in writing.
+
+### D72.4 — What this leaves for the owner
+
+**Three sites, not four**, all in `artist-portal/orders/page.tsx`, all genuine refund execution, all with the D71 evidence attached: two independent idempotency layers, no refund ever processed in prod, and a current behaviour that shows operators success when a refund fails. Recommendation unchanged — approve the transport swap; it is the last thing between the ratchet and zero.
+
+### D72.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom guard: ratchet at 1, snapshot current at 750 columns.
+- authFetch migration: **94 → 38**, per-file deltas honest, re-checked against the work.
+- Orders / `stripe_transfers`: **12 / 0**. `refund_requests`: 2, both pending.
+
+---
+
+## D73. CORRECTING D71/D72: I scoped the money boundary by endpoint. It has to be by handler.
+
+*— supervisor. 324 commits, ratchet 94 → 32. The loop gated both `customer-portal/page.tsx` handlers; one of those gates is mine to lift, and the reason is an error in my own rule.*
+
+### D73.1 — One of the two gates is right, and it is the more interesting one
+
+**`confirmDelivery` (PATCH `/api/orders` → `delivered`): GATE STANDS.** The loop spotted that a buyer confirming delivery **releases the artist's escrow** — money moves as a result of this request. What makes this a good catch is that it is the *same endpoint and verb* the loop already migrated as `updateStatus` (mark processing/shipped, "not a payment path"). The difference is not the URL, it is what the status value causes server-side. Under D72's test — does money move on **this** request — the answer is yes. Correctly gated, and it is exactly the reading I asked for.
+
+### D73.2 — The other gate is my fault: D71 named an endpoint where it should have named a handler
+
+D71 wrote: *"Execution endpoints — GATE. The server actually moves money on this call: `/api/refunds/process`, **`/api/refunds/request`**."* D72 repeated it. **`/api/refunds/request` does not move money.** It records a `refund_requests` row; the money moves later, on a separate call to `/api/refunds/process`, which is separately gated. Prod agrees: 2 refund requests, both `pending`, **0 refunds ever processed**.
+
+I listed it because `issueProactiveRefund` in `artist-portal/orders` POSTs to `/api/refunds/request` *and then* to `/api/refunds/process` — that **handler** does move money, via the second call. I collapsed the handler's behaviour into the endpoint's name and mis-scoped the rule.
+
+**The unit is the handler, not the URL.** `submitRefundRequest` on the customer portal calls only `/api/refunds/request` and stops. No money moves. It should be migrated.
+
+### D73.3 — The rule, restated correctly
+
+- **GATE — the handler causes money to move as a result of this request:** `processRefund`, `issueProactiveRefund` (chains into `/process`), `confirmDelivery` (releases escrow).
+- **MIGRATE — the handler creates a session or records a request; money moves later on a separately-gated call:** billing subscribe/portal/onboard, the offer checkout (D72), and **`submitRefundRequest`**.
+
+### D73.4 — And migrating it fixes a live customer-facing failure the loop found
+
+Its note, which is the substantive part of that commit: `submitRefundRequest` has **no `!res.ok` branch and a catch that only `console.error`s**. So a customer whose refund request is rejected sees nothing at all — no error, no confirmation either way — and reasonably believes it was submitted. Given no refund has ever been processed here, a request that silently fails to record is the difference between a customer being in the queue and not existing.
+
+Leaving it gated to protect a refund path it never touches preserves that bug for no safety gain.
+
+### D73.5 — Where this leaves the owner: four sites
+
+Down from six. `submitRefundRequest` and the offer checkout both migrate under the corrected rule; the owner decides:
+
+```
+artist-portal/orders/page.tsx   processRefund (×2 sites) + issueProactiveRefund   money moves
+customer-portal/page.tsx        confirmDelivery                                   releases escrow
+```
+
+Recommendation unchanged from D71 for the refund trio — the endpoint is idempotent at two layers, nothing has ever been processed, and today's behaviour hides failures from operators. `confirmDelivery` is the same shape of question and the same answer applies, with the added note that escrow release is server-side and unaffected by how the client sends the request.
+
+### D73.6 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom guard: ratchet at 1, snapshot current at 750 columns.
+- authFetch migration: **94 → 32**, per-file deltas honest; the customer-portal commit correctly left the floor unchanged since nothing was migrated.
+- Orders / `stripe_transfers`: **12 / 0**. `refund_requests`: 2, both pending.
+
+---
+
+## D74. Stalled MID-TASK this time. Read `git status` before picking a new task on restart.
+
+*— supervisor. 326 commits, ratchet 94 → 28 (uncommitted). A different stall shape from the previous three, with a specific hazard.*
+
+### D74.1 — The diagnosis
+
+Last commit `26f93a3` at 07:23:12. Last **file write** at 07:29:31. At 07:50 that is **21 minutes with nothing touched**, and the working tree is byte-identical to what it was at the 07:35 check.
+
+Unlike the three stalls in D45/D53/D69, the tree is **not clean**:
+
+```
+ M website/src/components/PlacementStepper.tsx
+ M website/tests/integration/authfetch-mutation-ratchet.test.ts   (LITERAL_FLOOR lowered to 28)
+?? website/src/components/PlacementStepper.test.tsx
+```
+
+So it committed the venue-settings docs backfill, began the `PlacementStepper` migration, wrote the component, the new test and the lowered ratchet, and stopped before running the gate or committing. The D69 pattern still technically holds — the last *commit* was docs-only — but the new detail is that it got partway into the next task first.
+
+### D74.2 — The hazard this creates, which the previous stalls did not
+
+**On restart the loop reads PROGRESS, whose last entry is the venue-settings migration. There is no record of the `PlacementStepper` work at all.** If it picks the next task from the ledger rather than looking at the tree, the repository is left carrying:
+
+- a half-migrated `PlacementStepper.tsx`,
+- an untracked test for it,
+- and a ratchet **already lowered to 28** for a migration that is not committed and may not be complete.
+
+That last one is the dangerous piece. `LITERAL_FLOOR` is the measure everything else trusts; a floor lowered for work that never landed makes the ratchet lie in the one direction it must never lie — claiming more migrated than has been.
+
+### D74.3 — Instruction for the restart, before anything else
+
+1. **Run `git status` first.** Do not pick a task from the ledger until the tree is understood.
+2. Either **finish** the `PlacementStepper` migration (run `npm run check`, confirm the eslint count matches `LITERAL_FLOOR = 28`, commit it with its PROGRESS entry), **or revert all three files** and re-do it cleanly. Both are fine; leaving it is not.
+3. **Verify the floor matches reality** either way: the ratchet test recomputes the count from eslint, so a mismatched floor fails the gate rather than passing silently. Trust that check over the number in the file.
+4. Then continue: **D72** (migrate the OffersList offer-checkout under the session-creation rule) and **D73** (migrate `submitRefundRequest`; it records a request and moves no money — and today a rejected request shows the customer nothing). Neither has been read yet; `grep D72 PROGRESS.md` returns 0.
+
+### D74.4 — Nothing is lost
+
+The in-flight edits are on disk, the last commit is green, and the ledger is accurate up to it. This is a restart, not a recovery.
+
+### D74.5 — Sweeps this run
+
+- RLS SELECT-leak assertion: **0 rows, clean.**
+- `artist_profiles`: 64 anon columns, closed and holding.
+- Phantom guard: ratchet at 1, snapshot current at 750 columns.
+- authFetch migration: **94 → 30 committed, 28 in the working tree** (the 2-site difference is the uncommitted `PlacementStepper` work above).
+- Orders / `stripe_transfers`: **12 / 0**. `refund_requests`: 2, both pending.

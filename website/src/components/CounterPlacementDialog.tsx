@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import Toggle from "@/components/Toggle";
 
 const NOTE_MAX = 600;
@@ -76,7 +76,9 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
           : "free_loan";
       const finalMonthlyFee = paidLoan && typeof fee === "number" ? fee : null;
       const finalRevShare = qr && typeof revShare === "number" && revShare > 0 ? revShare : null;
-      const res = await authFetch("/api/placements", {
+      // mutate throws on a non-2xx, so the counter event below only fires on a
+      // confirmed 2xx (same success-only gating as the other placement handlers).
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({
           id: placementId,
@@ -89,12 +91,6 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
           },
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Could not send counter");
-        setBusy(false);
-        return;
-      }
       const result: CounterResult = {
         placementId,
         monthlyFeeGbp: finalMonthlyFee,
@@ -117,8 +113,8 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
       }
       onSuccess?.(result);
       onClose();
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code || "Could not send counter" : "Network error. Please try again.");
       setBusy(false);
     }
   }

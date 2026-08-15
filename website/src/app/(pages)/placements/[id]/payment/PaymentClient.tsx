@@ -19,6 +19,11 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
   async function startCheckout() {
     setBusy(true);
     setError(null);
+    // OWNER-GATED (money boundary, 05): this starts the paid-loan Stripe CHECKOUT
+    // (creates the subscription payment session and redirects the venue to pay), so
+    // it is NOT migrated to mutate() until the owner signs off, exactly like the
+    // OffersList checkout and the orders refund handlers. It stays on authFetch and
+    // remains flagged/grandfathered in the no-authfetch-mutation ratchet.
     try {
       const res = await authFetch(`/api/placements/${placementId}/payment/setup`, {
         method: "POST",

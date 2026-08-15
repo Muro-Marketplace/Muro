@@ -10,7 +10,7 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 
 export default function PlacementReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -70,22 +70,16 @@ export default function PlacementReviewPage({ params }: { params: Promise<{ id: 
     setSubmitting(true);
     setError(null);
     try {
-      const res = await authFetch(`/api/placements/${encodeURIComponent(id)}/review`, {
+      await mutate(`/api/placements/${encodeURIComponent(id)}/review`, {
         method: "POST",
         body: JSON.stringify({ rating, text: text.trim() || undefined }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Couldn't submit. Please try again.");
-        setSubmitting(false);
-        return;
-      }
       setSubmitted(true);
       // Soft refresh the placement page in the background so the
       // user sees their review reflected if they navigate back.
       router.refresh();
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code || "Couldn't submit. Please try again." : "Network error. Please try again.");
       setSubmitting(false);
     }
   }

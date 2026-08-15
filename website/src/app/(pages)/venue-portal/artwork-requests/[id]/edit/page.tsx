@@ -8,7 +8,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import ArtworkRequestForm, {
   type ArtworkRequestInitial,
   type ArtworkRequestPayload,
@@ -85,13 +85,18 @@ export default function EditArtworkRequestPage({ params }: { params: Promise<{ i
   }, [id]);
 
   async function submit(payload: ArtworkRequestPayload) {
-    const res = await authFetch(`/api/artwork-requests/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || data.error || "Could not save changes.");
+    // mutate throws ApiError on a non-2xx, whose .message already prefers
+    // body.message over body.error — the same precedence the manual throw used,
+    // so the form's catch still shows the server's reason.
+    try {
+      await mutate(`/api/artwork-requests/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      throw new Error(
+        err instanceof ApiError ? err.message || "Could not save changes." : "Network error. Please try again.",
+      );
     }
     router.push(`/venue-portal/artwork-requests/${id}`);
   }

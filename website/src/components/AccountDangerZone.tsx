@@ -12,7 +12,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { supabase } from "@/lib/supabase";
 
 const CONFIRM_STRING = "DELETE MY ACCOUNT";
@@ -31,22 +31,19 @@ export default function AccountDangerZone() {
     setBusy(true);
     setError(null);
     try {
-      const res = await authFetch("/api/account/delete", {
+      await mutate("/api/account/delete", {
         method: "POST",
         body: JSON.stringify({ confirm: confirmText }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Could not delete your account.");
-        setBusy(false);
-        return;
-      }
       // Sign out (best-effort — the auth user is already gone, so this
       // may fail silently with 401; that's fine) then redirect to home.
       await supabase.auth.signOut().catch(() => {});
       router.push("/");
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      // mutate throws on a non-2xx (ApiError, carrying the server's reason on
+      // .code) or a dropped request, so the sign-out + redirect can only run on a
+      // confirmed delete.
+      setError(err instanceof ApiError ? err.code || "Could not delete your account." : "Network error. Please try again.");
       setBusy(false);
     }
   }

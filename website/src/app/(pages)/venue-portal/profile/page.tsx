@@ -5,7 +5,7 @@ import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useToast } from "@/context/ToastContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 
@@ -323,7 +323,7 @@ export default function VenueProfilePage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await authFetch("/api/venue-profile", {
+      await mutate("/api/venue-profile", {
         method: "PUT",
         body: JSON.stringify({
           // E42-d: `|| null`, not `|| undefined` — JSON.stringify omits undefined, so
@@ -347,19 +347,20 @@ export default function VenueProfilePage() {
         }),
       });
 
-      if (!res.ok) {
-        showToast("Failed to save profile. Please try again.", { variant: "error" });
-        setSaving(false);
-        return;
-      }
-
       setSaved(true);
       setHasUnsavedChanges(false);
       setEditing(null);
       refetch();
       setTimeout(() => setSaved(false), 2500);
-    } catch {
-      showToast("Failed to save. Please check your connection.", { variant: "error" });
+    } catch (err) {
+      // mutate throws on a non-2xx (ApiError) or a dropped request; keep the two
+      // distinct messages the old !res.ok / catch pair had.
+      showToast(
+        err instanceof ApiError
+          ? err.message || "Failed to save profile. Please try again."
+          : "Failed to save. Please check your connection.",
+        { variant: "error" },
+      );
     } finally {
       setSaving(false);
     }

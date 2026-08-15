@@ -20,12 +20,13 @@ vi.mock("@/context/ToastContext", () => ({
   useToast: () => ({ showToast: vi.fn() }),
 }));
 
-vi.mock("@/lib/api-client", () => ({
-  authFetch: vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({}),
-  }),
-}));
+// 05: the offer POST goes through mutate now (throws on a non-2xx). importActual
+// pulls in the real module, which reaches @/lib/supabase, so stub that too.
+vi.mock("@/lib/supabase", () => ({ supabase: { auth: {}, from: () => ({}) } }));
+vi.mock("@/lib/api-client", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api-client")>();
+  return { ...actual, mutate: vi.fn().mockResolvedValue({}) };
+});
 
 import MakeOfferModal from "./MakeOfferModal";
 

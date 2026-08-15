@@ -5,7 +5,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate } from "@/lib/api-client";
 
 interface Request {
   id: string;
@@ -111,13 +111,10 @@ export default function FeatureRequestsPage() {
     // Optimistic.
     setRequests((prev) => prev.map((r) => r.id === id ? { ...r, upvotes: r.upvotes + 1 } : r));
     try {
-      const res = await authFetch(`/api/feature-requests/${id}/upvote`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        load();
-        return;
-      }
-      setRequests((prev) => prev.map((r) => r.id === id ? { ...r, upvotes: data.upvotes } : r));
+      // mutate throws on a non-2xx or a dropped request, so both recovery paths
+      // (reload the true counts) collapse into the catch.
+      const data = await mutate<{ upvotes?: number }>(`/api/feature-requests/${id}/upvote`, { method: "POST" });
+      setRequests((prev) => prev.map((r) => r.id === id ? { ...r, upvotes: data?.upvotes ?? r.upvotes } : r));
     } catch {
       load();
     }

@@ -7,15 +7,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-const { authFetchMock, venueState, unsavedWarningMock } = vi.hoisted(() => ({
-  authFetchMock: vi.fn(),
+const { mutateMock, venueState, unsavedWarningMock } = vi.hoisted(() => ({
+  mutateMock: vi.fn(),
   venueState: { venue: null as unknown },
   unsavedWarningMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/useCurrentVenue", () => ({ useCurrentVenue: () => ({ venue: venueState.venue, refetch: vi.fn() }) }));
 vi.mock("@/context/ToastContext", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
-vi.mock("@/lib/api-client", () => ({ authFetch: authFetchMock }));
+// 05: the profile PUT goes through mutate now (throws on a non-2xx).
+vi.mock("@/lib/api-client", () => ({ mutate: mutateMock }));
 vi.mock("@/lib/upload", () => ({ uploadImage: vi.fn(async () => "https://cdn/x.png") }));
 vi.mock("@/lib/use-unsaved-warning", () => ({ useUnsavedWarning: unsavedWarningMock }));
 vi.mock("@/components/VenuePortalLayout", () => ({ default: ({ children }: { children: unknown }) => children }));
@@ -25,9 +26,9 @@ import VenueProfilePage from "./page";
 
 afterEach(() => cleanup());
 beforeEach(() => {
-  authFetchMock.mockReset();
+  mutateMock.mockReset();
   unsavedWarningMock.mockReset();
-  authFetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+  mutateMock.mockResolvedValue({});
   // A venue with a name but NO type — the row whose value used to fall to "Not set".
   venueState.venue = { name: "Kings Arms", type: undefined, location: "London" };
 });
@@ -46,8 +47,8 @@ describe("venue profile editing (E42-a)", () => {
     fireEvent.change(typeInput, { target: { value: "Cafe" } });
     fireEvent.click(screen.getAllByText("Save Changes")[0]);
 
-    await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
-    const putCall = authFetchMock.mock.calls.find((c) => c[0] === "/api/venue-profile");
+    await waitFor(() => expect(mutateMock).toHaveBeenCalled());
+    const putCall = mutateMock.mock.calls.find((c) => c[0] === "/api/venue-profile");
     expect(putCall).toBeTruthy();
     const body = JSON.parse((putCall![1] as RequestInit).body as string);
     expect(body.type).toBe("Cafe");
@@ -65,8 +66,8 @@ describe("venue profile editing (E42-a)", () => {
     fireEvent.change(typeInput, { target: { value: "" } }); // clear it
     fireEvent.click(screen.getAllByText("Save Changes")[0]);
 
-    await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
-    const putCall = authFetchMock.mock.calls.find((c) => c[0] === "/api/venue-profile");
+    await waitFor(() => expect(mutateMock).toHaveBeenCalled());
+    const putCall = mutateMock.mock.calls.find((c) => c[0] === "/api/venue-profile");
     const body = JSON.parse((putCall![1] as RequestInit).body as string);
     // Fail-before: `|| undefined` dropped the key from the JSON, so the field could
     // never be blanked. `|| null` sends null and the DAO writes NULL.

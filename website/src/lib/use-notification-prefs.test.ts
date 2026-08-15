@@ -3,8 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 
 const authFetchMock = vi.fn();
+const mutateMock = vi.fn();
+// 05: the read GET stays on authFetch; togglePref PATCHes via mutate, which
+// rejects on a non-2xx instead of resolving.
 vi.mock("@/lib/api-client", () => ({
   authFetch: (...args: unknown[]) => authFetchMock(...args),
+  mutate: (...args: unknown[]) => mutateMock(...args),
 }));
 
 import { useNotificationPrefs } from "./use-notification-prefs";
@@ -13,6 +17,7 @@ const mockUser = { id: "u1" } as unknown as Parameters<typeof useNotificationPre
 
 beforeEach(() => {
   authFetchMock.mockReset();
+  mutateMock.mockReset();
 });
 
 afterEach(() => cleanup());
@@ -58,7 +63,7 @@ describe("useNotificationPrefs", () => {
       }),
     });
     // PATCH resolves successfully.
-    authFetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    mutateMock.mockResolvedValue({ ok: true });
 
     const { result } = renderHook(() => useNotificationPrefs(mockUser));
 
@@ -71,7 +76,7 @@ describe("useNotificationPrefs", () => {
     });
 
     expect(result.current.prefs.email_digest_enabled).toBe(false);
-    const patchCall = authFetchMock.mock.calls[1];
+    const patchCall = mutateMock.mock.calls[0];
     expect(patchCall?.[0]).toBe("/api/account/preferences");
     expect(patchCall?.[1]?.method).toBe("PATCH");
     expect(JSON.parse(patchCall?.[1]?.body as string)).toEqual({
@@ -90,7 +95,7 @@ describe("useNotificationPrefs", () => {
         },
       }),
     });
-    authFetchMock.mockResolvedValueOnce({ ok: false, status: 500 });
+    mutateMock.mockRejectedValue(new Error("HTTP 500"));
 
     const { result } = renderHook(() => useNotificationPrefs(mockUser));
 

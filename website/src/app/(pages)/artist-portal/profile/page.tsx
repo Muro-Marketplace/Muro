@@ -10,7 +10,7 @@ import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId 
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { slugify } from "@/lib/slugify";
@@ -495,7 +495,7 @@ export default function ProfileEditorPage() {
       // style_tags is the full list (catch-all + custom entries).
       const styleTags = profile.tags;
 
-      const res = await authFetch("/api/artist-profile", {
+      await mutate("/api/artist-profile", {
         method: "PUT",
         body: JSON.stringify({
           name: profile.name,
@@ -541,13 +541,15 @@ export default function ProfileEditorPage() {
         }),
       });
 
-      if (!res.ok) {
-        showToast("Failed to save profile. Please try again.", { variant: "error" });
-        return;
-      }
     } catch (err) {
-      console.error("Profile save error:", err);
-      showToast("Failed to save profile. Please check your connection.", { variant: "error" });
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the old
+      // !res.ok branch and this catch merge; keep the two distinct messages.
+      if (err instanceof ApiError) {
+        showToast(err.message || "Failed to save profile. Please try again.", { variant: "error" });
+      } else {
+        console.error("Profile save error:", err);
+        showToast("Failed to save profile. Please check your connection.", { variant: "error" });
+      }
       return;
     }
 

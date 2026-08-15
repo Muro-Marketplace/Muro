@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 
 interface Props {
   open: boolean;
@@ -116,7 +116,9 @@ function MakeOfferModalBody({
     }
     setSubmitting(true);
     try {
-      const res = await authFetch("/api/offers", {
+      // Making an offer creates an offer row (a bid), not a charge — the payment
+      // happens later at the separate checkout step.
+      await mutate("/api/offers", {
         method: "POST",
         body: JSON.stringify({
           artistSlug,
@@ -127,16 +129,6 @@ function MakeOfferModalBody({
           message: message.trim() || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        if (data.minimumPence) {
-          setError(`Minimum offer is £${(data.minimumPence / 100).toFixed(2)}. ${data.message || ""}`);
-        } else {
-          setError(data.message || data.error || "Could not submit offer.");
-        }
-        setSubmitting(false);
-        return;
-      }
       setSubmitted(true);
       onSubmitted?.();
       showToast(`Offer sent to ${artistName}. They'll see it in their offers inbox.`, { durationMs: 5000 });
@@ -144,8 +136,19 @@ function MakeOfferModalBody({
         onClose();
         setSubmitted(false);
       }, 1800);
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        // The minimum-offer rejection carries `minimumPence` in the body, which
+        // mutate hands back on ApiError.payload.
+        const body = err.payload as { minimumPence?: number } | null;
+        setError(
+          body?.minimumPence
+            ? `Minimum offer is £${(body.minimumPence / 100).toFixed(2)}. ${err.message || ""}`.trim()
+            : err.message || "Could not submit offer.",
+        );
+      } else {
+        setError("Network error. Please try again.");
+      }
       setSubmitting(false);
     }
   }
