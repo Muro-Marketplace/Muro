@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 
 interface CurationRow {
   id: string;
@@ -111,16 +111,19 @@ export default function AdminCurationPage() {
 
   async function updateRow(id: string, patch: { status?: string; adminNotes?: string }) {
     setSavingId(id);
+    setError(null);
     try {
-      const res = await authFetch("/api/admin/curation", {
+      await mutate("/api/admin/curation", {
         method: "PATCH",
         body: JSON.stringify({ id, ...patch }),
       });
-      if (res.ok) {
-        setRequests((prev) => prev.map((r) => r.id === id
-          ? { ...r, ...(patch.status ? { status: patch.status } : {}), ...(patch.adminNotes !== undefined ? { admin_notes: patch.adminNotes } : {}) }
-          : r));
-      }
+      setRequests((prev) => prev.map((r) => r.id === id
+        ? { ...r, ...(patch.status ? { status: patch.status } : {}), ...(patch.adminNotes !== undefined ? { admin_notes: patch.adminNotes } : {}) }
+        : r));
+    } catch (err) {
+      // Previously the failure branch was empty: a rejected PATCH left the row
+      // unchanged with no message, so the admin could not tell a save from a no-op.
+      setError(err instanceof ApiError ? err.code || "Could not save that change." : "Network error. Please try again.");
     } finally {
       setSavingId(null);
     }

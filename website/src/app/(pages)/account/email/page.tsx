@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate } from "@/lib/api-client";
 
 interface PrefsRow {
   placements_enabled: boolean;
@@ -55,11 +55,12 @@ export default function EmailPreferencesPage() {
     setPrefs(next);
     setError(null);
     try {
-      const res = await authFetch("/api/account/email-preferences", {
+      // mutate throws on a non-2xx or a dropped request, so the manual
+      // `if (!res.ok) throw` collapses into the existing catch.
+      await mutate("/api/account/email-preferences", {
         method: "PATCH",
         body: JSON.stringify(partial),
       });
-      if (!res.ok) throw new Error("save failed");
       setSavedAt(Date.now());
     } catch {
       setError("Could not save. Try again.");

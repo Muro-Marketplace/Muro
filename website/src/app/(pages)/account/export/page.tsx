@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 
 export default function AccountExportPage() {
   const { user, loading } = useAuth();
@@ -21,25 +21,21 @@ export default function AccountExportPage() {
     // setState lives inside the async resolution so the lint rule that
     // bans setState() during the synchronous effect body is satisfied.
     Promise.resolve().then(() => { if (!cancelled) setState("working"); });
-    authFetch("/api/account/export", { method: "POST" })
-      .then(async (res) => {
+    // mutate throws on a non-2xx (ApiError, carrying the server's error string on
+    // .code) or a dropped request, so the two failure branches merge into the catch.
+    mutate<{ downloadUrl?: string }>("/api/account/export", { method: "POST" })
+      .then((data) => {
         if (cancelled) return;
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setError(data?.error || "Could not start your export.");
-          setState("error");
-          return;
-        }
-        if (data?.downloadUrl) {
-          setDownloadUrl(data.downloadUrl);
-          setState("ready");
-        } else {
-          setState("ready");
-        }
+        if (data?.downloadUrl) setDownloadUrl(data.downloadUrl);
+        setState("ready");
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
-        setError("Could not reach the export service.");
+        setError(
+          err instanceof ApiError
+            ? err.code || "Could not start your export."
+            : "Could not reach the export service.",
+        );
         setState("error");
       });
     return () => {

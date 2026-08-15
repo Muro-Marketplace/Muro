@@ -8,15 +8,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const { mockAuthFetch, stableUser } = vi.hoisted(() => ({
+const { mockAuthFetch, mockMutate, stableUser } = vi.hoisted(() => ({
   mockAuthFetch: vi.fn(),
+  mockMutate: vi.fn(),
   // Stable reference — SavedContext's load effect depends on `user`,
   // so a fresh object literal each render would reload mid-test.
   stableUser: { id: "u1", email: "x@y.com" },
 }));
 
+// 05: the read GET stays on authFetch; the POST/DELETE toggles now go through
+// mutate, which rejects on a non-2xx instead of resolving.
 vi.mock("@/lib/api-client", () => ({
   authFetch: mockAuthFetch,
+  mutate: mockMutate,
 }));
 
 vi.mock("@/context/AuthContext", () => ({
@@ -47,17 +51,18 @@ function renderHarness() {
   );
 }
 
-beforeEach(() => mockAuthFetch.mockReset());
+beforeEach(() => {
+  mockAuthFetch.mockReset();
+  mockMutate.mockReset();
+});
 afterEach(() => cleanup());
 
 describe("SavedContext failure handling", () => {
   it("reverts the optimistic add and shows an error toast when POST fails", async () => {
-    mockAuthFetch.mockImplementation((_url: string, init?: { method?: string }) => {
-      if (!init || init.method === undefined) {
-        return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
-      }
-      return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
-    });
+    mockAuthFetch.mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => ({ items: [] }) }),
+    );
+    mockMutate.mockRejectedValue(new Error("HTTP 500"));
 
     renderHarness();
     await waitFor(() => expect(mockAuthFetch).toHaveBeenCalledTimes(1));
@@ -70,21 +75,19 @@ describe("SavedContext failure handling", () => {
 
   it("reverts the optimistic remove and shows an error toast when DELETE fails", async () => {
     let firstLoad = true;
-    mockAuthFetch.mockImplementation((_url: string, init?: { method?: string }) => {
-      if (!init || init.method === undefined) {
-        if (firstLoad) {
-          firstLoad = false;
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({
-              items: [{ item_type: "work", item_id: "w1", created_at: "2026-05-06T00:00:00Z" }],
-            }),
-          });
-        }
-        return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    mockAuthFetch.mockImplementation(() => {
+      if (firstLoad) {
+        firstLoad = false;
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            items: [{ item_type: "work", item_id: "w1", created_at: "2026-05-06T00:00:00Z" }],
+          }),
+        });
       }
-      return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
     });
+    mockMutate.mockRejectedValue(new Error("HTTP 500"));
 
     renderHarness();
     await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("saved"));

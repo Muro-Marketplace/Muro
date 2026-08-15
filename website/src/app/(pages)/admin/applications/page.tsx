@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
@@ -94,26 +94,23 @@ export default function AdminApplicationsPage() {
 
     setActionLoading(id);
     try {
-      const res = await authFetch(`/api/admin/applications/${id}`, {
+      const data = await mutate<{ message?: string }>(`/api/admin/applications/${id}`, {
         method: "PUT",
         body: JSON.stringify({ action }),
       });
-      const data = await res.json();
-
-      if (res.ok) {
-        setToast(
-          action === "accept"
-            ? `Accepted. ${data.message || ""}`
-            : "Application rejected."
-        );
-        setTimeout(() => setToast(""), 4000);
-        loadApplications();
-        setExpandedId(null);
-      } else {
-        showToast(data.error || "Action failed", { variant: "error" });
-      }
-    } catch {
-      showToast("Network error", { variant: "error" });
+      setToast(
+        action === "accept"
+          ? `Accepted. ${data?.message || ""}`
+          : "Application rejected."
+      );
+      setTimeout(() => setToast(""), 4000);
+      loadApplications();
+      setExpandedId(null);
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.code || "Action failed" : "Network error",
+        { variant: "error" },
+      );
     }
     setActionLoading(null);
   }
