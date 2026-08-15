@@ -9166,3 +9166,60 @@ and fires the event exactly once. Fail-before verified by making the catch call 
 case failed), then restored. `npm run check` green: 195 files, 1952 tests, route audit PASS.
 
 **Next: context/SavedContext.tsx (2)** — then the 1-site tail. The 6 owner-gated money sites remain last.
+
+## row 8 (doc `05`) authFetch→mutate MIGRATION COMPLETE — floor 28→7, only owner-gated money sites remain
+
+Commits `9a4d126` (28→20) and `5a07067` (20→7), after `13a3dc5` (30→28).
+
+Ran continuously rather than one-file-per-iteration (owner instruction, 2026-08-15: "continue
+until completion, no loop"). Twenty-two remaining non-gated sites across 21 files migrated:
+`9a4d126` — SavedContext (2 favourites toggles), account/email prefs PATCH, account/export POST,
+and the four admin pages (applications accept/reject, blogs approve/reject, disputes
+resolve/escalate, curation row PATCH).
+`5a07067` — artist artwork-request response, artist profile PUT, venue profile PUT, feature-request
+upvote, placement review, venue artwork-request create + edit, auth-callback oauth-finalize,
+AccountDangerZone delete, CounterOfferDialog, CounterPlacementDialog, MakeOfferModal,
+use-notification-prefs togglePref.
+
+Three latent bugs fixed on the way, all previously invisible:
+- **admin/blogs + admin/disputes had NO catch at all** — a network failure rejected unhandled and
+  showed the admin nothing. Both now report it.
+- **admin/curation's failure branch was empty** — a rejected row PATCH silently did nothing, so the
+  admin could not tell a save from a no-op. It now surfaces via the page's existing error banner.
+- **use-notification-prefs**: removing its manual `res.ok` throw made the hook fully analysable to
+  the react-hooks compiler pass, which then reported a **pre-existing** `set-state-in-effect` error
+  on the unrelated load effect (confirmed pre-existing by linting the HEAD version: 0 errors only
+  because the rule had bailed out of the hook). Fixed with the microtask defer already used in
+  `account/export`. Worth knowing: that lint rule can be silently suppressed by an unanalysable
+  construct elsewhere in the same hook.
+
+Mapping notes for the recipe: `ApiError.message` already prefers `body.message` over `body.error`,
+so handlers with that precedence (artwork-request cap-hit, the two request forms, counters) map to
+`err.message`; handlers that read only `body.error` map to `err.code`; structured failure bodies
+(`fieldErrors`, `minimumPence`) come off `err.payload`.
+
+**ONE MORE OWNER-GATED SITE FOUND** (7 total, not 6): `PaymentClient.startCheckout` (POST
+`/api/placements/:id/payment/setup`) starts the paid-loan **Stripe checkout**, so it was surfaced
+with an in-code marker rather than migrated, like the others.
+
+Five existing tests updated to mock `mutate` (AccountDangerZone, use-notification-prefs,
+MakeOfferModal, auth callback, venue profile) — all assert the same behaviour as before.
+
+Ratchet `LITERAL_FLOOR` **7**, measured, and the remaining 7 are exactly the owner-gated set:
+1-3. `artist-portal/orders` `processRefund` ×2 + `issueProactiveRefund` (execute Stripe refunds)
+4. `OffersList.pay` (POST `/api/offers/:id/checkout`)
+5. `customer-portal` `confirmDelivery` (PATCH → delivered, RELEASES artist escrow)
+6. `customer-portal` `submitRefundRequest` (POST `/api/refunds/request`; migrating it would also fix
+   a latent silent failure — a non-2xx currently shows the customer nothing)
+7. `PaymentClient.startCheckout` (paid-loan Stripe checkout)
+
+`npm run check` green: **0 lint errors**, 195 files, 1952 tests, route audit PASS.
+
+**OWNER DECISION NOW DUE (blocks the `warn`→`error` flip, nothing else).** Every non-money
+`authFetch` mutation in the codebase is migrated. The rule stays at `warn` and the ratchet holds at
+7 until you rule on the seven money handlers above. The proposed change for each is transport-only:
+`mutate` throws on a non-2xx instead of resolving, so the handler's success path (a redirect, a
+confirmation, a status flip) can no longer run after a failed request. No amount, split, recipient
+or execution path changes. Options: (a) approve all seven, then flip the rule to `error` and delete
+the ratchet; (b) approve a subset; (c) leave them on `authFetch` permanently and flip the rule with
+seven documented exemptions.
