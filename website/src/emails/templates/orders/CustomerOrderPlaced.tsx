@@ -20,6 +20,13 @@ export interface CustomerOrderPlacedProps {
   tax?: Money;
   total: Money;
   shippingAddress: Address;
+  /**
+   * 09 item 1.2. Optional so the many callers that only know the shipping
+   * address stay valid; rendered only when supplied. This is what lets
+   * customer_order_placed carry everything the retired customer_order_receipt
+   * used to, so retiring it loses the buyer nothing.
+   */
+  billingAddress?: Address;
   trackingToken?: string;
 }
 
@@ -37,6 +44,7 @@ export function CustomerOrderPlaced(p: CustomerOrderPlacedProps) {
       <OrderSummary items={p.items} subtotal={p.subtotal} shipping={p.shipping} tax={p.tax} total={p.total} />
       <Divider />
       <AddressBlock label="Shipping to" address={p.shippingAddress} />
+      {p.billingAddress && <AddressBlock label="Billing" address={p.billingAddress} />}
       <Button href={primaryHref} persona="customer">Track order</Button>
       <Small>Placed {p.orderDate}.</Small>
       <Divider />

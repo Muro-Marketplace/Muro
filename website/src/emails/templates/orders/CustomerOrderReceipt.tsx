@@ -80,7 +80,7 @@ export const mock: CustomerOrderReceiptProps = {
 const entry: TemplateEntry<CustomerOrderReceiptProps> = {
   id: "customer_order_receipt",
   name: "Order receipt",
-  description: "Legal order confirmation / VAT receipt.",
+  description: "RETIRED, superseded by customer_order_placed. Not wired to any trigger.",
   stream: "tx",
   persona: "customer",
   category: "orders_and_payouts",
@@ -90,6 +90,6 @@ const entry: TemplateEntry<CustomerOrderReceiptProps> = {
   mock,
   canUnsubscribe: false,
   hasInAppEquivalent: true,
-  priority: 1,
+  priority: 3,
 };
 export default entry;

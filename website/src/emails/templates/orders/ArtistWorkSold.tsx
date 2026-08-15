@@ -50,7 +50,7 @@ export const mock: ArtistWorkSoldProps = {
 const entry: TemplateEntry<ArtistWorkSoldProps> = {
   id: "artist_work_sold",
   name: "Artist: work sold",
-  description: "Celebration + logistics.",
+  description: "RETIRED, superseded by artist_order_received. Not wired to any trigger.",
   stream: "notify",
   persona: "artist",
   category: "orders_and_payouts",
@@ -60,6 +60,6 @@ const entry: TemplateEntry<ArtistWorkSoldProps> = {
   mock,
   canUnsubscribe: false,
   hasInAppEquivalent: true,
-  priority: 1,
+  priority: 3,
 };
 export default entry;

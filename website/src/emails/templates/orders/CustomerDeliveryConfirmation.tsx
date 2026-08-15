@@ -63,7 +63,7 @@ export const mock: CustomerDeliveryConfirmationProps = {
 const entry: TemplateEntry<CustomerDeliveryConfirmationProps> = {
   id: "customer_delivery_confirmation",
   name: "Delivery confirmation",
-  description: "Carrier-reported delivery, light prompt to review.",
+  description: "RETIRED, superseded by customer_order_delivered. Not wired to any trigger.",
   stream: "tx",
   persona: "customer",
   category: "orders_and_payouts",
@@ -73,6 +73,6 @@ const entry: TemplateEntry<CustomerDeliveryConfirmationProps> = {
   mock,
   canUnsubscribe: false,
   hasInAppEquivalent: true,
-  priority: 2,
+  priority: 3,
 };
 export default entry;

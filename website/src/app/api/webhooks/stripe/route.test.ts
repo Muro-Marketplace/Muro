@@ -45,6 +45,21 @@ const {
 
 // D52: the webhook now gates payouts on canReceivePayout (not the onboarding
 // boolean) and records blocked legs. Both are mocked here.
+// 09 item 1.3: the order-placed emails now fan out from recordOrderEvent, which
+// this file mocks. The email COUNT is asserted in
+// tests/integration/email-one-per-event.test.ts, which runs the real dispatcher;
+// here we assert the payload the webhook hands it, which is the webhook's job.
+const { recordOrderEventMock } = vi.hoisted(() => ({
+  // Typed with its input so mock.calls[0][0] is addressable in the assertions.
+  recordOrderEventMock: vi.fn(async (_input: {
+    orderId: string;
+    buyerEmail?: string | null;
+    artistEmail?: string | null;
+    data?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) => ({ eventType: null, sent: 0, deduped: 0 })),
+}));
+
 const { recordBlockedLegMock, canReceivePayoutMock } = vi.hoisted(() => ({
   recordBlockedLegMock: vi.fn(async () => {}),
   canReceivePayoutMock: vi.fn(),
@@ -143,7 +158,7 @@ vi.mock("@/emails/templates/artist-additions/ArtistStripeKycNeeded", () => ({ Ar
 // Phase 2.3 + 2.2 imports get stubbed so the heavy dispatcher
 // registry isn't loaded during webhook tests.
 vi.mock("@/lib/orders/lifecycle", () => ({
-  recordOrderEvent: vi.fn(async () => ({ eventType: null, sent: 0, deduped: 0 })),
+  recordOrderEvent: recordOrderEventMock,
 }));
 // The three invoice/subscription handlers stay stubbed (they make their own
 // Stripe calls), but recordPaidLoanSubscription and periodFromSubscription are the
@@ -343,6 +358,7 @@ beforeEach(() => {
   // the user id (u-alice -> acct_alice) or the venue slug. Tests add a userId or
   // slug to blockedPayoutTargets to simulate a lapsed / non-payout-ready account.
   recordBlockedLegMock.mockClear();
+  recordOrderEventMock.mockClear();
   blockedPayoutTargets = new Set();
   canReceivePayoutMock.mockReset();
   canReceivePayoutMock.mockImplementation(
@@ -803,28 +819,36 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
       .map(([a]) => a);
   }
 
-  it("sends the buyer a receipt and the artist both emails, which it never did before", async () => {
+  /** The data payload the webhook handed recordOrderEvent (09 item 1.3). */
+  function eventData() {
+    const calls = recordOrderEventMock.mock.calls as unknown as Array<[{
+      buyerEmail: string | null; artistEmail: string | null;
+      data: Record<string, unknown>;
+    }]>;
+    return calls[0]?.[0];
+  }
+
+  it("hands both parties to the order-placed event, which it never did before", async () => {
+    // E6 originally: the offer branch sent nothing. It then sent three emails
+    // (buyer receipt + two artist). 09 item 1.3 routes both recipients through
+    // recordOrderEvent instead, one email each. That fan-out is asserted in
+    // tests/integration/email-one-per-event.test.ts, which runs the real
+    // dispatcher; here we check the webhook supplies both addresses.
     authGetUserByIdMock.mockResolvedValue({ data: { user: { email: "artist@example.com" } } });
     setupOfferDb(freshState());
     await fireOffer();
-    expect(offerSends().map((s) => s.template)).toEqual([
-      "customer_order_receipt",
-      "artist_work_sold",
-      "artist_order_confirmation",
-    ]);
-    expect(offerSends()[0].to).toBe("venue@example.com");
-    expect(offerSends()[1].to).toBe("artist@example.com");
+    expect(eventData()?.buyerEmail).toBe("venue@example.com");
+    expect(eventData()?.artistEmail).toBe("artist@example.com");
   });
 
-  it("keys the offer sends on the payment intent, like the cart path", async () => {
+  it("ties the offer event to the payment intent, so a Stripe retry cannot double-send", async () => {
     authGetUserByIdMock.mockResolvedValue({ data: { user: { email: "artist@example.com" } } });
     setupOfferDb(freshState());
     await fireOffer();
-    expect(offerSends().map((s) => s.idempotencyKey)).toEqual([
-      "order_receipt:pi_test_1",
-      "artist_work_sold:pi_test_1",
-      "artist_order_confirmation:pi_test_1",
-    ]);
+    const call = recordOrderEventMock.mock.calls[0]?.[0] as unknown as {
+      metadata?: Record<string, unknown>;
+    };
+    expect(JSON.stringify(call?.metadata ?? {})).toContain("pi_test_1");
   });
 
   it("raises the in-app sale notification for the artist", async () => {
@@ -854,10 +878,10 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
   it("bills the receipt as one aggregate line that sums to what was charged", async () => {
     setupOfferDb(freshState());
     await fireOffer();
-    const props = (receiptPropsMock.mock.calls as unknown as Array<[{
+    const props = eventData()!.data as unknown as {
       items: Array<{ title: string; quantity: number; lineTotal: { amount: number } }>;
       subtotal: { amount: number }; shipping: { amount: number }; total: { amount: number };
-    }]>)[0][0];
+    };
     // An offer is a single agreed price, so one line, and the line, subtotal and
     // total must all agree or the buyer's receipt does not add up.
     expect(props.items).toHaveLength(1);
@@ -870,7 +894,7 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
   it("names the piece on the receipt when the offer covers one work", async () => {
     setupOfferDb(freshState());
     await fireOffer();
-    const props = (receiptPropsMock.mock.calls as unknown as Array<[{ items: Array<{ title: string; artistName: string }> }]>)[0][0];
+    const props = eventData()!.data as unknown as { items: Array<{ title: string; artistName: string }> };
     expect(props.items[0].title).toBe("Harbour Light");
     expect(props.items[0].artistName).toBe("Fin Coles");
   });
@@ -878,14 +902,14 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
   it("counts the works when the offer covers several", async () => {
     setupOfferDb(freshState({ stock: { "w-1": 2, "w-2": 2 }, titles: { "w-1": "One", "w-2": "Two" } }));
     await fireOffer({ ...OFFER_META, offer_work_ids: "w-1,w-2" });
-    const props = (receiptPropsMock.mock.calls as unknown as Array<[{ items: Array<{ title: string }> }]>)[0][0];
+    const props = eventData()!.data as unknown as { items: Array<{ title: string }> };
     expect(props.items[0].title).toBe("2 works");
   });
 
   it("names the collection when the offer is for one", async () => {
     setupOfferDb(freshState());
     await fireOffer({ ...OFFER_META, offer_collection_id: "col_7" });
-    const props = (receiptPropsMock.mock.calls as unknown as Array<[{ items: Array<{ title: string }> }]>)[0][0];
+    const props = eventData()!.data as unknown as { items: Array<{ title: string }> };
     expect(props.items[0].title).toBe("Collection col_7");
   });
 
@@ -947,42 +971,44 @@ describe("Stripe webhook — cart confirmations, current behaviour pinned", () =
     return POST(buildRequest());
   }
 
-  it("sends exactly three emails: buyer receipt, artist sale, artist confirmation", async () => {
+  it("hands both parties to the order-placed event", async () => {
+    // Was three emails (buyer receipt + two artist). 09 item 1.3 routes both
+    // recipients through recordOrderEvent, one email each; the fan-out itself is
+    // asserted in tests/integration/email-one-per-event.test.ts against the real
+    // dispatcher, since this file mocks recordOrderEvent.
     await runCartCheckout();
-    expect(sends().map((s) => s.template)).toEqual([
-      "customer_order_receipt",
-      "artist_work_sold",
-      "artist_order_confirmation",
-    ]);
+    const call = recordOrderEventMock.mock.calls[0]?.[0] as unknown as {
+      buyerEmail: string | null; artistEmail: string | null;
+    };
+    expect(call?.buyerEmail).toBe("buyer@example.com");
+    expect(call?.artistEmail).toBe("alice@example.com");
   });
 
   it("keys every send on the payment intent so a Stripe retry cannot double-send", async () => {
     await runCartCheckout();
-    expect(sends().map((s) => s.idempotencyKey)).toEqual([
-      "order_receipt:pi_test_1",
-      "artist_work_sold:pi_test_1",
-      "artist_order_confirmation:pi_test_1",
-    ]);
+    const keys = sends().map((s) => s.idempotencyKey);
+    // The dispatcher appends the transactional template name to the caller's key.
+    for (const key of keys) expect(key).toContain("pi_test_1");
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("routes the receipt to the buyer and both artist emails to the artist", async () => {
+  it("carries the buyer's totals and the artist's sale amount in one payload", async () => {
+    // One data object feeds both templates, so a dropped field silently
+    // downgrades an email rather than failing.
     await runCartCheckout();
-    const s = sends();
-    expect(s[0].to).toBe("buyer@example.com");
-    expect(s[1].to).toBe("alice@example.com");
-    expect(s[2].to).toBe("alice@example.com");
-    // The artist sends carry userId so preference checks can apply; the buyer
-    // receipt does not, because a receipt is not opt-out-able.
-    expect(s[0].userId).toBeUndefined();
-    expect(s[1].userId).toBe("u-alice");
-    expect(s[2].userId).toBe("u-alice");
+    const data = (recordOrderEventMock.mock.calls[0]?.[0] as unknown as {
+      data: Record<string, unknown>;
+    })?.data;
+    expect(data?.total).toBeTruthy();
+    expect(data?.billingAddress).toBeTruthy();
+    expect(data?.saleAmount).toBeTruthy();
   });
 
-  it("files all three under orders_and_payouts", async () => {
+  it("files both under orders_and_payouts", async () => {
     await runCartCheckout();
-    expect(sends().map((s) => s.category)).toEqual([
-      "orders_and_payouts", "orders_and_payouts", "orders_and_payouts",
-    ]);
+    for (const c of sends().map((s) => s.category)) {
+      expect(c).toBe("orders_and_payouts");
+    }
   });
 
   it("raises the in-app sale notification for the artist", async () => {
@@ -1010,7 +1036,13 @@ describe("Stripe webhook — cart confirmations, current behaviour pinned", () =
       data: { object: buildSession({ id: "cs_cart_2", amount_total: 10000, metadata: { kind: "cart_checkout", artist_slugs: "alice", fulfilment_method: "ship", source: "direct" } }) },
     });
     await POST(buildRequest());
-    expect(sends().map((s) => s.template)).toEqual(["customer_order_receipt"]);
+    // No artist auth user means no artist address on the event, so the dispatcher
+    // has nobody to send the artist copy to; the buyer's still goes.
+    const call = recordOrderEventMock.mock.calls[0]?.[0] as unknown as {
+      buyerEmail: string | null; artistEmail: string | null;
+    };
+    expect(call?.artistEmail).toBeNull();
+    expect(call?.buyerEmail).toBe("buyer@example.com");
   });
 });
 

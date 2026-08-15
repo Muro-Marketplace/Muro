@@ -65,6 +65,10 @@ import OfferReceivedNotification from "./templates/messages/OfferReceivedNotific
 // ── Performance (artist) ──────────────────────────────────────────────────
 import ArtistFirstQrScan from "./templates/performance/ArtistFirstQrScan";
 import ArtistQrScanMilestone from "./templates/performance/ArtistQrScanMilestone";
+// 09 item 1.6: this template existed with a full TemplateEntry but was never
+// imported here, so it was invisible to the registry, the preview library and
+// every audit that walks EMAIL_REGISTRY.
+import ArtistQrScanDigest from "./templates/performance/ArtistQrScanDigest";
 import ArtistWeeklyPortfolioDigest from "./templates/performance/ArtistWeeklyPortfolioDigest";
 import ArtistNewVenueMatch from "./templates/performance/ArtistNewVenueMatch";
 import ArtistLowEngagementTips from "./templates/performance/ArtistLowEngagementTips";
@@ -220,6 +224,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   // Performance
   ArtistFirstQrScan,
   ArtistQrScanMilestone,
+  ArtistQrScanDigest,
   ArtistWeeklyPortfolioDigest,
   ArtistNewVenueMatch,
   ArtistLowEngagementTips,

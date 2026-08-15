@@ -96,12 +96,44 @@ export async function sendOrderConfirmations(
     artistUserId, artistRevenue, firstItemTitle, stripeSessionId, venue,
   } = input;
 
+  // 09 item 1.3. ONE email per recipient. This used to record the event (which
+  // dispatches customer_order_placed + artist_order_received) and THEN send three
+  // more templates inline, so a single checkout put 2 emails in the buyer's inbox
+  // and 3 in the artist's, all saying the same thing. The inline sends are gone;
+  // everything they carried is now in this payload, and each template reads only
+  // the props it declares (dispatcher.ts spreads `data` into createElement).
+
+  // Signed token bound to {orderId, email} so /orders/track can authenticate the
+  // lookup without trusting a bare email match. Best-effort: with no secret
+  // configured the email still goes, just without the link.
+  let trackingToken: string | undefined;
+  if (buyerEmail) {
+    try {
+      trackingToken = await signOrderToken({ orderId, email: buyerEmail });
+    } catch (err) {
+      console.warn("[confirmations] signOrderToken failed:", err);
+    }
+  }
+  const receiptName = buyerName || "there";
+  const postal = {
+    name: receiptName,
+    line1: address.line1,
+    line2: address.line2 || undefined,
+    city: address.city,
+    postcode: address.postcode,
+    country: address.country,
+  };
+
   // J1 (Phase 2.3): the order.placed event and its Phase 2.0c dispatch.
   try {
     let artistEmail: string | null = null;
+    let artistFirstName = "there";
     if (artistUserId) {
       const { data: artistAuth } = await db.auth.admin.getUserById(artistUserId);
       artistEmail = artistAuth.user?.email ?? null;
+      const { data: ap } = await db
+        .from("artist_profiles").select("name").eq("user_id", artistUserId).single();
+      if (ap?.name) artistFirstName = ap.name.split(" ")[0];
     }
     await recordOrderEvent({
       orderId,
@@ -109,43 +141,7 @@ export async function sendOrderConfirmations(
       buyerEmail: buyerEmail ?? null,
       artistEmail,
       data: {
-        firstName: buyerEmail ? buyerEmail.split("@")[0] : "there",
-        orderNumber: orderId,
-        orderUrl: `${SITE}/customer-portal/orders`,
-      },
-      metadata: { stripe_session_id: stripeSessionId ?? null },
-    });
-  } catch (lifecycleErr) {
-    console.error("[confirmations] lifecycle hook:", lifecycleErr);
-  }
-
-  // Customer order receipt (legally required under CCR 2013).
-  if (buyerEmail) {
-    // Signed token bound to {orderId, email} so /orders/track can authenticate
-    // the lookup without trusting a bare email match. Best-effort: with no
-    // secret configured the email still goes, just without the link.
-    let trackingToken: string | undefined;
-    try {
-      trackingToken = await signOrderToken({ orderId, email: buyerEmail });
-    } catch (err) {
-      console.warn("[confirmations] signOrderToken failed:", err);
-    }
-    const receiptName = buyerName || "there";
-    const postal = {
-      name: receiptName,
-      line1: address.line1,
-      line2: address.line2 || undefined,
-      city: address.city,
-      postcode: address.postcode,
-      country: address.country,
-    };
-    await sendEmail({
-      idempotencyKey: `order_receipt:${paymentIntentId || orderId}`,
-      template: "customer_order_receipt",
-      category: "orders_and_payouts",
-      to: buyerEmail,
-      subject: `Your Wallplace order ${orderId}`,
-      react: CustomerOrderReceipt({
+        // customer_order_placed
         firstName: receiptName.split(" ")[0] || "there",
         orderNumber: orderId,
         orderUrl: `${SITE}/orders/${orderId}`,
@@ -158,63 +154,26 @@ export async function sendOrderConfirmations(
         billingAddress: postal,
         shippingAddress: postal,
         supportUrl: `${SITE}/support`,
-      }),
-      metadata: { orderId, paymentIntentId },
+        // artist_order_received. firstName is shared, so the artist's own name
+        // is passed under the key its template reads.
+        workTitle: firstItemTitle,
+        buyerFirstName: (buyerName || "your buyer").split(" ")[0],
+        saleAmount: { amount: Math.round(artistRevenue * 100), currency: "GBP" },
+        artistFirstName,
+      },
+      metadata: { stripe_session_id: stripeSessionId ?? null, payment_intent: paymentIntentId ?? null },
     });
+  } catch (lifecycleErr) {
+    console.error("[confirmations] lifecycle hook:", lifecycleErr);
   }
 
-  // Notify the artist, email plus in-app bell.
+  // 09 item 1.3. The buyer's customer_order_receipt and the artist's
+  // artist_work_sold + artist_order_confirmation used to be sent here, on top of
+  // the two the event dispatch above already sends. All three are retired: the
+  // buyer's receipt content (items, totals, billing address, tracking token) and
+  // the artist's sale amount now ride on customer_order_placed and
+  // artist_order_received respectively. The in-app bell below is unaffected.
   if (artistUserId) {
-    const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistUserId);
-    const { data: artistProfile } = await db
-      .from("artist_profiles").select("name").eq("user_id", artistUserId).single();
-    if (artistUser?.email && artistProfile) {
-      // Two emails on purpose: the celebration ("you made a sale") and the
-      // operational receipt. Different jobs, distinct idempotency keys.
-      await sendEmail({
-        idempotencyKey: `artist_work_sold:${paymentIntentId || orderId}`,
-        template: "artist_work_sold",
-        category: "orders_and_payouts",
-        to: artistUser.email,
-        subject: `You made a sale, ${firstItemTitle}`,
-        userId: artistUserId,
-        react: ArtistWorkSold({
-          firstName: (artistProfile.name || "there").split(" ")[0],
-          workTitle: firstItemTitle,
-          orderNumber: orderId,
-          saleAmount: { amount: Math.round(artistRevenue * 100), currency: "GBP" },
-          nextSteps: [
-            "Pack the piece securely (packing guidelines in the portal)",
-            "Print the shipping label we've generated",
-            "Drop off or arrange collection within 3 business days",
-          ],
-          orderUrl: `${SITE}/artist-portal/orders/${orderId}`,
-          shippingInstructionsUrl: `${SITE}/artist-portal/orders/${orderId}/ship`,
-        }),
-        metadata: { orderId, paymentIntentId },
-      });
-      await sendEmail({
-        idempotencyKey: `artist_order_confirmation:${paymentIntentId || orderId}`,
-        template: "artist_order_confirmation",
-        category: "orders_and_payouts",
-        to: artistUser.email,
-        subject: `Order ${orderId}, ${firstItemTitle}`,
-        userId: artistUserId,
-        react: ArtistOrderConfirmation({
-          firstName: (artistProfile.name || "there").split(" ")[0],
-          orderNumber: orderId,
-          workTitle: firstItemTitle,
-          buyerFirstName: (buyerName || "your buyer").split(" ")[0],
-          orderUrl: `${SITE}/artist-portal/orders/${orderId}`,
-          nextSteps: [
-            "Ship within 3 business days",
-            "Mark as shipped in the portal",
-            "Payout lands 2 business days after delivery",
-          ],
-        }),
-        metadata: { orderId, paymentIntentId },
-      });
-    }
     createNotification({
       userId: artistUserId,
       kind: "sale",
