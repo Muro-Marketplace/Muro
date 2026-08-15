@@ -381,3 +381,94 @@ describe("PATCH /api/placements stops billing on a terminal transition (D8)", ()
     expect(cancelBillingMock).not.toHaveBeenCalled();
   });
 });
+
+// ─── Row 22 (D65): the strip-and-retry paths are gone ───
+//
+// Five (in fact seven) places in this route reacted to a failed write by
+// re-running it with columns removed. Every one of those columns exists in prod
+// (verified against tests/integration/schema-columns.json), so the fallback could
+// never do what its comment claimed. What it COULD do is turn a real failure into
+// a false success: the broadest one fired on ANY error and stripped all ten
+// lifecycle columns, so a stage advance could return 200 having written nothing
+// the caller asked for.
+//
+// These pin the property that matters: an unrelated failure surfaces, and the
+// route does not quietly try again with less data.
+describe("PATCH /api/placements surfaces write failures (row 22)", () => {
+  const ACTIVE_ROW: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+    proposed_by_user_id: null,
+  };
+
+  /** Same as setupDb, but every placements UPDATE fails with a non-column error. */
+  function setupFailingUpdate(row: Row) {
+    updates.length = 0;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "placements") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: row, error: null }),
+              maybeSingle: async () => ({ data: row, error: null }),
+              order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            updates.push(payload);
+            // Deliberately NOT a "column does not exist" message: this is the
+            // unrelated failure the old fallback would have masked.
+            return {
+              eq: async () => ({ error: { message: "permission denied for table placements" } }),
+            };
+          },
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: null, error: null }),
+            maybeSingle: async () => ({ data: null, error: null }),
+            eq: () => ({ maybeSingle: async () => ({ data: null }) }),
+            order: () => ({ limit: async () => ({ data: [], error: null }) }),
+          }),
+          in: async () => ({ data: [], error: null }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        delete: () => {
+          const chain = {
+            eq: () => chain,
+            then: (fn: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(fn),
+          };
+          return chain;
+        },
+      };
+    });
+  }
+
+  it("returns 500 on a stage advance whose write fails, and does not retry with fewer columns", async () => {
+    setupFailingUpdate(ACTIVE_ROW);
+    const res = await patch({ id: "pl-1", stage: "installed" });
+
+    // Fail-before: the blanket retry stripped installed_at (and nine others) and
+    // let the route fall through to a 200 having written nothing.
+    expect(res.status).toBe(500);
+    // Exactly one attempt: no second, smaller write.
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toHaveProperty("installed_at");
+  });
+
+  it("returns 500 on an unsetStage whose write fails, keeping the requested columns in the single attempt", async () => {
+    setupFailingUpdate({ ...ACTIVE_ROW, status: "completed" });
+    const res = await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(res.status).toBe(500);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toHaveProperty("collected_at", null);
+  });
+});

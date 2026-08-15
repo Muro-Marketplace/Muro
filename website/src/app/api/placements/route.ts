@@ -99,20 +99,11 @@ export async function GET(request: Request) {
     // tab that makes this surface useful as an inbox, so the filter
     // is now a no-op. The query param is kept so callers don't break.
 
-    let { data, error } = await query.order("created_at", { ascending: false });
-
-    // Retry without any envs where the hidden_for_* columns don't exist
-    // yet (pre-migration 026). We select("*") so it should always
-    // succeed, but some SELECT statements in deployments may be strict.
-    if (error && String(error.message || "").toLowerCase().includes("hidden_for")) {
-      const retry = await db
-        .from("placements")
-        .select("*")
-        .eq(role.type === "artist" ? "artist_user_id" : "venue_user_id", auth.user!.id)
-        .order("created_at", { ascending: false });
-      data = retry.data;
-      error = retry.error;
-    }
+    // Row 22 (D65): the hidden_for_* retry that used to sit here is DELETED.
+    // Both columns exist in prod (verified against tests/integration/schema-columns.json),
+    // so the fallback could never fire for the reason it claimed; all it could do
+    // was re-run the query without the caller's filters and mask a real failure.
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (error) {
       console.error("Supabase error:", error);
@@ -454,16 +445,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Build rows. `baseRows` now keeps the critical ownership columns
-    // (artist_slug / venue_user_id / venue_slug / proposed_by_user_id) so
-    // the fallback retry still produces rows the subsequent GET can
-    // find via its .eq("venue_user_id", auth.user.id) filter. Previously
-    // the fallback silently stripped venue_user_id and the placement
-    // became invisible on reload.
-    // Full row with every column the app understands. The fallback chain
-    // below only drops columns the DB specifically complains about, it
-    // does not blanket-strip monthly_fee_gbp / qr_enabled / message, which
-    // used to cause paid-loan placements to be saved without their £ value.
+    // Full row with every column the app understands. There is no fallback
+    // chain any more (row 22): every column here exists in prod, so a failed
+    // insert is a real error and is surfaced as one.
     const fullRows = parsed.data.map((p) => ({
       id: p.id,
       artist_user_id: artistProfile!.user_id || null,
@@ -472,12 +456,10 @@ export async function POST(request: Request) {
       venue_slug: venueProfile!.slug,
       work_title: p.workTitle,
       work_image: p.workImage || null,
-      // Size requested for the primary work. Migration 032 adds the
-      // column; retry-strip handles older environments.
+      // Size requested for the primary work (migration 032).
       work_size: p.requestedDimensions || null,
-      // Additional works sharing the same placement row. Saved into
-      // extra_works (migration 027); if the column isn't applied yet
-      // the retry logic below strips it gracefully.
+      // Additional works sharing the same placement row, saved into
+      // extra_works (migration 027).
       extra_works: Array.isArray(p.extraWorks) && p.extraWorks.length > 0
         ? p.extraWorks.map((w) => ({ title: w.title, image: w.image || null, size: w.size || null }))
         : null,
@@ -505,31 +487,13 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     }));
 
-    async function insertWithout(drop: string[]) {
-      const clean = fullRows.map((row) => {
-        const next = { ...row } as Record<string, unknown>;
-        for (const k of drop) delete next[k];
-        return next;
-      });
-      return db.from("placements").insert(clean);
-    }
-
-    let { error } = await db.from("placements").insert(fullRows);
-
-    // Pattern-match the error message and strip only the columns the DB
-    // actually rejected, so we don't silently drop payment info.
-    const stripped = new Set<string>();
-    const candidates = ["proposed_by_user_id", "venue_slug", "artist_slug", "monthly_fee_gbp", "qr_enabled", "message", "extra_works", "work_size"];
-    while (error) {
-      const msg = error.message || "";
-      const newStrip = candidates.filter((c) => !stripped.has(c) && new RegExp(`\\b${c}\\b`).test(msg));
-      if (newStrip.length === 0) break;
-      newStrip.forEach((c) => stripped.add(c));
-      console.warn(`Placement insert missing columns [${Array.from(stripped).join(", ")}], retrying:`, msg);
-      const r = await insertWithout(Array.from(stripped));
-      error = r.error;
-    }
-    if (error) console.warn("Placement insert failed:", error.message);
+    // Row 22 (D65): the strip-and-retry loop that used to sit here is DELETED.
+    // All eight candidate columns (proposed_by_user_id, venue_slug, artist_slug,
+    // monthly_fee_gbp, qr_enabled, message, extra_works, work_size) exist in prod,
+    // so a rejected insert is never "the column is missing" — it is a real failure,
+    // and re-inserting without the payment terms silently created a placement whose
+    // agreed fee and QR setting were gone while the caller got a 200.
+    const { error } = await db.from("placements").insert(fullRows);
 
     if (error) {
       console.error("Supabase error:", error);
@@ -749,12 +713,11 @@ export async function POST(request: Request) {
         },
       };
 
-      let { error: msgErr } = await db.from("messages").insert(extendedMsg);
-      if (msgErr) {
-        // Retry without message_type/metadata if columns missing
-        const retry = await db.from("messages").insert(baseMsg);
-        msgErr = retry.error;
-      }
+      // Row 22 (D65): the "retry without message_type/metadata" fallback is DELETED.
+      // Both columns exist in prod, and the metadata is what gates the recipient's
+      // Accept/Decline controls — re-inserting without it produced a message that
+      // looked delivered but could not be acted on.
+      const { error: msgErr } = await db.from("messages").insert(extendedMsg);
       if (msgErr) {
         console.warn("Auto-message on placement skipped:", msgErr.message);
       }
@@ -992,9 +955,8 @@ export async function PATCH(request: Request) {
       }
 
       // Build the terms-only update (no role flip yet). We apply it with
-      // .select() so the response tells us exactly which columns the DB
-      // accepted, and we narrow the retry to the column that actually
-      // failed rather than blanket-stripping proposed_by_user_id.
+      // .select() so the response tells us whether a row was actually
+      // updated, not just whether the statement errored.
       const termsUpdates: Record<string, unknown> = {};
       if (counter.revenueSharePercent !== undefined) termsUpdates.revenue_share_percent = counter.revenueSharePercent;
       if (counter.qrEnabled !== undefined) termsUpdates.qr_enabled = counter.qrEnabled;
@@ -1018,20 +980,14 @@ export async function PATCH(request: Request) {
         if (!termsErr && Array.isArray(data) && data.length > 0) {
           termsSaved = true;
         } else if (termsErr) {
-          // Retry by progressively stripping columns that the DB doesn't
-          // know about. We only drop columns mentioned in the error
-          // message, everything else we want to keep trying.
-          const msg = String(termsErr.message || "").toLowerCase();
-          const safe = { ...termsUpdates };
-          if (msg.includes("qr_enabled")) delete safe.qr_enabled;
-          if (msg.includes("monthly_fee_gbp")) delete safe.monthly_fee_gbp;
-          if (msg.includes("arrangement_type")) delete safe.arrangement_type;
-          if (msg.includes("hidden_for_artist")) delete safe.hidden_for_artist;
-          if (msg.includes("hidden_for_venue")) delete safe.hidden_for_venue;
-          if (Object.keys(safe).length > 0) {
-            const retry = await db.from("placements").update(safe).eq("id", id).select("id");
-            if (!retry.error && Array.isArray(retry.data) && retry.data.length > 0) termsSaved = true;
-          }
+          // Row 22 (D65): the column-stripping retry that used to sit here is
+          // DELETED. qr_enabled, monthly_fee_gbp, arrangement_type and both
+          // hidden_for_* columns exist in prod, so the retry could not be doing
+          // what it claimed — and a "successful" retry that had dropped
+          // monthly_fee_gbp reported the counter as sent while the DB still held
+          // the OLD fee, which is the worst possible outcome for a negotiation.
+          // termsSaved stays false, so the caller gets the 500 below.
+          console.error("Counter terms update failed for placement", id, termsErr.message);
         }
       }
 
@@ -1289,27 +1245,12 @@ export async function PATCH(request: Request) {
       }
     }
 
-    let { error } = await db.from("placements").update(updates).eq("id", id);
-
-    // Retry without the new lifecycle / proposal / archive columns if the
-    // DB isn't migrated yet (pre-024 lifecycle, pre-026 archive).
-    if (error) {
-      const {
-        accepted_at: _a,
-        scheduled_for: _s,
-        installed_at: _i,
-        live_from: _l,
-        collected_at: _c,
-        proposed_stage: _ps,
-        proposed_by_user_id: _pbu,
-        proposed_at: _pa,
-        hidden_for_artist: _ha,
-        hidden_for_venue: _hv,
-        ...safe
-      } = updates as Record<string, unknown>;
-      const retry = await db.from("placements").update(safe).eq("id", id);
-      error = retry.error;
-    }
+    // Row 22 (D65): the blanket retry that used to sit here is DELETED. It was the
+    // broadest of the five — it fired on ANY error (a permission failure, a
+    // constraint violation, a bad id) and stripped all ten lifecycle / proposal /
+    // archive columns, so a stage advance could report success having written
+    // nothing the caller asked for. Every one of those columns exists in prod.
+    const { error } = await db.from("placements").update(updates).eq("id", id);
 
     if (error) {
       console.error("Supabase error:", error);
@@ -1902,12 +1843,8 @@ export async function PATCH(request: Request) {
             message_type: "placement_response",
             metadata: { placementId: id, status },
           };
-          let { error: msgErr } = await db.from("messages").insert(extendedMsg);
-          if (msgErr) {
-            // Fall back without message_type/metadata if columns missing
-            const retry = await db.from("messages").insert(baseMsg);
-            msgErr = retry.error;
-          }
+          // Row 22 (D65): same deleted fallback as the other message inserts.
+          const { error: msgErr } = await db.from("messages").insert(extendedMsg);
           if (msgErr) {
             console.warn("Auto placement_response message failed:", msgErr.message);
           }
@@ -2032,11 +1969,8 @@ export async function PATCH(request: Request) {
               message_type: "placement_response",
               metadata: { placementId: id, status: "cancelled" },
             };
-            let { error: msgErr } = await db.from("messages").insert(extendedMsg);
-            if (msgErr) {
-              const retry = await db.from("messages").insert(baseMsg);
-              msgErr = retry.error;
-            }
+            // Row 22 (D65): same deleted fallback as the other message inserts.
+            const { error: msgErr } = await db.from("messages").insert(extendedMsg);
             if (msgErr) {
               console.warn("Auto cancellation message failed:", msgErr.message);
             }
