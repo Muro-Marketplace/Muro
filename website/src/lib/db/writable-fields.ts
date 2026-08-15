@@ -166,12 +166,20 @@ export const VENUE_PROFILE_WRITABLE = Object.freeze([
   "email_digest_enabled",
 ] as const);
 //
-// Deliberately NOT on the list, and confirmed absent from the live table:
-// `preferred_sizes` and `interested_in_local_artists`. venue-profiles.ts strips
-// them as "columns that may not exist in older schemas", but they exist in no
-// schema at all. Leaving them out is what that strip logic was achieving by
-// accident, so once the routes use this allowlist the strip-and-retry dance in
-// upsertVenueProfile can go.
+// Two names are deliberately NOT on the list, and they are not the same case
+// (row 23, D66):
+//
+//   - `preferred_sizes` is VESTIGIAL. It exists in no schema, no UI collects it,
+//     nothing reads it, and no row holds it. `preferred_styles` does exist in
+//     prod, so this was an incomplete migration rather than a design decision.
+//     There is nothing to build: if the name turns up again, delete it.
+//   - `interested_in_local_artists` is a REAL shipped control
+//     (venue-portal/profile) that is bound to state and hydrated, but whose value
+//     is discarded on save because the column does not exist. That is row 23(a):
+//     add the nullable boolean and the allowlist entry so the tick persists.
+//
+// The strip-and-retry in upsertVenueProfile that used to compensate for both is
+// already gone (E42-c); the allowlist is what keeps them out now.
 
 /** Never accepted from a client on venue_profiles. */
 export const VENUE_PROFILE_SERVER_OWNED = Object.freeze([

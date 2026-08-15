@@ -104,9 +104,11 @@ describe("PUT /api/venue-profile mass-assignment (E45)", () => {
   });
 
   it("drops columns that exist in no schema", async () => {
-    // venue-profiles.ts strips these at write time as "may not exist in older
-    // schemas". They exist in no schema at all, so the allowlist keeps them out
-    // from the start.
+    // Neither column exists in prod, and the allowlist is what keeps them out.
+    // `preferred_sizes` is vestigial (row 23b: nothing collects, reads or stores
+    // it). `interested_in_local_artists` is a shipped control whose value is
+    // discarded for want of a column; when row 23a adds it this assertion is the
+    // one to flip.
     await PUT(req("PUT", { name: "Kettle", preferred_sizes: ["a"], interested_in_local_artists: true }));
     expect(written()).not.toHaveProperty("preferred_sizes");
     expect(written()).not.toHaveProperty("interested_in_local_artists");

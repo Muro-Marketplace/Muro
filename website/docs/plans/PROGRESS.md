@@ -26,9 +26,9 @@ Order of work: the "Corrected dependency order" at the end of
 | 19 | The 12 phantom selects 7b surfaced (D59 = rule 7), one fix per iteration, each shrinks the ratchet | 7b guard, docs `01`/`04`/`08`/misc | **#1 order-tracking** (66dc55a), **#2 placement-ending-soon cron gated off** (2d52b98, owner (b)/(c) per D60), **#3 onboarding-nudges** (bb1a695), **#4 walls/my-works** (7f8f6d8), **#5 orders/[id]/events** (1b8a270), **#6 paid-loan-billing email** (648fb10), **#7 offers title→name** (81c3dbe, x2 selects), **#8 placements/[id] image→profile_image** (5191471, aliased), **#9 sitemap updated_at→created_at** (6db8f07). Ratchet 12 → 1. **CLOSED**: all 10 live phantom selects resolved (#1-#9 fixed; the 10th, `free_until` at webhooks/stripe, is the parked ratchet floor per D14/D17.2, owner-gated). Cannot shrink below 1 without an owner decision on free_until |
 | 20 | Schema-snapshot regeneration script for the phantom guard (supervisor D61) | 7b guard, runbook | **DONE** (08495ae): `scripts/schema-snapshot.ts` + `.lib.ts`, `npm run schema:snapshot`, guard header + MASTER-RUNBOOK reference it, 8-test lib guard incl a byte-for-byte round-trip of the committed snapshot |
 | 20b | D62 follow-up: regenerator needs `SUPABASE_ACCESS_TOKEN` (absent here → exits 2); record the dependency, point the exit-2 error at the remedy, investigate a service-role path | supervisor D62 | **DONE** (2131d2a): dependency recorded in guard header + runner; `MISSING_TOKEN_MESSAGE` points at the remedy (tested); service-role path investigated — none clean, token stands. **D62.5 owner escalation OPEN**: add `SUPABASE_ACCESS_TOKEN` locally (keeps the phantom guard maintainable across migrations) |
-| 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **todo, AFTER `05` closes** (not owner-gated). Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
-| 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **todo, AFTER `05` (alongside row 21)**. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
-| 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **todo, AFTER `05` (with rows 21/22)**. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
+| 21 | Close the artwork post-limit TOCTOU at `artist-works/route.ts` with an atomic check-and-insert (supervisor D64) | D64 | **BLOCKED 2026-08-15: needs a prod migration and the Supabase MCP is unauthorised in this session** (`execute_sql` and `list_migrations` both return "You do not have permission to perform this action"). Deliberately NOT writing the .sql: an unapplied migration on disk is exactly the ledger divergence already open as an owner question. Design is settled and ready to apply the moment the MCP is authorised, see the row-21 note below. Not owner-gated. Atomic RPC following the `085`/`087` pattern: `SECURITY DEFINER`, `SET search_path=public`, EXECUTE revoked from anon/authenticated/PUBLIC + granted service_role only; new migration above the highest on disk, applied to prod via Supabase MCP + verified; then the function-grant sweep. Low urgency (E41-c removed the client's N concurrent POSTs) but the route is a public API |
+| 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **DONE** (9af466a). SEVEN sites, not the five listed. Every candidate column verified present in `tests/integration/schema-columns.json`, so no fallback could do what it claimed; each could only turn a real failure into a false success. Two new route tests drive an unrelated failure (permission denied) and assert a 500 with exactly ONE write attempt. Fail-before verified. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
+| 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **(b) DONE, (a) BLOCKED.** (b) `preferred_sizes`: the only live reference was a stale comment in `writable-fields.ts` that lumped it in with `interested_in_local_artists`; corrected so the two cases read apart (vestigial vs shipped-control-awaiting-a-column), and the venue-profile route test now says which assertion flips when 23(a) lands. The strip-and-retry it referred to was already removed by E42-c. (a) `interested_in_local_artists` needs a new column, so it is blocked on the same unauthorised Supabase MCP as row 21. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, 4339efd). Remaining (**order per D67, OWNER-APPROVED 2026-07-31**): (1) **DONE — `no-authfetch-mutation` rule + grandfathered ratchet landed at `warn`, floor 94 across 44 files (468e3f1).** The rule's 94-site list IS the real E43 surface (vs 11 hand-enumerated — D67 vindicated). (2) IN PROGRESS — work the union, batching **by FILE not by call site** (supervisor D70.3: 44 files vs 94 sites; sites in a file share a shape/import/test). **E43-e done** (MessageInbox report/delete/block trio → shared `submitFlagAction` helper, floor 94→91, 7381399). **MessageInbox.tsx COMPLETE** (remaining 9 mutating `authFetch` → `mutate`, floor 91→82, e4ff19f; file now 0-flagged, 2 read GETs kept). **E43-d done** (`artist-portal/portfolio/page.tsx` shipping-settings save → `mutate` + success/error toasts, floor 82→81, e70ca39). **E43-g done** (saved-item `handleRemove` in BOTH `artist-portal/saved` + `customer-portal/saved` → `mutate`, remove-on-confirmed-delete + rollback/error-toast, floor 81→79, 516ec5f). **E43-h done** (`browse/[slug]/ArtistProfileClient.tsx` public enquiry: primary `/api/messages` → `mutate`, confirmation only on success, `/api/enquiry` best-effort, floor 79→78, 3d51a9b). **E43-i done** (`components/Header.tsx` 3 fire-and-forget mark-read `authFetch`→`mutate`, floor 78→75, 335de6c; no bespoke test — render-heavy + no user-visible outcome, covered by the ratchet + mutate contract). NEXT per D70.3: E43-j done (`VenuePortalLayout.tsx` self-heal → `mutate` + retry banner, floor 75→74, ec57636); bug-12 part 1 done (`BlogEditor.tsx` 3 saves → `mutate`, floor 74→71, b2c3769); `PlacementDetailClient.tsx` done (6 handlers → `mutate`, event-on-success-only for handleRespond, floor 71→65, 239ea48); `PlacementContextPanel.tsx` done (6 handlers → `mutate`, undo event success-only + a real catch added on all 6, floor 65→59, 13bc052); `artist-portal/billing/page.tsx` done (4 Stripe-session-redirect POSTs → `mutate`, transport-only, floor 59→55, 953e121); `artist-portal/orders/page.tsx` PARTIAL (order-STATUS PATCH → `mutate`, floor 55→54, 4ab254a; the 3 refund-path sites processRefund/issueProactiveRefund SURFACED as OWNER-GATED — they execute Stripe refunds, held per the money boundary); the other ~30 files + the 3 owner-gated refund sites, LOWERING `LITERAL_FLOOR` by each file's count in the same commit. **D70.2: 94 is a MIGRATION surface, not 94 bugs** (the rule has no res.ok exemption); the live-bug subset is the unchecked ones. Hand items E43-d/e/g/h/i/j + bug-12 are all IN the 94; **E43-f is OUT** (dead View buttons, no authFetch — own fix). (3) Flip the rule to `error` when the floor hits zero. (4) bug-12's flag-gate/notFound half is separate from its authFetch sites |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
@@ -9223,3 +9223,74 @@ confirmation, a status flip) can no longer run after a failed request. No amount
 or execution path changes. Options: (a) approve all seven, then flip the rule to `error` and delete
 the ratchet; (b) approve a subset; (c) leave them on `authFetch` permanently and flip the rule with
 seven documented exemptions.
+
+## rows 21 / 22 / 23 + bug-12 part 2 + E43-f — continuous run, 2026-08-15
+
+The owner lifted the one-file-per-iteration cadence ("continue until completion, no
+loop"), so these ran back to back rather than one per wake-up.
+
+### DONE
+
+- **bug-12 part 2** (`af2eb2f`): the blog surface is gated on `BLOGS_V1`. The nav item
+  is spread in only when the flag is on, and all three blog pages `notFound()` when it
+  is off, so typing the URL does not reach an editor whose every save 403s. Doc
+  correction: the plan says all three are server components; only `new/page.tsx` is, the
+  other two are `"use client"`. The gate still holds (`notFound()` works from a client
+  component, `isFlagOn` is client-safe via the CLIENT_ENV snapshot), it just runs after
+  hydration on those two. New `blogs-flag-gate.test.tsx`, fail-before verified.
+
+- **E43-f** (`07931c6`): both "View" controls on venue-portal/enquiries had no onClick,
+  no href and no form association while looking live. Both now push to the messages
+  inbox. **Doc correction:** the plan says wire them to `?conversation=<id>`; that param
+  does not exist — the messages page reads `?artist=` / `?artistName=`, and
+  `enquiry.artist` already holds the slug. Rows with no slug fall back to the unfiltered
+  inbox. Also deleted an `/api/orders` fetch in the same effect whose `.then` body was
+  empty, so every page load spent a request on data it discarded. New test, fail-before
+  verified.
+
+- **row 22** (`9af466a`): all strip-and-retry paths in `placements/route.ts` deleted.
+  **Seven sites, not the five the plan listed** (the two extra are the same
+  message-insert fallback in the response and cancellation paths). Every candidate
+  column verified present in the committed schema snapshot, so no fallback could do what
+  its comment claimed; each could only convert a real failure into a false success. The
+  worst two: the POST insert re-inserted without the payment terms (a placement created
+  with its agreed fee and QR setting gone, 200 OK), and the stage update fired on ANY
+  error and stripped all ten lifecycle columns (a stage advance returning 200 having
+  written nothing). Two new tests drive a permission error through the stage-advance and
+  unsetStage paths and assert 500 + exactly one write attempt; fail-before verified by
+  restoring the blanket retry.
+
+- **row 23(b)**: `preferred_sizes` had no code left to delete — its only reference was a
+  stale comment in `writable-fields.ts`, which wrongly grouped it with
+  `interested_in_local_artists`. Rewritten so the two read apart: one is vestigial (an
+  incomplete migration next to the `preferred_styles` that does exist), the other is a
+  shipped control awaiting a column. The strip-and-retry that comment pointed at was
+  already gone (E42-c).
+
+### BLOCKED — Supabase MCP is unauthorised in this session
+
+**Rows 21 and 23(a) both need a prod migration and cannot be completed.** Both
+`execute_sql` and `list_migrations` against `uwkuhygwvasdzwsusiym` return "You do not
+have permission to perform this action". I deliberately did NOT write the `.sql` files:
+a migration on disk that has not been applied is exactly the ledger-divergence problem
+already sitting in the owner-questions list, and the plan's own rule is write **and**
+apply **and** verify in one step.
+
+Both are ready to execute the moment the MCP is authorised:
+
+- **Row 21** (post-limit TOCTOU, `artist-works/route.ts`). Confirmed the defect by
+  reading: the route counts the artist's works, compares to the tier cap, and inserts
+  later through `upsertWork`, so two concurrent POSTs both pass the check. A plain
+  `INSERT ... WHERE (SELECT count(*)) < limit` does **not** fix it — under READ COMMITTED
+  both statements read the same snapshot. It needs serialisation per artist: either a
+  `pg_advisory_xact_lock` on the artist id or a `SELECT ... FOR UPDATE` on the parent
+  `artist_profiles` row, then count, then insert, all inside one `SECURITY DEFINER`
+  function following the 085/087 pattern (`SET search_path = public`, EXECUTE revoked
+  from anon/authenticated/PUBLIC, granted service_role only), numbered 101.
+- **Row 23(a)**: one nullable boolean column on `venue_profiles` plus the
+  `writable-fields.ts` allowlist entry, numbered after row 21's.
+
+Owner action needed: authorise the Supabase MCP (or say to write the migrations
+unapplied and accept the divergence, which I would not recommend).
+
+`npm run check` green throughout: 0 lint errors, 197 files, 1962 tests.
