@@ -9142,3 +9142,27 @@ Fail-before verified by changing the network toast string (the reject case faile
 
 **Next: PlacementStepper.tsx (2)** — then SavedContext (2), then the 1-site tail. The 6 owner-gated
 money sites remain last.
+
+## row 8 (doc `05`) components/PlacementStepper.tsx — 2 handlers → mutate (floor 30→28)
+
+Commit `<pending>`. `src/components/PlacementStepper.tsx` + new test.
+
+Both flagged sites are placement lifecycle STAGE transitions (not money), and both `authFetch` in the
+file are mutations, so `authFetch` drops from the import entirely:
+- **`advance`** (PATCH `/api/placements`, `stage`): stamps the next stage. The optimistic `onChange`
+  and the cross-portal `wallplace:placement-changed` event now fire only on a confirmed 2xx
+  (same E43-a class as the placements pages).
+- **`undoStage`** (PATCH `/api/placements`, `unsetStage`): clears a stage timestamp; same success-only
+  gating for `onChange` + the event.
+Both surface `err.code` (mirrors the old `data.error`) on `ApiError`, else the network message.
+
+Ratchet `LITERAL_FLOOR` 30 → 28 (both flagged migrated). Measured: total 28, file no longer listed.
+
+Test: NEW `PlacementStepper.test.tsx` (jsdom). Seeds an active placement already scheduled, so the next
+advanceable stage is `installed` (a direct stamp, unlike `scheduled` which opens a date picker), then
+clicks "Mark installed": (1) an `ApiError(403)` reject shows "Not allowed", fires NEITHER `onChange` nor
+the event, and calls `mutate` with the PATCH; (2) a resolve calls `onChange` once with `installedAt` set
+and fires the event exactly once. Fail-before verified by making the catch call `onChange` (the failure
+case failed), then restored. `npm run check` green: 195 files, 1952 tests, route audit PASS.
+
+**Next: context/SavedContext.tsx (2)** — then the 1-site tail. The 6 owner-gated money sites remain last.

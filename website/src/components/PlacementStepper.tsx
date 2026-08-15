@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { useConfirm } from "@/context/ConfirmContext";
 
 export interface PlacementStepperData {
@@ -95,15 +95,12 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
     try {
       const body: Record<string, unknown> = { id: placement.id, stage };
       if (explicitDate) body.stageDate = explicitDate;
-      const res = await authFetch("/api/placements", {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the optimistic
+      // stage update + the cross-portal event only run on a confirmed 2xx.
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify(body),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Could not update stage");
-        return;
-      }
       const ts = explicitDate || new Date().toISOString();
       const next: PlacementStepperData = { ...placement };
       if (stage === "scheduled") next.scheduledFor = ts;
@@ -115,8 +112,8 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
         window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: placement.id, action: "advance", stage } }));
       }
       setSchedulePickerOpen(false);
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code || "Could not update stage" : "Network error. Please try again.");
     } finally {
       setBusy(null);
     }
@@ -163,15 +160,10 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
     setBusy(stage);
     setError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: placement.id, unsetStage: stage }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Could not undo stage");
-        return;
-      }
       const next: PlacementStepperData = { ...placement };
       if (stage === "scheduled") next.scheduledFor = null;
       if (stage === "installed") next.installedAt = null;
@@ -181,8 +173,8 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: placement.id, action: "undo", stage } }));
       }
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code || "Could not undo stage" : "Network error. Please try again.");
     } finally {
       setBusy(null);
     }
