@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
-import { authFetch } from "@/lib/api-client";
 
 type Status = "Pending" | "Responded" | "Closed";
 type FilterTab = "All" | Status;
@@ -34,19 +34,29 @@ const statusBadge = (status: Status) => {
 const FILTER_TABS: FilterTab[] = ["All", "Pending", "Responded", "Closed"];
 
 export default function EnquiriesPage() {
+  const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
 
-  useEffect(() => {
-    authFetch("/api/orders")
-      .then((r) => r.json())
-      .then((data) => {
-        // For now, enquiries come from a simple endpoint; using orders as fallback
-        // When a dedicated enquiry endpoint exists, swap it in
-      })
-      .catch(() => {});
+  // E43-f: both "View" buttons had no onClick, no href and no form association,
+  // so the only way to open an enquiry from this page did nothing. Enquiry threads
+  // live in the messages inbox, which selects a thread from `?artist=<slug>` (the
+  // plan doc suggested `?conversation=<id>`; that param does not exist — the
+  // messages page reads `artist` / `artistName`). `enquiry.artist` already holds
+  // the artist slug, so it maps straight across. Rows whose slug is missing fall
+  // back to the unfiltered inbox rather than pushing a dead query.
+  function openEnquiry(enquiry: Enquiry) {
+    router.push(
+      enquiry.artist && enquiry.artist !== "Unknown"
+        ? `/venue-portal/messages?artist=${encodeURIComponent(enquiry.artist)}`
+        : "/venue-portal/messages",
+    );
+  }
 
-    // Try to load enquiries from the enquiry endpoint
+  useEffect(() => {
+    // E43-f: an /api/orders fetch used to run here whose .then body was empty (a
+    // comment about a "fallback" that was never written), so every page load spent
+    // a request on data it immediately discarded. Deleted.
     fetch("/api/enquiry")
       .then((r) => r.json())
       .then((data) => {
@@ -153,6 +163,7 @@ export default function EnquiriesPage() {
                 <td className="px-5 py-4 text-right whitespace-nowrap">
                   <button
                     type="button"
+                    onClick={() => openEnquiry(enquiry)}
                     className="text-xs text-accent hover:underline cursor-pointer"
                   >
                     View
@@ -199,6 +210,7 @@ export default function EnquiriesPage() {
                 </span>
                 <button
                   type="button"
+                  onClick={() => openEnquiry(enquiry)}
                   className="text-xs text-accent hover:underline cursor-pointer"
                 >
                   View Details
