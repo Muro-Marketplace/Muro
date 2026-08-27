@@ -27,17 +27,19 @@ Read first, in this order:
 
 ## Two standing blockers, do not work around them
 
-**1. The Supabase MCP is unauthorised.** `execute_sql` and `list_migrations` against
-project `uwkuhygwvasdzwsusiym` both return "You do not have permission to perform
-this action". Migration numbering (D57) requires writing the .sql AND applying it to
-prod AND verifying live, in one step. So while the MCP is unauthorised: **do not
-write migration files.** An unapplied migration on disk is the ledger-divergence
-problem already open as an owner question. Check the MCP once at the start; if it
-works, the blocked items below unblock. If it does not, skip them and say so.
+**1. Migrations are one atomic step.** The Supabase MCP is AUTHORISED as of
+2026-08-15 (verified against project `uwkuhygwvasdzwsusiym`), so migration work is
+unblocked. D57 binds: pick the next number ABOVE the highest on disk (currently 100,
+so 101 next), NEVER backfill a gap, write the `.sql` AND apply it to prod via the MCP
+AND verify the result live, all in the same piece of work. Never leave an unapplied
+migration on disk: that is the ledger-divergence problem already open as an owner
+question. Then run `npm run schema:snapshot` (needs `SUPABASE_ACCESS_TOKEN`; if that
+is still unset the script exits 2 and says so, which is D62, not a failure you caused).
 
-For prod column facts without the MCP, `website/tests/integration/schema-columns.json`
-is a committed snapshot of all 53 tables and 750 columns. It is authoritative enough
-to prove a column exists.
+Re-verify the MCP at the start of the session with a cheap read; if it has lapsed
+again, skip the migration items and say so rather than writing files you cannot apply.
+`website/tests/integration/schema-columns.json` is a committed snapshot of all 53
+tables and 750 columns, good enough to prove a column exists without a round trip.
 
 **2. Seven money handlers are owner-gated.** Do not migrate, refactor or "improve"
 these without the owner saying so. Each is marked in-code with an OWNER-GATED comment:
@@ -91,9 +93,9 @@ in this order unless something forces otherwise.
    Not a data breach today (all 14 admin API routes check server-side) but it is a
    social-engineering surface and it leaks the moment an admin page is added that
    fetches from a non-admin-gated endpoint. The proper fix is the `admin_users` table,
-   which needs a migration, so if the MCP is still unauthorised do the parts that do
-   not: server-side gating of the `/admin` route group, and stop trusting
-   `user_metadata.user_type` as the only signal. **D5 ordering is binding: create AND
+   now buildable since the MCP is authorised, plus server-side gating of the `/admin`
+   route group so the shell stops trusting `user_metadata.user_type`. **D5 ordering is
+   binding: create AND
    backfill `admin_users` BEFORE removing the `user_metadata` conjunct, or every admin
    is locked out of the live site. The conjunct cutover itself is owner-gated.**
 5. **E30a**, application decisions are unaudited (`03` §2).
@@ -118,7 +120,10 @@ in this order unless something forces otherwise.
 12. **08 surface cull**: needs a rewrite decision and §7 owner decisions first.
     Surface those, do not start cutting.
 
-### Blocked on the Supabase MCP (do only if it authorises)
+### Migration work (unblocked, the MCP is authorised)
+
+Fold these in wherever they fit the ordering above; row 23a in particular is a
+two-minute change once the column exists.
 
 - **Row 21**, the artwork post-limit TOCTOU in `api/artist-works/route.ts`. The route
   counts the artist's works, checks the tier cap, then inserts later, so two
@@ -131,7 +136,9 @@ in this order unless something forces otherwise.
   granted to service_role only. Next migration number is 101.
 - **Row 23a**, add a nullable `interested_in_local_artists` boolean to
   `venue_profiles` plus the `writable-fields.ts` allowlist entry. A shipped checkbox
-  currently discards its value.
+  currently discards its value. Confirmed live 2026-08-15: `preferred_styles` exists,
+  `interested_in_local_artists` and `preferred_sizes` do not. Flip the assertion in
+  `api/venue-profile/route.test.ts` that currently pins the column as absent.
 - **07 K11**, no committed base schema.
 
 ## How to work
@@ -193,5 +200,5 @@ unconditional list.
 - **Paths containing parentheses** (`src/app/(pages)/...`) must be quoted in shell
   commands or the glob will fail.
 
-Start by confirming the Supabase MCP state and running `npm run check` to see the
-baseline, then begin with E34.
+Start by re-confirming the Supabase MCP with a cheap read and running `npm run check`
+for the baseline, then begin with E34. E34 needs no migration, so it lands fast.
