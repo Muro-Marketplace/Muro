@@ -9377,3 +9377,59 @@ share the email…`, `copies registration details…`). Restoring the orphan fac
 venueSlug smuggled in on the raw body`); reverting restored 6/6.
 
 `npm run check` green: 0 lint errors (169 warnings), 203 files, 1998 tests.
+
+### E36c — spoofable rate-limit key (03 §5.3) — DONE
+
+**The doc's UNCONFIRMED, answered.** §5.3 said "UNCONFIRMED which of Cloudflare or
+Vercel actually fronts production; confirm before choosing the order". Probed live
+2026-08-28: `https://www.wallplace.co.uk` returns `server: Vercel` and **no** `cf-ray`,
+so Vercel fronts production directly with no Cloudflare.
+
+**That makes the doc's own suggested fix wrong here, and I did not ship it.** It
+proposed reading `cf-connecting-ip` first. With nothing setting that header, it is
+entirely client-supplied, so the "fix" would have reproduced the exact bug it was
+meant to close — an attacker rotates `cf-connecting-ip` instead of
+`x-forwarded-for` and nothing changes. `cf-connecting-ip` is deliberately not read,
+and there is a test pinning that.
+
+**What changed.** New `src/lib/client-ip.ts` with `getClientIp(Request | Headers)`,
+the doc's "export a shared helper" follow-on. It reads only `x-vercel-forwarded-for`
+then `x-real-ip`, both set by the platform proxy on the way in, and never falls back
+to a client-supplied header. XFF is not read at all: proxies *append* to it, so its
+left-most entry is whatever the caller typed. All four derivation sites now use it:
+
+- `lib/rate-limit.ts` — `getIP` kept as a delegating shim so existing callers
+  (`api/moderation`) are untouched.
+- `api/terms/accept` — the audit IP on a legal acceptance record. It was the field
+  meant to make the row hard to repudiate and was the easiest one to forge. Now stores
+  `null` rather than the string `"unknown"` when no platform header identified the
+  caller, so the column never implies more than it can prove.
+- `lib/analytics.ts` — `generateVisitorId`, so unique-visitor figures were forgeable.
+- `api/auth/verify-turnstile` — was `cf-connecting-ip || x-forwarded-for`, both
+  client-supplied here. Now sends `remoteip` only when a platform header resolved one;
+  a forged remoteip weakens Turnstile's own analysis, so sending nothing is better than
+  sending something invented.
+
+**On the "unknown" bucket.** The doc's second follow-on was to give `"unknown"` a much
+tighter limit. I did **not** do that, deliberately: if the platform header turns out to
+be absent in production, a tighter limit converts a misconfiguration into an outage on
+an assumption I cannot verify from here. Instead `"unknown"` is one shared bucket (which
+is already tight) and `getClientIp` warns once, loudly, in production when it is reached
+— the same fail-loud pattern as the Upstash fallback warning directly above it, and as
+09 Phase 0. Tightening it is a safe follow-on once prod logs confirm the header is
+populated.
+
+**Tests.** `src/lib/client-ip.test.ts`, 12 new. The one that matters: four requests
+with the same `x-vercel-forwarded-for` but a different `x-forwarded-for` each time share
+a bucket and the fourth is refused with a 429. Before the fix all four landed in
+separate buckets and none was ever refused.
+
+`src/lib/rate-limit.test.ts` updated. Its `it("prefers x-forwarded-for (first entry)")`
+was pinning the vulnerability as intended behaviour; it now asserts the opposite, with
+a comment naming the reversal, exactly as §5.3 required.
+
+**Fail-before verified.** Restoring `x-forwarded-for` and `cf-connecting-ip` to the
+trusted list fails 6 of the 12, including the bucket-sharing regression test; reverting
+restored 12/12.
+
+`npm run check` green: 0 lint errors (169 warnings), 204 files, 2011 tests, exit 0.

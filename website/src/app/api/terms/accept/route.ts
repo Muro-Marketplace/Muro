@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { getClientIp, UNKNOWN_IP } from "@/lib/client-ip";
 import { termsAcceptSchema } from "@/lib/validations";
 
 // E46b (06 B1). This route records acceptance of the platform terms, so its rows
@@ -62,8 +63,13 @@ export async function POST(request: Request) {
       ? (user!.email as string).toLowerCase()
       : parsed.data.userEmail;
 
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+    // E36c: this is the audit IP on a legal acceptance record. It used to be
+    // the left-most x-forwarded-for entry, which the caller supplies, so the
+    // one field meant to make the row hard to repudiate was the easiest to
+    // forge. Null when no platform header identified the caller, rather than
+    // recording "unknown" as though it were an address.
+    const clientIp = getClientIp(request);
+    const ip = clientIp === UNKNOWN_IP ? null : clientIp;
     const userAgent = request.headers.get("user-agent") || null;
 
     const supabaseAdmin = getSupabaseAdmin();

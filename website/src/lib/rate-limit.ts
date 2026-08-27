@@ -12,6 +12,7 @@
 // explicit rule name.
 
 import { NextResponse } from "next/server";
+import { getClientIp } from "./client-ip";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
@@ -84,12 +85,12 @@ function memCheck(key: string, limit: number, windowMs: number, now: number): { 
 
 // ── Public ─────────────────────────────────────────────────────────────
 
+/**
+ * @deprecated Use `getClientIp` from `@/lib/client-ip` directly. Kept because
+ * existing callers import it from here.
+ */
 export function getIP(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  const real = request.headers.get("x-real-ip");
-  if (real) return real;
-  return "unknown";
+  return getClientIp(request);
 }
 
 function tooManyResponse(retryAfter: number): NextResponse {

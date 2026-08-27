@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { createHash } from "crypto";
+import { getClientIp } from "./client-ip";
 
 export interface TrackEventParams {
   event_type: string;
@@ -57,8 +58,9 @@ export function extractTrackingContext(headers: Headers): {
   userAgent: string;
   referrer: string | null;
 } {
-  const forwarded = headers.get("x-forwarded-for");
-  const ip = forwarded ? forwarded.split(",")[0].trim() : "unknown";
+  // E36c: was the left-most x-forwarded-for entry, i.e. client-supplied, so
+  // every "unique visitor" figure derived from it was forgeable.
+  const ip = getClientIp(headers);
   const userAgent = headers.get("user-agent") || "unknown";
   const referrer = headers.get("referer") || null;
   return { ip, userAgent, referrer };

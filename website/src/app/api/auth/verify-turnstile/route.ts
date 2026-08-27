@@ -15,6 +15,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { getClientIp, UNKNOWN_IP } from "@/lib/client-ip";
 
 const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
@@ -48,8 +49,12 @@ export async function POST(request: Request) {
     const params = new URLSearchParams();
     params.set("secret", secret);
     params.set("response", token);
-    const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "";
-    if (ip) params.set("remoteip", ip.split(",")[0].trim());
+    // E36c: `cf-connecting-ip` is only trustworthy behind Cloudflare, and
+    // production is fronted by Vercel, so both of the headers this used to read
+    // were client-supplied. Sending a forged remoteip to siteverify weakens
+    // Turnstile's own analysis, so send nothing rather than something invented.
+    const ip = getClientIp(request);
+    if (ip !== UNKNOWN_IP) params.set("remoteip", ip);
 
     const res = await fetch(VERIFY_URL, {
       method: "POST",
