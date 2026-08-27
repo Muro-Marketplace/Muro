@@ -86,12 +86,14 @@ export default function VenuePortalLayout({
     document.title = portalTitleFor(pathname);
   }, [pathname]);
 
-  // Self-heal the caller's venue_profiles row on first portal visit.
-  // The registration flow inserts the row with user_id=NULL (the user
-  // isn't signed in yet); ensureProfile links it, OR inserts a minimal
-  // row if the original orphan was never created / got lost. Without
-  // this, every venue-only API call (placements, offers, artwork
-  // requests) errors with a misleading "Artist profile not found".
+  // Create or link the caller's venue_profiles row on first portal visit.
+  // Registration only records a venue_registrations entry, so this is where the
+  // profile itself comes from: ensureProfile inserts it, hydrated from that
+  // registration via the confirmed email (E34 — it used to adopt an ownerless
+  // row named by a slug the browser chose). Without this, every venue-only API
+  // call (placements, offers, artwork requests) errors with a misleading
+  // "Artist profile not found". The email_confirmed_at gate below is load-
+  // bearing: an unconfirmed caller gets neither adoption nor hydration.
   const runSelfHeal = useCallback(async () => {
     if (!user || !user.email_confirmed_at) return;
     try {

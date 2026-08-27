@@ -30,7 +30,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **DONE** (9af466a). SEVEN sites, not the five listed. Every candidate column verified present in `tests/integration/schema-columns.json`, so no fallback could do what it claimed; each could only turn a real failure into a false success. Two new route tests drive an unrelated failure (permission denied) and assert a 500 with exactly ONE write attempt. Fail-before verified. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
 | 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **(b) DONE, (a) BLOCKED.** (b) `preferred_sizes`: the only live reference was a stale comment in `writable-fields.ts` that lumped it in with `interested_in_local_artists`; corrected so the two cases read apart (vestigial vs shipped-control-awaiting-a-column), and the venue-profile route test now says which assertion flips when 23(a) lands. The strip-and-retry it referred to was already removed by E42-c. (a) `interested_in_local_artists` needs a new column, so it is blocked on the same unauthorised Supabase MCP as row 21. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, 4339efd). Remaining (**order per D67, OWNER-APPROVED 2026-07-31**): (1) **DONE — `no-authfetch-mutation` rule + grandfathered ratchet landed at `warn`, floor 94 across 44 files (468e3f1).** The rule's 94-site list IS the real E43 surface (vs 11 hand-enumerated — D67 vindicated). (2) IN PROGRESS — work the union, batching **by FILE not by call site** (supervisor D70.3: 44 files vs 94 sites; sites in a file share a shape/import/test). **E43-e done** (MessageInbox report/delete/block trio → shared `submitFlagAction` helper, floor 94→91, 7381399). **MessageInbox.tsx COMPLETE** (remaining 9 mutating `authFetch` → `mutate`, floor 91→82, e4ff19f; file now 0-flagged, 2 read GETs kept). **E43-d done** (`artist-portal/portfolio/page.tsx` shipping-settings save → `mutate` + success/error toasts, floor 82→81, e70ca39). **E43-g done** (saved-item `handleRemove` in BOTH `artist-portal/saved` + `customer-portal/saved` → `mutate`, remove-on-confirmed-delete + rollback/error-toast, floor 81→79, 516ec5f). **E43-h done** (`browse/[slug]/ArtistProfileClient.tsx` public enquiry: primary `/api/messages` → `mutate`, confirmation only on success, `/api/enquiry` best-effort, floor 79→78, 3d51a9b). **E43-i done** (`components/Header.tsx` 3 fire-and-forget mark-read `authFetch`→`mutate`, floor 78→75, 335de6c; no bespoke test — render-heavy + no user-visible outcome, covered by the ratchet + mutate contract). NEXT per D70.3: E43-j done (`VenuePortalLayout.tsx` self-heal → `mutate` + retry banner, floor 75→74, ec57636); bug-12 part 1 done (`BlogEditor.tsx` 3 saves → `mutate`, floor 74→71, b2c3769); `PlacementDetailClient.tsx` done (6 handlers → `mutate`, event-on-success-only for handleRespond, floor 71→65, 239ea48); `PlacementContextPanel.tsx` done (6 handlers → `mutate`, undo event success-only + a real catch added on all 6, floor 65→59, 13bc052); `artist-portal/billing/page.tsx` done (4 Stripe-session-redirect POSTs → `mutate`, transport-only, floor 59→55, 953e121); `artist-portal/orders/page.tsx` PARTIAL (order-STATUS PATCH → `mutate`, floor 55→54, 4ab254a; the 3 refund-path sites processRefund/issueProactiveRefund SURFACED as OWNER-GATED — they execute Stripe refunds, held per the money boundary); the other ~30 files + the 3 owner-gated refund sites, LOWERING `LITERAL_FLOOR` by each file's count in the same commit. **D70.2: 94 is a MIGRATION surface, not 94 bugs** (the rule has no res.ok exemption); the live-bug subset is the unchecked ones. Hand items E43-d/e/g/h/i/j + bug-12 are all IN the 94; **E43-f is OUT** (dead View buttons, no authFetch — own fix). (3) Flip the rule to `error` when the floor hits zero. (4) bug-12's flag-gate/notFound half is separate from its authFetch sites |
-| 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | todo |
+| 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | **E34 DONE** (§3): adopt-by-slug deleted, adoption now requires a CONFIRMED email and exactly one match, insert slug no longer comes from metadata, orphan factory in `register-venue` deleted. Prod facts settled the doc's open question: `venue_profiles.user_id` is NOT NULL, 9 venues / 0 orphans, so adopt-by-slug was latent and the seed had never worked; the insert half was live. No `artist_slug` equivalent exists (0 server readers). Remaining: E36c/E36b/E36d, E35d/E30b (`admin_users`), E30a |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
 | 12 | `08` rewritten cull last (D6 unconditional list only until rewritten) | `08` | todo |
@@ -9294,3 +9294,86 @@ Owner action needed: authorise the Supabase MCP (or say to write the migrations
 unapplied and accept the divergence, which I would not recommend).
 
 `npm run check` green throughout: 0 lint errors, 197 files, 1962 tests.
+
+---
+
+## Session 2026-08-28 — finishing the plan
+
+Supabase MCP re-verified live at the start of the session against
+`uwkuhygwvasdzwsusiym` (a cheap `information_schema` read returned 43 columns for
+`venue_profiles`), so rows 21 and 23(a) are unblocked. Baseline `npm run check`
+green before any change: 0 lint errors, 201 files, 1982 tests.
+
+Worktree note: this session started on `claude/wallplace-remediation-finish-42e4c1`,
+which was pinned at 356cd37 and therefore missing every commit above. Fast-forwarded
+onto `claude/wallplace-remediation-loop-b4984a` (a clean ff, 356cd37 was its ancestor)
+before doing anything, and ran `npm ci`.
+
+### E34 — venue takeover via a self-asserted `venue_slug` (03 §3) — DONE
+
+**The doc's open question, answered against prod.** `03` §3.2 could not tell whether
+`venue_profiles.user_id` is nullable in the deployed database, and said the answer
+decides the classification. It is **NOT NULL**, and prod holds **9 venues with 0
+ownerless rows**. So §3.5's second branch applies, and the hand-off prompt's framing
+("STILL LIVE, verified") is half right. Split honestly:
+
+- **Adopt-by-slug is latent, not live.** `.is("user_id", null)` can never match a row,
+  so the branch is unreachable today. It becomes a live takeover the moment anyone
+  makes that column nullable — and the branch was written *expecting* it to be.
+- **The insert half IS live.** The same self-asserted string was the base slug for the
+  fallback INSERT, so a signup could pre-claim the canonical handle of a venue that had
+  not registered yet: `/venues/<slug>`, plus the inbound routing for artist messages,
+  placements and artwork requests. No orphan needed.
+- **And the seed has never worked.** `register-venue` inserted a `venue_profiles` row
+  with `user_id` omitted against a NOT NULL column, so every venue registration since
+  launch hit a 23502 that was logged and swallowed. §3.5 predicted exactly this. The
+  0-orphan count is the proof.
+
+**What changed.**
+- `api/venue-profile/route.ts`: deleted the adopt-by-slug branch outright; adoption is
+  now by **confirmed** email only (`user.email_confirmed_at`, previously not checked at
+  all) and only when **exactly one** orphan matches — taking `.order(created_at desc)
+  .limit(1)` of several was a coin flip on a shared or role address. The fallback insert
+  derives its slug from the registration/display name, never from metadata.
+- `api/register-venue/route.ts`: deleted the orphan factory. It read `body.venueSlug`
+  off the **raw** body (not in `registerVenueSchema`, so unvalidated and never
+  slugified), which is what let an anonymous caller name any slug. Dead code by the
+  NOT NULL finding, and the entry point for the takeover.
+- To keep the deletion honest rather than a silent feature loss, `ensureVenueProfile`
+  now hydrates the new row from the caller's own `venue_registrations` entry, matched on
+  the confirmed email: name, type, location, contact_name, phone, wall_space — the same
+  fields the dead seed intended. Registration details still reach the profile; they just
+  key off a verified fact now.
+- `signup/venue/page.tsx`: stopped writing `venue_slug` into user_metadata and stopped
+  sending `venueSlug` to the API. Nothing reads it any more, and leaving a dead
+  self-asserted field invites the next reader to trust it again.
+- `components/VenuePortalLayout.tsx`: comment corrected — it claimed registration
+  inserts the row with `user_id=NULL`, which was never true in prod.
+
+**Also answered while here:** `03` §3.1 flagged as UNCONFIRMED whether an
+adopt-orphan-by-`artist_slug` path exists. It does not. `user_metadata.artist_slug` has
+**zero** server-side readers; `venue_slug` had exactly one, now removed.
+
+**What this does and does not buy.** After the fix a slug can only be obtained by
+registering a venue under that name with a confirmed email — auditable in
+`venue_registrations` (`status: 'pending'`) and rate-limited. It never transfers an
+existing row. Name-squatting by registering "The Copper Kettle" yourself is still
+possible; that is a moderation problem, not an authz hole, and the fix does not claim
+to solve it.
+
+**Tests.** `src/app/api/venue-profile/ensure-profile.test.ts` (10) and
+`src/app/api/register-venue/route.test.ts` (6), both new. The venue-profile file uses an
+in-memory stand-in for the service-role client that enforces the real `venue_profiles.slug`
+UNIQUE constraint, so the suffix loop is exercised for real. Exploit assertions, not just
+happy paths: the attacker gets no adoption AND the victim row's `user_id` stays null; the
+created slug is not the one they asserted.
+
+**Fail-before verified.** Against unfixed code, 6 of the 10 ensure-profile tests fail
+(`does not adopt an orphan named only by the attacker's metadata slug`, `does not use
+the metadata slug as the new row's slug either`, `falls back to a user-scoped slug…`,
+`refuses to adopt when the email is not confirmed`, `refuses to adopt when two orphans
+share the email…`, `copies registration details…`). Restoring the orphan factory in
+`register-venue` fails 2 of 6 there (`never opens a service-role client`, `ignores a
+venueSlug smuggled in on the raw body`); reverting restored 6/6.
+
+`npm run check` green: 0 lint errors (169 warnings), 203 files, 1998 tests.

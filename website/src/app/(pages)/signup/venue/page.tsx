@@ -153,15 +153,14 @@ export default function RegisterVenuePage() {
         return;
       }
 
-      const venueSlug = slugify(form.venueName);
-
-      // Persist the registration record AND seed the venue profile
-      // server-side. The endpoint now does both in one call so the
-      // verified login round-trip lands in a working portal.
+      // Persist the registration record. The venue profile itself is created
+      // on the first verified login (ensureVenueProfile), hydrated from this
+      // record via the confirmed email. E34: the slug used to be computed here
+      // and sent along, which made it a value the browser chose.
       const regRes = await fetch("/api/register-venue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, venueSlug }),
+        body: JSON.stringify(form),
       });
       if (!regRes.ok) {
         const data = await regRes.json().catch(() => ({}));
@@ -175,7 +174,11 @@ export default function RegisterVenuePage() {
         email: form.email,
         password: form.password,
         options: {
-          data: { user_type: "venue", display_name: form.contactName, venue_slug: venueSlug },
+          // E34: `venue_slug` used to ride along here and the server treated it
+          // as proof of ownership. Nothing reads it now, and it must not come
+          // back: a value written with the anon key is the claimant's choice,
+          // not evidence.
+          data: { user_type: "venue", display_name: form.contactName },
           emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(postSignupNext)}`,
         },
       });

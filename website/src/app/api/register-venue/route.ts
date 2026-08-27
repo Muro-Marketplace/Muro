@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { registerVenueSchema } from "@/lib/validations";
 import { notifyAdminNewVenue } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { slugify } from "@/lib/slugify";
 import { sendEmail } from "@/lib/email/send";
 import { VenueRegistrationConfirmation } from "@/emails/templates/venue-lifecycle/VenueRegistrationConfirmation";
 
@@ -64,34 +62,20 @@ export async function POST(request: Request) {
       location: `${d.city}, ${d.postcode}`,
     }).catch((err) => { if (err) console.error("notifyAdminNewVenue error:", err); });
 
-    // Seed venue_profiles so the portal is ready on verified login.
-    // user_id stays NULL until VenuePortalLayout's adoptIfOrphan effect
-    // back-fills it on the first verified visit.
-    const venueSlug = (typeof body.venueSlug === "string" && body.venueSlug)
-      ? body.venueSlug
-      : slugify(d.venueName);
-    const db = getSupabaseAdmin();
-    const { data: existing } = await db
-      .from("venue_profiles")
-      .select("id")
-      .eq("slug", venueSlug)
-      .maybeSingle();
-    if (!existing) {
-      const { error: profileErr } = await db.from("venue_profiles").insert({
-        slug: venueSlug,
-        name: d.venueName,
-        type: d.venueType === "Other" && body.customVenueType ? body.customVenueType : d.venueType,
-        location: d.city,
-        contact_name: d.contactName,
-        email: d.email,
-        phone: d.phone || "",
-        wall_space: d.wallSpace || "",
-        // user_id intentionally omitted — stays NULL until back-filled
-      });
-      if (profileErr) {
-        console.error("[register-venue] venue_profiles insert failed:", profileErr);
-      }
-    }
+    // E34. This used to seed an ownerless venue_profiles row here, on a slug
+    // taken from the RAW body (`body.venueSlug`, absent from registerVenueSchema,
+    // so unvalidated and never slugified) — letting an anonymous caller squat any
+    // slug and manufacture the orphan that venue-profile's adopt-by-slug branch
+    // would then hand to whoever claimed it.
+    //
+    // The seed could never work in any case: venue_profiles.user_id is NOT NULL
+    // and the insert omitted it, so every registration hit a 23502 that was
+    // logged and swallowed. Prod confirms it — 9 venues, 0 ownerless rows.
+    //
+    // The profile is now created on the venue's first verified login by
+    // ensureVenueProfile, hydrated from this venue_registrations row via the
+    // confirmed email. Registration details still reach the profile; ownership
+    // comes from a verified fact instead of a string a stranger chose.
 
     await sendEmail({
       idempotencyKey: `venue_registration_confirmation:${d.email.toLowerCase()}`,
