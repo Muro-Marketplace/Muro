@@ -38,6 +38,11 @@ export default function AdminPortalLayout({
   const { user, loading, userType, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // NOT the gate. E30b moved the decision to the server: AdminGate wraps the
+  // whole /admin route group and will not render this component at all unless
+  // /api/admin/whoami said yes. `userType` comes from user_metadata, which the
+  // user writes themselves at signup, so on its own it stopped nobody. Kept as
+  // a cheap second line and to route a signed-out visitor sensibly.
   useEffect(() => {
     if (!loading && (!user || userType !== "admin")) {
       router.replace("/login");

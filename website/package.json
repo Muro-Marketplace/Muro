@@ -19,7 +19,8 @@
     "depcheck": "depcruise src --config .dependency-cruiser.cjs",
     "audit:full": "npm run check && npm run audit:advisors && npm run audit:e2e-security",
     "audit:allowlist": "tsx scripts/audit/check-public-routes.ts",
-    "schema:snapshot": "tsx scripts/schema-snapshot.ts"
+    "schema:snapshot": "tsx scripts/schema-snapshot.ts",
+    "admin:backfill": "tsx scripts/backfill-admin-users.ts"
   },
   "dependencies": {
     "@react-email/components": "^1.0.12",

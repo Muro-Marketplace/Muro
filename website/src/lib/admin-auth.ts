@@ -34,6 +34,14 @@ async function resolveUser(request: Request): Promise<User | null> {
  *
  * The metadata check comes first so we never reach the DB for non-admin roles.
  * The email allowlist short-circuits so allowlisted admins never hit the DB.
+ *
+ * The `user_metadata` conjunct is a known weakness, documented in 03 §1.2: the
+ * field is writable by the user it belongs to (anon-key signUp, and GoTrue's
+ * PUT /auth/v1/user), so it raises no attacker cost, while anything that
+ * overwrites an admin's metadata silently revokes their access. Removing it is
+ * an owner-gated cutover and deliberately NOT done here. Migration 101 and the
+ * backfill script are its prerequisites, per 03 §1.4: create and backfill
+ * `admin_users` first, or the cutover locks every admin out.
  */
 async function userIsAdmin(user: User): Promise<boolean> {
   const role = (user.user_metadata as { user_type?: unknown } | null)?.user_type;
@@ -42,11 +50,32 @@ async function userIsAdmin(user: User): Promise<boolean> {
   const email = user.email?.toLowerCase();
   if (email && adminEmails().includes(email)) return true;
 
-  const { data } = await getSupabaseAdmin()
+  return adminUsersHasRow(user.id);
+}
+
+/**
+ * True iff `admin_users` carries a row for this user.
+ *
+ * Migration 101 created the table. Before it, the table did not exist in any
+ * environment (verified against prod 2026-08-28: `to_regclass` returned NULL),
+ * the select below errored, `data` came back null, and this branch silently
+ * returned false for everyone. So the deployed rule was never ADR 0001's
+ * three-source conjunction, it was `metadata AND email IN ADMIN_EMAILS`. The
+ * select also asked for `id`, a column the table does not have.
+ *
+ * A failure is logged rather than swallowed, so the next time this branch stops
+ * working it says so instead of quietly denying every table-only admin.
+ */
+async function adminUsersHasRow(userId: string): Promise<boolean> {
+  const { data, error } = await getSupabaseAdmin()
     .from("admin_users")
-    .select("id")
-    .eq("user_id", user.id)
+    .select("user_id")
+    .eq("user_id", userId)
     .limit(1);
+  if (error) {
+    console.error("[admin-auth] admin_users lookup failed:", error.message);
+    return false;
+  }
   return Array.isArray(data) && data.length > 0;
 }
 

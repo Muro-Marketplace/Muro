@@ -9508,3 +9508,99 @@ tests are untouched.
 fails 8 of 31; reverting restored 31/31.
 
 `npm run check` green: 0 lint errors, 208 files, 2052 tests, exit 0.
+
+### E30b + 03 §1.4 steps 0-2 — the admin surface and the admin_users table — DONE
+
+**Step 0, the inventory the doc says must be written down before anything else.**
+Run against prod 2026-08-28:
+
+- `SELECT to_regclass('public.admin_users')` → **NULL. The table has never existed.**
+  This closes §1.1's UNCONFIRMED fact 3, and the consequence is bigger than the doc
+  allowed for: the deployed predicate was never ADR 0001's three-source conjunction.
+  The PostgREST select errored, `data` came back null, `Array.isArray(null)` was
+  false, and the branch silently returned false for everyone. The live rule was
+  `metadata AND email IN ADMIN_EMAILS`. The select also asked for `id`, a column the
+  intended table does not have.
+- 40 auth users; exactly **1** with `raw_user_meta_data->>'user_type' = 'admin'`
+  (`fcoles2598@gmail.com`, confirmed). So creating and backfilling the table is
+  additive and risk-free, exactly as §1.4 predicted for this branch.
+
+**Step 1, migration 101 — written, applied, verified in one piece of work (D57).**
+`supabase/migrations/101_admin_users.sql`, applied via the Supabase MCP and verified
+live: table exists, RLS enabled, **0 policies**, **0 grants to anon/authenticated/PUBLIC**,
+`service_role` granted, **0 rows**. It therefore grants nobody anything on its own —
+it is the second operand of an OR whose first operand is unchanged. Snapshot
+regenerated: `tests/integration/schema-columns.json` now has 54 tables, with
+`admin_users` inserted at the JSONB-canonical position (after `placements`), produced
+through the regenerator's own `serialize()` so the diff is one line and not a
+reformat. `SUPABASE_ACCESS_TOKEN` is still unset (D62), so the regeneration went
+through the same library the script uses rather than the script itself.
+
+**Step 2, backfill — script shipped, deliberately not run.** `scripts/backfill-admin-users.ts`,
+wired as `npm run admin:backfill`, with `--dry-run`. It resolves each `ADMIN_EMAILS`
+entry through `auth.admin.listUsers()` (paged) and upserts a row, then asserts the
+table mirrors the allowlist completely and exits 1 naming any address with no auth
+user. It refuses to run on an empty allowlist, because backfilling nothing and
+reporting success is the precise state that makes the later cutover lock everyone out.
+
+**I did not insert rows myself, on purpose.** The correct row set is derived from the
+deployed `ADMIN_EMAILS`, which is not readable from here. Inserting the one metadata
+admin on a guess would be granting prod admin to an account that may not currently
+hold it — a prod grant, which the loop escalates rather than does. Running the script
+in an environment that has the real allowlist is both safer and the doc's own design.
+
+**Step 3, the predicate cutover — NOT DONE, owner-gated,** per the standing
+instruction and D5. The `user_metadata` conjunct stays until the owner says
+otherwise, and `admin-auth.ts` now carries a comment saying so and naming its
+prerequisites.
+
+**What DID change in `admin-auth.ts`:** the `admin_users` select asked for `id`
+(nonexistent) and swallowed its error. It now selects `user_id`, distinguishes a
+failed lookup from an empty one, and logs the failure. That takes the branch from
+"always false because it errored" to "correctly false because the table is empty",
+which is not a privilege change.
+
+**E30b, the surface gate.** `admin/layout.tsx` returned its children unwrapped, so
+nothing ran ahead of the `/admin` route group and the only gate was a render-time
+`userType !== "admin"` check inside a client component, on the field the attacker
+writes. New `AdminGate` wraps the route group and renders nothing until
+`/api/admin/whoami` (new, using the real `getAdminUser`) confirms. Wiring it at the
+route-group boundary rather than per page is the point: the original hole was
+reachable because nothing enforced the pairing.
+
+**One deliberate deviation from §2.2:** it groups 503 with 401/403 and redirects all
+three to `/login`. A 503 means the server has no admin source configured, so sending
+the admin to a login form they will complete successfully and then bounce from again
+is a loop. `AdminGate` names the misconfiguration instead. `AdminPortalLayout` keeps
+its check as a cheap second line, with the comment rewritten to stop implying it is
+the gate.
+
+**§2.2's ordering warning, assessed and found not to apply here.** It says stage 1
+must ship *after* the predicate change or admins are locked out of the UI. That is
+about a gate stricter than the current one. It is not: today's client gate already
+requires the metadata, so `AdminGate` (metadata AND allowlist) can only reject people
+the current gate already rejects. Nobody with access today loses it.
+
+**Tests.** 24 new. `AdminGate.test.tsx` (7): the regression case is metadata claiming
+admin while the server says 403 renders nothing; plus no shell flash before the
+answer, fail-closed when the check throws, 503 named not looped, and exactly one call
+to the read-only whoami route. `whoami/route.test.ts` (7) drives the real
+`getAdminUser` through the same mock harness as `admin-auth.test.ts` rather than
+mocking the thing under test. `admin-route-guard.test.ts` (3) is the invariant that
+keeps the real boundary real: every route under `api/admin` must call a guard, and
+per exported handler, not once per file. Proved it bites by adding an unguarded
+`api/admin/__probe/route.ts`: 2 of 3 failed naming the file, and passed again once
+removed. `AdminGate.test.tsx` needed an explicit `afterEach(cleanup)` — this repo has
+no global auto-cleanup and `screen` queries the whole document, so one test's rendered
+shell was being found by the next test's "rendered nothing" assertion.
+
+**One real bug the tests caught in my own code:** `AdminGate`'s effect had `[router]`
+in its deps, so an unstable router identity re-ran the whoami check on every render.
+Split into ask-once (empty deps, genuinely exhaustive) and act-on-the-answer.
+
+**ADR 0008 written**, superseding 0001. It quotes and corrects 0001's false claim that
+`user_metadata` "can only be set via the Supabase service-role API", strikes it
+through in place so it cannot be quoted out of context, and records the step table
+with what is done and what is owner-gated.
+
+`npm run check` green: 0 lint errors, 211 files, 2069 tests, exit 0.

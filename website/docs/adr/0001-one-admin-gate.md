@@ -1,7 +1,15 @@
 # ADR 0001 - One canonical admin gate
 
-**Status:** Accepted  
+**Status:** Superseded by [0008](0008-admin-gate-server-facts-only.md)  
 **Date:** 2026-06-14
+
+> **Superseded 2026-08-28.** Two of this ADR's premises turned out to be false.
+> The `admin_users` table it treats as an operand did not exist in the deployed
+> database, so the live predicate was `metadata AND email in ADMIN_EMAILS`. And
+> the "second factor" claim under Consequences / Positive below is wrong:
+> `user_metadata` is NOT service-role-only, it is writable by the user it
+> belongs to via anon-key `signUp` and GoTrue's `PUT /auth/v1/user`. Read
+> [0008](0008-admin-gate-server-facts-only.md) before acting on anything here.
 
 ---
 
@@ -48,7 +56,7 @@ Two public exports are built on this predicate:
 ### Positive
 
 - There is now a single place to read, audit, and change the admin definition.
-- The metadata field acts as a second factor: even if an attacker compromises an allowlisted email address, they cannot gain admin access without also controlling `user_metadata.user_type`, which can only be set via the Supabase service-role API.
+- ~~The metadata field acts as a second factor: even if an attacker compromises an allowlisted email address, they cannot gain admin access without also controlling `user_metadata.user_type`, which can only be set via the Supabase service-role API.~~ **FALSE, corrected by [0008](0008-admin-gate-server-facts-only.md).** `user_metadata` is writable by the user it belongs to. It raises no attacker cost, and as a conjunct it can strip a real admin whose metadata gets overwritten.
 - `isAdminRequest` makes it straightforward to add admin checks to new routes without duplicating logic.
 
 ### Negative / breaking
