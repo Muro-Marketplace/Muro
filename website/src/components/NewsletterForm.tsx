@@ -34,7 +34,10 @@ export default function NewsletterForm({ source = "footer", className = "" }: Ne
         return;
       }
       setStatus("success");
-      setMessage(body?.alreadySubscribed ? "You're already subscribed." : "Thanks, you're on the list.");
+      // E36d: the response no longer distinguishes a fresh subscribe from an
+      // existing one, because doing so leaked membership to anyone with a list
+      // of addresses. One message for both.
+      setMessage("Thanks, you're on the list.");
       setEmail("");
     } catch {
       setStatus("error");

@@ -9433,3 +9433,78 @@ trusted list fails 6 of the 12, including the bucket-sharing regression test; re
 restored 12/12.
 
 `npm run check` green: 0 lint errors (169 warnings), 204 files, 2011 tests, exit 0.
+
+### E36b — open redirect in /api/demo/login (03 §5.2) — DONE
+
+`destinationFor` accepted any `next` starting with `/`. That includes
+protocol-relative URLs: `new URL("//evil.example/x", "https://wallplace.co.uk/…")`
+resolves to `https://evil.example/x`, and `/\evil.example` is read as a host by
+several browsers. It mattered more than a bare open redirect because the route sets
+the `sb-*-auth-token` cookie on the same response, so the bounce is
+credential-adjacent and starts on a wallplace.co.uk URL.
+
+This was the only redirect construction in the app not going through
+`@/lib/safe-redirect`. It uses the shared helper now; nothing new was written.
+
+**Tests.** `src/app/api/demo/login/route.test.ts`, 15 new, table-driven over eight
+hostile `next` values plus the in-app paths that must keep working. One asserts the
+auth cookie is set on the very response that redirects, so the reason this mattered
+is written down and not just in a comment.
+
+**Fail-before verified.** Restoring `startsWith("/")` fails 6 of 15: the
+protocol-relative, triple-slash, backslash-host and CRLF cases, plus the venue
+default and the cookie test. The `javascript:`, `data:`, absolute-https and bare-host
+cases passed even before the fix (none starts with `/`), which is worth stating
+rather than implying all eight were live.
+
+### E36d — user enumeration on apply / waitlist / register-venue (03 §5.4) — DONE
+
+All three returned a distinct 409 with a specific message on a duplicate email
+against a 200 otherwise, so a public unauthenticated form told anyone with a list of
+addresses who had applied, joined the waitlist, or registered a venue. With E36c's
+spoofable key (fixed above) the oracle was unlimited.
+
+**Both channels closed, not just the obvious one.** §5.4 warned that a timing side
+channel survives the naive fix: the success path awaits `sendEmail` while the 409
+path returns immediately, so latency separates the cases even with identical status
+codes. That is now closed too, and the tests assert the byte-identical body, not
+merely the status.
+
+- Duplicate branches return byte-identical output to a fresh submission. The signal
+  moves to a `console.warn` server log line, which is where it belonged.
+- New `src/lib/after-response.ts` wraps Next 16's `after()`. Both sends move off the
+  response path, so both branches return at the same point. It falls back to running
+  the task inline when there is no Next request scope, because `after()` throws
+  there rather than deferring, and every route unit test in this repo calls handlers
+  directly. §5.4 preferred enqueuing over an artificial delay and asked whether it
+  was feasible: `after()` is exactly that, and it needed no new infrastructure.
+- Neither send fires on a duplicate. Skipping matters beyond noise: re-sending would
+  let anyone mail a stranger, and re-pinging would let anyone fill the admin inbox,
+  by submitting an address they guessed.
+- `apply`'s profile bridge is also skipped on a duplicate. It was already idempotent
+  (guarded by an existence check on `user_id`), so this is about not doing pointless
+  work on the oracle path.
+- **newsletter fixed too, as §5.4 asked.** Its comment claimed it avoided the leak;
+  the code returned `{ok: true, alreadySubscribed: true}`, which is the same
+  disclosure one level down. Flag dropped, and `NewsletterForm.tsx` now shows one
+  message for both cases instead of "You're already subscribed."
+
+**Checked before merging, per §5.4's breakage note.** Grepped for consumers of the
+409 and of "already exists" across components and pages: none. The only `409` handler
+is `checkout/page.tsx`, a different route, and `apply/claim/page.tsx` matches on
+Supabase Auth's own message, not ours.
+
+**Tests.** 21 new across four files (`waitlist`, `newsletter`, `register-venue`,
+plus 6 added to the existing `apply` suite), and 5 for the helper. Each route asserts
+`{status, body}` equality between the duplicate and fresh cases, that a real database
+failure (42501) still 500s rather than being swallowed into a fake success, and that
+neither send fires on a duplicate. Those last assertions await a tick first —
+`afterResponse` deliberately does not await the task, so without the flush they would
+have passed vacuously. `apply`'s existing mock was changed to return the mock's value
+rather than a hardcoded `{error:null}`, defaulting to success so the pre-existing
+tests are untouched.
+
+**Fail-before verified.** Restoring the 409 branches and the `alreadySubscribed` flag
+fails 8 of 31; reverting restored 31/31.
+
+`npm run check` green: 0 lint errors, 208 files, 2052 tests, exit 0.

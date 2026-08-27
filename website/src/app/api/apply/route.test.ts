@@ -29,8 +29,10 @@ vi.mock("@/lib/supabase-admin", () => ({
       if (table === "artist_applications") {
         return {
           insert: async (payload: Record<string, unknown>) => {
-            applicationInsertMock(payload);
-            return { error: null };
+            // The return value comes from the mock so a test can drive the
+            // 23505 / real-failure branches (E36d). Defaults to success so the
+            // tests written before that stay unchanged.
+            return applicationInsertMock(payload) ?? { error: null };
           },
         };
       }
@@ -109,6 +111,14 @@ function req(body: unknown = VALID_BODY, withAuth = true): Request {
     body: JSON.stringify(body),
   });
 }
+
+
+/**
+ * Let the afterResponse task run. The handler deliberately does not await the
+ * sends (E36d: awaiting them is what made the duplicate branch measurably
+ * faster), so without this the "not called" assertions would pass vacuously.
+ */
+const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
   applicationInsertMock.mockReset();
@@ -193,5 +203,60 @@ describe("POST /api/apply creates the artist_profiles bridge row", () => {
     // admin accept route will create the profile from the application).
     expect(applicationInsertMock).toHaveBeenCalledTimes(1);
     expect(profilesInsertMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/apply is not an account-existence oracle (E36d)", () => {
+  const DUPLICATE = { error: { code: "23505", message: "duplicate key" } };
+
+  it("answers a duplicate email byte-identically to a fresh application", async () => {
+    const freshRes = await POST(req());
+    const fresh = { status: freshRes.status, body: await freshRes.text() };
+
+    applicationInsertMock.mockReturnValue(DUPLICATE);
+    const dupRes = await POST(req());
+    const duplicate = { status: dupRes.status, body: await dupRes.text() };
+
+    expect(duplicate).toEqual(fresh);
+    expect(duplicate.status).toBe(200);
+  });
+
+  it("never answers 409 on a unique-constraint violation", async () => {
+    applicationInsertMock.mockReturnValue(DUPLICATE);
+    const res = await POST(req());
+    expect(res.status).not.toBe(409);
+    expect(await res.text()).not.toContain("already exists");
+  });
+
+  it("does not re-notify the admin or re-send the receipt on a duplicate", async () => {
+    // Otherwise the endpoint mails anyone whose address you can guess, and
+    // spams the admin inbox on demand.
+    applicationInsertMock.mockReturnValue(DUPLICATE);
+    await POST(req());
+    await flush();
+    expect(notifyAdminMock).not.toHaveBeenCalled();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("does not re-run the profile bridge on a duplicate", async () => {
+    applicationInsertMock.mockReturnValue(DUPLICATE);
+    await POST(req());
+    expect(profilesInsertMock).not.toHaveBeenCalled();
+  });
+
+  it("still sends both on a fresh application", async () => {
+    await POST(req());
+    await flush();
+    expect(notifyAdminMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("still surfaces a genuine database failure as a 500", async () => {
+    // The oracle fix must not swallow real errors into a fake success.
+    applicationInsertMock.mockReturnValue({ error: { code: "42501", message: "permission denied" } });
+    const res = await POST(req());
+    await flush();
+    expect(res.status).toBe(500);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });

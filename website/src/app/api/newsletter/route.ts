@@ -32,12 +32,16 @@ export async function POST(request: Request) {
     source: parsed.data.source || "website",
   });
 
-  // Unique-constraint violation = already subscribed. Treat as success so we
-  // don't leak membership status to enumeration attacks, but surface a
-  // friendly message.
+  // Unique-constraint violation = already subscribed. Return exactly what a
+  // fresh subscribe returns, so this is not a membership oracle.
+  //
+  // E36d: the comment used to claim that and the code did not deliver it — the
+  // 200 carried `alreadySubscribed: true`, which is the same leak one level
+  // down. Reading a boolean off the body is no harder than reading a status.
   if (error) {
     if ((error as { code?: string }).code === "23505") {
-      return NextResponse.json({ ok: true, alreadySubscribed: true });
+      console.warn("[newsletter] duplicate subscribe for an existing email");
+      return NextResponse.json({ ok: true });
     }
     console.error("Newsletter subscribe error:", error);
     return NextResponse.json({ error: "Could not subscribe, please try again." }, { status: 500 });

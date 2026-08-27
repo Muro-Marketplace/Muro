@@ -6,6 +6,7 @@ import { notifyAdminNewApplication } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistApplicationSubmitted } from "@/emails/templates/artist-additions/ArtistApplicationSubmitted";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { afterResponse } from "@/lib/after-response";
 import { slugify } from "@/lib/slugify";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -130,13 +131,21 @@ export async function POST(request: Request) {
       }
     }
 
+    // E36d. A duplicate email used to answer 409 with "An application with this
+    // email already exists", which turns a public unauthenticated form into an
+    // account-existence oracle: submit an address, read the status, learn
+    // whether that person has applied. It now returns byte-identical output to
+    // a fresh submission. The repeat submitter sees the success screen, which
+    // is the right trade for a public form; if we ever need to tell them, tell
+    // them by email, which only reaches someone who controls the address.
+    // The duplicate still gets a server log line, which is where the signal
+    // belonged.
+    const alreadyApplied = error?.code === "23505";
+    if (alreadyApplied) {
+      console.warn("[apply] duplicate application for an existing email");
+      error = null;
+    }
     if (error) {
-      if (error.code === "23505") {
-        return NextResponse.json(
-          { error: "An application with this email already exists" },
-          { status: 409 }
-        );
-      }
       console.error("Supabase error:", error);
       return NextResponse.json(
         { error: "Something went wrong. Please try again." },
@@ -152,7 +161,7 @@ export async function POST(request: Request) {
     // marketplace and outbound actions (placements, sales) stay gated
     // by review_status='approved' so a pending profile doesn't leak
     // onto /browse or send placement requests.
-    if (authedUser) {
+    if (authedUser && !alreadyApplied) {
       try {
         const db = getSupabaseAdmin();
         const { data: existingProfile } = await db
@@ -211,27 +220,37 @@ export async function POST(request: Request) {
       }
     }
 
-    // Admin ping, keep the legacy helper, it's internal only.
-    // primaryMedium is optional now; fall back to a placeholder so
-    // the admin notification helper's required-string contract holds.
-    await notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium || "-" }).catch((err) => { if (err) console.error("notifyAdminNewApplication error:", err); });
+    // E36d. Both sends move off the response path. Awaiting them here is what
+    // made the duplicate branch measurably faster than the fresh one, so the
+    // status fix above would have leaked through latency instead. Skipped
+    // entirely on a duplicate: the applicant already has their receipt (the
+    // idempotency key would suppress it anyway) and the admin already has
+    // their ping.
+    if (!alreadyApplied) {
+      afterResponse(async () => {
+        // Admin ping, keep the legacy helper, it's internal only.
+        // primaryMedium is optional now; fall back to a placeholder so
+        // the admin notification helper's required-string contract holds.
+        await notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium || "-" }).catch((err) => { if (err) console.error("notifyAdminNewApplication error:", err); });
 
-    // Applicant receipt via the new pipeline (polished template, logged,
-    // preference-aware). We key idempotency off the email address so a
-    // double-submit from the form doesn't double-send.
-    await sendEmail({
-      idempotencyKey: `artist_application_submitted:${d.email.toLowerCase()}`,
-      template: "artist_application_submitted",
-      category: "placements",
-      to: d.email,
-      subject: "We've received your Wallplace application",
-      react: ArtistApplicationSubmitted({
-        firstName: (d.name || "there").split(" ")[0],
-        reviewTimelineDays: 3,
-        portfolioUrl: `${SITE}/artist-portal/portfolio`,
-      }),
-      metadata: { email: d.email, location: d.location },
-    });
+        // Applicant receipt via the new pipeline (polished template, logged,
+        // preference-aware). We key idempotency off the email address so a
+        // double-submit from the form doesn't double-send.
+        await sendEmail({
+          idempotencyKey: `artist_application_submitted:${d.email.toLowerCase()}`,
+          template: "artist_application_submitted",
+          category: "placements",
+          to: d.email,
+          subject: "We've received your Wallplace application",
+          react: ArtistApplicationSubmitted({
+            firstName: (d.name || "there").split(" ")[0],
+            reviewTimelineDays: 3,
+            portfolioUrl: `${SITE}/artist-portal/portfolio`,
+          }),
+          metadata: { email: d.email, location: d.location },
+        });
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch {

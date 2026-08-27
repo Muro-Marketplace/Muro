@@ -56,6 +56,14 @@ function post(body: unknown): Request {
   });
 }
 
+
+/**
+ * Let the afterResponse task run. The handler deliberately does not await it
+ * (E36d: awaiting the send is what made the two branches distinguishable by
+ * latency), so without this the "not called" assertions would pass vacuously.
+ */
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
 beforeEach(() => {
   anonFrom.mockReset();
   insertMock.mockReset();
@@ -127,5 +135,55 @@ describe("POST /api/register-venue (E34: no orphan factory)", () => {
     const res = await POST(post(VALID));
     expect(res.status).toBe(429);
     expect(insertMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/register-venue is not an account-existence oracle (E36d)", () => {
+  it("answers a duplicate email byte-identically to a fresh registration", async () => {
+    const freshRes = await POST(post(VALID));
+    const fresh = { status: freshRes.status, body: await freshRes.text() };
+
+    insertMock.mockResolvedValue({ error: { code: "23505", message: "duplicate key" } });
+    const dupRes = await POST(post(VALID));
+    const duplicate = { status: dupRes.status, body: await dupRes.text() };
+
+    expect(duplicate).toEqual(fresh);
+    expect(duplicate.status).toBe(200);
+  });
+
+  it("never answers 409 on a unique-constraint violation", async () => {
+    insertMock.mockResolvedValue({ error: { code: "23505", message: "duplicate key" } });
+    const res = await POST(post(VALID));
+    expect(res.status).not.toBe(409);
+    expect(await res.text()).not.toContain("already exists");
+  });
+
+  it("does not re-notify or re-send on a duplicate", async () => {
+    // Otherwise the endpoint mails anyone whose address you can guess, and
+    // spams the admin inbox on demand.
+    insertMock.mockResolvedValue({ error: { code: "23505", message: "duplicate key" } });
+    await POST(post(VALID));
+    await flush();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it("still sends both on a fresh registration", async () => {
+    await POST(post(VALID));
+    await flush();
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0]).toMatchObject({
+      to: "stranger@evil.example",
+      template: "venue_registration_confirmation",
+    });
+  });
+
+  it("still surfaces a genuine database failure as a 500", async () => {
+    insertMock.mockResolvedValue({ error: { code: "42501", message: "permission denied" } });
+    const res = await POST(post(VALID));
+    await flush();
+    expect(res.status).toBe(500);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });
