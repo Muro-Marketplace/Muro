@@ -2,10 +2,12 @@
 // PostgREST uses commas as term separators and parens for and()/or() groups,
 // so a value containing them can inject extra filter terms. A term is kept
 // only if it matches column.operator.value with a value charset that excludes
-// commas and parens. Dots, plus, percent, at and hyphen are allowed so normal
-// emails, slugs and UUIDs pass.
+// commas and parens. Dots, plus, percent, at, hyphen and colon are allowed so
+// normal emails, slugs, UUIDs and ISO timestamps pass (colon carries no
+// meaning to PostgREST's filter grammar; commas and parens are the
+// injection vectors).
 const SAFE_TERM =
-  /^[a-zA-Z_][a-zA-Z0-9_]*\.(eq|neq|gt|gte|lt|lte|like|ilike|in|is)\.[A-Za-z0-9_@%+.\-]+$/;
+  /^[a-zA-Z_][a-zA-Z0-9_]*\.(eq|neq|gt|gte|lt|lte|like|ilike|in|is)\.[A-Za-z0-9_@%+.:\-]+$/;
 
 /**
  * Join only the terms whose value is safe to interpolate into .or().

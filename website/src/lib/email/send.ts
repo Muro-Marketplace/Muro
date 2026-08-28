@@ -23,6 +23,7 @@
 import { Resend } from "resend";
 import { render } from "@react-email/components";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { orFilter } from "@/lib/db/safe-filter";
 import { isProductionRuntime } from "@/lib/email/env";
 import { STREAMS } from "./streams";
 import {
@@ -293,7 +294,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       })
       .eq("idempotency_key", input.idempotencyKey)
       .neq("status", "sent")
-      .or(`status.neq.queued,created_at.lt.${staleBefore}`)
+      .or(orFilter(["status.neq.queued", `created_at.lt.${staleBefore}`]))
       .select("id")
       .maybeSingle();
     if (reclaimError) {

@@ -56,6 +56,21 @@ export async function POST(request: Request) {
 
     const d = parsed.data;
 
+    // A50 (QA 2026-08-28): the whole point of auth-gating the application is
+    // to reject impersonation instead of trusting whatever email the form
+    // sent, and this route never actually checked. A signed-in user could
+    // file an application, and trigger the acknowledgement email, for any
+    // address they liked. When we know who the caller is, the application
+    // email must be their own; the legacy unauthenticated path is unchanged.
+    if (authedUser?.email && d.email.toLowerCase() !== authedUser.email.toLowerCase()) {
+      return NextResponse.json(
+        {
+          error: `Please apply with the email on your account (${authedUser.email}). To use a different address, sign out first.`,
+        },
+        { status: 403 },
+      );
+    }
+
     // ONE insert, no strip-and-retry. Every column below exists in production
     // (checked against `tests/integration/schema-columns.json` and against the
     // live schema), so the ladder that used to sit under this could not do what
@@ -231,8 +246,12 @@ export async function POST(request: Request) {
         // K1: was notifyAdminNewApplication in the legacy module. Through the
         // pipeline it gets an email_events row and an idempotency key, so a
         // retried submission no longer pings the admin twice.
+        // R4.15: keyed on the bare email, this burnt forever, so a rejected
+        // artist re-applying (their old row deleted) pinged nobody. The
+        // submission's created_at scopes the key to THIS application; the
+        // unique email constraint already stops double-submits reaching here.
         await sendAdminAlert({
-          idempotencyKey: `admin_new_application:${d.email.toLowerCase()}`,
+          idempotencyKey: `admin_new_application:${d.email.toLowerCase()}:${fullRow.created_at}`,
           subject: `New artist application: ${d.name}`,
           summary: `${d.name} has applied to join Wallplace.`,
           fields: [
@@ -245,10 +264,12 @@ export async function POST(request: Request) {
         });
 
         // Applicant receipt via the new pipeline (polished template, logged,
-        // preference-aware). We key idempotency off the email address so a
-        // double-submit from the form doesn't double-send.
+        // preference-aware). R4.15: keyed per submission (email + the row's
+        // created_at), not per address, so a legitimate re-application after a
+        // rejection gets its receipt. Double-submits never reach this block:
+        // the duplicate insert 23505s and alreadyApplied skips both sends.
         await sendEmail({
-          idempotencyKey: `artist_application_submitted:${d.email.toLowerCase()}`,
+          idempotencyKey: `artist_application_submitted:${d.email.toLowerCase()}:${fullRow.created_at}`,
           template: "artist_application_submitted",
           category: "placements",
           to: d.email,
