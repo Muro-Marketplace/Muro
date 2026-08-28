@@ -93,6 +93,42 @@ function withoutComments(yaml: string): string {
     .join("\n");
 }
 
+// 09 item 4.4. `npm run check` is the local gate, and CI ran only three of its
+// six parts, so the public-route allowlist, the one-email-entrypoint dependency
+// rule and the template render pass gated nothing on a PR. They passed on a
+// developer's machine and were decoration everywhere it counted.
+//
+// The required list is DERIVED from package.json rather than hand-written here,
+// so adding a script to `check` and forgetting the CI step fails this test
+// instead of silently un-gating the guard it was added for.
+describe("CI runs every gate that `npm run check` runs (09 item 4.4)", () => {
+  const pkg = JSON.parse(
+    readFileSync(path.resolve(here, "../../package.json"), "utf8"),
+  ) as { scripts: Record<string, string> };
+
+  /** The `npm run X` names `check` chains together, in order. */
+  const checkParts = [...pkg.scripts.check.matchAll(/npm run ([\w:-]+)/g)].map((m) => m[1]);
+
+  it("parses the check script into parts, so an empty list cannot pass vacuously", () => {
+    expect(checkParts.length).toBeGreaterThanOrEqual(4);
+    expect(checkParts).toContain("lint");
+  });
+
+  it.each(checkParts.map((part) => [part]))("has a CI step running `npm run %s`", (part) => {
+    expect(
+      () => stepBlock(`npm run ${part}`),
+      `\`npm run ${part}\` is part of \`npm run check\` but no CI step runs it, ` +
+        "so whatever it guards does not block a PR",
+    ).not.toThrow();
+  });
+
+  it("does not let any of them pass when they fail", () => {
+    for (const part of checkParts) {
+      expect(stepBlock(`npm run ${part}`).join("\n"), part).not.toMatch(/continue-on-error/);
+    }
+  });
+});
+
 describe("advisor runs nightly, not as a PR gate (D12 ruling 3)", () => {
   const NIGHTLY_WORKFLOW = path.resolve(here, "../../../.github/workflows/advisors-nightly.yml");
   const nightly = existsSync(NIGHTLY_WORKFLOW)

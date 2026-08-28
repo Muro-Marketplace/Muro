@@ -10621,3 +10621,44 @@ own commit and your sign-off.
   `08` should cull rather than fix.
 - **The `08` cull beyond D6 item 3.** Surfaced with per-item verification instead,
   because two of D6's four "zero inbound link" deletions are not in fact clean.
+
+### 09 items 4.4 and 4.5 — DONE, and 4.4 found a real gap
+
+**4.4 first, because it turned out to matter more than it reads.** CI's `check`
+job runs `npm run lint`, `npm run typecheck` and `npm run test` as three separate
+steps. It does **not** run `npm run check`. So three of that script's six parts
+never ran on a PR:
+
+- `audit:allowlist` (the public-route + demo-exempt allowlist) — **this gap
+  predates the session**;
+- `depcheck` (the `one-email-entrypoint` rule from K1);
+- `email:render` (the template render pass from 4.1).
+
+Two of those three are guards **I added this session believing they gated**. They
+passed locally and were decoration everywhere it counted. Fixed: three new steps,
+kept separate rather than collapsed into one `npm run check` so a red build names
+the gate that broke.
+
+**The lock is derived, not hand-written.** `ci-gates.test.ts` now parses
+`package.json`'s `check` script into its `npm run X` parts and asserts a CI step
+exists for each, with no `continue-on-error`. Adding anything to `check` and
+forgetting the CI step now fails the test instead of silently un-gating whatever
+it was added for. Proved it bites by appending `schema:snapshot` to `check`: 2 of
+19 failed naming it; reverting restored 18/18.
+
+**4.5.** `src/emails/OUTSTANDING.md` opened with "113 templates built · 50 wired ·
+63 outstanding". All three numbers were wrong: the audit reports **131 built, 65
+wired, 66 with no send path**. Replaced with the command rather than with fresher
+numbers, because a hand-maintained count in a file nobody regenerates is exactly
+how the document came to disagree with the codebase. §E.1 calls the audit "the
+honest replacement for OUTSTANDING.md:3", so that is what it now says.
+
+**One deviation from §4.5, stated rather than fudged.** It also says to delete
+§1.1, §1.2 and §2.1 as "done in 0.5". Those are DNS records, Vercel environment
+variables and Supabase dashboard settings. **Nothing in the repository can tell
+me whether they are done**, so deleting them would be asserting infrastructure
+state this file cannot see. They stay, with a note saying exactly that and what
+to check before deleting them.
+
+`npm run check` green: 0 lint errors, 227 files, 2218 tests, 131 templates, 0
+dependency violations, exit 0.

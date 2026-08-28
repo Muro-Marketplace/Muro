@@ -48,6 +48,21 @@ jobs:
         run: npm run lint
       - run: npm run typecheck
       - run: npm run test
+      # 09 item 4.4. These three are part of `npm run check` and were NOT run
+      # here, so every guard behind them was decoration: the public-route
+      # allowlist, the one-email-entrypoint dependency rule, and the template
+      # render pass all passed locally and gated nothing on a PR.
+      #
+      # Kept as separate steps rather than a single `npm run check` so a red
+      # build names the gate that broke. ci-gates.test.ts derives the required
+      # list from package.json's `check` script, so adding anything to `check`
+      # without adding a step here fails the test.
+      - name: Public-route allowlist
+        run: npm run audit:allowlist
+      - name: Dependency rules
+        run: npm run depcheck
+      - name: Email templates render
+        run: npm run email:render
 
   # The Supabase advisor deliberately does NOT run here. It lives in
   # advisors-nightly.yml. See EXECUTION-DECISIONS D12 ruling 3: a clean advisor
