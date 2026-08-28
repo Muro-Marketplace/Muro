@@ -542,8 +542,15 @@ describe("PATCH /api/placements concurrent placement cap (Task 3)", () => {
       if (table === "messages") {
         return {
           select: () => ({
+            // Two shapes fork off the same .eq("message_type", ...): the F39
+            // requester-trail lookup goes straight to order/limit, the
+            // accept/decline auto-message goes via .contains() first to find
+            // the original placement_request thread.
             eq: () => ({
               order: () => ({ limit: async () => ({ data: trail, error: null }) }),
+              contains: () => ({
+                order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+              }),
             }),
           }),
           insert: async () => ({ error: null }),
