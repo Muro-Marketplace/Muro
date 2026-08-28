@@ -277,7 +277,7 @@ export async function PATCH(request: Request) {
         data: {
           firstName: firstName0,
           orderNumber: orderId,
-          orderUrl: `${SITE}/customer-portal/orders`,
+          orderUrl: `${SITE}/customer-portal`,
           // 09 item 1.5: the cancellation template needs the verb phrase, and
           // the dispatcher spreads `data` straight into the component.
           statusText: orderStatusText(status),
@@ -327,7 +327,7 @@ export async function PATCH(request: Request) {
             orderNumber: orderId,
             statusText: orderStatusText(status),
             trackingNumber: trackingNumber || undefined,
-            orderUrl: `${SITE}/customer-portal/orders`,
+            orderUrl: `${SITE}/customer-portal`,
             supportUrl: `${SITE}/support`,
           }),
           metadata: { orderId, status },

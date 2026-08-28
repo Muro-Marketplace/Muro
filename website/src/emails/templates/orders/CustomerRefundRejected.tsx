@@ -50,7 +50,7 @@ export const mock: CustomerRefundRejectedProps = {
   firstName: "Sam",
   orderNumber: "WP-4821",
   reason: "The return window for this order closed on 14 May.",
-  ordersUrl: "https://wallplace.co.uk/customer-portal/orders",
+  ordersUrl: "https://wallplace.co.uk/customer-portal",
   supportUrl: "https://wallplace.co.uk/support",
 };
 

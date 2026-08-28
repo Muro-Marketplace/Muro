@@ -29,7 +29,7 @@ export const mock: OrderDisputeResolvedProps = {
   firstName: "Maya",
   orderNumber: "WP-28473",
   outcome: "Full refund to the buyer; replacement piece shipped by the artist at our cost.",
-  disputeUrl: "https://wallplace.co.uk/orders/WP-28473/dispute",
+  disputeUrl: "https://wallplace.co.uk/orders/WP-28473",
   supportUrl: "https://wallplace.co.uk/support",
 };
 

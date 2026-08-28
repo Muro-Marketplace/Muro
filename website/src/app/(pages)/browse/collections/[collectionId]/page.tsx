@@ -12,6 +12,7 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 import SaveButton from "@/components/SaveButton";
 import MakeOfferModal from "@/components/offers/MakeOfferModal";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
+import { slugify } from "@/lib/slugify";
 import { SIZE_BANDS, bandsForWork, type SizeBandKey } from "@/components/browse/SizeBands";
 
 type CollectionWork = ArtistWork & {
@@ -265,7 +266,9 @@ export default function CollectionDetailPage() {
                       armRevealAutoHide();
                       return;
                     }
-                    router.push(`/browse/${collection.artistSlug}/${work.id}`);
+                    // B13: the artwork route resolves works by slugify(title)
+                    // only, so linking the DB UUID 404s every DB-backed tile.
+                    router.push(`/browse/${collection.artistSlug}/${slugify(work.title)}`);
                   }}
                 >
                   <div
@@ -299,7 +302,7 @@ export default function CollectionDetailPage() {
                         </div>
                         <div className="flex gap-1">
                           <Link
-                            href={`/browse/${collection.artistSlug}/${work.id}`}
+                            href={`/browse/${collection.artistSlug}/${slugify(work.title)}`}
                             onClick={(e) => e.stopPropagation()}
                             className="px-2 py-1 text-[10px] text-white/90 border border-white/30 hover:border-white hover:bg-white/10 rounded-sm transition-colors"
                           >
