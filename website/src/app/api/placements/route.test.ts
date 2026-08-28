@@ -469,3 +469,196 @@ describe("PATCH /api/placements surfaces write failures (row 22)", () => {
     expect(updates[0]).toHaveProperty("collected_at", null);
   });
 });
+
+// ─── Task 3: concurrent placement cap on the pending → active transition ───
+//
+// The gate keys on the placement's ARTIST (existing.artist_user_id), not the
+// caller, because whichever party clicks accept, the wall-slot being consumed
+// is the artist's. These tests use a dedicated DB mock rather than the shared
+// setupDb above, because the cap check needs two query shapes setupDb doesn't
+// model: a configurable artist_profiles row (plan/status) and a head:true
+// COUNT query against placements, alongside the existing "fetch by id" shape
+// the rest of the accept path also needs.
+describe("PATCH /api/placements concurrent placement cap (Task 3)", () => {
+  const CORE_PROFILE = { subscription_plan: "core", subscription_status: "active" };
+  const PRO_PROFILE = { subscription_plan: "pro", subscription_status: "active" };
+
+  /** Head-query args captured so a test can assert the count check is head:true (no row fetch). */
+  let headQueryCalls: Array<{ columns: unknown; opts: unknown }>;
+
+  function setupCapDb(
+    row: Row,
+    opts: {
+      profile?: { subscription_plan: string; subscription_status: string } | null;
+      activeCount?: number;
+      trail?: TrailMsg[];
+    } = {},
+  ) {
+    const { profile = null, activeCount = 0, trail = [] } = opts;
+    updates.length = 0;
+    headQueryCalls = [];
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === "placements") {
+        return {
+          select: (columns: unknown, selectOpts?: { head?: boolean }) => {
+            if (selectOpts?.head) {
+              // The concurrent-count query: head:true, no rows, count only.
+              headQueryCalls.push({ columns, opts: selectOpts });
+              const chain = {
+                eq: () => chain,
+                then: (resolve: (v: unknown) => unknown) =>
+                  Promise.resolve({ data: null, count: activeCount, error: null }).then(resolve),
+              };
+              return chain;
+            }
+            // The normal "fetch the placement by id" shape used everywhere else.
+            return {
+              eq: () => ({
+                single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
+                maybeSingle: async () => ({ data: row, error: null }),
+                order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+              }),
+            };
+          },
+          update: (payload: Record<string, unknown>) => {
+            updates.push(payload);
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      if (table === "artist_profiles") {
+        // Serves both the pending-review gate (review_status, absent here so
+        // it never blocks) and the cap gate (subscription_plan/status).
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: profile, error: profile ? null : { code: "PGRST116" } }),
+              maybeSingle: async () => ({ data: profile, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "messages") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({ limit: async () => ({ data: trail, error: null }) }),
+            }),
+          }),
+          insert: async () => ({ error: null }),
+        };
+      }
+      // Everything else (venue_profiles, artist_works, placement_archives, ...)
+      // answers empty so side paths (notifications, emails, inventory) are inert.
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: null, error: null }),
+            maybeSingle: async () => ({ data: null, error: null }),
+            eq: () => ({ maybeSingle: async () => ({ data: null }) }),
+            order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+          }),
+          in: async () => ({ data: [], error: null }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        delete: () => {
+          const chain = {
+            eq: () => chain,
+            then: (fn: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(fn),
+          };
+          return chain;
+        },
+      };
+    });
+  }
+
+  /** The venue proposed this placement, so the ARTIST is the one who may accept it. */
+  const PENDING_ARTIST_ACCEPTS: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "pending",
+    proposed_by_user_id: VENUE,
+  };
+
+  /** The artist proposed this placement, so the VENUE is the one who may accept it. */
+  const PENDING_VENUE_ACCEPTS: Row = {
+    ...PENDING_ARTIST_ACCEPTS,
+    proposed_by_user_id: ARTIST,
+  };
+
+  it("blocks the accept with 402 placement_limit_reached when the accepting artist is at their Core cap", async () => {
+    // auth defaults to ARTIST in the top-level beforeEach.
+    setupCapDb(PENDING_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 2 });
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBe(402);
+    const body = await res.json();
+    expect(body.error).toBe("placement_limit_reached");
+    expect(body.message).toMatch(/2 active placements/);
+    expect(body.upgrade_url).toBe("/artist-portal/billing");
+    expect(updates, "a capacity-blocked accept must not write").toEqual([]);
+  });
+
+  it("blocks the accept with the other-party payload when the VENUE clicks accept and the artist is at cap", async () => {
+    authMock.mockResolvedValue({ user: { id: VENUE, email: "v@example.com" }, error: null });
+    setupCapDb(PENDING_VENUE_ACCEPTS, { profile: CORE_PROFILE, activeCount: 2 });
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBe(402);
+    const body = await res.json();
+    expect(body.error).toBe("placement_limit_reached");
+    expect(body.message).toMatch(/this artist/i);
+    expect(body.message).not.toMatch(/your plan/i);
+    expect(body.upgrade_url).toBeUndefined();
+    expect(updates).toEqual([]);
+  });
+
+  it("allows the accept when the artist is under their Core cap, using a head:true count (no row fetch)", async () => {
+    setupCapDb(PENDING_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 1 });
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBeLessThan(400);
+    expect(updates.length).toBeGreaterThan(0);
+    expect(updates[0]).toMatchObject({ status: "active" });
+    expect(headQueryCalls).toHaveLength(1);
+    expect(headQueryCalls[0].opts).toMatchObject({ count: "exact", head: true });
+  });
+
+  it("never blocks a Pro artist, however high the active count", async () => {
+    setupCapDb(PENDING_ARTIST_ACCEPTS, { profile: PRO_PROFILE, activeCount: 40 });
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBeLessThan(400);
+    expect(updates.length).toBeGreaterThan(0);
+    expect(updates[0]).toMatchObject({ status: "active" });
+  });
+
+  it("does not gate a decline, even when the artist is at cap", async () => {
+    setupCapDb(PENDING_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 2 });
+    const res = await patch({ id: "pl-1", status: "declined" });
+    expect(res.status).toBeLessThan(400);
+    expect(updates.length).toBeGreaterThan(0);
+    expect(updates[0]).toMatchObject({ status: "declined" });
+  });
+
+  it("runs after the self-placement guard: a blocked self-placement gets its own 400, not the cap's 402", async () => {
+    setupCapDb(
+      {
+        artist_user_id: ARTIST,
+        venue_user_id: ARTIST,
+        artist_slug: "alice",
+        venue_slug: "own-venue",
+        venue: "Own Venue",
+        status: "pending",
+        proposed_by_user_id: null,
+      },
+      { profile: CORE_PROFILE, activeCount: 2 },
+    );
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/yourself/i);
+    expect(updates).toEqual([]);
+  });
+});

@@ -31,6 +31,7 @@ import { placementTermsSummary } from "@/lib/placements/terms-summary";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { afterResponse } from "@/lib/after-response";
+import { placementCapDecision } from "./placement-cap";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -1203,6 +1204,50 @@ export async function PATCH(request: Request) {
     // Artist cannot unilaterally change a pending placement into something other than active/declined
     if (isArtist && existing.status === "pending" && status === "pending") {
       // no-op but allowed
+    }
+
+    // Tier capacity (launch pricing, owner decision 2026-08-28): a placement
+    // going live occupies one of the artist's concurrent-placement slots
+    // (Core 2, Premium 5, Pro unlimited). Enforced on the pending -> active
+    // transition regardless of which party clicks accept, because the wall
+    // time is the artist's either way. The count is computed live from
+    // placements; no cached counter column (AGENTS.md data invariant).
+    //
+    // Placed after the F39 authz block above (self-placement / requester /
+    // not-authorised) rather than immediately after the pending-review gate,
+    // so an unauthorised caller gets the correct 400/403 instead of a 402
+    // that leaks the artist's capacity state.
+    if (status === "active" && existing.status === "pending" && existing.artist_user_id) {
+      const { data: capProfile } = await db
+        .from("artist_profiles")
+        .select("subscription_plan, subscription_status")
+        .eq("user_id", existing.artist_user_id)
+        .maybeSingle();
+      const { count: activeCount } = await db
+        .from("placements")
+        .select("id", { count: "exact", head: true })
+        .eq("artist_user_id", existing.artist_user_id)
+        .eq("status", "active");
+      const decision = placementCapDecision({
+        profile: capProfile ?? null,
+        activeCount: activeCount ?? 0,
+      });
+      if (!decision.allowed) {
+        const isOwnCap = existing.artist_user_id === auth.user!.id;
+        return NextResponse.json(
+          isOwnCap
+            ? {
+                error: "placement_limit_reached",
+                message: `Your plan includes ${decision.cap} active placements at a time. Upgrade to take on more walls.`,
+                upgrade_url: "/artist-portal/billing",
+              }
+            : {
+                error: "placement_limit_reached",
+                message: "This artist is at their plan's active placement limit right now. They can free a slot or upgrade, then you can accept.",
+              },
+          { status: 402 },
+        );
+      }
     }
 
     const updates: Record<string, unknown> = {};
