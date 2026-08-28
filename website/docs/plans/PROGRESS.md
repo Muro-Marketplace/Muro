@@ -12700,3 +12700,28 @@ the throw escapes raw and the release never runs.
    above): erasing an admin would erase their audit trail.
 4. `npm run audit:reconcile` still reports the twelve pre-ledger test
    orders as drift, deliberately (decision 9).
+
+## Session close, 2026-08-28 (audit run). The plan is finished.
+
+Every approved owner decision is executed and committed (one commit per
+decision), T9 and D18 were the last two builds, and the requested full deep
+audit ran against LIVE PROD and the code rather than the plan documents.
+
+The audit's own finds, both fixed and committed tonight:
+1. the checkout price hole was only four-fifths closed (collections,
+   identity-less lines, unmatched sizes, and the T9 in-store overcharge) -
+   `1bbca82`;
+2. a THROWN webhook branch error leaked the D1 event claim, turning a
+   transient fault into a permanently dropped event - `ec0223c`.
+
+Gate at close: `npm run check` green. 253 test files, 2585 tests, 0 lint
+errors, 170 warnings (the two staged ratchets by design).
+
+Remaining, and who owns it (unchanged in kind, restated once):
+- **Deploy.** Prod runs pre-remediation code; nothing here is live yet.
+- Decisions 20 (leaked-password toggle) and 21 (TURNSTILE_SECRET_KEY),
+  both dashboard-side.
+- Stripe Connect KYC for the demo account (interactive).
+- Decision 4, the `08` cull: parked on the owner's instruction.
+- K10b/K10c/K11 (Docker / supabase CLI / pg_dump absent on this machine)
+  and the four `09` items needing DNS or dashboards or elapsed time.
