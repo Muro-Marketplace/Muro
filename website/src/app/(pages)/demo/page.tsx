@@ -31,9 +31,37 @@ export const metadata: Metadata = {
  * server-side guard. We can't conditionally render server-only logic
  * here (this is an RSC), so the URL stays consistent.
  */
+/**
+ * Resolve a configured demo slug, loudly.
+ *
+ * Still falls back in production, because a broken /demo page is worse than the
+ * wrong demo artist on it, but it says so rather than swallowing the mismatch,
+ * and it throws in development so a typo is caught before it ships.
+ */
+function resolveDemo<T extends { slug: string }>(
+  pool: readonly T[],
+  slug: string,
+  kind: "artist" | "venue",
+): T {
+  const found = pool.find((entry) => entry.slug === slug);
+  if (found) return found;
+
+  const message =
+    `[demo] No ${kind} matches the configured demo slug "${slug}". ` +
+    `Check NEXT_PUBLIC_DEMO_${kind.toUpperCase()}_SLUG. Falling back to "${pool[0]?.slug}".`;
+  if (process.env.NODE_ENV === "development") throw new Error(message);
+  console.error(message);
+  return pool[0];
+}
+
 export default function DemoLandingPage() {
-  const demoArtist = artists.find((a) => a.slug === DEMO_ARTIST_SLUG) || artists[0];
-  const demoVenue = venues.find((v) => v.slug === DEMO_VENUE_SLUG) || venues[0];
+  // K8 (07 §8.3): these were `find(...) || artists[0]`. A misconfigured
+  // NEXT_PUBLIC_DEMO_ARTIST_SLUG produced no error at all, just a different
+  // artist than the one the "Tour the platform" CTA was pointed at, and nobody
+  // would know until someone noticed the wrong name on the demo. Silent
+  // fallbacks on a configured value are how a config typo survives a release.
+  const demoArtist = resolveDemo(artists, DEMO_ARTIST_SLUG, "artist");
+  const demoVenue = resolveDemo(venues, DEMO_VENUE_SLUG, "venue");
 
   // Decide whether the Phase 2 portal-tour login is available. When
   // it is, buttons hit the login endpoint; otherwise they fall back

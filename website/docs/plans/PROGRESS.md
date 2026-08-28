@@ -10267,3 +10267,64 @@ a read of the artist column, and a guard that flagged them would be wrong.
 
 `npm run check` green: 0 lint errors, 223 files, 2193 tests, 0 dependency
 violations, exit 0.
+
+### 07 K8 — duplicate demo personas — PARTIAL. The safe half done, the rest escalated.
+
+**Prod state, checked before touching anything:**
+
+| slug | name | review_status | plan | sub status | Connect |
+|---|---|---|---|---|---|
+| `maya-chen-demo` | Maya Chen | approved | pro | **none** | **no** |
+| `fin-coles` | Fin Coles | approved | premium | canceled | yes |
+| `finlay-coles` | Finlay Coles | approved | none | none | no |
+
+That confirms two of §8.2's three preconditions on the demo row (no
+`subscription_status`, no Connect account, so Bug 9's Buy Now 422 is real) and
+turns up something the doc did not have.
+
+**NEW FINDING, not in the doc: `finlay-coles` exists as an approved artist row,
+and its public page is unreachable.** `next.config.ts` redirects
+`/browse/finlay-coles` to `/browse/fin-coles` **permanently (308)**. So that
+profile is listed in `/browse` and every click on it lands the visitor on a
+*different artist*. Two distinct rows, one of them shadowed by a cached redirect.
+Owner question below: are they the same person, and which row survives?
+
+**Done, all code-only:**
+
+- **§13.19's dead duplicate deleted.** `src/data/demo.ts` exported its own
+  `DEMO_USER_IDS` and `isDemoUser`, shadowing the real pair in
+  `src/lib/demo-guard.ts`. Its array had both entries commented out, so it was
+  permanently empty and its `isDemoUser` returned **false for everyone, including
+  the actual demo accounts**. Zero importers outside the file.
+- **§8.3's claim about `assertNotDemo` is stale and the comment that repeated it
+  is corrected.** The doc says it "has zero call sites in the entire repo. No
+  mutation route is actually guarded... This is a security finding". E23a wired it
+  across every outward-facing and in-portal route (ratchet 58 to 0), and
+  `data/demo.ts`'s header still described Phase 2 as "future". Both fixed.
+- **`/demo`'s silent fallback made loud.** `artists.find(...) || artists[0]` meant
+  a misconfigured `NEXT_PUBLIC_DEMO_ARTIST_SLUG` produced no error at all, just a
+  different artist than the CTA was pointed at. It now throws in development and
+  logs in production, still falling back, because a broken /demo page is worse
+  than the wrong artist on it.
+- **`.env.example` had ZERO `DEMO` entries.** All eight are documented, including
+  the note that an unset `DEMO_*_USER_ID` silently disables `assertNotDemo` for the
+  account it names.
+- **The redirect-target guard (§8.5).** `tests/integration/redirect-targets.test.ts`
+  pins the artist redirect and its target together, and asserts no self-redirect
+  and no redirect chain. `next.config.ts` gains the warning in prose: a 308 is
+  cached indefinitely, the target is a DB row with no static seed behind it, so
+  deleting it makes this a permanent 404 for everyone who already made the hop.
+
+**NOT done, and why.** The rename half of §8.2 needs
+`UPDATE artist_profiles SET slug='maya-chen' WHERE slug='maya-chen-demo'` on a live
+row, deletion of the `maya-chen` static seed and its six works, and Stripe Connect
+onboarding for the demo account so Bug 9's Buy Now stops 422-ing. That is prod data
+plus a Stripe dashboard action: both are on the escalate list, and they only make
+sense as one sequenced package. Written up as an owner item below rather than
+half-done, because the intermediate states are worse than either end (renaming
+before the static row is deleted produces a slug collision in the merge, and
+deleting the static row first leaves the homepage's positional pick,
+`artists.slice(0, 6)`, pointing at a different artist).
+
+`npm run check` green: 0 lint errors, 224 files, 2197 tests, 0 dependency
+violations, exit 0.
