@@ -12,6 +12,8 @@ const {
   isFlagOnMock,
   isSubscribedMock,
   revalidatePathMock,
+  rpcMock,
+  deleteWorkMock,
 } = vi.hoisted(() => ({
   authMock: vi.fn(),
   getProfileMock: vi.fn(),
@@ -20,14 +22,19 @@ const {
   isFlagOnMock: vi.fn(),
   isSubscribedMock: vi.fn(),
   revalidatePathMock: vi.fn(),
+  // Row 21 / migration 104: the tier cap is an atomic RPC now, not a
+  // read-then-check in this route.
+  rpcMock: vi.fn(),
+  deleteWorkMock: vi.fn(),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
+vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ rpc: rpcMock }) }));
 vi.mock("@/lib/db/artist-profiles", () => ({ getArtistProfileByUserId: getProfileMock }));
 vi.mock("@/lib/db/artist-works", () => ({
   getWorksByArtistProfileId: getWorksMock,
   upsertWork: upsertWorkMock,
-  deleteWork: vi.fn(),
+  deleteWork: deleteWorkMock,
 }));
 vi.mock("@/lib/slugify", () => ({ slugify: (s: string) => s }));
 vi.mock("@/lib/feature-flags", () => ({ isFlagOn: isFlagOnMock }));
@@ -37,6 +44,15 @@ vi.mock("next/cache", () => ({ revalidatePath: revalidatePathMock }));
 import { POST } from "./route";
 
 beforeEach(() => {
+  rpcMock.mockReset();
+  deleteWorkMock.mockReset();
+  deleteWorkMock.mockResolvedValue({ error: null });
+  // Default: the slot is granted and this is a brand-new work, which is what
+  // every pre-row-21 test implicitly assumed.
+  rpcMock.mockResolvedValue({
+    data: [{ claimed: true, created: true, current_count: 1 }],
+    error: null,
+  });
   authMock.mockReset();
   getProfileMock.mockReset();
   getWorksMock.mockReset();
@@ -268,5 +284,109 @@ describe("POST /api/artist-works no longer writes the phantom in_store_price (E4
     const res = await POST(req({ ...baseBody, inStorePrice: 250 }));
     expect(res.status).toBe(200);
     expect(row()).not.toHaveProperty("in_store_price");
+  });
+});
+
+// Row 21 (supervisor D64). The artwork post-limit was a TOCTOU.
+//
+// The route counted the artist's works, compared to the tier cap, and inserted
+// later through upsertWork. Two concurrent POSTs both read the count before
+// either insert landed, so both passed a cap they should not have, and this is a
+// public API: the window is reachable by anyone with a session, not just a fast
+// client. Migration 104 serialises the check and the claim per artist with an
+// advisory transaction lock.
+describe("POST /api/artist-works post-limit is claimed atomically (row 21)", () => {
+  beforeEach(() => {
+    isFlagOnMock.mockReturnValue(false);
+    isSubscribedMock.mockResolvedValue({ active: true });
+  });
+
+  it("decides the cap through the RPC, not by counting in the route", async () => {
+    // THE regression. The count and the check now happen inside one locked
+    // transaction; a route that counts for itself is racy however careful the
+    // comparison is.
+    await POST(req(baseBody));
+
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    const [fn, args] = rpcMock.mock.calls[0];
+    expect(fn).toBe("claim_artist_work_slot");
+    expect(args).toMatchObject({
+      p_artist_id: "ap_1",
+      p_work_id: "w_1",
+      p_limit: 8, // Core tier.
+    });
+  });
+
+  it("passes the caller's real tier limit, not the default", async () => {
+    getProfileMock.mockResolvedValue({ profile: { id: "ap_1", subscription_plan: "pro" } });
+    await POST(req(baseBody));
+    expect(rpcMock.mock.calls[0][1].p_limit).toBe(50);
+  });
+
+  it("refuses with 403 when the RPC declines the slot", async () => {
+    rpcMock.mockResolvedValue({
+      data: [{ claimed: false, created: false, current_count: 8 }],
+      error: null,
+    });
+
+    const res = await POST(req(baseBody));
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe("post_limit_reached");
+    // The count comes from the same locked read that made the decision, so the
+    // number the artist is shown cannot disagree with the one that refused them.
+    expect(body.current).toBe(8);
+    expect(body.limit).toBe(8);
+    expect(upsertWorkMock, "the work was written despite the refusal").not.toHaveBeenCalled();
+  });
+
+  it("releases the claimed slot when the save afterwards fails", async () => {
+    // The RPC claims by inserting a placeholder. Without this, a failed upload
+    // would permanently consume a tier slot with a row the artist cannot see or
+    // remove.
+    upsertWorkMock.mockResolvedValue({
+      error: { message: "boom" }, droppedColumns: [], savedRow: null, fallbackErrors: [],
+    });
+
+    const res = await POST(req(baseBody));
+
+    expect(res.status).toBe(500);
+    expect(deleteWorkMock).toHaveBeenCalledWith("w_1", "ap_1");
+  });
+
+  it("does NOT release a slot it did not claim, so an edit that fails is not deleted", async () => {
+    // `created: false` means the row already existed: this is an edit. Deleting
+    // it because a save failed would destroy the artist's existing work.
+    rpcMock.mockResolvedValue({
+      data: [{ claimed: true, created: false, current_count: 3 }],
+      error: null,
+    });
+    upsertWorkMock.mockResolvedValue({
+      error: { message: "boom" }, droppedColumns: [], savedRow: null, fallbackErrors: [],
+    });
+
+    const res = await POST(req(baseBody));
+
+    expect(res.status).toBe(500);
+    expect(deleteWorkMock, "an edit that failed to save was deleted").not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the RPC itself errors", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "permission denied" } });
+
+    const res = await POST(req(baseBody));
+
+    expect(res.status).toBe(500);
+    expect(upsertWorkMock).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the RPC returns nothing at all", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+
+    const res = await POST(req(baseBody));
+
+    expect(res.status).toBe(403);
+    expect(upsertWorkMock).not.toHaveBeenCalled();
   });
 });
