@@ -52,6 +52,7 @@ import { missingStripePriceEnvs } from "@/env";
 import type Stripe from "stripe";
 import { isSettled } from "@/lib/payments/settlement";
 import { VenueCollectionPending } from "@/emails/templates/venue-lifecycle/VenueCollectionPending";
+import { CustomerRefundConfirmation } from "@/emails/templates/orders/CustomerRefundConfirmation";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -159,7 +160,10 @@ async function handleWebhookEvent(
   }
 
   // ─── Curation checkout (one-off OR managed subscription) ───
-  if (event.type === "checkout.session.completed") {
+  // WS1.5: async_payment_succeeded is the settlement of a deferred completed
+  // event (BACS and friends); every write below is idempotent, so accepting
+  // both types books the money whichever event carries the settled state.
+  if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
     const session = event.data.object as Stripe.Checkout.Session;
     if (session.metadata?.kind === "curation_request") {
       const requestId = session.metadata.curation_request_id;
@@ -260,7 +264,7 @@ async function handleWebhookEvent(
   }
 
   // ─── Purchase-offer checkout (Request 1 — venue-only offers) ───
-  if (event.type === "checkout.session.completed") {
+  if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
     const session = event.data.object as Stripe.Checkout.Session;
     if (session.metadata?.checkout_kind === "purchase_offer") {
       const offerId = session.metadata.offer_id;
@@ -577,11 +581,16 @@ async function handleWebhookEvent(
   // acknowledgement, which is correct — there is nothing to do with it.
 
   // ─── Art purchase checkout ───
-  if (event.type === "checkout.session.completed") {
+  if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
     const session = event.data.object as Stripe.Checkout.Session;
 
     // Only process one-time payment checkouts (art purchases), not subscriptions
-    if (session.mode === "payment") {
+    // WS1.6: and only CART sessions. The earlier branches claim their kinds,
+    // but ordering is not a contract; an unknown future kind must not be
+    // booked as a cart.
+    const sessionKind = session.metadata?.kind ?? session.metadata?.checkout_kind ?? "";
+    const isCartKind = sessionKind === "" || sessionKind === "cart_checkout";
+    if (session.mode === "payment" && isCartKind) {
       try {
         // Server-side cart row is the data-of-record (Plan B Task 6). The
         // 500-char metadata cap used to truncate big carts; cart_sessions
@@ -1886,6 +1895,250 @@ async function handleWebhookEvent(
       .eq("stripe_transfer_id", transfer.id);
 
     if (error) console.error("Transfer reversed update error:", error);
+  }
+
+  // ─── Chargebacks (WS1.2, audit R3.2 CRITICAL) ───
+  //
+  // Until 2026-08-28 these events were claimed by the dedup table and acked
+  // with the default 200: the platform silently lost the sale plus the
+  // dispute fee, held artist legs still paid out on schedule mid-case, and
+  // nobody was told inside the evidence window. The dispute email's "we hold
+  // the payout while the case is open" promise is now true.
+  if (event.type === "charge.dispute.created") {
+    const dispute = event.data.object as Stripe.Dispute;
+    const paymentIntentId =
+      typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id;
+    const { data: order } = paymentIntentId
+      ? await db.from("orders").select("id, status, buyer_email, artist_slug").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      : { data: null };
+
+    if (order) {
+      // Hold every not-yet-paid leg. Paid legs are dealt with on `closed`
+      // (a reversal only if the dispute is LOST).
+      const { error: holdErr } = await db
+        .from("stripe_transfers")
+        .update({ status: "blocked", last_error: `held: chargeback ${dispute.id}`, updated_at: new Date().toISOString() })
+        .eq("order_id", order.id)
+        .in("status", ["pending", "failed"]);
+      if (holdErr) console.error("[webhook] dispute leg hold failed:", holdErr);
+
+      const { error: stErr } = await db.from("orders").update({ status: "disputed" }).eq("id", order.id);
+      if (stErr) console.error("[webhook] dispute status write failed:", stErr);
+    }
+
+    const dueBy = dispute.evidence_details?.due_by
+      ? new Date(dispute.evidence_details.due_by * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long" })
+      : "unknown";
+    await sendAdminAlert({
+      idempotencyKey: `chargeback_opened:${dispute.id}`,
+      subject: `Chargeback opened: £${(dispute.amount / 100).toFixed(2)}${order ? ` on ${order.id}` : ""}`,
+      summary: `A buyer disputed a charge (reason: ${dispute.reason}). Artist payouts for the order are held. Evidence is due by ${dueBy}; respond in the Stripe dashboard or the money is lost by default.`,
+      fields: [
+        { label: "Dispute", value: dispute.id },
+        { label: "Order", value: order?.id || "no matching order" },
+        { label: "Amount", value: `£${(dispute.amount / 100).toFixed(2)}` },
+        { label: "Reason", value: dispute.reason || "unknown" },
+        { label: "Evidence due", value: dueBy },
+      ],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    });
+    return NextResponse.json({ received: true });
+  }
+
+  if (event.type === "charge.dispute.closed") {
+    const dispute = event.data.object as Stripe.Dispute;
+    const paymentIntentId =
+      typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id;
+    const { data: order } = paymentIntentId
+      ? await db.from("orders").select("id, status, delivered_at").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      : { data: null };
+
+    if (order && dispute.status === "won") {
+      // Release the held legs back to the queue; the sweep pays them.
+      await db
+        .from("stripe_transfers")
+        .update({ status: "pending", last_error: null, updated_at: new Date().toISOString() })
+        .eq("order_id", order.id)
+        .eq("status", "blocked")
+        .like("last_error", "held: chargeback%");
+      await db
+        .from("orders")
+        .update({ status: order.delivered_at ? "delivered" : "confirmed" })
+        .eq("id", order.id);
+    } else if (order && dispute.status === "lost") {
+      // The buyer's bank took the money. Held/pending legs die; PAID legs are
+      // clawed back with an idempotent reversal per leg.
+      await db
+        .from("stripe_transfers")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("order_id", order.id)
+        .in("status", ["pending", "failed", "blocked"]);
+      const { data: paidLegs } = await db
+        .from("stripe_transfers")
+        .select("id, stripe_transfer_id")
+        .eq("order_id", order.id)
+        .eq("status", "paid");
+      for (const leg of (paidLegs || []) as Array<{ id: string; stripe_transfer_id: string | null }>) {
+        if (!leg.stripe_transfer_id) continue;
+        try {
+          await stripe.transfers.createReversal(
+            leg.stripe_transfer_id,
+            {},
+            { idempotencyKey: `chargeback:${dispute.id}:reversal:${leg.id}` },
+          );
+          await db.from("stripe_transfers").update({ status: "reversed", updated_at: new Date().toISOString() }).eq("id", leg.id);
+        } catch (revErr) {
+          console.error("[webhook] chargeback reversal failed:", { leg: leg.id, revErr });
+        }
+      }
+      await db.from("orders").update({ status: "refunded" }).eq("id", order.id);
+    }
+
+    await sendAdminAlert({
+      idempotencyKey: `chargeback_closed:${dispute.id}`,
+      subject: `Chargeback ${dispute.status}: £${(dispute.amount / 100).toFixed(2)}${order ? ` on ${order.id}` : ""}`,
+      summary:
+        dispute.status === "won"
+          ? "The dispute was won. Held artist payouts have been released back to the queue."
+          : dispute.status === "lost"
+            ? "The dispute was lost: the buyer's bank kept the money, held payouts were cancelled and any already-paid artist legs were reversed. Check the reversal results below in Stripe."
+            : `The dispute closed with status ${dispute.status}.`,
+      fields: [
+        { label: "Dispute", value: dispute.id },
+        { label: "Order", value: order?.id || "no matching order" },
+        { label: "Outcome", value: dispute.status || "unknown" },
+      ],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    });
+    return NextResponse.json({ received: true });
+  }
+
+  // ─── Dashboard-initiated refunds (WS1.3, audit R1.F2 / R3.5) ───
+  //
+  // stripe.refunds.create from the in-app flow ALSO emits this event; the
+  // order is already marked refunded there, so the no-op guard below keeps
+  // the two paths from double-processing. What this handler catches is the
+  // refund issued straight from the Stripe dashboard, which previously never
+  // reached the books: legs kept paying, stock stayed sold, the order lied.
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+    const paymentIntentId =
+      typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+    const { data: order } = paymentIntentId
+      ? await db.from("orders").select("id, status, buyer_email, items").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      : { data: null };
+
+    if (!order || order.status === "refunded") {
+      return NextResponse.json({ received: true, ignored: order ? "already_refunded" : "no_matching_order" });
+    }
+
+    const fullyRefunded = charge.refunded === true;
+    if (!fullyRefunded) {
+      // A PARTIAL dashboard refund has no in-app record naming which line it
+      // was for, so leg surgery here would guess. Alert a human instead of
+      // guessing with money.
+      await sendAdminAlert({
+        idempotencyKey: `dashboard_partial_refund:${charge.id}:${charge.amount_refunded}`,
+        subject: `Partial dashboard refund on ${order.id}: £${(charge.amount_refunded / 100).toFixed(2)}`,
+        summary: "A partial refund was issued from the Stripe dashboard. The books were NOT adjusted automatically because the refunded line is unknown; reconcile the artist legs by hand via the in-app refund flow.",
+        fields: [
+          { label: "Order", value: order.id },
+          { label: "Refunded so far", value: `£${(charge.amount_refunded / 100).toFixed(2)}` },
+        ],
+        actionPath: "/admin/financials",
+        actionLabel: "Open financials",
+      });
+      return NextResponse.json({ received: true, partial: true });
+    }
+
+    // Full refund: cancel unpaid legs, reverse paid legs, restock, mark, tell.
+    await db
+      .from("stripe_transfers")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("order_id", order.id)
+      .in("status", ["pending", "failed", "blocked"]);
+    const { data: paidLegs } = await db
+      .from("stripe_transfers")
+      .select("id, stripe_transfer_id")
+      .eq("order_id", order.id)
+      .eq("status", "paid");
+    for (const leg of (paidLegs || []) as Array<{ id: string; stripe_transfer_id: string | null }>) {
+      if (!leg.stripe_transfer_id) continue;
+      try {
+        await stripe.transfers.createReversal(
+          leg.stripe_transfer_id,
+          {},
+          { idempotencyKey: `dashrefund:${charge.id}:reversal:${leg.id}` },
+        );
+        await db.from("stripe_transfers").update({ status: "reversed", updated_at: new Date().toISOString() }).eq("id", leg.id);
+      } catch (revErr) {
+        console.error("[webhook] dashboard-refund reversal failed:", { leg: leg.id, revErr });
+      }
+    }
+    for (const item of ((order.items as Array<{ workId?: string; quantity?: number; qty?: number }>) || [])) {
+      if (!item.workId) continue;
+      const { error: restockErr } = await db.rpc("restock_work", {
+        p_work_id: item.workId,
+        p_qty: Number(item.qty ?? item.quantity ?? 1),
+      });
+      if (restockErr) console.warn("[webhook] dashboard-refund restock failed:", restockErr);
+    }
+    await db.from("orders").update({ status: "refunded" }).eq("id", order.id);
+    if (order.buyer_email) {
+      try {
+        await sendEmail({
+          idempotencyKey: `refund:${order.id}:dashboard`,
+          template: "customer_refund_confirmation",
+          category: "orders_and_payouts",
+          to: order.buyer_email,
+          subject: `Your refund for order ${order.id}`,
+          react: CustomerRefundConfirmation({
+            firstName: "there",
+            orderNumber: order.id,
+            refundAmount: { amount: charge.amount_refunded, currency: "GBP" },
+            expectedArrival: "5 to 10 business days",
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { orderId: order.id },
+        });
+      } catch (mailErr) {
+        console.warn("[webhook] dashboard-refund email failed:", mailErr);
+      }
+    }
+    await sendAdminAlert({
+      idempotencyKey: `dashboard_refund:${charge.id}`,
+      subject: `Dashboard refund processed on ${order.id}`,
+      summary: "A full refund issued from the Stripe dashboard was reconciled automatically: unpaid legs cancelled, paid legs reversed, stock restored, buyer emailed.",
+      fields: [{ label: "Order", value: order.id }],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    });
+    return NextResponse.json({ received: true });
+  }
+
+  // ─── refund.failed (WS1.4): the buyer's money did NOT go back ───
+  if (event.type === "refund.failed") {
+    const refund = event.data.object as Stripe.Refund;
+    const paymentIntentId =
+      typeof refund.payment_intent === "string" ? refund.payment_intent : refund.payment_intent?.id;
+    const { data: order } = paymentIntentId
+      ? await db.from("orders").select("id, status").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      : { data: null };
+    await sendAdminAlert({
+      idempotencyKey: `refund_failed:${refund.id}`,
+      subject: `Refund FAILED${order ? ` on ${order.id}` : ""}: £${(refund.amount / 100).toFixed(2)}`,
+      summary: "Stripe could not return the money to the buyer (failure reason below). The order may be marked refunded while the buyer has not been paid back; resolve in the Stripe dashboard and contact the buyer.",
+      fields: [
+        { label: "Refund", value: refund.id },
+        { label: "Order", value: order?.id || "no matching order" },
+        { label: "Reason", value: (refund as { failure_reason?: string }).failure_reason || "unknown" },
+      ],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    });
+    return NextResponse.json({ received: true });
   }
 
   // ─── Connect account onboarding updates ───

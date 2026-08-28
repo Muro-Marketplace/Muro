@@ -1,4 +1,10 @@
--- 122: schema prerequisites for the 2026-08-28 transaction hardening plan.
+-- 123: schema prerequisites for the 2026-08-28 transaction hardening plan.
+--
+-- NUMBERING NOTE: applied to prod under the ledger name "122_hardening_schema"
+-- before the parallel outreach branch's 122_placements_created_by_user_id
+-- landed on disk via merge; the FILE is renumbered 123 to keep disk unique,
+-- and the prod ledger name is unchanged (the ledger has never been 1:1 with
+-- disk numbering, see the bootstrap note in writable-fields.ts).
 --
 -- (a) placement_recurring_billings is a MONEY LEDGER, and its two FKs to
 --     auth.users were ON DELETE CASCADE: deleting a user destroyed the

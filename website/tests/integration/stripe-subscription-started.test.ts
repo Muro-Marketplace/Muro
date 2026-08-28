@@ -898,3 +898,137 @@ describe("transfer.reversed is terminal", () => {
     expect(writes).toEqual([{ status: "reversed" }]);
   });
 });
+
+// ─── WS1.2/1.3/1.4: chargebacks and dashboard refunds reach the books ───
+//
+// Before 2026-08-28 charge.dispute.* and charge.refunded fell through to the
+// default 200: the platform ate chargebacks while still paying artists, and a
+// dashboard refund left legs paying, stock sold and the order lying.
+import { stripe as stripeMockedModule } from "@/lib/stripe";
+import { sendAdminAlert as adminAlertMock } from "@/lib/email/admin-alert";
+
+describe("chargebacks and dashboard refunds (WS1.2/1.3/1.4)", () => {
+  const ORDER = { id: "WS-DISPUTED1", status: "delivered", delivered_at: "2026-08-20T00:00:00Z", buyer_email: "buyer@x.com", artist_slug: "fin-coles", items: [{ workId: "w-1", quantity: 2 }], total: 100 };
+  let transferUpdates: Array<{ row: Record<string, unknown>; filters: string[] }>;
+  let orderUpdates: Array<Record<string, unknown>>;
+  let paidLegs: Array<{ id: string; stripe_transfer_id: string | null }>;
+  let orderRow: Record<string, unknown> | null;
+
+  function installMoneyDb() {
+    transferUpdates = [];
+    orderUpdates = [];
+    paidLegs = [];
+    orderRow = { ...ORDER };
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") {
+        return { insert: async () => ({ error: null }), delete: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      if (table === "orders") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: orderRow, error: null }) }) }),
+          update: (row: Record<string, unknown>) => { orderUpdates.push(row); return { eq: async () => ({ error: null }) }; },
+        };
+      }
+      if (table === "stripe_transfers") {
+        const filters: string[] = [];
+        const updChain = (row: Record<string, unknown>) => {
+          const c: Record<string, unknown> = {};
+          const push = (name: string) => (...args: unknown[]) => { filters.push(`${name}:${JSON.stringify(args)}`); return c; };
+          c.eq = push("eq");
+          c.in = push("in");
+          c.like = push("like");
+          c.then = (resolve: (v: unknown) => unknown) => { transferUpdates.push({ row, filters: [...filters] }); return Promise.resolve({ error: null }).then(resolve); };
+          return c;
+        };
+        return {
+          update: (row: Record<string, unknown>) => updChain(row),
+          select: () => ({ eq: () => ({ eq: async () => ({ data: paidLegs, error: null }) }) }),
+        };
+      }
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        upsert: async () => ({ error: null }),
+      };
+    });
+  }
+
+  beforeEach(() => {
+    installMoneyDb();
+    vi.mocked(adminAlertMock).mockClear();
+    vi.mocked(stripeMockedModule.transfers.createReversal).mockClear();
+    vi.mocked(stripeMockedModule.transfers.createReversal).mockResolvedValue({ id: "trr_1" } as never);
+  });
+
+  it("dispute.created holds unpaid legs, marks the order disputed, and alerts admin", async () => {
+    nextEvent.value = event("charge.dispute.created", {
+      id: "dp_1", amount: 10000, reason: "fraudulent", payment_intent: "pi_1",
+      evidence_details: { due_by: 1790000000 },
+    });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    expect(transferUpdates).toHaveLength(1);
+    expect(transferUpdates[0].row).toMatchObject({ status: "blocked" });
+    expect(orderUpdates).toEqual([{ status: "disputed" }]);
+    expect(vi.mocked(adminAlertMock)).toHaveBeenCalledTimes(1);
+    const alert = vi.mocked(adminAlertMock).mock.calls[0][0] as { idempotencyKey: string };
+    expect(alert.idempotencyKey).toBe("chargeback_opened:dp_1");
+  });
+
+  it("dispute lost: unpaid legs cancelled, paid legs reversed, order refunded", async () => {
+    paidLegs = [{ id: "leg-1", stripe_transfer_id: "tr_9" }];
+    nextEvent.value = event("charge.dispute.closed", { id: "dp_1", amount: 10000, status: "lost", payment_intent: "pi_1" });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    expect(vi.mocked(stripeMockedModule.transfers.createReversal)).toHaveBeenCalledWith(
+      "tr_9", {}, { idempotencyKey: "chargeback:dp_1:reversal:leg-1" },
+    );
+    expect(orderUpdates).toEqual([{ status: "refunded" }]);
+    // First transfers write cancels the unpaid set, second marks the reversed leg.
+    expect(transferUpdates[0].row).toMatchObject({ status: "cancelled" });
+    expect(transferUpdates[1].row).toMatchObject({ status: "reversed" });
+  });
+
+  it("dispute won: held legs go back to pending and the order status is restored", async () => {
+    nextEvent.value = event("charge.dispute.closed", { id: "dp_1", amount: 10000, status: "won", payment_intent: "pi_1" });
+    await POST(post());
+    expect(transferUpdates[0].row).toMatchObject({ status: "pending", last_error: null });
+    expect(orderUpdates).toEqual([{ status: "delivered" }]);
+  });
+
+  it("dashboard FULL refund: legs handled, stock restocked, order refunded, buyer emailed once", async () => {
+    paidLegs = [{ id: "leg-1", stripe_transfer_id: "tr_9" }];
+    nextEvent.value = event("charge.refunded", { id: "ch_1", refunded: true, amount: 10000, amount_refunded: 10000, payment_intent: "pi_1" });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    expect(rpcMock).toHaveBeenCalledWith("restock_work", { p_work_id: "w-1", p_qty: 2 });
+    expect(orderUpdates).toEqual([{ status: "refunded" }]);
+    const refundEmails = vi.mocked(sendEmail).mock.calls.map((c) => c[0]).filter((c) => c.template === "customer_refund_confirmation");
+    expect(refundEmails).toHaveLength(1);
+    expect(refundEmails[0].idempotencyKey).toBe("refund:WS-DISPUTED1:dashboard");
+  });
+
+  it("charge.refunded on an already-refunded order is a no-op (the in-app flow owns it)", async () => {
+    orderRow = { ...ORDER, status: "refunded" };
+    nextEvent.value = event("charge.refunded", { id: "ch_1", refunded: true, amount: 10000, amount_refunded: 10000, payment_intent: "pi_1" });
+    const res = await POST(post());
+    expect((await res.json()).ignored).toBe("already_refunded");
+    expect(transferUpdates).toHaveLength(0);
+    expect(orderUpdates).toHaveLength(0);
+  });
+
+  it("PARTIAL dashboard refund alerts a human and touches no money rows", async () => {
+    nextEvent.value = event("charge.refunded", { id: "ch_1", refunded: false, amount: 10000, amount_refunded: 2500, payment_intent: "pi_1" });
+    await POST(post());
+    expect(transferUpdates).toHaveLength(0);
+    expect(orderUpdates).toHaveLength(0);
+    expect(vi.mocked(adminAlertMock).mock.calls[0][0]).toMatchObject({ idempotencyKey: "dashboard_partial_refund:ch_1:2500" });
+  });
+
+  it("refund.failed alerts admin with the reason", async () => {
+    nextEvent.value = event("refund.failed", { id: "re_1", amount: 5000, payment_intent: "pi_1", failure_reason: "expired_or_canceled_card" });
+    await POST(post());
+    expect(vi.mocked(adminAlertMock).mock.calls[0][0]).toMatchObject({ idempotencyKey: "refund_failed:re_1" });
+  });
+});
