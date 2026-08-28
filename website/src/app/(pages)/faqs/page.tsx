@@ -20,10 +20,10 @@ const generalFaqs: FaqEntry[] = [
     answer: (
       <>
         <p>
-          Wallplace earns through artist membership plans (from £9.99/month)
-          and a platform fee on artwork sales (5 to 15% depending on the artist&rsquo;s
-          plan). When a piece sells, the artist keeps the majority. Venues
-          never pay a platform fee.
+          Wallplace earns through artist membership plans (from £9.99/month),
+          a flat 15% platform fee on artwork sales, and optional paid services
+          for venues such as Wallplace Curated. When a piece sells, the artist
+          keeps the majority. Displaying art is always free for venues.
         </p>
         <p>
           Full breakdown on our <Link href="/pricing">pricing page</Link>.
@@ -90,8 +90,8 @@ const artistFaqs: FaqEntry[] = [
           Payouts run via Stripe Connect. When a buyer pays, the funds are
           held until the artwork has been confirmed delivered (or 14 days
           have passed without a buyer dispute, whichever comes first). At
-          that point we transfer your share, sale price minus our platform
-          fee (5 to 15% depending on plan) and any agreed venue revenue share,
+          that point we transfer your share, sale price minus our 15%
+          platform fee and any agreed venue revenue share,
           straight to your linked bank account. You&rsquo;ll see every
           payout itemised in <Link href="/artist-portal/billing">your billing page</Link>.
         </p>
@@ -179,8 +179,9 @@ const venueFaqs: FaqEntry[] = [
           Nothing. There is no cost to venues for browsing, enquiring, or
           displaying artwork through Wallplace. Delivery and installation
           are arranged directly between you and the artist. Venues never pay
-          a platform fee, Wallplace&rsquo;s revenue comes from sales
-          commissions and optional artist tools, not from charges to venues.
+          a platform fee and never pay to display. Wallplace earns from
+          artist memberships, a fee on sales, and optional services venues
+          can choose, such as Wallplace Curated.
         </p>
         <p>
           Full terms in the <Link href="/venue-agreement">venue agreement</Link>.

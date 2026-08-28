@@ -293,7 +293,7 @@ export default function Home() {
                   <ul className="space-y-3 mb-10">
                     <BulletPoint text="Get displayed in cafés, restaurants, hotels, and offices" />
                     <BulletPoint text="Sell directly online, every QR scan leads to your store" />
-                    <BulletPoint text="5 to 15% platform fee. No gallery taking 50%." />
+                    <BulletPoint text="Flat 15% platform fee. No gallery taking 50%." />
                   </ul>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">

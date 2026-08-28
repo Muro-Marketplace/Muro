@@ -31,7 +31,7 @@ export const mock: ArtistPremiumUpgradeEducationalProps = {
     "Unlimited works instead of 3",
     "Appear higher in venue searches",
     "Per-work scan + sale analytics",
-    "Lower marketplace fee (5% vs 15% on Core)",
+    "5 active placements at a time instead of 2",
   ],
   upgradeUrl: "https://wallplace.co.uk/pricing",
 };
