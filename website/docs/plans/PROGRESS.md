@@ -11856,10 +11856,12 @@ conversation-list aggregator have to honour it before a block has any effect, an
 until they do a person is still told "blocked" and can still be messaged. That
 was impossible to build before and is possible now.
 
-**17. The report modal says "submitted" whatever the API answers.** The route now
-returns 500 when the write fails instead of claiming success, but the frontend
-swallows it, so the person is still told it worked. A frontend change, listed
-here so it is not lost.
+**17. ~~The report modal says "submitted" whatever the API answers.~~ WRONG,
+withdrawn.** E43-e already routed the modal through `submitFlagAction`, which
+confirms only after the server accepts and error-toasts otherwise. I copied the
+route header's pre-E43-e description into this list without re-checking the
+component. With the API-side 500 fix, the chain is honest end to end. Nothing
+to do.
 
 **18. The anti-spam outreach cap was missing a third of its surface** and now
 is not. Placement requests were free: a Core artist limited to 2 first contacts a
@@ -12323,3 +12325,23 @@ Five tests: refused before insert, neutral copy, normal delivery with no block,
 the inbox filter both ways. Fail-before verified on both enforcement points
 separately. The block route's "nothing reads this table yet" note is replaced
 with where it is enforced.
+
+### Decision 17 — already fixed, and the decision itself was my error — CLOSED
+
+Went to make the report modal stop showing "submitted" on a failed API call and
+found **it already does not**. E43-e (commit 7381399) routed the Report, Delete
+and Block actions through `submitFlagAction`, which sets the confirmation ONLY
+after `mutate()` resolves — it throws on any non-2xx — and shows an error toast
+otherwise, with a test pinning exactly the rejected-block case.
+
+So the full chain is now honest end to end: the API returns 500 when the write
+fails (the migration-111 fix), and the modal surfaces that as an error rather
+than a confirmation.
+
+**Decision 17 should never have been on the list.** When I fixed the report
+route I copied its header's claim that "the frontend already swallows 4xx/5xx
+and shows the submitted confirmation either way" into my notes without
+re-checking the component — that header described the pre-E43-e world, and
+E43-e had already fixed it weeks earlier. The stale claim is corrected at the
+route, here, and in the owner-decision entry. Nothing to change; one test suite
+re-run to confirm (3/3).

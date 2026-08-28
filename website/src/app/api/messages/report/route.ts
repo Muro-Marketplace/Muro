@@ -10,9 +10,12 @@
 // and reporting success for a write that failed is what made this invisible for
 // as long as it was.
 //
-// KNOWN, and not this route's to fix: the modal shows "submitted" regardless of
-// the response, so a 500 here still does not reach the person. Surfaced in
-// PROGRESS rather than changed from the API side.
+// The modal side is already honest: E43-e routed Report/Delete/Block through
+// submitFlagAction, which sets the "submitted" confirmation ONLY after mutate()
+// resolves (it throws on a non-2xx), and shows an error toast otherwise. So the
+// 500 this route now returns reaches the person as a visible failure. An
+// earlier note here claimed the modal still swallowed it, which repeated this
+// header's own pre-E43-e description without re-checking the component.
 
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
