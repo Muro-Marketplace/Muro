@@ -154,6 +154,22 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return { ok: false, error: `Render failed: ${msg}` };
   }
 
+  // 5b. Thread the recipient into the footer unsubscribe link (QA flag C24).
+  // EmailShell builds `/account/email/unsubscribe?c=<category>` but only the
+  // send pipeline knows WHO the mail is going to, and the unsubscribe page
+  // needs both. Injecting here fixes every template at once instead of
+  // threading a userId prop through sixty shells. Templates render the link
+  // in exactly two forms (with `?c=` or bare), both handled; the adjacent
+  // `/account/email` preference-centre link is left alone.
+  if (input.userId) {
+    const inject = (body: string): string =>
+      body
+        .replaceAll("/account/email/unsubscribe?c=", `/account/email/unsubscribe?u=${input.userId}&c=`)
+        .replace(/\/account\/email\/unsubscribe(?![?\w])/g, `/account/email/unsubscribe?u=${input.userId}`);
+    html = inject(html);
+    text = inject(text);
+  }
+
   // 6. Send.
   const client = resend();
   if (!client) {

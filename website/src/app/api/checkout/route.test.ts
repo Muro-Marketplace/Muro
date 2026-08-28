@@ -1590,3 +1590,47 @@ describe("POST /api/checkout server-side pricing (audit)", () => {
     expect(saved.expectedSubtotalPence).toBe(10000);
   });
 });
+
+// QA flag B27 (launch triage). The in-store price is a collect-from-venue
+// price; a cart line still carrying its collect claim inside a SHIP order
+// must be charged the shipped tier price, or collect-priced goods get posted.
+describe("POST /api/checkout collect claim under a ship order (B27)", () => {
+  it("charges the tier price, not the in-store price, when the order ships", async () => {
+    setupDefaultDbMock();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async () => ({
+              data: [{
+                id: "w-1", available: true, quantity_available: 10, title: "Untitled",
+                pricing: [{ label: "S", price: 100, inStorePrice: 80 }],
+                frame_options: null, in_store_price: 80,
+              }],
+              error: null,
+            }),
+          }),
+        };
+      }
+      return base(table);
+    });
+
+    const res = await POST(
+      req({
+        // Order-level SHIP, line-level collect claim (a flipped cart).
+        items: [{
+          ...baseItem, type: "work", workId: "w-1", price: 80,
+          lineFulfilment: "collect_venue",
+          collectVenueSlug: "the-copper-kettle", collectPlacementId: "p-1",
+        }],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const sent = (stripeCreate.mock.calls as unknown as Array<
+      [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
+    >)[0]?.[0]?.line_items ?? [];
+    expect(sent[0]?.price_data?.unit_amount).toBe(10000);
+  });
+});

@@ -10,7 +10,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { fromMock, sendMock } = vi.hoisted(() => ({ fromMock: vi.fn(), sendMock: vi.fn() }));
+const { fromMock, sendMock, renderMock } = vi.hoisted(() => ({
+  fromMock: vi.fn(),
+  sendMock: vi.fn(),
+  renderMock: vi.fn(async () => "<p>hi</p>"),
+}));
 
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
 vi.mock("resend", () => ({
@@ -18,8 +22,9 @@ vi.mock("resend", () => ({
     emails = { send: sendMock };
   },
 }));
-// The template is irrelevant here; skip the real renderer.
-vi.mock("@react-email/components", () => ({ render: async () => "<p>hi</p>" }));
+// The template is irrelevant here; skip the real renderer. renderMock so the
+// C24 footer-injection tests can supply a body carrying the unsubscribe link.
+vi.mock("@react-email/components", () => ({ render: renderMock }));
 
 import { sendEmail } from "./send";
 
@@ -140,5 +145,40 @@ describe("EMAIL_DRY_RUN (09 E.2)", () => {
 
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(res).toMatchObject({ ok: true, skipped: false });
+  });
+});
+
+// ── C24: the recipient is threaded into the footer unsubscribe link ─────────
+//
+// EmailShell renders `/account/email/unsubscribe?c=<category>` with no user,
+// because only the send pipeline knows the recipient. Before this injection
+// the visible unsubscribe link in every notify/news email failed permanently
+// (the page requires both `u` and `c`).
+describe("unsubscribe link injection (C24)", () => {
+  beforeEach(() => {
+    process.env.RESEND_API_KEY = "re_test";
+  });
+
+  const FOOTER =
+    '<a href="https://wallplace.co.uk/account/email/unsubscribe?c=digests">Unsubscribe</a>' +
+    '<a href="https://wallplace.co.uk/account/email">Preferences</a>' +
+    '<a href="https://wallplace.co.uk/account/email/unsubscribe">Unsubscribe all</a>';
+
+  it("appends u to both link forms, leaving the preference-centre link alone", async () => {
+    renderMock.mockResolvedValue(FOOTER);
+    await sendEmail({ ...INPUT, category: "digests", userId: "u-42" });
+    const call = sendMock.mock.calls[0][0] as { html: string };
+    expect(call.html).toContain("/account/email/unsubscribe?u=u-42&c=digests");
+    expect(call.html).toContain('/account/email/unsubscribe?u=u-42"');
+    // The adjacent preference-centre link must not be rewritten.
+    expect(call.html).toContain('/account/email"');
+  });
+
+  it("leaves the link untouched when the send has no userId", async () => {
+    renderMock.mockResolvedValue(FOOTER);
+    await sendEmail({ ...INPUT, category: "digests" });
+    const call = sendMock.mock.calls[0][0] as { html: string };
+    expect(call.html).toContain("/account/email/unsubscribe?c=digests");
+    expect(call.html).not.toContain("u=");
   });
 });

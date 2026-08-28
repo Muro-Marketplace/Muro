@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { buildVenueOptions, resolveVenueParam, type VenueOption } from "@/lib/labels/venue-options";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
 import type { LabelData } from "@/components/labels/LabelSheet";
@@ -33,8 +34,12 @@ export default function LabelsPage() {
   // Portfolio label
   const [portfolioQty, setPortfolioQty] = useState(0);
   // Venue context for QR tracking
-  const [selectedVenue, setSelectedVenue] = useState("");
-  const [venues, setVenues] = useState<string[]>([]);
+  const [selectedVenue, setSelectedVenue] = useState<VenueOption | null>(null);
+  // QA flag D16: the dropdown must carry the venue SLUG, not just the display
+  // name. The QR route attributes a scan to a venue (revenue share, redirect,
+  // signed venue param) only via `vs=<slug>`; a name-only label loses the
+  // attribution silently.
+  const [venues, setVenues] = useState<VenueOption[]>([]);
   const [venueDropdownOpen, setVenueDropdownOpen] = useState(false);
   const [preselected, setPreselected] = useState(false);
   const [labelSize, setLabelSize] = useState<LabelSize>("medium");
@@ -71,8 +76,10 @@ export default function LabelsPage() {
     const paramWorks = searchParams.get("works");
     const paramSizes = searchParams.get("sizes");
     const paramSize = searchParams.get("size");
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (paramVenue) setSelectedVenue(paramVenue);
+    // Venue resolution happens in its own effect below once the venues list
+    // has loaded, so deep links can name the venue by slug (emails) or by
+    // display name (portal links) and still preselect correctly.
+    void paramVenue;
     if (paramWorks && artist.works) {
       const workTitles = paramWorks.split(",").map((w) => w.trim());
       const sizeList = paramSizes
@@ -93,6 +100,7 @@ export default function LabelsPage() {
         if (chosen) sizeMap[i] = chosen;
       });
       if (indices.size > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelected(indices);
         if (Object.keys(sizeMap).length > 0) setSelectedSizes(sizeMap);
       }
@@ -107,18 +115,26 @@ export default function LabelsPage() {
     return count;
   }, [selected, quantities, portfolioQty]);
 
+  // Resolve the venue deep-link param against the loaded venues list. Emails
+  // pass the SLUG (?venue=the-curzon), portal pages historically passed the
+  // display name; match slug first, then name (QA flag D16).
+  useEffect(() => {
+    if (venues.length === 0 || selectedVenue) return;
+    const match = resolveVenueParam(
+      venues,
+      searchParams.get("venueSlug") || searchParams.get("venue"),
+    );
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (match) setSelectedVenue(match);
+  }, [venues, searchParams, selectedVenue]);
+
   // Fetch unique venue names from placements
   useEffect(() => {
     authFetch("/api/placements")
       .then((r) => r.json())
       .then((data) => {
         if (data.placements) {
-          const uniqueVenues = [...new Set(
-            data.placements
-              .map((p: { venue?: string }) => p.venue)
-              .filter(Boolean) as string[]
-          )];
-          setVenues(uniqueVenues);
+          setVenues(buildVenueOptions(data.placements));
         }
       })
       .catch(() => {});
@@ -166,7 +182,8 @@ export default function LabelsPage() {
       labels.push({
         artistName: currentArtist.name,
         artistSlug: currentArtist.slug,
-        venueName: selectedVenue || undefined,
+        venueName: selectedVenue?.name,
+        venueSlug: selectedVenue?.slug ?? undefined,
         quantity: portfolioQty,
         isPortfolioLabel: true,
         labelSize,
@@ -181,7 +198,8 @@ export default function LabelsPage() {
         artistName: currentArtist.name,
         artistSlug: currentArtist.slug,
         workId: work.id,
-        venueName: selectedVenue || undefined,
+        venueName: selectedVenue?.name,
+        venueSlug: selectedVenue?.slug ?? undefined,
         workTitle: work.title,
         workMedium: work.medium,
         workDimensions: selectedSizes[i] || work.dimensions,
@@ -337,7 +355,7 @@ export default function LabelsPage() {
                 className="w-full flex items-center justify-between text-sm border border-border rounded-sm px-3 py-2 bg-background hover:bg-background/80 transition-colors text-left"
               >
                 <span className={selectedVenue ? "text-foreground" : "text-muted"}>
-                  {selectedVenue || "No venue"}
+                  {selectedVenue?.name || "No venue"}
                 </span>
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-muted shrink-0">
                   <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
@@ -346,7 +364,7 @@ export default function LabelsPage() {
               {venueDropdownOpen && (
                 <div className="absolute left-0 right-0 mt-1 bg-surface border border-border rounded-sm shadow-sm z-20 max-h-48 overflow-y-auto">
                   <button
-                    onClick={() => { setSelectedVenue(""); setVenueDropdownOpen(false); }}
+                    onClick={() => { setSelectedVenue(null); setVenueDropdownOpen(false); }}
                     className={`w-full text-left text-sm px-3 py-2 hover:bg-background transition-colors ${
                       !selectedVenue ? "text-accent font-medium" : "text-foreground"
                     }`}
@@ -355,13 +373,13 @@ export default function LabelsPage() {
                   </button>
                   {venues.map((v) => (
                     <button
-                      key={v}
+                      key={v.slug || v.name}
                       onClick={() => { setSelectedVenue(v); setVenueDropdownOpen(false); }}
                       className={`w-full text-left text-sm px-3 py-2 hover:bg-background transition-colors ${
-                        v === selectedVenue ? "text-accent font-medium" : "text-foreground"
+                        (v.slug || v.name) === (selectedVenue?.slug || selectedVenue?.name) ? "text-accent font-medium" : "text-foreground"
                       }`}
                     >
-                      {v}
+                      {v.name}
                     </button>
                   ))}
                   {venues.length === 0 && (

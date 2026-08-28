@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import ConfirmUnsubscribe from "./ConfirmUnsubscribe";
 import { preferenceKeyFor, type EmailCategory } from "@/lib/email/categories";
 
 export const metadata: Metadata = {
@@ -54,26 +54,11 @@ export default async function UnsubscribePage({ searchParams }: { searchParams: 
   const category = c && VALID_CATEGORIES.includes(c as EmailCategory) ? (c as EmailCategory) : null;
   const label = category ? CATEGORY_LABELS[category] : null;
 
-  let state: "ok" | "critical" | "missing" | "unknown" = "missing";
-  if (!u || !category) {
-    state = "missing";
-  } else if (!preferenceKeyFor(category)) {
-    state = "critical";
-  } else {
-    try {
-      const db = getSupabaseAdmin();
-      const key = preferenceKeyFor(category)!;
-      const { error } = await db
-        .from("email_preferences")
-        .upsert(
-          { user_id: u, [key]: false, updated_at: new Date().toISOString() },
-          { onConflict: "user_id" },
-        );
-      state = error ? "unknown" : "ok";
-    } catch {
-      state = "unknown";
-    }
-  }
+  // QA flag C24: the preference is no longer changed during this render.
+  // Applying on GET meant a mail client's link prefetch unsubscribed the
+  // reader without a click; the ConfirmUnsubscribe button now owns the write.
+  const state: "confirm" | "critical" | "missing" =
+    !u || !category ? "missing" : !preferenceKeyFor(category) ? "critical" : "confirm";
 
   return (
     <div className="bg-background">
@@ -81,28 +66,19 @@ export default async function UnsubscribePage({ searchParams }: { searchParams: 
         <div className="max-w-[640px] mx-auto px-6">
           <h1 className="text-3xl lg:text-4xl mb-4">Email preferences</h1>
 
-          {state === "ok" && (
-            <p className="text-muted leading-relaxed mb-6">
-              You&rsquo;ve been unsubscribed from {label?.toLowerCase()}. We won&rsquo;t send you any more of those emails. Critical messages about orders, security, and legal notices will still come through, you can&rsquo;t turn those off.
-            </p>
+          {state === "confirm" && (
+            <ConfirmUnsubscribe userId={u!} category={category!} label={label || "these emails"} />
           )}
           {state === "critical" && (
             <p className="text-muted leading-relaxed mb-6">
               {label} are required for service and can&rsquo;t be turned off. If you no longer want to receive any email from Wallplace, you can{" "}
-              <Link href="/account/delete" className="text-accent hover:underline">delete your account</Link>
+              <Link href="/customer-portal/settings" className="text-accent hover:underline">delete your account from your settings page</Link>
               .
             </p>
           )}
           {state === "missing" && (
             <p className="text-muted leading-relaxed mb-6">
               We couldn&rsquo;t read the unsubscribe details from the link. Please use the link in the email, or sign in to update your preferences directly.
-            </p>
-          )}
-          {state === "unknown" && (
-            <p className="text-muted leading-relaxed mb-6">
-              Something went wrong saving your preference. Please try again from the link in the email, or contact{" "}
-              <a href="mailto:hello@wallplace.co.uk" className="text-accent hover:underline">hello@wallplace.co.uk</a>
-              .
             </p>
           )}
 
