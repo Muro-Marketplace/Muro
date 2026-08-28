@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import Link from "next/link";
 import Image from "next/image";
@@ -101,6 +102,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   // thread's perspective (non-artist outreach). The server still derives the
   // real sender role from the user's profile, so this is a UI-only coercion.
   const portalRole: "artist" | "venue" = portalType === "artist" ? "artist" : "venue";
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
@@ -319,6 +321,27 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     // act because `loading` flips false at that moment, not on polls.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialArtistSlug, initialArtistName, loading]);
+
+  // H20: notification emails link the inbox with ?c=<conversationId>,
+  // which this component previously ignored, so "Open conversation"
+  // landed on the generic inbox with nothing selected. Auto-open that
+  // thread once conversations have loaded. Same one-shot ref pattern as
+  // the initialArtistSlug effect above (and the same reason not to
+  // depend on `conversations`: the 15s poll must not snap the user back).
+  // Declared AFTER the artist effect so a ?c= target wins if both
+  // params are ever present.
+  const handledConvParamRef = useRef<string | null>(null);
+  useEffect(() => {
+    const target = searchParams?.get("c");
+    if (!target || loading) return;
+    if (handledConvParamRef.current === target) return;
+    handledConvParamRef.current = target;
+    if (conversations.some((c) => c.conversationId === target)) {
+      setSelectedConv(target);
+      setComposing(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loading]);
 
   // Load thread
   const loadThread = useCallback(async (convId: string, silent = false) => {
@@ -787,6 +810,9 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
               e.stopPropagation();
               const ok = await confirm({
                 title: "Delete this conversation?",
+                // F2: the endpoint hard-deletes every message in the
+                // thread for BOTH parties. Say so, promise nothing else.
+                body: "This permanently deletes the conversation for both of you. It cannot be undone.",
                 confirmLabel: "Delete",
                 destructive: true,
               });
@@ -1612,7 +1638,8 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
           confirm()+alert() flag handler with a proper Vinted-style
           popup: Help routes to FAQ, Report opens a textarea + sends
           to /api/messages/report (existing endpoint), Delete
-          archives the conversation, Block disables future messaging
+          permanently deletes the conversation for both parties (F2:
+          it is a hard delete, and the copy says so), Block disables future messaging
           from this slug. Block is wired to a stubbed endpoint for now;
           if it fails the UI falls back to a friendly note. */}
       {flagOpen && selectedConvData && (
@@ -1644,7 +1671,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
             {flagSubmitted ? (
               <div className="px-5 py-6 text-sm text-foreground">
                 {flagSubmitted === "reported" && "Report submitted. Our team will review this conversation."}
-                {flagSubmitted === "deleted" && "Conversation archived. You won't see it in your inbox."}
+                {flagSubmitted === "deleted" && "Conversation deleted for both of you. This cannot be undone."}
                 {flagSubmitted === "blocked" && "User blocked. They won't be able to message you again."}
                 <div className="mt-4 flex justify-end">
                   <button
@@ -1703,28 +1730,48 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     type="button"
                     disabled={flagSubmitting}
                     onClick={async () => {
+                      // F2: the old copy promised a support-recoverable
+                      // archive. The endpoint hard-deletes every message in
+                      // the thread for BOTH parties, so the dialog now says
+                      // exactly that. (It also posted DELETE to /api/messages,
+                      // which has no DELETE handler, so the "archive" 405ed
+                      // every time; the per-conversation endpoint is the one
+                      // that exists.)
+                      const convId = selectedConvData?.conversationId;
+                      if (!convId) return;
                       const ok = await confirm({
-                        title: "Archive this conversation?",
-                        body: "It'll disappear from your inbox but can be restored by support if needed.",
-                        confirmLabel: "Archive",
+                        title: "Delete this conversation?",
+                        body: "This permanently deletes the conversation for both of you. It cannot be undone.",
+                        confirmLabel: "Delete",
+                        destructive: true,
                       });
                       if (!ok) return;
-                      // E43-e: only confirm the archive once the server accepted it.
-                      await submitFlagAction({
-                        url: "/api/messages",
+                      // E43-e: only confirm the delete once the server accepted it.
+                      const accepted = await submitFlagAction({
+                        url: `/api/messages/${convId}`,
                         method: "DELETE",
-                        body: { conversationId: selectedConvData?.conversationId },
+                        body: undefined,
                         outcome: "deleted",
-                        errorMessage: "Could not archive the conversation. Please try again.",
+                        errorMessage: "Could not delete the conversation. Please try again.",
                         setSubmitting: setFlagSubmitting,
                         setSubmitted: setFlagSubmitted,
                         showToast,
                       });
+                      if (accepted) {
+                        // Removing the conversation unmounts this modal (it
+                        // renders only while a conversation is selected), so
+                        // the confirmation goes out as a toast instead.
+                        setFlagOpen(false);
+                        setConversations((prev) => prev.filter((c) => c.conversationId !== convId));
+                        setSelectedConv(null);
+                        setMessages([]);
+                        showToast("Conversation deleted.");
+                      }
                     }}
                     className="w-full text-left block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors disabled:opacity-50"
                   >
                     <span className="font-medium">Delete conversation</span>
-                    <span className="block text-xs text-muted mt-0.5">Archive this thread from your inbox.</span>
+                    <span className="block text-xs text-muted mt-0.5">Permanently removes this thread for both of you.</span>
                   </button>
                 </li>
                 <li>

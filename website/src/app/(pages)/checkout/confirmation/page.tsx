@@ -33,6 +33,7 @@ function ConfirmationBackdrop() {
 // anyone holding a session id could read the buyer's name, address and email.
 interface StripeOrder {
   id: string;
+  /** Stripe's payment_status: "paid" | "unpaid" | "no_payment_required". */
   status: string;
   amountTotal: number;
   lineItems: { name: string; quantity: number; amount: number }[];
@@ -61,36 +62,68 @@ function ConfirmationContent() {
       ? "/artist-portal/orders"
       : "/customer-portal";
   const [order, setOrder] = useState<StripeOrder | null>(null);
-  const [loading, setLoading] = useState(true);
+  // B20/B21: this page used to clear the cart on mount and assert
+  // "payment received" without ever reading the session's payment_status,
+  // so an unpaid or abandoned session (or a bogus session id) still got a
+  // money-received claim and an emptied cart. The phase now follows what
+  // Stripe actually reports:
+  //   paid       -> confirmed receipt; the ONLY branch that clears the
+  //                 cart and drops the QR attribution
+  //   processing -> session found but payment not confirmed, hedged copy
+  //   error      -> the lookup failed, no claims either way
+  //   no_session -> no session id in the URL at all
+  // no_session is derivable at first render (useSearchParams is synchronous),
+  // so it seeds the state rather than being set inside the effect.
+  const [phase, setPhase] = useState<
+    "loading" | "no_session" | "error" | "processing" | "paid"
+  >(() => (sessionId ? "loading" : "no_session"));
 
   useEffect(() => {
-    // Clear cart on successful checkout
-    clearCart();
-    // Drop the QR attribution once the order is in. Otherwise a
-    // subsequent unrelated purchase from the same browser would keep
-    // crediting the original venue right up to the 24h TTL.
-    clearQrContext();
+    if (!sessionId) return;
 
+    let cancelled = false;
     async function fetchSession() {
-      if (!sessionId) {
-        setLoading(false);
-        return;
-      }
-
       try {
         const res = await fetch(`/api/checkout/session?id=${sessionId}`);
+        if (!res.ok) {
+          if (!cancelled) setPhase("error");
+          return;
+        }
         const data = await res.json();
-        if (data.id) setOrder(data);
+        if (cancelled) return;
+        if (!data.id) {
+          setPhase("error");
+          return;
+        }
+        setOrder(data);
+        // `status` is Stripe's payment_status. Success only when the money
+        // is confirmed as received; anything else gets the hedged state.
+        if (data.status === "paid") {
+          // Clear the cart only now that payment is confirmed. An unpaid
+          // session may never complete, and the buyer needs the cart
+          // intact to try again.
+          clearCart();
+          // Drop the QR attribution once the order is in. Otherwise a
+          // subsequent unrelated purchase from the same browser would keep
+          // crediting the original venue right up to the 24h TTL.
+          clearQrContext();
+          setPhase("paid");
+        } else {
+          setPhase("processing");
+        }
       } catch (err) {
         console.error("Failed to fetch session:", err);
+        if (!cancelled) setPhase("error");
       }
-      setLoading(false);
     }
 
     fetchSession();
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId, clearCart]);
 
-  if (loading) {
+  if (phase === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-muted text-sm">Loading order details...</p>
@@ -98,7 +131,7 @@ function ConfirmationContent() {
     );
   }
 
-  if (!order && !sessionId) {
+  if (phase === "no_session") {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
@@ -115,19 +148,42 @@ function ConfirmationContent() {
     );
   }
 
-  // Session ID provided but order fetch failed
-  if (!order && sessionId) {
+  // A clock face, not a tick: these branches must not imply the money
+  // arrived when we cannot or did not verify it.
+  const pendingIcon = (
+    <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <polyline points="12 7 12 12 15.5 14" />
+      </svg>
+    </div>
+  );
+
+  const discoverStrip = (
+    <div data-testid="discover-strip" className="mt-8 border-t border-border pt-6">
+      <p className="text-xs text-muted uppercase tracking-widest mb-3">Discover more</p>
+      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <Link href="/browse" className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors">Browse art</Link>
+        <Link href="/spaces" className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors">Explore spaces</Link>
+        <Link href="/browse/collections" className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors">Featured collections</Link>
+      </div>
+    </div>
+  );
+
+  // Session id provided but the lookup failed. B21: this branch used to
+  // claim "Your payment was received successfully", which is unverifiable
+  // here and false for a bogus session id. Say what we know: nothing yet.
+  if (phase === "error") {
     return (
       <div className="max-w-2xl mx-auto px-6 py-16 text-center">
-        <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </div>
-        <h1 className="text-3xl font-serif mb-2">Thank You!</h1>
-        <p className="text-muted mb-4">Your payment was received successfully.</p>
+        {pendingIcon}
+        <h1 className="text-3xl font-serif mb-2">Checking your order</h1>
+        <p className="text-muted mb-4">We couldn&apos;t confirm your payment just now.</p>
         <p className="text-sm text-muted/70 mb-8">
-          We couldn&apos;t load the full order details right now, but your order is confirmed. You&apos;ll receive a confirmation email shortly.
+          If your payment completed, you&apos;ll receive a confirmation email shortly.
+          If nothing arrives within the hour, please{" "}
+          <Link href="/contact" className="text-accent hover:underline">contact us</Link>{" "}
+          and we&apos;ll look into it.
         </p>
         <Link
           href="/browse"
@@ -135,18 +191,57 @@ function ConfirmationContent() {
         >
           Continue browsing
         </Link>
-        {/* Discover more strip */}
-        <div data-testid="discover-strip" className="mt-8 border-t border-border pt-6">
-          <p className="text-xs text-muted uppercase tracking-widest mb-3">Discover more</p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/browse" className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors">Browse art</Link>
-            <Link href="/spaces" className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors">Explore spaces</Link>
-            <Link href="/browse/collections" className="inline-flex items-center justify-center px-5 py-2.5 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-surface transition-colors">Featured collections</Link>
-          </div>
-        </div>
+        {discoverStrip}
       </div>
     );
   }
+
+  // Session found but Stripe has not confirmed the payment. B20: no
+  // "payment received" claim, and the cart is left intact so the buyer
+  // can check out again if the payment never completes.
+  if (phase === "processing") {
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-16 text-center">
+        {pendingIcon}
+        <h1 className="text-3xl font-serif mb-2">Payment processing</h1>
+        <p className="text-muted mb-4">Thanks, your order is with us.</p>
+        <p className="text-sm text-muted/70 mb-8">
+          Your payment hasn&apos;t been confirmed yet. We&apos;ll email your confirmation
+          as soon as it goes through. Your cart is untouched, so if the payment
+          didn&apos;t complete you can simply check out again.
+        </p>
+
+        {order?.lineItems && (
+          <div className="bg-surface border border-border rounded-sm p-5 mb-8 text-left">
+            <h2 className="text-sm font-medium mb-4">Items</h2>
+            <div className="space-y-3">
+              {order.lineItems.map((item, i) => (
+                <div key={i} className="flex justify-between text-sm">
+                  <span>{item.name} {item.quantity > 1 ? `x${item.quantity}` : ""}</span>
+                  <span className="font-medium">&pound;{item.amount.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-border mt-4 pt-3">
+              <div className="flex justify-between text-sm font-medium">
+                <span>Total</span>
+                <span>&pound;{order.amountTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Link
+          href="/browse"
+          className="inline-flex items-center justify-center px-6 py-3 border border-border text-foreground text-sm font-medium rounded-sm hover:bg-background transition-colors"
+        >
+          Continue browsing
+        </Link>
+        {discoverStrip}
+      </div>
+    );
+  }
+
 
   return (
     <div className="relative min-h-screen">

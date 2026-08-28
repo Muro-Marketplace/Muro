@@ -118,7 +118,11 @@ export async function PATCH(
       timeline: resp.proposed_commission_timeline,
       status: "accepted",
     });
-    nextStepLink = `/venue-portal/commissions`;
+    // E24: /venue-portal/commissions does not exist as a route, so
+    // navigating there landed the venue on a 404 straight after a
+    // successful accept. Point back at the request detail page, which
+    // the detail UI treats as "stay here and show a success state".
+    nextStepLink = `/venue-portal/artwork-requests/${requestId}`;
   } else if (resp.response_type === "placement") {
     // Plan G2: auto-create a pending placements row using the artist's
     // proposed terms. The venue confirms (or counters) from the
@@ -179,6 +183,11 @@ export async function PATCH(
         work_title: req.title || "Placement from artwork request",
         work_image: null,
         arrangement_type: arrangementType,
+        // E23: proposed_revenue_share_percent is the VENUE'S share (the
+        // artist respond form caps it at "max 50% to the venue"), which is
+        // exactly what placements.revenue_share_percent means (payout legs
+        // deduct it from the artist's gross as venueCutPence). Pass it
+        // through unchanged — no inversion.
         revenue_share_percent: typeof revSharePct === "number" ? revSharePct : null,
         monthly_fee_gbp: monthlyFeeGbp,
         // QR defaults: rev-share placements need QR (it's how customers buy from
@@ -247,7 +256,10 @@ export async function PATCH(
     link: linkedOfferId
       ? `/artist-portal/offers`
       : linkedCommissionId
-        ? `/artist-portal/commissions`
+        // E24: /artist-portal/commissions does not exist either. Send the
+        // artist to their artwork-requests list, where the accepted
+        // response lives — same target the decline notification uses.
+        ? `/artist-portal/artwork-requests`
         : linkedPlacementId
           ? `/artist-portal/placements`
           : `/artist-portal/messages`,

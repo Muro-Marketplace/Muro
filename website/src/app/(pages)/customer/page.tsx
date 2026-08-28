@@ -39,7 +39,7 @@ export default function CustomerPage() {
               </h1>
               <p className="text-lg lg:text-xl text-white/60 leading-relaxed max-w-xl mb-10">
                 Spot a piece you love on a wall somewhere. Scan the QR. Own it.
-                Or skip the wall and browse hundreds of independent artists online.
+                Or skip the wall and browse a growing community of independent artists online.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Link href="/browse" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors">

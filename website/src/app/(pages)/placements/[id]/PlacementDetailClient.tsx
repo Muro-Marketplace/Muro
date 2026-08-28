@@ -566,7 +566,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
             {(() => {
               const labelHref = portalBase === "/venue-portal"
                 ? `/venue-portal/labels?placement=${encodeURIComponent(placement.id)}`
-                : `/artist-portal/labels?works=${encodeURIComponent(placement.work_title || "")}&venue=${encodeURIComponent(venue?.name || placement.venue || "")}`;
+                : `/artist-portal/labels?works=${encodeURIComponent(placement.work_title || "")}&venue=${encodeURIComponent(venue?.name || placement.venue || "")}${placement.venue_slug ? `&venueSlug=${encodeURIComponent(placement.venue_slug)}` : ""}`;
               return (
                 <Link
                   href={labelHref}

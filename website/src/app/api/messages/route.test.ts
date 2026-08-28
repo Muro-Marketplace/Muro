@@ -16,6 +16,8 @@ const {
   fromMock,
   isFlagOnMock,
   sendEmailMock,
+  sendMessageUnreadEmailMock,
+  getUserByIdMock,
   isAdminMock,
   recordAdminActionMock,
   moderateMock,
@@ -24,6 +26,8 @@ const {
   fromMock: vi.fn(),
   isFlagOnMock: vi.fn(),
   sendEmailMock: vi.fn(async () => ({ ok: true })),
+  sendMessageUnreadEmailMock: vi.fn(async () => ({ ok: true })),
+  getUserByIdMock: vi.fn(async () => ({ data: { user: null as null | { email: string } } })),
   isAdminMock: vi.fn(),
   recordAdminActionMock: vi.fn(),
   moderateMock: vi.fn(() => ({ allowed: true, flagged: false, reason: undefined as string | undefined })),
@@ -37,8 +41,12 @@ vi.mock("@/lib/supabase-admin", () => ({
     // The placement-response notification path reads the artist's auth user.
     // Without this the fixture threw and the outer catch reported 400, which
     // would have made a passing E33 guard look like a malformed body.
-    auth: { admin: { getUserById: async () => ({ data: { user: null } }) } },
+    // Hoisted so the F7 email-link tests can resolve a recipient email.
+    auth: { admin: { getUserById: getUserByIdMock } },
   }),
+}));
+vi.mock("@/lib/email/notifications", () => ({
+  sendMessageUnreadEmail: sendMessageUnreadEmailMock,
 }));
 vi.mock("@/lib/feature-flags", () => ({ isFlagOn: isFlagOnMock }));
 // K1: the legacy @/lib/email is deleted; both directions of the placement
@@ -79,6 +87,9 @@ beforeEach(() => {
   fromMock.mockReset();
   isFlagOnMock.mockReset();
   sendEmailMock.mockClear();
+  sendMessageUnreadEmailMock.mockClear();
+  getUserByIdMock.mockReset();
+  getUserByIdMock.mockResolvedValue({ data: { user: null } });
   isAdminMock.mockReset();
   recordAdminActionMock.mockReset();
   moderateMock.mockReset();
@@ -737,5 +748,83 @@ describe("GET /api/messages honours the viewer's blocks", () => {
     const body = await (await GET(getReqSlug())).json();
 
     expect((body.conversations as unknown[]).length).toBe(2);
+  });
+});
+
+
+// F7/H20: the unread-message email hardcoded /artist-portal/messages for every
+// recipient, so a venue clicking "Open conversation" bounced off the artist
+// portal guard. The sender now names the recipient's own portal.
+describe("POST /api/messages links the unread email to the RECIPIENT's portal", () => {
+  function setupRecipientDb(kind: "artist" | "venue") {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        // kind === "artist": sender resolution (by user_id), recipient
+        // resolution (by slug) and the notify lookup all resolve to
+        // artist rows. kind === "venue": no artist rows anywhere, so
+        // every lookup falls through to venue_profiles.
+        return chainSelectMaybe(
+          kind === "artist" ? { slug: "alice", user_id: "u-recip", name: "Alice" } : null,
+        );
+      }
+      if (table === "venue_profiles") {
+        return chainSelectMaybe({ slug: "alice", user_id: "u-recip", name: "Alice" });
+      }
+      if (table === "user_blocks") return chainSelectMaybe(null);
+      if (table === "messages") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+          insert: () => ({
+            select: () => ({ maybeSingle: async () => ({ data: { id: "msg-77" }, error: null }) }),
+          }),
+        };
+      }
+      return chainSelectMaybe(null);
+    });
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "recipient@example.com" } } });
+  }
+
+  function send() {
+    return POST(
+      req({
+        conversationId: "conv-9",
+        senderName: "alice",
+        senderType: "venue",
+        recipientSlug: "bob",
+        content: "Hello there, this is a message.",
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    isFlagOnMock.mockReturnValue(false);
+  });
+
+  it("sends recipientPortal 'venue' when the recipient is a venue", async () => {
+    setupRecipientDb("venue");
+
+    const res = await send();
+
+    expect(res.status).toBe(200);
+    expect(sendMessageUnreadEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendMessageUnreadEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientPortal: "venue",
+        recipientEmail: "recipient@example.com",
+        conversationId: "conv-9",
+      }),
+    );
+  });
+
+  it("sends recipientPortal 'artist' when the recipient is an artist", async () => {
+    setupRecipientDb("artist");
+
+    const res = await send();
+
+    expect(res.status).toBe(200);
+    expect(sendMessageUnreadEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendMessageUnreadEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientPortal: "artist" }),
+    );
   });
 });

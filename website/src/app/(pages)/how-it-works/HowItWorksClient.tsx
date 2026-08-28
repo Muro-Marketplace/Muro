@@ -42,7 +42,7 @@ const tabContent: Record<Audience, {
     secondary: { href: "/pricing", label: "See pricing" },
   },
   customer: {
-    lede: "Buy original artwork directly from independent artists. Spot a piece on a wall in a venue and scan the QR, or browse hundreds of storefronts online.",
+    lede: "Buy original artwork directly from independent artists. Spot a piece on a wall in a venue and scan the QR, or browse a growing roster of artist storefronts online.",
     steps: [
       { number: "01", title: "Discover", description: "Find work in person at a venue showing Wallplace artists, or browse artist storefronts online." },
       { number: "02", title: "Buy", description: "Pay securely through Wallplace. Every piece comes with a certificate of authenticity from the artist." },

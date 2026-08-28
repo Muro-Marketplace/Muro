@@ -3,9 +3,14 @@
 // Verifies the page reads `data.refundRequests` (not `data.requests`) from
 // the GET /api/refunds response and renders the pending-refund badge when
 // an order is selected and has a pending refund linked to it.
+//
+// C5/C6 (QA 2026-08-28): the refund request form migrated to mutate(). A
+// partial refund with an invalid amount can no longer be submitted, and any
+// failure (server non-2xx or network) surfaces to the customer instead of
+// being silently swallowed.
 
 import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor, screen, cleanup } from "@testing-library/react";
+import { render, waitFor, screen, cleanup, fireEvent } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // All vi.mock calls are hoisted to the top of the module by Vitest.
@@ -77,11 +82,20 @@ vi.mock("@/components/OrderStatusTracker", () => ({
   }) => <span data-testid="order-status">{currentStatus}</span>,
 }));
 
-// authFetch — the page's only network layer.
-const authFetchMock = vi.fn();
-vi.mock("@/lib/api-client", () => ({
-  authFetch: (...args: unknown[]) => authFetchMock(...args),
+// api-client — authFetch for reads, mutate for the refund request (C5/C6).
+// Spread the actual module so ApiError/NetworkError stay the real classes.
+const { authFetchMock, mutateMock } = vi.hoisted(() => ({
+  authFetchMock: vi.fn(),
+  mutateMock: vi.fn(),
 }));
+vi.mock("@/lib/api-client", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api-client")>();
+  return {
+    ...actual,
+    authFetch: (...args: unknown[]) => authFetchMock(...args),
+    mutate: (...args: unknown[]) => mutateMock(...args),
+  };
+});
 
 // Supabase — pulled in transitively via authFetch / PortalGuard.
 vi.mock("@/lib/supabase", () => ({
@@ -145,6 +159,7 @@ function jsonResponse(data: unknown, ok = true): Response {
 // ---------------------------------------------------------------------------
 
 import CustomerPortalPage from "./page";
+import { ApiError } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Pre-select the order so the detail panel renders without needing a click.
@@ -257,5 +272,100 @@ describe("CustomerPortalPage — refund-history field contract (2.1, 6.1)", () =
 
     // No badge — the wrong key is silently ignored.
     expect(screen.queryByText(/Refund requested: pending review/i)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C5/C6 — refund request form: submit gating and failure surfacing
+// ---------------------------------------------------------------------------
+
+describe("CustomerPortalPage — refund request form (C5/C6)", () => {
+  beforeEach(() => {
+    // Eligible delivered order, no existing refund request, so the form is offered.
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/orders") {
+        return Promise.resolve(jsonResponse({ orders: [mockOrder] }));
+      }
+      if (url === "/api/refunds") {
+        return Promise.resolve(jsonResponse({ refundRequests: [], userType: "customer" }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+  });
+
+  function submitButton(): HTMLButtonElement {
+    return screen.getByText("Submit Refund Request") as HTMLButtonElement;
+  }
+
+  async function openRefundForm() {
+    render(<CustomerPortalPage />);
+    fireEvent.click(await screen.findByText("Request Refund"));
+    fireEvent.change(
+      screen.getByPlaceholderText("Please describe why you'd like a refund"),
+      { target: { value: "Damaged in transit" } },
+    );
+  }
+
+  it("C5: disables submit for a partial refund until the amount is valid", async () => {
+    await openRefundForm();
+
+    // Full refund with a reason: submittable.
+    expect(submitButton().disabled).toBe(false);
+
+    // Partial with a blank amount: fail-before this submitted and died as a
+    // silent server 400.
+    fireEvent.click(screen.getByLabelText("Partial refund"));
+    expect(submitButton().disabled).toBe(true);
+
+    // Zero and over-total are equally invalid.
+    const amountInput = screen.getByPlaceholderText("0.00");
+    fireEvent.change(amountInput, { target: { value: "0" } });
+    expect(submitButton().disabled).toBe(true);
+    fireEvent.change(amountInput, { target: { value: "999" } });
+    expect(submitButton().disabled).toBe(true);
+
+    // A sane amount unlocks it.
+    fireEvent.change(amountInput, { target: { value: "20" } });
+    expect(submitButton().disabled).toBe(false);
+  });
+
+  it("C6: surfaces a server rejection and keeps the form open", async () => {
+    mutateMock.mockRejectedValue(
+      new ApiError(409, "A pending refund request already exists for this order.", null, {}),
+    );
+    await openRefundForm();
+    fireEvent.click(submitButton());
+
+    // Fail-before: the non-2xx was swallowed and the customer saw nothing.
+    expect(
+      await screen.findByText("A pending refund request already exists for this order."),
+    ).toBeTruthy();
+    expect(screen.getByText("Submit Refund Request")).toBeTruthy();
+    expect(screen.queryByText(/Refund request submitted/)).toBeNull();
+  });
+
+  it("C6: surfaces a network failure", async () => {
+    mutateMock.mockRejectedValue(new Error("connection reset"));
+    await openRefundForm();
+    fireEvent.click(submitButton());
+
+    expect(
+      await screen.findByText("Network error. Please check your connection and try again."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Refund request submitted/)).toBeNull();
+  });
+
+  it("shows the confirmation only on a confirmed 2xx", async () => {
+    mutateMock.mockResolvedValue({ success: true, refundRequest: { ...pendingRefund } });
+    await openRefundForm();
+    fireEvent.click(submitButton());
+
+    expect(await screen.findByText(/Refund request submitted/)).toBeTruthy();
+    expect(mutateMock).toHaveBeenCalledWith(
+      "/api/refunds/request",
+      expect.objectContaining({ method: "POST" }),
+    );
+    // Form is gone.
+    expect(screen.queryByText("Submit Refund Request")).toBeNull();
   });
 });

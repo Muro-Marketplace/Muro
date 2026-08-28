@@ -84,6 +84,12 @@ export const applySchema = z.object({
 export const registerVenueSchema = z.object({
   venueName: safeString(200),
   venueType: safeString(100),
+  // A43: the free-text description behind the "Other" venue type. The form
+  // always posts it; without this field zod stripped it and the venue's own
+  // words never reached the database. The route folds it into `message`
+  // (venue_registrations has no column for it, and a migration is out of
+  // scope), so it must survive parsing here.
+  customVenueType: optionalString(100),
   contactName: safeString(100),
   email,
   phone: optionalString(30),

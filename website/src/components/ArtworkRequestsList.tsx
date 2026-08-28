@@ -49,9 +49,13 @@ function formatBudget(minP: number | null, maxP: number | null): string | null {
 function arrangementSummary(r: PublicArtworkRequest): string {
   const parts: string[] = [];
   if (r.intent.includes("display")) {
+    // E23: qr_revenue_share_percent is the VENUE'S share of each QR sale
+    // (canonical direction, same as placements.revenue_share_percent).
+    // Derive the artist-facing "you keep X%" from it rather than showing
+    // the raw number as if it were the artist's cut.
     parts.push(
       r.qr_revenue_share_percent != null
-        ? `QR display · ${r.qr_revenue_share_percent}% to artist`
+        ? `QR display · you keep ${100 - r.qr_revenue_share_percent}% of sales`
         : "Display",
     );
   }

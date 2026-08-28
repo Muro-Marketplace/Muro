@@ -94,6 +94,7 @@ export async function POST(request: Request) {
           recipientEmail: artistUser.email,
           recipientUserId: artistProfile.user_id,
           recipientName: artistProfile.name,
+          recipientPortal: "artist",
           senderName,
           messagePreview: message,
           conversationId: cid,

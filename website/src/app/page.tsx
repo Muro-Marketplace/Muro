@@ -349,67 +349,10 @@ export default function Home() {
             </div>
           </section>
 
-          {/* ─── TESTIMONIALS ─── */}
-          <section className="py-20 lg:py-28 bg-surface border-y border-border">
-            <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
-              <AnimateIn>
-              <div className="text-center mb-14">
-                <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Testimonials</p>
-                <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground">
-                  Trusted by artists and venues
-                </h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* Testimonials (#33), tightened to feel like real
-                    UK independents talking about specific outcomes
-                    rather than generic platform praise. Names + roles
-                    are placeholders we'll replace with real quotes
-                    as they land; tone target: dry, specific, no
-                    superlatives. */}
-                {[
-                  {
-                    quote: "Two of our regulars asked who painted the piece above the bar within the first week. One of them ended up buying it. The artist now changes the wall every couple of months.",
-                    name: "Eloise Bramley",
-                    role: "Co-owner, The Copper Kettle, Hackney",
-                    type: "Venue",
-                  },
-                  {
-                    quote: "I'd been emailing cafés cold for two years before I joined. In my first three months on Wallplace I got more genuine enquiries than I'd had cumulatively. Eight of them turned into placements.",
-                    name: "Tomi Okafor",
-                    role: "Architectural photographer, London",
-                    type: "Artist",
-                  },
-                  {
-                    quote: "The QR thing sounded like a gimmick at first. We've now had four sales straight off the wall this quarter, the customer scans, buys, the artist ships, and our cut just lands. We didn't have to learn anything new.",
-                    name: "David Chen",
-                    role: "Manager, Roots & Vine, Bermondsey",
-                    type: "Venue",
-                  },
-                ].map((t, i) => (
-                  <div key={i} className="bg-background border border-border rounded-sm p-6 lg:p-8 flex flex-col">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="text-accent/30 mb-4 shrink-0">
-                      <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z" fill="currentColor" />
-                      <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" fill="currentColor" />
-                    </svg>
-                    <p className="text-sm text-foreground/80 leading-relaxed flex-1 mb-6">
-                      {t.quote}
-                    </p>
-                    <div className="flex items-center gap-3 pt-4 border-t border-border">
-                      <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
-                        <span className="text-sm font-medium text-accent">{t.name.charAt(0)}</span>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{t.name}</p>
-                        <p className="text-xs text-muted">{t.role}</p>
-                      </div>
-                      <span className="ml-auto text-[10px] font-medium uppercase tracking-wider text-accent/60 bg-accent/5 px-2 py-0.5 rounded-sm">{t.type}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              </AnimateIn>
-            </div>
-          </section>
+          {/* Testimonials removed pre-launch (QA flag A8): the quotes were
+              placeholder copy with invented names and sales outcomes, which
+              cannot appear as genuine reviews. Reinstate only with real,
+              consented quotes. */}
 
           {/* ─── VENUE DEMAND ─── */}
           <section className="py-20 lg:py-28 relative overflow-hidden">

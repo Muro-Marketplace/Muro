@@ -4,7 +4,7 @@ import { Suspense, useMemo, useState, useEffect } from "react";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import { formatCurrency } from "@/lib/format-currency";
 import { isRefundEligible } from "@/lib/order-status-labels";
@@ -81,6 +81,7 @@ function CustomerPortalContent() {
   const [refundReason, setRefundReason] = useState("");
   const [refundSubmitting, setRefundSubmitting] = useState(false);
   const [refundSuccess, setRefundSuccess] = useState(false);
+  const [refundError, setRefundError] = useState<string | null>(null);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   // E21: the buyer confirms delivery, because doing so releases the artist's
   // escrow and the artist must not attest it themselves.
@@ -108,8 +109,10 @@ function CustomerPortalContent() {
     // OWNER-GATED (money boundary, 05): confirming delivery RELEASES the artist's
     // escrow (a fund movement/payout, per the E21 note above), so this is NOT
     // migrated to mutate() until the owner signs off on the transport swap, exactly
-    // like the orders refund handlers and the OffersList checkout. It stays on
-    // authFetch and remains flagged/grandfathered in the no-authfetch-mutation ratchet.
+    // like the OffersList checkout. It stays on authFetch and remains
+    // flagged/grandfathered in the no-authfetch-mutation ratchet. (The refund
+    // handlers, which only create/decide refund REQUESTS, were migrated in the
+    // 2026-08-28 QA round: C5/C6 here, D18/D19 on artist orders.)
     try {
       const res = await authFetch("/api/orders", {
         method: "PATCH",
@@ -132,30 +135,34 @@ function CustomerPortalContent() {
 
   async function submitRefundRequest(orderId: string) {
     setRefundSubmitting(true);
-    // OWNER-GATED (money boundary, 05): posts to the refund flow (/api/refunds/request),
-    // the same path the artist-orders refund handlers use, so it is NOT migrated to
-    // mutate() until the owner rules on the refund transport swaps. NB: migrating it
-    // would ALSO fix a latent silent failure here (a non-2xx currently shows the customer
-    // nothing, and the catch only console.errors) — flag that for the owner. Stays on
-    // authFetch, flagged/grandfathered in the ratchet.
+    setRefundError(null);
+    // C5/C6 (QA 2026-08-28): migrated from authFetch to mutate() as part of this
+    // remediation round. The old shape swallowed every failure: a non-2xx showed
+    // the customer nothing (the form just sat there) and a network error only
+    // console.errored. mutate() throws ApiError on a non-2xx and NetworkError
+    // when the request never lands, so both now surface via refundError. The
+    // money boundary is unchanged: this only CREATES a refund request for
+    // review, it moves no funds.
     try {
       const body: Record<string, unknown> = { orderId, reason: refundReason, type: refundType };
-      if (refundType === "partial" && refundAmount) body.amount = parseFloat(refundAmount);
-      const res = await authFetch("/api/refunds/request", {
+      if (refundType === "partial") body.amount = parseFloat(refundAmount);
+      const data = await mutate<RefundRequestCreateResponse>("/api/refunds/request", {
         method: "POST",
         body: JSON.stringify(body),
       });
-      if (res.ok) {
-        const data: RefundRequestCreateResponse = await res.json();
-        if (data.refundRequest) setRefundRequests((prev) => [...prev, data.refundRequest]);
-        setRefundSuccess(true);
-        setShowRefundForm(false);
-        setRefundReason("");
-        setRefundAmount("");
-        setRefundType("full");
-      }
+      if (data.refundRequest) setRefundRequests((prev) => [...prev, data.refundRequest]);
+      setRefundSuccess(true);
+      setShowRefundForm(false);
+      setRefundReason("");
+      setRefundAmount("");
+      setRefundType("full");
     } catch (err) {
       console.error("Refund request failed:", err);
+      setRefundError(
+        err instanceof ApiError
+          ? err.message || "Could not submit your refund request. Please try again."
+          : "Network error. Please check your connection and try again.",
+      );
     }
     setRefundSubmitting(false);
   }
@@ -354,6 +361,13 @@ function CustomerPortalContent() {
               if (!refundEligible) return null;
 
               if (showRefundForm) {
+                // C5: a partial refund with a blank (or non-positive, or
+                // over-total) amount used to submit anyway and die as a silent
+                // server 400. Gate the submit button until the amount is valid.
+                const parsedAmount = parseFloat(refundAmount);
+                const partialAmountInvalid =
+                  refundType === "partial" &&
+                  (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || parsedAmount > selected.total);
                 return (
                   <div className="space-y-4">
                     <p className="text-xs text-muted uppercase tracking-wider">Request a Refund</p>
@@ -407,25 +421,28 @@ function CustomerPortalContent() {
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => submitRefundRequest(selected.id)}
-                        disabled={refundSubmitting || !refundReason.trim()}
+                        disabled={refundSubmitting || !refundReason.trim() || partialAmountInvalid}
                         className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
                       >
                         {refundSubmitting ? "Submitting..." : "Submit Refund Request"}
                       </button>
                       <button
-                        onClick={() => { setShowRefundForm(false); setRefundReason(""); setRefundAmount(""); setRefundType("full"); }}
+                        onClick={() => { setShowRefundForm(false); setRefundError(null); setRefundReason(""); setRefundAmount(""); setRefundType("full"); }}
                         className="px-4 py-2 text-sm text-muted hover:text-foreground transition-colors"
                       >
                         Cancel
                       </button>
                     </div>
+                    {refundError && (
+                      <p className="text-xs text-red-600">{refundError}</p>
+                    )}
                   </div>
                 );
               }
 
               return (
                 <button
-                  onClick={() => { setShowRefundForm(true); setRefundSuccess(false); }}
+                  onClick={() => { setShowRefundForm(true); setRefundSuccess(false); setRefundError(null); }}
                   className="text-sm text-accent hover:text-accent-hover transition-colors"
                 >
                   Request Refund

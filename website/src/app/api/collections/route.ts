@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
+import { isFlagOn } from "@/lib/feature-flags";
+import { isSubscribed } from "@/lib/subscriptions";
 
 type CollectionPayload = {
   name?: unknown;
@@ -79,7 +81,11 @@ function parseBody(body: CollectionPayload) {
     typeof body.bannerImage === "string" && body.bannerImage.trim() !== ""
       ? body.bannerImage.trim()
       : null;
-  const available = typeof body.available === "boolean" ? body.available : true;
+  // D15: the publish gate needs to distinguish "the caller asked to publish"
+  // from "the caller said nothing and we defaulted to true", so the explicit
+  // flag travels alongside the resolved value.
+  const availableExplicit = typeof body.available === "boolean";
+  const available = availableExplicit ? (body.available as boolean) : true;
 
   return {
     name,
@@ -90,7 +96,42 @@ function parseBody(body: CollectionPayload) {
     thumbnail,
     bannerImage,
     available,
+    availableExplicit,
   };
+}
+
+/**
+ * D15 (B2/C2 for bundles, gated by GATING_V1): collections used to publish
+ * with no subscription gate at all, so an unsubscribed artist could go live
+ * via a bundle while the same works were 402-blocked on /api/artist-works.
+ * Same semantics as that route:
+ *   - an explicit `available: true` from a non-subscribed artist returns 402
+ *     so the client surfaces the upgrade prompt;
+ *   - an omitted flag falls back to a draft (available=false) instead of the
+ *     old publish-by-default.
+ * Returns the 402 response to send, or the effective `available` value.
+ */
+async function gatePublish(
+  userId: string,
+  available: boolean,
+  availableExplicit: boolean,
+): Promise<{ response: NextResponse } | { available: boolean }> {
+  if (!isFlagOn("GATING_V1")) return { available };
+  const sub = await isSubscribed(userId);
+  if (sub.active) return { available };
+  if (available && availableExplicit) {
+    return {
+      response: NextResponse.json(
+        {
+          error: "subscription_required",
+          message: "Publishing a collection requires an active Wallplace subscription.",
+          upgrade_url: "/artist-portal/billing",
+        },
+        { status: 402 },
+      ),
+    };
+  }
+  return { available: false };
 }
 
 // GET: fetch collections for the authenticated artist
@@ -150,6 +191,7 @@ export async function POST(request: Request) {
       thumbnail,
       bannerImage,
       available,
+      availableExplicit,
     } = parseBody(raw);
 
     if (!name || workIds.length < 2) {
@@ -171,6 +213,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Artist profile not found" }, { status: 404 });
     }
 
+    // Same ordering as /api/artist-works: no profile is a 404 first, the
+    // paywall answers 402 only to a real artist.
+    const gated = await gatePublish(auth.user!.id, available, availableExplicit);
+    if ("response" in gated) return gated.response;
+
     const id = `${profile.slug}-collection-${Date.now()}`;
     const now = new Date().toISOString();
 
@@ -188,7 +235,7 @@ export async function POST(request: Request) {
           work_sizes: workSizes,
           thumbnail,
           banner_image: bannerImage,
-          available,
+          available: gated.available,
           created_at: now,
           updated_at: now,
         },
@@ -234,6 +281,7 @@ export async function PATCH(request: Request) {
       thumbnail,
       bannerImage,
       available,
+      availableExplicit,
     } = parseBody(raw);
 
     if (!name || workIds.length < 2) {
@@ -255,6 +303,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Artist profile not found" }, { status: 404 });
     }
 
+    // Same ordering as /api/artist-works: no profile is a 404 first, the
+    // paywall answers 402 only to a real artist.
+    const gated = await gatePublish(auth.user!.id, available, availableExplicit);
+    if ("response" in gated) return gated.response;
+
     const { data, error } = await db
       .from("artist_collections")
       .update({
@@ -265,7 +318,7 @@ export async function PATCH(request: Request) {
         work_sizes: workSizes,
         thumbnail,
         banner_image: bannerImage,
-        available,
+        available: gated.available,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import UpgradePrompt from "@/components/UpgradePrompt";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
@@ -57,6 +58,9 @@ export default function CollectionsPage() {
   const [uploading, setUploading] = useState<null | "thumbnail" | "banner">(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  // D15: publishing a collection is now 402-gated server-side, the same as
+  // publishing a work. When the API refuses, show the shared upgrade prompt.
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -176,6 +180,11 @@ export default function CollectionsPage() {
       });
       resetForm();
     } catch (err) {
+      if (err instanceof ApiError && err.code === "subscription_required") {
+        setUpgradeOpen(true);
+        setFormError(err.message);
+        return;
+      }
       setFormError(err instanceof ApiError ? err.message || "Failed to save collection" : "Network error. Please try again.");
     } finally {
       setSaving(false);
@@ -243,10 +252,15 @@ export default function CollectionsPage() {
             prev.map((c) => (c.id === id ? data.collection! : c))
           );
         }
-      } catch {
+      } catch (err) {
         setUserCollections((prev) =>
           prev.map((c) => (c.id === id ? { ...c, available: !nextAvailable } : c))
         );
+        // D15: a publish attempt refused by the subscription gate should tell
+        // the artist why the toggle snapped back, not revert in silence.
+        if (err instanceof ApiError && err.code === "subscription_required") {
+          setUpgradeOpen(true);
+        }
       }
     },
     [artist, userCollections]
@@ -336,6 +350,12 @@ export default function CollectionsPage() {
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/collections">
+      <UpgradePrompt
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        title="Upgrade to publish collections"
+        message="Publishing a collection is part of a paid Wallplace plan. Upgrade your subscription and you're back in."
+      />
       <div className="max-w-4xl">
         <div className="flex items-start justify-between mb-6">
           <div>

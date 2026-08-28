@@ -11,7 +11,8 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { useAuth } from "@/context/AuthContext";
 
 interface OrderEvent {
   event_type: string;
@@ -35,6 +36,16 @@ interface StepDef {
   label: string;
   hint: string;
 }
+
+// B29: category options for the dispute form. POST /api/disputes stores the
+// raw string (2 to 100 chars) and the admin panel displays it verbatim, so
+// readable labels double as values.
+const DISPUTE_CATEGORIES = [
+  "Damaged in transit",
+  "Item not received",
+  "Not as described",
+  "Other",
+] as const;
 
 const STEPS: StepDef[] = [
   { key: "order.placed", label: "Placed", hint: "We received your order." },
@@ -102,6 +113,18 @@ export default function OrderTrackingPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
+  // B29: buyer dispute entry. POST /api/disputes requires a signed-in
+  // party (Bearer auth), so the form only shows for signed-in viewers;
+  // guests who arrived via the receipt-email token get a mailto fallback.
+  const { user, loading: authLoading } = useAuth();
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportCategory, setReportCategory] = useState<string>(DISPUTE_CATEGORIES[0]);
+  const [reportDescription, setReportDescription] = useState("");
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
+  const reportMailto = `mailto:hello@wallplace.co.uk?subject=${encodeURIComponent(`Problem with order ${orderId}`)}`;
+
   const load = useCallback(async () => {
     if (!orderId) return;
     setLoading(true);
@@ -152,6 +175,35 @@ export default function OrderTrackingPage() {
     }
   }
 
+  async function handleReportSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (reportDescription.trim().length < 10) {
+      setReportError("Please describe the problem in at least 10 characters.");
+      return;
+    }
+    setReportSubmitting(true);
+    setReportError(null);
+    try {
+      await mutate("/api/disputes", {
+        method: "POST",
+        body: JSON.stringify({
+          orderId,
+          category: reportCategory,
+          description: reportDescription.trim(),
+        }),
+      });
+      setReportSubmitted(true);
+    } catch (err) {
+      setReportError(
+        err instanceof ApiError
+          ? err.message || "Could not open the case. Please try again."
+          : "Network error, please try again.",
+      );
+    } finally {
+      setReportSubmitting(false);
+    }
+  }
+
   // Map event type → first event with that type so each step lights up
   // on its earliest occurrence.
   const eventByType = new Map<string, OrderEvent>();
@@ -177,10 +229,10 @@ export default function OrderTrackingPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
         <div className="mb-8">
           {/* Guests who arrived via the receipt-email token can't
-              reach /customer-portal/orders without signing in, so
+              reach the customer portal without signing in, so
               point them at the public tracking lookup instead. */}
           <Link
-            href={trackingToken ? "/orders/track" : "/customer-portal/orders"}
+            href={trackingToken ? "/orders/track" : "/customer-portal"}
             className="text-sm text-muted hover:text-accent"
           >
             &larr; {trackingToken ? "Look up another order" : "Back to orders"}
@@ -268,12 +320,22 @@ export default function OrderTrackingPage() {
                   >
                     {confirming ? "Confirming…" : "Confirm delivery"}
                   </button>
-                  <Link
-                    href={`/contact?order=${orderId}`}
-                    className="px-4 py-2 text-sm rounded-sm border border-border hover:border-accent/40"
-                  >
-                    Report a problem
-                  </Link>
+                  {user ? (
+                    <button
+                      type="button"
+                      onClick={() => setReportOpen(true)}
+                      className="px-4 py-2 text-sm rounded-sm border border-border hover:border-accent/40"
+                    >
+                      Report a problem
+                    </button>
+                  ) : (
+                    <a
+                      href={reportMailto}
+                      className="px-4 py-2 text-sm rounded-sm border border-border hover:border-accent/40"
+                    >
+                      Report a problem
+                    </a>
+                  )}
                 </div>
               </div>
             )}
@@ -281,15 +343,129 @@ export default function OrderTrackingPage() {
             {isConfirmed && (
               <p className="mt-6 text-sm text-muted">
                 Confirmed on {formatDate(eventByType.get("order.delivery_confirmed")!.created_at)}.{" "}
-                <Link
-                  href={`/contact?order=${orderId}`}
-                  className="text-accent hover:underline"
-                >
-                  Report a problem
-                </Link>
+                {user ? (
+                  <button
+                    type="button"
+                    onClick={() => setReportOpen(true)}
+                    className="text-accent hover:underline"
+                  >
+                    Report a problem
+                  </button>
+                ) : (
+                  <a href={reportMailto} className="text-accent hover:underline">
+                    Report a problem
+                  </a>
+                )}
                 .
               </p>
             )}
+
+            {/* B29: standing dispute entry. Always present once the order
+                loads, because a problem is not gated on delivery: an order
+                stuck in processing needs this path too. */}
+            <div className="mt-6 rounded-sm border border-border bg-surface px-5 py-5">
+              {reportSubmitted ? (
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-1">Problem reported</p>
+                  <p className="text-xs text-muted">
+                    We&rsquo;ve opened a case and emailed both you and the artist.
+                    Reply to that email within 3 business days with your side and
+                    any photos. We hold the payout while the case is open.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-foreground mb-1">
+                    Problem with this order?
+                  </p>
+                  {authLoading ? null : user ? (
+                    !reportOpen ? (
+                      <>
+                        <p className="text-xs text-muted mb-4">
+                          Tell us what went wrong and we&rsquo;ll open a case with
+                          the artist. We hold the payout while the case is open.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setReportOpen(true)}
+                          className="px-4 py-2 text-sm rounded-sm border border-border hover:border-accent/40"
+                        >
+                          Report a problem
+                        </button>
+                      </>
+                    ) : (
+                      <form onSubmit={handleReportSubmit} className="mt-2">
+                        <label
+                          htmlFor="dispute-category"
+                          className="block text-xs uppercase tracking-wider text-muted mb-1.5"
+                        >
+                          What went wrong?
+                        </label>
+                        <select
+                          id="dispute-category"
+                          value={reportCategory}
+                          onChange={(e) => setReportCategory(e.target.value)}
+                          className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60"
+                        >
+                          {DISPUTE_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                        <label
+                          htmlFor="dispute-description"
+                          className="block text-xs uppercase tracking-wider text-muted mb-1.5 mt-4"
+                        >
+                          Describe the problem
+                        </label>
+                        <textarea
+                          id="dispute-description"
+                          value={reportDescription}
+                          onChange={(e) => setReportDescription(e.target.value)}
+                          rows={4}
+                          maxLength={2000}
+                          required
+                          placeholder="What happened, and what would put it right? Photos can follow by email."
+                          className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60 resize-y"
+                        />
+                        {reportError && (
+                          <p className="text-xs text-red-600 mt-2">{reportError}</p>
+                        )}
+                        <div className="flex flex-wrap gap-2 mt-4">
+                          <button
+                            type="submit"
+                            disabled={reportSubmitting}
+                            className="px-4 py-2 text-sm rounded-sm bg-accent text-white hover:bg-accent-hover disabled:opacity-50"
+                          >
+                            {reportSubmitting ? "Sending…" : "Open a case"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReportOpen(false);
+                              setReportError(null);
+                            }}
+                            className="px-4 py-2 text-sm rounded-sm border border-border hover:border-accent/40"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )
+                  ) : (
+                    <p className="text-xs text-muted">
+                      Email us at{" "}
+                      <a href={reportMailto} className="text-accent hover:underline">
+                        hello@wallplace.co.uk
+                      </a>{" "}
+                      with your order number and what went wrong, or sign in to
+                      open a case here.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
           </>
         )}
       </div>

@@ -1585,7 +1585,7 @@ export default function PlacementsPage() {
                                 ];
                                 const titles = all.map((w) => w.title).join(",");
                                 const sizes = all.map((w) => w.size).join(",");
-                                return `/artist-portal/labels?venue=${encodeURIComponent(p.venue)}&works=${encodeURIComponent(titles)}&sizes=${encodeURIComponent(sizes)}`;
+                                return `/artist-portal/labels?venue=${encodeURIComponent(p.venue)}${p.venueSlug ? `&venueSlug=${encodeURIComponent(p.venueSlug)}` : ""}&works=${encodeURIComponent(titles)}&sizes=${encodeURIComponent(sizes)}`;
                               })()}
                               onClick={(e) => e.stopPropagation()}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-foreground border border-border hover:bg-[#F5F3F0] rounded-sm transition-colors"
@@ -1850,7 +1850,7 @@ export default function PlacementsPage() {
                     </Link>
                     {p.status === "Active" && (
                       <Link
-                        href={`/artist-portal/labels?venue=${encodeURIComponent(p.venue)}&works=${encodeURIComponent(p.workTitle)}${p.workSize ? `&size=${encodeURIComponent(p.workSize)}` : ""}`}
+                        href={`/artist-portal/labels?venue=${encodeURIComponent(p.venue)}${p.venueSlug ? `&venueSlug=${encodeURIComponent(p.venueSlug)}` : ""}&works=${encodeURIComponent(p.workTitle)}${p.workSize ? `&size=${encodeURIComponent(p.workSize)}` : ""}`}
                         className="inline-flex items-center justify-center gap-1 flex-1 min-w-[100px] sm:min-w-[140px] px-3 py-1.5 text-xs font-medium text-foreground border border-border hover:bg-[#F5F3F0] rounded-sm transition-colors"
                         title="Generate QR labels"
                       >

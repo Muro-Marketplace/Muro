@@ -64,7 +64,7 @@ export const mock: CustomerOrderStatusUpdateProps = {
   firstName: "Sam",
   orderNumber: "WP-4821",
   statusText: orderStatusText("cancelled"),
-  orderUrl: "https://wallplace.co.uk/customer-portal/orders",
+  orderUrl: "https://wallplace.co.uk/customer-portal",
   supportUrl: "https://wallplace.co.uk/support",
 };
 

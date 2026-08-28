@@ -154,7 +154,9 @@ export async function POST(request: Request) {
               ((order.shipping as { fullName?: string } | null)?.fullName || "there").split(" ")[0],
             orderNumber: order.id as string,
             reason: reason || undefined,
-            ordersUrl: `${SITE}/customer-portal/orders`,
+            // C4: the customer's orders live on the /customer-portal dashboard;
+            // /customer-portal/orders is only a legacy-link redirect.
+            ordersUrl: `${SITE}/customer-portal`,
             supportUrl: `${SITE}/support`,
           }),
           metadata: { orderId: order.id, refundRequestId },
@@ -418,7 +420,9 @@ export async function POST(request: Request) {
           kind: "refund_approved",
           title: `Refund approved, £${Number(refundReq.amount).toFixed(2)}`,
           body: `Your refund on ${order.id} has been processed and should arrive within 5 business days.`,
-          link: `/customer-portal/orders?id=${encodeURIComponent(order.id as string)}`,
+          // C18: was /customer-portal/orders?id=..., a dead route AND the wrong
+          // param (the dashboard reads ?order=, via useUrlState("order")).
+          link: `/customer-portal?order=${encodeURIComponent(order.id as string)}`,
         }).catch((err) => { if (err) console.error("Buyer refund bell error:", err); });
       }
 

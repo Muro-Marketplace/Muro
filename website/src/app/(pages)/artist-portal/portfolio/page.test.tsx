@@ -35,11 +35,27 @@ vi.mock("@/hooks/useCurrentArtist", () => ({
 import PortfolioPage from "./page";
 import { ApiError } from "@/lib/api-client";
 
+// jsdom neither loads images nor implements object URLs, and the upload path
+// awaits window.Image's onload before it calls uploadImage. Stub both so the
+// D22/D24 tests can drive a real file-input change end to end.
+class FakeImage {
+  naturalWidth = 900;
+  naturalHeight = 600;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  set src(_v: string) {
+    setTimeout(() => this.onload?.(), 0);
+  }
+}
+URL.createObjectURL = vi.fn(() => "blob:mock");
+URL.revokeObjectURL = vi.fn();
+
 afterEach(() => cleanup());
 beforeEach(() => {
   mutateMock.mockReset();
   showToastMock.mockReset();
   artistState.works = [];
+  vi.stubGlobal("Image", FakeImage);
 });
 
 // A work complete enough for the portfolio grid to render a card for it.
@@ -64,14 +80,25 @@ const WORK = {
 const TITLE_PLACEHOLDER = "e.g. Last Light on Mare Street";
 const formIsOpen = () => screen.queryAllByPlaceholderText(TITLE_PLACEHOLDER).length > 0;
 
-/** Open the Add form and fill the two fields handleSubmit requires. */
-function openAddAndFill() {
+/** Open the Add form and fill the fields handleSubmit requires. */
+async function openAddAndFill({ withImage = true }: { withImage?: boolean } = {}) {
   fireEvent.click(screen.getAllByText("+ Add New Work")[0]);
   fireEvent.change(screen.getAllByPlaceholderText(TITLE_PLACEHOLDER)[0], {
     target: { value: "Test Work" },
   });
   // defaultSizes already gives one labelled size row at price 0; give it a price.
   fireEvent.change(screen.getAllByPlaceholderText("Price")[0], { target: { value: "120" } });
+  if (!withImage) return;
+  // D22: an image is required before a work can save. Push one through the
+  // primary file input (the mocked uploadImage resolves to https://cdn/x.png)
+  // and wait for the preview state ("Replace Image") to confirm it landed.
+  const fileInput = document.querySelector(
+    'input[type="file"]:not([multiple])',
+  ) as HTMLInputElement;
+  fireEvent.change(fileInput, {
+    target: { files: [new File(["x"], "art.png", { type: "image/png" })] },
+  });
+  await screen.findAllByText("Replace Image");
 }
 
 describe("artist portfolio add/edit save (E41-a)", () => {
@@ -79,7 +106,7 @@ describe("artist portfolio add/edit save (E41-a)", () => {
     mutateMock.mockRejectedValue(new ApiError(403, "post_limit_reached", "post_limit_reached", {}));
     render(<PortfolioPage />);
 
-    openAddAndFill();
+    await openAddAndFill();
     fireEvent.click(screen.getAllByText("Save Work")[0]);
 
     // The error surfaces once the rejected write settles.
@@ -96,7 +123,7 @@ describe("artist portfolio add/edit save (E41-a)", () => {
     mutateMock.mockResolvedValue({ savedRow: { id: "w1" } });
     render(<PortfolioPage />);
 
-    openAddAndFill();
+    await openAddAndFill();
     fireEvent.click(screen.getAllByText("Save Work")[0]);
 
     await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Artwork added"));
@@ -154,7 +181,7 @@ describe("artist portfolio save posts only changed works (E41-c)", () => {
     render(<PortfolioPage />);
     await screen.findAllByText("Existing One");
 
-    openAddAndFill();
+    await openAddAndFill();
     fireEvent.click(screen.getAllByText("Save Work")[0]);
 
     await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Artwork added"));
@@ -191,5 +218,114 @@ describe("shipping settings save (05 E43-d)", () => {
       expect(showToastMock).toHaveBeenCalledWith("server exploded", { variant: "error" }),
     );
     expect(showToastMock).not.toHaveBeenCalledWith("Shipping settings saved");
+  });
+});
+
+// D22. Saving a work without an image used to fall back to a picsum stock
+// photo, which then went live on public browse as if it were the artwork.
+describe("imageless works cannot save (D22)", () => {
+  it("refuses to save without an image and shows a validation message", async () => {
+    mutateMock.mockResolvedValue({ savedRow: { id: "w1" } });
+    render(<PortfolioPage />);
+
+    await openAddAndFill({ withImage: false });
+    fireEvent.click(screen.getAllByText("Save Work")[0]);
+
+    // Fail-before: the save went through with a picsum placeholder as the image.
+    expect(
+      (await screen.findAllByText("Upload an image of the artwork before saving")).length,
+    ).toBeGreaterThan(0);
+    expect(mutateMock).not.toHaveBeenCalled();
+    expect(showToastMock).not.toHaveBeenCalledWith("Artwork added");
+    expect(formIsOpen()).toBe(true);
+  });
+
+  it("publishes the uploaded image, never a stock placeholder", async () => {
+    mutateMock.mockResolvedValue({ savedRow: { id: "w1" } });
+    render(<PortfolioPage />);
+
+    await openAddAndFill();
+    fireEvent.click(screen.getAllByText("Save Work")[0]);
+
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Artwork added"));
+    const body = JSON.parse(
+      (mutateMock.mock.calls[0][1] as { body: string }).body,
+    ) as { image: string };
+    expect(body.image).toBe("https://cdn/x.png");
+    expect(JSON.stringify(mutateMock.mock.calls)).not.toContain("picsum");
+  });
+});
+
+// D24. Bulk add used to filter to the valid drafts, save those, and clear the
+// whole list, silently discarding every incomplete draft (typed titles and
+// uploaded images included) with only an "Added N works" toast.
+describe("bulk add keeps incomplete drafts (D24)", () => {
+  it("saves the complete drafts and keeps the incomplete ones in the editor with a message", async () => {
+    mutateMock.mockResolvedValue({});
+    render(<PortfolioPage />);
+
+    // No works yet, so the empty state's "Bulk add multiple" opens the modal.
+    fireEvent.click(screen.getAllByText("Bulk add multiple")[0]);
+    const bulkInput = document.querySelector(
+      'input[type="file"][multiple]',
+    ) as HTMLInputElement;
+    fireEvent.change(bulkInput, {
+      target: {
+        files: [
+          new File(["a"], "ready.png", { type: "image/png" }),
+          new File(["b"], "incomplete.png", { type: "image/png" }),
+        ],
+      },
+    });
+
+    // Titles are seeded from the filenames; wait for both uploads to settle.
+    await screen.findByDisplayValue("ready");
+    await screen.findByDisplayValue("incomplete");
+    await waitFor(() => expect(screen.queryAllByText("Uploading…")).toHaveLength(0));
+
+    // Price the first draft only; the second stays unpriced and so invalid.
+    fireEvent.change(screen.getAllByPlaceholderText("0")[0], { target: { value: "120" } });
+
+    fireEvent.click(screen.getByText("Save 2 works"));
+
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Added 1 work"));
+    // Fail-before: setBulkAddDrafts([]) wiped the incomplete draft here. It now
+    // stays in the editor, while the saved draft leaves.
+    expect(screen.getByDisplayValue("incomplete")).toBeTruthy();
+    expect(screen.queryByDisplayValue("ready")).toBeNull();
+    // And the artist is told what happened, per draft and overall.
+    expect(
+      screen.getByText("1 draft was not saved. Fix the highlighted issues, then save again."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "This draft needs at least one size with a price above £0 before it can be saved.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("saves nothing and flags every draft when none are complete", async () => {
+    mutateMock.mockResolvedValue({});
+    render(<PortfolioPage />);
+
+    fireEvent.click(screen.getAllByText("Bulk add multiple")[0]);
+    const bulkInput = document.querySelector(
+      'input[type="file"][multiple]',
+    ) as HTMLInputElement;
+    fireEvent.change(bulkInput, {
+      target: { files: [new File(["a"], "unpriced.png", { type: "image/png" })] },
+    });
+    await screen.findByDisplayValue("unpriced");
+    await waitFor(() => expect(screen.queryAllByText("Uploading…")).toHaveLength(0));
+
+    fireEvent.click(screen.getByText("Save 1 work"));
+
+    expect(
+      await screen.findByText(
+        "Nothing was saved. Each draft needs an image, a title, and at least one priced size.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByDisplayValue("unpriced")).toBeTruthy();
+    expect(showToastMock).not.toHaveBeenCalled();
   });
 });

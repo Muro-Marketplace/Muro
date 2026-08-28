@@ -30,6 +30,12 @@ export interface MessageUnreadInput {
   recipientEmail: string;
   recipientUserId: string | null;
   recipientName: string | null;
+  /**
+   * Which portal inbox the RECIPIENT reads. Drives the email's link.
+   * F7: this used to be hardcoded to the artist portal, so a venue
+   * clicking "Open conversation" landed on a portal it could not use.
+   */
+  recipientPortal: "artist" | "venue";
   senderName: string;
   messagePreview: string;
   conversationId: string;
@@ -44,6 +50,8 @@ export function previewOf(text: string): string {
 
 export async function sendMessageUnreadEmail(input: MessageUnreadInput): Promise<SendEmailResult> {
   const site = siteOrigin();
+  const inboxPath =
+    input.recipientPortal === "venue" ? "/venue-portal/messages" : "/artist-portal/messages";
   return sendEmail({
     idempotencyKey: `message_unread:${input.messageId}`,
     template: "message_unread_notification",
@@ -55,7 +63,7 @@ export async function sendMessageUnreadEmail(input: MessageUnreadInput): Promise
       firstName: (input.recipientName || "there").trim().split(" ")[0] || "there",
       senderName: input.senderName,
       messagePreview: previewOf(input.messagePreview),
-      conversationUrl: `${site}/artist-portal/messages?c=${encodeURIComponent(input.conversationId)}`,
+      conversationUrl: `${site}${inboxPath}?c=${encodeURIComponent(input.conversationId)}`,
       muteMessagesUrl: `${site}/account/email`,
     }),
     metadata: { conversationId: input.conversationId, ...input.metadata },

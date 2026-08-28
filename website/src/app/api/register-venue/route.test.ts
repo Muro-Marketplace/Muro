@@ -177,6 +177,9 @@ describe("POST /api/register-venue is not an account-existence oracle (E36d)", (
     expect(sendEmailMock.mock.calls[0][0]).toMatchObject({
       to: "stranger@evil.example",
       template: "venue_registration_confirmation",
+      // A44: registration is open, so the email is a welcome, not an
+      // "application under review".
+      subject: "Your venue is registered on Wallplace",
     });
   });
 
@@ -186,5 +189,49 @@ describe("POST /api/register-venue is not an account-existence oracle (E36d)", (
     await flush();
     expect(res.status).toBe(500);
     expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/register-venue keeps the 'Other' free text (A43)", () => {
+  // The form's "Other" venue type has a free-text description. The schema
+  // used to strip it, so the venue's own words were silently discarded.
+  // There is no venue_registrations column for it, so it is folded into the
+  // stored message instead.
+  it("folds the typed venue-type description into the stored message", async () => {
+    await POST(
+      post({
+        ...VALID,
+        venueType: "Other",
+        customVenueType: "Coffee roastery",
+        message: "We have three walls.",
+      }),
+    );
+
+    const written = insertMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(written.venue_type).toBe("Other");
+    expect(written.message).toBe("Venue type: Coffee roastery.\n\nWe have three walls.");
+  });
+
+  it("stores the description alone when no message was written", async () => {
+    await POST(post({ ...VALID, venueType: "Other", customVenueType: "Coffee roastery" }));
+
+    const written = insertMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(written.message).toBe("Venue type: Coffee roastery.");
+  });
+
+  it("ignores a custom description when the type is not Other", async () => {
+    await POST(post({ ...VALID, customVenueType: "smuggled", message: "Hello" }));
+
+    const written = insertMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(written.venue_type).toBe("Pub");
+    expect(written.message).toBe("Hello");
+  });
+
+  it("names the described type in the admin alert", async () => {
+    await POST(post({ ...VALID, venueType: "Other", customVenueType: "Coffee roastery" }));
+    await flush();
+
+    const fields = notifyMock.mock.calls[0][0].fields as { label: string; value: string }[];
+    expect(fields).toContainEqual({ label: "Type", value: "Other (Coffee roastery)" });
   });
 });

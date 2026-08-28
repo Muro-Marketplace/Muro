@@ -35,6 +35,10 @@ interface RequestRow {
   mediums: string[];
   budget_min_pence: number | null;
   budget_max_pence: number | null;
+  // E23: the venue's share of each QR sale (canonical direction, same
+  // as placements.revenue_share_percent). Artist-side copy derives
+  // "you keep X%" from it.
+  qr_revenue_share_percent: number | null;
   location: string | null;
   timescale: string | null;
   venue_slug: string | null;
@@ -230,6 +234,11 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
         <p className="text-sm text-foreground/80 leading-relaxed mb-4 whitespace-pre-wrap">{req.description}</p>
         <div className="flex flex-wrap gap-2 text-[10px] mb-8">
           {req.intent.map((i) => <span key={i} className="px-1.5 py-0.5 bg-accent/5 text-accent rounded-sm capitalize">{i}</span>)}
+          {req.intent.includes("display") && req.qr_revenue_share_percent != null && (
+            <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">
+              QR sales: you keep {100 - req.qr_revenue_share_percent}%, venue keeps {req.qr_revenue_share_percent}%
+            </span>
+          )}
           {(req.budget_min_pence || req.budget_max_pence) && (
             <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">
               £{((req.budget_min_pence || 0) / 100).toFixed(0)} to £{((req.budget_max_pence || 0) / 100).toFixed(0)}
@@ -352,7 +361,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
                   </div>
                   <div>
                     <label htmlFor="placement-rev" className="block text-xs uppercase tracking-wider text-muted mb-1.5">
-                      Revenue share (%)
+                      Venue revenue share (%)
                     </label>
                     <input
                       id="placement-rev"

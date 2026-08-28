@@ -1,20 +1,34 @@
 // @vitest-environment jsdom
-// 05 E43-h. The public enquiry form set setEnquirySent(true) in its catch AND used
-// authFetch (which resolves on a non-2xx), so a failed enquiry told the visitor it
-// was sent. The primary /api/messages send now goes through mutate() (throws), the
-// confirmation is shown only on success, and a failure surfaces an error toast.
+// 05 E43-h + B9/F19.
+//
+// E43-h: the public enquiry form set setEnquirySent(true) in its catch AND used
+// authFetch (which resolves on a non-2xx), so a failed enquiry told the visitor
+// it was sent. The primary send goes through mutate() (throws), the confirmation
+// is shown only on success, and a failure surfaces an error toast.
+//
+// B9/F19: the form used to post to /api/messages for EVERYONE, which 401s
+// guests and 403s customers, so the form's main audience failed after filling
+// it in. Guests and customers now post to /api/enquiry (the artist replies by
+// email); signed-in artists and venues keep the /api/messages path.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-const { mutateMock, showToastMock } = vi.hoisted(() => ({
+const { mutateMock, showToastMock, authState, searchParamsMock } = vi.hoisted(() => ({
   mutateMock: vi.fn(),
   showToastMock: vi.fn(),
+  authState: {
+    user: null as null | { id: string; email?: string },
+    displayName: "",
+    userType: null as string | null,
+  },
+  searchParamsMock: vi.fn(() => new URLSearchParams()),
 }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/browse/alice",
+  useSearchParams: () => searchParamsMock(),
 }));
 vi.mock("@/lib/supabase", () => ({ supabase: { auth: {}, from: () => ({}) } }));
 vi.mock("@/lib/api-client", async (orig) => {
@@ -22,7 +36,7 @@ vi.mock("@/lib/api-client", async (orig) => {
   return { ...actual, mutate: mutateMock };
 });
 vi.mock("@/context/CartContext", () => ({ useCart: () => ({ addItem: vi.fn(), items: [] }) }));
-vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: null, displayName: "", userType: null }) }));
+vi.mock("@/context/AuthContext", () => ({ useAuth: () => authState }));
 vi.mock("@/context/ToastContext", () => ({ useToast: () => ({ showToast: showToastMock }) }));
 vi.mock("@/components/SaveButton", () => ({ default: () => null }));
 vi.mock("@/components/ArtworkThumb", () => ({ default: () => null }));
@@ -37,6 +51,11 @@ afterEach(() => cleanup());
 beforeEach(() => {
   mutateMock.mockReset();
   showToastMock.mockReset();
+  authState.user = null;
+  authState.displayName = "";
+  authState.userType = null;
+  searchParamsMock.mockReset();
+  searchParamsMock.mockReturnValue(new URLSearchParams());
   global.fetch = vi.fn(() => Promise.resolve(new Response("{}", { status: 200 }))) as unknown as typeof fetch;
 });
 
@@ -59,7 +78,7 @@ const WORK = {
   frameOptions: [],
 };
 
-function openAndFillEnquiry() {
+function renderProfile() {
   render(
     <ArtistProfileClient
       artistName="Alice"
@@ -69,6 +88,10 @@ function openAndFillEnquiry() {
       works={[WORK as never]}
     />,
   );
+}
+
+function openAndFillEnquiry() {
+  renderProfile();
   fireEvent.click(screen.getByTitle("Quick look")); // opens the work lightbox
   fireEvent.click(screen.getByRole("button", { name: "Message Alice" }));
   fireEvent.change(screen.getByPlaceholderText("Your name"), { target: { value: "Bob" } });
@@ -90,7 +113,60 @@ describe("ArtistProfileClient enquiry (05 E43-h)", () => {
     expect(screen.queryByText("Message Sent")).toBeNull();
   });
 
-  it("confirms only after the message actually sends", async () => {
+  it("confirms only after the enquiry actually sends", async () => {
+    mutateMock.mockResolvedValue({});
+    openAndFillEnquiry();
+
+    fireEvent.click(screen.getByText("Send Message"));
+
+    await waitFor(() => expect(screen.getByText("Message Sent")).toBeTruthy());
+    expect(showToastMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("ArtistProfileClient enquiry routing by viewer (B9/F19)", () => {
+  it("a GUEST posts to /api/enquiry, never /api/messages, and is told to expect an email reply", async () => {
+    mutateMock.mockResolvedValue({});
+    openAndFillEnquiry();
+
+    fireEvent.click(screen.getByText("Send Message"));
+
+    await waitFor(() => expect(screen.getByText("Message Sent")).toBeTruthy());
+    // Fail-before: this posted to /api/messages, which 401s guests, so the
+    // form's widest audience always failed after typing their message.
+    expect(mutateMock).toHaveBeenCalledWith("/api/enquiry", expect.objectContaining({ method: "POST" }));
+    expect(mutateMock).not.toHaveBeenCalledWith("/api/messages", expect.anything());
+    const body = JSON.parse((mutateMock.mock.calls[0][1] as { body: string }).body);
+    expect(body).toMatchObject({
+      senderName: "Bob",
+      senderEmail: "bob@example.com",
+      artistSlug: "alice",
+      workTitle: "Last Light",
+      message: "Do you ship abroad?",
+    });
+    expect(screen.getByText(/reply to you by email/)).toBeTruthy();
+  });
+
+  it("a CUSTOMER posts to /api/enquiry, never /api/messages", async () => {
+    authState.user = { id: "u-cust", email: "cust@example.com" };
+    authState.userType = "customer";
+    authState.displayName = "Cass Customer";
+    mutateMock.mockResolvedValue({});
+    openAndFillEnquiry();
+
+    fireEvent.click(screen.getByText("Send Message"));
+
+    await waitFor(() => expect(screen.getByText("Message Sent")).toBeTruthy());
+    // Fail-before: /api/messages 403s accounts without an artist or venue profile.
+    expect(mutateMock).toHaveBeenCalledWith("/api/enquiry", expect.objectContaining({ method: "POST" }));
+    expect(mutateMock).not.toHaveBeenCalledWith("/api/messages", expect.anything());
+    expect(screen.getByText(/reply to you by email/)).toBeTruthy();
+  });
+
+  it("a VENUE keeps the signed-in /api/messages path", async () => {
+    authState.user = { id: "u-venue", email: "venue@example.com" };
+    authState.userType = "venue";
+    authState.displayName = "The Copper Kettle";
     mutateMock.mockResolvedValue({});
     openAndFillEnquiry();
 
@@ -98,6 +174,20 @@ describe("ArtistProfileClient enquiry (05 E43-h)", () => {
 
     await waitFor(() => expect(screen.getByText("Message Sent")).toBeTruthy());
     expect(mutateMock).toHaveBeenCalledWith("/api/messages", expect.objectContaining({ method: "POST" }));
-    expect(showToastMock).not.toHaveBeenCalled();
+    // The enquiries-table copy stays best-effort via plain fetch.
+    expect(global.fetch).toHaveBeenCalledWith("/api/enquiry", expect.objectContaining({ method: "POST" }));
+    expect(screen.getByText(/typically respond within 48 hours/)).toBeTruthy();
+  });
+});
+
+describe("ArtistProfileClient ?enquiry=1 auto-open (B12/F17/H9)", () => {
+  it("opens the enquiry form straight from the URL param", async () => {
+    searchParamsMock.mockReturnValue(new URLSearchParams("enquiry=1"));
+
+    renderProfile();
+
+    // No clicks: the Message CTAs elsewhere on the site land customers and
+    // guests here with ?enquiry=1 expecting the form to be open.
+    expect(await screen.findByPlaceholderText("Your message...")).toBeTruthy();
   });
 });

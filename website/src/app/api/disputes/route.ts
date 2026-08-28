@@ -127,7 +127,9 @@ export async function POST(request: Request) {
           react: OrderDisputeOpened({
             firstName: party.firstName,
             orderNumber: order.id,
-            disputeUrl: `${siteOrigin()}/orders/${encodeURIComponent(order.id)}/dispute`,
+            // The order page hosts the dispute surface; /orders/<id>/dispute
+            // never existed and 404ed from every email.
+            disputeUrl: `${siteOrigin()}/orders/${encodeURIComponent(order.id)}`,
             nextSteps: NEXT_STEPS,
             supportUrl: `${siteOrigin()}/support`,
           }),

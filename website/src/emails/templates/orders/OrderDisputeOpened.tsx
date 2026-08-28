@@ -31,7 +31,7 @@ export function OrderDisputeOpened({ firstName, orderNumber, disputeUrl, nextSte
 export const mock: OrderDisputeOpenedProps = {
   firstName: "Maya",
   orderNumber: "WP-28473",
-  disputeUrl: "https://wallplace.co.uk/orders/WP-28473/dispute",
+  disputeUrl: "https://wallplace.co.uk/orders/WP-28473",
   nextSteps: [
     "Reply within 3 business days with your perspective and any photos",
     "We&rsquo;ll hold the payout while the case is open",

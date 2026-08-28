@@ -65,7 +65,10 @@ export default function ArtistOrdersPage() {
   const [rejectReasonInput, setRejectReasonInput] = useState("");
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null);
   const [refundProcessing, setRefundProcessing] = useState(false);
+  const [refundActionError, setRefundActionError] = useState<string | null>(null);
   const [showIssueRefund, setShowIssueRefund] = useState(false);
+  const [issueRefundError, setIssueRefundError] = useState<string | null>(null);
+  const [issueRefundNotice, setIssueRefundNotice] = useState<string | null>(null);
   const [issueRefundType, setIssueRefundType] = useState<"full" | "partial">("full");
   const [issueRefundAmount, setIssueRefundAmount] = useState("");
   const [issueRefundReason, setIssueRefundReason] = useState("");
@@ -124,54 +127,106 @@ export default function ArtistOrdersPage() {
 
   async function processRefund(refundRequestId: string, action: "approve" | "reject") {
     setRefundProcessing(true);
+    setRefundActionError(null);
+    // D18 (QA 2026-08-28): was authFetch with success-only handling, so a
+    // rejected approve/reject gave the artist zero feedback and the card kept
+    // its stale state. mutate() throws on a non-2xx / network failure, and the
+    // failure now surfaces via refundActionError. The server-side money
+    // boundary in /api/refunds/process is untouched.
     try {
       const body: Record<string, string> = { refundRequestId, action };
       if (action === "reject" && rejectReasonInput) body.reason = rejectReasonInput;
-      const res = await authFetch("/api/refunds/process", {
+      await mutate("/api/refunds/process", {
         method: "POST",
         body: JSON.stringify(body),
       });
-      if (res.ok) {
-        setRefundRequests((prev) =>
-          prev.map((r) => r.id === refundRequestId ? { ...r, status: action === "approve" ? "approved" : "rejected", resolved_reason: rejectReasonInput || undefined } as RefundRequest : r)
-        );
-        setRejectReasonInput("");
-        setShowRejectInput(null);
-      }
+      setRefundRequests((prev) =>
+        prev.map((r) => r.id === refundRequestId ? { ...r, status: action === "approve" ? "approved" : "rejected", resolved_reason: rejectReasonInput || undefined } as RefundRequest : r)
+      );
+      setRejectReasonInput("");
+      setShowRejectInput(null);
     } catch (err) {
       console.error("Refund processing failed:", err);
+      setRefundActionError(
+        err instanceof ApiError
+          ? err.message || "Could not process the refund request. Please try again."
+          : "Network error. Please check your connection and try again.",
+      );
     }
     setRefundProcessing(false);
   }
 
   async function issueProactiveRefund(orderId: string) {
     setRefundProcessing(true);
+    setIssueRefundError(null);
+    setIssueRefundNotice(null);
+
+    // D19 (QA 2026-08-28). Two-step flow: step 1 creates the refund request
+    // row, step 2 asks /api/refunds/process to approve it. For an
+    // artist-initiated request step 2 ALWAYS answers 403 by design (no
+    // self-approval; an admin must action it — that server-side money boundary
+    // is deliberate and must not be "fixed" here). The old code swallowed every
+    // non-2xx and closed the form as if the refund had happened. Now the 403
+    // shows an honest "sent to Wallplace for approval" confirmation with the
+    // request left visible as pending, and every other failure is surfaced.
+    let created: RefundRequestRow | null = null;
     try {
       const body: Record<string, unknown> = { orderId, reason: issueRefundReason, type: issueRefundType };
-      if (issueRefundType === "partial" && issueRefundAmount) body.amount = parseFloat(issueRefundAmount);
-      const reqRes = await authFetch("/api/refunds/request", {
+      if (issueRefundType === "partial") body.amount = parseFloat(issueRefundAmount);
+      const reqData = await mutate<RefundRequestCreateResponse>("/api/refunds/request", {
         method: "POST",
         body: JSON.stringify(body),
       });
-      if (reqRes.ok) {
-        const reqData: RefundRequestCreateResponse = await reqRes.json();
-        if (reqData.refundRequest) {
-          const approveRes = await authFetch("/api/refunds/process", {
-            method: "POST",
-            body: JSON.stringify({ refundRequestId: reqData.refundRequest.id, action: "approve" }),
-          });
-          if (approveRes.ok) {
-            setRefundRequests((prev) => [...prev, { ...reqData.refundRequest, status: "approved" }]);
-          }
-        }
-      }
+      created = reqData.refundRequest ?? null;
+    } catch (err) {
+      console.error("Issue refund failed:", err);
+      setIssueRefundError(
+        err instanceof ApiError
+          ? err.message || "Could not create the refund request. Please try again."
+          : "Network error. Please check your connection and try again.",
+      );
+      setRefundProcessing(false);
+      return; // Form stays open so the artist can correct and retry.
+    }
+
+    if (!created) {
+      // Demo-guard style 200 with no row: nothing was created, nothing to process.
       setShowIssueRefund(false);
       setIssueRefundReason("");
       setIssueRefundAmount("");
       setIssueRefundType("full");
-    } catch (err) {
-      console.error("Issue refund failed:", err);
+      setRefundProcessing(false);
+      return;
     }
+
+    try {
+      await mutate("/api/refunds/process", {
+        method: "POST",
+        body: JSON.stringify({ refundRequestId: created.id, action: "approve" }),
+      });
+      setRefundRequests((prev) => [...prev, { ...created!, status: "approved" }]);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        // The designed path: the request now sits with Wallplace for approval.
+        setRefundRequests((prev) => [...prev, created!]);
+        setIssueRefundNotice(
+          "Your refund request has been sent to Wallplace for approval. The buyer will receive the refund once it is approved.",
+        );
+      } else {
+        console.error("Issue refund failed:", err);
+        // The request row was created, so reflect it honestly as pending.
+        setRefundRequests((prev) => [...prev, created!]);
+        setIssueRefundError(
+          err instanceof ApiError
+            ? err.message || "The refund request was created but could not be processed. Wallplace will review it."
+            : "Network error. The refund request was created and will be reviewed by Wallplace.",
+        );
+      }
+    }
+    setShowIssueRefund(false);
+    setIssueRefundReason("");
+    setIssueRefundAmount("");
+    setIssueRefundType("full");
     setRefundProcessing(false);
   }
 
@@ -406,6 +461,18 @@ export default function ArtistOrdersPage() {
 
             return (
               <div className="mt-5 pt-4 border-t border-border space-y-4">
+                {/* D19: outcome of the last "Issue Refund" attempt. The 403
+                    from /api/refunds/process is the designed artist path, so
+                    it renders as a confirmation, not an error. */}
+                {issueRefundNotice && (
+                  <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-sm px-3 py-2">
+                    {issueRefundNotice}
+                  </p>
+                )}
+                {issueRefundError && !showIssueRefund && (
+                  <p className="text-xs text-red-600">{issueRefundError}</p>
+                )}
+
                 {/* Pending refund requests */}
                 {pendingRefunds.map((req) => (
                   <div key={req.id} className="p-4 bg-amber-50 border border-amber-200 rounded-sm space-y-3">
@@ -464,6 +531,9 @@ export default function ArtistOrdersPage() {
                         </button>
                       )}
                     </div>
+                    {refundActionError && (
+                      <p className="text-xs text-red-600">{refundActionError}</p>
+                    )}
                   </div>
                 ))}
 
@@ -526,22 +596,35 @@ export default function ArtistOrdersPage() {
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => issueProactiveRefund(selected.id)}
-                            disabled={refundProcessing || !issueRefundReason.trim()}
+                            // D19 (cf. C5): a partial refund with a blank, non-positive
+                            // or over-total amount would only die as a server 400, so
+                            // gate the submit until the amount is valid.
+                            disabled={
+                              refundProcessing ||
+                              !issueRefundReason.trim() ||
+                              (issueRefundType === "partial" &&
+                                (!Number.isFinite(parseFloat(issueRefundAmount)) ||
+                                  parseFloat(issueRefundAmount) <= 0 ||
+                                  parseFloat(issueRefundAmount) > selected.total))
+                            }
                             className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
                           >
                             {refundProcessing ? "Processing..." : "Issue Refund"}
                           </button>
                           <button
-                            onClick={() => { setShowIssueRefund(false); setIssueRefundReason(""); setIssueRefundAmount(""); setIssueRefundType("full"); }}
+                            onClick={() => { setShowIssueRefund(false); setIssueRefundError(null); setIssueRefundReason(""); setIssueRefundAmount(""); setIssueRefundType("full"); }}
                             className="px-4 py-2 text-sm text-muted hover:text-foreground transition-colors"
                           >
                             Cancel
                           </button>
                         </div>
+                        {issueRefundError && (
+                          <p className="text-xs text-red-600">{issueRefundError}</p>
+                        )}
                       </div>
                     ) : (
                       <button
-                        onClick={() => setShowIssueRefund(true)}
+                        onClick={() => { setShowIssueRefund(true); setIssueRefundError(null); setIssueRefundNotice(null); }}
                         className="text-sm text-accent hover:text-accent-hover transition-colors"
                       >
                         Issue Refund
@@ -569,7 +652,13 @@ export default function ArtistOrdersPage() {
           {orders.map((order) => (
             <button
               key={order.id}
-              onClick={() => setSelectedOrder(selectedOrder === order.id ? null : order.id)}
+              onClick={() => {
+                setSelectedOrder(selectedOrder === order.id ? null : order.id);
+                // Refund feedback is per-order; don't carry it to another order's panel.
+                setRefundActionError(null);
+                setIssueRefundError(null);
+                setIssueRefundNotice(null);
+              }}
               className={`w-full text-left bg-surface border rounded-sm p-4 sm:p-5 transition-all hover:border-accent/30 ${
                 selectedOrder === order.id ? "border-accent/40 shadow-sm" : order.status === "confirmed" ? "border-amber-200" : "border-border"
               }`}

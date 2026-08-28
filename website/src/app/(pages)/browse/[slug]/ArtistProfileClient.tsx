@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import type { ArtistWork } from "@/data/artists";
@@ -185,9 +185,44 @@ export default function ArtistProfileClient({
     revealClearTimer.current = setTimeout(() => setRevealedWorkIndex(null), 6000);
   }, []);
   const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   const qrSize = searchParams.get("size") || null;
   const isQrScan = searchParams.get("ref") === "qr";
+
+  // B9/F19: the signed-in messaging API rejects customers (403) and
+  // guests (401), so only artists and venues take the /api/messages
+  // path. Everyone else sends through /api/enquiry, which stores the
+  // enquiry, drops it into the artist's inbox and emails the artist,
+  // who replies to the visitor's email address.
+  const isPortalSender = !!user && (userType === "artist" || userType === "venue");
+
+  // B12/F17/H9: "Message the artist" CTAs for customers and guests now
+  // land on /browse/<slug>?enquiry=1 so the enquiry form opens straight
+  // away instead of funnelling into a portal inbox customers cannot use.
+  useEffect(() => {
+    if (searchParams.get("enquiry") === "1" && !showEnquiry) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowEnquiry(true);
+      setEnquirySent(false);
+    }
+    // Depend only on the params: re-running on showEnquiry would reopen
+    // the modal the moment the user closed it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // Closing the modal strips ?enquiry=1 from the URL, so a second click
+  // on a Message CTA (which pushes the same URL) re-triggers the
+  // auto-open effect instead of being ignored as a no-op navigation.
+  const closeEnquiry = useCallback(() => {
+    setShowEnquiry(false);
+    if (searchParams.get("enquiry")) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("enquiry");
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }
+  }, [searchParams, pathname, router]);
 
   // Auto-open lightbox if ?work= param is present
   useEffect(() => {
@@ -1108,10 +1143,10 @@ export default function ArtistProfileClient({
 
       {/* Enquiry modal */}
       {showEnquiry && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center" onClick={() => setShowEnquiry(false)}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center" onClick={closeEnquiry}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative z-10 bg-white rounded-sm w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setShowEnquiry(false)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center">
+            <button onClick={closeEnquiry} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#1A1A1A" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
             </button>
             {enquirySent ? (
@@ -1120,7 +1155,11 @@ export default function ArtistProfileClient({
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="2" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
                 </div>
                 <h3 className="text-lg font-serif mb-2">Message Sent</h3>
-                <p className="text-sm text-muted">Your enquiry has been sent to {artistName}. They typically respond within 48 hours.</p>
+                <p className="text-sm text-muted">
+                  {isPortalSender
+                    ? `Your enquiry has been sent to ${artistName}. They typically respond within 48 hours.`
+                    : `Your enquiry has been sent to ${artistName}. They will reply to you by email, typically within 48 hours.`}
+                </p>
               </div>
             ) : (
               <>
@@ -1149,34 +1188,55 @@ export default function ArtistProfileClient({
                       // the message actually lands. The old code used authFetch (resolves
                       // on a 403/500) AND set enquirySent in the catch, so a failed
                       // enquiry told the visitor it had been sent.
-                      await mutate("/api/messages", {
-                        method: "POST",
-                        body: JSON.stringify({
-                          senderId: user?.id || null,
-                          senderName,
-                          senderType: userType || "anonymous",
-                          recipientSlug: artistSlug,
-                          content: `${currentWork ? `Re: ${currentWork.title}\n\n` : ""}${data.get("message")}`,
-                          metadata: { enquiryType },
-                        }),
-                      });
-                      // Also save to the enquiries table for backward compatibility.
-                      // Best-effort: a failure here must not undo the confirmation, since
-                      // the message itself already landed.
-                      try {
-                        await fetch("/api/enquiry", {
+                      //
+                      // B9/F19: /api/messages 401s guests and 403s customers, and
+                      // this form used to post there for everyone, so its main
+                      // audience filled the form and then failed. Artists and
+                      // venues keep the messages path; everyone else sends
+                      // through /api/enquiry (which also drops the enquiry into
+                      // the artist's inbox and emails them).
+                      if (isPortalSender) {
+                        await mutate("/api/messages", {
                           method: "POST",
-                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            senderId: user?.id || null,
+                            senderName,
+                            senderType: userType || "anonymous",
+                            recipientSlug: artistSlug,
+                            content: `${currentWork ? `Re: ${currentWork.title}\n\n` : ""}${data.get("message")}`,
+                            metadata: { enquiryType },
+                          }),
+                        });
+                        // Also save to the enquiries table for backward compatibility.
+                        // Best-effort: a failure here must not undo the confirmation, since
+                        // the message itself already landed.
+                        try {
+                          await fetch("/api/enquiry", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              senderName,
+                              senderEmail: data.get("senderEmail") || user?.email || "",
+                              artistSlug,
+                              workTitle: currentWork?.title || null,
+                              enquiryType,
+                              message: data.get("message"),
+                            }),
+                          });
+                        } catch { /* best-effort secondary notification */ }
+                      } else {
+                        await mutate("/api/enquiry", {
+                          method: "POST",
                           body: JSON.stringify({
                             senderName,
-                            senderEmail: data.get("senderEmail") || user?.email || "",
+                            senderEmail: (data.get("senderEmail") as string) || user?.email || "",
                             artistSlug,
                             workTitle: currentWork?.title || null,
-                            enquiryType: data.get("enquiryType"),
+                            enquiryType,
                             message: data.get("message"),
                           }),
                         });
-                      } catch { /* best-effort secondary notification */ }
+                      }
                       setEnquirySent(true);
                     } catch (err) {
                       showToast(

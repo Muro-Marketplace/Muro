@@ -465,7 +465,13 @@ export async function POST(request: Request) {
       const dbTier = tiers.find(
         (t) => t?.label?.toLowerCase?.() === item.size?.toLowerCase?.(),
       );
-      const isCollectLine = item.lineFulfilment === "collect_venue";
+      // QA flag B27: a line's collect CLAIM only earns the in-store price when
+      // the ORDER is a collect-from-venue order, because that is the only mode
+      // where the T9 placement re-validation runs. A cart whose lines say
+      // collect_venue but whose order says ship would otherwise be charged the
+      // cheaper in-store price for goods we then post out.
+      const isCollectLine =
+        item.lineFulfilment === "collect_venue" && fulfilmentMethod === "collect_venue";
 
       if (isCollectLine) {
         // T9: the number the collect button shows is the IN-STORE price

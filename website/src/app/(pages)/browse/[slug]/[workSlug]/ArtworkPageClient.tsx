@@ -682,10 +682,15 @@ export default function ArtworkPageClient({
               router.push(`/venue-portal/messages?artist=${artistSlug}${nameParam}`);
             } else if (user && userType === "artist") {
               router.push(`/artist-portal/messages?artist=${artistSlug}${nameParam}`);
-            } else if (user) {
-              router.push(`/customer-portal/messages?artist=${artistSlug}${nameParam}`);
             } else {
-              router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+              // Customers and logged-out visitors go to the profile's
+              // enquiry form (B12/F17/H9). The customer-portal inbox the
+              // customer branch used to target cannot work (the messages
+              // API rejects accounts without an artist or venue profile),
+              // and the login bounce sent guests towards the same dead
+              // end. The enquiry form needs no account; the artist
+              // replies by email. ?work= scopes the enquiry to this piece.
+              router.push(`/browse/${artistSlug}?enquiry=1&work=${encodeURIComponent(work.id)}`);
             }
           }}
           className="w-full px-5 py-2 text-xs text-muted hover:text-accent transition-colors border-t border-border"

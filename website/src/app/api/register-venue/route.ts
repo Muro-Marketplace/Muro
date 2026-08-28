@@ -23,6 +23,19 @@ export async function POST(request: Request) {
 
     const d = parsed.data;
 
+    // A43: the "Other" venue type comes with a free-text description that
+    // used to be stripped by the schema and silently discarded. There is no
+    // venue_registrations column for it, so fold it into the stored message
+    // instead of migrating; the venue's typed input has to land somewhere.
+    const customVenueType =
+      d.venueType === "Other" ? (d.customVenueType || "").trim() : "";
+    const message = [
+      customVenueType ? `Venue type: ${customVenueType}.` : "",
+      (d.message || "").trim(),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
     const { error } = await supabase.from("venue_registrations").insert({
       venue_name: d.venueName,
       venue_type: d.venueType,
@@ -35,7 +48,7 @@ export async function POST(request: Request) {
       postcode: d.postcode,
       wall_space: d.wallSpace || null,
       art_interests: d.artInterests || [],
-      message: d.message || null,
+      message: message || null,
       hear_about: d.hearAbout || null,
       status: "pending",
       created_at: new Date().toISOString(),
@@ -83,7 +96,10 @@ export async function POST(request: Request) {
           summary: `${d.venueName} registered through the public form.`,
           fields: [
             { label: "Contact", value: `${d.contactName} <${d.email}>` },
-            { label: "Type", value: d.venueType },
+            {
+              label: "Type",
+              value: customVenueType ? `Other (${customVenueType})` : d.venueType,
+            },
             { label: "Location", value: `${d.city}, ${d.postcode}` },
           ],
         });
@@ -93,7 +109,7 @@ export async function POST(request: Request) {
           template: "venue_registration_confirmation",
           category: "security",
           to: d.email,
-          subject: "We've received your Wallplace application",
+          subject: "Your venue is registered on Wallplace",
           react: VenueRegistrationConfirmation({
             contactFirstName: (d.contactName || "there").split(" ")[0],
             venueName: d.venueName,

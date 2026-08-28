@@ -226,13 +226,22 @@ describe("managed tiers", () => {
 
   it("cancels the subscription, then refunds the latest paid invoice", async () => {
     rowForLookup = { ...MANAGED_ROW };
-    invoicesList.mockResolvedValue({ data: [{ id: "in_1", payment_intent: "pi_from_invoice" }] });
+    invoicesList.mockResolvedValue({
+      data: [{
+        id: "in_1",
+        payments: { data: [{ payment: { type: "payment_intent", payment_intent: "pi_from_invoice" } }] },
+      }],
+    });
 
     const res = await POST(post({ id: REQUEST_ID }));
     expect(res.status).toBe(200);
 
     expect(subsCancel).toHaveBeenCalledWith("sub_42");
-    expect(invoicesList).toHaveBeenCalledWith({ subscription: "sub_42", status: "paid", limit: 1 });
+    // G11: the pinned API only exposes the intent via the expandable payments
+    // list, so the expand is load-bearing, not an optimisation.
+    expect(invoicesList).toHaveBeenCalledWith({
+      subscription: "sub_42", status: "paid", limit: 1, expand: ["data.payments"],
+    });
     expect(refundsCreate).toHaveBeenCalledTimes(1);
     expect((refundsCreate.mock.calls[0] as [{ payment_intent: string }])[0].payment_intent).toBe(
       "pi_from_invoice",
@@ -262,16 +271,37 @@ describe("managed tiers", () => {
   it("an already-cancelled subscription is not an error: continue to the refund", async () => {
     rowForLookup = { ...MANAGED_ROW };
     subsCancel.mockRejectedValue(new Error("This subscription is a canceled subscription."));
-    invoicesList.mockResolvedValue({ data: [{ id: "in_1", payment_intent: "pi_from_invoice" }] });
+    invoicesList.mockResolvedValue({
+      data: [{
+        id: "in_1",
+        payments: { data: [{ payment: { type: "payment_intent", payment_intent: "pi_from_invoice" } }] },
+      }],
+    });
 
     const res = await POST(post({ id: REQUEST_ID }));
     expect(res.status).toBe(200);
     expect(refundsCreate).toHaveBeenCalledTimes(1);
   });
 
+  it("still refunds from the LEGACY invoice.payment_intent shape (pre-basil fallback)", async () => {
+    rowForLookup = { ...MANAGED_ROW };
+    invoicesList.mockResolvedValue({ data: [{ id: "in_1", payment_intent: "pi_legacy" }] });
+
+    const res = await POST(post({ id: REQUEST_ID }));
+    expect(res.status).toBe(200);
+    expect((refundsCreate.mock.calls[0] as [{ payment_intent: string }])[0].payment_intent).toBe(
+      "pi_legacy",
+    );
+  });
+
   it("cancel succeeded but refund failed: 502 telling the admin billing is stopped", async () => {
     rowForLookup = { ...MANAGED_ROW };
-    invoicesList.mockResolvedValue({ data: [{ id: "in_1", payment_intent: "pi_from_invoice" }] });
+    invoicesList.mockResolvedValue({
+      data: [{
+        id: "in_1",
+        payments: { data: [{ payment: { type: "payment_intent", payment_intent: "pi_from_invoice" } }] },
+      }],
+    });
     refundsCreate.mockRejectedValue(new Error("card_declined"));
 
     const res = await POST(post({ id: REQUEST_ID }));

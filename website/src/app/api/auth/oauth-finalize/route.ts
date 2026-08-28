@@ -22,6 +22,13 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { triggerWelcomeIfNeeded } from "@/lib/email/welcome";
 import { verifyOAuthState } from "@/lib/oauth-state";
 import { isSignupRole, type SignupRole } from "@/lib/auth-roles";
+import { getClientIp, UNKNOWN_IP } from "@/lib/client-ip";
+
+// H15: the terms version/type the email/password signup pages send to
+// /api/terms/accept. Keep in lockstep with signup/{artist,customer,venue}
+// and ApplicationForm.
+const TERMS_VERSION = "v1.0-2026-04";
+const TERMS_TYPE = "platform_tos";
 
 // E35d: there was a local `ALLOWED_ROLES = ["artist","customer","venue"]` here,
 // referenced only to derive this type and never used as a check. The author's
@@ -93,6 +100,31 @@ export async function POST(request: Request) {
         display_name: displayName,
       },
     });
+
+    // H15: the email/password flows record terms acceptance via
+    // /api/terms/accept at signup; the OAuth flow skipped it entirely, so
+    // OAuth users had no terms_acceptances row at all. Record it here, at
+    // the moment the role is first stamped (i.e. this really is a signup,
+    // not a returning sign-in), inserting directly with the admin client.
+    // Same columns as terms/accept's authenticated path: identity comes
+    // from the verified token, never from the request body.
+    const clientIp = getClientIp(request);
+    const { error: termsError } = await db.from("terms_acceptances").insert({
+      user_id: user.id,
+      user_email: (user.email || "").toLowerCase(),
+      user_type: requestedRole,
+      terms_version: TERMS_VERSION,
+      terms_type: TERMS_TYPE,
+      ip_address: clientIp === UNKNOWN_IP ? null : clientIp,
+      user_agent: request.headers.get("user-agent") || null,
+      accepted_at: new Date().toISOString(),
+    });
+    if (termsError) {
+      // Best-effort, matching the fire-and-forget fetch on the signup
+      // pages: sign-in must not fail because the audit insert did. Logged
+      // so the gap is visible rather than silent.
+      console.error("[oauth-finalize] terms acceptance insert failed:", termsError);
+    }
   }
 
   const finalRole: Role = currentRole || (requestedRole as Role);

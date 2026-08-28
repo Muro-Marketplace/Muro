@@ -204,6 +204,60 @@ describe("PATCH /api/artwork-requests/[id]/responses/[responseId]", () => {
     expect(json.nextStepLink).toBe("/venue-portal/placements?artist=the-artist");
   });
 
+  it("passes the artist's proposed venue share into the placement unchanged (E23)", async () => {
+    // proposed_revenue_share_percent is the VENUE'S cut (the respond form
+    // caps it at "max 50% to the venue"), and placements.revenue_share_percent
+    // means exactly that (payout legs deduct it from the artist's gross as
+    // venueCutPence). The mint must copy it through without inverting.
+    responseOverride = { proposed_revenue_share_percent: 30 };
+    const { PATCH } = await import("./route");
+    const res = await PATCH(buildRequest("accept"), ctx);
+    expect(res.status).toBe(200);
+
+    const placementInsert = inserts.find((i) => i.table === "placements");
+    expect(placementInsert).toBeTruthy();
+    expect(placementInsert!.row.revenue_share_percent).toBe(30);
+    // Inverting to the artist's remainder (70) would silently flip the split.
+    expect(placementInsert!.row.revenue_share_percent).not.toBe(70);
+  });
+
+  it("on accept of a commission response, keeps the venue on the request detail page (E24)", async () => {
+    // /venue-portal/commissions does not exist, so the old nextStepLink
+    // navigated the venue to a 404 straight after a successful accept.
+    responseOverride = {
+      response_type: "commission",
+      proposed_commission_amount_pence: 120000,
+      proposed_commission_timeline: "6 to 8 weeks",
+      proposed_monthly_fee_pence: null,
+      proposed_qr_enabled: null,
+      proposed_revenue_share_percent: null,
+    };
+    const { PATCH } = await import("./route");
+    const res = await PATCH(buildRequest("accept"), ctx);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.status).toBe("accepted");
+
+    // A commissions row is still minted from the proposed terms.
+    const commissionInsert = inserts.find((i) => i.table === "commissions");
+    expect(commissionInsert).toBeTruthy();
+    expect(commissionInsert!.row.amount_pence).toBe(120000);
+    expect(commissionInsert!.row.status).toBe("accepted");
+
+    // The venue stays on the request detail page rather than 404ing.
+    expect(json.nextStepLink).toBe("/venue-portal/artwork-requests/arq_1");
+    expect(json.nextStepLink).not.toBe("/venue-portal/commissions");
+
+    // The artist notification also points at a real route —
+    // /artist-portal/commissions does not exist either. The mock
+    // accumulates calls across tests (vi.resetModules does not remint
+    // the factory result), so assert on this test's call: the latest.
+    const { createNotification } = await import("@/lib/notifications");
+    const notifyCalls = (createNotification as ReturnType<typeof vi.fn>).mock.calls;
+    expect(notifyCalls.length).toBeGreaterThan(0);
+    expect(notifyCalls[notifyCalls.length - 1][0].link).toBe("/artist-portal/artwork-requests");
+  });
+
   it("defaults qr_enabled to true for revenue_share when proposed_qr_enabled is null", async () => {
     // QR is how customers buy off the venue's wall, so a rev-share
     // placement without QR is broken-by-default. The artwork-request

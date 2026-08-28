@@ -107,7 +107,9 @@ export async function PATCH(
             firstName: party.firstName,
             orderNumber: order.id,
             outcome: parsed.data.resolution,
-            disputeUrl: `${siteOrigin()}/orders/${encodeURIComponent(order.id)}/dispute`,
+            // B29: /orders/[id]/dispute never existed; the order page carries the
+            // dispute section, so the resolved email lands there.
+            disputeUrl: `${siteOrigin()}/orders/${encodeURIComponent(order.id)}`,
             supportUrl: `${siteOrigin()}/support`,
           }),
           metadata: { disputeId: id, orderId: order.id },

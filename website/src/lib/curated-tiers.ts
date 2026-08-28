@@ -322,3 +322,17 @@ export const CURATED_TIER_KEYS = new Set<CuratedTierKey>(
 export function getCuratedTier(key: string): CuratedTier | undefined {
   return CURATED_TIERS.find((t) => t.key === key);
 }
+
+/**
+ * The note under the "Ready to start?" footer on /curated/[tier].
+ *
+ * E38: this used to read "cancel any time" for every tier, including the
+ * one-off tiers where there is no subscription and nothing to cancel. Only
+ * the managed (recurring) tiers may promise cancellation; the one-off tiers
+ * state what the payment actually is.
+ */
+export function curatedTierFooterNote(group: CuratedTierGroup): string {
+  return group === "managed"
+    ? "cancel any time."
+    : "a one-off payment, no subscription.";
+}

@@ -114,12 +114,33 @@ export async function POST(request: Request) {
           }
         }
 
-        const invoices = await stripe.invoices.list({ subscription: sub, status: "paid", limit: 1 });
-        const invoice = invoices.data[0] as (Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent | null }) | undefined;
-        const invoicePi =
+        // QA flag G11. On the pinned API version (post-basil) Invoice no longer
+        // carries a top-level payment_intent; payments live in the expandable
+        // `payments` list, each entry naming its payment_intent. The legacy
+        // field is kept as a fallback for any account still on an older
+        // behaviour, so the refund path works on both shapes.
+        const invoices = await stripe.invoices.list({
+          subscription: sub,
+          status: "paid",
+          limit: 1,
+          expand: ["data.payments"],
+        });
+        const invoice = invoices.data[0] as
+          | (Stripe.Invoice & { payment_intent?: string | Stripe.PaymentIntent | null })
+          | undefined;
+        const payments = invoice?.payments?.data ?? [];
+        const paidViaIntent = payments.find(
+          (pmt) => pmt.payment.type === "payment_intent" && pmt.payment.payment_intent,
+        );
+        const fromPayments =
+          typeof paidViaIntent?.payment.payment_intent === "string"
+            ? paidViaIntent.payment.payment_intent
+            : paidViaIntent?.payment.payment_intent?.id || null;
+        const fromLegacy =
           typeof invoice?.payment_intent === "string"
             ? invoice.payment_intent
             : invoice?.payment_intent?.id || null;
+        const invoicePi = fromPayments || fromLegacy;
 
         if (invoicePi) {
           refund = await stripe.refunds.create(
