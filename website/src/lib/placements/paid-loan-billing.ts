@@ -487,6 +487,9 @@ export async function handleInvoicePaymentFailed(
         ? "The venue's card could not be charged after several attempts. You are not being paid while billing is paused."
         : "The venue's card was declined. Stripe retries automatically; the venue has been asked to update it.",
       link: `/placements/${encodeURIComponent(billing.placement_id)}`,
+      // Webhook-driven: Stripe redelivers, and each invoice attempt is its
+      // own event, so the key carries the invoice and the stage (F6).
+      idempotencyKey: `paid_loan_payment_failed:${invoice.id}:${finalAttempt ? "final" : "retry"}`,
     }).catch(() => {});
   }
   if (finalAttempt) {
@@ -554,6 +557,8 @@ export async function handleSubscriptionDeleted(
         title: "Monthly loan payments cancelled",
         body,
         link: `/placements/${encodeURIComponent(fullRow.placement_id)}`,
+        // Webhook-driven (customer.subscription.deleted redelivers).
+        idempotencyKey: `paid_loan_cancelled:${subscription.id}:${userId}`,
       }).catch(() => {});
     }
   }

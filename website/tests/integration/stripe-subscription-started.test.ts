@@ -12,12 +12,13 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { fromMock, getUserByIdMock, nextEvent, paidLoanDeletedMock, curationDeletedMock, rpcMock } =
+const { fromMock, getUserByIdMock, nextEvent, paidLoanDeletedMock, curationDeletedMock, rpcMock, cancelPaidLoanMock } =
   vi.hoisted(() => ({
   fromMock: vi.fn(),
   getUserByIdMock: vi.fn(),
   nextEvent: { value: null as unknown },
   paidLoanDeletedMock: vi.fn(async () => {}),
+  cancelPaidLoanMock: vi.fn(async () => ({ status: "cancelled" })),
   curationDeletedMock: vi.fn(async () => {}),
   rpcMock: vi.fn(
     async (): Promise<{ data: unknown; error: { message: string } | null }> => ({
@@ -40,6 +41,7 @@ vi.mock("@/lib/placements/paid-loan-billing", () => ({
   handleInvoicePaid: vi.fn(async () => false),
   handleInvoicePaymentFailed: vi.fn(async () => false),
   handleSubscriptionDeleted: paidLoanDeletedMock,
+  cancelPaidLoanBilling: cancelPaidLoanMock,
 }));
 vi.mock("@/lib/curation/billing", () => ({
   handleCurationInvoicePaid: vi.fn(async () => false),
@@ -859,6 +861,41 @@ describe("checkout.session.completed books a collect_venue order", () => {
     // availability follows the normal stock decrement untouched.
     expect(placementUpdates).toContainEqual({ in_store_price: null, in_store_frame_included: false });
     expect(workFlagUpdates).toEqual([{ available_in_store: false }]);
+  });
+
+  it("WS3.3: an off-wall sale ENDS the placement - sold, billing cancelled, stamps cleared", async () => {
+    // Before this, nothing ever set a placement to "sold": an off-wall sale
+    // left the placement active forever, and a paid-loan venue kept paying a
+    // monthly display fee for a piece that had left the arrangement.
+    setupCartDb();
+    nextEvent.value = completedSession();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "placements") {
+        const chain: Record<string, unknown> = {
+          maybeSingle: async () => ({ data: null, error: null }),
+          order: async () => ({ data: [], error: null }),
+          limit: async () => ({ data: [{ venue_slug: "the-copper-kettle" }], error: null }),
+          then: (resolve: (v: unknown) => unknown) =>
+            resolve({ data: [{ id: "p-wall", status: "active" }], error: null }),
+        };
+        chain.eq = () => chain;
+        chain.in = () => chain;
+        return {
+          select: () => chain,
+          update: (row: Record<string, unknown>) => {
+            placementUpdates.push(row);
+            return { eq: async () => ({ error: null }), in: async () => ({ error: null }) };
+          },
+        };
+      }
+      return base(table);
+    });
+
+    await POST(post());
+    expect(placementUpdates).toContainEqual({ status: "sold" });
+    expect(cancelPaidLoanMock).toHaveBeenCalledWith("p-wall", expect.anything());
+    expect(workFlagUpdates).toContainEqual({ placed_at_venue: null, current_placement_id: null });
   });
 
   it("books it with zero shipping cost", async () => {

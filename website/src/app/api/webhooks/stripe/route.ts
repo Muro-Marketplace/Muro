@@ -564,6 +564,7 @@ async function handleWebhookEvent(
         kind: "paid_loan_started",
         title: `Monthly loan payments started, £${Number(placement.monthly_fee_gbp).toFixed(2)}/mo`,
         body: "The venue's card is set up. Your first payout follows the first paid invoice.",
+        idempotencyKey: `paid_loan_started:${placementId}`,
         // Owner find (2026-08-28): the flat list gave the artist nowhere to
         // SEE the payment; the detail page carries the payment status banner.
         link: `/placements/${encodeURIComponent(placementId)}`,
@@ -1161,6 +1162,51 @@ async function handleWebhookEvent(
                 console.warn("[webhook] off-the-wall offer clear threw:", offErr);
               }
             }
+            // WS3.3 (audit: off-wall sale kept billing). The piece is sold, so
+            // the placement ends NOW: status → sold, and any paid-loan billing
+            // is cancelled so the venue does not pay next month's display fee
+            // for a piece that has left the arrangement. Direct writes rather
+            // than the placements PATCH on purpose: that route's
+            // active→terminal inventory block RESTORES stock, which is built
+            // for unsold returns; this piece is sold and the sale itself
+            // already decremented. The "Placed at X" portfolio stamp clears
+            // for the same reason. Idempotent: a redelivery sees status=sold
+            // and skips.
+            if (soldPlacementIds.length > 0) {
+              try {
+                const { cancelPaidLoanBilling } = await import("@/lib/placements/paid-loan-billing");
+                const { data: soldRows } = await db
+                  .from("placements")
+                  .select("id, status")
+                  .in("id", soldPlacementIds);
+                for (const pl of (soldRows || []) as Array<{ id: string; status: string }>) {
+                  if (pl.status === "sold") continue;
+                  const { error: soldErr } = await db
+                    .from("placements")
+                    .update({ status: "sold" })
+                    .eq("id", pl.id);
+                  if (soldErr) {
+                    console.error("[webhook] could not mark placement sold:", soldErr);
+                    continue;
+                  }
+                  try {
+                    await cancelPaidLoanBilling(pl.id, db);
+                  } catch (cancelErr) {
+                    console.error("[webhook] paid-loan cancel after off-wall sale failed:", cancelErr);
+                  }
+                  try {
+                    await db
+                      .from("artist_works")
+                      .update({ placed_at_venue: null, current_placement_id: null })
+                      .eq("current_placement_id", pl.id);
+                  } catch (stampErr) {
+                    console.warn("[webhook] placement stamp clear failed:", stampErr);
+                  }
+                }
+              } catch (windDownErr) {
+                console.error("[webhook] off-wall placement wind-down failed:", windDownErr);
+              }
+            }
             if (cartWorkIds.length > 0) {
               try {
                 const { error: flagErr } = await db
@@ -1203,7 +1249,12 @@ async function handleWebhookEvent(
                   kind: "collection_pending",
                   title: `Sold off your wall: ${firstWork}`,
                   body: `${savedShipping?.fullName || "The buyer"} will collect it with order ${orderId}`,
-                  link: "/venue-portal/placements",
+                  // F10: one sold placement deep-links straight to it; the
+                  // sendEmail below can throw, so the bell is keyed (F6b).
+                  link: soldPlacementIds.length === 1
+                    ? `/placements/${soldPlacementIds[0]}`
+                    : "/venue-portal/placements",
+                  idempotencyKey: `collection_pending:${orderId}`,
                 }).catch((err) => console.warn("[webhook] collection bell failed:", err));
                 if (venueUser?.email) {
                   await sendEmail({
@@ -1523,7 +1574,7 @@ async function handleWebhookEvent(
               trialEndDate,
               upgradeUrl: `${SITE}/artist-portal/billing`,
               benefits: [
-                "Unlimited works in your portfolio",
+                "Up to 50 works in your portfolio",
                 "Priority matching with venues",
                 "Advanced QR analytics",
               ],
@@ -1882,7 +1933,11 @@ async function handleWebhookEvent(
             kind: "payout_sent",
             title: `Payout sent · ${amountLabel}`,
             body: `Expected to land ${arrival}`,
-            link: "/artist-portal/billing/payouts",
+            // F9/F1: /artist-portal/billing/payouts does not exist; billing
+            // is the page that lists payouts. Keyed because the sendEmail
+            // below can throw and Stripe's retry re-runs this bell (F6b).
+            link: "/artist-portal/billing",
+            idempotencyKey: `payout_sent:${payout.id}`,
           }).catch((err) => console.warn("[stripe webhook] payout notification failed:", err));
 
           await sendEmail({
@@ -1897,7 +1952,7 @@ async function handleWebhookEvent(
               payoutAmount: amount,
               payoutDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
               expectedArrival: arrival,
-              payoutUrl: `${SITE}/artist-portal/billing/payouts`,
+              payoutUrl: `${SITE}/artist-portal/billing`,
               supportUrl: `${SITE}/support`,
             }),
             metadata: { payoutId: payout.id, connectAccountId },
