@@ -469,3 +469,52 @@ describe("PATCH /api/placements surfaces write failures (row 22)", () => {
     expect(updates[0]).toHaveProperty("collected_at", null);
   });
 });
+
+// ── 121: the buy-off-the-wall offer lives on the placement ──────────────────
+//
+// The artist prices THIS physical piece at live-on-wall; a venue cannot set a
+// price on someone else's work, and an explicit null clears the frame flag
+// with the offer so a stale "frame included" cannot outlive it.
+describe("PATCH /api/placements in-store offer (121)", () => {
+  const ROW: Row = {
+    artist_user_id: "u-artist",
+    venue_user_id: "u-venue",
+    artist_slug: "fin-coles",
+    venue_slug: "testing-venue",
+    venue: "Testing Venue",
+    status: "active",
+  };
+
+  it("lets the artist set the offer, persisting price and frame flag", async () => {
+    setupDb({ ...ROW });
+    authMock.mockResolvedValue({ user: { id: "u-artist", email: "a@example.com" }, error: null });
+    const res = await patch({ id: "p1", inStorePrice: 120, inStoreFrameIncluded: true });
+    expect(res.status).toBe(200);
+    const update = updates.find((u) => "in_store_price" in u);
+    expect(update).toMatchObject({ in_store_price: 120, in_store_frame_included: true });
+  });
+
+  it("an explicit null clears the offer AND the frame flag", async () => {
+    setupDb({ ...ROW });
+    authMock.mockResolvedValue({ user: { id: "u-artist", email: "a@example.com" }, error: null });
+    const res = await patch({ id: "p1", inStorePrice: null });
+    expect(res.status).toBe(200);
+    const update = updates.find((u) => "in_store_price" in u);
+    expect(update).toMatchObject({ in_store_price: null, in_store_frame_included: false });
+  });
+
+  it("403s a venue trying to price the artist's piece", async () => {
+    setupDb({ ...ROW });
+    authMock.mockResolvedValue({ user: { id: "u-venue", email: "v@example.com" }, error: null });
+    const res = await patch({ id: "p1", inStorePrice: 120 });
+    expect(res.status).toBe(403);
+    expect(updates.find((u) => "in_store_price" in u)).toBeUndefined();
+  });
+
+  it("refuses a non-positive price at the schema", async () => {
+    setupDb({ ...ROW });
+    authMock.mockResolvedValue({ user: { id: "u-artist", email: "a@example.com" }, error: null });
+    const res = await patch({ id: "p1", inStorePrice: 0 });
+    expect(res.status).toBe(400);
+  });
+});

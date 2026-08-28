@@ -15,6 +15,7 @@ import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
+import InStoreOfferCard from "@/components/InStoreOfferCard";
 import { isLoan, isPurchase } from "@/lib/arrangement-type";
 import { ARRANGEMENT_LABEL, labelForArrangement } from "@/lib/arrangement-labels";
 import { normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
@@ -50,6 +51,8 @@ interface PlacementRow {
   live_from?: string | null;
   subscription_status?: string | null;
   subscription_current_period_end?: string | null;
+  in_store_price?: number | null;
+  in_store_frame_included?: boolean | null;
   collected_at?: string | null;
 }
 
@@ -123,6 +126,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
   const [artist, setArtist] = useState<{ name: string; slug: string; image?: string } | null>(null);
   const [venue, setVenue] = useState<{ name: string; slug: string; image?: string; location?: string; city?: string } | null>(null);
   const [viewerRole, setViewerRole] = useState<"artist" | "venue" | null>(null);
+  const [offerPromptOpen, setOfferPromptOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -294,6 +298,12 @@ export default function PlacementDetailClient({ placementId }: Props) {
       });
       await load({ silent: true });
       setSchedulePickerOpen(false);
+      // Owner decision 2026-08-28: the moment the piece is LIVE on the wall
+      // is when the artist knows exactly what hangs there and in what frame,
+      // so that is when we ask whether it can be bought off the wall.
+      if (stage === "live" && viewerRole === "artist" && placement.in_store_price == null) {
+        setOfferPromptOpen(true);
+      }
     } catch { /* ignore; next load will reconcile */ }
     finally {
       setAdvanceBusy(null);
@@ -1014,6 +1024,16 @@ export default function PlacementDetailClient({ placementId }: Props) {
           terms, so a paid loan whose monthly billing is not yet set up is
           reachable from the placement itself, not only the venue-portal
           card view. */}
+      {viewerRole && (
+        <InStoreOfferCard
+          placement={placement}
+          viewerRole={viewerRole}
+          promptOpen={offerPromptOpen}
+          onOpenPrompt={() => setOfferPromptOpen(true)}
+          onClosePrompt={() => setOfferPromptOpen(false)}
+          onSaved={() => load({ silent: true })}
+        />
+      )}
       {viewerRole && (
         <PaidLoanPaymentChip
           placementId={placement.id}

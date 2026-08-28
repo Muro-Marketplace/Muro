@@ -1851,10 +1851,6 @@ export default function PortfolioPage() {
       image: form.imagePreview,
       orientation: form.orientation,
       ...(shippingVal != null && !isNaN(shippingVal) ? { shippingPrice: shippingVal } : {}),
-      // Owner decision 2026-08-28: in-store is a FLAG now, not a price list.
-      // The collect-from-venue price is the normal tier price, so nothing
-      // per-size needs persisting; the tick box maps to available_in_store.
-      availableInStore: form.inStoreEnabled,
       quantityAvailable: qtyFinite ? qtyVal : null,
       frameOptions: cleanFrameOptions.length > 0 ? cleanFrameOptions : undefined,
     };
@@ -2410,22 +2406,10 @@ export default function PortfolioPage() {
                   />
                   <span className="text-xs text-muted">Different shipping per size</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.inStoreEnabled}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setForm((p) => ({
-                        ...p,
-                        inStoreEnabled: checked,
-                        inStorePricing: checked ? (p.inStorePricing.length ? p.inStorePricing : p.sizes.map(() => "")) : [],
-                      }));
-                    }}
-                    className="w-3.5 h-3.5 rounded-sm border border-border accent-accent"
-                  />
-                  <span className="text-xs text-muted">Available to buy in store?</span>
-                </label>
+                {/* 121: in-store availability moved to the PLACEMENT. The
+                    artist is prompted when marking a piece live on the wall
+                    (placement detail page), where the actual size and frame
+                    are known; the portfolio no longer asks. */}
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"

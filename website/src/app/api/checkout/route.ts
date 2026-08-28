@@ -61,6 +61,10 @@ export async function POST(request: Request) {
     // send any pair — so the placement row is the authority on venue, artist,
     // liveness and size.
     let collectVenueAddress: string | null = null;
+    // 121: the placement's buy-off-the-wall price, keyed by placement id, for
+    // the pricing ladder below. The PLACEMENT is the price authority for a
+    // collect line; the work-level paths further down are legacy fallbacks.
+    const offerByPlacementId = new Map<string, number>();
     if (fulfilmentMethod === "collect_venue") {
       const placementIds = items
         .map((i) => i.collectPlacementId)
@@ -83,7 +87,7 @@ export async function POST(request: Request) {
 
       const { data: places } = await getSupabaseAdmin()
         .from("placements")
-        .select("id, venue_slug, artist_slug, status, collection_address, placed_size_label")
+        .select("id, venue_slug, artist_slug, status, collection_address, placed_size_label, in_store_price")
         .in("id", placementIds)
         .eq("status", "active");
       const byId = new Map((places || []).map((pl) => [pl.id, pl]));
@@ -110,6 +114,9 @@ export async function POST(request: Request) {
           );
         }
         collectVenueAddress = pl.collection_address ?? collectVenueAddress;
+        if (typeof pl.in_store_price === "number" && pl.in_store_price > 0) {
+          offerByPlacementId.set(pl.id, pl.in_store_price);
+        }
       }
     }
     // Task 1 review-deferred follow-up: read the metadata fields off
@@ -475,11 +482,23 @@ export async function POST(request: Request) {
         item.lineFulfilment === "collect_venue" && fulfilmentMethod === "collect_venue";
 
       if (isCollectLine) {
-        // Owner decision 2026-08-28: collect-from-venue charges the NORMAL
-        // tier price. The in-store price model is retired; a legacy per-size
-        // or work-level in-store price is honoured only when it exists AND
-        // the tick box is not set, so carts from before migration 120 keep
-        // the number their button displayed.
+        // 121: the placement's own off-the-wall offer is THE price for this
+        // physical piece. The artist set it at live-on-wall; nothing the
+        // client sends can move it.
+        const offer = item.collectPlacementId
+          ? offerByPlacementId.get(item.collectPlacementId)
+          : undefined;
+        if (typeof offer === "number") {
+          const dbPence = Math.round(offer * 100);
+          if (dbPence !== clientPence) {
+            console.warn("[checkout] off-the-wall price corrected", {
+              workId: item.workId, placementId: item.collectPlacementId, clientPence, dbPence,
+            });
+          }
+          return dbPence;
+        }
+        // Legacy ladders below: the 120 tick box (tier price) and the pre-120
+        // in-store prices, for placements that have no offer of their own yet.
         if (row.available_in_store !== true) {
           const perSize = dbTier && typeof dbTier.inStorePrice === "number" && dbTier.inStorePrice > 0
             ? dbTier.inStorePrice

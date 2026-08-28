@@ -1510,7 +1510,7 @@ describe("POST /api/checkout server-side pricing (audit)", () => {
 
   // Collect-from-venue pricing needs the T9 placement claim to hold, so these
   // two mock both tables.
-  function setupCollect(workRow: Record<string, unknown>) {
+  function setupCollect(workRow: Record<string, unknown>, placementExtra: Record<string, unknown> = {}) {
     const base = fromMock.getMockImplementation()!;
     fromMock.mockImplementation((table: string) => {
       if (table === "artist_works") {
@@ -1528,6 +1528,8 @@ describe("POST /api/checkout server-side pricing (audit)", () => {
                   status: "active",
                   collection_address: "1 High St",
                   placed_size_label: null,
+                  in_store_price: null,
+                  ...placementExtra,
                 }],
                 error: null,
               }),
@@ -1573,6 +1575,40 @@ describe("POST /api/checkout server-side pricing (audit)", () => {
     );
     expect(res.status).toBe(200);
     expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(7000);
+  });
+
+  it("121: the PLACEMENT's off-the-wall offer is the price, beating every work-level source", async () => {
+    // The artist priced this physical piece at live-on-wall; tier price,
+    // tick box and legacy in-store prices are all overridden.
+    setupCollect(
+      {
+        id: "w-1", available: true, quantity_available: 10, title: "Untitled",
+        pricing: [{ label: "S", price: 100, inStorePrice: 80 }],
+        frame_options: null, in_store_price: 70, available_in_store: true,
+      },
+      { in_store_price: 130 },
+    );
+    const res = await POST(
+      req({ fulfilmentMethod: "collect_venue", items: [{ ...collectLine, price: 130 }], shipping: collectShipping }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(13000);
+  });
+
+  it("121: a forged client price on an offered piece is corrected to the offer", async () => {
+    setupCollect(
+      {
+        id: "w-1", available: true, quantity_available: 10, title: "Untitled",
+        pricing: [{ label: "S", price: 100 }],
+        frame_options: null, in_store_price: null, available_in_store: false,
+      },
+      { in_store_price: 130 },
+    );
+    const res = await POST(
+      req({ fulfilmentMethod: "collect_venue", items: [{ ...collectLine, price: 1 }], shipping: collectShipping }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(13000);
   });
 
   it("the tick box charges the NORMAL tier price, ignoring any legacy in-store price", async () => {

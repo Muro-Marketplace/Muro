@@ -64,11 +64,12 @@ export async function getArtistProfileBySlug(slug: string) {
   const placementsById = new Map<string, {
     id: string; venue_slug: string | null; venue: string | null; status: string | null;
     collection_address: string | null; placed_size_label: string | null;
+    in_store_price: number | null; in_store_frame_included: boolean | null;
   }>();
   if (placementIds.length > 0) {
     const { data: placementRows } = await db
       .from("placements")
-      .select("id, venue_slug, venue, status, collection_address, placed_size_label")
+      .select("id, venue_slug, venue, status, collection_address, placed_size_label, in_store_price, in_store_frame_included")
       .in("id", placementIds);
     for (const row of placementRows || []) {
       placementsById.set(row.id, row);
@@ -87,6 +88,9 @@ export async function getArtistProfileBySlug(slug: string) {
             status: pl.status,
             collectionAddress: pl.collection_address,
             placedSizeLabel: pl.placed_size_label,
+            // 121: the buy-off-the-wall offer for this placed piece.
+            inStorePrice: pl.in_store_price,
+            inStoreFrameIncluded: pl.in_store_frame_included === true,
           }
         : null,
     };
