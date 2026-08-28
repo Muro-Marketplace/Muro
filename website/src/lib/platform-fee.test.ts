@@ -10,8 +10,8 @@ import {
 
 describe("PLAN_FEE_PERCENT", () => {
   it("Core charges 15%", () => expect(PLAN_FEE_PERCENT.core).toBe(15));
-  it("Premium charges 8%", () => expect(PLAN_FEE_PERCENT.premium).toBe(8));
-  it("Pro charges 5%", () => expect(PLAN_FEE_PERCENT.pro).toBe(5));
+  it("Premium charges 15% (flat, owner decision 2026-08-28)", () => expect(PLAN_FEE_PERCENT.premium).toBe(15));
+  it("Pro charges 15% (flat, owner decision 2026-08-28)", () => expect(PLAN_FEE_PERCENT.pro).toBe(15));
   it("default falls to 15% (Core)", () => expect(DEFAULT_PLAN_FEE_PERCENT).toBe(15));
 });
 
@@ -21,12 +21,21 @@ describe("platformFeePercentForArtist()", () => {
     expect(platformFeePercentForArtist(undefined)).toBe(15);
   });
 
-  // The discount requires an ACTIVE subscription (D40/E52). These pass
-  // subscription_status: "active" so they exercise the plan mapping.
+  // Requires an ACTIVE subscription (D40/E52) to reach the plan map at all;
+  // an inactive profile falls to the default further down regardless of plan.
+  // These pass subscription_status: "active" so they exercise the mapping.
   it("maps each plan to the right percent for an active subscription", () => {
     expect(platformFeePercentForArtist({ subscription_plan: "core", subscription_status: "active" })).toBe(15);
-    expect(platformFeePercentForArtist({ subscription_plan: "premium", subscription_status: "active" })).toBe(8);
-    expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "active" })).toBe(5);
+    expect(platformFeePercentForArtist({ subscription_plan: "premium", subscription_status: "active" })).toBe(15);
+    expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "active" })).toBe(15);
+  });
+
+  it("charges the flat 15% on every live plan (owner decision 2026-08-28)", () => {
+    for (const plan of ["core", "premium", "pro"]) {
+      expect(
+        platformFeePercentForArtist({ subscription_plan: plan, subscription_status: "active" }),
+      ).toBe(15);
+    }
   });
 
   it("unknown plan falls back to 15% (even when active)", () => {
@@ -34,8 +43,8 @@ describe("platformFeePercentForArtist()", () => {
   });
 
   it("is case-insensitive on the plan", () => {
-    expect(platformFeePercentForArtist({ subscription_plan: "PREMIUM", subscription_status: "active" })).toBe(8);
-    expect(platformFeePercentForArtist({ subscription_plan: "Pro", subscription_status: "active" })).toBe(5);
+    expect(platformFeePercentForArtist({ subscription_plan: "PREMIUM", subscription_status: "active" })).toBe(15);
+    expect(platformFeePercentForArtist({ subscription_plan: "Pro", subscription_status: "active" })).toBe(15);
   });
 
   // D40 / E52: the discount is only granted while the subscription is live. A
@@ -56,12 +65,12 @@ describe("platformFeePercentForArtist()", () => {
       expect(platformFeePercentForArtist({ subscription_plan: "premium" })).toBe(15);
     });
 
-    it("honours the discount for an active premium artist (fin-coles' live shape)", () => {
-      expect(platformFeePercentForArtist({ subscription_plan: "premium", subscription_status: "active", trial_end: null })).toBe(8);
+    it("honours the flat 15% for an active premium artist (fin-coles' live shape)", () => {
+      expect(platformFeePercentForArtist({ subscription_plan: "premium", subscription_status: "active", trial_end: null })).toBe(15);
     });
 
     it("honours a trialing subscription", () => {
-      expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "trialing", trial_end: null })).toBe(5);
+      expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "trialing", trial_end: null })).toBe(15);
     });
   });
 
@@ -81,7 +90,7 @@ describe("platformFeePercentForArtist()", () => {
     });
 
     it("ignores null trial_end", () => {
-      expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "active", trial_end: null })).toBe(5);
+      expect(platformFeePercentForArtist({ subscription_plan: "pro", subscription_status: "active", trial_end: null })).toBe(15);
     });
 
     it("does not grant the trial 0% to a cancelled artist even if trial_end is future", () => {
@@ -116,7 +125,7 @@ describe("platformFeePercentForArtist honours free_until", () => {
         subscription_status: "active",
         free_until: past,
       }),
-    ).toBe(8);
+    ).toBe(15);
   });
 
   it("gives a CANCELLED artist no reward: the status gate comes first", () => {
@@ -140,6 +149,6 @@ describe("platformFeePercentForArtist honours free_until", () => {
         subscription_plan: "pro",
         subscription_status: "active",
       }),
-    ).toBe(5);
+    ).toBe(15);
   });
 });

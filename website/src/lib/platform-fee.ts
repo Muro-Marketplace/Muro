@@ -18,13 +18,21 @@
  * charged.
  */
 
+import { PLATFORM_FEE_PERCENT } from "@/lib/pricing";
+
+// Flat 15% on every plan (owner decision 2026-08-28). The inverted ladder
+// (core 15 / premium 8 / pro 5) was removed before launch: at realistic
+// volumes no artist could justify the upgrade as a fee hedge, and it paid the
+// platform least on its best sellers. Tiers differentiate on capacity now
+// (works caps, concurrent placement caps, Curated priority), not fee.
+// The keys stay so callers and tests can keep addressing plans by name.
 export const PLAN_FEE_PERCENT: Record<string, number> = {
-  core: 15,
-  premium: 8,
-  pro: 5,
+  core: PLATFORM_FEE_PERCENT,
+  premium: PLATFORM_FEE_PERCENT,
+  pro: PLATFORM_FEE_PERCENT,
 };
 
-export const DEFAULT_PLAN_FEE_PERCENT = 15;
+export const DEFAULT_PLAN_FEE_PERCENT = PLATFORM_FEE_PERCENT;
 
 interface ArtistPlanState {
   subscription_plan?: string | null;

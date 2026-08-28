@@ -155,14 +155,16 @@ describe("POST /api/offers/[id]/checkout split (E6)", () => {
     expect(Number(m.offer_platform_fee_pence) + Number(m.offer_artist_net_pence)).toBe(OFFER.amount_pence);
   });
 
-  it("uses the artist's real plan rate, not a flat 15%", async () => {
-    // Pro AND active — the discount now requires a live subscription (D40/E52).
-    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "pro", subscription_status: "active" }); // 5%
+  it("charges the flat 15% for a pro artist too, now that the ladder is gone", async () => {
+    // Pro AND active — same shape as the old plan-discount check (D40/E52), but
+    // the flat fee (owner decision 2026-08-28) means pro resolves to 15% like
+    // every other plan rather than a lower ladder rate.
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "pro", subscription_status: "active" });
     await post();
     expect(metadata()).toMatchObject({
-      offer_platform_fee_percent: "5",
-      offer_platform_fee_pence: "165",
-      offer_artist_net_pence: "3135",
+      offer_platform_fee_percent: "15",
+      offer_platform_fee_pence: "495",
+      offer_artist_net_pence: "2805",
     });
   });
 
