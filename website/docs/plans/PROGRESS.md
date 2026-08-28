@@ -11962,3 +11962,69 @@ returns `bypass: true` so it is visible, but it still lets the request past. The
 one fact needed to decide: **is that key set in Vercel production?** If yes, make
 it a hard fail and the behaviour never changes. If no, bot protection on signup
 is currently off and that is the more urgent half.
+
+---
+
+## Session close, 2026-08-28 (overnight). What changed, and what is left.
+
+### The plan itself is done, apart from what needs you or a tool this box lacks
+
+| doc | state |
+|---|---|
+| `01` authz/IDOR | complete |
+| `02` RLS/DB/storage | complete bar X2/K11 (needs `pg_dump`) |
+| `03` auth/admin | complete bar the owner-gated predicate cutover |
+| `04` payments | 33 of 61 ticked, verified against the code. Open: Phase 8 (a new checkout mode, owner), refunds D16/D17/D18 (owner), the `tests/transactions` harness, and 0.5's consolidation, whose invariant is now pinned by test instead |
+| `05` frontend saves | complete |
+| `06` validation | **complete**. Phase C was done and entirely unticked |
+| `07` unknot | K1–K8 complete, K10a and K10d complete. K10b/K10c/K11 blocked: no Supabase CLI, no Docker, no `pg_dump` on this machine |
+| `08` cull | still blocked on its rewrite, per D6. Surfaced, not cut |
+| `09` emails | **31 of 35**. The four open are DNS, a Supabase dashboard paste, DMARC staging and one that is time-based |
+
+### What the night actually produced
+
+Seven migrations (105–111), all applied to production and verified live, and
+**19 defects that were live in production**, most found by sweeping for a class
+rather than by working the list:
+
+**Silent data loss (4).** Every referral code ever submitted, destroyed on insert.
+A flagged message losing its type, terms and attachments. `DELETE /api/account`
+erasing nothing while reporting success. Three placement inserts rejected whole.
+
+**Features that did nothing (5).** Reporting a conversation. Blocking a user. The
+consignment-record audit trail. The 14-day statutory refund window. The referral
+programme end to end.
+
+**Wrong answers, silently (5).** The anti-spam cap missing a third of its surface.
+The venue digest reporting zero views to everyone. An onboarding nudge sent to
+people who did not need it. A guard watching for functions K1 deleted. The
+webhook booking orders against unsettled payments.
+
+**Reachable-but-unbuilt (2).** No way to open a dispute at all. The contact form
+never answering the sender.
+
+**Silent config failures (3).** The CAPTCHA bypass in production. Six tables
+failing the nightly advisor job. A `002_run_me.sql` residue the repo drops and
+never recreates.
+
+### Four new guards, each verified by reintroducing the bug it was written for
+
+`phantom-write-columns.test.ts` covers three variants at once — phantom tables,
+phantom write columns, phantom filter columns — and found **15 of the 19**.
+`one-write-attempt.test.ts` ratchets the strip-and-retry ladder that hid four of
+them. `cron-schedule.test.ts` closes the "a route nothing schedules" shape of
+07 K5. `service-role-tables-documented.test.ts` keeps the advisor allowlist and
+its documentation in step, in `check` rather than in the nightly job where the
+mistake is not made.
+
+### What I would look at first
+
+**Owner decision 9**: £953.20 booked as owed to artists with an empty
+`stripe_transfers` table, and one order that took £64.49 with nobody attributed.
+It is the only finding that is money already taken.
+
+**Owner decision 21**: is `TURNSTILE_SECRET_KEY` set in Vercel production? If it
+is not, signup has no bot protection right now.
+
+**Owner decision 15**: anyone who has already deleted their account still has
+their data. Their auth user is gone, so they cannot ask again.
