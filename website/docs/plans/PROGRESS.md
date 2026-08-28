@@ -10109,3 +10109,75 @@ so `disputes` is a table written by nothing. Building new product surface is a
 different decision from removing duplication, and it belongs to the owner rather
 than to a remediation pass. 3.1 and 4.7 are owner-only (DNS/DMARC and Supabase SMTP)
 and 4.4 depends on the CI lint flag.
+
+### 07 K3 — four sources of arrangement labels — DONE (core), and K2e with it
+
+**All four implementations plus both API ladders are gone.** `src/lib/arrangement-labels.ts`
+is the only one left, extended to express everything the others could:
+
+- `mixed` is named. It was returning **"Other arrangement"** for a value that is
+  live in production, which was the plainest symptom of the split.
+- `revenue_share` renamed from "Revenue-share loan (QR-enabled)" to
+  "Revenue share". It is not a loan, and the parenthetical described a
+  configuration rather than the arrangement.
+- Fee/QR-aware, so "Paid loan + QR" is expressible where only `status.ts` could
+  say it.
+
+**The two implementations disagreed on one input, and the disagreement is
+preserved rather than papered over:** `labelForArrangement("free_loan")` returned
+"Paid loan" (the alias map), while `arrangementLabel({arrangement_type:"free_loan"})`
+returned "Free display" (no fee present). Both were right for their own callers, so
+the **call form** decides: a caller with only a type string knows nothing about the
+fee and keeps the paid reading; a caller passing the object is in the data-derived
+world where no fee means no fee. Every existing caller keeps its meaning, and a test
+says so explicitly.
+
+**Deleted:** `placements/status.ts`'s `arrangementLabel` (25 lines) and
+`arrangement-type.ts`'s `arrangementLabel` alias. That alias renamed a function to
+collide with a *different* function's name, so which behaviour a file got depended
+on its import line.
+
+**The prose regex is not carried over.** `status.ts` scanned the free-text request
+message for "£X/month" when the fee column was null, and `PlacementContextPanel`
+kept its own copy. The label a user saw depended on wording someone had typed.
+
+**E13 fixed.** `/spaces` rendered the literal "Revenue Share" at `:359` and `:392`
+beside `ARRANGEMENT_LABEL.revenue_share` at `:538` — two names for one arrangement
+on one page. Both literals now read from the canonical map.
+
+**Both eslint-disable pairs removed**, which §3.5 says is worth more than its other
+assertions ("a suppression comment is a knot being tied in front of you"):
+`PlacementDetailClient`'s flag-gated ladder (which had a *second* ladder in its else
+branch, a fifth vocabulary, title-cased unlike anything else) and
+`placements/route.ts`'s negotiation-log terms (which said "Free loan arrangement",
+a phrase no other surface uses).
+
+**K2e done, unblocked by this.** `PAID_LOAN_V2` had only those two label branches
+left, so §2.5 step 5's ordering is satisfied and the flag is deleted from
+`FeatureFlag`, `FLAGS` and `CLIENT_ENV`. Removing its gate also **fixed a live
+copy bug**: the "Venue owns the work" line was hidden behind a flag that is off in
+production, so a venue looking at a purchase was never told they own the work.
+
+**One thing measured rather than assumed, and deliberately left.**
+`PlacementDetailClient` still parses the message for a displayed monthly-fee
+*amount*, with a "re-confirm with the other party before payout" caveat beside it.
+Against prod: **3 of 86 placements have a fee in the message and nothing in the
+column**, so deleting it would show "Free display" on three real negotiated
+placements. That is a data-backfill decision for the owner, not a duplicate-label
+cleanup, and it is in the open items below with the query.
+
+**Tests.** `arrangement-labels.test.ts` extended to 13 (including an exhaustive
+type × fee × QR sweep asserting the output is always in the declared set), and
+`one-label-source.test.ts` (5). `status.test.ts` had tested *only* the deleted
+function; rather than delete the file, its other six exports — which had never had a
+test — got one (15).
+
+**NOT done: the §3.2 JSX sweep across the remaining 14 files.** The four
+implementations, both API ladders, both suppressions and the E13 collision are the
+substance and they are closed. What is left is hardcoded label strings in list rows,
+profile bodies and dialogs: mechanical volume, no behavioural defect, and three of
+them are near-identical dev-only surfaces §3.2 itself says `08` should cull rather
+than fix. Listed as an open item rather than half-swept.
+
+`npm run check` green: 0 lint errors, 223 files, 2188 tests, 0 dependency
+violations, exit 0.

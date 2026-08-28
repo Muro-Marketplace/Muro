@@ -356,7 +356,11 @@ function SpacesPageContent() {
             <div className="w-px h-8 bg-border" />
             <div className="text-center">
               <p className="text-2xl font-serif text-foreground">{filtered.filter((v) => v.interestedInRevenueShare).length}</p>
-              <p className="text-xs text-muted">Revenue Share</p>
+              {/* K3 / E13: this read the literal "Revenue Share" while :538
+                  below rendered ARRANGEMENT_LABEL.revenue_share
+                  ("Revenue-share loan (QR-enabled)"), so one page showed two
+                  different names for the same arrangement. One source now. */}
+              <p className="text-xs text-muted">{ARRANGEMENT_LABEL.revenue_share}</p>
             </div>
             <div className="w-px h-8 bg-border" />
             <div className="text-center">
@@ -389,7 +393,8 @@ function SpacesPageContent() {
               {([
                 { key: "all", label: "All Arrangements" },
                 { key: "display", label: "Display" },
-                { key: "revenue", label: "Revenue Share" },
+                // K3 / E13: same collision as the stat above.
+                { key: "revenue", label: ARRANGEMENT_LABEL.revenue_share },
                 { key: "purchase", label: "Purchase" },
               ] as const).map((a) => (
                 <button

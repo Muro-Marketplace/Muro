@@ -1,47 +1,139 @@
 import { describe, it, expect } from "vitest";
-import { arrangementLabel } from "./status";
+import {
+  STAGE_ORDER,
+  currentStage,
+  nextStage,
+  normaliseStatus,
+  statusBadgeClass,
+  viewerRole,
+  type DisplayStatus,
+  type PlacementLifecycle,
+} from "./status";
 
-// P6 (Phase 2.1) guard: the optimistic-insert path on the artist and
-// venue placement pages now calls arrangementLabel() to derive the
-// row label, instead of hard-coded "Revenue Share" / "Paid Loan"
-// strings. This test locks the canonical labels so any future change
-// to the helper would also flip the optimistic paths together.
-describe("arrangementLabel() casing matches the canonical UI labels", () => {
-  it("returns 'Revenue share' (lowercase s)", () => {
-    expect(
-      arrangementLabel({ arrangement_type: "revenue_share", qr_enabled: false }),
-    ).toBe("Revenue share");
+// K3: the `arrangementLabel()` block that lived here moved to
+// src/lib/arrangement-labels.test.ts along with the function itself — status.ts
+// was a SECOND label implementation with a different vocabulary from the module
+// that calls itself the single source of truth.
+//
+// That left this file testing nothing, and the module's other six exports had
+// never had a test. Rather than delete the file, they get one: the lifecycle
+// helpers below drive what the placement panel shows and who it lets act.
+
+const EMPTY: PlacementLifecycle = { status: "pending" };
+
+describe("normaliseStatus", () => {
+  it("maps every known raw status to its display form", () => {
+    const cases: Record<string, DisplayStatus> = {
+      active: "Active",
+      pending: "Pending",
+      declined: "Declined",
+      cancelled: "Cancelled",
+      sold: "Sold",
+      completed: "Completed",
+      // `paused` is deliberately folded into Completed: there is no Paused
+      // display status, and leaving it unmapped would fall to the default.
+      paused: "Completed",
+    };
+    for (const [raw, expected] of Object.entries(cases)) {
+      expect(normaliseStatus(raw), raw).toBe(expected);
+    }
   });
 
-  it("returns 'Paid loan' for a paid arrangement", () => {
+  it("is case-insensitive, because legacy rows are capitalised", () => {
+    expect(normaliseStatus("Active")).toBe("Active");
+    expect(normaliseStatus("PENDING")).toBe("Pending");
+  });
+
+  it("defaults an unknown or missing status to Active", () => {
+    // Worth pinning rather than assuming: the default is NOT "Pending", so a
+    // row with a status nobody recognises reads as live rather than as awaiting
+    // a response. Changing it would change who the panel asks to act.
+    expect(normaliseStatus("nonsense")).toBe("Active");
+    expect(normaliseStatus(null)).toBe("Active");
+    expect(normaliseStatus(undefined)).toBe("Active");
+    expect(normaliseStatus("")).toBe("Active");
+  });
+});
+
+describe("statusBadgeClass", () => {
+  it("returns a class string for every display status", () => {
+    const statuses: DisplayStatus[] = [
+      "Active", "Pending", "Declined", "Cancelled", "Sold", "Completed",
+    ];
+    for (const status of statuses) {
+      expect(statusBadgeClass(status), status).toMatch(/\S/);
+    }
+  });
+
+  it("gives the two negative outcomes the same treatment", () => {
+    expect(statusBadgeClass("Cancelled")).toBe(statusBadgeClass("Declined"));
+  });
+});
+
+describe("currentStage", () => {
+  it("returns null before anything has happened", () => {
+    expect(currentStage(EMPTY)).toBeNull();
+  });
+
+  it("reads the furthest stage reached, not the first", () => {
+    // The checks run latest-first, so a placement that has been accepted,
+    // scheduled, installed and gone live reads as "live".
     expect(
-      arrangementLabel({
-        arrangement_type: "paid_loan",
-        monthly_fee_gbp: 50,
-        qr_enabled: false,
+      currentStage({
+        status: "active",
+        acceptedAt: "2026-01-01",
+        scheduledFor: "2026-01-02",
+        installedAt: "2026-01-03",
+        liveFrom: "2026-01-04",
       }),
-    ).toBe("Paid loan");
+    ).toBe("live");
   });
 
-  it("returns 'Paid loan + QR' for mixed", () => {
-    expect(
-      arrangementLabel({
-        arrangement_type: "mixed",
-        monthly_fee_gbp: 50,
-        qr_enabled: true,
-      }),
-    ).toBe("Paid loan + QR");
+  it("walks each stage in order", () => {
+    const p: PlacementLifecycle = { status: "active" };
+    expect(currentStage({ ...p, acceptedAt: "x" })).toBe("accepted");
+    expect(currentStage({ ...p, acceptedAt: "x", scheduledFor: "x" })).toBe("scheduled");
+    expect(currentStage({ ...p, acceptedAt: "x", installedAt: "x" })).toBe("installed");
+    expect(currentStage({ ...p, acceptedAt: "x", collectedAt: "x" })).toBe("collected");
+  });
+});
+
+describe("nextStage", () => {
+  it("returns null when nothing has started", () => {
+    expect(nextStage(EMPTY)).toBeNull();
   });
 
-  it("returns 'Free display' for free_loan", () => {
-    expect(
-      arrangementLabel({ arrangement_type: "free_loan", qr_enabled: false }),
-    ).toBe("Free display");
+  it("returns the following stage", () => {
+    expect(nextStage({ status: "active", acceptedAt: "x" })).toBe("scheduled");
+    expect(nextStage({ status: "active", acceptedAt: "x", scheduledFor: "x" })).toBe("installed");
   });
 
-  it("returns 'Direct purchase' for purchase", () => {
-    expect(
-      arrangementLabel({ arrangement_type: "purchase", qr_enabled: false }),
-    ).toBe("Direct purchase");
+  it("returns null at the end of the lifecycle rather than wrapping", () => {
+    expect(nextStage({ status: "completed", collectedAt: "x" })).toBeNull();
+    expect(STAGE_ORDER[STAGE_ORDER.length - 1]).toBe("collected");
+  });
+});
+
+describe("viewerRole", () => {
+  it("treats a signed-out viewer as an observer", () => {
+    expect(viewerRole({ status: "pending", requesterUserId: "u1" }, null)).toBe("observer");
+    expect(viewerRole({ status: "pending", requesterUserId: "u1" }, undefined)).toBe("observer");
+  });
+
+  it("names the requester", () => {
+    expect(viewerRole({ status: "pending", requesterUserId: "u1" }, "u1")).toBe("requester");
+  });
+
+  it("names anyone else as the responder", () => {
+    expect(viewerRole({ status: "pending", requesterUserId: "u1" }, "u2")).toBe("responder");
+  });
+
+  it("falls back to responder when the requester is unknown", () => {
+    // Legacy rows have no requester recorded. Reading them as "responder" means
+    // the panel offers Accept/Decline rather than "waiting on the other side",
+    // which is the recoverable direction: a wrong "waiting" strands the
+    // placement with nobody able to move it.
+    expect(viewerRole({ status: "pending" }, "u1")).toBe("responder");
+    expect(viewerRole({ status: "pending", requesterUserId: null }, "u1")).toBe("responder");
   });
 });

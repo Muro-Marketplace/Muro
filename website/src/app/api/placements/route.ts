@@ -26,6 +26,7 @@ import { PlacementEnded } from "@/emails/templates/placements/PlacementEnded";
 import { z } from "zod";
 import { ArtistNewPlacementInvitation } from "@/emails/templates/placements/ArtistNewPlacementInvitation";
 import { placementTermsSummary } from "@/lib/placements/terms-summary";
+import { labelForArrangement } from "@/lib/arrangement-labels";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -1050,19 +1051,25 @@ export async function PATCH(request: Request) {
             .limit(1)
             .maybeSingle();
           cid = existingThread?.conversation_id || deterministicConversationId(mine.slug, theirs.slug);
+          // K3: this was a five-way ladder with two eslint-disable suppressions
+          // of no-raw-arrangement-type, producing yet another vocabulary
+          // ("Free loan arrangement", which no other surface says). The
+          // canonical labeller names the arrangement; only the percentage,
+          // which is genuinely local to a counter-offer, is composed here.
           const terms: string[] = [];
-          if (counter.arrangementType === "revenue_share" && counter.revenueSharePercent !== undefined) {
-            terms.push(`Revenue share: ${counter.revenueSharePercent}% to the venue`);
-          // eslint-disable-next-line wallplace/no-raw-arrangement-type -- negotiation-log term text; paid_loan and free_loan are both handled with their own copy, neither is missed
-          } else if (counter.arrangementType === "paid_loan") {
-            terms.push("Paid loan arrangement");
-          // eslint-disable-next-line wallplace/no-raw-arrangement-type -- see above
-          } else if (counter.arrangementType === "free_loan") {
-            terms.push("Free loan arrangement");
-          } else if (counter.arrangementType === "purchase") {
-            terms.push("Purchase arrangement");
-          } else if (counter.revenueSharePercent !== undefined) {
-            terms.push(`Revenue share: ${counter.revenueSharePercent}%`);
+          if (counter.arrangementType || counter.revenueSharePercent !== undefined) {
+            const label = counter.arrangementType
+              ? labelForArrangement({
+                  arrangementType: counter.arrangementType,
+                  monthlyFeeGbp: counter.monthlyFeeGbp,
+                  qrEnabled: counter.qrEnabled,
+                })
+              : "Revenue share";
+            terms.push(
+              counter.revenueSharePercent !== undefined
+                ? `${label}: ${counter.revenueSharePercent}% to the venue`
+                : label,
+            );
           }
           if (counter.monthlyFeeGbp !== undefined) terms.push(`Monthly fee: \u00a3${counter.monthlyFeeGbp}`);
           if (counter.qrEnabled !== undefined) terms.push(counter.qrEnabled ? "QR enabled" : "QR disabled");

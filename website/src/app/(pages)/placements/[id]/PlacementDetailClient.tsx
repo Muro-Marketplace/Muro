@@ -15,8 +15,8 @@ import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
-import { isFlagOn } from "@/lib/feature-flags";
-import { isLoan } from "@/lib/arrangement-type";
+import { isLoan, isPurchase } from "@/lib/arrangement-type";
+import { labelForArrangement } from "@/lib/arrangement-labels";
 
 interface PlacementRow {
   id: string;
@@ -504,43 +504,30 @@ export default function PlacementDetailClient({ placementId }: Props) {
         )}
         <div className="flex-1 min-w-0">
           <p className="text-xs uppercase tracking-wider text-muted mb-1">
-            {/* G1 (Phase 2.2): read placement.arrangement_type directly
-                so the header matches what was written. Gated by
-                PAID_LOAN_V2 per the spec's "with flag off: zero
-                behaviour change" requirement — when the flag is off
-                we keep the pre-Phase-2 mapping (free_loan → "Paid Loan").
-            */}
-            {isFlagOn("PAID_LOAN_V2")
-              ? (() => {
-                  const t = placement.arrangement_type;
-                  const pct = placement.revenue_share_percent
-                    ? ` (${placement.revenue_share_percent}%)`
-                    : "";
-                  if (t === "purchase") return "Purchase";
-                  // eslint-disable-next-line wallplace/no-raw-arrangement-type -- flag-on detail label; every value is handled explicitly (paid_loan is not missed) and free_loan -> "Display" is the deliberate flag-on nuance per ADR 0007
-                  if (t === "paid_loan") return "Paid Loan";
-                  // eslint-disable-next-line wallplace/no-raw-arrangement-type -- see above
-                  if (t === "free_loan") return "Display";
-                  if (t === "revenue_share") return `Revenue Share${pct}`;
-                  if (t === "mixed") return `Paid Loan + Rev Share${pct}`;
-                  return "Placement";
-                })()
-              : placement.arrangement_type === "revenue_share"
-                ? `Revenue Share${placement.revenue_share_percent ? ` (${placement.revenue_share_percent}%)` : ""}`
-                : isLoan(placement.arrangement_type)
-                  ? "Paid Loan"
-                  : "Purchase"}
+            {/* K3: this was a PAID_LOAN_V2-gated ladder with a SECOND ladder in
+                its else branch, producing a fifth arrangement vocabulary
+                ("Paid Loan", "Rev Share", "Display", title-cased differently
+                from every other surface) and carrying two eslint-disable
+                suppressions of no-raw-arrangement-type. Both ladders are gone.
+                The flag gated a copy difference, not a behaviour, so removing
+                it removes the difference rather than picking a side. */}
+            {labelForArrangement({
+              arrangementType: placement.arrangement_type,
+              monthlyFeeGbp: placement.monthly_fee_gbp,
+              qrEnabled: placement.qr_enabled,
+            })}
+            {placement.revenue_share_percent ? ` (${placement.revenue_share_percent}%)` : ""}
           </p>
-          {/* G2 (Phase 2.2): "Venue owns the work" on purchase, else
-              "On loan from artist". Same flag-gate as G1 — pre-Phase-2
-              the page had no ownership text at all. */}
-          {isFlagOn("PAID_LOAN_V2") && (
-            <p className="text-[11px] text-muted mb-2">
-              {placement.arrangement_type === "purchase"
-                ? "Venue owns the work"
-                : "On loan from artist"}
-            </p>
-          )}
+          {/* G2 (Phase 2.2): "Venue owns the work" on purchase, else "On loan
+              from artist". K3: the PAID_LOAN_V2 gate is gone with the label
+              ladder above. It hid a true, useful sentence behind a flag that is
+              off in production, so a venue looking at a purchase was not told
+              they own the work. */}
+          <p className="text-[11px] text-muted mb-2">
+            {isPurchase(placement.arrangement_type)
+              ? "Venue owns the work"
+              : "On loan from artist"}
+          </p>
           <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-2">{placement.work_title}</h1>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             {artist && (

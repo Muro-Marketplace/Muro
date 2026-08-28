@@ -11,7 +11,6 @@ import {
   statusBadgeClass,
   nextAction,
   viewerRole,
-  arrangementLabel as sharedArrangementLabel,
   type DisplayStatus,
   type PlacementLifecycle,
 } from "@/lib/placements/status";
@@ -19,6 +18,7 @@ import { canRespond } from "@/lib/placement-permissions";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
 import Toggle from "@/components/Toggle";
 import { useSearchParams } from "next/navigation";
+import { labelForArrangement } from "@/lib/arrangement-labels";
 
 interface PanelProps {
   otherPartySlug: string | null;
@@ -573,27 +573,25 @@ export default function PlacementContextPanel({
   // Has placement \u2014 show progress panel.
   const p = current as RemotePlacement;
   // Derive the headline arrangement label from actual data rather than
-  // trusting the raw arrangement_type. For legacy rows where the fee was
-  // dropped by an earlier insert retry, fall back to parsing £X/month out
-  // of the request message so a paid loan isn't mislabelled.
-  // G1 (Phase 2.2): single source of truth via the shared
-  // arrangementLabel(), so this panel agrees with the
-  // /placements/[id] header and the placement-list rows. Still falls
-  // back to scanning the request message for "\u00a3X/month" via the
-  // helper, so legacy rows without a populated fee column don't
-  // mis-label as "Free display".
-  const arrangementLabel = sharedArrangementLabel({
-    arrangement_type: p.arrangement_type,
-    monthly_fee_gbp: p.monthly_fee_gbp,
-    qr_enabled: p.qr_enabled,
-    message: p.message,
+  // trusting the raw arrangement_type, so this panel agrees with the
+  // /placements/[id] header and the placement-list rows.
+  //
+  // K3: was `sharedArrangementLabel` from placements/status.ts, a second
+  // implementation with a different vocabulary from the module that calls
+  // itself the single source of truth. One owner now.
+  //
+  // The message-body regex is gone with it. It scanned the request message for
+  // "£X/month" so a legacy row with a dropped fee column would not mis-label as
+  // "Free display" — but inferring a monetary amount from prose a user typed is
+  // a bug generator, and it silently disagreed with every other surface that
+  // did not do it. A legacy row with no fee reads as what the column says; the
+  // fix for a dropped fee is to backfill the column.
+  const arrangementLabel = labelForArrangement({
+    arrangementType: p.arrangement_type,
+    monthlyFeeGbp: p.monthly_fee_gbp,
+    qrEnabled: p.qr_enabled,
   });
-  // Same fee-derivation as the helper, but exposed locally for the
-  // conditional Monthly-fee + QR-code rows below.
-  const msg = p.message || "";
-  const msgFeeMatch = msg.match(/(?:\u00a3|gbp)\s?(\d{2,5})\s?(?:\/?\s?m|per\s*m|\/\s*mo|a\s*m)/i);
-  const msgFee = msgFeeMatch ? parseFloat(msgFeeMatch[1]) : 0;
-  const hasFee = (typeof p.monthly_fee_gbp === "number" && p.monthly_fee_gbp > 0) || msgFee > 0;
+  const hasFee = typeof p.monthly_fee_gbp === "number" && p.monthly_fee_gbp > 0;
 
   return (
     <aside className="w-full h-full bg-[#FAF8F5] border-l border-border flex flex-col overflow-y-auto">

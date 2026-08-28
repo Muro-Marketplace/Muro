@@ -11,7 +11,8 @@ import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
-import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, arrangementLabel } from "@/lib/placements/status";
+import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass } from "@/lib/placements/status";
+import { labelForArrangement } from "@/lib/arrangement-labels";
 import { updatePlacementStatus } from "@/lib/placements/status-update";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
@@ -122,11 +123,13 @@ function normaliseType(
 ): string {
   // Use the shared arrangement-label helper so "Paid Loan + QR" /
   // "Revenue Share" etc. all come out of one source of truth.
-  return arrangementLabel({
-    arrangement_type: rawType,
-    monthly_fee_gbp: extras?.monthly_fee_gbp,
-    qr_enabled: extras?.qr_enabled,
-    message: extras?.message,
+  return labelForArrangement({
+    arrangementType: rawType,
+    monthlyFeeGbp: extras?.monthly_fee_gbp,
+    qrEnabled: extras?.qr_enabled,
+    // K3: `message` is gone. status.ts regexed the free-text body for
+    // "£X/month" to infer a fee when the column was null; inferring money from
+    // prose a user typed is a bug generator, so the canonical labeller does not.
   });
 }
 

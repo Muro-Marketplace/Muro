@@ -5,7 +5,6 @@ import {
   isRevenueShare,
   isPurchase,
   isLoan,
-  arrangementLabel,
 } from "./arrangement-type";
 
 describe("isPaidLoan", () => {
@@ -82,16 +81,7 @@ describe("isLoan", () => {
   });
 });
 
-describe("arrangementLabel", () => {
-  it("labels paid_loan and the legacy free_loan alias as Paid loan", () => {
-    expect(arrangementLabel("paid_loan")).toBe("Paid loan");
-    expect(arrangementLabel("free_loan")).toBe("Paid loan");
-  });
-  it("does NOT label a paid loan as Direct purchase (the N4 regression)", () => {
-    expect(arrangementLabel("paid_loan")).not.toBe("Direct purchase");
-    expect(arrangementLabel("free_loan")).not.toBe("Direct purchase");
-  });
-  it("labels purchase as Direct purchase", () => {
-    expect(arrangementLabel("purchase")).toBe("Direct purchase");
-  });
-});
+// K3: the `arrangementLabel` alias this block tested is deleted. It renamed
+// labelForArrangement to collide with a DIFFERENT function of the same name in
+// placements/status.ts, so which one a file got depended on its import line.
+// Its behaviour is covered in arrangement-labels.test.ts.

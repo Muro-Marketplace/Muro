@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { authFetch } from "@/lib/api-client";
-import { arrangementLabel } from "@/lib/placements/status";
+import { labelForArrangement } from "@/lib/arrangement-labels";
 import { artistPayoutPounds } from "@/lib/finance/order-money";
 
 const dateRanges = ["Last 7 days", "Last 30 days", "Last 3 months", "Last 12 months", "All time"];
@@ -72,11 +72,10 @@ export default function AnalyticsPage() {
             workTitle: p.work_title || "Untitled",
             workImage: (p.work_image as string) || "",
             venue: p.venue || "",
-            type: arrangementLabel({
-              arrangement_type: p.arrangement_type as string | null,
-              monthly_fee_gbp: p.monthly_fee_gbp as number | null,
-              qr_enabled: p.qr_enabled as boolean | null,
-              message: p.message as string | null,
+            type: labelForArrangement({
+              arrangementType: p.arrangement_type as string | null,
+              monthlyFeeGbp: p.monthly_fee_gbp as number | null,
+              qrEnabled: p.qr_enabled as boolean | null,
             }),
             revenueSharePercent: p.revenue_share_percent as number | undefined,
             status: (p.status || "active"),

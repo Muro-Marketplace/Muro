@@ -35,7 +35,6 @@
 export type FeatureFlag =
   | "WALL_VISUALIZER_V1"
   | "OAUTH_GOOGLE_APPLE"
-  | "PAID_LOAN_V2"
   | "GATING_V1"
   | "BLOGS_V1";
 
@@ -68,16 +67,6 @@ export const FLAGS: Record<FeatureFlag, FlagDef> = {
       "providers are enabled in the Supabase dashboard and the OAuth client " +
       "credentials (Google Cloud, Apple Developer) are configured. Flip to 1 " +
       "in Vercel once both are live.",
-  },
-  PAID_LOAN_V2: {
-    envKey: "NEXT_PUBLIC_FLAG_PAID_LOAN_V2",
-    devDefault: true,
-    prodDefault: false,
-    description:
-      "Phase 2.2: monthly Stripe subscription billing for paid_loan and " +
-      "mixed placements, plus the corrected arrangement-type read paths. " +
-      "On in dev so local QA can exercise the billing flow; off in prod " +
-      "until the Stripe webhook surface is verified end-to-end.",
   },
   GATING_V1: {
     envKey: "NEXT_PUBLIC_FLAG_GATING_V1",
@@ -122,7 +111,6 @@ export const FLAGS: Record<FeatureFlag, FlagDef> = {
 export const CLIENT_ENV: Record<string, string | undefined> = {
   NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1: process.env.NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1,
   NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE: process.env.NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE,
-  NEXT_PUBLIC_FLAG_PAID_LOAN_V2: process.env.NEXT_PUBLIC_FLAG_PAID_LOAN_V2,
   NEXT_PUBLIC_FLAG_GATING_V1: process.env.NEXT_PUBLIC_FLAG_GATING_V1,
   NEXT_PUBLIC_FLAG_BLOGS_V1: process.env.NEXT_PUBLIC_FLAG_BLOGS_V1,
 };

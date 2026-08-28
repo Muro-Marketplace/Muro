@@ -51,4 +51,7 @@ export function isLoan(type: RawArrangementType): boolean {
 }
 
 /** Human-facing label, resolving the legacy `free_loan` alias to "Paid loan". */
-export const arrangementLabel = labelForArrangement;
+// K3: there was an `export const arrangementLabel = labelForArrangement;` here.
+// An alias that renames a function to collide with a DIFFERENT function's name
+// (placements/status.ts also exported an `arrangementLabel`) is pure hazard:
+// which one you got depended on your import line. Import labelForArrangement.
