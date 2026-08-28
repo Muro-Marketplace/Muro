@@ -1,4 +1,9 @@
-// Stream: notify. Closes the loop for the artist, enables QR setup + record.
+// Stream: tx. Closes the loop for the artist, enables QR setup + record.
+//
+// R4.12 (WS5.5): was notify/placements. Acceptance forms the commercial
+// arrangement (for paid loans, a monthly liability starts here), so this now
+// rides orders_and_payouts, the critical always-send category; sendEmail()
+// enforces it via TEMPLATE_CATEGORY_OVERRIDES for older send sites too.
 
 import { EmailShell, H1, P, Button, SecondaryButton, Badge } from "@/emails/_components";
 import type { TemplateEntry } from "@/emails/registry-types";
@@ -14,7 +19,7 @@ export interface ArtistPlacementAcceptedProps {
 
 export function ArtistPlacementAccepted({ firstName, venueName, placementUrl, nextSteps, qrLabelsUrl, consignmentRecordUrl }: ArtistPlacementAcceptedProps) {
   return (
-    <EmailShell stream="notify" persona="artist" category="placements" preview={`${venueName} accepted your placement`}>
+    <EmailShell stream="tx" persona="artist" category="orders_and_payouts" preview={`${venueName} accepted your placement`}>
       <H1>
         <Badge tone="success">Accepted</Badge> <span style={{ marginLeft: 6 }}>{venueName} accepted</span>
       </H1>
@@ -52,14 +57,14 @@ const entry: TemplateEntry<ArtistPlacementAcceptedProps> = {
   id: "artist_placement_accepted",
   name: "Placement accepted (to artist)",
   description: "Fires when a venue accepts an artist-initiated request.",
-  stream: "notify",
+  stream: "tx",
   persona: "artist",
-  category: "placements",
+  category: "orders_and_payouts",
   subject: "{{venueName}} accepted your placement",
   previewText: "What to do next.",
   component: ArtistPlacementAccepted,
   mock,
-  canUnsubscribe: true,
+  canUnsubscribe: false,
   hasInAppEquivalent: true,
   priority: 1,
 };

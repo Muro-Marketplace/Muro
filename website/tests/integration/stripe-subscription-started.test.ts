@@ -493,6 +493,28 @@ describe("customer.subscription.created credits the referrer atomically", () => 
     expect(rpcMock).not.toHaveBeenCalled();
   });
 
+  it("WS3.5: the referrer is emailed when the credit lands, keyed per referred artist", async () => {
+    nextEvent.value = event("customer.subscription.created", subscription());
+    await POST(post());
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "referral_credit_granted");
+    expect(sends).toHaveLength(1);
+    expect(sends[0].to).toBe("maya@example.com");
+    // referred.id: the RPC guard credits each referred artist exactly once.
+    expect(sends[0].idempotencyKey).toBe("referral_credit:u-artist");
+  });
+
+  it("WS3.5: no grant email when the RPC says nothing was credited", async () => {
+    rpcMock.mockResolvedValueOnce({ data: [{ credited: false }], error: null });
+    nextEvent.value = event("customer.subscription.created", subscription());
+    await POST(post());
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "referral_credit_granted");
+    expect(sends).toHaveLength(0);
+  });
+
   it("still answers 200 when the credit RPC fails", async () => {
     // The subscription is recorded; a credit failure must not make Stripe
     // redeliver an event whose real work is done.

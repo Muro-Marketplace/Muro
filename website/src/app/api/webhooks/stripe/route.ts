@@ -10,6 +10,7 @@ import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
 import { resolveArtistNamesBulk } from "@/emails/_helpers/resolve-artist-name";
 import { ArtistPayoutSent } from "@/emails/templates/payments/ArtistPayoutSent";
+import { ReferralCreditGranted } from "@/emails/templates/payments/ReferralCreditGranted";
 import { ArtistPayoutFailed } from "@/emails/templates/payments/ArtistPayoutFailed";
 import { SubscriptionPaymentFailed } from "@/emails/templates/payments/SubscriptionPaymentFailed";
 import { SubscriptionTrialEnding } from "@/emails/templates/payments/SubscriptionTrialEnding";
@@ -1509,9 +1510,9 @@ async function handleWebhookEvent(
       try {
         const { data: referred } = await db
           .from("artist_profiles")
-          .select("id")
+          .select("id, name")
           .eq("stripe_customer_id", customerId)
-          .maybeSingle<{ id: string }>();
+          .maybeSingle<{ id: string; name: string | null }>();
         if (referred) {
           const { data: credit, error: creditErr } = await db.rpc("extend_free_until", {
             p_referred_id: referred.id,
@@ -1527,6 +1528,56 @@ async function handleWebhookEvent(
                 referrerId: row.referrer_id,
                 freeUntil: row.new_free_until,
               });
+              // WS3.5 (audit R7 row 14): the credit is a real money event
+              // (the referrer's fee drops to 0% until free_until) and was
+              // recorded with this console.log alone. Tell the referrer.
+              // Keyed on the referred artist: the RPC's guard means each
+              // referred artist credits exactly once, ever.
+              try {
+                const { data: referrer } = await db
+                  .from("artist_profiles")
+                  .select("user_id, name")
+                  .eq("id", row.referrer_id)
+                  .maybeSingle<{ user_id: string | null; name: string | null }>();
+                if (referrer?.user_id) {
+                  const freeUntilDate = row.new_free_until
+                    ? new Date(row.new_free_until).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })
+                    : "";
+                  createNotification({
+                    userId: referrer.user_id,
+                    kind: "referral_credited",
+                    title: "You earned 30 fee-free days",
+                    body: `${referred.name || "An artist you referred"} started a paid plan. Your platform fee is 0% until ${freeUntilDate}.`,
+                    link: "/artist-portal/billing",
+                    idempotencyKey: `referral_credited:${referred.id}`,
+                  }).catch((err) => console.warn("[webhook] referral bell failed:", err));
+                  const { data: { user: referrerUser } } = await db.auth.admin.getUserById(referrer.user_id);
+                  if (referrerUser?.email) {
+                    await sendEmail({
+                      idempotencyKey: `referral_credit:${referred.id}`,
+                      template: "referral_credit_granted",
+                      category: "orders_and_payouts",
+                      to: referrerUser.email,
+                      userId: referrer.user_id,
+                      subject: "You earned 30 fee-free days on Wallplace",
+                      react: ReferralCreditGranted({
+                        firstName: (referrer.name || "there").split(" ")[0],
+                        referredArtistName: referred.name || "An artist you referred",
+                        freeUntilDate,
+                        billingUrl: `${SITE}/artist-portal/billing`,
+                        supportUrl: `${SITE}/support`,
+                      }),
+                      metadata: { referredId: referred.id, referrerId: row.referrer_id },
+                    });
+                  }
+                }
+              } catch (referralNotifyErr) {
+                console.error("[webhook] referral grant comms failed:", referralNotifyErr);
+              }
             }
           }
         }
