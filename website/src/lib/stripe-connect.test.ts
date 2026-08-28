@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { transfersCreate, fromMock, notifyAdminPayoutExhaustedMock } = vi.hoisted(() => ({
+const { transfersCreate, fromMock, sendAdminAlertMock } = vi.hoisted(() => ({
   transfersCreate: vi.fn(),
   fromMock: vi.fn(),
-  notifyAdminPayoutExhaustedMock: vi.fn(async () => {}),
+  sendAdminAlertMock: vi.fn(async () => ({ ok: true, skipped: false, messageId: "m" })),
 }));
 
 vi.mock("@/lib/stripe", () => ({
@@ -14,9 +14,11 @@ vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ from: fromMock }),
 }));
 
-// alertExhaustedPayout lazily imports @/lib/email (C4).
-vi.mock("@/lib/email", () => ({
-  notifyAdminPayoutExhausted: notifyAdminPayoutExhaustedMock,
+// alertExhaustedPayout lazily imports the alert helper so the transfer module
+// does not pull the email stack into every caller (C4). K1: that used to be the
+// legacy @/lib/email; it is the one pipeline now.
+vi.mock("@/lib/email/admin-alert", () => ({
+  sendAdminAlert: sendAdminAlertMock,
 }));
 
 import { executeTransfer, scheduleTransfer, recordBlockedLeg, processPendingTransfers, reconcileOrdersWithoutLegs } from "./stripe-connect";
@@ -185,7 +187,7 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
     transfer: "success" | Error;
   }) {
     capturedUpdates = [];
-    notifyAdminPayoutExhaustedMock.mockClear();
+    sendAdminAlertMock.mockClear();
     transfersCreate.mockReset();
     transfersCreate.mockImplementation(async () => {
       if (opts.transfer instanceof Error) throw opts.transfer;
@@ -233,7 +235,7 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
     expect(update).toMatchObject({ status: "failed", retry_count: 3 });
     expect(update?.next_attempt_at).toBeTruthy();
     expect(String(update?.last_error)).toContain("stripe rate limit");
-    expect(notifyAdminPayoutExhaustedMock).not.toHaveBeenCalled();
+    expect(sendAdminAlertMock).not.toHaveBeenCalled();
   });
 
   it("exhausts at MAX_RETRIES and alerts an operator", async () => {
@@ -242,9 +244,19 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
     expect(res.exhausted).toBe(1);
     expect(res.retried).toBe(0);
     expect(capturedUpdates.find((u) => u.status === "failed")).toMatchObject({ retry_count: 6 });
-    expect(notifyAdminPayoutExhaustedMock).toHaveBeenCalledWith(
-      expect.objectContaining({ transferId: "st_1", orderId: "o1", recipientUserId: "u1" }),
-    );
+    // K1: the alert is one generic admin template now, so the identifiers live
+    // in `fields` rather than in named props. Assert they are all still there,
+    // because an alert that omits the transfer or the order is not actionable.
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    const alert = sendAdminAlertMock.mock.calls[0][0] as {
+      idempotencyKey: string;
+      fields: { label: string; value: string }[];
+    };
+    expect(alert.idempotencyKey).toContain("st_1");
+    const values = alert.fields.map((f) => f.value).join(" | ");
+    expect(values).toContain("o1");
+    expect(values).toContain("st_1");
+    expect(values).toContain("u1");
   });
 
   it("cancels a due transfer whose order was cancelled, without calling Stripe", async () => {

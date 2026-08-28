@@ -3,7 +3,9 @@ import { z } from "zod";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { notifyAdminCurationRequest, notifyCurationCustomerEnquiry } from "@/lib/email";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { sendEmail } from "@/lib/email/send";
+import { CurationEnquiryReceived } from "@/emails/templates/venue-lifecycle/CurationEnquiryReceived";
 import {
   CURATION_TIERS as TIERS,
   CURATION_TIER_KEYS,
@@ -158,25 +160,44 @@ export async function POST(request: Request) {
   }
 
   // Notify admin (awaited so it runs on serverless; .catch keeps mail failure non-fatal)
-  await notifyAdminCurationRequest({
-    requestId: row.id,
-    tier: tier.label,
-    payFirst: isPayFirst || isManaged,
-    priceGbp: tier.priceGbp,
-    venueName: d.venueName,
-    contactName: d.contactName,
-    contactEmail: d.contactEmail,
-    location: d.location,
-  }).catch((err) => { if (err) console.error("notifyAdminCurationRequest error:", err); });
+  // K1: was notifyAdminCurationRequest in the legacy module. Keyed on the
+  // request id, so a retried submit cannot double-alert.
+  await sendAdminAlert({
+    idempotencyKey: `admin_curation_request:${row.id}`,
+    subject: `Curation request: ${d.venueName} (${tier.label})`,
+    summary: `${d.venueName} requested curation.`,
+    fields: [
+      { label: "Contact", value: `${d.contactName} <${d.contactEmail}>` },
+      { label: "Tier", value: tier.label },
+      ...(d.location ? [{ label: "Location", value: d.location }] : []),
+      {
+        label: "Flow",
+        value: (isPayFirst || isManaged)
+          ? `Pay-first checkout (£${tier.priceGbp}), awaiting completion`
+          : `Bespoke enquiry (from £${tier.priceGbp}), please send a quote`,
+      },
+    ],
+    actionPath: "/admin/curation",
+    actionLabel: "View in admin",
+  });
 
   // Bespoke tier: no upfront payment.
   if (tier.kind === "one_off" && !tier.payFirst) {
-    await notifyCurationCustomerEnquiry({
-      email: d.contactEmail,
-      contactName: d.contactName,
-      venueName: d.venueName,
-      tierLabel: tier.label,
-    }).catch((err) => { if (err) console.error("notifyCurationCustomerEnquiry error:", err); });
+    // K1: was notifyCurationCustomerEnquiry in the legacy module.
+    await sendEmail({
+      idempotencyKey: `curation_enquiry_received:${row.id}`,
+      template: "curation_enquiry_received",
+      category: "orders_and_payouts",
+      to: d.contactEmail,
+      subject: "Your Wallplace curation enquiry",
+      react: CurationEnquiryReceived({
+        contactFirstName: (d.contactName || "there").split(" ")[0],
+        venueName: d.venueName,
+        tierLabel: tier.label,
+        responseDays: 2,
+      }),
+      metadata: { curationRequestId: row.id, tier: tier.label },
+    });
     return NextResponse.json({ mode: "enquiry", id: row.id });
   }
 

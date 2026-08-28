@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { contactSchema } from "@/lib/validations";
-import { notifyAdminNewContact } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
 
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, 5, 60000);
@@ -33,7 +33,17 @@ export async function POST(request: Request) {
       );
     }
 
-    await notifyAdminNewContact({ name, email, type, message }).catch((err) => { if (err) console.error("notifyAdminNewContact error:", err); });
+    // K1: was notifyAdminNewContact in the legacy module.
+    await sendAdminAlert({
+      idempotencyKey: `admin_new_contact:${email.toLowerCase()}:${type}:${message.slice(0, 64)}`,
+      subject: `New contact form submission from ${name}`,
+      summary: `${name} sent a message through the contact form.`,
+      fields: [
+        { label: "Email", value: email },
+        { label: "Type", value: type },
+        { label: "Message", value: message },
+      ],
+    });
 
     return NextResponse.json({ success: true });
   } catch {

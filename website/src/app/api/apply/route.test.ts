@@ -74,10 +74,12 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn(async () => null),
 }));
 
-vi.mock("@/lib/email", () => ({
-  notifyAdminNewApplication: (...args: unknown[]) => {
+// K1: was a mock of the legacy `@/lib/email`. The admin ping goes through the
+// one pipeline now, via sendAdminAlert.
+vi.mock("@/lib/email/admin-alert", () => ({
+  sendAdminAlert: (...args: unknown[]) => {
     notifyAdminMock(...args);
-    return Promise.resolve();
+    return Promise.resolve({ ok: true, skipped: false, messageId: "m" });
   },
 }));
 

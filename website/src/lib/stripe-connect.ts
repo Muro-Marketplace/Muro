@@ -279,14 +279,25 @@ async function alertExhaustedPayout(
   lastError: string,
 ): Promise<void> {
   try {
-    const { notifyAdminPayoutExhausted } = await import("@/lib/email");
-    await notifyAdminPayoutExhausted({
-      transferId: record.id,
-      orderId: record.order_id,
-      recipientType: record.recipient_type,
-      recipientUserId: record.recipient_user_id,
-      amountCents: record.amount_cents,
-      lastError,
+    // K1: was notifyAdminPayoutExhausted in the legacy module. Still a dynamic
+    // import so the transfer module does not pull the email stack into every
+    // caller. Keyed on the transfer id, so a re-run of the sweep over the same
+    // exhausted record does not re-alert.
+    const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+    await sendAdminAlert({
+      idempotencyKey: `admin_payout_exhausted:${record.id}`,
+      subject: `Payout exhausted its retries: ${record.order_id}`,
+      summary:
+        "A Stripe Connect transfer failed on every attempt and will not be retried again. It needs a person.",
+      fields: [
+        { label: "Order", value: record.order_id },
+        { label: "Transfer", value: record.id },
+        { label: "Recipient", value: `${record.recipient_type} ${record.recipient_user_id}` },
+        { label: "Amount", value: `£${(record.amount_cents / 100).toFixed(2)}` },
+        { label: "Last error", value: lastError },
+      ],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
     });
   } catch (err) {
     console.error("[stripe-connect] exhausted-payout alert failed:", err);

@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { applySchema } from "@/lib/validations";
-import { notifyAdminNewApplication } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistApplicationSubmitted } from "@/emails/templates/artist-additions/ArtistApplicationSubmitted";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { afterResponse } from "@/lib/after-response";
 import { slugify } from "@/lib/slugify";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -231,7 +231,21 @@ export async function POST(request: Request) {
         // Admin ping, keep the legacy helper, it's internal only.
         // primaryMedium is optional now; fall back to a placeholder so
         // the admin notification helper's required-string contract holds.
-        await notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium || "-" }).catch((err) => { if (err) console.error("notifyAdminNewApplication error:", err); });
+        // K1: was notifyAdminNewApplication in the legacy module. Through the
+        // pipeline it gets an email_events row and an idempotency key, so a
+        // retried submission no longer pings the admin twice.
+        await sendAdminAlert({
+          idempotencyKey: `admin_new_application:${d.email.toLowerCase()}`,
+          subject: `New artist application: ${d.name}`,
+          summary: `${d.name} has applied to join Wallplace.`,
+          fields: [
+            { label: "Email", value: d.email },
+            { label: "Location", value: d.location },
+            { label: "Medium", value: d.primaryMedium || "-" },
+          ],
+          actionPath: "/admin",
+          actionLabel: "Review in the admin dashboard",
+        });
 
         // Applicant receipt via the new pipeline (polished template, logged,
         // preference-aware). We key idempotency off the email address so a

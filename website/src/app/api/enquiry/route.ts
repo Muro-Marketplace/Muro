@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { enquirySchema } from "@/lib/validations";
-import { notifyAdminNewEnquiry, notifyNewMessage } from "@/lib/email";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { sendEmail } from "@/lib/email/send";
+import { MessageUnreadNotification } from "@/emails/templates/messages/MessageUnreadNotification";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -34,7 +38,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
     }
 
-    await notifyAdminNewEnquiry({ senderName, senderEmail, artistSlug, enquiryType, message }).catch((err) => { if (err) console.error("notifyAdminNewEnquiry error:", err); });
+    // K1: was notifyAdminNewEnquiry in the legacy module.
+    await sendAdminAlert({
+      idempotencyKey: `admin_new_enquiry:${senderEmail.toLowerCase()}:${artistSlug}:${message.slice(0, 64)}`,
+      subject: `New enquiry for ${artistSlug}`,
+      summary: `${senderName} sent an enquiry through the public artist page.`,
+      fields: [
+        { label: "From", value: `${senderName} <${senderEmail}>` },
+        { label: "Artist", value: artistSlug },
+        { label: "Type", value: enquiryType },
+        { label: "Message", value: message },
+      ],
+    });
 
     // Also create a message in the messaging system so it appears in the artist's inbox
     const db = getSupabaseAdmin();
@@ -62,12 +77,26 @@ export async function POST(request: Request) {
     if (artistProfile?.user_id) {
       const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistProfile.user_id);
       if (artistUser?.email) {
-        await notifyNewMessage({
-          email: artistUser.email,
-          name: artistProfile.name,
-          senderName,
-          messagePreview: message,
-        }).catch((err) => { if (err) console.error("notifyNewMessage error:", err); });
+        // K1: was notifyNewMessage in the legacy module, which sent from an
+        // unverified domain with no unsubscribe header, no preference check and
+        // no record that it was attempted. MessageUnreadNotification is the
+        // template that already existed for exactly this email.
+        await sendEmail({
+          idempotencyKey: `enquiry_message:${cid}`,
+          template: "message_unread_notification",
+          category: "messages",
+          to: artistUser.email,
+          userId: artistProfile.user_id,
+          subject: `New message from ${senderName} on Wallplace`,
+          react: MessageUnreadNotification({
+            firstName: (artistProfile.name || "there").split(" ")[0],
+            senderName,
+            messagePreview: message,
+            conversationUrl: `${SITE}/artist-portal/messages?c=${encodeURIComponent(cid)}`,
+            muteMessagesUrl: `${SITE}/account/email`,
+          }),
+          metadata: { artistSlug, conversationId: cid },
+        });
       }
     }
 

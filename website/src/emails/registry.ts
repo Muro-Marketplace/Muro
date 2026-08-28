@@ -57,6 +57,11 @@ import PlacementConsignmentRecordCreated from "./templates/placements/PlacementC
 import PlacementContractCountersigned from "./templates/placements/PlacementContractCountersigned";
 
 // ── Messages ──────────────────────────────────────────────────────────────
+// ── Admin (internal) ──────────────────────────────────────────────────────
+// K1: one template for every operational alert to the Wallplace team, replacing
+// eight near-identical hand-written HTML notifiers in the deleted lib/email.ts.
+import AdminAlert from "./templates/admin/AdminAlert";
+
 import MessageUnreadNotification from "./templates/messages/MessageUnreadNotification";
 import MessageHourlyDigest from "./templates/messages/MessageHourlyDigest";
 import ReviewPostedNotification from "./templates/messages/ReviewPostedNotification";
@@ -80,6 +85,10 @@ import VenueRotationReminder from "./templates/venue-lifecycle/VenueRotationRemi
 import VenuePlacementAnniversary from "./templates/venue-lifecycle/VenuePlacementAnniversary";
 import VenueManagedCurationPitch from "./templates/venue-lifecycle/VenueManagedCurationPitch";
 import VenueRegistrationConfirmation from "./templates/venue-lifecycle/VenueRegistrationConfirmation";
+// K1: the two curation customer emails, replacing hand-written HTML in the
+// deleted lib/email.ts.
+import CurationEnquiryReceived from "./templates/venue-lifecycle/CurationEnquiryReceived";
+import CurationPaymentReceived from "./templates/venue-lifecycle/CurationPaymentReceived";
 
 // ── Orders ────────────────────────────────────────────────────────────────
 import CustomerOrderReceipt from "./templates/orders/CustomerOrderReceipt";
@@ -166,6 +175,9 @@ import OperationalAccountRestored from "./templates/legal/OperationalAccountRest
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
+  AdminAlert,
+  CurationEnquiryReceived,
+  CurationPaymentReceived,
   // Account
   AccountEmailVerification,
   AccountPasswordReset,

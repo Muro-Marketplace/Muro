@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { registerVenueSchema } from "@/lib/validations";
-import { notifyAdminNewVenue } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { afterResponse } from "@/lib/after-response";
 import { sendEmail } from "@/lib/email/send";
 import { VenueRegistrationConfirmation } from "@/emails/templates/venue-lifecycle/VenueRegistrationConfirmation";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
 
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, 5, 60000);
@@ -76,13 +76,17 @@ export async function POST(request: Request) {
     // status codes would still have leaked through latency.
     if (!alreadyRegistered) {
       afterResponse(async () => {
-        await notifyAdminNewVenue({
-          name: d.venueName,
-          contactName: d.contactName,
-          email: d.email,
-          type: d.venueType,
-          location: `${d.city}, ${d.postcode}`,
-        }).catch((err) => { if (err) console.error("notifyAdminNewVenue error:", err); });
+        // K1: was notifyAdminNewVenue in the legacy module.
+        await sendAdminAlert({
+          idempotencyKey: `admin_new_venue:${d.email.toLowerCase()}`,
+          subject: `New venue registration: ${d.venueName}`,
+          summary: `${d.venueName} registered through the public form.`,
+          fields: [
+            { label: "Contact", value: `${d.contactName} <${d.email}>` },
+            { label: "Type", value: d.venueType },
+            { label: "Location", value: `${d.city}, ${d.postcode}` },
+          ],
+        });
 
         await sendEmail({
           idempotencyKey: `venue_registration_confirmation:${d.email.toLowerCase()}`,

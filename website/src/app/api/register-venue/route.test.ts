@@ -28,7 +28,8 @@ const { anonFrom, insertMock, adminMock, notifyMock, sendEmailMock, rateLimitMoc
 
 vi.mock("@/lib/supabase", () => ({ supabase: { from: anonFrom } }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: adminMock }));
-vi.mock("@/lib/email", () => ({ notifyAdminNewVenue: notifyMock }));
+// K1: the admin ping goes through the one pipeline now.
+vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: notifyMock }));
 vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: rateLimitMock }));
 vi.mock("@/emails/templates/venue-lifecycle/VenueRegistrationConfirmation", () => ({
@@ -75,7 +76,7 @@ beforeEach(() => {
   rateLimitMock.mockResolvedValue(null);
   insertMock.mockResolvedValue({ error: null });
   anonFrom.mockReturnValue({ insert: insertMock });
-  notifyMock.mockResolvedValue(undefined);
+  notifyMock.mockResolvedValue({ ok: true, skipped: false, messageId: "m" });
   sendEmailMock.mockResolvedValue(undefined);
   adminMock.mockImplementation(() => {
     throw new Error("register-venue must not touch the service-role client");
