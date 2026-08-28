@@ -1193,8 +1193,12 @@ export async function PATCH(request: Request) {
             }).catch(() => {});
 
             // Email the counterparty (the new recipient of the request).
-            // Idempotency includes the updated_at so serial counters on
-            // the same row each send their own email.
+            // R4.14: this was keyed on Date.now(), which is not an idempotency
+            // key (a platform retry or double-submit double-sent), while the
+            // comment here claimed updated_at. The key is now derived from the
+            // recipient plus the countered terms: a retried identical request
+            // dedupes, and a genuine follow-up counter (different terms, or
+            // the other party countering back) gets its own key.
             try {
               const { data: { user: counterpartyUser } } = await db.auth.admin.getUserById(counterpartyUserId);
               if (counterpartyUser?.email) {
@@ -1212,7 +1216,7 @@ export async function PATCH(request: Request) {
                 if (counterShare !== undefined) changedTerms.push(`Revenue share: ${counterShare}%`);
                 if (counter.qrEnabled !== undefined) changedTerms.push(counter.qrEnabled ? "QR enabled" : "QR disabled");
                 await sendEmail({
-                  idempotencyKey: `placement_counter:${id}:${Date.now()}`,
+                  idempotencyKey: `placement_counter:${id}:to:${counterpartyUserId}:${derivedArrangement ?? counter.arrangementType ?? "-"}:${counter.monthlyFeeGbp ?? "-"}:${counterShare ?? "-"}:${counter.qrEnabled ?? "-"}`,
                   template: "placement_counter_offer_received",
                   category: "placements",
                   to: counterpartyUser.email,

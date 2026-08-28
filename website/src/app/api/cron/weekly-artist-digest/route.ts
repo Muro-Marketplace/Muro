@@ -2,11 +2,10 @@
 // week's activity, and sends the polished weekly digest.
 // Skips any artist with <3 notable events (no "you had a quiet week" emails).
 
-import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistWeeklyPortfolioDigest } from "@/emails/templates/performance/ArtistWeeklyPortfolioDigest";
-import { requireCronAuth, runBatch } from "../_auth";
+import { requireCronAuth, runBatch, finishCronRun } from "../_auth";
 
 export const dynamic = "force-dynamic";
 
@@ -77,5 +76,6 @@ export async function GET(request: Request) {
     });
   });
 
-  return NextResponse.json({ ok: true, ...result });
+  // WS6.5: all-failed runs 500 and alert admin; partial failure stays 200.
+  return finishCronRun("weekly-artist-digest", result, { ...result });
 }

@@ -15,20 +15,25 @@
 // These assert on whether the WRITE happened as much as on the status code: the
 // security property is that no update reaches placements.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 
-const { authMock, fromMock, isFlagOnMock, cancelBillingMock } = vi.hoisted(() => ({
+const { authMock, fromMock, isFlagOnMock, cancelBillingMock, getUserByIdMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
   fromMock: vi.fn(),
   isFlagOnMock: vi.fn(() => false),
   cancelBillingMock: vi.fn(async () => ({ status: "cancelled" as const })),
+  // Defaults to no user, which short-circuits every email branch; the R4.14
+  // counter-key tests point it at a real counterparty.
+  getUserByIdMock: vi.fn(async () => ({
+    data: { user: null as { email?: string; user_metadata?: Record<string, unknown> } | null },
+  })),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
     from: fromMock,
-    auth: { admin: { getUserById: async () => ({ data: { user: null } }) } },
+    auth: { admin: { getUserById: getUserByIdMock } },
   }),
 }));
 vi.mock("@/lib/feature-flags", () => ({ isFlagOn: isFlagOnMock }));
@@ -65,6 +70,8 @@ vi.mock("@/emails/templates/placements/PlacementArtworkInstalled", () => ({ Plac
 vi.mock("@/emails/templates/placements/PlacementEnded", () => ({ PlacementEnded: () => null }));
 
 import { PATCH } from "./route";
+// Mocked above; imported so the R4.14 tests can assert on the calls.
+import { sendEmail } from "@/lib/email/send";
 
 type Row = {
   artist_user_id: string | null;
@@ -74,6 +81,10 @@ type Row = {
   venue: string | null;
   status: string;
   proposed_by_user_id?: string | null;
+  // Current terms the counter path merges under a partial counter (F32).
+  monthly_fee_gbp?: number | null;
+  qr_enabled?: boolean | null;
+  revenue_share_percent?: number | null;
 };
 
 const updates: Record<string, unknown>[] = [];
@@ -81,9 +92,28 @@ const updates: Record<string, unknown>[] = [];
 /** Rows the message-trail requester lookup should see. */
 type TrailMsg = { sender_id: string | null; metadata: Record<string, unknown> | null };
 
-function setupDb(row: Row | null, trail: TrailMsg[] = []) {
+/** Profile rows for the counter auto-message branch (R4.14 tests). */
+type ProfileStub = { slug: string; name: string };
+
+function setupDb(
+  row: Row | null,
+  trail: TrailMsg[] = [],
+  profiles: { artist?: ProfileStub; venue?: ProfileStub } = {},
+) {
   updates.length = 0;
   fromMock.mockImplementation((table: string) => {
+    if (table === "artist_profiles" && profiles.artist) {
+      const profile = profiles.artist;
+      return {
+        select: () => ({ eq: () => ({ single: async () => ({ data: profile, error: null }) }) }),
+      };
+    }
+    if (table === "venue_profiles" && profiles.venue) {
+      const profile = profiles.venue;
+      return {
+        select: () => ({ eq: () => ({ single: async () => ({ data: profile, error: null }) }) }),
+      };
+    }
     if (table === "placements") {
       return {
         select: () => ({
@@ -95,7 +125,16 @@ function setupDb(row: Row | null, trail: TrailMsg[] = []) {
         }),
         update: (payload: Record<string, unknown>) => {
           updates.push(payload);
-          return { eq: async () => ({ error: null }) };
+          // Awaitable at .eq() for the plain paths, and .select()-able for
+          // the counter terms write, which confirms a row actually changed.
+          const afterEq = {
+            select: async () => ({ data: [{ id: "pl-1" }], error: null }),
+            then: (
+              onFulfilled: (v: { error: null }) => unknown,
+              onRejected?: (e: unknown) => unknown,
+            ) => Promise.resolve({ error: null }).then(onFulfilled, onRejected),
+          };
+          return { eq: () => afterEq };
         },
       };
     }
@@ -107,6 +146,10 @@ function setupDb(row: Row | null, trail: TrailMsg[] = []) {
         select: () => ({
           eq: () => ({
             order: () => ({ limit: async () => ({ data: trail, error: null }) }),
+          }),
+          // The counter auto-message thread lookup: .or(...).order().limit().maybeSingle()
+          or: () => ({
+            order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
           }),
         }),
         insert: async () => ({ error: null }),
@@ -156,6 +199,8 @@ beforeEach(() => {
   isFlagOnMock.mockReturnValue(false);
   authMock.mockResolvedValue({ user: { id: ARTIST, email: "a@example.com" }, error: null });
   cancelBillingMock.mockClear();
+  getUserByIdMock.mockReset();
+  getUserByIdMock.mockResolvedValue({ data: { user: null } });
 });
 
 describe("PATCH /api/placements state machine (E20)", () => {
@@ -544,5 +589,164 @@ describe("PATCH /api/placements in-store offer (121)", () => {
     authMock.mockResolvedValue({ user: { id: "u-artist", email: "a@example.com" }, error: null });
     const res = await patch({ id: "p1", inStorePrice: 0 });
     expect(res.status).toBe(400);
+  });
+});
+
+// F32 + D26 (WS8 item 2). The counter path stored the client's arrangementType
+// verbatim, so a counter claiming "paid_loan" while enabling QR (the dialog's
+// old mapping) or the legacy "free_loan" for a paid loan (the panel's old
+// mapping) wrote a label that disagreed with the economics. The share also
+// passed through unclamped up to the schema's 100 while every UI caps at 50.
+describe("PATCH /api/placements counter derives arrangement_type + clamps share (F32/D26)", () => {
+  // The venue proposed; the artist (the authenticated default) counters.
+  const PENDING: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "pending",
+    proposed_by_user_id: VENUE,
+    monthly_fee_gbp: null,
+    qr_enabled: true,
+    revenue_share_percent: 10,
+  };
+
+  it("derives mixed for a paid-loan counter with QR on, whatever the client claims", async () => {
+    setupDb({ ...PENDING });
+    const res = await patch({
+      id: "pl-1",
+      counter: { arrangementType: "paid_loan", monthlyFeeGbp: 80, qrEnabled: true, revenueSharePercent: 15 },
+    });
+    expect(res.status).toBe(200);
+    expect(updates[0]).toMatchObject({
+      arrangement_type: "mixed",
+      monthly_fee_gbp: 80,
+      qr_enabled: true,
+      revenue_share_percent: 15,
+    });
+  });
+
+  it("derives paid_loan from the legacy free_loan claim when a fee is attached and QR is off", async () => {
+    // The context panel used to send "free_loan" for paid loans (F27).
+    setupDb({ ...PENDING });
+    const res = await patch({
+      id: "pl-1",
+      counter: { arrangementType: "free_loan", monthlyFeeGbp: 60, qrEnabled: false },
+    });
+    expect(res.status).toBe(200);
+    expect(updates[0]).toMatchObject({ arrangement_type: "paid_loan", monthly_fee_gbp: 60 });
+  });
+
+  it("clamps revenueSharePercent to the product's 50 cap before writing", async () => {
+    setupDb({ ...PENDING });
+    const res = await patch({
+      id: "pl-1",
+      counter: { arrangementType: "revenue_share", qrEnabled: true, revenueSharePercent: 100 },
+    });
+    expect(res.status).toBe(200);
+    expect(updates[0]).toMatchObject({ revenue_share_percent: 50, arrangement_type: "revenue_share" });
+  });
+
+  it("merges a partial counter over the row's current terms before deriving", async () => {
+    // The row already carries a monthly fee; the counter only flips QR on.
+    // Fee (kept) + QR (new) is canonically mixed.
+    setupDb({ ...PENDING, monthly_fee_gbp: 45, qr_enabled: false, revenue_share_percent: null });
+    const res = await patch({ id: "pl-1", counter: { qrEnabled: true } });
+    expect(res.status).toBe(200);
+    expect(updates[0]).toMatchObject({ arrangement_type: "mixed", qr_enabled: true });
+    // The fee itself was not part of the counter, so it is not rewritten.
+    expect(updates[0]).not.toHaveProperty("monthly_fee_gbp");
+  });
+
+  it("still refuses the requester countering their own pending request", async () => {
+    setupDb({ ...PENDING, proposed_by_user_id: ARTIST });
+    const res = await patch({ id: "pl-1", counter: { qrEnabled: false } });
+    expect(res.status).toBe(400);
+    expect(updates).toHaveLength(0);
+  });
+});
+
+// R4.14 (WS5.5). The counter-offer email was keyed on Date.now(), which is not
+// an idempotency key: a platform retry or a double-submit of the same counter
+// sent the email twice. notifications.ts's own docstring names this exact
+// anti-pattern. The key is now derived from the recipient plus the countered
+// terms, so a retried identical request dedupes while a genuinely new counter
+// still sends.
+describe("PATCH /api/placements counter-offer email idempotency key (R4.14)", () => {
+  const PENDING: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "pending",
+    proposed_by_user_id: VENUE,
+    monthly_fee_gbp: null,
+    qr_enabled: true,
+    revenue_share_percent: 10,
+  };
+
+  const PROFILES = {
+    artist: { slug: "alice", name: "Alice" },
+    venue: { slug: "kings-arms", name: "Kings Arms" },
+  };
+
+  const sendEmailSpy = vi.mocked(sendEmail);
+
+  beforeEach(() => {
+    sendEmailSpy.mockClear();
+    getUserByIdMock.mockResolvedValue({
+      data: { user: { email: "venue@example.com", user_metadata: {} } },
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const COUNTER = {
+    id: "pl-1",
+    counter: { arrangementType: "paid_loan", monthlyFeeGbp: 80, qrEnabled: false },
+  };
+
+  it("keys the email deterministically, so a retried request dedupes", async () => {
+    // Fake only Date: with the old Date.now() key, two attempts seconds apart
+    // produced two distinct keys and therefore two emails (fail-before).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-29T10:00:00.000Z"));
+
+    setupDb({ ...PENDING }, [], PROFILES);
+    expect((await patch(COUNTER)).status).toBe(200);
+
+    vi.setSystemTime(new Date("2026-08-29T10:00:05.000Z"));
+    setupDb({ ...PENDING }, [], PROFILES);
+    expect((await patch(COUNTER)).status).toBe(200);
+
+    expect(sendEmailSpy).toHaveBeenCalledTimes(2);
+    const keys = sendEmailSpy.mock.calls.map(
+      (c) => (c[0] as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(keys[0]).toBe(keys[1]);
+    // Scoped to the recipient, so A countering B and B countering back with
+    // identical terms do not collide.
+    expect(keys[0]).toContain(`:to:${VENUE}:`);
+    expect(keys[0]).toMatch(/^placement_counter:pl-1:/);
+  });
+
+  it("gives a counter with different terms its own key", async () => {
+    setupDb({ ...PENDING }, [], PROFILES);
+    expect((await patch(COUNTER)).status).toBe(200);
+
+    setupDb({ ...PENDING }, [], PROFILES);
+    expect(
+      (await patch({ id: "pl-1", counter: { ...COUNTER.counter, monthlyFeeGbp: 95 } })).status,
+    ).toBe(200);
+
+    expect(sendEmailSpy).toHaveBeenCalledTimes(2);
+    const keys = sendEmailSpy.mock.calls.map(
+      (c) => (c[0] as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(keys[0]).not.toBe(keys[1]);
   });
 });

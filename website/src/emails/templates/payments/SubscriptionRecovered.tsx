@@ -24,7 +24,7 @@ export function SubscriptionRecovered({
 }: SubscriptionRecoveredProps) {
   return (
     <EmailShell stream="tx" persona="artist" preview="Payment received; your portfolio is live again">
-      <H1>You're back, {firstName}</H1>
+      <H1>You&rsquo;re back, {firstName}</H1>
       <P>
         Your payment went through and your {planName} subscription is active again. Your
         portfolio is back in the public marketplace and buyers can find your work as normal.

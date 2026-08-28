@@ -1,10 +1,9 @@
 // Vercel Cron, Wednesday 09:00 UTC.
 
-import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email/send";
 import { VenueWeeklyDigest } from "@/emails/templates/venue-lifecycle/VenueWeeklyDigest";
-import { requireCronAuth, runBatch } from "../_auth";
+import { requireCronAuth, runBatch, finishCronRun } from "../_auth";
 
 export const dynamic = "force-dynamic";
 
@@ -71,5 +70,6 @@ export async function GET(request: Request) {
     });
   });
 
-  return NextResponse.json({ ok: true, ...result });
+  // WS6.5: all-failed runs 500 and alert admin; partial failure stays 200.
+  return finishCronRun("weekly-venue-digest", result, { ...result });
 }

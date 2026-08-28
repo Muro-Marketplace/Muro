@@ -7,7 +7,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { sendAdminAlertMock } = vi.hoisted(() => ({
-  sendAdminAlertMock: vi.fn(async () => ({ ok: true as const, skipped: false as const, messageId: "m-1" })),
+  // The unused-args signature keeps `mock.calls[0][0]` typed (the assertions
+  // below read the alert payload); a zero-arg vi.fn() types calls as [] and
+  // the payload reads stop compiling.
+  sendAdminAlertMock: vi.fn(async (..._args: unknown[]) => ({ ok: true as const, skipped: false as const, messageId: "m-1" })),
 }));
 
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: sendAdminAlertMock }));

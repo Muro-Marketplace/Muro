@@ -37,16 +37,20 @@ function phantomIn(cols: string, known: Set<string>): string | null {
 
 // Artist party on the placement, so the authz check passes. venue_user_id is null so
 // the venue_profiles branch short-circuits and needs no mock.
-const PLACEMENT = { id: "pl1", artist_user_id: "u-artist", venue_user_id: null, requester_user_id: null };
+const PLACEMENT = { id: "pl1", artist_user_id: "u-artist", venue_user_id: null, proposed_by_user_id: null };
 
 function ctx(id = "pl1") {
   return { params: Promise.resolve({ id }) };
 }
 
-function setupDb(artistRow: Record<string, unknown> | null) {
+/** Every jsonb filter the messages lookup applied, so F29's scoping is assertable. */
+const messageContains: Array<Record<string, unknown>> = [];
+
+function setupDb(artistRow: Record<string, unknown> | null, placement: Record<string, unknown> = PLACEMENT) {
+  messageContains.length = 0;
   fromMock.mockImplementation((table: string) => {
     if (table === "placements") {
-      return { select: () => ({ eq: () => ({ single: async () => ({ data: PLACEMENT, error: null }) }) }) };
+      return { select: () => ({ eq: () => ({ single: async () => ({ data: placement, error: null }) }) }) };
     }
     if (table === "orders") {
       return { select: () => ({ eq: async () => ({ data: [] }) }) };
@@ -74,7 +78,21 @@ function setupDb(artistRow: Record<string, unknown> | null) {
         }),
       };
     }
-    if (table === "messages" || table === "placement_record_versions") {
+    if (table === "messages") {
+      // F29: the requester lookup filters by jsonb metadata (placementId)
+      // instead of scanning the latest 50 messages platform-wide.
+      return {
+        select: () => ({
+          eq: () => ({
+            contains: (_col: string, filter: Record<string, unknown>) => {
+              messageContains.push(filter);
+              return { order: () => ({ limit: async () => ({ data: [] }) }) };
+            },
+          }),
+        }),
+      };
+    }
+    if (table === "placement_record_versions") {
       return { select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: [] }) }) }) }) };
     }
     return { select: () => ({ eq: () => ({ single: async () => ({ data: null }), maybeSingle: async () => ({ data: null }) }) }) };
@@ -97,5 +115,29 @@ describe("GET /api/placements/[id] — artist enrichment (row 19 #8)", () => {
     // Fail-before: the old select named artist_profiles.image (absent), so PostgREST
     // rejected the whole query and the entire artist block came back null.
     expect(body.artist).toMatchObject({ name: "Alice", slug: "alice", image: "https://cdn/alice.jpg" });
+  });
+});
+
+// F29 (WS8 item 1). The requester chain read placement.requester_user_id, a
+// phantom column no migration ever created, so the column path was always null
+// and resolution leaned entirely on a message scan capped at the latest 50
+// placement_request messages PLATFORM-WIDE. Fifty newer requests anywhere on
+// the platform and both parties read "Awaiting their response" forever.
+describe("GET /api/placements/[id] requester resolution (F29)", () => {
+  it("resolves the requester from proposed_by_user_id without needing the message trail", async () => {
+    setupDb(
+      { name: "Alice", slug: "alice", image: null },
+      { ...PLACEMENT, proposed_by_user_id: "u-venue" },
+    );
+    const res = await GET(new Request("http://localhost/api/placements/pl1"), ctx());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.placement.requester_user_id).toBe("u-venue");
+  });
+
+  it("scopes the message fallback to this placement via the jsonb metadata filter", async () => {
+    setupDb({ name: "Alice", slug: "alice", image: null });
+    await GET(new Request("http://localhost/api/placements/pl1"), ctx());
+    expect(messageContains).toContainEqual({ placementId: "pl1" });
   });
 });
