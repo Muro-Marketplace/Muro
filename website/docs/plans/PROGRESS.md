@@ -10700,3 +10700,78 @@ the template's, and a props assertion would have been checking the wrong object
 venue actually sees "£21.00", rather than it merely having been handed over.
 
 `npm run check` green: 0 lint errors, 227 files, 2235 tests, exit 0.
+
+### 09 items 3.6 + 3.7 — disputes, built end to end — DONE
+
+Done together because they share one question, "who are the two parties to this
+order", and answering it twice is how one side ends up told and the other does
+not.
+
+**3.7 was a feature build, not a wiring task, exactly as §D.1 warned.** The
+`disputes` table shipped in migration 060. The admin panel could list and resolve
+rows. `OrderDisputeOpened` and `OrderDisputeResolved` were both written, styled
+and registered. And **nothing anywhere could create a dispute**, so the table was
+permanently empty, both templates were unreachable, and a buyer with a damaged
+painting had no route that was not an email to support.
+
+`POST /api/disputes` now exists. Authenticated, demo-guarded, rate-limited,
+zod-validated, and the opener must be a party to the order or placement, checked
+through `assertOrderParty` / `assertPlacementParty` rather than an inline
+comparison, per §D.1 and for the reason K9 exists. It inserts the row, mails both
+parties, records the lifecycle event and alerts an admin.
+
+**Deliberately not idempotent at the row level.** A person can open a second
+dispute on one order, and refusing it would silently swallow a real complaint.
+The emails carry the dedupe instead, keyed on the dispute id and the party's
+role, so a retried request that does create a second row still cannot send two
+copies about the first.
+
+**One deviation from §D.1, and it is the doc that is wrong.** It specifies 403
+for a non-party. `authz.ts` denies with 404 by design, documented in its own
+header: a 403 confirms the row exists and is an enumeration oracle. The source
+wins. The test asserts 404, states why, and adds a second test proving a
+stranger cannot tell a real order id from an imaginary one.
+
+**`disputed` had to stop mapping to null.** It was internal-only for as long as
+no dispute could exist. Now the order's own lifecycle log has to show the case,
+or the K3 stepper and any payout reconciler cannot see it. `emailsForEvent` still
+returns `[]` for it on purpose: the route mails both parties itself, and a
+trigger here would be a third email for one dispute, which is the duplicate-send
+class K1 spent its whole PR removing.
+
+**Migration 105 (written, applied to prod, verified live).** `order_events`
+constrains `event_type` with a CHECK rather than an enum, so `order.disputed`
+would have failed the INSERT. Widened by drop-and-add, which is additive: every
+previously legal value is still legal and no existing row can violate it.
+Verified against `uwkuhygwvasdzwsusiym`, the live definition now carries all
+eight values. Did **not** add `order.dispute_resolved`: `eventForStatus` maps
+from `orders.status` and no such status exists, so the value would be
+unreachable from the only code that writes these rows.
+
+**What opening a dispute deliberately does NOT do: change `orders.status`.** It
+writes the lifecycle event and leaves the status alone. Flipping an order to
+`disputed` would move it through the payout state machine, and that is a money
+decision, not a wiring one. The dispute is visible in the admin panel and on the
+order's event log either way.
+
+**3.6 was a one-line root cause.** `admin/disputes/[id]` pre-fetched
+`.select("id, status")`, so at the moment it resolved a case it held a decision
+and no people. It could not have emailed the parties even if it had tried. The
+select now carries `order_id, placement_id, opener_user_id`, and a resolve sends
+`order_dispute_resolved` to both parties with the admin's own resolution text as
+the outcome. Only on `resolve`: `close` has no outcome text and `escalate` is an
+internal reclassification, so an email for either would say nothing.
+
+**37 new tests, every fix verified fail-before by reverting it.** Mapping
+`disputed` back to null fails the lifecycle test. Collapsing the idempotency key
+to the dispute id alone fails the distinct-keys test. Emailing only the first
+party fails four. Reverting the admin select to `"id, status"` fails the
+column test; deleting the email block fails three more.
+
+**One of mine was vacuous and I caught it on that last check.** "puts the admin's
+resolution text in the email" iterated `sendEmail.mock.calls` directly, so with
+the email block deleted it looped over an empty array and passed. Asserting the
+count first fixes it, and it now fails on that mutation with the other two.
+
+`npm run check` green: 0 lint errors, 230 files, 2274 tests, 131 templates, 0
+dependency violations, exit 0.

@@ -70,6 +70,12 @@ function emailsForEvent(
       // orders/route.ts sent the cancellation, so which email an order event
       // produces had two owners. One owner now.
       return [{ to: input.buyerEmail, template: "order_cancelled" }];
+    case "order.disputed":
+      // 09 item 3.7. The dispute route mails both parties itself, keyed on the
+      // dispute id, because it knows who they are and this function only knows
+      // the two addresses the CALLER passed in. Returning a trigger here would
+      // mean two emails for one dispute.
+      return [];
     case "order.refunded":
     case "order.delivery_confirmed":
       // Deliberately still empty. A refund already emails the buyer from

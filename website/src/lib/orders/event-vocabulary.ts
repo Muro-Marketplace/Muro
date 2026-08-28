@@ -20,7 +20,8 @@ export type OrderEventType =
   | "order.delivered"
   | "order.delivery_confirmed"
   | "order.cancelled"
-  | "order.refunded";
+  | "order.refunded"
+  | "order.disputed";
 
 export const ORDER_STATUS_TO_EVENT: Record<string, OrderEventType | null> = {
   confirmed: "order.placed",
@@ -31,11 +32,13 @@ export const ORDER_STATUS_TO_EVENT: Record<string, OrderEventType | null> = {
   // Audit follow-up: refunded transitions also drop a lifecycle event
   // so the K3 stepper / payout reconciler see refund state.
   refunded: "order.refunded",
-  // artist_notified and disputed are internal-only — no email surface
-  // yet, and `disputed` is opened via its own /api/disputes flow so
-  // the lifecycle log is owned there.
+  // 09 item 3.7. `disputed` used to map to null, so opening a dispute left
+  // no trace on the order at all and the stepper could not show one. It maps
+  // to a real event now (mig 105 widened the CHECK to match). The event is
+  // logged and emails nobody: POST /api/disputes mails both parties itself,
+  // and a second trigger here would be the duplicate-send class K1 removed.
+  disputed: "order.disputed",
   artist_notified: null,
-  disputed: null,
   awaiting_dispatch: null,
 };
 
