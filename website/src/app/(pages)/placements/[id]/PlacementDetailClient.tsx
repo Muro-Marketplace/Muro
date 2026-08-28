@@ -49,6 +49,7 @@ interface PlacementRow {
   installed_at?: string | null;
   live_from?: string | null;
   subscription_status?: string | null;
+  subscription_current_period_end?: string | null;
   collected_at?: string | null;
 }
 
@@ -1021,6 +1022,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
           liveFrom={placement.live_from}
           subscriptionStatus={placement.subscription_status}
           role={viewerRole}
+          currentPeriodEnd={placement.subscription_current_period_end}
         />
       )}
 

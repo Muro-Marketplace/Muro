@@ -223,9 +223,12 @@ export const ARTIST_WORK_WRITABLE = Object.freeze([
   "orientation",
   "sort_order",
   "shipping_price",
-  // Owner decision 14 / migration 118: real column now, so the value the
-  // portfolio always collected persists instead of being dropped at the route.
+  // Owner decision 14 / migration 118: real column now. Retired as a UI input
+  // on 2026-08-28 (the tick box below replaced the price model); stays listed
+  // so a legacy payload cannot fail a save.
   "in_store_price",
+  // Migration 120: the "Available to buy in store?" tick box.
+  "available_in_store",
   "quantity_available",
   "frame_options",
   "description",

@@ -1036,7 +1036,6 @@ export default function PortfolioPage() {
         image: d.imageUrl,
         orientation: d.orientation,
         ...(shippingPrice !== undefined ? { shippingPrice } : {}),
-        ...(inStorePricing.length > 0 ? { inStorePricing } : {}),
         ...(frameOptions.length > 0 ? { frameOptions } : {}),
       };
     });
@@ -1457,6 +1456,7 @@ export default function PortfolioPage() {
       // its in-store prices from the persisted `pricing[i].inStorePrice`
       // location, with legacy fallbacks.
       inStoreEnabled:
+        w.availableInStore === true ||
         w.pricing.some(
           (p) => typeof p.inStorePrice === "number" && p.inStorePrice > 0,
         ) ||
@@ -1528,6 +1528,7 @@ export default function PortfolioPage() {
       // the checkbox flipped off on every reopen even when the artist
       // had a valid `in_store_price` saved.
       inStoreEnabled:
+        w.availableInStore === true ||
         w.pricing.some(
           (p) => typeof p.inStorePrice === "number" && p.inStorePrice > 0,
         ) ||
@@ -1839,11 +1840,6 @@ export default function PortfolioPage() {
         // toggle silently failed to persist. We now stash the price
         // alongside `shippingPrice` in the `pricing` JSONB column,
         // which DOES round-trip through the API and DB.
-        if (form.inStoreEnabled) {
-          const raw = form.inStorePricing[formIdx];
-          const n = raw === undefined || raw === "" ? NaN : Number(raw);
-          if (Number.isFinite(n) && n > 0) base.inStorePrice = n;
-        }
         return base;
       }),
       available: form.available && (!qtyFinite || qtyVal! > 0),
@@ -1855,33 +1851,10 @@ export default function PortfolioPage() {
       image: form.imagePreview,
       orientation: form.orientation,
       ...(shippingVal != null && !isNaN(shippingVal) ? { shippingPrice: shippingVal } : {}),
-      ...(inStoreVal != null && !isNaN(inStoreVal) ? { inStorePrice: inStoreVal } : {}),
-      // In-store pricing, walk form.sizes (NOT validSizes) so we
-      // line up with the parallel `form.inStorePricing[]` array. The
-      // previous code used `validSizes.map((s, i) => form.inStorePricing[i])`
-      // which silently mismatched whenever the artist had any
-      // empty-priced rows above a priced one: validSizes filtered
-      // those rows out so its index 0 was form.sizes[1], but the
-      // in-store array still held the form.sizes[0] value at index 0
-      //, the saved in-store price ended up bound to the wrong size.
-      // We also drop entries where the *online* price is 0 (matches
-      // the validSizes filter applied to `pricing` above) so the
-      // shapes stay aligned, and we gate on `inStoreEnabled` so a
-      // toggle-off truly clears the section.
-      inStorePricing: form.inStoreEnabled
-        ? form.sizes
-            .map((s, i) => {
-              if (!s.label || !(s.price > 0)) return null;
-              const raw = form.inStorePricing[i];
-              const price = raw ? parseFloat(raw) : 0;
-              return Number.isFinite(price) && price > 0
-                ? { label: s.label, price }
-                : null;
-            })
-            .filter(
-              (p): p is { label: string; price: number } => p !== null,
-            )
-        : undefined,
+      // Owner decision 2026-08-28: in-store is a FLAG now, not a price list.
+      // The collect-from-venue price is the normal tier price, so nothing
+      // per-size needs persisting; the tick box maps to available_in_store.
+      availableInStore: form.inStoreEnabled,
       quantityAvailable: qtyFinite ? qtyVal : null,
       frameOptions: cleanFrameOptions.length > 0 ? cleanFrameOptions : undefined,
     };
@@ -2451,7 +2424,7 @@ export default function PortfolioPage() {
                     }}
                     className="w-3.5 h-3.5 rounded-sm border border-border accent-accent"
                   />
-                  <span className="text-xs text-muted">Also sold in-store at venues</span>
+                  <span className="text-xs text-muted">Available to buy in store?</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -2537,7 +2510,6 @@ export default function PortfolioPage() {
                       <div />
                       <div className="text-right pr-1">Price</div>
                       {form.shippingPerSize && <div className="text-right pr-1">Shipping</div>}
-                      {form.inStoreEnabled && <div className="text-right pr-1">In-store</div>}
                       {form.stockPerSize && <div className="text-right pr-1">Qty</div>}
                       <div />
                     </div>
@@ -2620,38 +2592,7 @@ export default function PortfolioPage() {
                                 )}
                               </div>
                             )}
-                            {form.inStoreEnabled && (
-                              <div className="flex items-center gap-1 justify-end">
-                                <span className="text-xs text-muted">£</span>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={storeCurrent}
-                                  onChange={(e) => setForm((p) => {
-                                    const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
-                                    updated[i] = e.target.value;
-                                    return { ...p, inStorePricing: updated };
-                                  })}
-                                  onBlur={(e) => {
-                                    const raw = e.target.value.trim();
-                                    if (!raw) return;
-                                    const n = Number(raw);
-                                    if (!Number.isFinite(n)) return;
-                                    const formatted = n.toFixed(2);
-                                    if (formatted === raw) return;
-                                    setForm((p) => {
-                                      const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
-                                      updated[i] = formatted;
-                                      return { ...p, inStorePricing: updated };
-                                    });
-                                  }}
-                                  placeholder="-"
-                                  className="w-16 sm:w-[90px] bg-background border border-border rounded-sm px-2 py-2 text-sm text-right focus:outline-none focus:border-accent/60"
-                                />
-                              </div>
-                            )}
-                            {form.stockPerSize && (
+                                                        {form.stockPerSize && (
                               <div className="flex items-center gap-1 justify-end">
                                 <input
                                   type="number"
@@ -2782,41 +2723,7 @@ export default function PortfolioPage() {
                             )}
                           </label>
                         )}
-                        {form.inStoreEnabled && (
-                          <label className="flex flex-col gap-1">
-                            <span className="text-[10px] text-muted uppercase tracking-wider">In-store</span>
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-muted">£</span>
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={storeCurrent}
-                                onChange={(e) => setForm((p) => {
-                                  const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
-                                  updated[i] = e.target.value;
-                                  return { ...p, inStorePricing: updated };
-                                })}
-                                onBlur={(e) => {
-                                  const raw = e.target.value.trim();
-                                  if (!raw) return;
-                                  const n = Number(raw);
-                                  if (!Number.isFinite(n)) return;
-                                  const formatted = n.toFixed(2);
-                                  if (formatted === raw) return;
-                                  setForm((p) => {
-                                    const updated = [...(p.inStorePricing?.length ? p.inStorePricing : p.sizes.map(() => ""))];
-                                    updated[i] = formatted;
-                                    return { ...p, inStorePricing: updated };
-                                  });
-                                }}
-                                placeholder="-"
-                                className="w-full bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
-                              />
-                            </div>
-                          </label>
-                        )}
-                      </div>
+                                              </div>
                     </div>
                   );
                 })}
@@ -4492,40 +4399,6 @@ function BulkAddDraftCard({
                 Each size persists its own shipping price. Leave a row
                 blank to fall back to the work-level shipping default.
               </p>
-            </div>
-          </CollapsibleRow>
-
-          {/* Per-size in-store / pickup price (optional). */}
-          <CollapsibleRow
-            label="In-store / pickup prices"
-            open={draft.showInStore}
-            onToggle={() => onChange({ showInStore: !draft.showInStore })}
-          >
-            <div className="space-y-1.5">
-              {draft.sizes.map((s, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="flex-1 text-[11px] text-muted truncate">
-                    {s.label || `(size ${i + 1})`}
-                  </span>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-xs text-muted">£</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={draft.inStorePrices[i] ?? ""}
-                      onChange={(e) => {
-                        const next = [...draft.inStorePrices];
-                        while (next.length < draft.sizes.length) next.push("");
-                        next[i] = e.target.value;
-                        onChange({ inStorePrices: next });
-                      }}
-                      placeholder="0"
-                      className="w-20 bg-background border border-border rounded-sm px-2 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:border-accent/60"
-                    />
-                  </div>
-                </div>
-              ))}
             </div>
           </CollapsibleRow>
 

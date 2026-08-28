@@ -559,7 +559,9 @@ async function handleWebhookEvent(
         kind: "paid_loan_started",
         title: `Monthly loan payments started, £${Number(placement.monthly_fee_gbp).toFixed(2)}/mo`,
         body: "The venue's card is set up. Your first payout follows the first paid invoice.",
-        link: "/artist-portal/placements",
+        // Owner find (2026-08-28): the flat list gave the artist nowhere to
+        // SEE the payment; the detail page carries the payment status banner.
+        link: `/placements/${encodeURIComponent(placementId)}`,
       }).catch(() => {});
     }
 
@@ -684,12 +686,65 @@ async function handleWebhookEvent(
               });
             }
           }
-          // Schema still records a single placement_id per order. Pick the
-          // first cart line whose artist has a placement so the choice is
-          // deterministic across replayed webhook deliveries.
-          for (const item of cartItems as Array<{ artistSlug?: string }>) {
-            const slug = item.artistSlug || "";
-            const place = placementByArtistSlug.get(slug);
+        }
+
+        // Work-level placement resolution (owner-reported money bug,
+        // 2026-08-28). placements has no work_id column; the link is
+        // artist_works.current_placement_id. The work the buyer actually
+        // bought decides the venue's rate; the artist-level first-wins map
+        // above remains only as the fallback for legacy lines. Both maps
+        // feed buildArtistLegs, which prefers the work-level rate per line.
+        const placementByWorkId = new Map<string, { id: string; revenue_share_percent: number }>();
+        const cartWorkIds = Array.from(new Set(
+          (cartItems as Array<{ workId?: string }>).map((i) => i.workId || "").filter(Boolean),
+        ));
+        if (venueSlug && cartWorkIds.length > 0) {
+          const { data: workRows } = await db.from("artist_works")
+            .select("id, current_placement_id")
+            .in("id", cartWorkIds);
+          const placementIdByWork = new Map<string, string>();
+          for (const w of (workRows || []) as Array<{ id: string; current_placement_id: string | null }>) {
+            if (w.current_placement_id) placementIdByWork.set(w.id, w.current_placement_id);
+          }
+          const linkedIds = Array.from(new Set(placementIdByWork.values()));
+          if (linkedIds.length > 0) {
+            const { data: linked } = await db.from("placements")
+              .select("id, revenue_share_percent, venue_slug, status")
+              .in("id", linkedIds)
+              .eq("venue_slug", venueSlug)
+              .eq("status", "active");
+            const byId = new Map(
+              ((linked || []) as Array<{ id: string; revenue_share_percent: number | null }>).map(
+                (pl) => [pl.id, pl],
+              ),
+            );
+            for (const [workId, plId] of placementIdByWork) {
+              const pl = byId.get(plId);
+              if (!pl) continue;
+              placementByWorkId.set(workId, {
+                id: pl.id,
+                revenue_share_percent: pl.revenue_share_percent || 0,
+              });
+              const artistLevel = placementByArtistSlug.get(
+                (cartItems as Array<{ workId?: string; artistSlug?: string }>).find((i) => i.workId === workId)?.artistSlug || "",
+              );
+              if (artistLevel && artistLevel.id !== pl.id) {
+                console.warn("[webhook] work-level placement overrides artist-level rate", {
+                  orderId, workId, workPlacement: pl.id, artistPlacement: artistLevel.id,
+                });
+              }
+            }
+          }
+        }
+
+        if (venueSlug) {
+          // Schema still records a single placement_id per order. Prefer the
+          // first line's WORK-level placement, then the artist-level fallback;
+          // both orderings are deterministic across replayed deliveries.
+          for (const item of cartItems as Array<{ artistSlug?: string; workId?: string }>) {
+            const place =
+              (item.workId ? placementByWorkId.get(item.workId) : undefined) ||
+              placementByArtistSlug.get(item.artistSlug || "");
             if (place) {
               placementId = place.id;
               break;
@@ -711,6 +766,7 @@ async function handleWebhookEvent(
         const legs = await buildArtistLegs(db, {
           cartItems: cartItems as CartLine[],
           placementByArtistSlug,
+          placementByWorkId,
           artistShippingPence: saved.artistShippingPence || {},
           shippingTotalPence: totalPence - subtotalPence,
         });
@@ -1069,6 +1125,23 @@ async function handleWebhookEvent(
           // are not told about is a confrontation waiting there. Email keyed on
           // the order so a Stripe redelivery cannot double it, plus a bell.
           if (isVenueCollection && venueSlug) {
+            // Owner decision 2026-08-28: the wall piece just sold, so the
+            // work stops being collectable. ONLY the tick box is cleared;
+            // online availability and stock follow the normal decrement, so
+            // prints keep selling unless this was the last piece.
+            if (cartWorkIds.length > 0) {
+              try {
+                const { error: flagErr } = await db
+                  .from("artist_works")
+                  .update({ available_in_store: false })
+                  .in("id", cartWorkIds);
+                if (flagErr) console.warn("[webhook] could not clear available_in_store:", flagErr);
+              } catch (flagErr) {
+                // Non-critical bookkeeping: a failure here must not stop the
+                // venue being told someone is coming to collect.
+                console.warn("[webhook] available_in_store clear threw:", flagErr);
+              }
+            }
             try {
               const { data: venueRow } = await db
                 .from("venue_profiles")

@@ -296,9 +296,14 @@ function setupDbMock(state: DbState) {
           eq: () => ({
             single: async () => ({ data: null }),
           }),
+          // Work-level placement resolution (2026-08-28): no linked
+          // placements in this fixture, so the artist-level rate map these
+          // tests pin remains the deciding one.
+          in: async () => ({ data: [], error: null }),
         }),
         update: () => ({
           eq: () => Promise.resolve({ error: null }),
+          in: () => Promise.resolve({ error: null }),
         }),
       };
     }
@@ -602,6 +607,8 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
                   : { quantity_available: state.stock[workId], title: state.titles?.[workId] };
               return { single: async () => ({ data: row() }), maybeSingle: async () => ({ data: row() }) };
             },
+            // Work-level placement resolution (2026-08-28): none linked here.
+            in: async () => ({ data: [], error: null }),
           }),
           update: (updates: Record<string, unknown>) => ({
             eq: async (_c: string, workId: string) => {

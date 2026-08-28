@@ -201,7 +201,7 @@ export default function VenueProfileBody({ slug }: { slug: string }) {
             <VenueProfileApplyCta
               venueSlug={venue.slug}
               venueName={venue.name || ""}
-              hasOpenRequests={openRequests.length > 0}
+              hasOpenRequests={false} // artwork requests parked 2026-08-28
             />
           </div>
         </div>
@@ -217,49 +217,8 @@ export default function VenueProfileBody({ slug }: { slug: string }) {
             </section>
           )}
 
-          {openRequests.length > 0 && (
-            <section id="open-requests" className="scroll-mt-24">
-              <h2 className="font-serif text-lg text-foreground mb-1">Open artwork requests</h2>
-              <p className="text-xs text-muted mb-3">
-                What this venue is calling for right now. Submit work that
-                fits the brief and they&rsquo;ll see it in their inbox.
-              </p>
-              <ul className="space-y-2">
-                {openRequests.map((r) => {
-                  const rawMin = r.budget_min_pence ?? null;
-                  const rawMax = r.budget_max_pence ?? null;
-                  const min = rawMin != null && rawMax != null && rawMin > rawMax ? rawMax : rawMin;
-                  const max = rawMin != null && rawMax != null && rawMin > rawMax ? rawMin : rawMax;
-                  const budget =
-                    min != null && max != null
-                      ? `£${(min / 100).toFixed(0)} to £${(max / 100).toFixed(0)}`
-                      : min != null
-                        ? `from £${(min / 100).toFixed(0)}`
-                        : max != null
-                          ? `up to £${(max / 100).toFixed(0)}`
-                          : null;
-                  return (
-                    <li key={r.id} className="border border-border rounded-sm p-4 hover:border-accent/40 transition-colors">
-                      <Link href={`/artist-portal/artwork-requests/${r.id}`} className="block">
-                        <p className="text-sm font-medium text-foreground mb-1">{r.title}</p>
-                        {r.description && <p className="text-xs text-muted line-clamp-2">{r.description}</p>}
-                        <div className="flex flex-wrap gap-2 mt-2 text-[10px]">
-                          {(r.intent || []).map((i) => (
-                            <span key={i} className="px-1.5 py-0.5 bg-accent/5 text-accent rounded-sm capitalize">
-                              {i}
-                            </span>
-                          ))}
-                          {budget && (
-                            <span className="px-1.5 py-0.5 bg-foreground/5 text-foreground/70 rounded-sm">{budget}</span>
-                          )}
-                        </div>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
+          {/* Open artwork requests parked (owner decision 2026-08-28);
+              the data still loads so the parking is a render change only. */}
 
           {walls.length > 0 && (
             <section>

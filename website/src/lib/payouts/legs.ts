@@ -15,6 +15,8 @@ import { platformFeePercentForArtist } from "@/lib/platform-fee";
 
 export interface CartLine {
   artistSlug?: string;
+  /** Work id, used to resolve the WORK's own placement rate (2026-08-28). */
+  workId?: string;
   price?: number;
   qty?: number;
   quantity?: number;
@@ -107,6 +109,16 @@ export async function buildArtistLegs(
     cartItems: CartLine[];
     /** artistSlug -> { id, revenue_share_percent }, from the placements lookup. */
     placementByArtistSlug: Map<string, { id: string; revenue_share_percent: number }>;
+    /**
+     * workId -> { id, revenue_share_percent }: the placement the SOLD WORK is
+     * actually on (artist_works.current_placement_id), when it is active at
+     * this venue. Owner-reported money bug (2026-08-28): with 40+ placements
+     * between one artist and one venue, matching by artist alone paid the
+     * venue the OLDEST active placement's rate whatever work sold. The work's
+     * own placement wins; the artist-level map is only the fallback for
+     * legacy lines with no work id or works with no placement link.
+     */
+    placementByWorkId?: Map<string, { id: string; revenue_share_percent: number }>;
     /** artistSlug -> shipping pence, persisted on cart_sessions by the checkout. */
     artistShippingPence: Record<string, number>;
     /** Shipping actually charged, i.e. amount_total - subtotal, in pence. */
@@ -167,11 +179,26 @@ export async function buildArtistLegs(
     Math.max(0, Math.round(input.shippingTotalPence)),
   );
 
+  // Venue cut per LINE, so two works by one artist on different placements
+  // each pay the venue their own placement's rate. Rounded per line; the
+  // remainder maths downstream (reconcilePlatformFee) absorbs any penny drift
+  // into the platform fee, never into a recipient.
+  const venueCutBySlug = new Map<string, number>();
+  for (const item of input.cartItems) {
+    const slug = (item.artistSlug || "").toLowerCase();
+    if (!slug) continue;
+    const pct =
+      (item.workId ? input.placementByWorkId?.get(item.workId)?.revenue_share_percent : undefined) ??
+      input.placementByArtistSlug.get(slug)?.revenue_share_percent ??
+      0;
+    const cut = Math.round(linePence(item) * (pct / 100));
+    venueCutBySlug.set(slug, (venueCutBySlug.get(slug) ?? 0) + cut);
+  }
+
   return slugs.map((slug) => {
     const profile = bySlug.get(slug)!;
     const grossPence = grossBySlug.get(slug) ?? 0;
-    const venuePct = input.placementByArtistSlug.get(slug)?.revenue_share_percent ?? 0;
-    const venueCutPence = Math.round(grossPence * (venuePct / 100));
+    const venueCutPence = venueCutBySlug.get(slug) ?? 0;
     const platformFeePercent = platformFeePercentForArtist(profile);
     const platformFeePence = Math.round(grossPence * (platformFeePercent / 100));
     const shippingPence = shippingBySlug.get(slug) ?? 0;

@@ -29,6 +29,7 @@ type WorkRow = {
   // Migration 118. Work-level in-store price, the number a collect-from-venue
   // buyer is shown when the work has no per-size in-store pricing.
   in_store_price: number | null;
+  available_in_store?: boolean | null;
   // E46c: the uplift is resolved from here, server-side, instead of trusting the
   // client's framed total. Real jsonb column; 6 of 35 live works carry frames.
   frame_options: Array<{
@@ -224,7 +225,7 @@ export async function POST(request: Request) {
     if (workIds.length > 0) {
       const { data: rows, error: worksErr } = await getSupabaseAdmin()
         .from("artist_works")
-        .select("id, available, quantity_available, pricing, title, frame_options, in_store_price")
+        .select("id, available, quantity_available, pricing, title, frame_options, in_store_price, available_in_store")
         .in("id", workIds);
       if (worksErr) {
         console.error("[checkout] cart re-validation lookup failed:", worksErr);
@@ -474,37 +475,30 @@ export async function POST(request: Request) {
         item.lineFulfilment === "collect_venue" && fulfilmentMethod === "collect_venue";
 
       if (isCollectLine) {
-        // T9: the number the collect button shows is the IN-STORE price
-        // (per-size first, then work-level), not the shipped tier price.
-        // Before this ladder a tier-labelled collect line was silently
-        // re-priced to the shipped tier, overcharging the buyer.
-        const perSize = dbTier && typeof dbTier.inStorePrice === "number" && dbTier.inStorePrice > 0
-          ? dbTier.inStorePrice
-          : null;
-        const workLevel = typeof row.in_store_price === "number" && row.in_store_price > 0
-          ? row.in_store_price
-          : null;
-        const inStore = perSize ?? workLevel;
-        if (inStore !== null) {
-          const dbPence = Math.round(inStore * 100);
-          if (dbPence !== clientPence) {
-            console.warn("[checkout] in-store price corrected", {
-              workId: item.workId,
-              clientPence,
-              dbPence,
-            });
+        // Owner decision 2026-08-28: collect-from-venue charges the NORMAL
+        // tier price. The in-store price model is retired; a legacy per-size
+        // or work-level in-store price is honoured only when it exists AND
+        // the tick box is not set, so carts from before migration 120 keep
+        // the number their button displayed.
+        if (row.available_in_store !== true) {
+          const perSize = dbTier && typeof dbTier.inStorePrice === "number" && dbTier.inStorePrice > 0
+            ? dbTier.inStorePrice
+            : null;
+          const workLevel = typeof row.in_store_price === "number" && row.in_store_price > 0
+            ? row.in_store_price
+            : null;
+          const legacy = perSize ?? workLevel;
+          if (legacy !== null) {
+            const dbPence = Math.round(legacy * 100);
+            if (dbPence !== clientPence) {
+              console.warn("[checkout] legacy in-store price corrected", {
+                workId: item.workId, clientPence, dbPence,
+              });
+            }
+            return dbPence;
           }
-          return dbPence;
         }
-        // No in-store price on record: fall through to the tier price, the
-        // only other number the server owns. Charging the standard price is
-        // safe for the platform; log it because the CTA should not have
-        // rendered without an in-store price.
         if (dbTier && typeof dbTier.price === "number" && dbTier.price > 0) {
-          console.warn("[checkout] collect line had no in-store price, tier price used", {
-            workId: item.workId,
-            size: item.size,
-          });
           return Math.round(dbTier.price * 100);
         }
         return unresolvableSize(item);

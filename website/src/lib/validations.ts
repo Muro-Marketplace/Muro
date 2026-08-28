@@ -204,6 +204,10 @@ export const artistWorkInputSchema = z.object({
   shippingPrice: money(1000).nullable().optional(),
   // Same cap as a per-size price: this IS a price, not a shipping fee.
   inStorePrice: money(100_000).nullable().optional(),
+  // Owner decision 2026-08-28: the tick box that replaced the in-store price
+  // model. inStorePrice above stays accepted (and ignored by the route) so an
+  // old client tab cannot 400 a whole save.
+  availableInStore: z.boolean().optional(),
   quantityAvailable: z.number().int().min(0).max(10_000).nullable().optional(),
   description: optionalString(2000),
   images: z.array(z.string().max(2000)).max(10).optional(),

@@ -266,24 +266,26 @@ describe("POST /api/artist-works frame options now come from the schema (E46a)",
   });
 });
 
-describe("POST /api/artist-works persists in_store_price (owner decision 14, migration 118)", () => {
+describe("POST /api/artist-works: the in-store TICK BOX (migration 120)", () => {
   const row = () =>
     (upsertWorkMock.mock.calls as unknown as Array<[string, Record<string, unknown>]>)[0]?.[1];
 
-  it("writes a supplied inStorePrice, ending the collect-then-drop", async () => {
-    // INVERTED 2026-08-28. This block used to pin the OMISSION of
-    // in_store_price, because the column existed in no migration and forwarding
-    // it made upsertWork's per-column ladder fail on every save. Migration 118
-    // created it, so the value the portfolio has collected all along finally
-    // lands.
-    const res = await POST(req({ ...baseBody, inStorePrice: 250 }));
+  // Third state of this block's lifecycle. First it pinned the OMISSION of
+  // in_store_price (phantom column), then decision 14 / migration 118 made it
+  // pin the write, and on 2026-08-28 the owner retired the price model for a
+  // tick box: availableInStore -> available_in_store, and in_store_price is
+  // parsed but never forwarded again (the column keeps whatever it held).
+  it("forwards availableInStore and refuses to forward the retired price", async () => {
+    const res = await POST(req({ ...baseBody, availableInStore: true, inStorePrice: 250 }));
     expect(res.status).toBe(200);
-    expect(row()).toMatchObject({ in_store_price: 250 });
+    expect(row()).toMatchObject({ available_in_store: true });
+    expect(row()).not.toHaveProperty("in_store_price");
   });
 
-  it("stores null, not undefined, when the artist clears it", async () => {
+  it("defaults the tick box to false when the client omits it", async () => {
     await POST(req(baseBody));
-    expect(row()).toHaveProperty("in_store_price", null);
+    expect(row()).toMatchObject({ available_in_store: false });
+    expect(row()).not.toHaveProperty("in_store_price");
   });
 
   it("rejects a negative price the same way the size prices are rejected", async () => {

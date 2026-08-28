@@ -93,6 +93,11 @@ const immersiveRoutes = ["/", "/venues", "/artists", "/about"];
 // is isolated behind a <Suspense> boundary. Without that, every page that
 // renders the shared Header would be forced into dynamic rendering, which
 // breaks the static prerender for pages like /admin/applications.
+
+// Owner experiment (2026-08-28): the marketplace header in the portal's
+// black, site-wide. Flip to false to restore the white marketplace header.
+const DARK_HEADER_TEST = true;
+
 function MarketplaceTabsNav({
   pathname,
   isPortal,
@@ -106,7 +111,7 @@ function MarketplaceTabsNav({
 }) {
   const searchParams = useSearchParams();
   const view = searchParams?.get("view") || "";
-  const onDark = isPortal || !showSolid;
+  const onDark = isPortal || DARK_HEADER_TEST || !showSolid;
   const tabs =
     variant === "venue" ? venueMarketplaceTabs
     : variant === "public" ? publicMarketplaceTabs
@@ -331,7 +336,7 @@ export default function Header() {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ${
-        isPortal
+        isPortal || DARK_HEADER_TEST
           ? "bg-[#1A1A1A]"
           : showSolid
           ? "bg-white border-b border-border"
@@ -347,7 +352,7 @@ export default function Header() {
           <Link
             href="/"
             className={`font-serif text-2xl lg:text-3xl tracking-tight transition-colors duration-300 -ml-0.5 lg:-ml-1 ${
-              isPortal || !showSolid ? "text-white" : "text-foreground"
+              isPortal || DARK_HEADER_TEST || !showSolid ? "text-white" : "text-foreground"
             }`}
           >
             Wallplace
@@ -371,8 +376,8 @@ export default function Header() {
             (user ? (userType === "venue" ? venueNavLinks : loggedInNavLinks) : publicNavLinks).map((link) => {
               const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
               const activeClass = isActive
-                ? (isPortal || !showSolid ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
-                : (isPortal || !showSolid ? "text-white/70 hover:text-white cursor-pointer" : "text-muted hover:text-foreground cursor-pointer");
+                ? (isPortal || DARK_HEADER_TEST || !showSolid ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
+                : (isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white cursor-pointer" : "text-muted hover:text-foreground cursor-pointer");
 
               if (link.subLinks && link.subLinks.length > 0) {
                 const isMarketplace = link.href === "/browse";
@@ -436,7 +441,7 @@ export default function Header() {
                 <button
                   onClick={() => { setMoreDropdownOpen(!moreDropdownOpen); setMsgDropdownOpen(false); setNotifDropdownOpen(false); }}
                   className={`text-sm transition-colors duration-300 flex items-center gap-1 ${
-                    isPortal || !showSolid
+                    isPortal || DARK_HEADER_TEST || !showSolid
                       ? "text-white/80 hover:text-white"
                       : "text-muted hover:text-foreground"
                   }`}
@@ -475,7 +480,7 @@ export default function Header() {
                 <Link
                   href={`${portalBase}/saved`}
                   className={`relative p-2 transition-colors duration-300 ${
-                    isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
+                    isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                   }`}
                   title="Saved"
                   aria-label="Saved"
@@ -495,7 +500,7 @@ export default function Header() {
                   <button
                     onClick={() => { setMsgDropdownOpen(!msgDropdownOpen); setNotifDropdownOpen(false); }}
                     className={`relative p-2 transition-colors duration-300 ${
-                      isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
+                      isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                     title="Messages"
                     aria-label="Messages"
@@ -596,7 +601,7 @@ export default function Header() {
                   <button
                     onClick={() => { setNotifDropdownOpen(!notifDropdownOpen); setMsgDropdownOpen(false); }}
                     className={`relative p-2 transition-colors duration-300 ${
-                      isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
+                      isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                     title="Notifications"
                     aria-label="Notifications"
@@ -734,7 +739,7 @@ export default function Header() {
                   <Link
                     href={portalBase}
                     className={`text-sm pl-3 pr-1 py-2 transition-colors duration-300 ${
-                      isPortal || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
+                      isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                   >
                     {userType === "venue" ? "Venue Portal" : userType === "customer" ? "My Account" : "Artist Portal"}
@@ -743,7 +748,7 @@ export default function Header() {
                     type="button"
                     onClick={() => setPortalDropdownOpen((v) => !v)}
                     className={`pl-1 pr-3 py-2 transition-colors duration-300 ${
-                      isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
+                      isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                     aria-label="Portal menu"
                     aria-expanded={portalDropdownOpen}
@@ -785,7 +790,6 @@ export default function Header() {
                             { label: "Dashboard", href: "/artist-portal" },
                             { label: "Edit Profile", href: "/artist-portal/profile" },
                             { label: "My Portfolio", href: "/artist-portal/portfolio" },
-                            { label: "Showroom", href: "/artist-portal/showroom" },
                             { label: "Messages", href: "/artist-portal/messages" },
                             { label: "Placements", href: "/artist-portal/placements" },
                             { label: "Collections", href: "/artist-portal/collections" },
@@ -842,7 +846,7 @@ export default function Header() {
                 <button
                   onClick={() => signOut()}
                   className={`text-sm transition-colors duration-300 ${
-                    isPortal || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
+                    isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
                   }`}
                 >
                   Logout
@@ -853,7 +857,7 @@ export default function Header() {
                 <Link
                   href="/login"
                   className={`text-sm px-4 py-2 transition-colors duration-300 ${
-                    isPortal || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
+                    isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
                   }`}
                 >
                   Login
@@ -861,14 +865,14 @@ export default function Header() {
                 <Link
                   href="/signup"
                   className={`text-sm px-4 py-2 rounded-sm transition-colors duration-300 ${
-                    isPortal || !showSolid ? "bg-white/10 text-white hover:bg-white/20" : "bg-accent-text text-white hover:bg-accent-text-hover"
+                    isPortal || DARK_HEADER_TEST || !showSolid ? "bg-white/10 text-white hover:bg-white/20" : "bg-accent-text text-white hover:bg-accent-text-hover"
                   }`}
                 >
                   Sign Up
                 </Link>
               </>
             ) : null}
-            <CartIndicator className={isPortal || !showSolid ? "text-white" : "text-foreground"} />
+            <CartIndicator className={isPortal || DARK_HEADER_TEST || !showSolid ? "text-white" : "text-foreground"} />
           </div>
 
           {/* Mobile Menu Toggle */}
@@ -876,7 +880,7 @@ export default function Header() {
             <button
               type="button"
               className={`p-2 -mr-2 transition-colors duration-300 ${
-                isPortal || !showSolid ? "text-white" : "text-foreground"
+                isPortal || DARK_HEADER_TEST || !showSolid ? "text-white" : "text-foreground"
               }`}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}

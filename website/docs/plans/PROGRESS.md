@@ -12760,6 +12760,60 @@ gating untouched; confirmDelivery and the two pay buttons remain as they
 were). The triage document carries the per-item detail and the bonus
 defects found during the round.
 
+## Owner live-testing round, 2026-08-28 afternoon
+
+### P0: the venue's cut is now the SOLD WORK's placement rate
+
+Owner-reported and reproduced in prod: with 43 placements between fin-coles
+and testing-venue, a QR sale paid the venue the OLDEST active placement's
+rate (5%) whatever work sold. `WS-NFXKMWTVH8FVKZHD` (Guanaco in Patagonia)
+booked at 5% when the work's own placement says 3%; `WS-9CSPWT8FNI0RRKSG`
+(Mt. Fitz Roy) sits on a paid-loan placement (no revenue share) and should
+have paid 0%. Both are the owner's test orders; nothing to unwind.
+
+placements has no work_id column; the link is artist_works.
+current_placement_id. The webhook now resolves each cart line's work to its
+own ACTIVE placement at the venue and buildArtistLegs computes the venue
+cut PER LINE (work-level rate first, the old artist-level first-wins map
+only as fallback), so two works by one artist each pay their own rate and
+the totals still reconcile to the penny. The order's single placement_id
+column now prefers the first line's work-level placement. 4 new legs tests
+(fail-before probed) plus the untouched 129 across checkout and webhook.
+
+### Owner live-testing round: the rest, delivered
+
+- **In-store rework (migration 120)**: "Available to buy in store?" tick box
+  replaces the price model end to end (editor, API flag column, artwork CTA
+  at tier price, checkout ladder, webhook clears the flag when the wall
+  piece sells). Legacy in-store prices honoured only while the box is
+  unticked, so pre-120 carts keep their displayed number.
+- **Unlimited works no longer flip to Sold**: decrement_work_stock and
+  restock_work treat NULL quantity as unlimited (was COALESCE to 0, so the
+  first sale zeroed and delisted the work). Verified live in a rolled-back
+  transaction; a stray real decrement during verification was restored
+  (8 back to 8) via restock_work.
+- **Spaces**: database venues carried coordinates: null and the distance
+  filter dropped them all whenever a location was set; they stay listed now,
+  badge-less, after the located results.
+- **Browse distance slider**: debounce starved by onCommit identity churn +
+  uncontrolled input remount snapped the thumb back; ref-stable commit and
+  a controlled input, with a mirror test plus source-invariant pins.
+- **Paid loan**: venue emailed to set up payment at accept
+  (paid_loan_setup_payment, keyed per placement), the started bell
+  deep-links to the placement detail, and the chip now renders a loud
+  green "Monthly payment active, £X/mo, next payment on D" banner when
+  billing runs (it used to render nothing).
+- **Labels**: per-print colour toggle (My theme / Classic) instead of the
+  Pro theme forcing orange; deep links resolve by venue slug or name.
+- **Social posts**: artist names render as written, not FIN COLES.
+- **Artist profile spacing**: hero carries the gap below the terms pills;
+  portfolio stops over-padding the top.
+- **Header**: DARK_HEADER_TEST=true renders the portal black site-wide
+  (one-flag revert in Header.tsx).
+- **Parked, each in its own revertable commit**: artwork requests (every
+  surface; APIs and components dormant) and the artist showroom (public
+  view-on-wall untouched).
+
 ## Outreach allowance: rolling week, honest column, visible number, 2026-08-28
 
 The cap was 2/5/10 per calendar day, counted on `placements.proposed_by_user_id`,
@@ -12802,10 +12856,16 @@ Cap tests rewritten for the new window and column (29, up from 18), plus 15 for
 the badge and hook, 6 form tests, 5 for the allowance endpoint and 4 new
 lint-rule cases. Full suite 271 files / 2,747 tests green, 0 lint errors.
 
-**One thing is not verifiable here and must be done at deploy:** migration 122
-has not been applied (this machine has placeholder Supabase credentials), so
-`tests/integration/schema-columns.json` was hand-edited to add
-`placements.created_by_user_id` where a regeneration would put it. Apply the
-migration, then run `npm run schema:snapshot` to replace the hand edit with the
-real thing. The migration must land before the code deploys: the placements
-insert has no strip-and-retry fallback, so a missing column is a hard 500.
+**Migration 122 is applied to prod** (numbered 122, not 120: prod already had
+120_in_store_flag_and_unlimited_stock and 121_placement_in_store_offer from
+other branches). Verified on the live DB: column, index and trigger present, 37
+of 87 rows backfilled from `proposed_by_user_id` (the remaining 50 never
+carried a proposer and all predate the 7-day window, so they cannot affect an
+enforcement decision). The freeze trigger was tested against a real row: an
+UPDATE to another user id and an UPDATE to NULL were both silently reverted.
+
+`tests/integration/schema-columns.json` is now synced to live for `placements`.
+That picked up **pre-existing drift**: `in_store_price` and
+`in_store_frame_included` were in prod but missing from the snapshot, because
+migrations 120/121 were applied without regenerating it. Every other table
+matches live, checked by column count across all 57.

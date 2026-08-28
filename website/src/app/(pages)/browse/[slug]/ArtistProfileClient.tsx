@@ -415,8 +415,9 @@ export default function ArtistProfileClient({
           </div>
         </div>
       )}
-      {/* Portfolio section */}
-      <section className="py-14 lg:py-18">
+      {/* Portfolio section. Top padding reduced 2026-08-28: the hero above
+          now carries the gap below its terms pills. */}
+      <section className="pt-8 pb-14 lg:pt-10 lg:pb-18">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl">Portfolio</h2>

@@ -147,14 +147,14 @@ async function renderCanvas(canvas: HTMLCanvasElement, p: Props, tab: Tab) {
     ctx.fillText(p.showingAtVenueName.toUpperCase(), w / 2, captionY + 60);
     ctx.font = "300 24px system-ui, -apple-system, Helvetica, sans-serif";
     ctx.globalAlpha = 0.65;
-    ctx.fillText(`A ${p.workMedium || "work"} by ${p.artistName.toUpperCase()}`, w / 2, captionY + 110);
+    ctx.fillText(`A ${p.workMedium || "work"} by ${p.artistName}`, w / 2, captionY + 110);
     ctx.globalAlpha = 1;
   } else {
     ctx.font = "600 56px serif";
     ctx.fillText(p.workTitle, w / 2, captionY + 30);
     ctx.font = "300 24px system-ui, -apple-system, Helvetica, sans-serif";
     ctx.globalAlpha = 0.65;
-    ctx.fillText(`A ${p.workMedium || "work"} by ${p.artistName.toUpperCase()}`, w / 2, captionY + 80);
+    ctx.fillText(`A ${p.workMedium || "work"} by ${p.artistName}`, w / 2, captionY + 80);
     ctx.globalAlpha = 1;
   }
 

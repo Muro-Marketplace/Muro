@@ -133,6 +133,9 @@ import CustomerConfirmDelivery48h from "./templates/orders/CustomerConfirmDelive
 import ArtistPayoutSent from "./templates/payments/ArtistPayoutSent";
 import ArtistPayoutFailed from "./templates/payments/ArtistPayoutFailed";
 import SubscriptionPaymentFailed from "./templates/payments/SubscriptionPaymentFailed";
+// Owner decision 2026-08-28: the venue is EMAILED to set up the paid-loan
+// payment, not just shown a chip.
+import PaidLoanSetUpPayment from "./templates/payments/PaidLoanSetUpPayment";
 import SubscriptionTrialEnding from "./templates/payments/SubscriptionTrialEnding";
 import SubscriptionUpgraded from "./templates/payments/SubscriptionUpgraded";
 import SubscriptionCancelled from "./templates/payments/SubscriptionCancelled";
@@ -301,6 +304,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   ArtistPayoutSent,
   ArtistPayoutFailed,
   SubscriptionPaymentFailed,
+  PaidLoanSetUpPayment,
   SubscriptionTrialEnding,
   SubscriptionUpgraded,
   SubscriptionCancelled,
