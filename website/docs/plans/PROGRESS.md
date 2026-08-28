@@ -11871,3 +11871,46 @@ right was drawn against a cap that only enforced two of three surfaces.
 skipping venues whose week was mostly views. Fixed, but if anyone has been
 reading those digests as a signal about venue engagement, they have been reading
 zeros.
+
+### The nightly advisor job would have failed, and one of its docs did not exist — DONE
+
+Ran the Supabase advisors against prod after tonight's schema work, to check for
+a regression. There was one, and it was older than tonight.
+
+`check-regressions.ts` fails on any advisor lint that is not in the baseline or
+in `known-acceptable.json`. **Six tables were live with a
+`rls_enabled_no_policy` lint and in neither list:**
+
+- `artist_applications` and `stripe_webhook_events`, live for months. The
+  nightly advisor job has been failing on a deliberate design, not on a
+  regression.
+- `admin_users`, from migration 101 earlier in this session. My gap.
+- `conversation_reports`, `user_blocks` and `placement_record_versions`, from
+  migration 111 tonight. Also mine, and they would have joined the other three.
+
+All six are the intended service-role-only pattern: RLS on, no policy, grants
+revoked from anon and authenticated, service_role only. The lint is expected;
+suppressing it is correct; not recording that is not.
+
+**`docs/security/service-role-only-tables.md` did not exist.**
+`check-regressions.ts` has referenced it by name since it was written, so nothing
+ever connected a suppression to a reason. It exists now, with all 24 tables and
+**which route writes each**, plus the five-step recipe for adding one, naming
+migration 111 as the worked example.
+
+**A test in `npm run check` keeps the two in step.** Every suppressed table must
+appear in the doc, and every documented row must name a writer rather than just a
+table. That placement is the point: the advisor job is nightly (ledger row 0b),
+so forgetting the allowlist entry fails later and somewhere else, which is
+exactly how `artist_applications` and `stripe_webhook_events` came to be live and
+unlisted for months. Verified by suppressing an undocumented table.
+
+**Advisor state after tonight, for the record.** Security: no ERRORs. 24
+INFO-level `rls_enabled_no_policy`, all intended and now all documented, plus one
+**WARN worth acting on: leaked-password protection is disabled.** Supabase Auth
+can check new passwords against HaveIBeenPwned; it is a dashboard toggle and it
+is off. Owner decision 20. Performance: no ERRORs, 79 unused-index INFOs (ADR
+0006 retains them pre-launch), 18 multiple-permissive-policy WARNs and 3
+unindexed FKs, all pre-existing and none introduced tonight.
+
+`npm run check` green: 0 lint errors, 250 files, 2511 tests, exit 0.
