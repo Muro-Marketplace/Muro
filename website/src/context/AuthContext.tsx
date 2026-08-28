@@ -126,7 +126,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: metadata },
+        options: {
+          data: metadata,
+          // 09 item 3.2: this and apply/claim were the two signup paths with no
+          // emailRedirectTo, so their confirmation link landed on Supabase's
+          // default redirect rather than back on the site. The three
+          // signup/* pages already pass exactly this.
+          emailRedirectTo:
+            typeof window === "undefined"
+              ? undefined
+              : `${window.location.origin}/login?next=${encodeURIComponent("/browse")}`,
+        },
       });
       return { error };
     },
