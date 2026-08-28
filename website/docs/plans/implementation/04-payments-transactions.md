@@ -2929,16 +2929,33 @@ Sequencing matters: the primitives and the idempotency floor must land before
 anything that returns 500 to force a Stripe retry, otherwise a retry duplicates
 work.
 
+**Ticked 2026-08-28 against the code, not from memory.** An item is ticked only
+where the artefact it names was found: the migration file, the module, the
+identifier, or, where the change is a few lines inside a larger handler, by
+reading that handler. Everything left unticked is either genuinely open or was
+not verified, and three are recorded as verified-NOT-done:
+
+- **0.5** is NOT done. Three separate `customer.subscription.deleted` branches
+  remain (`:1329`, `:1480`, `:1509`) where the item asks for one.
+- **5.3** is NOT done. There is no `extend_free_until` migration and the referral
+  credit at `webhooks/stripe:1217` is still read-modify-write (D14).
+- **Phase 8 (T9)** is not started, deliberately. It is a new checkout mode, and
+  building one unattended is what the money boundary exists to prevent. Surfaced
+  as owner decision 13 in PROGRESS.md.
+
+Items ticked by artefact rather than by reading the whole handler: 2.5, 3.2, 3.3,
+4.6, 5.1, 5.2, 7.4, 7.5.
+
 ### Phase 0: Floor (nothing else is safe without these)
 
-- [ ] **0.1** Migration `074_stripe_webhook_events.sql`; add the global event
+- [x] **0.1** Migration `074_stripe_webhook_events.sql`; add the global event
       dedup guard at the top of the webhook (D1).
-- [ ] **0.2** Add `isSettled()` and gate all three `checkout.session.completed`
+- [x] **0.2** Add `isSettled()` and gate all three `checkout.session.completed`
       branches on `payment_status === "paid"`; add
       `checkout.session.async_payment_succeeded` / `_failed` / `expired`
       branches (D1).
-- [ ] **0.3** Delete `POST /api/orders` (D2). Grep for callers first.
-- [ ] **0.4** Widen the order id and fix the 23505 collision check (D3).
+- [x] **0.3** Delete `POST /api/orders` (D2). Grep for callers first.
+- [x] **0.4** Widen the order id and fix the 23505 collision check (D3).
 - [ ] **0.5** Consolidate the duplicated `event.type` branches: one
       `customer.subscription.deleted`, one `invoice.paid`, one
       `invoice.payment_failed`, one `checkout.session.completed` router. Remove
@@ -2948,39 +2965,39 @@ work.
 
 ### Phase 1: Shared primitives
 
-- [ ] **1.1** Migration `084_payouts_enabled_columns.sql`; build
+- [x] **1.1** Migration `084_payouts_enabled_columns.sql`; build
       `src/lib/payouts/capability.ts` (C1); update the `account.updated` branch
       to keep the cache warm.
-- [ ] **1.2** Replace `canArtistAcceptOrders` at `api/checkout/route.ts:282`;
+- [x] **1.2** Replace `canArtistAcceptOrders` at `api/checkout/route.ts:282`;
       port `stripe-connect-status.test.ts`; delete the old module.
-- [ ] **1.3** `scheduleTransfer` must throw (C3); add `recordBlockedLeg`; update
+- [x] **1.3** `scheduleTransfer` must throw (C3); add `recordBlockedLeg`; update
       every call site to stop swallowing.
-- [ ] **1.4** Migration `085_stripe_transfers_retry.sql`; rewrite
+- [x] **1.4** Migration `085_stripe_transfers_retry.sql`; rewrite
       `processPendingTransfers` with `retry_count` and backoff; widen
       `executeTransfer` to accept `failed` (C4); add the exhausted-payout admin
       alert.
-- [ ] **1.5** Migration `075_decrement_work_stock.sql` (+ `restock_work`);
+- [x] **1.5** Migration `075_decrement_work_stock.sql` (+ `restock_work`);
       replace the read-modify-write decrement (D5).
 - [ ] **1.6** `tests/transactions/primitives.test.ts` green.
 
 ### Phase 2: T1 and T2 (the highest-volume routes)
 
-- [ ] **2.1** Fix the `.single()` artist lookup (D4).
-- [ ] **2.2** Split `strippableCols` from `REQUIRED_MONEY_COLS` (D6).
-- [ ] **2.3** Migration `076_cart_sessions_artist_shipping.sql`; persist
+- [x] **2.1** Fix the `.single()` artist lookup (D4).
+- [x] **2.2** Split `strippableCols` from `REQUIRED_MONEY_COLS` (D6).
+- [x] **2.3** Migration `076_cart_sessions_artist_shipping.sql`; persist
       per-artist shipping from `calculateOrderShipping`.
-- [ ] **2.4** Build `src/lib/payouts/legs.ts` (C2).
-- [ ] **2.5** Replace the single-fee / pooled-remainder / single-transfer code
+- [x] **2.4** Build `src/lib/payouts/legs.ts` (C2).
+- [x] **2.5** Replace the single-fee / pooled-remainder / single-transfer code
       in the webhook with the leg loop (E9).
 - [ ] **2.6** `t1-buy-now-single.test.ts` and `t2-buy-now-multi.test.ts` green.
 
 ### Phase 3: T3 offers (highest financial risk)
 
-- [ ] **3.1** Extract `sendOrderConfirmations` from the cart branch into
+- [x] **3.1** Extract `sendOrderConfirmations` from the cart branch into
       `src/lib/orders/confirmations.ts`; re-point the cart branch at it.
-- [ ] **3.2** Compute the split in `offers/[id]/checkout/route.ts`; add the
+- [x] **3.2** Compute the split in `offers/[id]/checkout/route.ts`; add the
       `canReceivePayout` pre-flight and the stock re-validation (E6, D7).
-- [ ] **3.3** Rewrite the offer webhook branch: full order row, stock
+- [x] **3.3** Rewrite the offer webhook branch: full order row, stock
       decrement, artist transfer, confirmations (E6, E10).
 - [ ] **3.4** `t3-offer.test.ts` green.
 
@@ -2994,20 +3011,20 @@ work.
       `PaymentClient.tsx` warning copy and disable the button (E8).
 - [ ] **4.3** Add the `paid_loan_monthly` checkout branch and the
       `setup_intent.succeeded` branch (C5, E7a, E7d).
-- [ ] **4.4** Migration `078_placement_recurring_billings_placement_uniq.sql`;
+- [x] **4.4** Migration `078_placement_recurring_billings_placement_uniq.sql`;
       fix the upsert conflict target (E7c).
 - [ ] **4.5** Remove the `PAID_LOAN_V2` check from `handleInvoicePaid`,
       `handleInvoicePaymentFailed`, `handleSubscriptionDeleted` and
       `cancelPaidLoanBilling`; keep it on `startPaidLoanBilling` (E11).
-- [ ] **4.6** Fix the epoch period-end stamps at `:722` and `:766` (E11b).
+- [x] **4.6** Fix the epoch period-end stamps at `:722` and `:766` (E11b).
 - [ ] **4.7** `t6-paid-loan.test.ts` green, run twice: flag on and flag off.
 - [ ] **4.8** Flip `PAID_LOAN_V2.prodDefault` to `true`.
 
 ### Phase 5: T7 subscriptions and T8 refunds
 
-- [ ] **5.1** `PRICE_TO_PLAN` map; refuse unknown price ids; add the env
+- [x] **5.1** `PRICE_TO_PLAN` map; refuse unknown price ids; add the env
       assertion to `src/env.ts` (D12).
-- [ ] **5.2** Scope the subscription handler by `metadata.kind` (D15).
+- [x] **5.2** Scope the subscription handler by `metadata.kind` (D15).
 - [ ] **5.3** Migration `079_extend_free_until.sql`; make the referral credit
       atomic (D14).
 - [ ] **5.4** Fix the partial-reversal denominator (D16).
@@ -3016,13 +3033,13 @@ work.
 
 ### Phase 6: T4, T5 placements and QR
 
-- [ ] **6.1** Widen `goingCancelled` to `completed` and `sold` (D8).
-- [ ] **6.2** Migration `077_placement_revenue_share_bounds.sql`; make the
+- [x] **6.1** Widen `goingCancelled` to `completed` and `sold` (D8).
+- [x] **6.2** Migration `077_placement_revenue_share_bounds.sql`; make the
       webhook placement lookup deterministic (D9).
-- [ ] **6.3** `src/lib/qr-attribution-token.ts`; mint in `/api/qr/[slug]`, carry
+- [x] **6.3** `src/lib/qr-attribution-token.ts`; mint in `/api/qr/[slug]`, carry
       in `qr-context`, verify in `/api/checkout`, behind
       `QR_TOKEN_ATTRIBUTION` (D10).
-- [ ] **6.4** Log the no-active-placement case (D11).
+- [x] **6.4** Log the no-active-placement case (D11).
 - [ ] **6.5** `t4-placement.test.ts` and `t5-qr-sale.test.ts` green.
 - [ ] **6.6** After one release with both paths live, remove the raw-`venueSlug`
       fallback and the flag.
@@ -3033,21 +3050,21 @@ work.
 managed tiers are genuinely rejected. That is a live revenue outage on two
 advertised products, not a latent bug.**
 
-- [ ] **7.0** Run the `pg_constraint` query in D25 against production. If the
+- [x] **7.0** Run the `pg_constraint` query in D25 against production. If the
       managed tiers are rejected, apply
       `083_curation_requests_tiers_and_statuses.sql` immediately and add the
       code-vs-schema tier test (D25).
-- [ ] **7.1** Restructure the error path so a row with a live session is never
+- [x] **7.1** Restructure the error path so a row with a live session is never
       deleted (D19).
-- [ ] **7.2** Migration `082_curation_requests_subscription.sql`; split the id
+- [x] **7.2** Migration `082_curation_requests_subscription.sql`; split the id
       columns (D20).
-- [ ] **7.3** `src/lib/curation/billing.ts` with the three handlers; wire into
+- [x] **7.3** `src/lib/curation/billing.ts` with the three handlers; wire into
       the consolidated webhook branches (D21).
-- [ ] **7.4** Validate the Stripe price against the tier at session creation
+- [x] **7.4** Validate the Stripe price against the tier at session creation
       (D22).
-- [ ] **7.5** `notifyAdminCurationPaid` + `notifyAdminCurationCancelled`;
+- [x] **7.5** `notifyAdminCurationPaid` + `notifyAdminCurationCancelled`;
       `CurationRenewalReceipt` template (D23).
-- [ ] **7.6** Make `/curated/success` verify the session (D24).
+- [x] **7.6** Make `/curated/success` verify the session (D24).
 - [ ] **7.7** `t10-curation.test.ts` green.
 
 ### Phase 8: T9 collect from venue (new feature)
@@ -3071,7 +3088,7 @@ advertised products, not a latent bug.**
 - [ ] **9.2** Stripe CLI replay against a preview deployment: drive every event
       in the fixture set at a live test-mode endpoint and diff the resulting DB
       state against the unit-test expectations.
-- [ ] **9.3** Reconciliation report: a script that sums
+- [x] **9.3** Reconciliation report: a script that sums
       `orders.total` against `stripe_transfers` + `orders.platform_fee` for a
       date range and fails on any penny of drift. Run it in CI nightly.
 - [ ] **9.4** Resolve every **UNCONFIRMED** marker in this document.

@@ -19,7 +19,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 4 | `074` RLS closure, all five leaks + `/apply` service-role switch **same commit** | `02` §11 | **done** (5ccf266). Assertion 5 rows → 0, proven behaviourally too. §11 had three errors: four-of-five policies, one-of-two INSERT policies, an unguarded ALTER on a table prod lacks |
 | 5 | G-A / G-B public PII projections (Bug 1, Bug 5) | D8 | **G-A done** (3a13aab). **G-B coords done** (ceb4d45); the slug/opaque-id half needs an owner decision |
 | 6 | `07 §13.2` `parseDimensions` collapse (pulled forward) | `07` | **behaviour pinned** (04c023c); the collapse itself needs an owner decision on implausible dimensions |
-| 7 | `04` payments Phase 0→9 | `04` | **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082). **T6 COMPLETE** (E7a-E7d, E8, E11, E11b). **B0 COMPLETE**: D2 (E19/E46f, 740b79a), D1 (13aed91, migration 084, event-dedup half; payment_status gate deferred to owner), D3 (c066a38). Next: T1 (D4-D6), then T4, T9, T5 |
+| 7 | `04` payments Phase 0→9 | `04` | **33 of 61 checklist items now ticked, verified against the code on 2026-08-28** (verification method and the three verified-NOT-done items are recorded above the checklist in the doc itself). Phase 0 done bar 0.5/0.6; Phases 1, 2, 3, 6 and 7 essentially complete. **Phase 0 done**: Bug 15 (ee7e888), curation T10 (509d3c4). **G-C / Bug 10 done** (a02c38e, migration 081: the scope column did not exist). **T3 E6+E10 done** (b2c27ed; no order row existed at all, `orders.shipping` is NOT NULL). **T3 emails done** (`sendOrderConfirmations` extracted, inline copy deleted). **D7 done** (95d7d93). **T2 / E9 done** (7dffb33, migration 082). **T6 COMPLETE** (E7a-E7d, E8, E11, E11b). **B0 COMPLETE**: D2 (E19/E46f, 740b79a), D1 (13aed91, migration 084, event-dedup half; payment_status gate deferred to owner), D3 (c066a38). **T1 (D4/D5/D6), T4 (D8/D9) and T5 (D10/D11) are all DONE** and the checklist was simply unticked. **Remaining and real: 0.5** (three `customer.subscription.deleted` branches where the plan wants one), **5.3/D14** (the referral credit is still read-modify-write, no `extend_free_until` migration), **5.4/5.5** (refund denominator + restock, both refunds so owner-gated), **Phase 8 / T9** (a new checkout mode, surfaced as owner decision 13 not started), and the `tests/transactions/**` harness (0.6, and every `*.test.ts` that depends on it). **Newly added: 9.3** the reconciliation report, and **open question 2** the Stripe API version pin. |
 | 7a | `free_until` overcharge: every sale billed 15% | D17.1 | **done** (6e0705e). Four sites, not the two D17 named. No fee changes today, no artist has a future `trial_end` |
 | 7b | Schema-column guard | **D17.3**, owner `02`, pulled forward | **DONE**. Narrow form (6e0705e), then **full form** (7f556eb): `schema-columns.json` snapshots all 53 tables / 750 columns; the scan surfaced 12 phantom selects, parked in a shrinking `GRANDFATHERED` ratchet and queued as **row 19** |
 | 7c | `placements/route.ts` phantom `requester_user_id` | N3 follow-up, found by 7b's guard | **DONE** (96fc84b): the real column is `proposed_by_user_id`; the whole-query rejection is gone (route.ts:806) |
@@ -11560,3 +11560,49 @@ exists in no migration and not in the live table. The route stopped passing it
 guaranteed-failing per-column write. The real fix is either a migration or
 removing the UI that collects per-size in-store prices; both were already
 escalated and this is the third place the same undecided question shows up.
+
+### 04 item 0.2 — `checkout.session.completed` does not mean paid — DONE
+
+The other half of D1, and the only Phase 0 item still open apart from 0.5.
+
+`checkout.session.completed` fires when the customer finishes the flow, not when
+the money arrives. A delayed payment method — BACS Direct Debit, SEPA, bank
+transfer, some cards under SCA — fires it with `payment_status: "unpaid"` and
+settles days later, **or never**. There was no `payment_status` check anywhere in
+the webhook: `grep -c payment_status` returned 0.
+
+Behind that event, four branches book something: an order row, a stock decrement,
+an artist transfer, a curation request marked paid. So the gate is **one check at
+the top of `handleWebhookEvent`** rather than four inside them, which is also the
+only shape a fifth branch cannot forget.
+
+**200, not an error.** Stripe must not retry: nothing is wrong, the money simply
+has not landed. `checkout.session.async_payment_succeeded` is the event that says
+it has, and this repo already handles it, so refusing the unsettled `completed`
+loses nothing.
+
+**Two deviations from the plan's literal text, both deliberate.**
+
+It says gate on `payment_status === "paid"`. That would **refuse a legitimate £0
+order**: a 100% discount or a trial that bills nothing today arrives as
+`no_payment_required`, which means nothing is owed, which is settled. Both are
+accepted.
+
+And an **unrecognised** value is refused, including one Stripe adds later, while
+an **absent** one is accepted. The two are not the same case. Absence is
+compatibility: older API versions omit the field, and every hand-built test
+fixture omits it. An unknown value is semantics, and the failures there are
+asymmetric — accepting one books orders and schedules payouts against money that
+may never arrive, silently, which is precisely what this gate exists to stop,
+while refusing one halts booking, which is loud, noticed in minutes and fixed by
+adding the value to a list.
+
+**One of my own tests was weak and the mutation run caught it, again.** "Lets a
+zero-total session through" asserted `expect(fromMock).toHaveBeenCalled()`, which
+is true either way, because the event-dedup claim runs before the gate. It now
+asserts that a real table is reached, and fails on the `=== "paid"` mutation.
+
+11 tests. Removing the gate fails the unpaid case; narrowing to `=== "paid"`
+fails two.
+
+`npm run check` green: 0 lint errors, 244 files, 2467 tests, exit 0.

@@ -50,6 +50,7 @@ import { sendOrderConfirmations, type OrderEmailItem } from "@/lib/orders/confir
 import { orderIdFromSession, classifyOrderIdConflict } from "@/lib/orders/order-id";
 import { missingStripePriceEnvs } from "@/env";
 import type Stripe from "stripe";
+import { isSettled } from "@/lib/payments/settlement";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -117,6 +118,34 @@ async function handleWebhookEvent(
   event: Stripe.Event,
   db: ReturnType<typeof getSupabaseAdmin>,
 ): Promise<NextResponse> {
+  // ─── D1 / 04 item 0.2: completed does not mean paid ───
+  //
+  // `checkout.session.completed` fires when the customer finishes the flow, not
+  // when the money arrives. A delayed payment method (BACS Direct Debit, SEPA,
+  // bank transfer, some cards under SCA) fires it with `payment_status:
+  // "unpaid"` and settles days later, or never.
+  //
+  // Every branch below books something against that session: an order row, a
+  // stock decrement, an artist transfer, a curation request marked paid. So the
+  // gate is ONE check here rather than four inside them, which is also the only
+  // shape a fifth branch cannot forget.
+  //
+  // 200, not an error: Stripe must NOT retry. There is nothing wrong, the money
+  // simply has not landed. `checkout.session.async_payment_succeeded` is the
+  // event that says it has, and the branches below already accept it, so
+  // refusing here loses nothing.
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    if (!isSettled(session)) {
+      console.warn("[webhook] checkout.session.completed is not settled, waiting", {
+        sessionId: session.id,
+        paymentStatus: session.payment_status,
+        kind: session.metadata?.kind ?? session.metadata?.checkout_kind ?? session.mode,
+      });
+      return NextResponse.json({ received: true, awaiting_payment: true });
+    }
+  }
+
   // ─── Curation checkout (one-off OR managed subscription) ───
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;

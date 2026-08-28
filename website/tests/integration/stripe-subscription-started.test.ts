@@ -269,3 +269,88 @@ describe("the invoice that follows does not send a second time", () => {
     expect(receipts).toHaveLength(0);
   });
 });
+
+
+// 04 D1 / item 0.2. `checkout.session.completed` does not mean paid.
+//
+// It fires when the customer finishes the flow. A delayed payment method (BACS
+// Direct Debit, SEPA, bank transfer, some cards under SCA) fires it with
+// `payment_status: "unpaid"` and settles days later, or never. Every branch
+// behind it books something: an order row, a stock decrement, an artist
+// transfer, a curation request marked paid.
+describe("checkout.session.completed is gated on settlement", () => {
+  function completed(paymentStatus: string | undefined, over: Record<string, unknown> = {}) {
+    return event("checkout.session.completed", {
+      id: "cs_1",
+      mode: "payment",
+      payment_status: paymentStatus,
+      metadata: {},
+      amount_total: 5000,
+      ...over,
+    });
+  }
+
+  it("does nothing at all for an UNPAID session", async () => {
+    nextEvent.value = completed("unpaid");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ awaiting_payment: true });
+    // Nothing beyond the event-dedup claim, which runs before the gate and is
+    // meant to: no order row, no stock decrement, no transfer, no curation row
+    // marked paid.
+    const tables = fromMock.mock.calls.map((c) => c[0]);
+    expect(tables.filter((t) => t !== "stripe_webhook_events")).toEqual([]);
+  });
+
+  it("answers 200 so Stripe does not retry a session that is merely waiting", async () => {
+    // A non-2xx would make Stripe redeliver on a schedule, forever, for a
+    // payment that is simply in flight. async_payment_succeeded is the event
+    // that says it landed.
+    nextEvent.value = completed("unpaid");
+    expect((await POST(post())).status).toBe(200);
+  });
+
+  /** Tables the handler touched, excluding the event-dedup claim. */
+  function tablesTouched(): string[] {
+    return fromMock.mock.calls.map((c) => c[0]).filter((t) => t !== "stripe_webhook_events");
+  }
+
+  it("lets a PAID session through to the branches below", async () => {
+    installDb();
+    nextEvent.value = completed("paid", {
+      metadata: { kind: "curation_request", curation_request_id: "cr_1" },
+    });
+
+    await POST(post());
+
+    expect(tablesTouched()).toContain("curation_requests");
+  });
+
+  it("lets a zero-total session through", async () => {
+    // `no_payment_required` is a 100% discount or a trial billing nothing today.
+    // Nothing is owed, so it is settled, and gating on `=== "paid"` alone would
+    // refuse a legitimate free order. Asserting a real table is reached, not
+    // merely that the mock saw something: the dedup claim runs before the gate,
+    // so `toHaveBeenCalled()` is true either way and the test would pass on the
+    // mutation it exists to catch.
+    installDb();
+    nextEvent.value = completed("no_payment_required", {
+      metadata: { kind: "curation_request", curation_request_id: "cr_1" },
+    });
+
+    await POST(post());
+
+    expect(tablesTouched()).toContain("curation_requests");
+  });
+
+  it("does not gate a subscription event, which carries no payment_status", async () => {
+    nextEvent.value = event("customer.subscription.created", subscription());
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).not.toMatchObject({ awaiting_payment: true });
+  });
+});
