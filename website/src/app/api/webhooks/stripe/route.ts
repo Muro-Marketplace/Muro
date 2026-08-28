@@ -11,6 +11,7 @@ import { sendEmail } from "@/lib/email/send";
 import { resolveArtistNamesBulk } from "@/emails/_helpers/resolve-artist-name";
 import { ArtistPayoutSent } from "@/emails/templates/payments/ArtistPayoutSent";
 import { ReferralCreditGranted } from "@/emails/templates/payments/ReferralCreditGranted";
+import { SubscriptionRecovered } from "@/emails/templates/payments/SubscriptionRecovered";
 import { ArtistPayoutFailed } from "@/emails/templates/payments/ArtistPayoutFailed";
 import { SubscriptionPaymentFailed } from "@/emails/templates/payments/SubscriptionPaymentFailed";
 import { SubscriptionTrialEnding } from "@/emails/templates/payments/SubscriptionTrialEnding";
@@ -55,6 +56,7 @@ import type Stripe from "stripe";
 import { isSettled } from "@/lib/payments/settlement";
 import { VenueCollectionPending } from "@/emails/templates/venue-lifecycle/VenueCollectionPending";
 import { CustomerRefundConfirmation } from "@/emails/templates/orders/CustomerRefundConfirmation";
+import { CustomerPaymentFailed } from "@/emails/templates/orders/CustomerPaymentFailed";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -1303,6 +1305,39 @@ async function handleWebhookEvent(
     }
   }
 
+  // ─── WS1.5 second half: a deferred payment FAILED after checkout ───
+  // Bank-debit style methods complete checkout before the money moves. The
+  // settlement gate correctly booked nothing, but the buyer walked away
+  // believing they bought art. Nothing was charged and no order exists;
+  // cart_sessions rows simply expire, so the only repair owed is the truth,
+  // to the buyer, once per session.
+  if (event.type === "checkout.session.async_payment_failed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const sessionKind = session.metadata?.kind || "";
+    if (sessionKind === "" || sessionKind === "cart_checkout") {
+      const buyerEmail = session.customer_details?.email || session.customer_email || "";
+      if (buyerEmail) {
+        try {
+          await sendEmail({
+            idempotencyKey: `async_payment_failed:${session.id}`,
+            template: "customer_payment_failed",
+            category: "orders_and_payouts",
+            to: buyerEmail,
+            subject: "Your Wallplace payment did not go through",
+            react: CustomerPaymentFailed({
+              firstName: (session.customer_details?.name || "there").split(" ")[0],
+              browseUrl: `${SITE}/browse`,
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { stripeSessionId: session.id },
+          });
+        } catch (mailErr) {
+          console.error("[webhook] async-payment-failed email failed:", mailErr);
+        }
+      }
+    }
+  }
+
   // ─── Subscription events ───
   if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
     const subscription = event.data.object as Stripe.Subscription;
@@ -1877,6 +1912,43 @@ async function handleWebhookEvent(
           .update({ subscription_status: "active" })
           .eq("stripe_customer_id", customerId);
         if (error) console.error("Invoice paid recovery error:", error);
+        // WS4.4 (R2.2, return half): the dunning emails say the portfolio is
+        // delisted while payments fail; recovery used to flip the status
+        // back in silence. Close the loop. Keyed on the invoice that paid.
+        if (!error && profile.user_id) {
+          try {
+            const { data: { user: recoveredUser } } = await db.auth.admin.getUserById(profile.user_id);
+            if (recoveredUser?.email) {
+              const planName = ((profile.subscription_plan as string) || "Wallplace")
+                .replace(/^./, (c: string) => c.toUpperCase());
+              createNotification({
+                userId: profile.user_id,
+                kind: "subscription_recovered",
+                title: "Payment received, your portfolio is live again",
+                body: "Your subscription is active and your work is back in the marketplace.",
+                link: "/artist-portal/billing",
+                idempotencyKey: `subscription_recovered:${invoice.id}`,
+              }).catch((err) => console.warn("[webhook] recovery bell failed:", err));
+              await sendEmail({
+                idempotencyKey: `subscription_recovered:${invoice.id}`,
+                template: "subscription_recovered",
+                category: "orders_and_payouts",
+                to: recoveredUser.email,
+                userId: profile.user_id,
+                subject: "Payment received, your portfolio is live again",
+                react: SubscriptionRecovered({
+                  firstName: (profile.name || "there").split(" ")[0],
+                  planName,
+                  portfolioUrl: `${SITE}/artist-portal/profile`,
+                  supportUrl: `${SITE}/support`,
+                }),
+                metadata: { invoiceId: invoice.id, customerId },
+              });
+            }
+          } catch (recoveryMailErr) {
+            console.error("[webhook] recovery email failed:", recoveryMailErr);
+          }
+        }
       }
 
       // Renewal receipt, only for recurring charges, not the initial signup
@@ -1961,6 +2033,17 @@ async function handleWebhookEvent(
         const artistProfileResolved = failedRecipient;
         const { data: { user } } = await db.auth.admin.getUserById(artistProfileResolved.user_id);
         if (user?.email) {
+          // WS6.2 (R6.F5): the artist's money bounced back off their bank;
+          // that deserves a bell, not just an inbox entry. Keyed because the
+          // email below can throw and Stripe redelivers.
+          createNotification({
+            userId: artistProfileResolved.user_id,
+            kind: "payout_failed",
+            title: "A payout to your bank failed",
+            body: payout.failure_message || "Stripe could not send your payout. Check your bank details.",
+            link: "/artist-portal/billing",
+            idempotencyKey: `payout_failed:${payout.id}`,
+          }).catch((err) => console.warn("[webhook] payout-failed bell failed:", err));
           await sendEmail({
             idempotencyKey: `payout_failed:${payout.id}`,
             template: "artist_payout_failed",

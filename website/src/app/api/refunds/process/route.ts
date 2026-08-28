@@ -142,6 +142,21 @@ export async function POST(request: Request) {
         // half already went through the pipeline as CustomerRefundConfirmation;
         // only the decline had no template, which is what kept the legacy
         // function alive. Both halves are on one pipeline now.
+        // WS6.2 (R6.F4): the decision that STOPS money moving had no bell.
+        // The requester's id first (an artist-raised request bells the
+        // artist), the order's buyer as fallback.
+        const rejectedBellUserId =
+          ((refundReq.requester_user_id || order.buyer_user_id) as string | null) ?? null;
+        if (rejectedBellUserId) {
+          createNotification({
+            userId: rejectedBellUserId,
+            kind: "refund_rejected",
+            title: `Refund request declined on order ${order.id}`,
+            body: reason ? `Reason: ${reason}` : "See the email for details.",
+            link: `/customer-portal?order=${encodeURIComponent(order.id as string)}`,
+            idempotencyKey: `refund_rejected:${refundRequestId}`,
+          }).catch((err) => console.warn("[refunds] rejection bell failed:", err));
+        }
         const declineTo = (requesterEmail || buyerEmailFallback) as string;
         // R4.17: the greeting used the buyer's SHIPPING name and no userId,
         // so an artist-raised request rejected by admin opened with the

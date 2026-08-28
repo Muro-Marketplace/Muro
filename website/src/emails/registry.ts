@@ -108,6 +108,7 @@ import CustomerDeliveryConfirmation from "./templates/orders/CustomerDeliveryCon
 import CustomerPostPurchaseCare from "./templates/orders/CustomerPostPurchaseCare";
 import CustomerPurchaseReviewRequest from "./templates/orders/CustomerPurchaseReviewRequest";
 import CustomerRefundConfirmation from "./templates/orders/CustomerRefundConfirmation";
+import CustomerPaymentFailed from "./templates/orders/CustomerPaymentFailed";
 // K1: the decline counterpart. Its absence is why the legacy notifyRefundDecision
 // survived after the approve half had already moved to the pipeline.
 import CustomerRefundRejected from "./templates/orders/CustomerRefundRejected";
@@ -139,6 +140,7 @@ import PaidLoanSetUpPayment from "./templates/payments/PaidLoanSetUpPayment";
 // WS4.3: paid-loan dunning to the venue, wired from invoice.payment_failed.
 import PaidLoanPaymentFailed from "./templates/payments/PaidLoanPaymentFailed";
 import ReferralCreditGranted from "./templates/payments/ReferralCreditGranted";
+import SubscriptionRecovered from "./templates/payments/SubscriptionRecovered";
 import ReferralWindowEnding from "./templates/payments/ReferralWindowEnding";
 import SubscriptionTrialEnding from "./templates/payments/SubscriptionTrialEnding";
 import SubscriptionUpgraded from "./templates/payments/SubscriptionUpgraded";
@@ -361,6 +363,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   CustomerPostPurchaseCare,
   CustomerPurchaseReviewRequest,
   CustomerRefundConfirmation,
+  CustomerPaymentFailed,
   ArtistRefundNotification,
   OrderDisputeOpened,
   OrderDisputeResolved,
@@ -380,6 +383,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   PaidLoanSetUpPayment,
   PaidLoanPaymentFailed,
   ReferralCreditGranted,
+  SubscriptionRecovered,
   ReferralWindowEnding,
   SubscriptionTrialEnding,
   SubscriptionUpgraded,

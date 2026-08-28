@@ -311,6 +311,41 @@ export async function handleInvoicePaid(
     Math.round(collectedPence * (1 - platformFeePct / 100)),
   );
 
+  // R2.13 (audit): cancelPaidLoanBilling failures were swallowed with a
+  // comment promising "the webhook reconciler will catch up", and no
+  // reconciler existed - so invoices for a COMPLETED placement kept paying
+  // the artist share indefinitely. The daily subscription-reconcile cron now
+  // exists, and this is the immediate tripwire: an invoice for a non-active
+  // placement still pays the share (the venue WAS charged; the artist's cut
+  // of real money is owed), but admin hears about it the same minute so the
+  // orphaned subscription gets cancelled by a human today, not never.
+  try {
+    const { data: placementRow } = await db
+      .from("placements")
+      .select("status")
+      .eq("id", billing.placement_id)
+      .maybeSingle<{ status: string | null }>();
+    if (placementRow && placementRow.status !== "active") {
+      const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+      await sendAdminAlert({
+        idempotencyKey: `paid_loan_nonactive:${invoice.id}`,
+        subject: "Paid-loan invoice charged for a non-active placement",
+        summary:
+          `Invoice ${invoice.id} charged the venue for placement ${billing.placement_id}, ` +
+          `whose status is "${placementRow.status}". The Stripe subscription should have been ` +
+          `cancelled when the placement ended; cancel it in Stripe or via the placement page.`,
+        fields: [
+          { label: "Placement", value: billing.placement_id },
+          { label: "Placement status", value: String(placementRow.status) },
+          { label: "Invoice", value: String(invoice.id) },
+        ],
+        metadata: { placementId: billing.placement_id, invoiceId: invoice.id },
+      });
+    }
+  } catch (staleAlertErr) {
+    console.warn("[paid-loan] non-active placement check failed:", staleAlertErr);
+  }
+
   // Audit fix: explicit idempotency check before scheduleTransfer.
   // The Stripe webhook retries failed events up to 3 days; without
   // this guard each retry inserts another pending transfer and the

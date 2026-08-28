@@ -458,6 +458,66 @@ describe("customer.subscription.deleted reaches all three reconcilers (D13)", ()
 // half that actually happened — its select named `free_until` before migration
 // 115 created it, so the whole statement was rejected and the programme never
 // credited anyone.
+describe("past_due recovery tells the artist (WS4.4 return half)", () => {
+  it("an invoice.paid that recovers past_due sends subscription_recovered, keyed on the invoice", async () => {
+    installDb({ profile: { id: "ap-1", user_id: "u-artist", name: "Maya Chen", subscription_status: "past_due", subscription_plan: "pro" } });
+    nextEvent.value = event("invoice.paid", { id: "in_rec_1", customer: "cus_1", billing_reason: "subscription_cycle", amount_paid: 0 });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "subscription_recovered");
+    expect(sends).toHaveLength(1);
+    expect(sends[0].idempotencyKey).toBe("subscription_recovered:in_rec_1");
+  });
+
+  it("an already-active subscriber gets no recovery email", async () => {
+    installDb({ profile: { id: "ap-1", user_id: "u-artist", name: "Maya Chen", subscription_status: "active", subscription_plan: "pro" } });
+    nextEvent.value = event("invoice.paid", { id: "in_rec_2", customer: "cus_1", billing_reason: "subscription_cycle", amount_paid: 0 });
+    await POST(post());
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "subscription_recovered");
+    expect(sends).toHaveLength(0);
+  });
+});
+
+describe("async payment failure tells the buyer (WS1.5)", () => {
+  it("emails the buyer once, keyed on the session; no order is touched", async () => {
+    installDb();
+    nextEvent.value = event("checkout.session.async_payment_failed", {
+      id: "cs_async_1",
+      mode: "payment",
+      customer_email: "jo@x.com",
+      customer_details: { email: "jo@x.com", name: "Jo Buyer" },
+      metadata: { kind: "cart_checkout" },
+    });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "customer_payment_failed");
+    expect(sends).toHaveLength(1);
+    expect(sends[0].to).toBe("jo@x.com");
+    expect(sends[0].idempotencyKey).toBe("async_payment_failed:cs_async_1");
+  });
+
+  it("a non-cart kind (curation, offer) is not the cart's business", async () => {
+    installDb();
+    nextEvent.value = event("checkout.session.async_payment_failed", {
+      id: "cs_async_2",
+      mode: "payment",
+      customer_email: "jo@x.com",
+      metadata: { kind: "curation_request" },
+    });
+    await POST(post());
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "customer_payment_failed");
+    expect(sends).toHaveLength(0);
+  });
+});
+
 describe("recurring-invoice handler throws answer 500 (WS1.1 second half)", () => {
   it("a paid-loan invoice.paid throw releases the claim via 500 so Stripe redelivers", async () => {
     // Swallowing this used to keep the dedup claim: a transient DB fault
