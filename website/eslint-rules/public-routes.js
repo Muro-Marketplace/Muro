@@ -16,6 +16,11 @@ const PUBLIC_ROUTES = {
     "Guest order tracking. Authenticated by signed token or email match, rate limited.",
   "src/app/api/newsletter/route.ts":
     "Public newsletter signup. Writes only the caller's own submitted email.",
+  "src/app/api/newsletter/confirm/route.ts":
+    "Double opt-in confirmation link. Authenticated by the 122-bit token in the URL, " +
+    "the same bearer model as the unsubscribe endpoint: whoever has the link read the " +
+    "inbox it was delivered to. Single-use (the token is cleared on success), expires " +
+    "after 7 days, and rate limited.",
   "src/app/api/waitlist/route.ts":
     "Public waitlist signup. Writes only the caller's own submitted details.",
   "src/app/api/contact/route.ts":

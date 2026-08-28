@@ -10887,3 +10887,70 @@ number 601; the case one is a straight "Maya@Example.com" against
 "maya@example.com".
 
 `npm run check` green: 0 lint errors, 234 files, 2328 tests, exit 0.
+
+### 09 item 3.5 — newsletter double opt-in — DONE
+
+The intent has been in the schema since migration 016 and was never implemented.
+`email_preferences.newsletter_enabled` defaults to **false** with the comment
+"double opt-in", `newsletter_subscribers` had no token column, so there was no
+way to confirm anything and nothing ever set that flag true. Two consequences:
+subscribing did nothing anyone could observe, and **anyone could subscribe anyone
+else's address**.
+
+Built end to end: `NewsletterSubscribeConfirm`, a token on the signup insert, the
+send, `GET /api/newsletter/confirm`, and a landing page. §D.3 is right that the
+route is the load-bearing half: without it the link 404s and double opt-in is
+worse than none, because nobody is ever confirmed and the form still looks like
+it worked.
+
+**Migration 107 (written, applied to prod, verified live).** `confirm_token TEXT
+UNIQUE` and `confirmed_at TIMESTAMPTZ`, plus a partial index on unconfirmed rows
+only.
+
+**The three existing subscribers are grandfathered as confirmed, and that is a
+decision worth seeing.** They subscribed under single opt-in, which is consent:
+they typed an address and pressed a button. Leaving them NULL looks like the
+cautious choice and is not, because every future "send only to confirmed" query
+would then silently drop three real people who did opt in and were never offered
+a link. `confirmed_at` is set to their own `subscribed_at`, not to now, so the
+row does not claim a confirmation happened today. One UPDATE reverses it. Listed
+with the other owner decisions.
+
+**The token is cleared on confirmation, not kept.** A retained token is a
+standing capability sitting in a mailbox archive, a forwarded email and any proxy
+log that recorded the URL. Cleared, a second click finds no row and lands exactly
+where an unknown token lands, so "already confirmed" is not an answer anyone can
+read off the page.
+
+**The 7-day expiry in the email copy is enforced.** A claimed expiry that is not
+checked is simply a false statement to the reader; the route compares against
+`subscribed_at` and lands expired links on their own message.
+
+**No resend on a duplicate**, per §D.3. The consequence is real and stated rather
+than hidden: someone whose confirmation goes to spam has no self-service retry.
+The recovery path is the contact form, which as of item 3.4 actually answers.
+
+**The reflected-send cap from 3.4 applies here too**, which is why it is a module.
+This is the same shape: an anonymous caller names a recipient who has not proved
+they own the address. A flooded address gets the row and no email, and the
+response is byte-identical to a fresh signup, so the cap cannot become the
+membership oracle E36d removed.
+
+**`sendEmail` is deliberately called with no `userId`.** Passing one would make it
+check `newsletter_enabled`, which defaults to FALSE, and suppress the very email
+whose job is to turn it true.
+
+`tests/integration/schema-columns.json` regenerated for 106 and 107. The
+regenerator needs `SUPABASE_ACCESS_TOKEN`, which this environment does not have
+(D12), so it was rebuilt through the MCP instead and cross-checked: a per-table
+md5 of the column list, live against committed, showed drift in exactly the two
+tables these migrations touched and none elsewhere, and zero drift after the
+patch. Not grandfathered, per D61.
+
+31 tests across the two routes, each fix verified fail-before. Removing the
+confirmation send fails 4. Keeping the token fails the single-use test. Dropping
+the expiry check fails the expiry test. Skipping the preference flip fails that
+one.
+
+`npm run check` green: 0 lint errors, 235 files, 2355 tests, 133 templates, 0
+dependency violations, exit 0.

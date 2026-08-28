@@ -81,13 +81,14 @@ describe("one auth-user lookup", () => {
     expect(bare, "listUsers() with no arguments returns only the first 50 users").toEqual([]);
   });
 
-  it("the helper is what the three former call sites now use", () => {
+  it("the helper is what every caller uses", () => {
     // Named individually so deleting the import from any one of them is a
     // failing test rather than a quiet regression.
     const callers = [
       "src/app/api/admin/applications/[id]/route.ts",
       "src/app/api/account/roles/route.ts",
       "src/app/api/placements/venues/route.ts",
+      "src/app/api/newsletter/confirm/route.ts",
     ];
     for (const file of callers) {
       expect(code(file), file).toContain("@/lib/auth/find-user-by-email");

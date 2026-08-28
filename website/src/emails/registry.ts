@@ -173,6 +173,7 @@ import UserRepermissionCampaign from "./templates/re-engagement/UserRepermission
 
 // ── Newsletter ────────────────────────────────────────────────────────────
 import NewsletterMonthlyGallery from "./templates/newsletter/NewsletterMonthlyGallery";
+import NewsletterSubscribeConfirm from "./templates/newsletter/NewsletterSubscribeConfirm";
 import NewsletterArtistSpotlight from "./templates/newsletter/NewsletterArtistSpotlight";
 import NewsletterVenueSpotlight from "./templates/newsletter/NewsletterVenueSpotlight";
 import NewsletterCuratorsPicks from "./templates/newsletter/NewsletterCuratorsPicks";
@@ -337,6 +338,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
 
   // Newsletter
   NewsletterMonthlyGallery,
+  NewsletterSubscribeConfirm,
   NewsletterArtistSpotlight,
   NewsletterVenueSpotlight,
   NewsletterCuratorsPicks,
