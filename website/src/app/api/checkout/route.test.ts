@@ -1184,6 +1184,18 @@ describe("POST /api/checkout venue attribution (D10)", () => {
   function setupOk() {
     fromMock.mockImplementation((table: string) => {
       if (table === "artist_profiles") return profilesTable([]);
+      if (table === "artist_works") {
+        // The audit closed the workId-less fallback, so this fixture's line
+        // now names a work and the DB must price it.
+        return {
+          select: () => ({
+            in: async () => ({
+              data: [{ id: "w-1", available: true, quantity_available: null, pricing: [{ label: "S", price: 100 }], title: "Untitled", frame_options: null, in_store_price: null }],
+              error: null,
+            }),
+          }),
+        };
+      }
       return { select: () => ({ eq: () => ({ single: async () => ({ data: null }) }), in: async () => ({ data: [], error: null }) }) };
     });
   }
@@ -1192,7 +1204,7 @@ describe("POST /api/checkout venue attribution (D10)", () => {
     return calls[0]?.[0]?.venueSlug;
   };
   const body = (extra: Record<string, unknown>) => ({
-    items: [{ ...baseItem, artistSlug: "alice" }],
+    items: [{ ...baseItem, artistSlug: "alice", type: "work", workId: "w-1" }],
     shipping: { ...baseShipping, country: "GB" },
     ...extra,
   });
@@ -1415,5 +1427,166 @@ describe("POST /api/checkout collect-from-venue re-validation (T9)", () => {
       [{ expectedShippingPence: number }]
     >)[0][0];
     expect(saved.expectedShippingPence).toBe(0);
+  });
+});
+
+// ── Server-side pricing, closed end to end (2026-08-28 audit) ────────────────
+//
+// The framed hole (E46c) was closed earlier; this pins the three fallbacks that
+// still let a client price survive to Stripe: collection bundles (never checked
+// against artist_collections at all), lines with no identity, and unframed
+// lines whose size label matches no tier. It also pins the T9 rule that a
+// collect-from-venue line charges the IN-STORE price the button displayed,
+// not the shipped tier price.
+describe("POST /api/checkout server-side pricing (audit)", () => {
+  beforeEach(() => {
+    setupDefaultDbMock();
+  });
+
+  const sentLineItems = () =>
+    (stripeCreate.mock.calls as unknown as Array<
+      [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
+    >)[0]?.[0]?.line_items ?? [];
+
+  it("prices a collection bundle from the DB, not the client", async () => {
+    const res = await POST(
+      req({
+        items: [{ ...baseItem, title: "Bundle", type: "collection", collectionId: "c-1", price: 0.01 }],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    // DB bundle_price is 100 in the default mock; the 1p client claim dies here.
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(10000);
+    const saved = (saveCartSessionMock.mock.calls as unknown as Array<
+      [{ cart: Array<{ price: number }> }]
+    >)[0][0];
+    // The data-of-record the webhook books from carries the corrected number too.
+    expect(saved.cart[0].price).toBe(100);
+  });
+
+  it("refuses a collection that is missing or unavailable", async () => {
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_collections") {
+        return { select: () => ({ in: async () => ({ data: [], error: null }) }) };
+      }
+      return base(table);
+    });
+    const res = await POST(
+      req({
+        items: [{ ...baseItem, title: "Bundle", type: "collection", collectionId: "c-gone", price: 100 }],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("collection_unavailable");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a line naming neither a work nor a collection", async () => {
+    const res = await POST(
+      req({
+        items: [{ ...baseItem, price: 0.01 }],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("cart_line_unidentified");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unframed line whose size matches no tier, instead of trusting its price", async () => {
+    const res = await POST(
+      req({
+        items: [{ ...baseItem, type: "work", workId: "w-1", size: "Made Up", price: 0.01 }],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("size_label_unresolvable");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  // Collect-from-venue pricing needs the T9 placement claim to hold, so these
+  // two mock both tables.
+  function setupCollect(workRow: Record<string, unknown>) {
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_works") {
+        return { select: () => ({ in: async () => ({ data: [workRow], error: null }) }) };
+      }
+      if (table === "placements") {
+        return {
+          select: () => ({
+            in: () => ({
+              eq: async () => ({
+                data: [{
+                  id: "p-1",
+                  venue_slug: "the-copper-kettle",
+                  artist_slug: "alice",
+                  status: "active",
+                  collection_address: "1 High St",
+                  placed_size_label: null,
+                }],
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return base(table);
+    });
+  }
+
+  const collectLine = {
+    ...baseItem,
+    type: "work",
+    workId: "w-1",
+    lineFulfilment: "collect_venue",
+    collectVenueSlug: "the-copper-kettle",
+    collectPlacementId: "p-1",
+  };
+  const collectShipping = { ...baseShipping, addressLine1: "", city: "", postcode: "", country: "GB" };
+
+  it("charges a collect line the per-size IN-STORE price, not the shipped tier price", async () => {
+    setupCollect({
+      id: "w-1", available: true, quantity_available: 10, title: "Untitled",
+      pricing: [{ label: "S", price: 100, inStorePrice: 80 }],
+      frame_options: null, in_store_price: null,
+    });
+    const res = await POST(
+      req({ fulfilmentMethod: "collect_venue", items: [{ ...collectLine, price: 80 }], shipping: collectShipping }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(8000);
+  });
+
+  it("falls back to the work-level in_store_price when the tier has none", async () => {
+    setupCollect({
+      id: "w-1", available: true, quantity_available: 10, title: "Untitled",
+      pricing: [{ label: "S", price: 100 }],
+      frame_options: null, in_store_price: 70,
+    });
+    const res = await POST(
+      req({ fulfilmentMethod: "collect_venue", items: [{ ...collectLine, price: 70 }], shipping: collectShipping }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(7000);
+  });
+
+  it("persists the corrected price on the cart session the webhook books from", async () => {
+    const res = await POST(
+      req({
+        items: [{ ...baseItem, type: "work", workId: "w-1", price: 0.01 }],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const saved = (saveCartSessionMock.mock.calls as unknown as Array<
+      [{ cart: Array<{ price: number }>; expectedSubtotalPence: number }]
+    >)[0][0];
+    expect(saved.cart[0].price).toBe(100);
+    expect(saved.expectedSubtotalPence).toBe(10000);
   });
 });

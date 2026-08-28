@@ -12563,3 +12563,86 @@ tests). The route needed a `DEMO_EXEMPT_ROUTES` entry like every other
 admin surface, which the authz-import ratchet correctly demanded.
 
 No migration: every column it reads was created by 013/D20-complete.
+
+## The full deep audit, 2026-08-28 (user instruction: trust nothing, verify everything)
+
+Method: verify against LIVE PROD and the code, never against the plan
+documents. Prod checks ran through the Supabase MCP against
+`uwkuhygwvasdzwsusiym`.
+
+### Prod database: all clean
+
+| check | result |
+|---|---|
+| TRUNCATE/REFERENCES/TRIGGER granted to anon/authenticated anywhere | **none** (112/113 held) |
+| any grant to anon/authenticated on an RLS-no-policy table | **none** |
+| public tables with RLS disabled | **none** |
+| SECURITY DEFINER functions executable by anon/authenticated | **none** |
+| SECURITY DEFINER functions without a pinned search_path | **none** |
+| FKs from public.* to auth.users that would block erasure | **none** (all CASCADE or SET NULL; 117 held) |
+| migration ledger | ends at `collect_from_venue` (=119); every migration on disk is applied |
+| `tests/integration/schema-columns.json` vs live information_schema | **exact match, every table, every column** - the phantom guards are anchored to reality |
+| orders fulfilment CHECK | ship, collection, digital, collect_venue (119) |
+| moderation_queue entity_type CHECK | includes `message` (116) |
+| curation tier CHECK (5 tiers) + status CHECK (incl. past_due/paused) | both live |
+| security advisors | 0 ERRORs; 24 INFO rls-no-policy rows, all deliberate and documented in `docs/security/service-role-only-tables.md` (gated by test); 1 WARN = leaked-password protection, which is owner decision 20 (dashboard toggle, surfaced) |
+
+Observation, low severity, pre-existing: `admin_audit_log.admin_user_id`
+is ON DELETE CASCADE, so deleting an admin's auth user would delete their
+audit rows. Erasing an ADMIN's account should probably SET NULL there
+instead. Not changed tonight: it needs an owner call on audit-trail
+retention vs erasure, and no admin deletion is in prospect.
+
+### Code sweep: ratchets and predicates all hold
+
+- Dropped counter columns (114): no live reference. `stats/public` uses
+  `total_placements` as a response KEY computed from a live count - fine.
+- `free_until`: read by platform-fee, payout legs, paid-loan billing and
+  the visualizer tier resolver - consistent everywhere.
+- `no-authfetch-mutation` ratchet: LITERAL_FLOOR = 7, intact (the seven
+  owner-gated money handlers).
+- Both phantom grandfather lists: EMPTY, size-locked at zero.
+- `user_metadata`: only display names + OAuth signup metadata. No authz
+  reads anywhere.
+
+### FOUND AND FIXED: the checkout price hole was only four-fifths closed
+
+The launch-blocker fix (server-side price re-validation) had closed the
+framed-line hole (E46c) and the tier-matched path, but three fallbacks
+still let the CLIENT's price reach Stripe, and one T9 case overcharged:
+
+1. **Collection bundles were never validated at all.** The server never
+   opened `artist_collections`: no existence check, no availability check,
+   and the client's `price` was charged as-is. A forged 1p bundle line
+   would have been charged 1p. Now: the row must exist and be available,
+   and the DB's `bundle_price` is the number (409 `collection_unavailable`
+   otherwise). Prod has 1 live collection.
+2. **Lines with neither workId nor collectionId rode through entirely
+   client-priced** ("legacy carts"). Nothing the product ships creates
+   such a line; now refused with 409 `cart_line_unidentified`.
+3. **An unframed line whose size label matches no tier kept the client's
+   price.** A real workId plus size "anything" was chargeable at 1p, and
+   stock would have decremented. Now refused (409 `size_label_unresolvable`)
+   unless it is a collect-from-venue line with an in-store price on record.
+4. **T9 collect lines that DID match a tier were re-priced to the shipped
+   tier price**, overcharging the buyer relative to the in-store price the
+   button displayed. Now: per-size `inStorePrice` first, then work-level
+   `in_store_price` (migration 118), then tier price only as the safe
+   fallback with a warn.
+
+Also: `saveCartSession` now persists the SERVER-priced lines, not the
+request's, so the order the webhook books (items, subtotal, splits) can
+never carry a forged or drifted client number even where Stripe charged
+the corrected amount. Before this, a drifted client price corrupted the
+order record and inflated the derived shipping split even though the card
+was charged correctly.
+
+Verified safe against prod data: all 35 available works carry pricing
+arrays (so refusing pricing-less works breaks nothing), and the D10 test
+fixture was the only cart in the suite still creating identity-less lines
+(it predates line identity; updated).
+
+7 new tests (collection corrected + refused, unidentified refused,
+unmatched size refused, both in-store price sources, corrected price on
+the persisted cart). Fail-before verified against the committed pre-fix
+route: exactly those 7 fail, everything else passes.

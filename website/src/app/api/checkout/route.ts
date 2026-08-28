@@ -24,8 +24,11 @@ type WorkRow = {
   id: string;
   available: boolean | null;
   quantity_available: number | null;
-  pricing: Array<{ label: string; price: number }> | null;
+  pricing: Array<{ label: string; price: number; inStorePrice?: number | null }> | null;
   title: string | null;
+  // Migration 118. Work-level in-store price, the number a collect-from-venue
+  // buyer is shown when the work has no per-size in-store pricing.
+  in_store_price: number | null;
   // E46c: the uplift is resolved from here, server-side, instead of trusting the
   // client's framed total. Real jsonb column; 6 of 35 live works carry frames.
   frame_options: Array<{
@@ -221,7 +224,7 @@ export async function POST(request: Request) {
     if (workIds.length > 0) {
       const { data: rows, error: worksErr } = await getSupabaseAdmin()
         .from("artist_works")
-        .select("id, available, quantity_available, pricing, title, frame_options")
+        .select("id, available, quantity_available, pricing, title, frame_options, in_store_price")
         .in("id", workIds);
       if (worksErr) {
         console.error("[checkout] cart re-validation lookup failed:", worksErr);
@@ -259,6 +262,62 @@ export async function POST(request: Request) {
             error: `"${row.title || line.title}" has just been sold.`,
             code: "work_sold",
             workId: line.workId,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    // Collections were the last fully client-priced line (2026-08-28 audit):
+    // the server never opened artist_collections, so the bundle price on the
+    // wire was the bundle price charged. Same treatment as works now: the row
+    // must exist and be available, and the DB's bundle_price is the number.
+    const collectionIds = items
+      .map((it) => (!it.workId && it.collectionId ? it.collectionId : null))
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    const collectionById = new Map<string, { id: string; available: boolean | null; bundle_price: number | null; name: string | null }>();
+    if (collectionIds.length > 0) {
+      const { data: colRows, error: colErr } = await getSupabaseAdmin()
+        .from("artist_collections")
+        .select("id, available, bundle_price, name")
+        .in("id", collectionIds);
+      if (colErr) {
+        console.error("[checkout] collection re-validation lookup failed:", colErr);
+        return NextResponse.json(
+          { error: "Couldn't validate your cart, please try again." },
+          { status: 500 },
+        );
+      }
+      for (const row of colRows || []) {
+        collectionById.set(row.id, row);
+      }
+      for (const line of items) {
+        if (line.workId || !line.collectionId) continue;
+        const col = collectionById.get(line.collectionId);
+        if (!col || col.available === false || typeof col.bundle_price !== "number" || col.bundle_price <= 0) {
+          return NextResponse.json(
+            {
+              error: `"${line.title}" is no longer available. Please remove it from your cart.`,
+              code: "collection_unavailable",
+              collectionId: line.collectionId,
+            },
+            { status: 409 },
+          );
+        }
+      }
+    }
+
+    // A line naming neither a work nor a collection cannot be priced from the
+    // DB, so it used to ride through on the client's own number. Nothing the
+    // product ships creates such a line any more; the only sources are
+    // localStorage carts from before line identity existed, and hand-rolled
+    // requests. Both get the same answer: refresh the cart.
+    for (const line of items) {
+      if (!line.workId && !line.collectionId) {
+        return NextResponse.json(
+          {
+            error: `"${line.title}" could not be verified. Please remove it from your cart and add it again.`,
+            code: "cart_line_unidentified",
           },
           { status: 409 },
         );
@@ -360,36 +419,117 @@ export async function POST(request: Request) {
       }
     }
 
-    const lineItems = items.map((item) => {
-      const row = item.workId ? workById.get(item.workId) : undefined;
-      let unitPence = Math.round(item.price * 100);
-      if (row?.pricing && Array.isArray(row.pricing)) {
-        const dbTier = row.pricing.find(
-          (p) => p?.label?.toLowerCase?.() === item.size?.toLowerCase?.(),
-        );
-        if (dbTier && typeof dbTier.price === "number" && dbTier.price > 0) {
-          unitPence = Math.round(dbTier.price * 100);
-          if (unitPence !== Math.round(item.price * 100)) {
-            console.warn("[checkout] price drift corrected", {
+    // 2026-08-28 audit: the client's price no longer survives to Stripe on ANY
+    // line. Works price from their pricing tier (in-store tier for a
+    // collect-from-venue line), framed lines from the server-computed uplift,
+    // collections from bundle_price, and a line the DB cannot price is refused
+    // above rather than trusted. `priceLine` returns pence, or a refusal.
+    const unresolvableSize = (item: { workId?: string; size?: string; title: string }) =>
+      NextResponse.json(
+        {
+          error: `The size "${item.size}" for "${item.title}" could not be verified. Please remove it from your cart and add it again.`,
+          code: "size_label_unresolvable",
+          workId: item.workId,
+        },
+        { status: 409 },
+      );
+
+    type CheckoutLine = (typeof items)[number];
+    const priceLine = (item: CheckoutLine): number | NextResponse => {
+      const clientPence = Math.round(item.price * 100);
+
+      // Collections: DB bundle_price, validated present above.
+      if (!item.workId && item.collectionId) {
+        const col = collectionById.get(item.collectionId)!;
+        const dbPence = Math.round((col.bundle_price as number) * 100);
+        if (dbPence !== clientPence) {
+          console.warn("[checkout] collection price corrected", {
+            collectionId: item.collectionId,
+            clientPence,
+            dbPence,
+          });
+        }
+        return dbPence;
+      }
+
+      const row = workById.get(item.workId as string)!;
+      const isFramedLine =
+        item.framed === true || (typeof item.size === "string" && item.size.includes(" + "));
+      if (isFramedLine) {
+        // E46c: the server-computed base + uplift, set in the loop above.
+        const server = framedPence.get(item.workId as string);
+        return typeof server === "number" ? server : unresolvableSize(item);
+      }
+
+      const tiers = Array.isArray(row.pricing) ? row.pricing : [];
+      const dbTier = tiers.find(
+        (t) => t?.label?.toLowerCase?.() === item.size?.toLowerCase?.(),
+      );
+      const isCollectLine = item.lineFulfilment === "collect_venue";
+
+      if (isCollectLine) {
+        // T9: the number the collect button shows is the IN-STORE price
+        // (per-size first, then work-level), not the shipped tier price.
+        // Before this ladder a tier-labelled collect line was silently
+        // re-priced to the shipped tier, overcharging the buyer.
+        const perSize = dbTier && typeof dbTier.inStorePrice === "number" && dbTier.inStorePrice > 0
+          ? dbTier.inStorePrice
+          : null;
+        const workLevel = typeof row.in_store_price === "number" && row.in_store_price > 0
+          ? row.in_store_price
+          : null;
+        const inStore = perSize ?? workLevel;
+        if (inStore !== null) {
+          const dbPence = Math.round(inStore * 100);
+          if (dbPence !== clientPence) {
+            console.warn("[checkout] in-store price corrected", {
               workId: item.workId,
-              clientPence: Math.round(item.price * 100),
-              dbPence: unitPence,
+              clientPence,
+              dbPence,
             });
           }
-        } else {
-          // No DB tier matched — for framed lines this is the expected
-          // path (size has " + <frame>" suffix). The above floor check
-          // already guarded against an artist re-pricing the base down;
-          // here we just observe how often we fall back to the client
-          // price so we can prioritise the full server-side uplift fix.
-          const isFramedLine = item.framed === true || (typeof item.size === "string" && item.size.includes(" + "));
-          if (isFramedLine) {
-            // E46c: the server-computed price, set above. Never item.price.
-            const server = item.workId ? framedPence.get(item.workId) : undefined;
-            if (typeof server === "number") unitPence = server;
-          }
+          return dbPence;
         }
+        // No in-store price on record: fall through to the tier price, the
+        // only other number the server owns. Charging the standard price is
+        // safe for the platform; log it because the CTA should not have
+        // rendered without an in-store price.
+        if (dbTier && typeof dbTier.price === "number" && dbTier.price > 0) {
+          console.warn("[checkout] collect line had no in-store price, tier price used", {
+            workId: item.workId,
+            size: item.size,
+          });
+          return Math.round(dbTier.price * 100);
+        }
+        return unresolvableSize(item);
       }
+
+      if (dbTier && typeof dbTier.price === "number" && dbTier.price > 0) {
+        const dbPence = Math.round(dbTier.price * 100);
+        if (dbPence !== clientPence) {
+          console.warn("[checkout] price drift corrected", {
+            workId: item.workId,
+            clientPence,
+            dbPence,
+          });
+        }
+        return dbPence;
+      }
+
+      // No tier carries this label. Until the 2026-08-28 audit the client's
+      // price stood here; every line the product creates uses a real tier
+      // label, so an unmatched one is a stale or forged cart.
+      return unresolvableSize(item);
+    };
+
+    const pricedLines: Array<{ item: CheckoutLine; unitPence: number }> = [];
+    for (const item of items) {
+      const priced = priceLine(item);
+      if (priced instanceof NextResponse) return priced;
+      pricedLines.push({ item, unitPence: priced });
+    }
+
+    const lineItems = pricedLines.map(({ item, unitPence }) => {
       return {
         price_data: {
           currency: "gbp",
@@ -553,7 +693,11 @@ export async function POST(request: Request) {
     // fatal — without the row, the webhook can't process the order.
     await saveCartSession({
       stripeSessionId: session.id,
-      cart: items,
+      // The SERVER-priced lines, not the request's. The webhook books the
+      // order (items, subtotal, splits) from this row, so a drifted or forged
+      // client price must not become the order of record while Stripe charges
+      // the corrected amount.
+      cart: pricedLines.map(({ item, unitPence }) => ({ ...item, price: unitPence / 100 })),
       shipping: {
         ...shipping,
         fulfilmentMethod,
