@@ -172,6 +172,34 @@ describe("placementUpdateSchema", () => {
   });
 });
 
+describe("paid-loan monthly fee floor", () => {
+  const base = {
+    id: "pl-1",
+    workTitle: "Test work",
+    venueSlug: "test-venue",
+    type: "paid_loan" as const,
+  };
+
+  it("accepts zero (not a paid loan) and £15 and up", () => {
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 0 }).success).toBe(true);
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 15 }).success).toBe(true);
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 250 }).success).toBe(true);
+  });
+
+  it("rejects a rent between £0.01 and £14.99", () => {
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 5 }).success).toBe(false);
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 14.99 }).success).toBe(false);
+  });
+
+  it("applies the same floor to counter offers", () => {
+    const counter = { id: "pl-1", counter: { monthlyFeeGbp: 10 } };
+    expect(placementUpdateSchema.safeParse(counter).success).toBe(false);
+    expect(
+      placementUpdateSchema.safeParse({ id: "pl-1", counter: { monthlyFeeGbp: 20 } }).success,
+    ).toBe(true);
+  });
+});
+
 describe("checkoutSchema", () => {
   const validItem = {
     title: "Print",
