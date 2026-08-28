@@ -17,9 +17,6 @@ const lines = readFileSync(CI_WORKFLOW, "utf8").split("\n");
 
 const indentOf = (line: string): number => line.match(/^\s*/)![0].length;
 const isStepMarker = (line: string): boolean => /^\s*-\s/.test(line);
-/** A job key, i.e. `  check:` at the two-space indent under `jobs:`. */
-const isJobKey = (line: string): boolean => /^ {2}[A-Za-z0-9_-]+:\s*$/.test(line);
-
 const runLine = (command: string): RegExp =>
   new RegExp(`^\\s*(-\\s+)?run:\\s*${command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
 
@@ -56,18 +53,6 @@ function stepBlock(command: string): string[] {
   return lines.slice(start, end);
 }
 
-/** The YAML lines of the whole job containing the step that runs `command`. */
-function jobBlock(command: string): string[] {
-  const runIdx = indexOfStepRunning(command);
-
-  let start = runIdx;
-  while (start >= 0 && !isJobKey(lines[start])) start--;
-
-  let end = runIdx + 1;
-  while (end < lines.length && !isJobKey(lines[end])) end++;
-
-  return lines.slice(start, end);
-}
 
 describe("CI lint gate", () => {
   it("has a step that runs `npm run lint`", () => {
