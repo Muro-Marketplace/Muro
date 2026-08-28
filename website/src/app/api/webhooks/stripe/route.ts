@@ -96,7 +96,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Dedup unavailable" }, { status: 500 });
   }
 
-  const res = await handleWebhookEvent(event, db);
+  // A THROW from any branch (a Stripe SDK call, an email render) must land in
+  // the same release path as a returned 500. Without this, the claim row
+  // survives the crash and Stripe's retry is waved through as a duplicate,
+  // which turns a transient fault into a permanently dropped event - the exact
+  // failure the release below exists to prevent.
+  let res: NextResponse;
+  try {
+    res = await handleWebhookEvent(event, db);
+  } catch (err) {
+    console.error("[webhook] unhandled processing error", { eventId: event.id, eventType: event.type, err });
+    res = NextResponse.json({ error: "Processing failed" }, { status: 500 });
+  }
 
   // Release the claim if processing failed, so Stripe's retry can reprocess. The
   // plan's snippet claimed the event and never released it, which turned any

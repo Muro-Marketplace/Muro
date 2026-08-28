@@ -12646,3 +12646,57 @@ fixture was the only cart in the suite still creating identity-less lines
 unmatched size refused, both in-store price sources, corrected price on
 the persisted cart). Fail-before verified against the committed pre-fix
 route: exactly those 7 fail, everything else passes.
+
+### FOUND AND FIXED (audit, continued): a thrown branch leaked the event claim
+
+The webhook released its D1 dedup claim when a branch RETURNED a 500, but a
+branch that THREW (a Stripe SDK call, an email render - the curation and
+purchase-offer branches run both outside any try) crashed past the release:
+the claim row survived, Stripe's retry hit the 23505 and was waved through
+as a duplicate, and a transient fault became a permanently dropped event -
+exactly the failure the release exists to prevent. The handler call is now
+wrapped so a throw lands in the same release path as a returned 500.
+
+Test: force `sendAdminAlert` (called outside any try in the curation
+branch) to reject; assert the response is 500 AND the claim row was
+deleted for that event id. Fail-before verified: with the wrapper removed
+the throw escapes raw and the release never runs.
+
+### Verified sound on re-read (no change needed)
+
+- **Payout split** (`lib/payouts/legs.ts`): integer pence throughout,
+  per-artist fee tiers, missing-profile ABORTS rather than pooling money
+  into another artist's leg, deterministic shipping allocation with exact
+  remainder handling, and the webhook calls build -> reconcile ->
+  assertLegsReconcile BEFORE writing anything.
+- **Webhook settlement gate**: `checkout.session.completed` with
+  `payment_status: "unpaid"` books nothing and answers 200 awaiting
+  `async_payment_succeeded`.
+- **Order emails**: every send is idempotency-keyed at two layers
+  (order_events UNIQUE key + email_events per-template key), so a Stripe
+  redelivery cannot double-send.
+- **Erasure** (`DELETE /api/account`): collect-not-short-circuit scrub,
+  artist rows also stamped `review_status: "rejected"`, auth user deleted
+  last; FK semantics verified live (every public FK to auth.users is
+  CASCADE or SET NULL).
+- **Crons**: every `vercel.json` cron path has a route file.
+- **Custom lint rules**: all at "error" except the two staged ratchets
+  (require-authz-on-mutation, no-authfetch-mutation), which are "warn" +
+  ratchet-test by design.
+- **T9 wire-through**: the artwork page's collect claim rides the cart
+  line into the checkout POST body and is re-validated server-side; the
+  admin predicate reads `admin_users` (exactly one row in prod: the
+  owner's, stamped with the decision-1 backfill note) OR the env
+  allowlist; `user_metadata` is display-only everywhere.
+
+### Standing facts the owner should keep in view (none are code defects)
+
+1. **Prod still runs the pre-remediation deploy.** `stripe_webhook_events`
+   has 0 rows, which is what the stale deploy predicts. Nothing audited
+   tonight is live until a deploy ships. This remains the top blocker.
+2. The leaked-password toggle (decision 20) and TURNSTILE_SECRET_KEY
+   (decision 21) are dashboard facts this box cannot see.
+3. `admin_audit_log.admin_user_id` is ON DELETE CASCADE (observation
+   above): erasing an admin would erase their audit trail.
+4. `npm run audit:reconcile` still reports the twelve pre-ledger test
+   orders as drift, deliberately (decision 9).

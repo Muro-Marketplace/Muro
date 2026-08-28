@@ -64,6 +64,7 @@ vi.mock("@/lib/stripe", () => ({
 
 import { POST } from "@/app/api/webhooks/stripe/route";
 import { sendEmail } from "@/lib/email/send";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
 
 const CUSTOMER = "cus_123";
 const PRICE_PREMIUM = "price_premium_monthly";
@@ -500,6 +501,72 @@ describe("customer.subscription.created credits the referrer atomically", () => 
   });
 });
 
+
+// The event-dedup claim must be RELEASED when processing crashes, or Stripe's
+// retry hits the 23505 and is waved through as a duplicate with the work never
+// done - a transient fault becomes a permanently dropped event. The release-on-
+// returned-500 path existed; this pins the 2026-08-28 audit's addition, the
+// try/catch that routes a THROWN error (Stripe SDK, email render) into the
+// same release.
+describe("a branch that throws releases the event-dedup claim", () => {
+  const releasedIds: string[] = [];
+
+  beforeEach(() => {
+    releasedIds.length = 0;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") {
+        return {
+          insert: async () => ({ error: null }),
+          delete: () => ({
+            eq: async (_col: string, id: string) => {
+              releasedIds.push(id);
+              return { error: null };
+            },
+          }),
+        };
+      }
+      if (table === "curation_requests") {
+        const row = { id: "cr_1", tier: "single_wall", venue_name: "Kettle", contact_name: "Sam", contact_email: null, status: "awaiting_quote" };
+        const c: Record<string, unknown> = {
+          maybeSingle: async () => ({ data: row, error: null }),
+          single: async () => ({ data: row, error: null }),
+        };
+        c.eq = () => c;
+        return { select: () => c, update: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      return installDbShape();
+    });
+    // The curation branch calls sendAdminAlert OUTSIDE any try: the crash site.
+    vi.mocked(sendAdminAlert).mockRejectedValueOnce(new Error("smtp exploded"));
+    nextEvent.value = event("checkout.session.completed", {
+      id: "cs_boom",
+      mode: "payment",
+      payment_status: "paid",
+      amount_total: 49900,
+      metadata: { kind: "curation_request", curation_request_id: "cr_1" },
+    });
+  });
+
+  function installDbShape() {
+    return {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({ data: null }),
+          single: async () => ({ data: null }),
+        }),
+      }),
+      update: () => ({ eq: async () => ({ error: null }) }),
+      upsert: async () => ({ error: null }),
+      insert: async () => ({ error: null, data: null }),
+    };
+  }
+
+  it("answers 500 so Stripe retries, and deletes the claim so the retry is processed", async () => {
+    const res = await POST(post());
+    expect(res.status).toBe(500);
+    expect(releasedIds).toEqual(["evt_checkout.session.completed"]);
+  });
+});
 
 // T9 (04 Phase 8, items 8.5 + 8.6). A collect-from-venue order books like a
 // collection order — delivered immediately, no shipping lifecycle, immediate
