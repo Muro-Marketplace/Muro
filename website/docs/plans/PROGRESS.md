@@ -12441,3 +12441,30 @@ Doc 04's 5.3/5.4/5.5 are ticked (5.3 by decision 10's migration 115). 5.6 was
 briefly ticked here and reverted in the same edit: it names `tests/transactions/`
 harness files that were never built, and the coverage living in co-located tests
 does not make the item as written true.
+
+### Decision 9 — the £953.20, resolved as internal test traffic — CLOSED (no money moved)
+
+The blanket approval cannot mean "move £953", and settling who the money
+belongs to dissolved the question. Every payee is the owner:
+
+| artist | orders | booked as owed | notes |
+|---|---|---|---|
+| `fin-coles` | 10 | £773.25 | **the owner's own test artist account** (decision 2 established this) |
+| `maya-chen` | 1 | £179.95 | **the demo account** (decision 3's rename) |
+| none | 1 | £0.00 | `WS-P06DDkUs`, the D4 orphan — buyer is `fcoles2598@gmail.com`, the owner |
+
+The buyer addresses are the owner's own and assorted test strings. **No
+third-party artist is unpaid.** The empty `stripe_transfers` table is a
+faithful record of test traffic that predates the ledger, not a debt.
+
+**Deliberately NOT done: backfilling ledger rows.** A `pending` row in
+`stripe_transfers` is not bookkeeping — `processPendingTransfers` retries
+pending rows on a cron, so backfilling would schedule real Stripe transfers to
+the owner's accounts as a side effect of tidying. If the owner ever wants these
+test orders reflected in the ledger, the safe shape is rows with a status the
+retry sweep ignores, created on explicit instruction.
+
+`npm run audit:reconcile` continues to report these twelve as drift, which is
+correct: the books genuinely do not reconcile for them, and the report is the
+standing reminder that the first REAL order must not join this list. D4's fix
+(the webhook refuses to book an unattributable order) is what prevents that.
