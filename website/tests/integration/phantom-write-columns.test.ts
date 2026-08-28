@@ -19,6 +19,24 @@
 //                                          (09 item 2.2)
 //
 // Both were found by hand. This finds the next one.
+//
+// TWO VARIANTS ARE DELIBERATELY NOT COVERED, and both were swept by hand on
+// 2026-08-28 and found clean:
+//
+//   .rpc("fn", {...})            a function that does not exist, or an argument
+//                                name that does not match. All four call sites
+//                                (claim_artist_work_slot, decrement_work_stock,
+//                                increment_placement_revenue, restock_work)
+//                                match production exactly.
+//   .upsert(..., { onConflict }) a conflict target with no matching unique
+//                                constraint, which errors at runtime. All eight
+//                                distinct targets have one.
+//
+// Covering them needs the snapshot to carry functions and unique constraints,
+// which means changing its format, its generator and its round-trip test. The
+// three variants above found fifteen live defects between them; these two found
+// none. Recorded rather than built, so the gap is a decision and not an
+// oversight.
 
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";

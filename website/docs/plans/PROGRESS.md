@@ -11838,3 +11838,36 @@ surface, a venue digest reporting zeros, and an onboarding nudge sent to people
 who did not need it.
 
 `npm run check` green: 0 lint errors, 248 files, 2501 tests, exit 0.
+
+## Owner decisions 15 to 19, from the phantom-schema sweep
+
+**15. `DELETE /api/account` never erased anything, and it is fixed.** No action
+needed on the code. What you may want to act on: **anyone who has already
+deleted their account still has their data in the database** — name, both bios,
+location, Instagram, website, waitlist entry and full application. Their auth
+user is gone, so they cannot see it and cannot ask again through the product. A
+one-off scrub of orphaned `artist_profiles` rows (a profile whose `user_id` no
+longer resolves to an auth user) would finish the job, and it is a DELETE of user
+rows, so it is yours.
+
+**16. Blocking now records, and still does nothing.** `user_blocks` exists as of
+migration 111, so a block is stored. **Nothing reads it.** The send path and the
+conversation-list aggregator have to honour it before a block has any effect, and
+until they do a person is still told "blocked" and can still be messaged. That
+was impossible to build before and is possible now.
+
+**17. The report modal says "submitted" whatever the API answers.** The route now
+returns 500 when the write fails instead of claiming success, but the frontend
+swallows it, so the person is still told it worked. A frontend change, listed
+here so it is not lost.
+
+**18. The anti-spam outreach cap was missing a third of its surface** and now
+is not. Placement requests were free: a Core artist limited to 2 first contacts a
+day could send unlimited ones. **That means the live usage figures for the cap are
+not what they appear** — any conclusion drawn about whether the limits are set
+right was drawn against a cap that only enforced two of three surfaces.
+
+**19. The weekly venue digest has been reporting zero views to every venue**, and
+skipping venues whose week was mostly views. Fixed, but if anyone has been
+reading those digests as a signal about venue engagement, they have been reading
+zeros.
