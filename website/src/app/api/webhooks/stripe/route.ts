@@ -1123,6 +1123,23 @@ async function handleWebhookEvent(
           // are not told about is a confrontation waiting there. Email keyed on
           // the order so a Stripe redelivery cannot double it, plus a bell.
           if (isVenueCollection && venueSlug) {
+            // Owner decision 2026-08-28: the wall piece just sold, so the
+            // work stops being collectable. ONLY the tick box is cleared;
+            // online availability and stock follow the normal decrement, so
+            // prints keep selling unless this was the last piece.
+            if (cartWorkIds.length > 0) {
+              try {
+                const { error: flagErr } = await db
+                  .from("artist_works")
+                  .update({ available_in_store: false })
+                  .in("id", cartWorkIds);
+                if (flagErr) console.warn("[webhook] could not clear available_in_store:", flagErr);
+              } catch (flagErr) {
+                // Non-critical bookkeeping: a failure here must not stop the
+                // venue being told someone is coming to collect.
+                console.warn("[webhook] available_in_store clear threw:", flagErr);
+              }
+            }
             try {
               const { data: venueRow } = await db
                 .from("venue_profiles")

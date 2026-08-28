@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     }
     const {
       id, title, medium, dimensions, priceBand, pricing, available, color, image,
-      orientation, sortOrder, shippingPrice, inStorePrice, quantityAvailable, frameOptions,
+      orientation, sortOrder, shippingPrice, inStorePrice, availableInStore, quantityAvailable, frameOptions,
       description, images,
     } = parsed.data;
 
@@ -188,12 +188,18 @@ export async function POST(request: Request) {
       orientation: orientation || "landscape",
       sort_order: sortOrder ?? 0,
       shipping_price: shippingPrice ?? null,
+      // Owner decision 2026-08-28: the in-store PRICE model is retired in
+      // favour of the tick box (migration 120). The legacy field is still
+      // parsed (an old tab may send it) but no longer written; the column
+      // keeps whatever it held.
+      available_in_store: availableInStore ?? false,
       // Owner decision 14 (migration 118): `in_store_price` is a real column
       // now, so the value the portfolio has collected all along finally
       // persists. Before 118 this field was deliberately not forwarded (A8),
       // because the column did not exist and sending it made upsertWork's
       // per-column ladder fail on every save.
-      in_store_price: inStorePrice ?? null,
+      // in_store_price deliberately NOT forwarded any more (see above).
+      ...(void inStorePrice, {}),
       quantity_available: quantityAvailable ?? null,
       frame_options: sanitizedFrames,
       description: sanitizedDescription,

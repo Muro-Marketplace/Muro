@@ -78,6 +78,7 @@ export interface DbArtistWork {
   sort_order: number;
   shipping_price?: number | null;
   in_store_price?: number | null;
+  available_in_store?: boolean | null;
   quantity_available?: number | null;
   frame_options?: { label: string; priceUplift: number }[];
   description?: string;
@@ -179,6 +180,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
       orientation: (w.orientation as "portrait" | "landscape" | "square") || undefined,
       shippingPrice: w.shipping_price ?? undefined,
       inStorePrice: w.in_store_price ?? undefined,
+      availableInStore: w.available_in_store === true,
       quantityAvailable: w.quantity_available ?? undefined,
       frameOptions: Array.isArray(w.frame_options) ? w.frame_options : [],
       createdAt: w.created_at ?? undefined,

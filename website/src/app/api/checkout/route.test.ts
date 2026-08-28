@@ -1549,11 +1549,11 @@ describe("POST /api/checkout server-side pricing (audit)", () => {
   };
   const collectShipping = { ...baseShipping, addressLine1: "", city: "", postcode: "", country: "GB" };
 
-  it("charges a collect line the per-size IN-STORE price, not the shipped tier price", async () => {
+  it("legacy per-size in-store price is honoured only while the tick box is off", async () => {
     setupCollect({
       id: "w-1", available: true, quantity_available: 10, title: "Untitled",
       pricing: [{ label: "S", price: 100, inStorePrice: 80 }],
-      frame_options: null, in_store_price: null,
+      frame_options: null, in_store_price: null, available_in_store: false,
     });
     const res = await POST(
       req({ fulfilmentMethod: "collect_venue", items: [{ ...collectLine, price: 80 }], shipping: collectShipping }),
@@ -1562,17 +1562,32 @@ describe("POST /api/checkout server-side pricing (audit)", () => {
     expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(8000);
   });
 
-  it("falls back to the work-level in_store_price when the tier has none", async () => {
+  it("falls back to the work-level in_store_price when the tier has none (legacy)", async () => {
     setupCollect({
       id: "w-1", available: true, quantity_available: 10, title: "Untitled",
       pricing: [{ label: "S", price: 100 }],
-      frame_options: null, in_store_price: 70,
+      frame_options: null, in_store_price: 70, available_in_store: false,
     });
     const res = await POST(
       req({ fulfilmentMethod: "collect_venue", items: [{ ...collectLine, price: 70 }], shipping: collectShipping }),
     );
     expect(res.status).toBe(200);
     expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(7000);
+  });
+
+  it("the tick box charges the NORMAL tier price, ignoring any legacy in-store price", async () => {
+    // Owner decision 2026-08-28: collect-from-venue is the same price as
+    // online; the in-store price model is retired.
+    setupCollect({
+      id: "w-1", available: true, quantity_available: 10, title: "Untitled",
+      pricing: [{ label: "S", price: 100, inStorePrice: 80 }],
+      frame_options: null, in_store_price: 70, available_in_store: true,
+    });
+    const res = await POST(
+      req({ fulfilmentMethod: "collect_venue", items: [{ ...collectLine, price: 100 }], shipping: collectShipping }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(10000);
   });
 
   it("persists the corrected price on the cart session the webhook books from", async () => {
