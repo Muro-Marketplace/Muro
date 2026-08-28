@@ -1,8 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
-import { artists } from "@/data/artists";
+import { artists as staticArtists } from "@/data/artists";
 import { venues } from "@/data/venues";
+import { getArtistBySlug } from "@/lib/db/merged-data";
 import { DEMO_ARTIST_SLUG, DEMO_VENUE_SLUG } from "@/data/demo";
 
 export const metadata: Metadata = {
@@ -54,13 +55,22 @@ function resolveDemo<T extends { slug: string }>(
   return pool[0];
 }
 
-export default function DemoLandingPage() {
+export default async function DemoLandingPage() {
   // K8 (07 §8.3): these were `find(...) || artists[0]`. A misconfigured
   // NEXT_PUBLIC_DEMO_ARTIST_SLUG produced no error at all, just a different
   // artist than the one the "Tour the platform" CTA was pointed at, and nobody
   // would know until someone noticed the wrong name on the demo. Silent
   // fallbacks on a configured value are how a config typo survives a release.
-  const demoArtist = resolveDemo(artists, DEMO_ARTIST_SLUG, "artist");
+  // Owner decision 3: the demo artist is a DATABASE account now (the static
+  // seed is deleted), so it resolves through the merged lookup, keeping
+  // resolveDemo's loud-failure semantics: a misconfigured slug throws in dev
+  // and falls back visibly in prod rather than silently touring the wrong
+  // artist. The venue still resolves from the static pool, which carries it.
+  const dbDemoArtist = await getArtistBySlug(DEMO_ARTIST_SLUG);
+  // A miss keeps resolveDemo's exact semantics: throw in development so a
+  // config typo cannot ship, fall back VISIBLY (console.error + first seed
+  // artist) in production rather than silently touring the wrong profile.
+  const demoArtist = dbDemoArtist ?? resolveDemo(staticArtists, DEMO_ARTIST_SLUG, "artist");
   const demoVenue = resolveDemo(venues, DEMO_VENUE_SLUG, "venue");
 
   // Decide whether the Phase 2 portal-tour login is available. When

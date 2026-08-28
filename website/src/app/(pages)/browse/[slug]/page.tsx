@@ -1,4 +1,5 @@
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import { DEMO_ARTIST_SLUG } from "@/data/demo";
 import Link from "next/link";
 import Image from "next/image";
 import { headers } from "next/headers";
@@ -153,14 +154,17 @@ export default async function ArtistProfilePage({
     notFound();
   }
 
-  // Phase 2.1 P1: demo banner activates when either the artist data
-  // carries the isDemo flag (Maya Chen) or the page is requested with
-  // ?demo=1 (manual preview / tour links).
+  // Phase 2.1 P1: demo banner activates for the configured demo artist, for
+  // seed data carrying the isDemo flag, or with ?demo=1 (manual preview / tour
+  // links). Owner decision 3 deleted the static Maya Chen seed (the flag's old
+  // carrier) and made the DB demo account the one Maya Chen, so the slug match
+  // is what keeps the banner on the demo profile.
   const sp = (await searchParams) ?? {};
   const demoFlag = sp.demo === "1" || sp.demo === "true";
-  const isDemoProfile = Boolean(
-    (artist as { isDemo?: boolean }).isDemo ?? false,
-  ) || demoFlag;
+  const isDemoProfile =
+    slug === DEMO_ARTIST_SLUG ||
+    Boolean((artist as { isDemo?: boolean }).isDemo ?? false) ||
+    demoFlag;
 
   // Track profile view (fire-and-forget, non-blocking)
   const headersList = await headers();

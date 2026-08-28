@@ -12201,3 +12201,36 @@ than `rejected` so the admin account sees an under-review banner rather than a
 rejection screen if it ever opens the artist portal. The note in `next.config.ts`
 now records the resolution and how to reverse it (re-approve AND delete the
 redirect in the same change).
+
+### Decision 3 — the demo persona package, two of three parts — DONE (Stripe Connect surfaced)
+
+**The DB rename ran first, deliberately, against the plan's ordering note.** K8
+said "renaming first collides in the merge". Checked against the source rather
+than trusted: `getAllArtists` dedupes by slug with DB priority (`dbSlugs` filter
+on the static slice), so a rename cannot duplicate — the DB row simply overrides
+the seed, on this branch AND on the stale deploy, which carries the same merge.
+The rename also fixes the live funnel immediately: `DEMO_ARTIST_SLUG` is
+`maya-chen`, so until now the "Tour the platform" CTA landed on the static fake
+artist rather than the sandboxed account.
+
+`maya-chen-demo` → `maya-chen`, and the row activated (`subscription_status:
+'active'`; its existing `pro` plan kept) because GATING_V1 filters non-seed
+artists without an active subscription — renamed but inactive, Maya Chen would
+have vanished from /browse. The account: approved, 8 works, mutations sandboxed
+by demo-guard.
+
+**The static seed and its six works are deleted**, with the sequencing note at
+the site. Two knock-ons fixed with it: `/demo` resolved its artist from the
+static pool and would have thrown in dev / fallen back in prod once the seed was
+gone — it now resolves through the merged lookup, keeping resolveDemo's
+loud-failure semantics; and the public-profile demo banner rode on the seed's
+`isDemo` flag — it now also matches `slug === DEMO_ARTIST_SLUG`.
+
+The homepage's positional `slice(0, 6)` shifts by one at next deploy, which is
+the "repointing" the plan warned about, and is cosmetic.
+
+**NOT done: Stripe Connect for the demo account.** Connect onboarding is an
+interactive KYC flow in a browser; no API call from here can complete it. Until
+it is done, Bug 9 stands: Buy Now on the demo artist's works 422s at checkout.
+That is the one remaining piece of decision 3 and it needs a human in the
+Stripe dashboard, signed in as the demo account.
