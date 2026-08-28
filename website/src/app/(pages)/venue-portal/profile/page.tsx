@@ -340,6 +340,10 @@ export default function VenueProfilePage() {
           interested_in_free_loan: freeLoan,
           interested_in_revenue_share: revenueShare,
           interested_in_direct_purchase: directPurchase,
+          // Row 23a: the control has always been on this form; until migration
+          // 103 there was no column to send it to, so this line was missing and
+          // the tick was silently discarded.
+          interested_in_local_artists: localArtists,
           display_wall_space: displayWallSpace || null,
           display_lighting: displayLighting || null,
           display_install_notes: displayInstall || null,

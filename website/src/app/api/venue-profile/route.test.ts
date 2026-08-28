@@ -103,15 +103,27 @@ describe("PUT /api/venue-profile mass-assignment (E45)", () => {
     });
   });
 
-  it("drops columns that exist in no schema", async () => {
-    // Neither column exists in prod, and the allowlist is what keeps them out.
-    // `preferred_sizes` is vestigial (row 23b: nothing collects, reads or stores
-    // it). `interested_in_local_artists` is a shipped control whose value is
-    // discarded for want of a column; when row 23a adds it this assertion is the
-    // one to flip.
-    await PUT(req("PUT", { name: "Kettle", preferred_sizes: ["a"], interested_in_local_artists: true }));
+  it("drops a column that exists in no schema", async () => {
+    // `preferred_sizes` is vestigial (row 23b): nothing collects, reads or
+    // stores it, and `preferred_styles` exists alongside, so it was an
+    // incomplete migration rather than a design decision. The allowlist is what
+    // keeps it out.
+    await PUT(req("PUT", { name: "Kettle", preferred_sizes: ["a"] }));
     expect(written()).not.toHaveProperty("preferred_sizes");
-    expect(written()).not.toHaveProperty("interested_in_local_artists");
+  });
+
+  it("now WRITES interested_in_local_artists, which it used to drop (row 23a)", async () => {
+    // FLIPPED. This assertion used to be `not.toHaveProperty`, with a comment
+    // saying it was the one to flip when row 23a landed. Migration 103 added the
+    // column; before it, the control shipped on venue-portal/profile, the save
+    // dropped the value here, and the transform hardcoded `true` on the way
+    // back, so a venue could untick the box, save, reload and see it ticked.
+    await PUT(req("PUT", { name: "Kettle", interested_in_local_artists: false }));
+    expect(written()).toHaveProperty("interested_in_local_artists", false);
+
+    upsertMock.mockClear();
+    await PUT(req("PUT", { name: "Kettle", interested_in_local_artists: true }));
+    expect(written()).toHaveProperty("interested_in_local_artists", true);
   });
 
   it("omits a field the caller did not send", async () => {

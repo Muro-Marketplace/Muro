@@ -157,6 +157,10 @@ export const VENUE_PROFILE_WRITABLE = Object.freeze([
   "interested_in_revenue_share",
   "interested_in_direct_purchase",
   "interested_in_collections",
+  // Row 23a / migration 103. The control shipped long before the column: the
+  // save dropped it here and the transform hardcoded `true` on the way back, so
+  // a venue could untick the box, save, reload and see it ticked again.
+  "interested_in_local_artists",
   // Taste
   "preferred_styles",
   "preferred_themes",
