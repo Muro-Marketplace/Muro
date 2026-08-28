@@ -12897,3 +12897,22 @@ That picked up **pre-existing drift**: `in_store_price` and
 `in_store_frame_included` were in prod but missing from the snapshot, because
 migrations 120/121 were applied without regenerating it. Every other table
 matches live, checked by column count across all 57.
+
+### Owner ruling: the 24-hour QR attribution window
+
+Ruled 2026-08-28 evening: the venue earns a revenue share ONLY when the
+buyer's device scanned a QR, with a 24-hour window between scan and
+purchase. Verified this is ALREADY the shipped design end to end: the
+D10 attribution token is minted at scan time with a 24h TTL and expiry is
+enforced server-side at checkout, and the client-side QR context in
+localStorage self-evicts after the same 24h. The "that artwork they
+scanned" scoping holds through the work-level placement rates: a venue is
+only ever paid for lines whose work is placed with them.
+
+What the ruling exposed as actually missing (audit F3): a collect-from-
+venue purchase WITHOUT a scan legitimately pays the venue nothing, but it
+still sells the physical piece off their wall. The webhook gated the
+venue notice, the off-the-wall offer clear and the legacy flag clear on
+QR attribution being present. All three now run for every collect sale;
+the notice resolves the venue from the sold placement when attribution is
+absent, and the share stays zero. Fail-before probed.

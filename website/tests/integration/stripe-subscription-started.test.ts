@@ -768,6 +768,62 @@ describe("checkout.session.completed books a collect_venue order", () => {
     expect(venueSends).toHaveLength(0);
   });
 
+  it("without a QR scan: venue gets the notice and the offer clears, but NO revenue share (owner ruling)", async () => {
+    // The 24h attribution token is the ONLY road to a venue share; a buyer
+    // who never scanned still triggers the physical-world consequences.
+    setupCartDb();
+    nextEvent.value = completedSession();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "cart_sessions") {
+        const c: Record<string, unknown> = {
+          maybeSingle: async () => ({
+            data: {
+              stripe_session_id: "cs_1",
+              cart: CART_ROW.cart.map((l) => ({ ...l, lineFulfilment: "collect_venue", collectPlacementId: "p-1" })),
+              shipping: CART_ROW.shipping,
+              source: "direct",
+              venue_slug: null,
+              artist_slugs: ["fin-coles"],
+              expected_subtotal_pence: 10000,
+              expected_shipping_pence: 0,
+              artist_shipping_pence: {},
+            },
+            error: null,
+          }),
+        };
+        c.eq = () => c;
+        c.gt = () => c;
+        return { select: () => c, update: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      if (table === "placements") {
+        const chain: Record<string, unknown> = {
+          maybeSingle: async () => ({ data: null, error: null }),
+          order: async () => ({ data: [], error: null }),
+          then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null }),
+          limit: async () => ({ data: [{ venue_slug: "the-copper-kettle" }], error: null }),
+        };
+        chain.eq = () => chain;
+        chain.in = () => chain;
+        return {
+          select: () => chain,
+          update: () => ({ eq: async () => ({ error: null }), in: async () => ({ error: null }) }),
+        };
+      }
+      return base(table);
+    });
+
+    await POST(post());
+
+    expect(orderInsert).toBeTruthy();
+    expect(Number(orderInsert!.venue_revenue)).toBe(0);
+    const venueSends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "venue_collection_pending");
+    expect(venueSends).toHaveLength(1);
+    expect(venueSends[0].to).toBe("venue@x.com");
+  });
+
   it("clears the placement's off-the-wall offer AND the legacy work flag on sale", async () => {
     await POST(post());
     // The wall piece sold: the placement's offer (121) comes down so the CTA

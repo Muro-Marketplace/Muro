@@ -1124,7 +1124,7 @@ async function handleWebhookEvent(
           // stranger will present an order number at the counter. A sale they
           // are not told about is a confrontation waiting there. Email keyed on
           // the order so a Stripe redelivery cannot double it, plus a bell.
-          if (isVenueCollection && venueSlug) {
+          if (isVenueCollection) {
             // Owner decision 2026-08-28: the wall piece just sold, so the
             // work stops being collectable. ONLY the tick box is cleared;
             // online availability and stock follow the normal decrement, so
@@ -1163,10 +1163,25 @@ async function handleWebhookEvent(
               }
             }
             try {
+              // Owner ruling (2026-08-28): the venue's revenue SHARE needs a QR
+              // scan within 24 hours (the attribution token's TTL), but the
+              // NOTICE does not - someone is walking in to collect whatever the
+              // buyer's journey was. When attribution is absent, resolve the
+              // venue from the sold placement instead.
+              let noticeVenueSlug = venueSlug;
+              if (!noticeVenueSlug && soldPlacementIds.length > 0) {
+                const { data: soldPl } = await db
+                  .from("placements")
+                  .select("venue_slug")
+                  .in("id", soldPlacementIds)
+                  .limit(1);
+                noticeVenueSlug = (soldPl?.[0] as { venue_slug?: string } | undefined)?.venue_slug || "";
+              }
+              if (!noticeVenueSlug) throw new Error("no venue resolvable for collection notice");
               const { data: venueRow } = await db
                 .from("venue_profiles")
                 .select("user_id, name")
-                .eq("slug", venueSlug)
+                .eq("slug", noticeVenueSlug)
                 .maybeSingle<{ user_id: string | null; name: string | null }>();
               if (venueRow?.user_id) {
                 const { data: { user: venueUser } } = await db.auth.admin.getUserById(venueRow.user_id);
@@ -1197,7 +1212,7 @@ async function handleWebhookEvent(
                       placementsUrl: `${SITE}/venue-portal/placements`,
                       supportUrl: `${SITE}/support`,
                     }),
-                    metadata: { orderId, venueSlug },
+                    metadata: { orderId, venueSlug: noticeVenueSlug },
                   });
                 }
               }
