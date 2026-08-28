@@ -1798,8 +1798,35 @@ async function handleWebhookEvent(
         .select("user_id, name")
         .eq("stripe_connect_account_id", connectAccountId)
         .maybeSingle();
-      if (artistProfile?.user_id) {
-        const { data: { user } } = await db.auth.admin.getUserById(artistProfile.user_id);
+      // WS2.3 (audit R3.9): a VENUE whose bank payout bounces used to vanish
+      // here (artist_profiles only). Resolve venues as the fallback and warn
+      // the admin when neither side matches.
+      let failedRecipient = artistProfile;
+      if (!failedRecipient?.user_id) {
+        const { data: venueProfile } = await db
+          .from("venue_profiles")
+          .select("user_id, name")
+          .eq("stripe_connect_account_id", connectAccountId)
+          .maybeSingle();
+        failedRecipient = venueProfile;
+      }
+      if (!failedRecipient?.user_id) {
+        await sendAdminAlert({
+          idempotencyKey: `payout_failed_unmatched:${payout.id}`,
+          subject: "Bank payout failed for an unmatched Connect account",
+          summary: "A payout.failed event arrived for a Connect account that matches no artist or venue profile. Investigate in Stripe.",
+          fields: [
+            { label: "Connect account", value: connectAccountId },
+            { label: "Payout", value: payout.id },
+            { label: "Amount", value: `£${(payout.amount / 100).toFixed(2)}` },
+          ],
+          actionPath: "/admin/financials",
+          actionLabel: "Open financials",
+        }).catch(() => {});
+      }
+      if (failedRecipient?.user_id) {
+        const artistProfileResolved = failedRecipient;
+        const { data: { user } } = await db.auth.admin.getUserById(artistProfileResolved.user_id);
         if (user?.email) {
           await sendEmail({
             idempotencyKey: `payout_failed:${payout.id}`,
@@ -1807,9 +1834,9 @@ async function handleWebhookEvent(
             category: "orders_and_payouts",
             to: user.email,
             subject: "Payout couldn't be sent",
-            userId: artistProfile.user_id,
+            userId: artistProfileResolved.user_id,
             react: ArtistPayoutFailed({
-              firstName: (artistProfile.name || "there").split(" ")[0],
+              firstName: (artistProfileResolved.name || "there").split(" ")[0],
               payoutAmount: { amount: payout.amount, currency: (payout.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" },
               reason: payout.failure_message || payout.failure_code || "Stripe rejected the transfer.",
               fixPayoutUrl: `${SITE}/artist-portal/billing`,
@@ -2166,6 +2193,21 @@ async function handleWebhookEvent(
       .update(patch)
       .eq("stripe_connect_account_id", account.id);
 
+    // WS2.3 (audit R3.7): `blocked` used to be a dead end - money owed to a
+    // not-yet-payable recipient never became payable when they finished
+    // onboarding. When payouts flip on, release the blocked legs for this
+    // account back to the queue. Dispute holds are NOT released here: those
+    // are blocked for a reason that onboarding cannot cure.
+    if (account.payouts_enabled) {
+      const { error: unblockErr } = await db
+        .from("stripe_transfers")
+        .update({ status: "pending", last_error: null, updated_at: new Date().toISOString() })
+        .eq("stripe_connect_account_id", account.id)
+        .eq("status", "blocked")
+        .not("last_error", "like", "held: chargeback%");
+      if (unblockErr) console.warn("[webhook] blocked-leg release failed:", unblockErr);
+    }
+
     // KYC-needed email: Stripe populates `requirements.currently_due` when
     // the Connect account is missing info. We only email the artist side
     // (venue Connect accounts are payouts-to-venue and tend to be simpler).
@@ -2230,6 +2272,8 @@ async function scheduleOrderLegs(
 ): Promise<void> {
   const { orderId, legs, venueSlug, venueRevenue, isCollection } = params;
 
+  const schedulingFailures: string[] = [];
+
   // Transfer venue revenue share.
   if (venueSlug && venueRevenue > 0) {
     try {
@@ -2269,6 +2313,7 @@ async function scheduleOrderLegs(
       }
     } catch (transferErr) {
       console.error("Venue transfer error:", transferErr);
+      schedulingFailures.push(`venue ${venueSlug}: ${transferErr instanceof Error ? transferErr.message : String(transferErr)}`);
     }
   }
 
@@ -2306,6 +2351,22 @@ async function scheduleOrderLegs(
       }
     } catch (transferErr) {
       console.error("Artist transfer error:", { slug: leg.artistSlug, transferErr });
+      schedulingFailures.push(`${leg.artistSlug}: ${transferErr instanceof Error ? transferErr.message : String(transferErr)}`);
     }
+  }
+
+  // WS2.5 (audit R1.F10): a per-leg scheduling failure used to be a log line
+  // only, and the whole-order reconciler is blind to orders that HAVE some
+  // legs. Anything that slipped through the idempotent retries above gets a
+  // human, with the order id they need.
+  if (schedulingFailures.length > 0) {
+    await sendAdminAlert({
+      idempotencyKey: `leg_schedule_failed:${orderId}`,
+      subject: `Payout leg scheduling failed on ${orderId}`,
+      summary: "One or more payout legs could not be written to the ledger. The buyer has paid; the listed recipients have no pending transfer. Redeliver the Stripe event or record the legs by hand.",
+      fields: schedulingFailures.map((f, i) => ({ label: `Failure ${i + 1}`, value: f })),
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    }).catch(() => {});
   }
 }

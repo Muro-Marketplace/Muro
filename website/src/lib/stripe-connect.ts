@@ -145,6 +145,27 @@ export async function executeTransfer(transferId: string) {
 
   if (!pending) return null;
 
+  // WS2.4 (audit R6.F13): claim the row BEFORE calling Stripe, so two
+  // concurrent invocations (cron overlap, manual retry racing the sweep)
+  // cannot both attempt it. The claim is a conditional bump of
+  // next_attempt_at ten minutes ahead: the loser's conditional update
+  // matches no row and backs off. Stripe's stable idempotency key remains
+  // the second line of defence within its 24h window.
+  if (pending.next_attempt_at && new Date(pending.next_attempt_at) > new Date()) {
+    return null; // another attempt owns the row (or backoff not elapsed)
+  }
+  const claimUntil = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  let claimQuery = db
+    .from("stripe_transfers")
+    .update({ next_attempt_at: claimUntil, updated_at: new Date().toISOString() })
+    .eq("id", transferId)
+    .eq("status", pending.status);
+  claimQuery = pending.next_attempt_at
+    ? claimQuery.eq("next_attempt_at", pending.next_attempt_at)
+    : claimQuery.is("next_attempt_at", null);
+  const { data: claimed } = await claimQuery.select("id");
+  if (!claimed || claimed.length === 0) return null;
+
   const transfer = await stripe.transfers.create(
     {
       amount: pending.amount_cents,
@@ -352,6 +373,42 @@ export async function processPendingTransfers(): Promise<SweepResult> {
           .update({ status: "cancelled", updated_at: new Date().toISOString() })
           .eq("id", record.id);
         continue;
+      }
+
+      // WS2.6 (audit gap 5): the 14-day hold used to be pure wall clock. A
+      // paid order that never shipped still paid the artist on day 14, and an
+      // open refund request did not pause the clock. A real order's leg now
+      // needs shipping progress (shipped/delivered; collection modes book
+      // delivered at purchase), and any open refund request holds it.
+      if (order && order.status !== "shipped" && order.status !== "delivered") {
+        const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+        await sendAdminAlert({
+          idempotencyKey: `stale_unshipped_payout:${record.id}`,
+          subject: `Payout held: ${record.order_id} unshipped past its hold date`,
+          summary:
+            "The payout hold elapsed but the order has not been shipped, so the artist leg was NOT paid. Chase the artist or cancel the order; the leg pays automatically once the order ships.",
+          fields: [
+            { label: "Order", value: String(record.order_id) },
+            { label: "Order status", value: String(order.status) },
+            { label: "Leg", value: String(record.id) },
+          ],
+          actionPath: "/admin/financials",
+          actionLabel: "Open financials",
+        }).catch(() => {});
+        continue;
+      }
+      if (order) {
+        const { data: openRefunds } = await db
+          .from("refund_requests")
+          .select("id")
+          .eq("order_id", record.order_id)
+          .eq("status", "pending")
+          .limit(1);
+        if (openRefunds && openRefunds.length > 0) {
+          // An open refund request pauses the payout; the refund decision
+          // settles the leg one way or the other.
+          continue;
+        }
       }
 
       await executeTransfer(record.id);

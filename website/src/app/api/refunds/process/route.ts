@@ -218,11 +218,15 @@ export async function POST(request: Request) {
     const shippingRefundPence = Math.max(0, refundAmountCents - subtotalPence);
 
     // Look up transfers for this order
+    // WS2.2 (audit R3.3/R3.4/R3.6): "failed" is a mid-retry leg the sweep
+    // will pay later and "blocked" is money owed pending payout-readiness,
+    // so both must take the same haircut as "pending"; leaving them out let
+    // a partially refunded order pay the artist in full later.
     const { data: transfers } = await db
       .from("stripe_transfers")
       .select("*")
       .eq("order_id", order.id)
-      .in("status", ["pending", "paid"]);
+      .in("status", ["pending", "failed", "blocked", "paid"]);
 
     // 1. Cancel or reverse transfers
     // F32: if a transfer reversal fails we must NOT proceed to refund the
@@ -231,12 +235,33 @@ export async function POST(request: Request) {
     const failedReversals: string[] = [];
     if (transfers && transfers.length > 0) {
       for (const transfer of transfers) {
-        if (transfer.status === "pending") {
-          // Transfer hasn't been sent yet, cancel it
-          await db
-            .from("stripe_transfers")
-            .update({ status: "cancelled" })
-            .eq("id", transfer.id);
+        if (transfer.status !== "paid") {
+          // Not yet sent. A FULL refund cancels the leg outright. A PARTIAL
+          // refund used to do the same (audit R3.3), confiscating the
+          // artist's entire unpaid leg for a one-line refund; it now takes
+          // the same proportional haircut as the paid-reversal branch below,
+          // and only a leg reduced to nothing is cancelled.
+          if (isFullRefund) {
+            await db
+              .from("stripe_transfers")
+              .update({ status: "cancelled", updated_at: new Date().toISOString() })
+              .eq("id", transfer.id);
+          } else {
+            const base = subtotalPence > 0
+              ? Math.round(transfer.amount_cents * (artworkRefundPence / subtotalPence))
+              : 0;
+            const ship = transfer.recipient_type === "artist" ? shippingRefundPence : 0;
+            const reduceBy = Math.min(transfer.amount_cents, base + ship);
+            const remaining = transfer.amount_cents - reduceBy;
+            await db
+              .from("stripe_transfers")
+              .update(
+                remaining > 0
+                  ? { amount_cents: remaining, updated_at: new Date().toISOString() }
+                  : { status: "cancelled", updated_at: new Date().toISOString() },
+              )
+              .eq("id", transfer.id);
+          }
         } else if (transfer.status === "paid" && transfer.stripe_transfer_id) {
           // Transfer was already sent to Connect account, reverse it
           try {

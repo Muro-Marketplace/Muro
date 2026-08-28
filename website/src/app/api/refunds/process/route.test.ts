@@ -104,11 +104,13 @@ function setupDb({
   order,
   claimResult,
   transfers = [],
+  onTransferUpdate,
 }: {
   refundRow: Record<string, unknown> | null;
   order: Record<string, unknown>;
   claimResult: Record<string, unknown> | null;
   transfers?: Array<Record<string, unknown>>;
+  onTransferUpdate?: (row: Record<string, unknown>, id: unknown) => void;
 }) {
   claimPendingMock.mockResolvedValue(claimResult);
 
@@ -145,8 +147,11 @@ function setupDb({
             in: async () => ({ data: transfers, error: null }),
           }),
         }),
-        update: () => ({
-          eq: () => Promise.resolve({ error: null }),
+        update: (row: Record<string, unknown>) => ({
+          eq: (_col: string, id: unknown) => {
+            onTransferUpdate?.(row, id);
+            return Promise.resolve({ error: null });
+          },
         }),
       };
     }
@@ -594,5 +599,58 @@ describe("POST /api/refunds/process — restock on full refund (D17)", () => {
     const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
     expect(res.status).toBe(200);
     expect(restockCalls()).toHaveLength(0);
+  });
+});
+
+// ─── WS2.2 (audit R3.3/R3.4): partial refunds take a proportional haircut ───
+describe("partial refunds and unpaid legs (WS2.2, audit R3.3/R3.4)", () => {
+  const pendingLeg = {
+    id: "leg-1",
+    status: "pending",
+    stripe_transfer_id: null,
+    recipient_type: "artist",
+    amount_cents: 8500,
+  };
+
+  function arm(transfers: Array<Record<string, unknown>>, refundType: "partial" | "full", amount: number | null, sink: Array<{ row: Record<string, unknown>; id: unknown }>) {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    const order = { ...baseOrder, subtotal: 100, shipping_cost: 10, total: 110, stripe_payment_intent_id: "pi_test" };
+    setupDb({
+      refundRow: { ...baseRefundRow, type: refundType, amount },
+      order,
+      claimResult: { ...baseClaimedReq, type: refundType, amount },
+      transfers,
+      onTransferUpdate: (row, id) => sink.push({ row, id }),
+    });
+  }
+
+  it("reduces a pending leg proportionally instead of confiscating it", async () => {
+    // Partial £40 on a £100 subtotal: the £85 pending leg loses
+    // round(8500 x 4000/10000) = 3400 and stays pending at £51.
+    const updates: Array<{ row: Record<string, unknown>; id: unknown }> = [];
+    arm([pendingLeg], "partial", 40, updates);
+    const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    expect(res.status).toBe(200);
+    const legUpdates = updates.filter((u) => u.id === "leg-1");
+    expect(legUpdates).toHaveLength(1);
+    expect(legUpdates[0].row).toMatchObject({ amount_cents: 5100 });
+    expect(legUpdates[0].row.status).toBeUndefined();
+  });
+
+  it("a mid-retry (failed) leg takes the same haircut", async () => {
+    const updates: Array<{ row: Record<string, unknown>; id: unknown }> = [];
+    arm([{ ...pendingLeg, status: "failed" }], "partial", 40, updates);
+    await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    const legUpdates = updates.filter((u) => u.id === "leg-1");
+    expect(legUpdates[0].row).toMatchObject({ amount_cents: 5100 });
+  });
+
+  it("a full refund still cancels the unpaid leg outright", async () => {
+    const updates: Array<{ row: Record<string, unknown>; id: unknown }> = [];
+    arm([pendingLeg], "full", null, updates);
+    await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    const legUpdates = updates.filter((u) => u.id === "leg-1");
+    expect(legUpdates[0].row).toMatchObject({ status: "cancelled" });
   });
 });

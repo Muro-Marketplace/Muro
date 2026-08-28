@@ -80,10 +80,15 @@ export async function grossMerchandiseValuePence(
 export async function artistEarningsPence(
   db: SupabaseClient,
 ): Promise<Map<string, number>> {
+  // WS2.5 (audit R3.12): the docstring said "money actually paid" but the
+  // query summed EVERY row, so blocked, cancelled and reversed legs inflated
+  // the admin's top-artists numbers. Paid and pending are earnings; the
+  // dead and clawed-back states are not.
   const { data, error } = await db
     .from("stripe_transfers")
     .select("recipient_user_id, amount_cents")
-    .eq("recipient_type", "artist");
+    .eq("recipient_type", "artist")
+    .in("status", ["paid", "pending"]);
   if (error) {
     console.error("[finance] stripe_transfers query failed:", error.message);
     throw new Error(`stripe_transfers query failed: ${error.message}`);
