@@ -73,18 +73,17 @@ describe("one arrangement-label source (K3)", () => {
     // wording someone had typed, and silently disagreed with every surface that
     // did not parse it. Both are gone.
     //
-    // Named files rather than a sweep, because the sweep's honest version has a
-    // false positive: PlacementDetailClient still parses the message for a
-    // displayed monthly-fee AMOUNT, with a "re-confirm with the other party
-    // before payout" caveat beside it. Measured against prod, 3 of 86
-    // placements have a fee in the message and nothing in the column, so
-    // deleting that would show "Free display" on three real negotiated
-    // placements. That is a data backfill decision for the owner, recorded in
-    // PROGRESS, not a duplicate-label cleanup.
+    // Owner decision 6 (2026-08-28) closed the last one: the three live rows
+    // whose fee existed only in the message were backfilled into
+    // `monthly_fee_gbp`, and PlacementDetailClient's parse was deleted with the
+    // reason recorded at the site. So the sweep is now total: NOTHING may infer
+    // a monetary amount from prose, and the file list below is every surface
+    // that ever did.
     const FEE_FROM_PROSE = /(?:£|gbp)[\s\S]{0,20}?\\d\{2,5\}/i;
     for (const file of [
       path.join("src", "lib", "placements", "status.ts"),
       path.join("src", "components", "PlacementContextPanel.tsx"),
+      path.join("src", "app", "(pages)", "placements", "[id]", "PlacementDetailClient.tsx"),
     ]) {
       expect(FEE_FROM_PROSE.test(code(file)), file).toBe(false);
     }

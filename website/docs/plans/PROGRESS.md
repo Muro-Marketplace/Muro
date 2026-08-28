@@ -12088,3 +12088,19 @@ than load-bearing.
 Data lost: 14 rows of near-uniformly-zero counters that never agreed with
 reality. That staleness was the argument FOR dropping: any future reader would
 have trusted them, which is how K5 happened the first time.
+
+### Decision 6 — the three fee rows backfilled, the prose parse deleted — DONE
+
+The three rows each state their fee verbatim in the negotiated message
+("Placement request: … — Paid Loan — £80/month to artist"), so the backfill was a
+transcription, not an inference: `p-msg-1776868867800` £80 (active),
+`p-msg-1776868880328` £80 (declined), `p-msg-1776874146924` £20 (active). The
+UPDATE pinned the exact ids AND `monthly_fee_gbp IS NULL`, so it is idempotent
+and could not clobber a value set since. Verified: all three now carry the fee.
+
+With zero rows left to serve, `PlacementDetailClient`'s regex-the-message
+fallback is deleted, along with its "Parsed from request message, re-confirm with
+the other party before payout" caveat. The `one-label-source` guard's
+fee-from-prose sweep now includes the file — it was previously named as the
+honest false positive — so all three surfaces that ever inferred money from
+prose are locked. Verified by restoring the regex: the guard names the file.

@@ -951,28 +951,25 @@ export default function PlacementDetailClient({ placementId }: Props) {
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Monthly fee</p>
               {(() => {
-                // Prefer the stored number. For legacy rows where the fee
-                // column wasn't populated but the message text mentions an
-                // amount, parse it out so the card doesn't lie with
-                // "Free display" when the request clearly said £X/month.
+                // The column is the only source. This used to fall back to
+                // regexing the free-text message for "£X/month" on legacy rows,
+                // with a "re-confirm before payout" caveat rendered beside the
+                // number — a monetary amount inferred from prose someone typed.
+                // Owner decision 6 (approved 2026-08-28) backfilled the three
+                // live rows that relied on it (p-msg-1776868867800 £80,
+                // p-msg-1776868880328 £80, p-msg-1776874146924 £20, each stated
+                // verbatim in its own negotiated message), so the parse now has
+                // zero rows to serve and inference-from-prose is gone from the
+                // last surface that did it.
                 const stored = placement.monthly_fee_gbp;
-                const msg = placement.message || "";
-                const mentionsFee = /(?:\u00a3|gbp)\s?(\d{2,5})\s?(?:\/?\s?m|per|a\s)/i.test(msg);
-                const parsed = mentionsFee ? parseFloat(RegExp.$1) : 0;
-                const hasStored = typeof stored === "number" && stored > 0;
-                const fee = hasStored ? stored : parsed;
-                const isPaidLoan = fee > 0;
+                const isPaidLoan = typeof stored === "number" && stored > 0;
                 return (
                   <>
                     <p className="text-lg font-medium text-foreground">
-                      {isPaidLoan ? `\u00a3${fee.toLocaleString()}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
+                      {isPaidLoan ? `\u00a3${stored.toLocaleString()}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
                     </p>
                     <p className="text-[11px] text-muted mt-1">
-                      {isPaidLoan
-                        ? (hasStored
-                            ? "Venue pays artist to display the work"
-                            : "Parsed from request message, re-confirm with the other party before payout")
-                        : "No rental fee agreed"}
+                      {isPaidLoan ? "Venue pays artist to display the work" : "No rental fee agreed"}
                     </p>
                   </>
                 );
