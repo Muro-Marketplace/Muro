@@ -28,7 +28,7 @@ export const mock: ArtistPremiumUpgradeEducationalProps = {
   firstName: "Maya",
   currentPlan: "Core",
   premiumBenefits: [
-    "Unlimited works instead of 3",
+    "20 works instead of 8",
     "Appear higher in venue searches",
     "Per-work scan + sale analytics",
     "5 active placements at a time instead of 2",

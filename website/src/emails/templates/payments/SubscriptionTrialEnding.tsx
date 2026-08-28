@@ -30,7 +30,7 @@ export const mock: SubscriptionTrialEndingProps = {
   trialEndDate: "28 April 2026",
   upgradeUrl: "https://wallplace.co.uk/artist-portal/billing",
   benefits: [
-    "Unlimited works in your portfolio",
+    "Up to 20 works in your portfolio",
     "Priority matching with venues",
     "Advanced QR analytics",
   ],

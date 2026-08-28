@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { WORKS_CAP } from "@/lib/pricing";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
 import { canReceivePayout } from "@/lib/payouts/capability";
@@ -1518,7 +1519,7 @@ async function handleWebhookEvent(
               trialEndDate,
               upgradeUrl: `${SITE}/artist-portal/billing`,
               benefits: [
-                "Unlimited works in your portfolio",
+                `Up to ${WORKS_CAP[planLabel.toLowerCase()] ?? WORKS_CAP.core} works in your portfolio`,
                 "Priority matching with venues",
                 "Advanced QR analytics",
               ],
