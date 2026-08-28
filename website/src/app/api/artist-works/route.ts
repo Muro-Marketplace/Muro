@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     }
     const {
       id, title, medium, dimensions, priceBand, pricing, available, color, image,
-      orientation, sortOrder, shippingPrice, quantityAvailable, frameOptions,
+      orientation, sortOrder, shippingPrice, inStorePrice, quantityAvailable, frameOptions,
       description, images,
     } = parsed.data;
 
@@ -188,15 +188,12 @@ export async function POST(request: Request) {
       orientation: orientation || "landscape",
       sort_order: sortOrder ?? 0,
       shipping_price: shippingPrice ?? null,
-      // `in_store_price` is NOT written. It exists in no migration and not in the
-      // live table, so upsertWork's strip-and-retry dropped it on every single
-      // request: a guaranteed-failing column write per save. It is absent from
-      // ARTIST_WORK_WRITABLE for the same reason (A8).
-      //
-      // The artist portal still COLLECTS per-size in-store prices, so artists are
-      // typing values that have never been stored. Finishing that feature needs a
-      // migration and removing it needs a UI change, so it is escalated in
-      // PROGRESS.md rather than decided here.
+      // Owner decision 14 (migration 118): `in_store_price` is a real column
+      // now, so the value the portfolio has collected all along finally
+      // persists. Before 118 this field was deliberately not forwarded (A8),
+      // because the column did not exist and sending it made upsertWork's
+      // per-column ladder fail on every save.
+      in_store_price: inStorePrice ?? null,
       quantity_available: quantityAvailable ?? null,
       frame_options: sanitizedFrames,
       description: sanitizedDescription,

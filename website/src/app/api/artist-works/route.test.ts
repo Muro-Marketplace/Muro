@@ -266,24 +266,29 @@ describe("POST /api/artist-works frame options now come from the schema (E46a)",
   });
 });
 
-describe("POST /api/artist-works no longer writes the phantom in_store_price (E46a / A8)", () => {
+describe("POST /api/artist-works persists in_store_price (owner decision 14, migration 118)", () => {
   const row = () =>
     (upsertWorkMock.mock.calls as unknown as Array<[string, Record<string, unknown>]>)[0]?.[1];
 
-  it("omits in_store_price from the write", async () => {
-    // The column exists in no migration and not in the live table, so
-    // upsertWork's strip-and-retry dropped it on EVERY save: a guaranteed-failing
-    // column write per request. It is absent from ARTIST_WORK_WRITABLE too.
-    await POST(req(baseBody));
-    expect(row()).not.toHaveProperty("in_store_price");
-  });
-
-  it("ignores a client-supplied inStorePrice rather than 400ing on it", async () => {
-    // The artist portal still sends it, so rejecting the request would break
-    // saving a work entirely. Accept and drop, and escalate the UI mismatch.
+  it("writes a supplied inStorePrice, ending the collect-then-drop", async () => {
+    // INVERTED 2026-08-28. This block used to pin the OMISSION of
+    // in_store_price, because the column existed in no migration and forwarding
+    // it made upsertWork's per-column ladder fail on every save. Migration 118
+    // created it, so the value the portfolio has collected all along finally
+    // lands.
     const res = await POST(req({ ...baseBody, inStorePrice: 250 }));
     expect(res.status).toBe(200);
-    expect(row()).not.toHaveProperty("in_store_price");
+    expect(row()).toMatchObject({ in_store_price: 250 });
+  });
+
+  it("stores null, not undefined, when the artist clears it", async () => {
+    await POST(req(baseBody));
+    expect(row()).toHaveProperty("in_store_price", null);
+  });
+
+  it("rejects a negative price the same way the size prices are rejected", async () => {
+    const res = await POST(req({ ...baseBody, inStorePrice: -1 }));
+    expect(res.status).toBe(400);
   });
 });
 

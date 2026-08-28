@@ -12400,3 +12400,25 @@ is nobody-in-production, everybody-in-preview-and-dev. An admin who needs the
 browser has preview deploys. The reasoning is recorded at the gate itself, and
 this closes the "B4 admin conjunct" open decision as answered rather than
 pending.
+
+### Decision 14 — the in-store price finally persists — DONE (migration 118)
+
+The undecided question showed up in three places; the decision resolved it by
+**finishing the feature**, which turned out to be the smaller change: every
+other link was already coded. The portfolio collects a work-level in-store
+price and its toggle honours one on reopen; `changed-works.ts` diffs it; the
+transform maps it onto the public work; the artwork page's collect CTA quotes
+it for works without per-size pricing. Only the column was missing, so artists
+typed a price, the form said saved, and the value went nowhere.
+
+**Migration 118** creates `artist_works.in_store_price` (nullable NUMERIC, with
+a comment distinguishing it from the per-size prices inside the `pricing`
+jsonb). The two deliberate omissions reinstated with it: the route forwards the
+field (with the same money cap as a size price, floored at 0) and
+`ARTIST_WORK_WRITABLE` admits it. The `upsertWork` extendedColumns landmine is
+defused by the column existing rather than by delisting it.
+
+Three test blocks inverted with their history recorded — the route's
+omit-the-phantom pair, and the writable-fields exclusion, which now documents
+the same excluded-while-phantom → admitted-when-real lifecycle its neighbour
+shipping columns went through.

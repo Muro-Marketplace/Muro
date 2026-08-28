@@ -171,7 +171,8 @@ export const placementSchema = z.object({
  * correctness and trust problem rather than direct theft. Fixed at the write
  * boundary regardless.
  *
- * No `inStorePrice`: see the route for why.
+ * `inStorePrice` joined 2026-08-28 (owner decision 14 / migration 118): the
+ * column exists now, so the value the portfolio always collected can persist.
  */
 const money = (max: number) => z.number().finite().min(0).max(max);
 
@@ -195,6 +196,8 @@ export const artistWorkInputSchema = z.object({
   orientation: z.enum(["portrait", "landscape", "square"]).optional(),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   shippingPrice: money(1000).nullable().optional(),
+  // Same cap as a per-size price: this IS a price, not a shipping fee.
+  inStorePrice: money(100_000).nullable().optional(),
   quantityAvailable: z.number().int().min(0).max(10_000).nullable().optional(),
   description: optionalString(2000),
   images: z.array(z.string().max(2000)).max(10).optional(),

@@ -153,12 +153,12 @@ describe("allowlist integrity", () => {
     expect(Object.isFrozen(ARTIST_WORK_SERVER_OWNED)).toBe(true);
   });
 
-  it("excludes the column that still does not exist in prod", () => {
-    // A8, verified against uwkuhygwvasdzwsusiym: written by code but present in no
-    // migration and not in the live table. Allowlisting it would let a client's
-    // value reach the write, and PostgREST would then reject the whole statement,
-    // so one stray field would fail the entire save.
-    expect(ARTIST_WORK_WRITABLE).not.toContain("in_store_price");
+  it("allowlists in_store_price now that migration 118 created it", () => {
+    // INVERTED 2026-08-28 (owner decision 14). Same lifecycle as the two
+    // shipping columns below: excluded while the column did not exist, because
+    // allowlisting a phantom would let one stray field fail the whole save,
+    // then admitted the moment the migration made it real.
+    expect(ARTIST_WORK_WRITABLE).toContain("in_store_price");
   });
 
   it("allowlists the two shipping-scope columns that migration 081 created", () => {

@@ -223,11 +223,9 @@ export const ARTIST_WORK_WRITABLE = Object.freeze([
   "orientation",
   "sort_order",
   "shipping_price",
-  // NOTE: `in_store_price` is written at api/artist-works/route.ts:176 and read
-  // by artist-profiles-transform.ts:176, but exists in no migration and NOT in
-  // the live table. That is precisely why upsertWork carries a strip-and-retry
-  // fallback: the column write fails and is dropped per-column today. Omitted
-  // here for the same reason as the two shipping columns above.
+  // Owner decision 14 / migration 118: real column now, so the value the
+  // portfolio always collected persists instead of being dropped at the route.
+  "in_store_price",
   "quantity_available",
   "frame_options",
   "description",
