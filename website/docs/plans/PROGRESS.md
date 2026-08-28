@@ -11501,3 +11501,62 @@ the whole save, and the real fix (a migration, or removing the UI that collects
 per-size in-store prices) is already escalated.
 
 `npm run check` green: 0 lint errors, 243 files, 2456 tests, exit 0.
+
+## Owner decisions added since the 2026-08-28 close, numbered on from 8
+
+**9. £953.20 is booked as owed to artists and `stripe_transfers` is empty.**
+Twelve revenue-bearing orders, £1,174.87 gross, and **not one ledger row**. All
+twelve predate the C2/C3 leg work, so this is history rather than a live
+regression, but the money is still owed and nothing records it. Two of the twelve
+name demo personas (`fin-coles`, `maya-chen`), so some may be test traffic; you
+can tell and I cannot. `npm run audit:reconcile` reproduces this on demand.
+
+**9a. `WS-P06DDkUs` (2026-05-17, £64.49) has no artist at all.** `artist_slug`
+NULL, `artist_user_id` NULL, and `artist_revenue`, `venue_revenue` and
+`platform_fee` all zero. £64.49 collected, nobody attributed, nothing allocated.
+The D4 signature, and the only order whose split does not sum.
+
+**9b. Five more have a slug and no user id** (`WS-agEXJ0gn`, `WS-iJ7I3ENn`,
+`WS-kcsWHfhq`, `WS-duumFTnR`, `WS-rQDHDmz5`, £535.42 between them). The slug
+resolved, the user id did not, so no transfer was ever scheduled. D4's fix stops
+this recurring; it does not repair these.
+
+**10. The referral programme goes live on the next referred signup.** Migration
+109 makes `api/apply` record `referred_by_code` for the first time ever. From the
+next referred artist's first payment, the webhook credits their referrer **30
+days of `free_until`**, which feeds `platformFeePercentForArtist`, so the platform
+takes no fee from that artist for a month. That has never happened once. Nothing
+is owed retroactively: the 13 destroyed codes are unrecoverable, so no back-credit
+is possible even if you wanted one. Reverting is one line, dropping the field from
+the insert.
+
+**11. Flagged messages reach no admin queue.** A message that trips the
+moderation filter now records `moderation_flagged` in its `metadata` (it
+previously lost its type and attachments instead), but `moderation_queue` (058)
+has a typed payload union covering blogs, feature requests and feedback, with no
+`message` member. Adding one means extending the union, the parser, the admin
+renderer and the `entity_type` constraint. That is a feature.
+
+**12. Every public table grants `TRUNCATE`, `REFERENCES` and `TRIGGER` to `anon`
+and `authenticated`** — all 53 of them, alongside SELECT/INSERT/UPDATE/DELETE.
+This is Supabase's stock default-privilege set rather than something Wallplace
+did, and PostgREST exposes no TRUNCATE verb, so it is not reachable through the
+API. It is still wider than any table needs. `contact_submissions` is the sharp
+case: it is protected from public reads only by the ABSENCE of a SELECT policy,
+so one permissive policy added for any reason makes every name, address and
+message body publicly readable. Grants are on the escalation list, so this is
+recorded and untouched.
+
+**13. T9 "collect from venue" is a feature build on the checkout path, and I have
+not started it.** `04` Phase 8 is six items: two migrations, a new
+`collect_venue` branch in `checkoutSchema`, server-side re-validation in
+`/api/checkout`, a third tile on the checkout page and a new email. It is the last
+substantial block in `04`. Building a new checkout mode unattended is exactly what
+the money boundary exists to prevent, so it is surfaced rather than started.
+
+**14. `upsertWork`'s `extendedColumns` still lists `in_store_price`**, which
+exists in no migration and not in the live table. The route stopped passing it
+(A8), so nothing triggers it today, but any future caller that does gets a
+guaranteed-failing per-column write. The real fix is either a migration or
+removing the UI that collects per-size in-store prices; both were already
+escalated and this is the third place the same undecided question shows up.
