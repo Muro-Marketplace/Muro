@@ -11209,3 +11209,51 @@ feature. Listed with the other owner decisions.
 
 `npm run check` green: 0 lint errors, 239 files, 2399 tests, 134 templates, 0
 dependency violations, exit 0.
+
+### 09 item 2.8 — the guard was watching for functions that no longer exist — DONE
+
+`no-unawaited-critical-sideeffect` denylisted **`executeTransfer`, or any name
+matching `/^notify/`**. K1 deleted every `notify*` function when it removed
+`src/lib/email.ts`. So from that PR onward the rule guarded exactly **one real
+name**, and a pattern matching nothing, while the four functions that took over
+the notifiers' job went uncovered: `sendEmail`, `sendTransactional`,
+`sendAdminAlert`, `recordOrderEvent`.
+
+The rule was still registered, still in `check`, still green, and had stopped
+covering the thing it was written for. Nothing in the build could say so, because
+"zero violations" is what a working guard and a dead one both look like.
+
+**It found a live one immediately.** `placements/route.ts:614` fires the
+"request sent" confirmation to the person who just made a placement request as a
+bare `sendEmail(...).catch(...)`. The `.catch` stops an unhandled rejection; it
+does not keep the runtime alive. On Vercel an un-awaited promise left running
+after the response can be killed mid-flight, so the confirmation silently never
+sends and `email_events` records nothing, which is the exact failure that table
+exists to make visible. §B.6 predicted this violation and named the line.
+
+Fixed with `afterResponse`, the pattern `waitlist`, `apply` and `register-venue`
+already use: the runtime keeps the function alive and the requester does not wait
+on the send. Zero violations after.
+
+22 new rule tests: each of the five names flagged bare, flagged behind a
+`.catch()`, allowed when awaited, and allowed inside `afterResponse`. Plus one
+that a hand-rolled `notify*` is still caught, so the dead pattern earns its keep
+as an on-the-way-in guard, and one that `sendEmailPreferencesLink` is not
+`sendEmail`. Reverting the denylist fails 10 of 32.
+
+**Two more Group 2 items were done under different names, which is a doc
+correction rather than work.** 2.1's `internal_ops` category is `platform_admin`,
+which already had the three values §B.3 specifies. 2.7's
+`no-legacy-email-import.js` is the `one-email-entrypoint` dependency-cruiser rule
+plus `no-legacy-email.test.ts`; the cruiser catches relative paths a lint rule
+would miss, and it runs in `depcheck` inside `check`.
+
+**2.3's six templates: three shipped under different ids.**
+`artist_new_placement_request` → `venue_new_placement_request` /
+`artist_new_placement_invitation` (the shipped pair splits by recipient, which
+the single proposed name does not),
+`venue_curation_enquiry_received` → `curation_enquiry_received`, and
+`venue_curation_payment_received` → `curation_payment_received`. Recorded here
+the same way the §C.5 matrix records its three renames.
+
+`npm run check` green: 0 lint errors, 239 files, 2421 tests, exit 0.

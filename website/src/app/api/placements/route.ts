@@ -28,6 +28,7 @@ import { ArtistNewPlacementInvitation } from "@/emails/templates/placements/Arti
 import { placementTermsSummary } from "@/lib/placements/terms-summary";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import { afterResponse } from "@/lib/after-response";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -611,23 +612,33 @@ export async function POST(request: Request) {
           parsed.data[0].revenueSharePercent,
           parsed.data[0].monthlyFeeGbp,
         );
-        sendEmail({
-          idempotencyKey: `placement_request:${placementIdForLink}:to_artist`,
-          template: "artist_placement_request_sent",
-          category: "placements",
-          to: senderEmail,
-          subject: `Request sent to ${venueProfile!.name}`,
-          userId: senderUserId,
-          react: ArtistPlacementRequestSent({
-            firstName: senderFirstName,
-            venueName: venueProfile!.name,
-            placementUrl,
-            requestedWorks: parsed.data.map((p) => p.workTitle),
-            proposedTerms: termsSummary,
-          }),
-          metadata: { placementId: placementIdForLink },
-        }).catch((err) => {
-          if (err) console.error("Artist receipt email failed:", err);
+        // 09 item 2.8. This was fire-and-forget, and the guard could not see it
+        // because its denylist still named the notify* functions K1 deleted. On
+        // Vercel an un-awaited promise left running after the response can be
+        // killed mid-flight, so the confirmation silently never sends and
+        // `email_events` records nothing, which is the exact failure that table
+        // exists to make visible. `afterResponse` is the pattern the other three
+        // routes use: the runtime keeps the function alive, and the sender does
+        // not wait on the send.
+        afterResponse(async () => {
+          await sendEmail({
+            idempotencyKey: `placement_request:${placementIdForLink}:to_artist`,
+            template: "artist_placement_request_sent",
+            category: "placements",
+            to: senderEmail,
+            subject: `Request sent to ${venueProfile!.name}`,
+            userId: senderUserId,
+            react: ArtistPlacementRequestSent({
+              firstName: senderFirstName,
+              venueName: venueProfile!.name,
+              placementUrl,
+              requestedWorks: parsed.data.map((p) => p.workTitle),
+              proposedTerms: termsSummary,
+            }),
+            metadata: { placementId: placementIdForLink },
+          }).catch((err) => {
+            if (err) console.error("Artist receipt email failed:", err);
+          });
         });
       }
 

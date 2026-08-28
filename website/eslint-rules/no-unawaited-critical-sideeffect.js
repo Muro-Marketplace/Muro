@@ -47,8 +47,32 @@ module.exports = {
       return undefined;
     }
 
+    /**
+     * 09 §B.6 / item 2.8. This used to be `executeTransfer` plus anything
+     * matching /^notify/, and K1 DELETED every notify* function when it removed
+     * src/lib/email.ts. So the rule was guarding one real name and a pattern
+     * that matched nothing, while the four functions that replaced those
+     * notifiers went uncovered.
+     *
+     * That matters on Vercel specifically: an un-awaited promise left running
+     * after the response is returned can be killed mid-flight, so the send is
+     * dropped and nothing anywhere records that it was attempted. Which is the
+     * entire failure mode `email_events` exists to make visible.
+     *
+     * The /^notify/ pattern stays, cheaply, so a new hand-rolled notifier is
+     * caught on the way in rather than after it ships.
+     */
+    const CRITICAL = new Set([
+      "executeTransfer",
+      "sendEmail",
+      "sendTransactional",
+      "sendAdminAlert",
+      "sendMessageUnreadEmail",
+      "recordOrderEvent",
+    ]);
+
     function isDenylisted(name) {
-      return name === "executeTransfer" || /^notify/.test(name);
+      return CRITICAL.has(name) || /^notify/.test(name);
     }
 
     return {
