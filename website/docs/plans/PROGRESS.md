@@ -12916,3 +12916,50 @@ venue notice, the off-the-wall offer clear and the legacy flag clear on
 QR attribution being present. All three now run for every collect sale;
 the notice resolves the venue from the sold placement when attribution is
 absent, and the share stays zero. Fail-before probed.
+
+## 2026-08-29: transaction-hardening plan executed in full
+
+Every code item in docs/plans/2026-08-28-transaction-hardening-plan.md is
+implemented, tested and committed (12 thematic commits, 39b0ff2..3dcf757).
+Full gate at completion: 2,997 tests across 292 files, tsc clean, eslint
+zero errors. Six parallel agents delivered WS5 (email pipeline), WS6
+(bells/crons) and the three WS8 waves; WS1-WS4 plus the cross-cutting
+items landed directly. Highlights beyond the earlier entries:
+
+- WS3: cancellation refunds the buyer (reversal-before-refund through a
+  system refund_requests row); account deletion cancels SaaS, paid-loan
+  and curation subscriptions and ABORTS if a cancel fails; an off-wall
+  sale marks the placement sold, cancels its billing and clears the
+  portfolio stamps; collection orders reach delivered (buyer-confirmed
+  handover) so the statutory window starts; the referral window emails at
+  grant and 4 days before expiry (new referral-window cron).
+- WS2.7: a buyer's delivered click releases only that artist's legs plus
+  the venue share; co-artists keep their payout_after date.
+- WS1.1 second half: all six paid-loan/curation invoice wrapper catches
+  now 500 so Stripe redelivers; WS1.5 second half: async_payment_failed
+  tells the buyer nothing was charged (customer_payment_failed).
+- WS4.4 return half: past_due recovery sends subscription_recovered.
+- R2.17: new daily subscription-reconcile cron corrects SaaS/paid-loan/
+  curation state toward Stripe and alerts on drift; R2.13: an invoice for
+  a non-active placement trips an immediate admin alarm.
+- R4.10/R4.17: lifecycle emails identify the RECIPIENT (not the actor);
+  refund rejections greet and identify the requester. WS6.2: rejection
+  and payout-failed bells.
+- B28: checkout clamps quantity against remaining stock server-side.
+- safe-filter now allows colons in values (ISO timestamps) so timestamp
+  bounds can go through orFilter; injection charset unchanged.
+
+New crons wired in vercel.json: referral-window (10:30), subscription-
+reconcile (07:30). New templates: paid_loan_payment_failed,
+referral_credit_granted, referral_window_ending, subscription_recovered,
+customer_payment_failed (plus venue_paid_loan_invoice and
+subscription_card_expiring wired by WS4).
+
+Remaining and deliberately NOT code: WS0 owner actions (Stripe webhook
+enabled-events list, RESEND_WEBHOOK_SECRET + Resend webhook endpoint,
+leaked-password toggle, TURNSTILE_SECRET_KEY, branch protection,
+clean-slate test-data reset decision), WS7 compliance decisions
+(VAT/commission invoicing/HMRC platform reporting, owner + accountant),
+and the stale prod deploy. R4.15's register-venue/waitlist keys and the
+artist-agreement page's proration sentence are flagged for a later pass
+(the latter is a legal document needing owner sign-off).
