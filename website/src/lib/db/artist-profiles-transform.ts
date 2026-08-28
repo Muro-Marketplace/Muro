@@ -45,10 +45,6 @@ export interface DbArtistProfile {
   postcode?: string;
   lat?: number | null;
   lng?: number | null;
-  total_views?: number;
-  total_placements?: number;
-  total_sales?: number;
-  total_enquiries?: number;
   message_notifications_enabled?: boolean;
   subscription_plan?: string;
   /** Phase 2.5 B4: surface the subscription_status so the merged
@@ -138,21 +134,9 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
         : null,
     image: profile.profile_image || `https://picsum.photos/seed/${profile.slug}/400/400`,
     bannerImage: profile.banner_image || undefined,
-    // K5: these map cached `artist_profiles.total_*` columns whose only writer
-    // (a manual admin POST) is deleted, so they are now frozen at whatever the
-    // last human-triggered refresh left — 0 for 13 of 14 artists. They are kept
-    // on the shape rather than ripped out because this transform feeds LIST
-    // endpoints, where counting live per artist is an N+1; the two surfaces that
-    // actually display these numbers (the artist dashboard and the public
-    // profile page) now count live via lib/analytics/artist-totals instead.
-    //
-    // Dropping the columns and these four fields is the tidy end state and needs
-    // an owner decision, because it is a destructive migration. Recorded in
-    // PROGRESS.
-    totalViews: profile.total_views || 0,
-    totalPlacements: profile.total_placements || 0,
-    totalSales: profile.total_sales || 0,
-    totalEnquiries: profile.total_enquiries || 0,
+    // K5's cached counters are GONE (migration 114, owner decision 5). The
+    // columns were written by nothing, wrong when live, and their transform
+    // fields had no reader. Live counts come from lib/analytics/artist-totals.
     subscriptionPlan: profile.subscription_plan || undefined,
     subscriptionStatus: profile.subscription_status || undefined,
     shipsInternationally: profile.ships_internationally || false,

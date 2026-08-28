@@ -9,7 +9,7 @@
 //   review_status / approved_at              → admin routes ONLY
 //                                              (api/admin/applications/[id])
 //   user_id / slug / artist_id / id          → never client-writable
-//   total_*                                  → lib/stats-cache.ts ONLY
+//   (total_* counters dropped by migration 114; live counts come from analytics)
 //   stripe_*                                 → Stripe onboarding + webhooks ONLY
 //   lat / lng                                → derived server-side from postcode
 //
@@ -112,10 +112,6 @@ export const ARTIST_PROFILE_SERVER_OWNED = Object.freeze([
   // live from analytics_events instead. They stay DENIED here regardless: a
   // client must never be able to write its own view or sale count, whether or
   // not anything else does.
-  "total_views",
-  "total_placements",
-  "total_sales",
-  "total_enquiries",
   // Billing / referral
   "referral_code", // unique, auto-generated
   "referred_by_code", // write-once at signup, drives a payout

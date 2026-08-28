@@ -12068,3 +12068,23 @@ Verified live after both: **zero** TRUNCATE/REFERENCES/TRIGGER grants remain for
 client roles anywhere in `public`, zero grants of any kind on the
 service-role-only set, and the 32 client-serving objects keep exactly their four
 row-level verbs.
+
+### Decision 5 — the four cached counters, dropped — DONE
+
+**Migration 114 (applied, verified: 0 of the 4 columns remain).** `total_views`,
+`total_placements`, `total_sales`, `total_enquiries` were K5's columns: written
+only by an endpoint no cron ever hit, wrong when live (0 views shown against
+2,295 real events), and since K5 written by nothing and read for nothing.
+Re-verified before dropping: the transform's four mapped fields had **no member
+access anywhere** outside the transform itself.
+
+The whole chain went with them: the four interface fields and the four mapped
+outputs in `artist-profiles-transform.ts`, the four `Artist` type fields in
+`data/artists.ts`, and the four `writable-fields.ts` denylist entries (whose
+header comment still pointed at `lib/stats-cache.ts`, deleted weeks ago). The
+`one-stats-source` guard's transform exemption is now vacuously clean rather
+than load-bearing.
+
+Data lost: 14 rows of near-uniformly-zero counters that never agreed with
+reality. That staleness was the argument FOR dropping: any future reader would
+have trusted them, which is how K5 happened the first time.

@@ -108,10 +108,6 @@ export interface Artist {
   bannerImage?: string;
   works: ArtistWork[];
   // Stats (populated from cache columns on artist_profiles)
-  totalViews?: number;
-  totalPlacements?: number;
-  totalSales?: number;
-  totalEnquiries?: number;
   subscriptionPlan?: string;
   shipsInternationally?: boolean;
   internationalShippingPrice?: number | null;
