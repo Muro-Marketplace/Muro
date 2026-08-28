@@ -17,6 +17,7 @@ import { saveQrContext } from "@/lib/qr-context";
 import { getProfileTheme, themeCssVars, canCustomiseTheme, DEFAULT_PROFILE_THEME } from "@/lib/profile-themes";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
+import { ENQUIRY_TYPES } from "@/lib/enquiry-types";
 
 interface ArtistProfileClientProps {
   artistName: string;
@@ -1189,10 +1190,9 @@ export default function ArtistProfileClient({
                   <input type="text" name="senderName" placeholder="Your name" required defaultValue={authDisplayName || ""} className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
                   <input type="email" name="senderEmail" placeholder="Your email" required defaultValue={user?.email || ""} className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
                   <select name="enquiryType" className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm text-muted focus:outline-none focus:border-accent/50">
-                    <option value="venue_looking">I&apos;m a venue looking for art</option>
-                    <option value="purchasing">I&apos;m interested in purchasing</option>
-                    <option value="custom_piece">Request a custom piece</option>
-                    <option value="general">General question</option>
+                    {ENQUIRY_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.option}</option>
+                    ))}
                   </select>
                   <textarea name="message" placeholder="Your message..." rows={3} required className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
                   <button type="submit" className="w-full px-5 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { authFetch } from "@/lib/api-client";
 import { isLoan } from "@/lib/arrangement-type";
 
@@ -44,7 +45,7 @@ function describeTerms(meta: LogEntry["metadata"]): string | null {
     if (typeof meta.monthlyFeeGbp === "number" && meta.monthlyFeeGbp > 0) {
       bits.push(`Paid loan £${meta.monthlyFeeGbp}/mo`);
     } else {
-      bits.push("Paid loan");
+      bits.push(ARRANGEMENT_LABEL.paid_loan);
     }
   }
   if (meta.arrangementType === "revenue_share" || typeof meta.revenueSharePercent === "number") {
@@ -52,7 +53,7 @@ function describeTerms(meta: LogEntry["metadata"]): string | null {
       bits.push(`${meta.revenueSharePercent}% revenue share`);
     }
   }
-  if (meta.arrangementType === "purchase") bits.push("Direct purchase");
+  if (meta.arrangementType === "purchase") bits.push(ARRANGEMENT_LABEL.purchase);
   if (meta.qrEnabled === true) bits.push("QR enabled");
   if (meta.qrEnabled === false) bits.push("QR disabled");
   return bits.length ? bits.join(" · ") : null;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { z } from "zod";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
@@ -43,8 +44,8 @@ const curationSchema = z.object({
 
 const METHOD_LABEL: Record<string, string> = {
   qr_loan: "QR-enabled loan",
-  paid_loan: "Paid loan",
-  direct_purchase: "Direct purchase",
+  paid_loan: ARRANGEMENT_LABEL.paid_loan,
+  direct_purchase: ARRANGEMENT_LABEL.purchase,
 };
 
 // D22: the managed-tier Stripe prices live in the dashboard behind the

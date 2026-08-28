@@ -1,3 +1,4 @@
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Link from "next/link";
 import Image from "next/image";
 import { headers } from "next/headers";
@@ -189,11 +190,11 @@ export default async function ArtistProfilePage({
     {
       label: artist.revenueSharePercent
         ? `Revenue share · ${artist.revenueSharePercent}%`
-        : "Revenue share",
+        : ARRANGEMENT_LABEL.revenue_share,
       yes: artist.openToRevenueShare,
     },
-    { label: "Paid loan", yes: artist.openToFreeLoan },
-    { label: "Direct purchase", yes: artist.openToOutrightPurchase },
+    { label: ARRANGEMENT_LABEL.paid_loan, yes: artist.openToFreeLoan },
+    { label: ARRANGEMENT_LABEL.purchase, yes: artist.openToOutrightPurchase },
   ].filter((t) => t.yes);
 
   // K5 / Bug 13: these read `artist.totalPlacements/totalSales/totalViews`,

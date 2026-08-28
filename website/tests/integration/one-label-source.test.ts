@@ -90,6 +90,52 @@ describe("one arrangement-label source (K3)", () => {
     }
   });
 
+  it("has no hardcoded arrangement label left in a rendering surface", async () => {
+    // 07 §3.2's inventory, as a check rather than a table. The canonical labels
+    // are short common phrases, so this is scoped to the string- and
+    // JSX-literal forms that are actually labels: `"Paid loan"` as a value, and
+    // `>Paid loan<` as element text. Prose that happens to contain the words is
+    // not matched, and comments are stripped.
+    const files = await sourceFiles(SRC);
+    const LABELS = ["Paid loan", "Revenue share", "Direct purchase", "Free display"];
+    const offenders: string[] = [];
+    for (const f of files) {
+      if (f === CANONICAL || f.startsWith(path.join("src", "emails"))) continue;
+      const src = code(f);
+      for (const label of LABELS) {
+        const asValue = new RegExp(`(?:[:=(,[]\\s*|\\?\\s*|label=)"${label}"`);
+        const asText = new RegExp(`>\\s*${label}\\s*<`);
+        if (asValue.test(src) || asText.test(src)) offenders.push(`${f} → "${label}"`);
+      }
+    }
+    expect(
+      offenders,
+      "route these through ARRANGEMENT_LABEL / labelForArrangement in @/lib/arrangement-labels",
+    ).toEqual([]);
+  });
+
+  it("has no TITLE-CASED variant of a canonical label anywhere", async () => {
+    // The E13 class, and the one that was still live after the K3 collapse:
+    // /browse rendered "Paid Loan" on a card while the artist's own profile
+    // rendered "Paid loan", and venue-portal/profile disagreed with ITSELF, the
+    // toggles title-cased and the summary under them sentence-cased.
+    //
+    // These are wrong however they are produced, so this checks the raw text
+    // including comments: a comment quoting the old form is fine, a literal is
+    // not, and the difference is the quotes.
+    const files = await sourceFiles(SRC);
+    const WRONG = ['"Paid Loan"', '"Revenue Share"', '"Direct Purchase"', '"Free Display"'];
+    const offenders: string[] = [];
+    for (const f of files) {
+      const src = code(f);
+      for (const w of WRONG) if (src.includes(w)) offenders.push(`${f} → ${w}`);
+    }
+    expect(
+      offenders,
+      "the canonical labels are sentence case; title case makes the same concept read two ways on two pages",
+    ).toEqual([]);
+  });
+
   it("has no eslint-disable of no-raw-arrangement-type", async () => {
     // §3.5: worth more than the other assertions. A suppression comment is a
     // knot being tied in front of you.

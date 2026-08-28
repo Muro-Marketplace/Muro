@@ -20,6 +20,7 @@
  * Pick the one you like and tell Claude to apply it to /browse/[slug].
  */
 
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -50,11 +51,11 @@ function getMeta(artist: Artist) {
     {
       label: artist.revenueSharePercent
         ? `Revenue share · ${artist.revenueSharePercent}%`
-        : "Revenue share",
+        : ARRANGEMENT_LABEL.revenue_share,
       yes: artist.openToRevenueShare,
     },
-    { label: "Paid loan", yes: artist.openToFreeLoan },
-    { label: "Direct purchase", yes: artist.openToOutrightPurchase },
+    { label: ARRANGEMENT_LABEL.paid_loan, yes: artist.openToFreeLoan },
+    { label: ARRANGEMENT_LABEL.purchase, yes: artist.openToOutrightPurchase },
   ].filter((t) => t.yes);
   const bannerSrc =
     artist.bannerImage || artist.works[0]?.image || artist.image;

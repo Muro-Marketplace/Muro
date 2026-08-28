@@ -27,6 +27,7 @@ import { z } from "zod";
 import { ArtistNewPlacementInvitation } from "@/emails/templates/placements/ArtistNewPlacementInvitation";
 import { placementTermsSummary } from "@/lib/placements/terms-summary";
 import { labelForArrangement } from "@/lib/arrangement-labels";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -1064,7 +1065,7 @@ export async function PATCH(request: Request) {
                   monthlyFeeGbp: counter.monthlyFeeGbp,
                   qrEnabled: counter.qrEnabled,
                 })
-              : "Revenue share";
+              : ARRANGEMENT_LABEL.revenue_share;
             terms.push(
               counter.revenueSharePercent !== undefined
                 ? `${label}: ${counter.revenueSharePercent}% to the venue`

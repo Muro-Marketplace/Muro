@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { labelForArrangement } from "@/lib/arrangement-labels";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
@@ -1231,22 +1232,23 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           {!isCounter && <p className="text-sm font-medium text-foreground">{meta.workTitle as string || "Artwork"}</p>}
                           <p className="text-xs text-muted">
                             {(() => {
-                              // Combined label: "Paid loan + QR" / "Revenue
-                              // Share" / "Direct purchase". Mirrors the
-                              // placements list and the status panel so the
-                              // thread, the list, and the panel all agree.
+                              // K3 / 07 §3.2. This was a FIFTH copy of the
+                              // whole ladder, inline in JSX, and it disagreed
+                              // with the canonical one: a paid_loan row whose
+                              // fee column is null read "Free display" here and
+                              // "Paid loan" in the placements list, for the same
+                              // placement, in two panes of the same app.
                               const type = meta.arrangementType as string | undefined;
                               const fee = meta.monthlyFeeGbp as number | undefined;
                               const qr = meta.qrEnabled as boolean | undefined;
                               const rev = meta.revenueSharePercent as number | undefined;
                               const hasFee = typeof fee === "number" && fee > 0;
-                              const label = hasFee
-                                ? (qr ? "Paid loan + QR" : "Paid loan")
-                                : type === "purchase"
-                                  ? "Direct purchase"
-                                  : qr || type === "revenue_share"
-                                    ? "Revenue share"
-                                    : "Free display";
+                              const label = labelForArrangement({
+                                arrangementType: type,
+                                monthlyFeeGbp: fee,
+                                qrEnabled: qr,
+                                revenueSharePercent: rev,
+                              });
                               const parts: string[] = [label];
                               if (hasFee) parts.push(`£${fee}/mo`);
                               if ((qr || type === "revenue_share") && typeof rev === "number" && rev > 0) parts.push(`${rev}% on QR sales`);

@@ -19,6 +19,7 @@ import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 type FilterTab = "All" | "Pending" | "Active" | "Completed" | "Archived";
 // Display-only strings, arrangementLabel() can return combined values
@@ -1432,7 +1433,7 @@ export default function PlacementsPage() {
                         </div>
                         {typeof p.revenueSharePercent === "number" && p.revenueSharePercent > 0 && (
                           <div>
-                            <p className="text-muted mb-0.5">Revenue share</p>
+                            <p className="text-muted mb-0.5">{ARRANGEMENT_LABEL.revenue_share}</p>
                             <p className="text-foreground font-medium">{p.revenueSharePercent}% to artist</p>
                           </div>
                         )}

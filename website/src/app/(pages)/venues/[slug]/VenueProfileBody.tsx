@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
 import Link from "next/link";
 import { authFetch } from "@/lib/api-client";
@@ -165,9 +166,9 @@ export default function VenueProfileBody({ slug }: { slug: string }) {
   const gallery = (venue.images || []).filter(Boolean);
   const hero = gallery[0] || venue.image || null;
   const arrangements = [
-    venue.interested_in_free_loan && "Paid loan",
-    venue.interested_in_revenue_share && "Revenue share",
-    venue.interested_in_direct_purchase && "Direct purchase",
+    venue.interested_in_free_loan && ARRANGEMENT_LABEL.paid_loan,
+    venue.interested_in_revenue_share && ARRANGEMENT_LABEL.revenue_share,
+    venue.interested_in_direct_purchase && ARRANGEMENT_LABEL.purchase,
   ].filter(Boolean) as string[];
 
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
 import Link from "next/link";
 import type { Artist } from "@/data/artists";
@@ -29,9 +30,12 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
   // profile header shows the broad discipline (Photography, Painting…)
   // and the specific style lives in the chip row below.
   const offers: string[] = [];
-  if (artist.openToRevenueShare) offers.push("Revenue Share");
-  if (artist.openToFreeLoan) offers.push("Paid Loan");
-  if (artist.openToOutrightPurchase) offers.push("Direct Purchase");
+  // K3 / E13. These were title-cased here and sentence-cased on the artist's own
+  // profile page, so the same three words read differently depending on which
+  // page you were on.
+  if (artist.openToRevenueShare) offers.push(ARRANGEMENT_LABEL.revenue_share);
+  if (artist.openToFreeLoan) offers.push(ARRANGEMENT_LABEL.paid_loan);
+  if (artist.openToOutrightPurchase) offers.push(ARRANGEMENT_LABEL.purchase);
   const formats: string[] = [];
   if (artist.offersOriginals) formats.push("Originals");
   if (artist.offersPrints) formats.push("Prints");

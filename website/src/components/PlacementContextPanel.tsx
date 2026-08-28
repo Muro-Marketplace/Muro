@@ -19,6 +19,7 @@ import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirec
 import Toggle from "@/components/Toggle";
 import { useSearchParams } from "next/navigation";
 import { labelForArrangement } from "@/lib/arrangement-labels";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 interface PanelProps {
   otherPartySlug: string | null;
@@ -521,14 +522,14 @@ export default function PlacementContextPanel({
           <div>
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted mb-2">Type</p>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setReqQr(true)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${reqQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>Revenue share</button>
-              <button type="button" onClick={() => setReqQr(false)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${!reqQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>Paid loan</button>
+              <button type="button" onClick={() => setReqQr(true)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${reqQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>{ARRANGEMENT_LABEL.revenue_share}</button>
+              <button type="button" onClick={() => setReqQr(false)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${!reqQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>{ARRANGEMENT_LABEL.paid_loan}</button>
             </div>
           </div>
 
           {reqQr ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted flex-1">Revenue share</span>
+              <span className="text-xs text-muted flex-1">{ARRANGEMENT_LABEL.revenue_share}</span>
               <input type="number" min={0} max={50} value={reqRevShare} onChange={(e) => setReqRevShare(Number(e.target.value) || 0)} className="w-16 px-2 py-1.5 bg-surface border border-border rounded-lg text-xs text-center focus:outline-none focus:border-accent/50" />
               <span className="text-xs text-muted">%</span>
             </div>
@@ -813,10 +814,10 @@ export default function PlacementContextPanel({
             {/* Paid loan toggle, checkbox because you can combine with QR. */}
             <label className="flex items-center justify-between gap-2 cursor-pointer">
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-foreground">Paid loan</p>
+                <p className="text-xs text-foreground">{ARRANGEMENT_LABEL.paid_loan}</p>
                 <p className="text-[10px] text-muted leading-snug">Venue pays the artist monthly to display the work.</p>
               </div>
-              <Toggle checked={counterPaidLoan} onChange={setCounterPaidLoan} ariaLabel="Paid loan" size="compact" />
+              <Toggle checked={counterPaidLoan} onChange={setCounterPaidLoan} ariaLabel={ARRANGEMENT_LABEL.paid_loan} size="compact" />
             </label>
             {counterPaidLoan && (
               <div className="flex items-center gap-2 pl-0">
@@ -837,7 +838,7 @@ export default function PlacementContextPanel({
             </label>
             {counterQr && (
               <div className="flex items-center gap-2 pl-0">
-                <span className="text-xs text-muted flex-1">{counterPaidLoan ? "Share on QR sales" : "Revenue share"}</span>
+                <span className="text-xs text-muted flex-1">{counterPaidLoan ? "Share on QR sales" : ARRANGEMENT_LABEL.revenue_share}</span>
                 <input type="number" min={0} max={50} value={counterRevShare} onChange={(e) => setCounterRevShare(Number(e.target.value) || 0)} className="w-16 px-2 py-1.5 bg-surface border border-border rounded-lg text-xs text-center focus:outline-none focus:border-accent/50" />
                 <span className="text-xs text-muted">%</span>
               </div>
@@ -882,7 +883,7 @@ export default function PlacementContextPanel({
           )}
           {p.qr_enabled && p.revenue_share_percent != null && p.revenue_share_percent > 0 && (
             <div className="flex gap-3 py-0.5">
-              <span className="text-muted w-24 shrink-0">Revenue share</span>
+              <span className="text-muted w-24 shrink-0">{ARRANGEMENT_LABEL.revenue_share}</span>
               <span className="text-foreground font-medium">{p.revenue_share_percent}% on QR sales</span>
             </div>
           )}

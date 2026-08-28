@@ -16,7 +16,7 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import { isLoan, isPurchase } from "@/lib/arrangement-type";
-import { labelForArrangement } from "@/lib/arrangement-labels";
+import { ARRANGEMENT_LABEL, labelForArrangement } from "@/lib/arrangement-labels";
 import { normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
 
 interface PlacementRow {
@@ -933,7 +933,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
         {placement.arrangement_type === "revenue_share" ? (
           <>
             <div className="bg-surface border border-border rounded-sm p-4">
-              <p className="text-xs text-muted uppercase tracking-wider mb-1">Revenue share</p>
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">{ARRANGEMENT_LABEL.revenue_share}</p>
               <p className="text-lg font-medium text-foreground">
                 {placement.revenue_share_percent != null ? `${placement.revenue_share_percent}%` : "Not set"}
               </p>
@@ -965,7 +965,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                 return (
                   <>
                     <p className="text-lg font-medium text-foreground">
-                      {isPaidLoan ? `\u00a3${fee.toLocaleString()}/month` : "Free display"}
+                      {isPaidLoan ? `\u00a3${fee.toLocaleString()}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
                     </p>
                     <p className="text-[11px] text-muted mt-1">
                       {isPaidLoan
@@ -991,7 +991,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
         ) : (
           <>
             <div className="bg-surface border border-border rounded-sm p-4">
-              <p className="text-xs text-muted uppercase tracking-wider mb-1">Direct purchase</p>
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">{ARRANGEMENT_LABEL.purchase}</p>
               <p className="text-lg font-medium text-foreground">Venue owns the work</p>
               <p className="text-[11px] text-muted mt-1">Outright sale, no ongoing split</p>
             </div>

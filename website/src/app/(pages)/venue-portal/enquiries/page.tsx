@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import { enquiryTypeLabel } from "@/lib/enquiry-types";
 
 type Status = "Pending" | "Responded" | "Closed";
 type FilterTab = "All" | Status;
@@ -11,7 +12,14 @@ interface Enquiry {
   id: number | string;
   artist: string;
   subject: string;
-  type: "Paid Loan" | "Revenue Share" | "Purchase" | "Display";
+  /**
+   * The stored `enquiry_type`. This was typed as the ARRANGEMENT vocabulary
+   * ("Paid Loan" | "Revenue Share" | ...), which this column has never held,
+   * and populated by casting `e.enquiry_type` into it. The real values are
+   * venue_looking / purchasing / custom_piece / general, so the union was
+   * fiction and the badge rendered the raw slug.
+   */
+  type: string;
   dateSent: string;
   status: Status;
 }
@@ -65,7 +73,7 @@ export default function EnquiriesPage() {
             id: e.id,
             artist: e.artist_slug || "Unknown",
             subject: (e.message as string)?.slice(0, 80) || "Enquiry",
-            type: (e.enquiry_type as string) || "Display",
+            type: (e.enquiry_type as string) || "general",
             dateSent: e.created_at ? new Date(e.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
             status: (e.status as Status) || "Pending",
           })));
@@ -151,7 +159,7 @@ export default function EnquiriesPage() {
                 </td>
                 <td className="px-5 py-4 whitespace-nowrap">
                   <span className="text-xs px-2 py-0.5 bg-background border border-border rounded-sm text-foreground/70">
-                    {enquiry.type}
+                    {enquiryTypeLabel(enquiry.type)}
                   </span>
                 </td>
                 <td className="px-5 py-4 text-muted whitespace-nowrap">
@@ -206,7 +214,7 @@ export default function EnquiriesPage() {
               </p>
               <div className="flex items-center justify-between">
                 <span className="text-xs px-2 py-0.5 bg-background border border-border rounded-sm text-foreground/70">
-                  {enquiry.type}
+                  {enquiryTypeLabel(enquiry.type)}
                 </span>
                 <button
                   type="button"

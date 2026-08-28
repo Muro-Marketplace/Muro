@@ -8,6 +8,7 @@ import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { getRecentRequestById } from "@/lib/recent-artwork-requests";
+import { labelForArrangement } from "@/lib/arrangement-labels";
 
 // Display label for an artist response. The API returns the artist's
 // public slug ("fin-coles") rather than their display name; titlecasing
@@ -291,7 +292,7 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                           <p className="text-xs text-muted mt-1">
                             Proposed: {r.proposed_monthly_fee_pence != null && r.proposed_monthly_fee_pence > 0
                               ? `£${(r.proposed_monthly_fee_pence / 100).toFixed(2)}/mo`
-                              : "Free display"}
+                              : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
                             {r.proposed_revenue_share_percent != null && r.proposed_revenue_share_percent > 0
                               ? ` · ${r.proposed_revenue_share_percent}% rev share`
                               : ""}

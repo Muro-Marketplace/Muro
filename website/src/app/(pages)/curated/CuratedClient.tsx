@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -686,13 +687,13 @@ export default function CuratedClient() {
                     <MethodCheckbox
                       checked={form.wantsPaidLoan}
                       onChange={(v) => update("wantsPaidLoan", v)}
-                      title="Paid loan"
+                      title={ARRANGEMENT_LABEL.paid_loan}
                       desc="Pay the artist a monthly fee to display their work."
                     />
                     <MethodCheckbox
                       checked={form.wantsDirectPurchase}
                       onChange={(v) => update("wantsDirectPurchase", v)}
-                      title="Direct purchase"
+                      title={ARRANGEMENT_LABEL.purchase}
                       desc="Buy a piece outright for your permanent collection."
                     />
                   </div>

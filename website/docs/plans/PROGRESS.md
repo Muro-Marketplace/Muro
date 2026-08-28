@@ -11007,3 +11007,54 @@ outstanding rather than quietly skipped.
 
 `npm run check` green: 0 lint errors, 236 files, 2366 tests, 134 templates, 0
 dependency violations, exit 0.
+
+### 07 §3.2 — the JSX label sweep, finished — DONE
+
+The last open piece of K3. §3.2's inventory listed 17 files still holding
+hardcoded arrangement-label strings after the four implementations and both API
+ladders were collapsed. All of them now read from `arrangement-labels.ts`.
+
+**It was not, as recorded, purely cosmetic. Two real defects were in there.**
+
+**1. A fifth live implementation.** `MessageInbox.tsx` carried the whole ladder
+inline in JSX, and it disagreed with the canonical one: a `paid_loan` row whose
+`monthly_fee_gbp` is null read **"Free display"** in the message thread and
+**"Paid loan"** in the placements list, for the same placement, in two panes of
+the same application. Now one call to `labelForArrangement`.
+
+**2. Title-case divergence, which is E13 again and was still live.** `/browse`
+rendered "Paid Loan" on a work card while the artist's own profile rendered
+"Paid loan". `venue-portal/profile` disagreed **with itself**: the three toggles
+were title-cased and the summary line directly beneath them was sentence-cased.
+Also in `BrowseArtistCard`, `SpacesPlacementRequestForm` and
+`ArtworkRequestForm`.
+
+**Two new guards, both verified to bite.** One rejects any hardcoded canonical
+label in a rendering surface, matching the string- and JSX-literal forms rather
+than the bare words, so prose is not swept in. The other rejects any title-cased
+variant anywhere, because those are wrong however they are produced. Putting
+"Paid Loan" back in `BrowseArtistCard` fails the second; putting "Revenue share"
+back into a `<span>` fails the first.
+
+**The title-case guard found one more thing, and it is a live display bug.**
+`venue-portal/enquiries` typed its `type` field as
+`"Paid Loan" | "Revenue Share" | "Purchase" | "Display"` — the arrangement
+vocabulary, which that column has never held — and populated it by casting
+`e.enquiry_type` straight in. So TypeScript could not object, and the union was
+fiction. Checked against prod: `enquiries.enquiry_type` holds `venue_looking`
+(7), `general` (3) and `purchasing` (1), and the portal rendered those raw. A
+venue's enquiries list showed a badge reading **"venue_looking"** on 7 of its 11
+rows.
+
+`src/lib/enquiry-types.ts` is the fix: four values, their labels, and the option
+text the artist-profile form already had written inline. The form and the badge
+now read the same list, and an unrecognised value is title-cased from its own
+slug rather than replaced with "Other", so a legacy row still says what it is.
+
+**One behaviour change worth naming.** Routing `MessageInbox` through the
+canonical function changes what a fee-less `paid_loan` reads as, from "Free
+display" to "Paid loan". That is the canonical answer and matches
+`terms-summary.ts`, but it is a change, not a no-op.
+
+`npm run check` green: 0 lint errors, 237 files, 2375 tests, 134 templates, 0
+dependency violations, exit 0.

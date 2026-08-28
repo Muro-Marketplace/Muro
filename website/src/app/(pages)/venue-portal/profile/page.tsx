@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
@@ -563,17 +564,17 @@ export default function VenueProfilePage() {
                 <Toggle
                   checked={revenueShare}
                   onChange={(v) => { setRevenueShare(v); markDirty(); }}
-                  label="Revenue Share"
+                  label={ARRANGEMENT_LABEL.revenue_share}
                 />
                 <Toggle
                   checked={freeLoan}
                   onChange={(v) => { setFreeLoan(v); markDirty(); }}
-                  label="Paid Loan"
+                  label={ARRANGEMENT_LABEL.paid_loan}
                 />
                 <Toggle
                   checked={directPurchase}
                   onChange={(v) => { setDirectPurchase(v); markDirty(); }}
-                  label="Direct Purchase"
+                  label={ARRANGEMENT_LABEL.purchase}
                 />
               </div>
             </div>
@@ -727,9 +728,9 @@ export default function VenueProfilePage() {
               styles={styles}
               themes={themes}
               arrangements={[
-                revenueShare && "Revenue share",
-                freeLoan && "Paid loan",
-                directPurchase && "Direct purchase",
+                revenueShare && ARRANGEMENT_LABEL.revenue_share,
+                freeLoan && ARRANGEMENT_LABEL.paid_loan,
+                directPurchase && ARRANGEMENT_LABEL.purchase,
               ].filter(Boolean) as string[]}
               displayWallSpace={displayWallSpace}
               displayLighting={displayLighting}
