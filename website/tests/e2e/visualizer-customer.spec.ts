@@ -14,11 +14,14 @@
 
 import { test, expect } from "@playwright/test";
 
-// "Last Light on Mare Street" is one of Maya Chen's seed works — used
-// elsewhere in smoke. The slug is derived from the title via
-// src/lib/slugify.ts: lower-case, hyphens.
-const ARTIST_SLUG = "maya-chen";
-const WORK_SLUG = "last-light-on-mare-street";
+// "Southwark Geometry" is one of James Okafor's STATIC seed works. It used
+// to be a Maya Chen work, but owner decision 3 (2026-08-28) deleted her
+// static entry when she became a real DB row (the demo account), and these
+// tests run against placeholder Supabase where only the static list exists.
+// The slug is derived from the title via src/lib/slugify.ts: lower-case,
+// hyphens.
+const ARTIST_SLUG = "james-okafor";
+const WORK_SLUG = "southwark-geometry";
 const ARTWORK_PATH = `/browse/${ARTIST_SLUG}/${WORK_SLUG}`;
 
 test.describe("wall visualiser — customer artwork sheet", () => {
