@@ -12345,3 +12345,38 @@ re-checking the component — that header described the pre-E43-e world, and
 E43-e had already fixed it weeks earlier. The stale claim is corrected at the
 route, here, and in the owner-decision entry. Nothing to change; one test suite
 re-run to confirm (3/3).
+
+### Decision 15 — nothing to scrub, and the reason is a third erasure bug — DONE (migration 117)
+
+The approved action was a one-off scrub of data left behind by completed
+deletions. **The target set is empty**: zero orphaned profiles, zero
+`[deleted-…]` tags, zero scrubbed messages, zero anonymised orders. Nobody has
+ever completed a deletion.
+
+Checking why found the structural half nothing had caught: **seven foreign keys
+reference `auth.users` with NO ACTION** (`artist_profiles.user_id`,
+`venue_profiles.user_id`, `orders.buyer_user_id`, `messages.sender_id`,
+`enquiries.sender_user_id`, `placements.artist_user_id`,
+`placements.cancelled_by_user_id`), so `auth.admin.deleteUser` violates a
+constraint for any user with a profile, an order, a sent message, an enquiry or
+a placement — every user the route exists for. Together with the phantom-write
+bug fixed earlier today, the flow failed at BOTH ends: the scrubs before the
+delete wrote nothing, and the delete itself always threw. Which is exactly why
+the residue count is zero.
+
+**Migration 117** (applied, verified) makes the two profile `user_id`s nullable
+and retargets all seven FKs to `ON DELETE SET NULL` — the semantics the route's
+own anonymise-and-keep design implies, and the pattern the schema already uses
+everywhere else (`reviewed_by`, `actor_user_id`, `changed_by_user_id`). Not
+CASCADE, which would rip out works and the anonymised history the route
+deliberately keeps. **Proven in a rolled-back transaction**: a user with a
+profile, an order and a message deletes cleanly, and all three rows survive
+detached.
+
+One route addition with it: the artist scrub now sets
+`review_status: "rejected"`, because a profile that survives deletion as an
+anonymised shell would otherwise stay listed in /browse under `[deleted-…]`.
+
+So the erasure flow is now, for the first time: scrub everything (fixed this
+morning) → refuse to proceed if any scrub failed (same) → delete the auth user,
+which succeeds (this) → the shell delists (this).

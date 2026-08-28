@@ -106,6 +106,14 @@ describe("DELETE /api/account actually erases", () => {
     expect(await res.json()).toEqual({ success: true });
   });
 
+  it("delists the scrubbed artist profile, or the shell stays in /browse", async () => {
+    // Migration 117 lets the profile survive deletion (user_id SET NULL), and
+    // approved profiles list. An anonymised shell named "[deleted-…]" on the
+    // public grid is not erasure.
+    await DELETE(req());
+    expect(payloadFor("artist_profiles")).toMatchObject({ review_status: "rejected" });
+  });
+
   it("scrubs the artist profile, which used to fail entirely", async () => {
     // THE regression. `image` is not a column, so PostgREST rejected the whole
     // update and NONE of these were cleared.

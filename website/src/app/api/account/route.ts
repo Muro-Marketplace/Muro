@@ -83,6 +83,11 @@ export async function DELETE(request: Request) {
       profile_image: "",
       banner_image: "",
       postcode: null,
+      // Delist. Migration 117 lets the profile survive deletion as an
+      // anonymised shell (user_id goes NULL when the auth user is removed),
+      // and getAllDatabaseArtists treats approved as listed — without this the
+      // shell would sit in /browse named "[deleted-…]".
+      review_status: "rejected",
     }).eq("user_id", userId),
   );
   await step("venue_profiles", () =>
