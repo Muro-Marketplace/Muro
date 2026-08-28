@@ -66,10 +66,16 @@ function emailsForEvent(
     case "order.delivered":
       return [{ to: input.buyerEmail, template: "order_delivered" }];
     case "order.cancelled":
+      // 09 item 1.5: this used to return [] and a second branch inside
+      // orders/route.ts sent the cancellation, so which email an order event
+      // produces had two owners. One owner now.
+      return [{ to: input.buyerEmail, template: "order_cancelled" }];
     case "order.refunded":
     case "order.delivery_confirmed":
-      // No purpose-built Phase 2.0c template for these yet; legacy
-      // inline copy continues to fire. Phase 3 will own consolidating.
+      // Deliberately still empty. A refund already emails the buyer from
+      // refunds/process (CustomerRefundConfirmation), and adding a second
+      // trigger here would send two emails for one refund — the exact defect
+      // K1 just removed from that route. Consolidating those is Phase 3's.
       return [];
   }
 }

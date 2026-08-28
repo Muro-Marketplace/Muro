@@ -112,17 +112,39 @@ describe("recordOrderEvent()", () => {
     expect(sendTransactionalMock).not.toHaveBeenCalled();
   });
 
-  it("for order.cancelled / refunded / delivery_confirmed there is no Phase 2 email yet (legacy paths cover)", async () => {
-    for (const status of ["cancelled"]) {
-      sendTransactionalMock.mockClear();
-      await recordOrderEvent({
-        orderId: "o1",
-        newStatus: status,
-        buyerEmail: "b@e.com",
-        artistEmail: "a@e.com",
-        data: {},
-      });
-      expect(sendTransactionalMock).not.toHaveBeenCalled();
-    }
+  it("sends the cancellation from here, not from a second branch in the route (09 item 1.5)", async () => {
+    // REVERSAL. This used to assert `not.toHaveBeenCalled()` for `cancelled`,
+    // because an `if (status !== shipped && !== delivered && !== processing)`
+    // branch inside orders/route.ts owned it instead. Two owners for "which
+    // email does an order event produce" is how a status ends up sending twice,
+    // or not at all.
+    sendTransactionalMock.mockClear();
+    await recordOrderEvent({
+      orderId: "o1",
+      newStatus: "cancelled",
+      buyerEmail: "b@e.com",
+      artistEmail: "a@e.com",
+      data: {},
+    });
+
+    expect(sendTransactionalMock).toHaveBeenCalledTimes(1);
+    expect(sendTransactionalMock.mock.calls[0][0]).toMatchObject({
+      to: "b@e.com",
+      template: "order_cancelled",
+    });
+  });
+
+  it("still sends nothing for refunded, so a refund cannot email the buyer twice", async () => {
+    // refunds/process already sends CustomerRefundConfirmation. A trigger here
+    // would reproduce the duplicate-send defect K1 removed from that route.
+    sendTransactionalMock.mockClear();
+    await recordOrderEvent({
+      orderId: "o1",
+      newStatus: "refunded",
+      buyerEmail: "b@e.com",
+      artistEmail: "a@e.com",
+      data: {},
+    });
+    expect(sendTransactionalMock).not.toHaveBeenCalled();
   });
 });

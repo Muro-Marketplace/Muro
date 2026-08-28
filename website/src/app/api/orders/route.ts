@@ -266,6 +266,9 @@ export async function PATCH(request: Request) {
           firstName: firstName0,
           orderNumber: orderId,
           orderUrl: `${SITE}/customer-portal/orders`,
+          // 09 item 1.5: the cancellation template needs the verb phrase, and
+          // the dispatcher spreads `data` straight into the component.
+          statusText: orderStatusText(status),
         },
         metadata: { tracking_number: trackingNumber ?? null },
       });
@@ -279,7 +282,7 @@ export async function PATCH(request: Request) {
     // a different idempotency key shape, so both paths fired and the
     // customer received duplicate messages for the same lifecycle
     // event. This send covers only the statuses the dispatcher doesn't
-    // (cancelled / disputed / refunded), so cancellation notes still go out.
+    // (disputed / refunded), so those notes still go out.
     //
     // K1: that used to be the legacy `notifyBuyerStatusUpdate`, hand-written
     // HTML from an unverified domain with no audit trail. Same scope, one
@@ -289,7 +292,16 @@ export async function PATCH(request: Request) {
     // returns (Vercel serverless can freeze/kill unawaited promises).
     // A failure is logged but does NOT fail the request — the status
     // change already committed successfully above.
-    if (order.buyer_email && status !== "shipped" && status !== "delivered" && status !== "processing") {
+    // `cancelled` is absent from this list on purpose: the dispatcher above owns
+    // it since 09 item 1.5. Leaving it here would send two emails for one
+    // cancellation, which is the defect K1 removed from refunds/process.
+    if (
+      order.buyer_email &&
+      status !== "shipped" &&
+      status !== "delivered" &&
+      status !== "processing" &&
+      status !== "cancelled"
+    ) {
       try {
         const shippingBlob = (order.shipping ?? {}) as { fullName?: string };
         await sendEmail({
@@ -303,7 +315,7 @@ export async function PATCH(request: Request) {
             orderNumber: orderId,
             statusText: orderStatusText(status),
             trackingNumber: trackingNumber || undefined,
-            ordersUrl: `${SITE}/customer-portal/orders`,
+            orderUrl: `${SITE}/customer-portal/orders`,
             supportUrl: `${SITE}/support`,
           }),
           metadata: { orderId, status },

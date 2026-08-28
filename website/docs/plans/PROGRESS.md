@@ -10052,3 +10052,60 @@ or transfer id is not actionable.
 
 `npm run check` green (now including depcheck): 0 lint errors, 220 files, 2144
 tests, 0 dependency violations, exit 0.
+
+### 09 items 1.5, 4.2 and 4.6 — DONE
+
+**1.5** (§C.4). Half was already done by K1: `notifyBuyerStatusUpdate` is deleted.
+The other half was that *two places* decided which email an order event produces —
+`emailsForEvent` returned `[]` for `order.cancelled` while a separate
+`if (status !== shipped && !== delivered && !== processing)` branch inside
+`orders/route.ts` sent the cancellation. One owner now: `order_cancelled` is a
+dispatcher template bound to `customer_order_status_update`, and `cancelled` is
+excluded from the fallback branch so it cannot send twice.
+
+**`order.refunded` deliberately left returning `[]`,** with a comment saying why:
+`refunds/process` already sends `CustomerRefundConfirmation`, so adding a trigger
+here would send two emails for one refund — the exact defect K1 removed from that
+route. A test pins it.
+
+The lifecycle test that asserted `not.toHaveBeenCalled()` for `cancelled` is
+**reversed**, with a comment naming the reversal, since it pinned the two-owner
+state as intended.
+
+**4.6.** `no-raw-arrangement-type` was the one registered rule with no test — for a
+rule at `error`, that means nothing verified it fires at all. 11 tests, and writing
+them **found a real bug in the rule**: its exemptions matched
+`filename.endsWith("/src/lib/arrangement-type.ts")`, with a leading slash, so they
+only fired when ESLint supplied an ABSOLUTE path. It does here, which is why lint
+stayed green and the gap was invisible. `no-ad-hoc-cap` already handles both forms
+deliberately; this one now does too, so a relative filename cannot start flagging
+the very module that defines the values. Both forms are tested.
+
+**4.2** (§E.4). `tests/integration/email-events-audit.test.ts`, 12 tests over a fake
+Supabase client that records upserts. The audit trail is the whole reason `sendEmail`
+won K1, and it only holds if every terminal outcome writes — a skip that writes
+nothing is indistinguishable from a send that never happened.
+
+§E.4's invariant is followed exactly, including its warning not to assert "one row
+per attempt": the duplicate short-circuit deliberately writes nothing because the
+original row exists. The assertion is **one row per distinct idempotency key,
+ending terminal**. Covered: all five skip reasons write their matching status; a
+render failure writes `render_failed` AND returns `ok:false` (both halves, because
+`ok:false` with no row is invisible afterwards); a `queued` original counts as a
+duplicate so two concurrent callers cannot both send; and metadata carries no `@`
+and no `eyJ`-prefixed value, because that column is JSONB and callers pass it
+freely.
+
+`npm run check` green: 0 lint errors, 222 files, 2168 tests, 0 dependency
+violations, exit 0.
+
+**09 Phase 3 items 3.3–3.7 NOT done, and not silently.** They are feature builds,
+not wiring: a `customer.subscription.created` branch and template (3.3), a support
+acknowledgement with a reflected-send rate limit (3.4), newsletter double opt-in
+including a migration and a confirm endpoint (3.5), and the dispute flows (3.6,
+3.7) — of which the doc itself says "**Largest item in this document; it is a
+feature, not a wiring task**" and notes there is *no dispute-creation path at all*,
+so `disputes` is a table written by nothing. Building new product surface is a
+different decision from removing duplication, and it belongs to the owner rather
+than to a remediation pass. 3.1 and 4.7 are owner-only (DNS/DMARC and Supabase SMTP)
+and 4.4 depends on the CI lint flag.

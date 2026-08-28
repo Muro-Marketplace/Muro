@@ -17,7 +17,7 @@ export interface CustomerOrderStatusUpdateProps {
   /** Reads as a verb phrase, e.g. "has been cancelled". */
   statusText: string;
   trackingNumber?: string;
-  ordersUrl: string;
+  orderUrl: string;
   supportUrl?: string;
 }
 
@@ -26,7 +26,7 @@ export function CustomerOrderStatusUpdate({
   orderNumber,
   statusText,
   trackingNumber,
-  ordersUrl,
+  orderUrl,
   supportUrl,
 }: CustomerOrderStatusUpdateProps) {
   return (
@@ -40,7 +40,7 @@ export function CustomerOrderStatusUpdate({
           <strong>Tracking number:</strong> {trackingNumber}
         </InfoBox>
       )}
-      <Button href={ordersUrl} persona="customer">Track your order</Button>
+      <Button href={orderUrl} persona="customer">Track your order</Button>
       <SupportBlock supportUrl={supportUrl} />
     </EmailShell>
   );
@@ -64,7 +64,7 @@ export const mock: CustomerOrderStatusUpdateProps = {
   firstName: "Sam",
   orderNumber: "WP-4821",
   statusText: orderStatusText("cancelled"),
-  ordersUrl: "https://wallplace.co.uk/customer-portal/orders",
+  orderUrl: "https://wallplace.co.uk/customer-portal/orders",
   supportUrl: "https://wallplace.co.uk/support",
 };
 

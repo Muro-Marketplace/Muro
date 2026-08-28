@@ -18,6 +18,7 @@ export type TransactionalTemplate =
   | "order_processing"
   | "order_out_for_delivery"
   | "order_delivered"
+  | "order_cancelled"
   | "customer_confirm_delivery";
 
 export interface SendTransactionalInput {
@@ -45,6 +46,12 @@ const TEMPLATE_BINDINGS: Record<TransactionalTemplate, string> = {
   order_processing: "customer_order_processing",
   order_out_for_delivery: "customer_order_out_for_delivery",
   order_delivered: "customer_order_delivered",
+  // 09 item 1.5 / §C.4. Cancellation used to be decided in a second place, an
+  // `if (status !== shipped && !== delivered && !== processing)` branch inside
+  // orders/route.ts, so which email an order event produces had two owners.
+  // The generic status-update template backs it: a bespoke one per remaining
+  // status would be several files nobody maintains.
+  order_cancelled: "customer_order_status_update",
   customer_confirm_delivery: "customer_confirm_delivery_48h",
 };
 
