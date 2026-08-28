@@ -7,6 +7,7 @@ import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { PLAN_PRICES, PLATFORM_FEE_PERCENT } from "@/lib/pricing";
 
 interface ProfileSubscription {
   subscription_status: string;
@@ -19,10 +20,10 @@ interface ProfileSubscription {
 
 // Monthly prices; annual saves ~17% (10 months' equivalent).
 const PLAN_DETAILS: Record<string, { name: string; priceMonthly: number; priceAnnual: number; fee: string }> = {
-  core: { name: "Core", priceMonthly: 9.99, priceAnnual: 99.99, fee: "15%" },
-  premium: { name: "Premium", priceMonthly: 24.99, priceAnnual: 249.99, fee: "8%" },
-  pro: { name: "Pro", priceMonthly: 49.99, priceAnnual: 499.99, fee: "5%" },
-  none: { name: "No plan", priceMonthly: 0, priceAnnual: 0, fee: "\u2014" },
+  core: { name: "Core", priceMonthly: PLAN_PRICES.core.monthlyGbp, priceAnnual: PLAN_PRICES.core.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%` },
+  premium: { name: "Premium", priceMonthly: PLAN_PRICES.premium.monthlyGbp, priceAnnual: PLAN_PRICES.premium.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%` },
+  pro: { name: "Pro", priceMonthly: PLAN_PRICES.pro.monthlyGbp, priceAnnual: PLAN_PRICES.pro.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%` },
+  none: { name: "No plan", priceMonthly: 0, priceAnnual: 0, fee: "n/a" },
 };
 
 function annualMonthlyEquivalent(priceAnnual: number): string {
@@ -482,7 +483,7 @@ export default function BillingPage() {
                   <ul className="text-xs text-muted space-y-1 mb-4 flex-1">
                     {p === "core" && <><li>Up to 8 works</li><li>Standard profile</li><li>Basic analytics</li></>}
                     {p === "premium" && <><li>Up to 20 works</li><li>Featured profile + badge</li><li>Message venues directly</li><li>Full analytics</li></>}
-                    {p === "pro" && <><li>Unlimited works</li><li>Premium profile</li><li>Message venues directly</li><li>Dedicated support</li></>}
+                    {p === "pro" && <><li>Up to 50 works</li><li>Premium profile</li><li>Message venues directly</li><li>Dedicated support</li></>}
                   </ul>
                   {isCurrent ? (
                     <div className="w-full py-2.5 text-sm font-medium text-center text-accent border border-accent/30 rounded-sm">

@@ -83,22 +83,22 @@ const planOptions = [
     name: "Core",
     price: "£9.99",
     fee: "15% platform fee",
-    description: "Up to 8 works, standard profile, basic analytics.",
+    description: "2 active placements, up to 8 works, standard profile, basic analytics.",
   },
   {
     id: "premium",
     name: "Premium",
     price: "£24.99",
-    fee: "8% platform fee",
-    description: "Up to 20 works, featured profile, message venues, full analytics.",
+    fee: "15% platform fee",
+    description: "5 active placements, up to 20 works, featured profile, full analytics.",
     popular: true as const,
   },
   {
     id: "pro",
     name: "Pro",
     price: "£49.99",
-    fee: "5% platform fee",
-    description: "Unlimited works, premium profile, message venues, dedicated support.",
+    fee: "15% platform fee",
+    description: "Unlimited placements, up to 50 works, Curated priority, dedicated support.",
   },
 ];
 
