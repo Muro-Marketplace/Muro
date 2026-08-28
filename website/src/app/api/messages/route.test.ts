@@ -62,13 +62,16 @@ vi.mock("@/lib/admin-audit", () => ({
 import { POST, GET } from "./route";
 
 function chainSelectMaybe(row: unknown) {
-  return {
-    select: () => ({
-      eq: () => ({
-        maybeSingle: async () => ({ data: row, error: null }),
-      }),
-    }),
+  // Self-referential, so any depth of .eq()/.or() (the user_blocks check
+  // chains two .eq()s) resolves rather than TypeError-ing into the outer
+  // catch and reading as a 400.
+  const chain: Record<string, unknown> = {
+    maybeSingle: async () => ({ data: row, error: null }),
+    single: async () => ({ data: row, error: null }),
   };
+  chain.eq = () => chain;
+  chain.or = () => chain;
+  return { select: () => chain };
 }
 
 beforeEach(() => {
@@ -297,13 +300,17 @@ describe("POST /api/messages placement_response authz (E33)", () => {
         return chainSelectMaybe({ slug: "alice", user_id: "u-art-a", name: "Alice" });
       }
       return {
-        select: () => ({
-          eq: () => ({
+        // Self-referential chain so any depth of .eq() (the user_blocks check
+        // chains two) resolves to "no row" rather than a TypeError.
+        select: () => {
+          const chain: Record<string, unknown> = {
             maybeSingle: async () => ({ data: null, error: null }),
             single: async () => ({ data: null, error: null }),
-            or: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
-          }),
-        }),
+            or: () => chain,
+            eq: () => chain,
+          };
+          return chain;
+        },
         // The route now reads the inserted row's id back, so the notification
         // can key on the message instead of on Date.now(). A fake that returns
         // nothing makes every POST a 500.
@@ -428,7 +435,7 @@ describe("POST /api/messages writes ONE row, with everything on it", () => {
     ).messages,
   );
 
-  function setupInsertDb(opts: { insertError?: unknown; queueError?: unknown } = {}) {
+  function setupInsertDb(opts: { insertError?: unknown; queueError?: unknown; recipientBlocksSender?: boolean } = {}) {
     inserts.length = 0;
     fromMock.mockImplementation((table: string) => {
       // Sender and recipient both resolve, or the route 404s the recipient
@@ -444,6 +451,9 @@ describe("POST /api/messages writes ONE row, with everything on it", () => {
             return { error: opts.queueError ?? null };
           },
         };
+      }
+      if (table === "user_blocks") {
+        return chainSelectMaybe(opts.recipientBlocksSender ? { blocked_slug: "alice" } : null);
       }
       if (table === "messages") {
         return {
@@ -583,5 +593,149 @@ describe("POST /api/messages writes ONE row, with everything on it", () => {
 
     expect(inserts).toHaveLength(1);
     expect(res.status).toBe(500);
+  });
+});
+
+
+// Owner decision 16. `user_blocks` was recorded (migration 111) and read by
+// NOTHING, so a person who blocked someone was told it worked while the blocked
+// account could still message them. The send path now honours it.
+describe("POST /api/messages honours the recipient's block", () => {
+  const insertsSeen: Record<string, unknown>[] = [];
+
+  function setupBlockDb(blocked: boolean) {
+    insertsSeen.length = 0;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return chainSelectMaybe(null);
+      if (table === "venue_profiles") {
+        return chainSelectMaybe({ slug: "alice", user_id: "u-venue", name: "Alice" });
+      }
+      if (table === "user_blocks") {
+        return chainSelectMaybe(blocked ? { blocked_slug: "alice" } : null);
+      }
+      if (table === "messages") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+          insert: (row: Record<string, unknown>) => {
+            insertsSeen.push(row);
+            return {
+              select: () => ({ maybeSingle: async () => ({ data: { id: "msg-9" }, error: null }) }),
+            };
+          },
+        };
+      }
+      return chainSelectMaybe(null);
+    });
+  }
+
+  function sendMsg() {
+    return POST(
+      req({
+        conversationId: "conv-1",
+        senderName: "alice",
+        senderType: "venue",
+        recipientSlug: "bob",
+        content: "Hello there, message content here.",
+      }),
+    );
+  }
+
+  beforeEach(() => isFlagOnMock.mockReturnValue(false));
+
+  it("refuses the send BEFORE any insert when the recipient has blocked the sender", async () => {
+    setupBlockDb(true);
+
+    const res = await sendMsg();
+
+    expect(res.status).toBe(403);
+    expect(insertsSeen).toHaveLength(0);
+  });
+
+  it("refuses with neutral copy that does not say 'blocked'", async () => {
+    // Telling a harasser they are blocked invites the workaround account.
+    setupBlockDb(true);
+    const body = await (await sendMsg()).json();
+    expect(JSON.stringify(body).toLowerCase()).not.toContain("block");
+  });
+
+  it("delivers normally when no block exists", async () => {
+    setupBlockDb(false);
+    await sendMsg();
+    expect(insertsSeen).toHaveLength(1);
+  });
+});
+
+
+// Owner decision 16, inbox half: a conversation with someone the VIEWER has
+// blocked disappears from their list.
+describe("GET /api/messages honours the viewer's blocks", () => {
+  function setupInboxDb(opts: { blocked: string[] }) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        // Ownership check resolves the viewer's slug; enrichment .in() returns [].
+        const chain: Record<string, unknown> = {
+          single: async () => ({ data: { slug: "alice" }, error: null }),
+          maybeSingle: async () => ({ data: { slug: "alice" }, error: null }),
+          in: async () => ({ data: [], error: null }),
+        };
+        chain.eq = () => chain;
+        return { select: () => chain };
+      }
+      if (table === "user_blocks") {
+        const chain: Record<string, unknown> = {};
+        chain.eq = async () => ({
+          data: opts.blocked.map((slug) => ({ blocked_slug: slug })),
+          error: null,
+        });
+        return { select: () => chain };
+      }
+      if (table === "messages") {
+        const chain: Record<string, unknown> = {
+          order: async () => ({
+            data: [
+              { conversation_id: "c-bob", sender_name: "bob", recipient_slug: "alice", content: "hi", sender_type: "artist", is_read: false, created_at: "2026-08-01" },
+              { conversation_id: "c-carol", sender_name: "carol", recipient_slug: "alice", content: "yo", sender_type: "artist", is_read: false, created_at: "2026-08-02" },
+            ],
+            error: null,
+          }),
+        };
+        chain.or = () => chain;
+        chain.eq = () => chain;
+        return { select: () => chain };
+      }
+      // venue_profiles enrichment, placements: empty.
+      const chain: Record<string, unknown> = {
+        in: async () => ({ data: [], error: null }),
+        maybeSingle: async () => ({ data: null, error: null }),
+        single: async () => ({ data: null, error: null }),
+      };
+      chain.eq = () => chain;
+      chain.or = async () => ({ data: [], error: null });
+      return { select: () => chain };
+    });
+  }
+
+  function getReqSlug(): Request {
+    return new Request("http://localhost/api/messages?slug=alice", {
+      headers: { authorization: "Bearer valid" },
+    });
+  }
+
+  it("filters out conversations with a blocked party", async () => {
+    setupInboxDb({ blocked: ["bob"] });
+
+    const body = await (await GET(getReqSlug())).json();
+    const parties = (body.conversations as { otherParty: string }[]).map((c) => c.otherParty);
+
+    expect(parties).toContain("carol");
+    expect(parties).not.toContain("bob");
+  });
+
+  it("leaves the inbox whole when nothing is blocked", async () => {
+    setupInboxDb({ blocked: [] });
+
+    const body = await (await GET(getReqSlug())).json();
+
+    expect((body.conversations as unknown[]).length).toBe(2);
   });
 });

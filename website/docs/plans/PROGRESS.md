@@ -12300,3 +12300,26 @@ One honest limit: there is no dedicated admin PAGE for the message queue yet —
 the shared endpoint serves it, and the blogs/feature-requests/feedback pages
 each read their own type. A `/admin/moderation?entity_type=message` surface is
 frontend work on the same endpoint, noted rather than smuggled in.
+
+### Decision 16 — blocking now does something — DONE
+
+Migration 111 made `user_blocks` exist; this makes it matter. Two enforcement
+points, both keyed on the slug pair the block endpoint stores:
+
+**The send path** refuses a message from a slug the recipient has blocked,
+before any insert, with deliberately neutral copy ("This person isn't accepting
+messages from you") — it does not say "blocked", because telling a harasser
+they are blocked invites the workaround account. Fail-open on a blocks-read
+error is NOT used here: the check is a plain maybeSingle whose null means no
+block, so an error reads as no block; the row-level worst case is one message
+getting through during a database blip, which is the right direction for a
+messaging outage.
+
+**The inbox** drops conversations whose other party the viewer has blocked.
+Fail-open on the blocks read, explicitly: an inbox that vanishes because the
+blocks table hiccuped is worse than one unfiltered load.
+
+Five tests: refused before insert, neutral copy, normal delivery with no block,
+the inbox filter both ways. Fail-before verified on both enforcement points
+separately. The block route's "nothing reads this table yet" note is replaced
+with where it is enforced.

@@ -154,9 +154,22 @@ export async function GET(request: Request) {
       }
     });
 
-    const sorted = Object.values(conversationsMap).sort(
-      (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
-    );
+    // Owner decision 16: honour the viewer's blocks. `user_blocks` was recorded
+    // (migration 111) and read by nothing, so a block changed nothing anywhere.
+    // Slug-keyed, matching what the block endpoint stores. Fail-open on a read
+    // error: an inbox that vanishes because the blocks table hiccuped is worse
+    // than one unfiltered load.
+    const { data: viewerBlocks } = await db
+      .from("user_blocks")
+      .select("blocked_slug")
+      .eq("blocker_user_id", auth.user!.id);
+    const blockedSlugs = new Set((viewerBlocks || []).map((b) => b.blocked_slug));
+
+    const sorted = Object.values(conversationsMap)
+      .filter((c) => !blockedSlugs.has(c.otherParty))
+      .sort(
+        (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+      );
 
     // Enrich with profile data: display names, images, placement status
     const otherPartySlugs = [...new Set(sorted.map((c) => c.otherParty))];
@@ -337,6 +350,27 @@ export async function POST(request: Request) {
         },
         { status: 403 },
       );
+    }
+
+    // Owner decision 16: the recipient's block stops the message BEFORE any
+    // insert. The check keys on (recipient user id, sender slug), which is
+    // exactly what the block endpoint stores. The refusal is deliberately
+    // neutral — it does not say "blocked" — because telling a harasser they
+    // have been blocked invites the workaround account; it just fails, the same
+    // way it would for someone who cannot be messaged at all.
+    if (recipientUserId) {
+      const { data: block } = await db
+        .from("user_blocks")
+        .select("blocked_slug")
+        .eq("blocker_user_id", recipientUserId)
+        .eq("blocked_slug", resolvedSenderSlug)
+        .maybeSingle();
+      if (block) {
+        return NextResponse.json(
+          { error: "This person isn't accepting messages from you." },
+          { status: 403 },
+        );
+      }
     }
 
     // If the client didn't pass a conversationId, try to find an existing

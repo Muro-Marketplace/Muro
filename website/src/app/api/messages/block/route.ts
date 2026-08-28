@@ -8,9 +8,10 @@
 // could never have read anything. Migration 111 creates it, and the swallow is
 // gone: a block that does not persist is not a block.
 //
-// STILL A FOLLOW-UP, and now actually possible: nothing READS this table yet.
-// The send path and the conversation-list aggregator have to honour it before a
-// block does anything beyond being recorded. Surfaced in PROGRESS.
+// ENFORCED as of owner decision 16 (2026-08-28): the send path refuses a
+// message from a slug the recipient has blocked (neutral copy, before any
+// insert), and the conversation list drops blocked parties from the viewer's
+// inbox. Both in api/messages/route.ts.
 
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
