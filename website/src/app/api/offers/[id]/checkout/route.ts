@@ -199,7 +199,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       checkout_kind: "purchase_offer",
     },
     success_url: `${origin}/checkout/confirmation?session_id={CHECKOUT_SESSION_ID}&offer_id=${encodeURIComponent(offer.id)}`,
-    cancel_url: `${origin}/customer-portal/offers`,
+    // B31/F42: the payer on an offer is a venue and their offers live at
+    // /venue-portal/offers. The old /customer-portal/offers has never
+    // existed, so backing out of Stripe landed mid-payment on a 404.
+    cancel_url: `${origin}/venue-portal/offers`,
   });
 
   return NextResponse.json({ url: session.url });

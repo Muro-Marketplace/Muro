@@ -360,3 +360,16 @@ describe("POST /api/offers/[id]/checkout stock re-validation (D7)", () => {
     });
   });
 });
+
+// B31/F42 (WS8 item 8). The cancel_url pointed at /customer-portal/offers,
+// which has never existed; the payer on an offer is a venue, so backing out of
+// Stripe landed mid-payment on a 404.
+describe("POST /api/offers/[id]/checkout cancel_url (B31/F42)", () => {
+  it("returns the venue to their own offers page, not a page that does not exist", async () => {
+    const res = await post();
+    expect(res.status).toBe(200);
+    const calls = sessionsCreateMock.mock.calls as unknown as Array<[{ cancel_url: string }]>;
+    expect(calls[0][0].cancel_url).toBe("http://localhost:3000/venue-portal/offers");
+    expect(calls[0][0].cancel_url).not.toContain("/customer-portal/");
+  });
+});

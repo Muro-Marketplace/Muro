@@ -638,3 +638,89 @@ describe("PUT /api/admin/applications/[id] writes an audit row (E30a)", () => {
     expect(auditMock).not.toHaveBeenCalled();
   });
 });
+
+// G5/H2 (WS8 item 5). Accepting an application for an EXISTING account sent a
+// fresh three-key user_metadata that force-flipped user_type to "artist": a
+// venue (or admin) who also applied as an artist silently lost their portal.
+// The route now spreads the existing metadata and never demotes a role.
+describe("PUT /api/admin/applications/[id] merges metadata on accept (G5/H2)", () => {
+  const APP = {
+    id: "123",
+    status: "pending",
+    name: "Maya Chen",
+    email: "maya@example.com",
+    location: "London",
+  };
+
+  function setupTables() {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_applications") {
+        return {
+          select: () => ({ eq: () => ({ single: async () => ({ data: APP, error: null }) }) }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+          insert: async () => ({ error: null }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      return {};
+    });
+  }
+
+  function acceptWithExistingUser(user_metadata: Record<string, unknown>) {
+    setupTables();
+    listUsersMock.mockResolvedValue({
+      data: { users: [{ id: "existing-user-id", email: "maya@example.com", user_metadata }] },
+      error: null,
+    });
+    updateUserMock.mockResolvedValue({ data: null, error: null });
+    return PUT(req({ action: "accept" }), { params: Promise.resolve({ id: "123" }) });
+  }
+
+  it("keeps a venue's role and unrelated keys, adds the artist slug", async () => {
+    const res = await acceptWithExistingUser({
+      user_type: "venue",
+      display_name: "Kings Arms",
+      first_name: "Maya",
+    });
+    expect(res.status).toBe(200);
+    expect(updateUserMock).toHaveBeenCalledTimes(1);
+    const [, payload] = updateUserMock.mock.calls[0];
+    expect(payload.user_metadata).toMatchObject({
+      user_type: "venue", // never demoted
+      display_name: "Kings Arms", // existing name kept
+      first_name: "Maya", // unrelated key survives the write
+      artist_slug: "maya-chen",
+    });
+    expect(inviteMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps an admin's role", async () => {
+    await acceptWithExistingUser({ user_type: "admin" });
+    const [, payload] = updateUserMock.mock.calls[0];
+    expect(payload.user_metadata.user_type).toBe("admin");
+  });
+
+  it("promotes a customer to artist, since becoming an artist is the point of applying", async () => {
+    await acceptWithExistingUser({ user_type: "customer", first_name: "Maya" });
+    const [, payload] = updateUserMock.mock.calls[0];
+    expect(payload.user_metadata).toMatchObject({
+      user_type: "artist",
+      first_name: "Maya",
+    });
+  });
+
+  it("stamps artist and the application name on a role-less account", async () => {
+    await acceptWithExistingUser({});
+    const [, payload] = updateUserMock.mock.calls[0];
+    expect(payload.user_metadata).toMatchObject({
+      user_type: "artist",
+      display_name: "Maya Chen",
+      artist_slug: "maya-chen",
+    });
+  });
+});
