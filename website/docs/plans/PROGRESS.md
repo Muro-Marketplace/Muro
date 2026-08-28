@@ -11140,3 +11140,72 @@ becoming a green tick nobody tested.
 
 `npm run check` green: 0 lint errors, 238 files, 2378 tests, 134 templates, 0
 dependency violations, exit 0.
+
+### 09 items 2.2 and 2.9, and a live data-loss bug found underneath them — DONE
+
+Group 2 was recorded as complete. Three items were not, and the third turned out
+to matter most.
+
+**2.9: a guard exemption that outlived the file it excused.**
+`no-inline-admin-check` exempted `src/lib/email.ts`, which K1 deleted. A dead
+exemption is worse than a dead file: it silently covers whatever is created at
+that path next, and that is an obvious path for someone to recreate. §2.9 says to
+repoint it at the replacement; **deleted instead**, because the replacement does
+not need one. `admin-alert.ts` imports `adminEmails()` from admin-auth rather
+than reading the env, so the ops inbox is the same list the rule protects, by
+construction. Two tests: the old path is no longer exempt, and nothing but
+`admin-auth.ts` is.
+
+**2.1 is done under a different name, which is a doc correction not work.** It
+asks for an `internal_ops` category with `stream: "tx"`,
+`criticalAlwaysSend: true`, `throttleCount: 0`. `platform_admin` already existed
+with exactly those three values and `AdminAlert` already uses it. Adding a second
+identical category would be the duplication this document exists to remove.
+
+**2.2: `sendMessageUnreadEmail` was inline, and `enquiry/route.ts` had its own
+copy.** They had drifted three ways, each visible to a real person:
+
+- `messages` truncated the preview at 200 characters; `enquiry` did not, so a
+  long enquiry shipped whole into a block sized for a preview.
+- `messages` keyed the send on **`Date.now()`**, which is not an idempotency key
+  at all: a Vercel retry of one request sent a second email. `enquiry` keyed on
+  the **conversation**, so a genuine second enquiry in an existing thread was
+  silently dropped as a duplicate. Both wrong, in opposite directions.
+- different subject lines for the same event.
+
+`src/lib/email/notifications.ts` is now the one function, keyed on the message
+row's id, which needed the insert to stop discarding it.
+
+**The bug underneath: a flagged message silently lost its type, its metadata and
+its attachments.** Row 22's class, in a file row 22 never looked at.
+
+`messages/route.ts` built an `extendedRow` and fell back to a `baseRow` "if the
+columns don't exist yet". The fallback was reachable, for a specific reason:
+**`flagged` and `flagged_reason` do not exist on `messages`** (checked against
+prod and against `schema-columns.json`), while `message_type`, `metadata` and
+`attachments` all do. So a message that tripped the moderation filter carried two
+phantom columns, PostgREST rejected the whole insert, and the retry wrote the
+base row instead.
+
+In plain terms: **a flagged placement-request message was stored as a plain text
+message with no type and none of its negotiated terms, its attachments dropped,
+and nothing errored.** The only trace of the flag was a `console.warn`.
+
+Fixed: one insert, no ladder, and the flag travels in `metadata`, a jsonb column
+that exists, so the signal survives on the row and is queryable.
+
+**The test fake now rejects unknown columns the way PostgREST does**, which is
+the difference between asserting a row's shape and reproducing the failure that
+shape caused. I found that out by mutation: with a shape-only fake, restoring the
+old code failed 3 of 5; with the faithful fake it fails 4 of 5, including the one
+that matters ("keeps message_type, metadata and attachments on a FLAGGED
+message").
+
+**Surfaced, not built: flagged messages still reach no admin queue.**
+`moderation_queue` (058) has a typed payload union covering blogs, feature
+requests and feedback, with no `message` member. Adding one means extending the
+union, the parser, the admin renderer and the `entity_type` constraint. That is a
+feature. Listed with the other owner decisions.
+
+`npm run check` green: 0 lint errors, 239 files, 2399 tests, 134 templates, 0
+dependency violations, exit 0.

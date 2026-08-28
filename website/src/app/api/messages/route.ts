@@ -11,7 +11,6 @@ import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { moderateMessage } from "@/lib/moderation";
 import { isFlagOn } from "@/lib/feature-flags";
 import { sendEmail } from "@/lib/email/send";
-import { MessageUnreadNotification } from "@/emails/templates/messages/MessageUnreadNotification";
 import { ArtistNewPlacementInvitation } from "@/emails/templates/placements/ArtistNewPlacementInvitation";
 import { VenueNewPlacementRequest } from "@/emails/templates/placements/VenueNewPlacementRequest";
 import { ArtistPlacementAccepted } from "@/emails/templates/placements/ArtistPlacementAccepted";
@@ -19,38 +18,9 @@ import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPla
 import { placementTermsSummary } from "@/lib/placements/terms-summary";
 import { artists as staticArtists } from "@/data/artists";
 import { venues as staticVenues } from "@/data/venues";
+import { sendMessageUnreadEmail } from "@/lib/email/notifications";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
-
-// Helper: send a message_unread notification via the new pipeline. Fires
-// immediately for MVP, once Inngest is wired, this becomes a delayed
-// event that cancels if the recipient reads the message in-app first.
-async function sendMessageUnreadEmail(args: {
-  recipientEmail: string;
-  recipientUserId: string | null;
-  recipientFirstName: string;
-  senderName: string;
-  messagePreview: string;
-  conversationId: string;
-  messageId: string | number;
-}) {
-  const conversationUrl = `${SITE}/artist-portal/messages?c=${encodeURIComponent(args.conversationId)}`;
-  await sendEmail({
-    idempotencyKey: `message_unread:${args.messageId}`,
-    template: "message_unread_notification",
-    category: "messages",
-    to: args.recipientEmail,
-    subject: `${args.senderName} sent you a message`,
-    userId: args.recipientUserId ?? undefined,
-    react: MessageUnreadNotification({
-      firstName: args.recipientFirstName,
-      senderName: args.senderName,
-      messagePreview: args.messagePreview.length > 200 ? args.messagePreview.slice(0, 197) + "…" : args.messagePreview,
-      conversationUrl,
-      muteMessagesUrl: `${SITE}/account/email`,
-    }),
-  });
-}
 
 // Slug → Human Readable (last-resort fallback used when we have no
 // artist/venue profile match, turns "fin-coles" into "Fin Coles").
@@ -413,8 +383,28 @@ export async function POST(request: Request) {
       }
     }
 
-    // Try insert with new columns first, fall back to base columns if they don't exist yet
-    const baseRow = {
+    // ONE insert, no strip-and-retry. Row 22's class, found in a second file.
+    //
+    // This used to build an `extendedRow` and fall back to a `baseRow` "if the
+    // columns don't exist yet", and the fallback was reachable for a specific
+    // and damaging reason: `flagged` and `flagged_reason` DO NOT EXIST on
+    // `messages` (verified against production and against
+    // tests/integration/schema-columns.json), while `message_type`, `metadata`
+    // and `attachments` all do.
+    //
+    // So a message that tripped the moderation filter carried two phantom
+    // columns, PostgREST rejected the whole insert, and the retry silently wrote
+    // the base row instead — dropping `message_type`, `metadata` AND
+    // `attachments`. A flagged PLACEMENT REQUEST was stored as a plain text
+    // message with no type and none of its negotiated terms, and nothing
+    // errored.
+    //
+    // The flag now travels in `metadata`, which is a real jsonb column, so the
+    // signal survives on the row and is queryable. It still reaches no admin
+    // queue: `moderation_queue` (058) has a typed payload union covering blogs,
+    // feature requests and feedback, with no `message` member. Building one is a
+    // feature, not this fix, and it is recorded as an owner decision.
+    const row = {
       conversation_id: cid,
       sender_id: auth.user!.id,
       sender_name: resolvedSenderSlug,
@@ -424,27 +414,25 @@ export async function POST(request: Request) {
       content,
       is_read: false,
       created_at: new Date().toISOString(),
-    };
-
-    // If moderation flagged the message, tag it for admin review
-    const extendedRow = {
-      ...baseRow,
       message_type: messageType || "text",
-      metadata: metadata || {},
+      metadata: {
+        ...(metadata || {}),
+        ...(moderation.flagged
+          ? { moderation_flagged: true, moderation_reason: moderation.reason ?? null }
+          : {}),
+      },
       attachments: attachments || [],
-      ...(moderation.flagged ? { flagged: true, flagged_reason: moderation.reason } : {}),
     };
 
-    let { error } = await db.from("messages").insert(extendedRow);
+    // `.select("id")` so the notification below can key on the message rather
+    // than on Date.now(), which is not an idempotency key at all.
+    const { data: inserted, error } = await db
+      .from("messages")
+      .insert(row)
+      .select("id")
+      .maybeSingle<{ id: string }>();
 
-    // If insert failed (likely missing columns), retry with base columns only
-    if (error) {
-      console.warn("Message insert failed with new columns, retrying base-only:", error.message);
-      const retry = await db.from("messages").insert(baseRow);
-      error = retry.error;
-    }
-
-    if (error) {
+    if (error || !inserted) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
     }
@@ -693,15 +681,13 @@ export async function POST(request: Request) {
           const { data: { user: recipientUser } } = await db.auth.admin.getUserById(recipientArtist.user_id);
           if (recipientUser?.email) {
             await sendMessageUnreadEmail({
+              messageId: inserted.id,
               recipientEmail: recipientUser.email,
               recipientUserId: recipientArtist.user_id,
-              recipientFirstName: recipientArtist.name.split(" ")[0] || "there",
+              recipientName: recipientArtist.name,
               senderName: resolvedSenderSlug,
               messagePreview: content,
               conversationId: cid || "",
-              // Sending immediately for MVP, once Inngest is wired, queue
-              // with a 10-minute delay and cancel-if-read.
-              messageId: Date.now(),
             });
           }
         }
@@ -716,13 +702,13 @@ export async function POST(request: Request) {
           const { data: { user: recipientUser } } = await db.auth.admin.getUserById(vp.user_id);
           if (recipientUser?.email) {
             await sendMessageUnreadEmail({
+              messageId: inserted.id,
               recipientEmail: recipientUser.email,
               recipientUserId: vp.user_id,
-              recipientFirstName: vp.name.split(" ")[0] || "there",
+              recipientName: vp.name,
               senderName: resolvedSenderSlug,
               messagePreview: content,
               conversationId: cid || "",
-              messageId: Date.now(),
             });
           }
         }

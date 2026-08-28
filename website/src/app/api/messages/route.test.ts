@@ -7,6 +7,8 @@
 // Also covers remediation findings 1.4 and 4.2: admin gate for
 // dispute-scoped reads and audit-before-return enforcement.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const {
@@ -16,6 +18,7 @@ const {
   sendEmailMock,
   isAdminMock,
   recordAdminActionMock,
+  moderateMock,
 } = vi.hoisted(() => ({
   authMock: vi.fn(),
   fromMock: vi.fn(),
@@ -23,6 +26,7 @@ const {
   sendEmailMock: vi.fn(async () => ({ ok: true })),
   isAdminMock: vi.fn(),
   recordAdminActionMock: vi.fn(),
+  moderateMock: vi.fn(() => ({ allowed: true, flagged: false, reason: undefined as string | undefined })),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
@@ -43,9 +47,7 @@ vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
 vi.mock("@/emails/templates/messages/MessageUnreadNotification", () => ({
   MessageUnreadNotification: () => null,
 }));
-vi.mock("@/lib/moderation", () => ({
-  moderateMessage: () => ({ allowed: true, flagged: false }),
-}));
+vi.mock("@/lib/moderation", () => ({ moderateMessage: moderateMock }));
 vi.mock("@/lib/validations", () => ({
   messageSchema: {
     safeParse: (body: unknown) => ({ success: true, data: body }),
@@ -76,6 +78,8 @@ beforeEach(() => {
   sendEmailMock.mockClear();
   isAdminMock.mockReset();
   recordAdminActionMock.mockReset();
+  moderateMock.mockReset();
+  moderateMock.mockReturnValue({ allowed: true, flagged: false, reason: undefined });
   authMock.mockResolvedValue({ user: { id: "u-art-a", email: "a@example.com" }, error: null });
 });
 
@@ -300,7 +304,12 @@ describe("POST /api/messages placement_response authz (E33)", () => {
             or: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
           }),
         }),
-        insert: async () => ({ data: null, error: null }),
+        // The route now reads the inserted row's id back, so the notification
+        // can key on the message instead of on Date.now(). A fake that returns
+        // nothing makes every POST a 500.
+        insert: () => ({
+          select: () => ({ maybeSingle: async () => ({ data: { id: "msg-1" }, error: null }) }),
+        }),
         upsert: async () => ({ data: null, error: null }),
       };
     });
@@ -391,5 +400,139 @@ describe("POST /api/messages placement_response authz (E33)", () => {
     setupPlacementDb(null);
     const res = await POST(responseReq("declined"));
     expect(res.status).not.toBe(400);
+  });
+});
+
+
+// Row 22's class, found in a second file (09 item 2.2's neighbourhood).
+//
+// The insert used to build an `extendedRow` and fall back to a `baseRow` "if
+// the columns don't exist yet". The fallback was reachable, and for a specific
+// reason: `flagged` and `flagged_reason` DO NOT EXIST on `messages` (checked
+// against production and against schema-columns.json), while `message_type`,
+// `metadata` and `attachments` all do. So a message that tripped the moderation
+// filter carried two phantom columns, PostgREST rejected the whole insert, and
+// the retry silently wrote the base row: a flagged PLACEMENT REQUEST was stored
+// as a plain text message with no type and none of its negotiated terms, and
+// nothing errored.
+describe("POST /api/messages writes ONE row, with everything on it", () => {
+  const inserts: Record<string, unknown>[] = [];
+
+  /** The real `messages` columns, from the committed schema snapshot. */
+  const MESSAGE_COLUMNS = new Set<string>(
+    (
+      JSON.parse(
+        readFileSync(path.resolve(__dirname, "../../../../tests/integration/schema-columns.json"), "utf8"),
+      ) as Record<string, string[]>
+    ).messages,
+  );
+
+  function setupInsertDb(opts: { insertError?: unknown } = {}) {
+    inserts.length = 0;
+    fromMock.mockImplementation((table: string) => {
+      // Sender and recipient both resolve, or the route 404s the recipient
+      // before it ever reaches the insert this describe block is about.
+      if (table === "artist_profiles") return chainSelectMaybe(null);
+      if (table === "venue_profiles") {
+        return chainSelectMaybe({ slug: "alice", user_id: "u-venue", name: "Alice" });
+      }
+      if (table === "messages") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+          insert: (row: Record<string, unknown>) => {
+            inserts.push(row);
+            // PostgREST rejects the WHOLE statement when a row names a column
+            // the table lacks. Modelling that is the point: without it this
+            // suite asserts the shape of a row rather than reproducing the
+            // failure the shape caused.
+            const unknown = Object.keys(row).filter((k) => !MESSAGE_COLUMNS.has(k));
+            const error = unknown.length
+              ? { code: "PGRST204", message: `Could not find the '${unknown[0]}' column of 'messages'` }
+              : (opts.insertError ?? null);
+            return {
+              select: () => ({
+                maybeSingle: async () =>
+                  error ? { data: null, error } : { data: { id: "msg-42" }, error: null },
+              }),
+            };
+          },
+        };
+      }
+      return chainSelectMaybe(null);
+    });
+  }
+
+  function send(body: Record<string, unknown> = {}) {
+    return POST(
+      req({
+        conversationId: "conv-1",
+        senderName: "alice",
+        senderType: "venue",
+        recipientSlug: "bob",
+        content: "Hello there, this is a message.",
+        ...body,
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    isFlagOnMock.mockReturnValue(false);
+    setupInsertDb();
+  });
+
+  it("keeps message_type, metadata and attachments on a FLAGGED message", async () => {
+    // THE regression. Under the old code this row lost all three.
+    moderateMock.mockReturnValue({ allowed: true, flagged: true, reason: "spammy link" });
+
+    await send({
+      messageType: "placement_request",
+      metadata: { arrangementType: "paid_loan", monthlyFeeGbp: 40 },
+      attachments: [{ url: "https://x/a.png" }],
+    });
+
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).toMatchObject({
+      message_type: "placement_request",
+      attachments: [{ url: "https://x/a.png" }],
+    });
+    expect(inserts[0].metadata).toMatchObject({ arrangementType: "paid_loan", monthlyFeeGbp: 40 });
+  });
+
+  it("records the flag in metadata, which is a column that exists", async () => {
+    moderateMock.mockReturnValue({ allowed: true, flagged: true, reason: "spammy link" });
+
+    await send();
+
+    expect(inserts[0].metadata).toMatchObject({
+      moderation_flagged: true,
+      moderation_reason: "spammy link",
+    });
+  });
+
+  it("never sends a column the messages table does not have", async () => {
+    // `flagged` and `flagged_reason` are the two that were being sent. Naming
+    // them keeps this test about the actual defect rather than about shape.
+    moderateMock.mockReturnValue({ allowed: true, flagged: true, reason: "spammy link" });
+
+    await send();
+
+    expect(Object.keys(inserts[0])).not.toContain("flagged");
+    expect(Object.keys(inserts[0])).not.toContain("flagged_reason");
+  });
+
+  it("adds nothing to metadata when the message is not flagged", async () => {
+    await send({ metadata: { arrangementType: "purchase" } });
+
+    expect(inserts[0].metadata).toEqual({ arrangementType: "purchase" });
+  });
+
+  it("attempts the insert exactly ONCE, and surfaces a failure", async () => {
+    // The strip-and-retry turned a real error into a quieter, lesser write.
+    setupInsertDb({ insertError: { message: "permission denied" } });
+
+    const res = await send();
+
+    expect(inserts).toHaveLength(1);
+    expect(res.status).toBe(500);
   });
 });
