@@ -9604,3 +9604,79 @@ through in place so it cannot be quoted out of context, and records the step tab
 with what is done and what is owner-gated.
 
 `npm run check` green: 0 lint errors, 211 files, 2069 tests, exit 0.
+
+### E35d — `user_type` is self-settable, and "admin" was an accepted input (03 §4.3) — DONE
+
+**Items 1-3, the code paths.** New `SIGNUP_ROLES` / `isSignupRole` in `auth-roles.ts`,
+alongside the existing `ALLOWED_ROLES` / `isRole`. The asymmetry is deliberate and
+commented: reading a stored value still has to accept "admin" or `portalPathForRole`
+and the sidebar break for real admins; accepting one as *input* is what was wrong.
+
+- `oauth-sign-state` validated a user-supplied body field with `isRole`, on an
+  unauthenticated route, so `POST {"role":"admin"}` minted a validly HMAC-signed
+  state token claiming admin. Now `isSignupRole`.
+- `oauth-finalize` declared its own `ALLOWED_ROLES = ["artist","customer","venue"]`
+  and never used it: the const existed only to derive a type, while the value reached
+  `user_metadata` through `v.role as Role`, a cast. `verifyOAuthState` validates
+  against the WIDE list, so "admin" passed. Real check now, dead const deleted.
+  Fixing only the minting route would have left every already-issued token able to
+  carry admin through, which is why the test mints its state directly with the
+  `oauth-state` helper rather than through the sign-state route.
+- **Not in the doc, found while checking the call sites:** `AuthContext`'s `signUp`
+  typed its metadata as `{ user_type: UserRole }`, and `UserRole` includes "admin".
+  Any caller could ask GoTrue for an admin account with the anon key and TypeScript
+  would agree. Narrowed to `SignupRole`.
+
+**Item 4, migration 102 — the only control covering the direct-to-GoTrue path.**
+Written, applied and verified live. A `BEFORE INSERT OR UPDATE` trigger on
+`auth.users` that strips a *newly acquired* `user_type = 'admin'`.
+
+**"Newly acquired" is load-bearing, and the doc's version would have caused an
+outage.** §4.3's snippet strips unconditionally. The live predicate still contains
+the `user_metadata.user_type = 'admin'` conjunct (the cutover is owner-gated), and
+GoTrue writes to `auth.users` on every sign-in, so an unconditional trigger would
+have revoked the only production admin the next time they logged in. This one
+permits a row that already said 'admin'.
+
+**§4.3's step-4 conflict, resolved the way the doc recommends.** It offers two ways:
+have the trigger consult `admin_users`, or drop the metadata stamp and drive admin
+nav off the server's answer. I took the second, and rejected the first for two
+reasons: it would not help today (`admin_users` is empty until the backfill runs, so
+the existing admin would be stripped anyway), and it would couple every write to
+`auth.users` to another table — if that table were ever dropped, every signup and
+login on the platform would fail. That is a bad thing to hang authentication on for
+a defence-in-depth control. Stated consequence, in the migration and here: a future
+admin granted only an `admin_users` row will not be auto-routed to `/admin` after
+login, because `portalPathForRole` reads metadata. They keep full API access and can
+navigate to `/admin` directly, where `AdminGate` admits them. §1.4 step 4 calls this
+"a nav convenience", which is why it is sequenced last.
+
+**Live verification, both attack paths, inside a rolled-back transaction:**
+
+```
+insert auth.users with '{"user_type":"admin","display_name":"Attacker"}'
+update the same row to set user_type = 'admin'
+-> probe_role_after_both_attempts: "customer"
+-> other_metadata_preserved:       "Attacker"     (only the role is touched)
+rollback
+```
+
+And the existing admin is unaffected by a sign-in-shaped write:
+
+```
+update auth.users set last_sign_in_at = now() where user_type = 'admin'
+-> admins_still_admin: 1
+rollback
+```
+
+**Tests.** 16 new: `auth-roles.test.ts` (4, including that `SIGNUP_ROLES` stays a
+strict subset of `ALLOWED_ROLES`), `oauth-sign-state/route.test.ts` (5),
+`oauth-finalize/route.test.ts` (5). Fail-before verified: restoring `isRole` and the
+cast fails exactly the two admin tests; reverting restored 10/10.
+
+**The trigger has no unit test, honestly.** It is a database control and this repo
+has no DB-backed test harness (the e2e security suite needs real credentials, which
+is a standing blocker). The live rolled-back proof above is the verification, and it
+exercises the real trigger on the real table rather than a model of it.
+
+`npm run check` green: 0 lint errors, 213 files, 2083 tests, exit 0.

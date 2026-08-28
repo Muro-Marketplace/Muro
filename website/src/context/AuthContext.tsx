@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User, Session, AuthError } from "@supabase/supabase-js";
-import { parseRole, type UserRole } from "@/lib/auth-roles";
+import { parseRole, type SignupRole, type UserRole } from "@/lib/auth-roles";
 
 interface AuthContextValue {
   user: User | null;
@@ -17,7 +17,10 @@ interface AuthContextValue {
   signUp: (
     email: string,
     password: string,
-    metadata: { user_type: UserRole; display_name: string },
+    // E35d: SignupRole, not UserRole. UserRole includes "admin", so this
+    // signature let any caller ask GoTrue for an admin account with the anon
+    // key. Admin is granted server-side only (ADR 0008).
+    metadata: { user_type: SignupRole; display_name: string },
   ) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 }
@@ -118,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (
       email: string,
       password: string,
-      metadata: { user_type: UserRole; display_name: string },
+      metadata: { user_type: SignupRole; display_name: string },
     ) => {
       const { error } = await supabase.auth.signUp({
         email,
