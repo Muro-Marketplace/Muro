@@ -804,9 +804,10 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "ID and valid status required" }, { status: 400 });
     }
 
-    const { id, status, stage, counter, stageDate, unsetStage } = parsed.data;
-    if (!status && !stage && !counter && !unsetStage) {
-      return NextResponse.json({ error: "status, stage, counter, or unsetStage required" }, { status: 400 });
+    const { id, status, stage, counter, stageDate, unsetStage, inStorePrice, inStoreFrameIncluded } = parsed.data;
+    const hasOfferUpdate = inStorePrice !== undefined || inStoreFrameIncluded !== undefined;
+    if (!status && !stage && !counter && !unsetStage && !hasOfferUpdate) {
+      return NextResponse.json({ error: "status, stage, counter, unsetStage, or an in-store offer update required" }, { status: 400 });
     }
 
     const db = getSupabaseAdmin();
@@ -825,6 +826,12 @@ export async function PATCH(request: Request) {
     }
 
     const isArtist = existing.artist_user_id === auth.user!.id;
+
+    // The off-the-wall offer is the ARTIST's to set: it prices their own
+    // physical piece. A venue cannot put a price on someone else's work.
+    if (hasOfferUpdate && !isArtist) {
+      return NextResponse.json({ error: "Only the artist can set the in-store offer" }, { status: 403 });
+    }
     const isVenue = existing.venue_user_id === auth.user!.id;
 
     if (!isArtist && !isVenue) {
@@ -1206,6 +1213,18 @@ export async function PATCH(request: Request) {
     }
 
     const updates: Record<string, unknown> = {};
+
+    // Buy-off-the-wall offer (owner decision 2026-08-28). Setting a price
+    // creates or reprices the offer; an explicit null clears it and the
+    // frame flag with it, so a stale "frame included" cannot survive an
+    // offer that no longer exists.
+    if (inStorePrice !== undefined) {
+      updates.in_store_price = inStorePrice;
+      if (inStorePrice === null) updates.in_store_frame_included = false;
+    }
+    if (inStoreFrameIncluded !== undefined && inStorePrice !== null) {
+      updates.in_store_frame_included = inStoreFrameIncluded;
+    }
     if (status) updates.status = status;
     const now = new Date().toISOString();
 

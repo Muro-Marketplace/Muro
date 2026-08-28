@@ -249,6 +249,12 @@ export const placementUpdateSchema = z.object({
   // progress bar, clears the timestamp on that stage (and only the
   // most recently reached stage is allowed, see API for the gate).
   unsetStage: z.enum(["scheduled", "installed", "live", "collected"]).optional(),
+  // Owner decision 2026-08-28: the buy-off-the-wall offer for THIS placed
+  // piece. Artist-only (enforced in the route). An explicit null price turns
+  // the offer off; both fields may ride alone or alongside a stage change
+  // (the live-on-wall prompt sends them together).
+  inStorePrice: z.number().positive().max(100_000).nullable().optional(),
+  inStoreFrameIncluded: z.boolean().optional(),
   // A counter offer keeps the row pending but revises the terms and hands the
   // "needs to respond" role back to the original requester.
   counter: z.object({

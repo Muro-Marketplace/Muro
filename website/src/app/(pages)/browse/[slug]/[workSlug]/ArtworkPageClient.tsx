@@ -596,11 +596,53 @@ export default function ArtworkPageClient({
             size; for the legacy original-only flow it stays
             "Original". Shipping is £0 because the buyer collects in
             person, that's the entire point of the pickup option. */}
+        {/* 121: the buy-off-the-wall OFFER on the placement is the primary
+            gate now. The artist priced THIS physical piece (size, frame) at
+            live-on-wall, so the button shows whenever the offer exists, with
+            the offer's own price and the placed size; the size selector above
+            keeps driving the normal delivery purchase, which stays available
+            alongside. */}
+        {work.available
+          && work.currentPlacement?.status === "active"
+          && work.currentPlacement.inStorePrice != null
+          && (() => {
+            const offer = work.currentPlacement!;
+            const wallSize = offer.placedSizeLabel || work.dimensions || "";
+            return (
+              <button
+                onClick={() => {
+                  addItem({
+                    type: "work",
+                    workId: work.id,
+                    artistSlug,
+                    artistName,
+                    title: `${work.title} (Off the wall${wallSize ? `, ${wallSize}` : ""})`,
+                    image: work.image,
+                    size: wallSize || "Original",
+                    price: offer.inStorePrice!,
+                    quantity: 1,
+                    shippingPrice: 0,
+                    lineFulfilment: "collect_venue",
+                    collectVenueSlug: offer.venueSlug ?? undefined,
+                    collectPlacementId: offer.id,
+                  });
+                  router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+                }}
+                className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
+              >
+                {`Buy off the wall at ${offer.venueName || "the venue"}, £${offer.inStorePrice!.toFixed(2)}${offer.inStoreFrameIncluded ? " (framed)" : ""}`}
+              </button>
+            );
+          })()}
+        {/* Legacy fallback for works ticked before the placement-level offer
+            existed (120 tick box / pre-120 in-store prices), shown only when
+            the placement carries NO offer of its own. */}
         {/* Owner decision 2026-08-28: the tick box (availableInStore) gates
             the collect CTA and the price is the NORMAL tier price; the legacy
             in-store price sources remain only as a fallback gate for works
             saved before migration 120. */}
-        {work.available && (work.availableInStore === true || selectedInStorePrice != null)
+        {work.currentPlacement?.inStorePrice == null
+          && work.available && (work.availableInStore === true || selectedInStorePrice != null)
           && work.currentPlacement?.status === "active"
           && (work.currentPlacement.placedSizeLabel == null
             || !selectedPricing

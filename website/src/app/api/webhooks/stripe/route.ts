@@ -1129,6 +1129,28 @@ async function handleWebhookEvent(
             // work stops being collectable. ONLY the tick box is cleared;
             // online availability and stock follow the normal decrement, so
             // prints keep selling unless this was the last piece.
+            // 121: the wall piece just sold, so its placement's off-the-wall
+            // offer comes down with it; the legacy work-level tick box (120)
+            // is cleared too. Online stock follows the normal decrement, so
+            // prints keep selling unless this was the last piece. Both are
+            // non-critical bookkeeping: a failure must not stop the venue
+            // being told someone is coming to collect.
+            const soldPlacementIds = Array.from(new Set(
+              (cartItems as Array<{ collectPlacementId?: string }>)
+                .map((i) => i.collectPlacementId || "")
+                .filter(Boolean),
+            ));
+            if (soldPlacementIds.length > 0) {
+              try {
+                const { error: offErr } = await db
+                  .from("placements")
+                  .update({ in_store_price: null, in_store_frame_included: false })
+                  .in("id", soldPlacementIds);
+                if (offErr) console.warn("[webhook] could not clear off-the-wall offer:", offErr);
+              } catch (offErr) {
+                console.warn("[webhook] off-the-wall offer clear threw:", offErr);
+              }
+            }
             if (cartWorkIds.length > 0) {
               try {
                 const { error: flagErr } = await db
@@ -1137,8 +1159,6 @@ async function handleWebhookEvent(
                   .in("id", cartWorkIds);
                 if (flagErr) console.warn("[webhook] could not clear available_in_store:", flagErr);
               } catch (flagErr) {
-                // Non-critical bookkeeping: a failure here must not stop the
-                // venue being told someone is coming to collect.
                 console.warn("[webhook] available_in_store clear threw:", flagErr);
               }
             }

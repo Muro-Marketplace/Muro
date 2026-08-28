@@ -574,7 +574,7 @@ describe("a branch that throws releases the event-dedup claim", () => {
 // number at their counter.
 describe("checkout.session.completed books a collect_venue order", () => {
   const CART_ROW = {
-    cart: [{ workId: "w-1", title: "Vietnamese Village", artistSlug: "fin-coles", price: 100, quantity: 1 }],
+    cart: [{ workId: "w-1", title: "Vietnamese Village", artistSlug: "fin-coles", price: 100, quantity: 1, collectPlacementId: "p-wall" }],
     shipping: {
       fullName: "Jo Bloggs",
       email: "jo@x.com",
@@ -590,10 +590,12 @@ describe("checkout.session.completed books a collect_venue order", () => {
 
   let orderInsert: Record<string, unknown> | null = null;
   const workFlagUpdates: Array<Record<string, unknown>> = [];
+  const placementUpdates: Array<Record<string, unknown>> = [];
 
   function setupCartDb(shippingOverride?: Record<string, unknown>) {
     orderInsert = null;
     workFlagUpdates.length = 0;
+    placementUpdates.length = 0;
     const shippingRow = shippingOverride ?? CART_ROW.shipping;
     fromMock.mockImplementation((table: string) => {
       const chain: Record<string, unknown> = {
@@ -674,7 +676,16 @@ describe("checkout.session.completed books a collect_venue order", () => {
         return { select: () => c };
       }
       if (table === "placements") {
-        return { select: () => chain, update: () => ({ eq: async () => ({ error: null }) }) };
+        return {
+          select: () => chain,
+          update: (row: Record<string, unknown>) => {
+            placementUpdates.push(row);
+            return {
+              eq: async () => ({ error: null }),
+              in: async () => ({ error: null }),
+            };
+          },
+        };
       }
       return {
         select: () => chain,
@@ -757,10 +768,12 @@ describe("checkout.session.completed books a collect_venue order", () => {
     expect(venueSends).toHaveLength(0);
   });
 
-  it("clears available_in_store on the sold works, and nothing else", async () => {
+  it("clears the placement's off-the-wall offer AND the legacy work flag on sale", async () => {
     await POST(post());
-    // The wall piece sold; the tick box comes off so the collect CTA
-    // disappears, while online availability follows the stock decrement.
+    // The wall piece sold: the placement's offer (121) comes down so the CTA
+    // disappears, the legacy tick box (120) is cleared, and online
+    // availability follows the normal stock decrement untouched.
+    expect(placementUpdates).toContainEqual({ in_store_price: null, in_store_frame_included: false });
     expect(workFlagUpdates).toEqual([{ available_in_store: false }]);
   });
 

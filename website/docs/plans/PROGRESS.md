@@ -12813,3 +12813,32 @@ column now prefers the first line's work-level placement. 4 new legs tests
 - **Parked, each in its own revertable commit**: artwork requests (every
   surface; APIs and components dormant) and the artist showroom (public
   view-on-wall untouched).
+
+### 121: the buy-off-the-wall offer moved to the placement
+
+Owner design session, built same day. Online sells a configurable product;
+in store sells one specific object, so the offer lives on the placement
+(migration 121: in_store_price, in_store_frame_included; applied and
+verified live).
+
+- Artist is PROMPTED at live-on-wall (and can set or edit any time from
+  the placement detail): one price, prefilled from the placed size's tier
+  plus the default frame uplift when "it hangs framed" is ticked, and a
+  frame-included tick. Artist-only server-side; explicit null clears the
+  frame flag with the offer.
+- Venue sees the offer read-only on the placement.
+- Artwork page: "Buy off the wall at {venue}, £X (framed)" whenever the
+  offer exists on an active placement, alongside the normal delivery
+  options (QR scan lands here, exactly as before). The 120 tick box and
+  pre-120 price fields survive only as fallback gates for offers not yet
+  set; the portfolio no longer asks anything about in-store.
+- Checkout prices a collect line from THE PLACEMENT's offer server-side,
+  beating tier price, tick box and legacy prices; forged client prices are
+  corrected to the offer.
+- On sale the webhook clears the placement's offer and the legacy work
+  flag; online stock follows the normal decrement.
+
+Tests: placements PATCH (set, clear-with-frame-flag, venue 403, schema
+floor), checkout offer-beats-everything and forged-price correction,
+webhook offer-clear, all fail-before probed. Full gate 268 files / 2,713
+tests / 0 lint errors.
