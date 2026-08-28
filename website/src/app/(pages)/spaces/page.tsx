@@ -75,8 +75,8 @@ export default function SpacesLookingForArtPage() {
 }
 
 function SpacesPageContent() {
-  const searchParams = useSearchParams();
-  // ?view=requests retired with the artwork-requests parking (2026-08-28).
+  // ?view=requests retired with the artwork-requests parking (2026-08-28);
+  // the page no longer reads any search params.
 
   const [venues, setVenues] = useState<DemandVenue[]>([]);
   const [stats, setStats] = useState<DemandStats | null>(null);

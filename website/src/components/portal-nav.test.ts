@@ -38,7 +38,6 @@ const artistNavItems = [
   "/artist-portal",
   "/artist-portal/profile",
   "/artist-portal/portfolio",
-  "/artist-portal/showroom",
   "/artist-portal/messages",
   "/artist-portal/placements",
   "/artist-portal/offers",

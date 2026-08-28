@@ -12779,3 +12779,37 @@ only as fallback), so two works by one artist each pay their own rate and
 the totals still reconcile to the penny. The order's single placement_id
 column now prefers the first line's work-level placement. 4 new legs tests
 (fail-before probed) plus the untouched 129 across checkout and webhook.
+
+### Owner live-testing round: the rest, delivered
+
+- **In-store rework (migration 120)**: "Available to buy in store?" tick box
+  replaces the price model end to end (editor, API flag column, artwork CTA
+  at tier price, checkout ladder, webhook clears the flag when the wall
+  piece sells). Legacy in-store prices honoured only while the box is
+  unticked, so pre-120 carts keep their displayed number.
+- **Unlimited works no longer flip to Sold**: decrement_work_stock and
+  restock_work treat NULL quantity as unlimited (was COALESCE to 0, so the
+  first sale zeroed and delisted the work). Verified live in a rolled-back
+  transaction; a stray real decrement during verification was restored
+  (8 back to 8) via restock_work.
+- **Spaces**: database venues carried coordinates: null and the distance
+  filter dropped them all whenever a location was set; they stay listed now,
+  badge-less, after the located results.
+- **Browse distance slider**: debounce starved by onCommit identity churn +
+  uncontrolled input remount snapped the thumb back; ref-stable commit and
+  a controlled input, with a mirror test plus source-invariant pins.
+- **Paid loan**: venue emailed to set up payment at accept
+  (paid_loan_setup_payment, keyed per placement), the started bell
+  deep-links to the placement detail, and the chip now renders a loud
+  green "Monthly payment active, £X/mo, next payment on D" banner when
+  billing runs (it used to render nothing).
+- **Labels**: per-print colour toggle (My theme / Classic) instead of the
+  Pro theme forcing orange; deep links resolve by venue slug or name.
+- **Social posts**: artist names render as written, not FIN COLES.
+- **Artist profile spacing**: hero carries the gap below the terms pills;
+  portfolio stops over-padding the top.
+- **Header**: DARK_HEADER_TEST=true renders the portal black site-wide
+  (one-flag revert in Header.tsx).
+- **Parked, each in its own revertable commit**: artwork requests (every
+  surface; APIs and components dormant) and the artist showroom (public
+  view-on-wall untouched).
