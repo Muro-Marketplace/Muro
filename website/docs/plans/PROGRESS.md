@@ -11413,3 +11413,46 @@ as a single insert. With both, it fails 4 of 5.
 
 `npm run check` green: 0 lint errors, 241 files, 2447 tests, 0 dependency
 violations, exit 0.
+
+### The strip-and-retry sweep, closed out: two more dead fallbacks deleted — DONE
+
+Finishing the sweep that migration 109 came out of. Two more, both over columns
+that exist, so neither could fire for the reason it claimed.
+
+**`admin/applications/[id]`** retried its status update without `reviewed_at` and
+`reviewed_by` "for a legacy schema". Both columns exist (migration 052, confirmed
+against the live schema). Had the branch ever fired it would have recorded an
+admin's accept or reject **without who did it or when**, and returned 200. That
+is the migration-109 class exactly: a fallback that reports success while
+discarding the field the write was partly for.
+
+The error check itself is kept and is the part that mattered: the original update
+had none, so a failure left the row at `pending` and the admin list kept showing
+the applicant as awaiting review after Accept was clicked.
+
+**Its test is inverted rather than deleted.** It used to assert "retries with a
+status-only payload"; it now asserts one attempt, carrying both audit columns,
+and a 500 when that attempt fails.
+
+**`venues/[slug]`** retried with a narrower column list "if the migration isn't
+applied". All five supposedly-optional columns exist. But this one was not merely
+dead, it ran on the common path: the primary read is `.maybeSingle()`, so `data`
+is null both when a column is missing **and when the slug simply does not
+exist**. Every request for an unknown venue ran a second full query, on a public
+unauthenticated route. And it discarded the error, so a real PostgREST rejection
+was indistinguishable from "no such venue", which is the D17.3 phantom-column
+class in its original form.
+
+One query now, and the error is checked. Six new tests on a route that had none:
+one query on the happy path, the display columns actually requested, one query
+when the row is absent, a 500 rather than a silent miss on a database error, and
+the two PII assertions (`user_id` and exact postcode withheld from an anonymous
+caller). Restoring the fallback fails two of them.
+
+**Class tally: nine strip-and-retry sites found across four files.** Seven in
+`placements/route.ts` (row 22), one in `messages/route.ts` (09 item 2.2, losing a
+flagged message's type and attachments), one in `api/apply` (migration 109,
+destroying every referral code ever submitted), plus these two dead ones. The
+only one deliberately kept is `upsertWork`'s, and migration 104 records why.
+
+`npm run check` green: 0 lint errors, 242 files, 2453 tests, exit 0.

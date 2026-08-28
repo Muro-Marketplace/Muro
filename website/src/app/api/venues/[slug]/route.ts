@@ -14,22 +14,26 @@ export async function GET(req: Request, ctx: { params: Promise<{ slug: string }>
   }
 
   const db = getSupabaseAdmin();
-  // Pull the complete venue profile, including the fields only the
-  // editor sets (display needs, gallery). Optional columns fall back
-  // gracefully if the migration isn't applied.
-  let { data } = await db
+  // Pull the complete venue profile, including the fields only the editor sets
+  // (display needs, gallery).
+  //
+  // The "retry with a lean select if the migration isn't applied" fallback that
+  // used to follow this is DELETED. All five supposedly-optional columns exist
+  // in production, so it could never fire for the reason it claimed. What it DID
+  // do was run on the far more common path: the primary read is `.maybeSingle()`,
+  // so `data` is null both when a column is missing AND when the slug simply
+  // does not exist, which meant a second full query on every 404 of a PUBLIC
+  // route. It also swallowed the error, so a real PostgREST rejection was
+  // indistinguishable from "no such venue" — the D17.3 phantom-column class,
+  // which is why the error is now checked.
+  const { data, error } = await db
     .from("venue_profiles")
     .select("user_id, slug, name, type, location, city, postcode, wall_space, description, image, images, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, preferred_styles, preferred_themes, display_wall_space, display_lighting, display_install_notes, display_rotation_frequency")
     .eq("slug", slug)
     .maybeSingle();
-  if (!data) {
-    // Older envs: retry with the lean select
-    const fallback = await db
-      .from("venue_profiles")
-      .select("user_id, slug, name, type, location, city, postcode, wall_space, description, image, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, preferred_styles, preferred_themes")
-      .eq("slug", slug)
-      .maybeSingle();
-    data = (fallback.data as typeof data) || null;
+  if (error) {
+    console.error("[venues/[slug]] profile read failed:", error.message);
+    return NextResponse.json({ error: "Could not load the venue" }, { status: 500 });
   }
 
   if (data) {

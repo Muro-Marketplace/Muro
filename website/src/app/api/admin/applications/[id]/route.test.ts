@@ -301,16 +301,19 @@ describe("PUT /api/admin/applications/[id] sets review_status='approved' on acce
   });
 });
 
-describe("PUT /api/admin/applications/[id] missing reviewed_at column fallback", () => {
-  // Regression: migration 052 added reviewed_at + reviewed_by to
-  // artist_applications. Production envs that haven't run it yet would
-  // silently fail the .update() with a "column does not exist" PostgREST
-  // error and leave status='pending', so the admin list still showed the
-  // application as awaiting review even after Accept was clicked. The
-  // updateApplicationStatus helper now retries with the bare {status}
-  // payload when the failure mentions reviewed_at/reviewed_by, so the
-  // status flip survives a missing-migration deployment.
-  it("retries with status-only payload when reviewed_at column is missing on accept", async () => {
+describe("PUT /api/admin/applications/[id] surfaces a failed status flip", () => {
+  // The original update had no error check, so a failure left status='pending'
+  // and the admin list kept showing the applicant as awaiting review after
+  // Accept was clicked. That check is what matters and it is still here.
+  //
+  // The strip-and-retry that WAS here is deleted, and this test is inverted with
+  // it. It dropped `reviewed_at` and `reviewed_by` "for a legacy schema"; both
+  // columns exist in production (migration 052, confirmed against the live
+  // schema), so the branch could never fire for the reason it claimed. If it
+  // ever had, it would have discarded the audit trail on an admin decision and
+  // reported success — the same class as migration 109's, which destroyed a
+  // referral code on every application.
+  it("does NOT retry without the audit columns, and reports the failure instead", async () => {
     const calls: Record<string, unknown>[] = [];
     fromMock.mockImplementation((table: string) => {
       if (table === "artist_applications") {
@@ -368,14 +371,17 @@ describe("PUT /api/admin/applications/[id] missing reviewed_at column fallback",
     const res = await PUT(req({ action: "accept" }), {
       params: Promise.resolve({ id: "123" }),
     });
-    expect(res.status).toBe(200);
 
-    // First call carried the metadata, the retry stripped it down to
-    // {status: "accepted"} so the status flip lands even on the legacy
-    // schema.
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    // A rejected update is a failure, not something to work around. Reporting
+    // 200 with a half-written row is how an admin comes to believe a decision
+    // was recorded when it was not.
+    expect(res.status).toBe(500);
+
+    // ONE attempt, carrying the audit columns. A second, leaner one would mean
+    // the accept was recorded without who did it or when.
+    expect(calls).toHaveLength(1);
     expect(calls[0]).toHaveProperty("reviewed_at");
-    expect(calls[calls.length - 1]).toEqual({ status: "accepted" });
+    expect(calls[0]).toHaveProperty("reviewed_by");
   });
 
   it("returns 500 with a meaningful error when the application update fails for non-column reasons", async () => {

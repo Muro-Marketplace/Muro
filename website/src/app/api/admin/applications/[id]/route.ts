@@ -288,13 +288,19 @@ export async function PUT(
 type AdminDb = ReturnType<typeof getSupabaseAdmin>;
 
 /**
- * Flip artist_applications.status with retry on missing reviewed_at /
- * reviewed_by columns. Migration 052 added these and the original update
- * here had no error check, so an env that hasn't run 052 yet would
- * silently leave the row at status='pending' and the admin list would
- * keep showing the applicant as awaiting review even after Accept was
- * clicked. The retry path drops the optional columns and tries again
- * with the bare status + best-effort logging.
+ * Flip artist_applications.status, and record who reviewed it and when.
+ *
+ * The error check is the part that matters and is kept: the original update had
+ * none, so a failure left the row at status='pending' and the admin list kept
+ * showing an applicant as awaiting review after Accept was clicked.
+ *
+ * The strip-and-retry that used to sit under it is DELETED. It dropped
+ * `reviewed_at` and `reviewed_by` "for a legacy schema". Both columns exist in
+ * production (migration 052, confirmed against the live schema and against
+ * `tests/integration/schema-columns.json`), so the branch could never fire, and
+ * if it ever did it would silently discard the audit trail on an admin decision
+ * while reporting success. Same class as migration 109's, which destroyed a
+ * referral code on every application for the same reason.
  */
 async function updateApplicationStatus(
   db: AdminDb,
@@ -313,24 +319,5 @@ async function updateApplicationStatus(
     .update(fullPayload)
     .eq("id", id);
 
-  if (!error) return null;
-
-  const msg = String(error.message || "").toLowerCase();
-  const missingMeta =
-    msg.includes("reviewed_at") || msg.includes("reviewed_by");
-  if (!missingMeta) {
-    return { message: error.message || "Unknown error" };
-  }
-
-  // Legacy schema, retry without the metadata columns. Status is the
-  // only column the admin list actually filters on, so dropping the
-  // others is acceptable for unblocking the gate.
-  const { error: retryError } = await db
-    .from("artist_applications")
-    .update({ status })
-    .eq("id", id);
-  if (retryError) {
-    return { message: retryError.message || "Unknown error" };
-  }
-  return null;
+  return error ? { message: error.message || "Unknown error" } : null;
 }
