@@ -43,7 +43,7 @@ export function activePlacementCapForProfile(
   const status = (profile?.subscription_status || "").toLowerCase();
   if (status !== "active" && status !== "trialing") return ACTIVE_PLACEMENT_CAP.core;
   const plan = (profile?.subscription_plan || "core").toLowerCase();
-  return plan in ACTIVE_PLACEMENT_CAP ? ACTIVE_PLACEMENT_CAP[plan] : ACTIVE_PLACEMENT_CAP.core;
+  return Object.hasOwn(ACTIVE_PLACEMENT_CAP, plan) ? ACTIVE_PLACEMENT_CAP[plan] : ACTIVE_PLACEMENT_CAP.core;
 }
 
 // Paid-loan monthly rent floor. Below this Stripe's fixed fees eat the cut and

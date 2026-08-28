@@ -35,6 +35,8 @@ describe("pricing source of truth", () => {
     expect(activePlacementCapForProfile({ subscription_plan: "pro", subscription_status: "canceled" })).toBe(2);
     expect(activePlacementCapForProfile(null)).toBe(2);
     expect(activePlacementCapForProfile({ subscription_plan: "unknown", subscription_status: "active" })).toBe(2);
+    // Guard against prototype-chain injection (toString, hasOwnProperty, etc).
+    expect(activePlacementCapForProfile({ subscription_plan: "toString", subscription_status: "active" })).toBe(2);
   });
 
   it("floors paid loans at £15 and caps founding artists at 20", () => {
