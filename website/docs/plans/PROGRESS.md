@@ -9829,3 +9829,90 @@ for the replay-guard table, because the block I replaced carried the setup the
 remaining test still needs.
 
 `npm run check` green: 0 lint errors, 216 files, 2106 tests, exit 0.
+
+### 07 K6 — three definitions of platform revenue — DONE
+
+**The concrete divergence, measured.** `/api/admin/stats` excluded `refunded`,
+`cancelled`, `failed` and `void`; `/api/admin/financials` excluded **only**
+`cancelled`, so it counted refunded orders as revenue. Over the test's seeded order
+set the two report **£1944.49 against £370.49** — a fivefold overstatement, not a
+rounding difference. Both were internally consistent; they were answering different
+questions under one word.
+
+**Two modules, not one, because the doc's single `revenue.ts` cannot work.** The
+per-order rules are needed by client components (`artist-portal/analytics`,
+`artist-portal/page`, `artist-portal/orders`), and a module importing
+`getSupabaseAdmin` is server-only. So:
+
+- `src/lib/finance/order-money.ts` — pure: `NON_REVENUE_STATUSES`,
+  `isRevenueBearing`, `poundsToPence`, `orderGrossPence`, `artistPayoutPounds`,
+  `artistPayoutPence`, `formatPounds`. Importable anywhere.
+- `src/lib/finance/revenue.ts` — the DB aggregates: `grossMerchandiseValuePence`,
+  `artistEarningsPence`, `venueSpendPence`, `subscriptionMrrPence`, `planPricesPence`.
+
+**§6.2's `amount_cents` plan is void, and there is no migration.** It says to pick
+`orders.amount_cents`, backfill it from `total` and add a CHECK. That column exists
+in no migration and not in the live table — Bug 15 established this, and that
+selecting it made PostgREST reject the whole statement so admin read £0 against 12
+real paid orders. `total` in pounds is the only amount column, so `orderGrossPence`
+has one branch, not two.
+
+**Both admin routes are now thin presenters.** `stats` no longer selects `total` at
+all: it already ran two order queries, so it calls `grossMerchandiseValuePence`
+twice instead, for the same query count. One improvement rides along: a failed
+orders query now **throws** instead of `|| []`-ing to a silent zero, so the Bug 15
+class fails loud with a 500 rather than reporting £0.
+
+**Five copies of the per-order payout rule, collapsed.** §6.3 names four
+(`api/dashboard`, `artist-portal/analytics`, `artist-portal/page`,
+`artist-portal/orders`); the grep guard found a fifth in `lib/stripe-connect.ts`'s
+reconcile sweep. The analytics copy carried a comment saying it "mirrors the
+dashboard's calculation ... so Analytics and Dashboard show the same number", which
+is what a copy looks like when it knows it is one.
+
+**§6.3's specific bug claim is WRONG, and I checked before writing it up.** It says
+`artist-portal/orders:586` "uses `||` not `??`, so a legitimate £0 payout falls
+through and displays the gross order value as the artist's earnings". It does not:
+`order.artist_revenue?.toFixed(2)` on `0` yields the string `"0.00"`, which is
+truthy, so `||` never fires. Verified by running it. The real defect at that site is
+different and smaller: it is the one copy with no `Number.isFinite` guard, so a NaN
+rendered `"£NaN"` instead of falling back. Collapsing to one function fixes that.
+
+**One real behaviour change, in a money path, stated plainly.**
+`stripe-connect.ts`'s reconcile sweep computed `Math.round(Number(o.artist_revenue)
+* 100)`. Identical to `poundsToPence` for every finite value; different for a NaN,
+which used to stay NaN and pass the `owedCents <= 0` guard (because `NaN <= 0` is
+false) and would have been recorded as a NaN-cent leg. It now becomes 0 and is
+routed to `unresolved` for an operator, which is where an amount nobody can compute
+belongs. No money movement changes.
+
+**Tests.** `order-money.test.ts` (17) and `one-revenue-source.test.ts` (6). The
+latter drives **both real route handlers** over one seeded order set and asserts
+they agree to the penny — a unit test of the shared module could not catch a route
+quietly keeping its own copy. Plus three grep guards, all comment-stripped so they
+check code and not whether a file explains its own history.
+
+**Fail-before verified.** Restoring `financials`' own `sumOrders` (excluding only
+`cancelled`) fails 2 of 6: the penny-agreement test reports 194449 against the
+expected 37049, and the inline-conversion guard names the file. Reverting restored
+6/6.
+
+**§6.6's lint rule NOT built, deliberately.** It specifies flagging `.from("orders")`
+combined with `.reduce(` outside `src/lib/finance/**`. Three legitimate sites match
+that shape (`placements/[id]`, `dashboard`, `webhooks/stripe`), including ones that
+already use the shared helper, so the rule would need eslint-disables from day one —
+the exact hollowing-out the repo's other guards were written to avoid. The three grep
+assertions target the shapes that actually recurred and run in the same `npm run
+check` gate, so enforcement is equivalent without the false positives. Similarly
+§6.5's "no file outside lib/finance selects `total`" is narrowed to reading the
+column AND folding it: taken literally it flags single-order display reads in
+`api/orders/track` and `api/orders/[id]/events`, and the allowlist to keep it green
+would grow until it meant nothing.
+
+**Not done, and not silently:** §6.3's two copies of the placement realised-revenue
+query (`placements/route.ts` vs `placements/[id]/route.ts`), which resolve the
+viewer's side differently so a user who is both artist and venue sees different
+numbers on the two pages. That is a real bug, it is separate from the revenue
+definitions, and it is left as an open item below rather than bundled here.
+
+`npm run check` green: 0 lint errors, 218 files, 2129 tests, exit 0.

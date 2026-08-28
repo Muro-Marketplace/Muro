@@ -7,6 +7,7 @@ import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
+import { artistPayoutPounds, formatPounds } from "@/lib/finance/order-money";
 
 interface Order {
   id: string;
@@ -585,7 +586,12 @@ export default function ArtistOrdersPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium">&pound;{order.artist_revenue?.toFixed(2) || order.total?.toFixed(2)}</p>
+                  {/* K6: was `order.artist_revenue?.toFixed(2) || order.total?.toFixed(2)`,
+                      the one copy of the payout rule with no finite guard, so a
+                      NaN rendered "£NaN" instead of falling back. (The doc claims
+                      the `||` also made a legitimate £0 show the gross; it does
+                      not — `(0).toFixed(2)` is the truthy string "0.00".) */}
+                  <p className="text-sm font-medium">&pound;{formatPounds(artistPayoutPounds(order))}</p>
                   <OrderStatusTracker currentStatus={order.status} compact />
                 </div>
               </div>

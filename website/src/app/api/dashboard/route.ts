@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { orFilter } from "@/lib/db/safe-filter";
+import { artistPayoutPounds, type OrderMoneyRow } from "@/lib/finance/order-money";
 
 /**
  * GET /api/dashboard
@@ -85,15 +86,13 @@ export async function GET(request: Request) {
       // breakdown shows. The previous `o.total` summed the gross
       // (buyer-paid) figure which didn't reconcile with the per-row
       // payouts on the Orders page.
-      const totalRevenue = orders.reduce((sum, o) => {
-        const payout =
-          typeof (o as { artist_revenue?: number | null }).artist_revenue === "number"
-            ? (o as { artist_revenue?: number | null }).artist_revenue!
-            : typeof (o as { total?: number | null }).total === "number"
-              ? (o as { total: number }).total
-              : 0;
-        return sum + (Number.isFinite(payout) ? payout : 0);
-      }, 0);
+      // K6: this derivation had four copies (here, artist-portal/analytics,
+      // artist-portal/page, artist-portal/orders) and had already drifted —
+      // three guarded with Number.isFinite and the fourth did not.
+      const totalRevenue = orders.reduce(
+        (sum, o) => sum + artistPayoutPounds(o as OrderMoneyRow),
+        0,
+      );
 
       return NextResponse.json({
         userType: "artist",

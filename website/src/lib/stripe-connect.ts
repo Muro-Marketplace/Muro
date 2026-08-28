@@ -1,5 +1,6 @@
 import { stripe } from "./stripe";
 import { getSupabaseAdmin } from "./supabase-admin";
+import { poundsToPence } from "@/lib/finance/order-money";
 
 /**
  * Schedule a transfer for later processing (default: 14-day payout delay).
@@ -226,7 +227,13 @@ export async function reconcileOrdersWithoutLegs(): Promise<ReconcileResult> {
   const result: ReconcileResult = { flagged: 0, unresolved: [], errors: [] };
   for (const o of owed) {
     if (haveLegs.has(o.id)) continue; // a ledger row exists; the sweep/webhook owns it
-    const owedCents = Math.round(Number(o.artist_revenue) * 100);
+    // K6: was `Math.round(Number(o.artist_revenue) * 100)`, a fifth copy of the
+    // pounds→pence conversion. Identical for every finite value; safer for a
+    // NaN, which used to survive as NaN (and `NaN <= 0` is false, so it passed
+    // the guard below and would have been recorded as a NaN-cent leg) and now
+    // becomes 0 and is routed to `unresolved` for an operator, which is where
+    // an amount nobody can compute belongs.
+    const owedCents = poundsToPence(o.artist_revenue);
     if (!o.artist_user_id || owedCents <= 0) {
       // No recipient, OR no computed owed amount (artist_revenue 0 on a total > 0
       // order — the D4 attribution-failure signature). A £0 blocked leg would
