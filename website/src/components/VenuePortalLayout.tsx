@@ -13,7 +13,6 @@ const navItems = [
   { label: "Messages", href: "/venue-portal/messages" },
   { label: "Placements", href: "/venue-portal/placements" },
   { label: "My Offers", href: "/venue-portal/offers" },
-  { label: "Artwork Requests", href: "/venue-portal/artwork-requests" },
   { label: "My Walls", href: "/venue-portal/walls" },
   { label: "Saved", href: "/venue-portal/saved" },
   { label: "QR Labels", href: "/venue-portal/labels" },
@@ -33,7 +32,6 @@ const bottomItems = [
  * still resolves to "My Walls".
  */
 const TITLE_BY_PREFIX: Array<readonly [string, string]> = [
-  ["/venue-portal/artwork-requests", "Artwork Requests"],
   ["/venue-portal/analytics", "Analytics"],
   ["/venue-portal/messages", "Messages"],
   ["/venue-portal/placements", "Placements"],

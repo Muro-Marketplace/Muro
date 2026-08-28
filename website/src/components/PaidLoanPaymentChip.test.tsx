@@ -28,8 +28,10 @@ describe("PaidLoanPaymentChip — N3 entry-point reachability", () => {
     expect(screen.getByText("Set up payment")).toBeTruthy();
   });
 
-  it("renders nothing once the subscription is active", () => {
-    const { container } = render(
+  it("shows the ACTIVE banner once the subscription is running (owner decision 2026-08-28)", () => {
+    // Used to render nothing, which made a running payment indistinguishable
+    // from a missing one. Both parties now get a loud confirmation.
+    render(
       <PaidLoanPaymentChip
         placementId="p1"
         arrangementType="paid_loan"
@@ -37,9 +39,11 @@ describe("PaidLoanPaymentChip — N3 entry-point reachability", () => {
         liveFrom={null}
         subscriptionStatus="active"
         role="venue"
+        currentPeriodEnd="2026-09-28T00:00:00Z"
       />,
     );
-    expect(container.firstChild).toBeNull();
+    expect(screen.getByText(/Monthly payment active, £50.00\/mo/)).toBeTruthy();
+    expect(screen.getByText(/Next payment on 28 September/)).toBeTruthy();
   });
 
   it("renders nothing for an outright purchase", () => {

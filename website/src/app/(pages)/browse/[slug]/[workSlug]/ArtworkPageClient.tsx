@@ -596,7 +596,11 @@ export default function ArtworkPageClient({
             size; for the legacy original-only flow it stays
             "Original". Shipping is £0 because the buyer collects in
             person, that's the entire point of the pickup option. */}
-        {work.available && selectedInStorePrice != null
+        {/* Owner decision 2026-08-28: the tick box (availableInStore) gates
+            the collect CTA and the price is the NORMAL tier price; the legacy
+            in-store price sources remain only as a fallback gate for works
+            saved before migration 120. */}
+        {work.available && (work.availableInStore === true || selectedInStorePrice != null)
           && work.currentPlacement?.status === "active"
           && (work.currentPlacement.placedSizeLabel == null
             || !selectedPricing
@@ -638,7 +642,7 @@ export default function ArtworkPageClient({
                       : `${work.title} (Original)`,
                   image: work.image,
                   size: isPerSize && selectedPricing ? selectedPricing.label : "Original",
-                  price: selectedInStorePrice,
+                  price: selectedPricing?.price ?? selectedInStorePrice ?? 0,
                   quantity: 1,
                   shippingPrice: 0,
                   // T9 / N2a: the line carries its collection CLAIM — venue and
@@ -653,8 +657,8 @@ export default function ArtworkPageClient({
               className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
             >
               {work.currentPlacement?.venueName
-                ? `Collect from ${work.currentPlacement.venueName}, £${selectedInStorePrice}`
-                : `Collect from venue, £${selectedInStorePrice}`}
+                ? `Collect from ${work.currentPlacement.venueName}, £${selectedPricing?.price ?? selectedInStorePrice}`
+                : `Collect from venue, £${selectedPricing?.price ?? selectedInStorePrice}`}
             </button>
           );
         })()}

@@ -35,6 +35,9 @@ export default function LabelsPage() {
   const [portfolioQty, setPortfolioQty] = useState(0);
   // Venue context for QR tracking
   const [selectedVenue, setSelectedVenue] = useState<VenueOption | null>(null);
+  // Owner decision 2026-08-28: the label colour follows the profile theme by
+  // DEFAULT but is a per-print choice, not a consequence of being on Pro.
+  const [labelColour, setLabelColour] = useState<"theme" | "classic">("theme");
   // QA flag D16: the dropdown must carry the venue SLUG, not just the display
   // name. The QR route attributes a scan to a venue (revenue share, redirect,
   // signed venue param) only via `vs=<slug>`; a name-only label loses the
@@ -390,6 +393,37 @@ export default function LabelsPage() {
             </div>
           </div>
 
+          {/* Label colour (owner decision 2026-08-28): theme by default,
+              classic on demand, chosen per print run. */}
+          <div className="lg:w-64 bg-surface border border-border rounded-sm p-4">
+            <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-2">Label colour</h3>
+            <p className="text-xs text-muted mb-3">How the printed labels are styled</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setLabelColour("theme")}
+                className={`flex-1 px-3 py-2 text-xs font-medium border rounded-sm transition-colors ${
+                  labelColour === "theme"
+                    ? "border-accent text-accent bg-accent/5"
+                    : "border-border text-muted hover:border-foreground/30"
+                }`}
+              >
+                My theme
+              </button>
+              <button
+                type="button"
+                onClick={() => setLabelColour("classic")}
+                className={`flex-1 px-3 py-2 text-xs font-medium border rounded-sm transition-colors ${
+                  labelColour === "classic"
+                    ? "border-accent text-accent bg-accent/5"
+                    : "border-border text-muted hover:border-foreground/30"
+                }`}
+              >
+                Classic
+              </button>
+            </div>
+          </div>
+
           {/* Portfolio QR */}
           <div className="lg:w-64 bg-surface border border-border rounded-sm p-4">
             <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-2">Portfolio Label</h3>
@@ -564,8 +598,9 @@ export default function LabelsPage() {
             // Premium+ gate. Core artists keep the classic palette
             // even if they somehow have a labelTheme saved (a tier
             // downgrade, say) so they don't carry premium styling
-            // they're no longer paying for.
-            canCustomiseTheme(currentArtist.subscriptionPlan)
+            // they're no longer paying for. On top of the gate, the
+            // print-time toggle lets any artist choose classic.
+            labelColour === "theme" && canCustomiseTheme(currentArtist.subscriptionPlan)
               ? currentArtist.labelTheme
               : undefined
           }

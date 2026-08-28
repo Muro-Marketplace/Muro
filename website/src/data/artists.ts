@@ -25,6 +25,11 @@ export interface SizePricing {
 }
 
 export interface ArtistWork {
+  /** Owner decision 2026-08-28: "Available to buy in store?" tick box. When
+   *  true and the work sits on an ACTIVE placement, the artwork page offers
+   *  collect-from-venue at the normal tier price. Replaces the in-store
+   *  price model (the price fields below stay for legacy data only). */
+  availableInStore?: boolean;
   id: string;
   title: string;
   medium: string;

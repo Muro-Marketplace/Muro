@@ -36,6 +36,8 @@ export interface PaidLoanPaymentChipProps {
   role: "artist" | "venue";
   /** Compact layout = inline chip; default = full-width banner. */
   compact?: boolean;
+  /** ISO date of the next renewal; shown on the active banner when known. */
+  currentPeriodEnd?: string | null;
 }
 
 const ACTIVE_STATES = new Set(["active", "trialing"]);
@@ -49,6 +51,7 @@ export default function PaidLoanPaymentChip({
   subscriptionStatus,
   role,
   compact = false,
+  currentPeriodEnd,
 }: PaidLoanPaymentChipProps) {
   const isPaidLoan =
     isPaidLoanArrangement(arrangementType, monthlyFeeGbp) || (monthlyFeeGbp ?? 0) > 0;
@@ -57,7 +60,41 @@ export default function PaidLoanPaymentChip({
   const isHealthy = ACTIVE_STATES.has(status);
   const isProblem = PROBLEM_STATES.has(status);
 
-  if (!isPaidLoan || isHealthy) return null;
+  if (!isPaidLoan) return null;
+
+  // Owner decision 2026-08-28: when billing IS running, say so loudly instead
+  // of rendering nothing. A paid loan whose money side is invisible reads as
+  // "not set up" to both parties.
+  if (isHealthy) {
+    if (compact) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+          Monthly payment active
+        </span>
+      );
+    }
+    const renewal = currentPeriodEnd
+      ? new Date(currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "long" })
+      : null;
+    return (
+      <div className="mb-6 bg-green-50 border border-green-200 rounded-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium text-green-800">
+            Monthly payment active{typeof monthlyFeeGbp === "number" && monthlyFeeGbp > 0 ? `, £${monthlyFeeGbp.toFixed(2)}/mo` : ""}
+          </p>
+          <p className="text-xs text-green-700 mt-0.5">
+            {role === "venue"
+              ? renewal
+                ? `Next payment on ${renewal}. Manage it any time from this page.`
+                : "Payments are running. Manage them any time from this page."
+              : renewal
+                ? `The venue's payment is set up. Next payment on ${renewal}.`
+                : "The venue's payment is set up and running."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Visual intensity:
   //   warn   , past-due / unpaid (real billing failure) OR live on

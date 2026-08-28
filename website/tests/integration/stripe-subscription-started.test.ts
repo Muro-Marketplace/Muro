@@ -589,9 +589,11 @@ describe("checkout.session.completed books a collect_venue order", () => {
   };
 
   let orderInsert: Record<string, unknown> | null = null;
+  const workFlagUpdates: Array<Record<string, unknown>> = [];
 
   function setupCartDb(shippingOverride?: Record<string, unknown>) {
     orderInsert = null;
+    workFlagUpdates.length = 0;
     const shippingRow = shippingOverride ?? CART_ROW.shipping;
     fromMock.mockImplementation((table: string) => {
       const chain: Record<string, unknown> = {
@@ -638,6 +640,18 @@ describe("checkout.session.completed books a collect_venue order", () => {
             };
           },
           update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "artist_works") {
+        return {
+          select: () => chain,
+          update: (row: Record<string, unknown>) => {
+            workFlagUpdates.push(row);
+            return {
+              eq: async () => ({ error: null }),
+              in: async () => ({ error: null }),
+            };
+          },
         };
       }
       if (table === "artist_profiles") {
@@ -741,6 +755,13 @@ describe("checkout.session.completed books a collect_venue order", () => {
       .map((c) => c[0])
       .filter((c) => c.template === "venue_collection_pending");
     expect(venueSends).toHaveLength(0);
+  });
+
+  it("clears available_in_store on the sold works, and nothing else", async () => {
+    await POST(post());
+    // The wall piece sold; the tick box comes off so the collect CTA
+    // disappears, while online availability follows the stock decrement.
+    expect(workFlagUpdates).toEqual([{ available_in_store: false }]);
   });
 
   it("books it with zero shipping cost", async () => {

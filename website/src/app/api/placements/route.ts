@@ -17,6 +17,8 @@ import { ArtistPlacementAccepted } from "@/emails/templates/placements/ArtistPla
 import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPlacementDeclined";
 import { ArtistPlacementRequestSent } from "@/emails/templates/placements/ArtistPlacementRequestSent";
 import { VenuePlacementAcceptedConfirmation } from "@/emails/templates/placements/VenuePlacementAcceptedConfirmation";
+import { PaidLoanSetUpPayment } from "@/emails/templates/payments/PaidLoanSetUpPayment";
+import { isPaidLoan } from "@/lib/arrangement-type";
 import { PlacementVenueDeclinedArtistRequest } from "@/emails/templates/placements/PlacementVenueDeclinedArtistRequest";
 import { PlacementCancelled } from "@/emails/templates/placements/PlacementCancelled";
 import { PlacementCounterOfferReceived } from "@/emails/templates/placements/PlacementCounterOfferReceived";
@@ -814,7 +816,7 @@ export async function PATCH(request: Request) {
     // relied on (the phantom requester_user_id rejected the whole query) is gone.
     const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id")
+      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title")
       .eq("id", id)
       .single();
 
@@ -1757,7 +1759,48 @@ export async function PATCH(request: Request) {
                 metadata: { placementId: id },
               });
             }
-          } else if (status === "declined") {
+          }
+
+          // Owner decision 2026-08-28: a paid loan that just went ACTIVE needs
+          // the VENUE (the payer) told by EMAIL to set up the monthly payment,
+          // whichever side accepted; the chip on the placements list only
+          // works for venues who happen to revisit the portal. Keyed once per
+          // placement, so the live-on-wall transition below cannot double it.
+          if (
+            status === "active" &&
+            isPaidLoan(existing.arrangement_type, existing.monthly_fee_gbp) &&
+            !existing.stripe_subscription_id &&
+            existing.venue_user_id
+          ) {
+            try {
+              const { data: { user: venueUser } } = await db.auth.admin.getUserById(existing.venue_user_id);
+              if (venueUser?.email) {
+                const feeGbp = Number(existing.monthly_fee_gbp) || 0;
+                await sendEmail({
+                  idempotencyKey: `paid_loan_setup:${id}`,
+                  template: "paid_loan_setup_payment",
+                  category: "orders_and_payouts",
+                  to: venueUser.email,
+                  userId: existing.venue_user_id,
+                  subject: "Set up the monthly payment for your placement",
+                  react: PaidLoanSetUpPayment({
+                    venueFirstName:
+                      (venueUser.user_metadata?.first_name as string | undefined) ||
+                      (existing.venue || "there").split(" ")[0],
+                    artistName: artistProfile?.name || "the artist",
+                    workTitle: existing.work_title || "your placement",
+                    monthlyFee: { amount: Math.round(feeGbp * 100), currency: "GBP" },
+                    paymentUrl: `${SITE}/placements/${encodeURIComponent(id)}/payment`,
+                  }),
+                  metadata: { placementId: id },
+                });
+              }
+            } catch (err) {
+              console.warn("[placements] paid-loan setup email failed:", err);
+            }
+          }
+
+          if (status === "declined") {
             if (requesterIsArtist) {
               await sendEmail({
                 idempotencyKey: `placement_response:${id}:declined`,
