@@ -17,6 +17,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isRevenueBearing, orderGrossPence, type OrderMoneyRow } from "./order-money";
+import { PLAN_PRICES } from "@/lib/pricing";
 
 export interface DateRange {
   /** Inclusive lower bound, ISO. Omit for all time. */
@@ -28,12 +29,12 @@ export interface DateRange {
 /** List prices, pence. Env-driven so the dashboard cannot drift from pricing. */
 export function planPricesPence(): Record<string, number> {
   return {
-    // Bug 17: these defaults must match the real plan prices (Core £9.99,
-    // Premium £24.99, Pro £49.99). The earlier 2900/9900/19900 figures inflated
-    // MRR about threefold whenever the PRICE_*_PENCE env vars were unset.
-    core: Number(process.env.PRICE_CORE_PENCE ?? 999),
-    premium: Number(process.env.PRICE_PREMIUM_PENCE ?? 2_499),
-    pro: Number(process.env.PRICE_PRO_PENCE ?? 4_999),
+    // Bug 17 history: hardcoded fallbacks here once inflated MRR threefold.
+    // The fallbacks now come from the pricing source of truth (Task 1) so a
+    // reprice cannot desynchronise the dashboard.
+    core: Number(process.env.PRICE_CORE_PENCE ?? PLAN_PRICES.core.monthlyPence),
+    premium: Number(process.env.PRICE_PREMIUM_PENCE ?? PLAN_PRICES.premium.monthlyPence),
+    pro: Number(process.env.PRICE_PRO_PENCE ?? PLAN_PRICES.pro.monthlyPence),
   };
 }
 
