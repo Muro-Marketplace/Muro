@@ -22,6 +22,8 @@ interface CurationRow {
   references_notes: string;
   status: string;
   amount_paid_gbp: number | null;
+  stripe_payment_intent_id: string | null;
+  stripe_subscription_id: string | null;
   paid_at: string | null;
   admin_notes: string;
   created_at: string;
@@ -129,6 +131,30 @@ export default function AdminCurationPage() {
     }
   }
 
+  // D18: the money path. The status dropdown is bookkeeping; this is the only
+  // control that actually returns money, so it confirms with the amount and
+  // reloads the list afterwards rather than guessing the resulting status
+  // (refunded, or cancelled when a managed row had no paid invoice).
+  async function refundRow(r: CurationRow) {
+    const what = r.stripe_subscription_id
+      ? `cancel the subscription and refund the last paid invoice for ${r.venue_name}`
+      : `refund £${r.amount_paid_gbp ?? "?"} to ${r.venue_name}`;
+    if (!window.confirm(`This will ${what}. Continue?`)) return;
+    setSavingId(r.id);
+    setError(null);
+    try {
+      await mutate("/api/admin/curation/refund", {
+        method: "POST",
+        body: JSON.stringify({ id: r.id }),
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code || "Refund failed." : "Network error. Please try again.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   return (
     <AdminPortalLayout activePath="/admin/curation">
       <div className="flex items-center justify-between gap-4 mb-6">
@@ -224,6 +250,22 @@ export default function AdminCurationPage() {
                         />
                       </div>
                     </div>
+
+                    {(r.stripe_payment_intent_id || r.stripe_subscription_id) && r.status !== "refunded" && (
+                      <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                        <p className="text-[11px] text-muted">
+                          Setting the status above moves no money. This does.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={savingId === r.id}
+                          onClick={() => refundRow(r)}
+                          className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-60"
+                        >
+                          {r.stripe_subscription_id ? "Cancel and refund via Stripe" : "Refund via Stripe"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

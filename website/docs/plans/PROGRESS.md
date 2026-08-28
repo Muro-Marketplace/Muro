@@ -12519,3 +12519,47 @@ supabase mock — its chain is `.select().eq().gt().maybeSingle()` and
 `artist_slugs` is an ARRAY on the row. The ship-order control varies the
 CART ROW's `fulfilmentMethod`, not the event metadata, because the saved
 row is the data-of-record and metadata is only the fallback.
+
+### D18 — the curation refund path exists now (04 B10)
+
+The gap: the admin curation page's status dropdown includes "Refunded", and
+selecting it moved no money. The status lied and Stripe kept the payment.
+D20 had already fixed the storage half (the payment-intent column can no
+longer hold a `sub_...` id); this builds the endpoint half.
+
+**New `POST /api/admin/curation/refund`** (withAdmin, action
+`curation_refund`, audited). Two shapes, decided by what the row holds:
+
+- **One-off tiers** (`stripe_payment_intent_id` = `pi_...`): full refund of
+  the payment intent.
+- **Managed tiers** (`stripe_subscription_id`): cancel the subscription
+  FIRST so no further invoices are raised even if the refund then fails,
+  then refund the most recent PAID invoice. A managed row that never paid
+  an invoice is cancelled without a refund and the response says which
+  happened (`refunded: false`, status `cancelled` not `refunded`).
+
+Order of operations is the point: the status write happens only after
+Stripe succeeds, so a refused refund leaves the row truthful. Both refunds
+carry idempotency key `curation_refund:{rowId}`, so a double-clicked button
+cannot refund twice. The D18 type-confusion guard survives at the boundary:
+a payment-intent column holding a non-`pi_` value is refused with a 409
+rather than passed to Stripe. The requester gets a
+`curation_refund_issued` receipt (new template, registered), keyed on the
+row; a failed email is a log line, not a rollback.
+
+Admin page: a "Refund via Stripe" (or "Cancel and refund via Stripe")
+button in the expanded row, shown only when there is a payment on record
+and the row is not already refunded, with a confirm naming the amount, next
+to the caption "Setting the status above moves no money. This does." The
+status dropdown stays: it is bookkeeping for out-of-band refunds done in
+the Stripe dashboard.
+
+15 tests on the route (real withAdmin against the mocked client, as in the
+sibling test file): authz, shape, both tiers, the guard, idempotency key,
+cancel-tolerates-already-cancelled, 502 leaves the row unwritten, email
+failure does not unwind the refund. Mutation probe verified the tests bite
+(disabling the guard and changing the key failed exactly the two targeted
+tests). The route needed a `DEMO_EXEMPT_ROUTES` entry like every other
+admin surface, which the authz-import ratchet correctly demanded.
+
+No migration: every column it reads was created by 013/D20-complete.

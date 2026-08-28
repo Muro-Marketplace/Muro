@@ -69,6 +69,8 @@ const DEMO_EXEMPT_ROUTES = {
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
   "src/app/api/admin/curation/route.ts":
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
+  "src/app/api/admin/curation/refund/route.ts":
+    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
   "src/app/api/admin/disputes/[id]/route.ts":
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
 };

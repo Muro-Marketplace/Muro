@@ -94,6 +94,8 @@ import VenueRegistrationConfirmation from "./templates/venue-lifecycle/VenueRegi
 import CurationEnquiryReceived from "./templates/venue-lifecycle/CurationEnquiryReceived";
 import CurationPaymentReceived from "./templates/venue-lifecycle/CurationPaymentReceived";
 import VenueCollectionPending from "./templates/venue-lifecycle/VenueCollectionPending";
+// D18: the counterpart to CurationPaymentReceived, sent by the admin refund endpoint.
+import CurationRefundIssued from "./templates/venue-lifecycle/CurationRefundIssued";
 // K1: the per-sale venue notice, distinct from the periodic revenue-share statement.
 import VenueSaleFromPlacement from "./templates/venue-lifecycle/VenueSaleFromPlacement";
 
@@ -201,6 +203,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   CurationEnquiryReceived,
   CurationPaymentReceived,
   VenueCollectionPending,
+  CurationRefundIssued,
   // Account
   AccountEmailVerification,
   AccountPasswordReset,
