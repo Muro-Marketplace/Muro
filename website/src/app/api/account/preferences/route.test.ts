@@ -283,3 +283,135 @@ describe("/api/account/preferences", () => {
     });
   });
 });
+
+// E13/E14 (WS8 item 3). venue_profiles has no order_notifications_enabled
+// column, and PostgREST rejects a select naming a missing column, so the
+// all-fields select 500'd EVERY venue GET (the checkboxes silently showed
+// defaults) and the venue "Order updates" PATCH failed every time. Venues now
+// read and write only the two columns their table has.
+describe("/api/account/preferences venue field list (E13/E14)", () => {
+  const VENUE_COLUMNS = new Set(["email_digest_enabled", "message_notifications_enabled"]);
+
+  beforeEach(() => {
+    getAuthenticatedUserMock.mockResolvedValue({
+      user: { id: "u1", user_metadata: { user_type: "venue" } },
+      error: null,
+    });
+  });
+
+  it("GET selects only columns venue_profiles actually has", async () => {
+    const selects: string[] = [];
+    fromMock.mockReturnValue({
+      select: (cols: string) => {
+        selects.push(cols);
+        // Model PostgREST: naming a missing column rejects the whole query.
+        const missing = cols.split(",").map((c) => c.trim()).find((c) => !VENUE_COLUMNS.has(c));
+        return {
+          eq: () => ({
+            maybeSingle: async () =>
+              missing
+                ? { data: null, error: { message: `column venue_profiles.${missing} does not exist` } }
+                : { data: { email_digest_enabled: false, message_notifications_enabled: true }, error: null },
+          }),
+        };
+      },
+    });
+    const res = await GET(req("GET"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.preferences.email_digest_enabled).toBe(false);
+    expect(body.preferences.message_notifications_enabled).toBe(true);
+    // The missing column is omitted, not invented.
+    expect(body.preferences).not.toHaveProperty("order_notifications_enabled");
+    expect(selects.join(",")).not.toContain("order_notifications_enabled");
+  });
+
+  it("PATCH drops order_notifications_enabled for a venue and writes the rest", async () => {
+    const update = vi.fn(() => ({ eq: () => Promise.resolve({ error: null }) }));
+    fromMock.mockReturnValue({ update });
+    const res = await PATCH(
+      req("PATCH", { order_notifications_enabled: false, email_digest_enabled: false }),
+    );
+    expect(res.status).toBe(200);
+    expect(update).toHaveBeenCalledWith({ email_digest_enabled: false });
+  });
+
+  it("PATCH with only the missing field returns 400 rather than writing a phantom column", async () => {
+    const update = vi.fn();
+    fromMock.mockReturnValue({ update });
+    const res = await PATCH(req("PATCH", { order_notifications_enabled: false }));
+    expect(res.status).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("artists still read and write all three fields", async () => {
+    getAuthenticatedUserMock.mockResolvedValue({
+      user: { id: "u1", user_metadata: { user_type: "artist" } },
+      error: null,
+    });
+    const update = vi.fn(() => ({ eq: () => Promise.resolve({ error: null }) }));
+    fromMock.mockReturnValue({ update });
+    const res = await PATCH(req("PATCH", { order_notifications_enabled: false }));
+    expect(res.status).toBe(200);
+    expect(update).toHaveBeenCalledWith({ order_notifications_enabled: false });
+  });
+});
+
+// C11 (WS8 item 2). Nothing in the signup flow ever inserts a
+// customer_profiles row, so the customer PATCH used to be an
+// UPDATE ... WHERE user_id = X that matched zero rows and still answered ok:
+// the toggle looked saved and silently reverted on the next load. Customer
+// PATCHes now get-or-create the row via an upsert keyed on the verified
+// auth user id.
+describe("/api/account/preferences customer get-or-create (C11)", () => {
+  beforeEach(() => {
+    getAuthenticatedUserMock.mockResolvedValue({
+      user: { id: "u1", email: "cust@example.com", user_metadata: { user_type: "customer" } },
+      error: null,
+    });
+  });
+
+  it("PATCH upserts the customer_profiles row keyed on the token's user_id", async () => {
+    const upsert = vi.fn(() => Promise.resolve({ error: null }));
+    const update = vi.fn();
+    fromMock.mockReturnValue({ upsert, update });
+
+    const res = await PATCH(req("PATCH", { email_digest_enabled: false }));
+
+    expect(res.status).toBe(200);
+    // Fail-before: this was update().eq("user_id", ...), matching zero rows
+    // for every customer and reporting ok anyway.
+    expect(update).not.toHaveBeenCalled();
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert).toHaveBeenCalledWith(
+      { user_id: "u1", email: "cust@example.com", email_digest_enabled: false },
+      { onConflict: "user_id" },
+    );
+    expect(fromMock).toHaveBeenCalledWith("customer_profiles");
+  });
+
+  it("PATCH surfaces an upsert failure as a 500 so the settings card can revert", async () => {
+    const upsert = vi.fn(() => Promise.resolve({ error: { message: "boom" } }));
+    fromMock.mockReturnValue({ upsert });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await PATCH(req("PATCH", { email_digest_enabled: false }));
+    expect(res.status).toBe(500);
+    errSpy.mockRestore();
+  });
+
+  it("artists and venues keep the plain update path (no upsert)", async () => {
+    getAuthenticatedUserMock.mockResolvedValue({
+      user: { id: "u1", user_metadata: { user_type: "artist" } },
+      error: null,
+    });
+    const upsert = vi.fn();
+    const update = vi.fn(() => ({ eq: () => Promise.resolve({ error: null }) }));
+    fromMock.mockReturnValue({ upsert, update });
+
+    const res = await PATCH(req("PATCH", { email_digest_enabled: false }));
+
+    expect(res.status).toBe(200);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith({ email_digest_enabled: false });
+  });
+});
