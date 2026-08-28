@@ -559,7 +559,9 @@ async function handleWebhookEvent(
         kind: "paid_loan_started",
         title: `Monthly loan payments started, £${Number(placement.monthly_fee_gbp).toFixed(2)}/mo`,
         body: "The venue's card is set up. Your first payout follows the first paid invoice.",
-        link: "/artist-portal/placements",
+        // Owner find (2026-08-28): the flat list gave the artist nowhere to
+        // SEE the payment; the detail page carries the payment status banner.
+        link: `/placements/${encodeURIComponent(placementId)}`,
       }).catch(() => {});
     }
 

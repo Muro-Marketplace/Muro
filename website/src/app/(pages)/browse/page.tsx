@@ -209,18 +209,26 @@ function DistanceSliderControl({
     ? `Within ${shortAny ? "any" : "any distance"}`
     : `Within ${display} mi`;
 
-  // Debounced commit — handles every release scenario (mouseup outside,
-  // touchend on a different element, blur from number input). 250ms idle
-  // is long enough to avoid mid-drag commits but short enough not to
-  // feel sluggish.
+  // Owner find (2026-08-28): the slider stuck on its old value. Two causes,
+  // both fixed here. (1) The debounce effect depended on `onCommit`, whose
+  // identity changes on EVERY parent render (it closes over the freshly
+  // parsed URL state), so any background re-render churn kept clearing the
+  // timer and the commit could starve; the latest callback now lives in a
+  // ref and the effect depends only on the draft. (2) The input was
+  // uncontrolled with a remount key on `value`, so a mid-drag parent update
+  // remounted it and snapped the thumb back; it is controlled now.
+  const onCommitRef = useRef(onCommit);
+  useEffect(() => {
+    onCommitRef.current = onCommit;
+  }, [onCommit]);
   useEffect(() => {
     if (draft == null) return;
     const t = setTimeout(() => {
-      onCommit(draft);
+      onCommitRef.current(draft);
       setDraft(null);
     }, 250);
     return () => clearTimeout(t);
-  }, [draft, onCommit]);
+  }, [draft]);
 
   const slider = (
     <input
@@ -228,8 +236,7 @@ function DistanceSliderControl({
       min={0}
       max={200}
       step={1}
-      key={`maxd-${value}`}
-      defaultValue={isAny ? 200 : display}
+      value={isAny ? 200 : display}
       onChange={(e) => {
         const v = Number(e.target.value);
         setDraft(v >= 200 ? ANY_DISTANCE : v);

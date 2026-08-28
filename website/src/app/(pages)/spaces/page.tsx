@@ -230,11 +230,19 @@ function SpacesPageContent() {
     if (filterArrangement === "purchase") list = list.filter((v) => v.interestedInDirectPurchase);
 
     if (userCoords) {
-      list = list
+      // Owner find (2026-08-28): REAL venues come from the API with
+      // coordinates: null (nothing geocodes venue postcodes yet), so
+      // filtering to v.coordinates removed every database venue the moment a
+      // location was set, leaving only the static seed. A venue with no
+      // coordinates cannot be excluded by a distance it does not have: keep
+      // it, badge-less, after the located results.
+      const located = list
         .filter((v) => v.coordinates)
         .map((v) => ({ ...v, distance: calcDistance(userCoords.lat, userCoords.lng, v.coordinates!.lat, v.coordinates!.lng) }))
         .filter((v) => v.distance <= maxDistance)
         .sort((a, b) => a.distance - b.distance);
+      const unlocated = list.filter((v) => !v.coordinates);
+      list = [...located, ...unlocated];
     }
 
     return list;
