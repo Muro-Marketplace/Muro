@@ -118,10 +118,14 @@ const nextConfig: NextConfig = {
       // without removing this rule in the same change.
       // tests/integration/redirect-targets.test.ts holds that pairing.
       //
-      // Live note (2026-08-28): an APPROVED `finlay-coles` row also exists in
-      // artist_profiles, distinct from `fin-coles`. It is listed in /browse but
-      // its public page is unreachable, because this rule sends every visitor to
-      // a different artist. Recorded as an owner question in PROGRESS.
+      // Resolved (owner decision 2, 2026-08-28): both slugs are the owner's own
+      // accounts. `fin-coles` (18 works, 10 orders, 68 placements) is the real
+      // test artist and this redirect's target; `finlay-coles` was the ADMIN
+      // account's incidental profile (0 works, 0 orders), approved and
+      // therefore listed in /browse while this rule made its page land on a
+      // different artist. Its review_status is now `pending`, which delists it,
+      // so the listing agrees with the redirect. To make that account a public
+      // artist instead: re-approve it AND delete this rule in the same change.
       { source: "/browse/finlay-coles", destination: "/browse/fin-coles", permanent: true },
     ];
   },

@@ -12177,3 +12177,27 @@ satisfied. Step 4 (stamp metadata for navigation) is a no-op today, since the
 sole admin already carries it.
 
 No admin lost access at any step: the owner passes both operands.
+
+### Decision 2 — `finlay-coles` resolved: it was the admin account's profile — DONE
+
+The question was "same person, or two accounts? Which row wins?" Prod answered
+both halves:
+
+| slug | email | works | orders | placements |
+|---|---|---|---|---|
+| `fin-coles` | finbin1@hotmail.co.uk | 18 | 10 | 68 |
+| `finlay-coles` | fcoles2598@gmail.com (**the admin account**) | 0 | 0 | 1 |
+
+Same person (the owner), two accounts. `fin-coles` is the real test artist and
+the redirect's target; `finlay-coles` is an incidental approved profile on the
+admin account, which is why it listed in /browse while its page 308'd to a
+different artist.
+
+**Action taken: `finlay-coles.review_status` → `pending`**, which delists it, so
+the listing now agrees with the redirect. Chosen over the alternatives because it
+is one reversible UPDATE: no row deleted, the placement attached to it untouched,
+and the redirect kept so old links still land somewhere real. `pending` rather
+than `rejected` so the admin account sees an under-review banner rather than a
+rejection screen if it ever opens the artist portal. The note in `next.config.ts`
+now records the resolution and how to reverse it (re-approve AND delete the
+redirect in the same change).
