@@ -323,7 +323,7 @@ export default function BillingPage() {
                 {statusBadge(status)}
               </div>
               <p className="text-sm text-muted">
-                {details.priceMonthly > 0 ? `\u00a3${details.priceMonthly}/mo or \u00a3${details.priceAnnual}/yr` : "\u2014"} &middot; {details.fee} platform fee on sales
+                {details.priceMonthly > 0 ? `\u00a3${details.priceMonthly}/mo or \u00a3${details.priceAnnual}/yr` : ""} &middot; {details.fee} platform fee on sales
               </p>
             </div>
             <button
@@ -350,7 +350,7 @@ export default function BillingPage() {
               </div>
               <p className="text-sm text-accent">
                 {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} remaining
-                {sub?.trial_end && ` \u2014 trial ends ${new Date(sub.trial_end).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
+                {sub?.trial_end && `, trial ends ${new Date(sub.trial_end).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
               </p>
             </div>
           )}
