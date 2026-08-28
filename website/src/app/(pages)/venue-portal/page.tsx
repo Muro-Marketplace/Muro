@@ -167,7 +167,10 @@ export default function VenueDashboardPage() {
         // pending requests the venue sent (they already know) and
         // accepted/declined responses to inbound requests the venue
         // didn't send.
-        const iAmRequester = p.requester_user_id && p.requester_user_id === myUserId;
+        // F51: placement rows carry the requester as proposed_by_user_id;
+        // requester_user_id is a phantom column the rows never have.
+        const requesterId = p.requester_user_id ?? p.proposed_by_user_id;
+        const iAmRequester = requesterId && requesterId === myUserId;
         if (p.status === "pending" && !iAmRequester) {
           activityItems.push({ id: "p-" + p.id, text: `Placement request: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: `/placements/${encodeURIComponent(p.id as string)}` });
         } else if (p.status === "active" && iAmRequester) {

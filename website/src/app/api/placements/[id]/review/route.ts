@@ -90,7 +90,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     kind: "review",
     title: `New ${parsed.data.rating}-star review`,
     body: parsed.data.text ? parsed.data.text.slice(0, 140) : "Tap to read your review",
-    link: placementUrl,
+    // Relative on purpose (R6.F11): an absolute link persists whatever domain
+    // was configured at insert time, so preview/staging bells jumped to
+    // production. The email below keeps the absolute placementUrl.
+    link: `/placements/${encodeURIComponent(placementId)}`,
   }).catch((err) => console.warn("[placement-review] bell failed:", err));
 
   try {

@@ -506,7 +506,12 @@ export default function VenuePlacementsPage() {
         liveFrom: (p.live_from as string | null) ?? null,
         subscriptionStatus: (p.subscription_status as string | null) ?? null,
         collectedAt: (p.collected_at as string | null) ?? null,
-        requesterUserId: (p.requester_user_id as string | null) ?? null,
+        // F24/F51: the list API emits the resolved requester as
+        // proposed_by_user_id; requester_user_id is a phantom the rows never
+        // carry. Read both so Accept/Decline, "Awaiting response" chips and
+        // the Sent/Received tag resolve.
+        requesterUserId:
+          ((p.requester_user_id ?? p.proposed_by_user_id) as string | null) ?? null,
         monthlyFeeGbp: (p.monthly_fee_gbp as number | null) ?? null,
         qrEnabledOnPlacement: (p.qr_enabled as boolean | null) ?? null,
         proposedStage: (p.proposed_stage as "installed" | "collected" | null) ?? null,

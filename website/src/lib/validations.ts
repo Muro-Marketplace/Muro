@@ -258,10 +258,14 @@ export const placementUpdateSchema = z.object({
   // A counter offer keeps the row pending but revises the terms and hands the
   // "needs to respond" role back to the original requester.
   counter: z.object({
+    // The route clamps this to the product's 0..50 cap (D26); the wider
+    // bound here keeps old client tabs from 400ing a whole counter.
     revenueSharePercent: z.number().min(0).max(100).optional(),
     qrEnabled: z.boolean().optional(),
     monthlyFeeGbp: z.number().min(0).max(100000).optional(),
-    arrangementType: z.enum(["free_loan", "paid_loan", "revenue_share", "purchase"]).optional(),
+    // "mixed" (paid loan + revenue share) included since F27: clients now
+    // send the derived canonical type. The route re-derives regardless.
+    arrangementType: z.enum(["free_loan", "paid_loan", "revenue_share", "purchase", "mixed"]).optional(),
     message: optionalString(2000),
   }).optional(),
 });

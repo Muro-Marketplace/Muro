@@ -1007,11 +1007,48 @@ export async function PATCH(request: Request) {
       // Build the terms-only update (no role flip yet). We apply it with
       // .select() so the response tells us whether a row was actually
       // updated, not just whether the statement errored.
+      //
+      // D26: the schema historically allowed a share up to 100 while every
+      // UI caps the venue's cut at 50. Clamp server-side so a hand-crafted
+      // payload cannot commit terms the product never offers.
+      const counterShare = counter.revenueSharePercent !== undefined
+        ? Math.min(50, Math.max(0, counter.revenueSharePercent))
+        : undefined;
       const termsUpdates: Record<string, unknown> = {};
-      if (counter.revenueSharePercent !== undefined) termsUpdates.revenue_share_percent = counter.revenueSharePercent;
+      if (counterShare !== undefined) termsUpdates.revenue_share_percent = counterShare;
       if (counter.qrEnabled !== undefined) termsUpdates.qr_enabled = counter.qrEnabled;
       if (counter.monthlyFeeGbp !== undefined) termsUpdates.monthly_fee_gbp = counter.monthlyFeeGbp;
-      if (counter.arrangementType !== undefined) termsUpdates.arrangement_type = counter.arrangementType;
+      // F32: never store the client's arrangementType verbatim. Merge the
+      // counter's terms over the row's current terms and derive the
+      // canonical arrangement_type exactly as POST does at create, so the
+      // stored label always agrees with the economics (paid loan + QR is
+      // "mixed", a fee-less "free_loan" claim with QR on is revenue share,
+      // and so on).
+      let derivedArrangement: string | undefined;
+      if (
+        counter.arrangementType !== undefined ||
+        counterShare !== undefined ||
+        counter.qrEnabled !== undefined ||
+        counter.monthlyFeeGbp !== undefined
+      ) {
+        const { data: currentTerms } = await db
+          .from("placements")
+          .select("monthly_fee_gbp, qr_enabled, revenue_share_percent")
+          .eq("id", id)
+          .maybeSingle<{ monthly_fee_gbp: number | null; qr_enabled: boolean | null; revenue_share_percent: number | null }>();
+        derivedArrangement = deriveArrangementType({
+          monthly_fee_gbp:
+            counter.monthlyFeeGbp !== undefined ? counter.monthlyFeeGbp : currentTerms?.monthly_fee_gbp ?? null,
+          qr_enabled:
+            counter.qrEnabled !== undefined ? counter.qrEnabled : currentTerms?.qr_enabled ?? true,
+          revenue_share_percent:
+            counterShare !== undefined ? counterShare : currentTerms?.revenue_share_percent ?? null,
+          // Mirrors the POST derivation: an explicit purchase counter is the
+          // only way a counter reaches "purchase".
+          purchase_amount_pence: counter.arrangementType === "purchase" ? 1 : null,
+        });
+        termsUpdates.arrangement_type = derivedArrangement;
+      }
       // If the row was previously declined, the counter re-opens it so
       // the negotiation continues. The role flip below will hand the
       // ball to the other party.
@@ -1096,18 +1133,20 @@ export async function PATCH(request: Request) {
           // ("Free loan arrangement", which no other surface says). The
           // canonical labeller names the arrangement; only the percentage,
           // which is genuinely local to a counter-offer, is composed here.
+          // F32: the message echoes the DERIVED type and the CLAMPED share,
+          // so what the thread says always matches what the row now holds.
           const terms: string[] = [];
-          if (counter.arrangementType || counter.revenueSharePercent !== undefined) {
-            const label = counter.arrangementType
+          if (derivedArrangement || counterShare !== undefined) {
+            const label = derivedArrangement
               ? labelForArrangement({
-                  arrangementType: counter.arrangementType,
+                  arrangementType: derivedArrangement,
                   monthlyFeeGbp: counter.monthlyFeeGbp,
                   qrEnabled: counter.qrEnabled,
                 })
               : ARRANGEMENT_LABEL.revenue_share;
             terms.push(
-              counter.revenueSharePercent !== undefined
-                ? `${label}: ${counter.revenueSharePercent}% to the venue`
+              counterShare !== undefined
+                ? `${label}: ${counterShare}% to the venue`
                 : label,
             );
           }
@@ -1134,8 +1173,9 @@ export async function PATCH(request: Request) {
             metadata: {
               placementId: id,
               counter: true,
-              arrangementType: counter.arrangementType,
-              revenueSharePercent: counter.revenueSharePercent ?? null,
+              // F32: the derived canonical type, never the client's claim.
+              arrangementType: derivedArrangement ?? counter.arrangementType,
+              revenueSharePercent: counterShare ?? null,
               qrEnabled: counter.qrEnabled ?? null,
               monthlyFeeGbp: counter.monthlyFeeGbp ?? null,
               // Counter flips roles, the counter-er now awaits response.
@@ -1159,9 +1199,17 @@ export async function PATCH(request: Request) {
               const { data: { user: counterpartyUser } } = await db.auth.admin.getUserById(counterpartyUserId);
               if (counterpartyUser?.email) {
                 const changedTerms: string[] = [];
-                if (counter.arrangementType !== undefined) changedTerms.push(`Arrangement: ${counter.arrangementType.replace("_", " ")}`);
+                // F32: name the derived arrangement through the canonical
+                // labeller, and quote the clamped share the row now holds.
+                if (counter.arrangementType !== undefined) {
+                  changedTerms.push(`Arrangement: ${labelForArrangement({
+                    arrangementType: derivedArrangement ?? counter.arrangementType,
+                    monthlyFeeGbp: counter.monthlyFeeGbp,
+                    qrEnabled: counter.qrEnabled,
+                  })}`);
+                }
                 if (counter.monthlyFeeGbp !== undefined) changedTerms.push(`Monthly fee: £${counter.monthlyFeeGbp}`);
-                if (counter.revenueSharePercent !== undefined) changedTerms.push(`Revenue share: ${counter.revenueSharePercent}%`);
+                if (counterShare !== undefined) changedTerms.push(`Revenue share: ${counterShare}%`);
                 if (counter.qrEnabled !== undefined) changedTerms.push(counter.qrEnabled ? "QR enabled" : "QR disabled");
                 await sendEmail({
                   idempotencyKey: `placement_counter:${id}:${Date.now()}`,
@@ -1611,7 +1659,9 @@ export async function PATCH(request: Request) {
       // / spam-foldered. Both parties get notified for stages that
       // genuinely matter to either side: scheduled, installed, live,
       // collected. Idempotency keyed by id+stage+user so re-PATCHing
-      // the same stage doesn't double-bell.
+      // the same stage doesn't double-bell. (R6.F6a: this comment used
+      // to be aspirational, the key is now actually passed and enforced
+      // by the unique index from migration 123.)
       try {
         const stageHeadlines: Record<string, string> = {
           scheduled: "Install date set",
@@ -1636,6 +1686,7 @@ export async function PATCH(request: Request) {
               title: headline,
               body: stageBodies[stage as string](venueLabel),
               link: `/placements/${encodeURIComponent(id)}`,
+              idempotencyKey: `placement_${stage}:${id}:${uid}`,
             }).catch((err) => console.warn("[placements] stage notification failed:", err));
           }
         }

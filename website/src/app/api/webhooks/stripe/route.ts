@@ -16,6 +16,7 @@ import { SubscriptionTrialEnding } from "@/emails/templates/payments/Subscriptio
 import { SubscriptionStarted } from "@/emails/templates/payments/SubscriptionStarted";
 import { SubscriptionUpgraded } from "@/emails/templates/payments/SubscriptionUpgraded";
 import { SubscriptionCancelled } from "@/emails/templates/payments/SubscriptionCancelled";
+import { SubscriptionCardExpiring } from "@/emails/templates/payments/SubscriptionCardExpiring";
 import { SubscriptionRenewalReceipt } from "@/emails/templates/payments/SubscriptionRenewalReceipt";
 import { ArtistStripeKycNeeded } from "@/emails/templates/artist-additions/ArtistStripeKycNeeded";
 // Only the default remains here: the per-artist rate is resolved inside
@@ -1922,6 +1923,43 @@ async function handleWebhookEvent(
       .eq("stripe_transfer_id", transfer.id);
 
     if (error) console.error("Transfer reversed update error:", error);
+  }
+
+  // ─── Card expiring (WS4.5, audit R2.4): the pre-failure warning ───
+  //
+  // The registered subscription_card_expiring template had no sender, so the
+  // first anyone heard about an expiring card was the failed invoice.
+  if (event.type === "customer.source.expiring") {
+    const source = event.data.object as Stripe.Card & { customer?: string | Stripe.Customer | null };
+    const customerId = typeof source.customer === "string" ? source.customer : source.customer?.id;
+    if (customerId) {
+      const { data: profile } = await db
+        .from("artist_profiles")
+        .select("user_id, name")
+        .eq("stripe_customer_id", customerId)
+        .maybeSingle<{ user_id: string | null; name: string | null }>();
+      if (profile?.user_id) {
+        const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+        if (user?.email) {
+          await sendEmail({
+            idempotencyKey: `card_expiring:${customerId}:${source.exp_month}-${source.exp_year}`,
+            template: "subscription_card_expiring",
+            category: "orders_and_payouts",
+            to: user.email,
+            userId: profile.user_id,
+            subject: "Your card is about to expire",
+            react: SubscriptionCardExpiring({
+              firstName: (profile.name || "there").split(" ")[0],
+              last4: source.last4 || "____",
+              expiresAt: `${String(source.exp_month).padStart(2, "0")}/${source.exp_year}`,
+              updatePaymentUrl: `${SITE}/artist-portal/billing`,
+            }),
+            metadata: { customerId },
+          });
+        }
+      }
+    }
+    return NextResponse.json({ received: true });
   }
 
   // ─── Chargebacks (WS1.2, audit R3.2 CRITICAL) ───

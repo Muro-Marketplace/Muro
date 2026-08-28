@@ -34,12 +34,12 @@ const THEME_TAGS = [
   "Light & Shadow",
 ];
 
-const SIZE_OPTIONS = [
-  "Small (up to 40cm)",
-  "Medium (40 to 80cm)",
-  "Large (80 to 120cm)",
-  "Oversized (120cm+)",
-];
+// E9 (QA 2026-08-28): the "Preferred Artwork Sizes" pill control that used to
+// live here was decorative. The selection was never in the save payload, there
+// is no preferred_sizes column (confirmed vestigial in
+// lib/db/writable-fields.ts), and the state reset to a hardcoded Medium+Large
+// on every load. Removed rather than left lying to venues; if the column is
+// ever added, reintroduce the control alongside the allowlist entry.
 
 // Small stand-in card that mirrors the public venue preview on /venues/[slug]
 //, every field flips in real time as the user edits. Goal: make the
@@ -213,7 +213,6 @@ export default function VenueProfilePage() {
   const [localArtists, setLocalArtists] = useState(false);
   const [styles, setStyles] = useState<string[]>([]);
   const [themes, setThemes] = useState<string[]>([]);
-  const [sizes, setSizes] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -248,9 +247,13 @@ export default function VenueProfilePage() {
       setRevenueShare(venue.interestedInRevenueShare ?? true);
       setDirectPurchase(venue.interestedInDirectPurchase ?? true);
       setLocalArtists(venue.interestedInLocalArtists ?? false);
-      setStyles(venue.preferredStyles?.length ? venue.preferredStyles : ["Contemporary", "Minimal", "Photography"]);
-      setThemes(venue.preferredThemes?.length ? venue.preferredThemes : ["Nature", "City", "Architecture"]);
-      setSizes(["Medium (40 to 80cm)", "Large (80 to 120cm)"]);
+      // E8 (QA 2026-08-28): an empty profile used to pre-select
+      // Contemporary/Minimal/Photography and Nature/City/Architecture, so a
+      // venue that saved any other edit silently persisted taste tags they
+      // never chose, and artists then targeted them on false data. Start
+      // empty; a venue with no saved tags has expressed no preference.
+      setStyles(venue.preferredStyles ?? []);
+      setThemes(venue.preferredThemes ?? []);
       setDetailName(venue.name || "");
       setDetailType(venue.type || "");
       setDetailLocation(venue.location || "");
@@ -316,9 +319,27 @@ export default function VenueProfilePage() {
     setThemes((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
     markDirty();
   };
-  const toggleSize = (s: string) => {
-    setSizes((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
-    markDirty();
+
+  // E6 (QA 2026-08-28): the section "Cancel" links used to only exit edit
+  // mode, keeping the typed values in state, so the next Save persisted the
+  // edits the user thought they had cancelled. Cancel now reverts the
+  // section's fields to the last saved venue record (the same values the
+  // load effect seeds from, refreshed on every save via refetch()). The
+  // page-wide unsaved-changes flag is deliberately left alone: other
+  // sections may still hold real unsaved edits, and over-warning is the
+  // safe side of that trade.
+  const resetDetailsFromSaved = () => {
+    setDetailName(venue?.name || "");
+    setDetailType(venue?.type || "");
+    setDetailLocation(venue?.location || "");
+    setDetailWallSpace(venue?.wallSpace || "");
+    setDetailFootfall(venue?.approximateFootfall || "");
+  };
+  const resetDisplayFromSaved = () => {
+    setDisplayWallSpace(venue?.displayWallSpace || "");
+    setDisplayLighting(venue?.displayLighting || "");
+    setDisplayInstall(venue?.displayInstallNotes || "");
+    setDisplayRotation(venue?.displayRotationFrequency || "");
   };
 
   const handleSave = async () => {
@@ -419,9 +440,14 @@ export default function VenueProfilePage() {
             </h2>
             <button
               type="button"
-              onClick={() =>
-                setEditing(editing === "details" ? null : "details")
-              }
+              onClick={() => {
+                if (editing === "details") {
+                  resetDetailsFromSaved();
+                  setEditing(null);
+                } else {
+                  setEditing("details");
+                }
+              }}
               className="text-xs text-accent hover:underline cursor-pointer"
             >
               {editing === "details" ? "Cancel" : "Edit"}
@@ -625,22 +651,9 @@ export default function VenueProfilePage() {
               />
             </div>
 
-            {/* Preferred sizes */}
-            <div>
-              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">
-                Preferred Artwork Sizes
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {SIZE_OPTIONS.map((size) => (
-                  <TagPill
-                    key={size}
-                    label={size}
-                    active={sizes.includes(size)}
-                    onClick={() => toggleSize(size)}
-                  />
-                ))}
-              </div>
-            </div>
+            {/* Preferred Artwork Sizes deliberately absent: see the E9 note
+                at the top of the file. No preferred_sizes column exists, so
+                a control here could only discard the selection on save. */}
           </div>
         </div>
 
@@ -652,9 +665,14 @@ export default function VenueProfilePage() {
             </h2>
             <button
               type="button"
-              onClick={() =>
-                setEditing(editing === "display" ? null : "display")
-              }
+              onClick={() => {
+                if (editing === "display") {
+                  resetDisplayFromSaved();
+                  setEditing(null);
+                } else {
+                  setEditing("display");
+                }
+              }}
               className="text-xs text-accent hover:underline cursor-pointer"
             >
               {editing === "display" ? "Cancel" : "Edit"}

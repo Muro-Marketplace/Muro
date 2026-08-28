@@ -31,7 +31,17 @@ vi.mock("@/lib/stripe", () => ({
     subscriptions: { create: subscriptionsCreateMock, update: subscriptionsUpdateMock },
   },
 }));
-vi.mock("@/lib/stripe-connect", () => ({ scheduleTransfer: scheduleTransferMock }));
+vi.mock("@/lib/stripe-connect", () => ({
+  scheduleTransfer: scheduleTransferMock,
+  recordBlockedLeg: vi.fn(async () => {}),
+}));
+// WS4.6: the payout gate is real capability now, not a truthy account id.
+vi.mock("@/lib/payouts/capability", () => ({
+  canReceivePayout: vi.fn(async () => ({ ok: true, accountId: "acct_test" })),
+}));
+vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
+vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
+vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/platform-fee", () => ({
   platformFeePercentForArtist: platformFeePctMock,
   DEFAULT_PLAN_FEE_PERCENT: 10,

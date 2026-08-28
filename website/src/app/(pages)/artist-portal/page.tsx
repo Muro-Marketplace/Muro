@@ -231,7 +231,10 @@ export default function ArtistPortalPage() {
         const time = p.responded_at || p.created_at;
         const venueName = formatName(p.venue);
         const placementLink = `/placements/${encodeURIComponent(p.id)}`;
-        const iAmRequester = p.requester_user_id && p.requester_user_id === myUserId;
+        // F51: dashboard rows are raw placements columns, so the requester
+        // arrives as proposed_by_user_id; requester_user_id is a phantom.
+        const requesterId = p.requester_user_id ?? p.proposed_by_user_id;
+        const iAmRequester = requesterId && requesterId === myUserId;
         if (p.status === "pending" && !iAmRequester) {
           activityItems.push({ id: "p-" + p.id, text: `Placement request: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
         } else if (p.status === "active" && iAmRequester) {

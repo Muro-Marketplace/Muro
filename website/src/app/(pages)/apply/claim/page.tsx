@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 /**
  * /apply/claim, lightweight follow-up to the artist application.
@@ -35,9 +36,23 @@ function slugify(name: string): string {
 function ClaimForm() {
   const router = useRouter();
   const params = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
   const prefilledEmail = params.get("email") || "";
   const prefilledName = params.get("name") || "";
   const prefilledMedium = params.get("medium") || "";
+
+  // A53 (QA 2026-08-28): everyone reaching this page from the auth-gated
+  // /apply flow already HAS an account and is signed in, and the /api/apply
+  // bridge has already created their pending artist_profiles row. Running
+  // the signup form for them signUp()s the same email into an obfuscated
+  // failure and tells them a falsehood ("Account created, please sign in").
+  // Detect the session and send them to their existing application/profile
+  // instead; the form below stays only for signed-out visitors following an
+  // old email link.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    router.replace("/artist-portal/profile?welcome=1");
+  }, [authLoading, user, router]);
 
   const [email, setEmail] = useState(prefilledEmail);
   const [name, setName] = useState(prefilledName);

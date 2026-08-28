@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 
 const navItems = [
   { label: "Dashboard", href: "/admin" },
@@ -21,6 +22,9 @@ const navItems = [
   { label: "Moderation", href: "/admin/moderation" },
   // Phase 2.8 A2/A3: dispute panel + read-only financials dashboard.
   { label: "Disputes", href: "/admin/disputes" },
+  // G2/G28: the refund-request money path. Artist-initiated refunds can
+  // only be approved by an admin, so the queue needs a surface.
+  { label: "Refunds", href: "/admin/refunds" },
   { label: "Financials", href: "/admin/financials" },
 ];
 

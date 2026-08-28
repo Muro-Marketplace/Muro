@@ -35,7 +35,8 @@ vi.mock("@/lib/feature-flags", () => ({ isFlagOn: isFlagOnMock }));
 // K1: the legacy @/lib/email is deleted; both directions of the placement
 // event go through sendEmail now.
 vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
-vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
+const { createNotificationMock } = vi.hoisted(() => ({ createNotificationMock: vi.fn(async () => {}) }));
+vi.mock("@/lib/notifications", () => ({ createNotification: createNotificationMock }));
 
 // The route pulls in paid-loan-billing, which constructs a Stripe client at
 // module load, so without these the file cannot even be imported in a test env
@@ -309,6 +310,33 @@ describe("PATCH /api/placements completion path (E23b)", () => {
     expect(updates.length).toBeGreaterThan(0);
     expect(updates[0]).toMatchObject({ status: "completed" });
     expect(updates[0].collected_at).toBeTruthy();
+  });
+
+  it("keys the stage bells so a re-PATCH of the same stage cannot double-bell (WS6.3 / R6.F6a)", async () => {
+    // Fail-before: the comment above the bell block claimed id+stage+user
+    // idempotency that did not exist, so re-PATCHing stage:"collected"
+    // inserted a second identical bell for both parties.
+    createNotificationMock.mockClear();
+    setupDb({
+      artist_user_id: ARTIST,
+      venue_user_id: VENUE,
+      artist_slug: "alice",
+      venue_slug: "kings-arms",
+      venue: "Kings Arms",
+      status: "active",
+      proposed_by_user_id: null,
+    });
+    const res = await patch({ id: "pl-1", stage: "collected" });
+    expect(res.status).toBeLessThan(400);
+    for (const uid of [ARTIST, VENUE]) {
+      expect(createNotificationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: uid,
+          kind: "placement_collected",
+          idempotencyKey: `placement_collected:pl-1:${uid}`,
+        }),
+      );
+    }
   });
 
   it("still supports undoing collected back to active", async () => {

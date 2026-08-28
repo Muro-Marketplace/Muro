@@ -45,6 +45,43 @@ export const CATEGORY_RULES: Record<EmailCategory, CategoryRules> = {
   platform_admin:      { stream: "tx",     criticalAlwaysSend: true,  throttleCount: 0, throttleHours: 0 },
 };
 
+// R4.12 (txn audit 4, 2026-08-28): money-consequential templates that were
+// filed under `placements` at their send sites, which made them suppressible
+// by a preference toggle, blockable by vacation mode and subject to the
+// 10/24h throttle, all logged as ok:true skips. A purchase offer is a money
+// event with an expiry; accepting or declining a placement forms or ends a
+// commercial arrangement (for paid loans, a monthly liability starts at
+// acceptance). The plan (WS5.5) moves them to `orders_and_payouts`, the
+// critical always-send category.
+//
+// The override lives HERE, in the pipeline, rather than at each send site,
+// because the same template is sent from more than one route (placements,
+// messages) and a future send site that copies an old call would silently
+// reintroduce the suppressible category. sendEmail() resolves every send
+// through resolveEmailCategory(), so the registry, the send sites and the
+// pipeline cannot disagree about these templates again. The registry entries
+// carry the same category so the preview library tells the truth.
+//
+// Application outcomes (artist_application_submitted / _approved / _rejected)
+// are also miscategorised per R4.12 but are account-state notices, not money;
+// they are left for a deliberate decision rather than mislabelled as orders.
+export const TEMPLATE_CATEGORY_OVERRIDES: Record<string, EmailCategory> = {
+  offer_received_notification: "orders_and_payouts",
+  artist_placement_accepted: "orders_and_payouts",
+  venue_placement_accepted_confirmation: "orders_and_payouts",
+  artist_placement_declined: "orders_and_payouts",
+  placement_venue_declined_artist_request: "orders_and_payouts",
+  placement_cancelled: "orders_and_payouts",
+};
+
+/**
+ * The category a send is actually treated as. The declared category wins
+ * unless the template is on the R4.12 override list above.
+ */
+export function resolveEmailCategory(template: string, declared: EmailCategory): EmailCategory {
+  return TEMPLATE_CATEGORY_OVERRIDES[template] ?? declared;
+}
+
 /** Which preference flag governs this category. null = unsuppressible. */
 export function preferenceKeyFor(category: EmailCategory): keyof {
   placements_enabled: boolean;
