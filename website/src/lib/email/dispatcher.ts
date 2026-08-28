@@ -11,6 +11,9 @@ import { findTemplate } from "@/emails/registry";
 import type { TemplateEntry } from "@/emails/registry-types";
 import { sendEmail } from "@/lib/email/send";
 import { createElement } from "react";
+// 09 item 4.1: moved out so a script can import it without dragging
+// `server-only` in through sendEmail. One substitution, one owner.
+import { substituteTokens } from "./subject-tokens";
 
 export type TransactionalTemplate =
   | "artist_order_received"
@@ -59,13 +62,6 @@ const TEMPLATE_BINDINGS: Record<TransactionalTemplate, string> = {
 // registry-types.ts). Substitute against `data` before the wire so the
 // inbox doesn't show the literal token. Unmatched tokens are left in
 // place to surface the gap during testing rather than silently dropping.
-function substituteTokens(template: string, data: Record<string, unknown>): string {
-  return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, key) => {
-    const val = data[key];
-    if (val === undefined || val === null) return match;
-    return typeof val === "string" ? val : String(val);
-  });
-}
 
 /**
  * Send a transactional order email with idempotency. Returns `{sent, deduped}`

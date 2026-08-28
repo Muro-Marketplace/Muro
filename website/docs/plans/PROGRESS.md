@@ -10483,3 +10483,59 @@ by anyone, including a future session reading only this file.
 
 `npm run check` green: 0 lint errors, 226 files, 2214 tests, 0 dependency
 violations, exit 0.
+
+### 09 item 4.1 — the email harness — DONE
+
+`scripts/email-harness.ts` with `render` and `audit`, wired as `npm run
+email:render` / `email:audit`, and **`email:render` is now inside `npm run
+check`** as §E.1 asks. All **131** registry templates render, in HTML and
+plaintext.
+
+**One extraction it forced, and the extraction is the point.** `substituteTokens`
+lived in `dispatcher.ts`, which imports `sendEmail`, which imports
+`supabase-admin`, which imports `server-only` and throws the moment a script
+touches it. So the harness could not reuse it, and a harness with **its own copy**
+of the substitution would pass while the real one left a literal `{{token}}` in an
+inbox. Moved to a dependency-free `src/lib/email/subject-tokens.ts`, one owner.
+
+Same reason for `src/lib/email/dispatcher-ids.ts`. That is a second copy of the
+binding table, so it gets this session's treatment: `dispatcher-ids-in-sync.test.ts`
+(4) fails the moment it drifts. A stale copy would silently downgrade a real
+"this token goes out literally" failure into a warning, which is the direction
+that matters.
+
+**The subject-token check is scoped, deliberately.** §E.1 says to fail on any
+leftover token after substituting against the mock. Run as written it fails 9 of
+131. Checked where a leftover token can actually reach an inbox: the dispatcher is
+the **only** sender that substitutes, because every `sendEmail` caller passes an
+explicit subject and the registry's is documentation. **None of the 9 are
+dispatcher-reachable**, so it fails for those seven ids and reports for the rest.
+Blocking `check` on a docstring would have taught people to edit the docstring.
+
+**`audit` found five real things, and they are not what they first look like.**
+Its raw output named 11 "sends referencing an id not in the registry"; seven were
+false positives, because `sendTransactional({ template: "order_placed" })` names a
+DISPATCHER name, not a registry id, so the audit resolves through the bindings
+first as §E.1 says. The remaining five are:
+
+`offer_received`, `suspicious_login`, `welcome_artist`, `welcome_customer`,
+`welcome_venue`
+
+These are **not broken sends**: `sendEmail`'s `template` is documented as the label
+written to `email_events`, not as a registry id. The divergence still matters:
+
+1. the per-category throttle filters `.eq("template", input.template)`, so one
+   template with two labels throttles as two templates;
+2. an operator asking "did that email send?" greps `email_events` by the id they
+   know, which is the registry's, and finds nothing.
+
+Left as a follow-up rather than renamed here: changing a label that is already
+written into live `email_events` rows splits the history of those five templates
+in two, which is a data decision.
+
+**`email:audit` is deliberately NOT in `check`.** §E.1 says report first, error
+once clean, and it is not clean. It exits 1 when run directly, so it is usable as
+a gate the moment the five above are settled.
+
+`npm run check` green, now including `email:render`: 0 lint errors, 227 files,
+2218 tests, 131 templates rendered, 0 dependency violations, exit 0.
