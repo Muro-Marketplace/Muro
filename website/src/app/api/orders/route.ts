@@ -280,6 +280,10 @@ export async function PATCH(request: Request) {
         actorUserId: auth.user?.id ?? null,
         buyerEmail: order.buyer_email ?? null,
         artistEmail,
+        // R4.10: recipient identities, so the buyer's email resolves the
+        // BUYER's preferences, not whoever clicked the status button.
+        buyerUserId: (order as { buyer_user_id?: string | null }).buyer_user_id ?? null,
+        artistUserId: artistUserId || null,
         data: {
           firstName: firstName0,
           orderNumber: orderId,

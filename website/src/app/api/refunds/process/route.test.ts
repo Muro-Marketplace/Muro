@@ -160,6 +160,7 @@ function setupDb({
         select: () => ({
           eq: () => ({
             single: async () => ({ data: { name: "Alice" }, error: null }),
+            maybeSingle: async () => ({ data: { name: "Alice Artist" }, error: null }),
           }),
         }),
       };
@@ -352,6 +353,50 @@ describe("POST /api/refunds/process — idempotency (1.8)", () => {
 // For all authz-failure cases (403/404) the claim must NEVER be called —
 // the refund_requests row must not be mutated for an unauthorised caller.
 // ---------------------------------------------------------------------------
+
+describe("rejection email identity (R4.17)", () => {
+  it("an ARTIST-raised rejection greets the artist and carries the artist's userId", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    setupDb({
+      refundRow: { ...baseRefundRow, requester_type: "artist", requester_email: "artist@x.com" },
+      order: { ...baseOrder, artist_user_id: "u-artist", shipping: { fullName: "Bella Buyer" } },
+      claimResult: { ...baseClaimedReq, requester_type: "artist", requester_email: "artist@x.com" },
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "reject" }));
+    expect(res.status).toBe(200);
+
+    const { sendEmail } = await import("@/lib/email/send");
+    const rejects = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "customer_refund_rejected");
+    expect(rejects).toHaveLength(1);
+    expect(rejects[0].to).toBe("artist@x.com");
+    expect(rejects[0].userId).toBe("u-artist");
+  });
+
+  it("a BUYER-raised rejection keeps the buyer's identity", async () => {
+    const { sendEmail: sendEmailForClear } = await import("@/lib/email/send");
+    vi.mocked(sendEmailForClear).mockClear();
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    setupDb({
+      refundRow: { ...baseRefundRow, requester_type: "buyer" },
+      order: { ...baseOrder, buyer_user_id: "u-buyer", shipping: { fullName: "Bella Buyer" } },
+      claimResult: baseClaimedReq,
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "reject" }));
+    expect(res.status).toBe(200);
+    const { sendEmail } = await import("@/lib/email/send");
+    const rejects = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "customer_refund_rejected");
+    expect(rejects).toHaveLength(1);
+    expect(rejects[0].userId).toBe("u-buyer");
+  });
+});
 
 describe("POST /api/refunds/process — authorisation (1.5, 4.1)", () => {
   it("403 when caller is not artist and not admin — claimPending is never called", async () => {

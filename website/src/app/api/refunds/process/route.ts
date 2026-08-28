@@ -143,15 +143,32 @@ export async function POST(request: Request) {
         // only the decline had no template, which is what kept the legacy
         // function alive. Both halves are on one pipeline now.
         const declineTo = (requesterEmail || buyerEmailFallback) as string;
+        // R4.17: the greeting used the buyer's SHIPPING name and no userId,
+        // so an artist-raised request rejected by admin opened with the
+        // buyer's name in the artist's inbox, and preference resolution ran
+        // against nobody. Greet the requester; identify the requester.
+        const requesterIsArtist = refundReq.requester_type === "artist";
+        let requesterFirstName =
+          ((order.shipping as { fullName?: string } | null)?.fullName || "there").split(" ")[0];
+        let requesterUserId = (order.buyer_user_id as string | null) ?? undefined;
+        if (requesterIsArtist) {
+          requesterUserId = (order.artist_user_id as string | null) ?? undefined;
+          const { data: artistProfileRow } = await db
+            .from("artist_profiles")
+            .select("name")
+            .eq("user_id", order.artist_user_id as string)
+            .maybeSingle<{ name: string | null }>();
+          requesterFirstName = (artistProfileRow?.name || "there").split(" ")[0];
+        }
         await sendEmail({
           idempotencyKey: `customer_refund_rejected:${refundRequestId}`,
           template: "customer_refund_rejected",
           category: "orders_and_payouts",
           to: declineTo,
+          userId: requesterUserId,
           subject: `Refund decision for order ${order.id}`,
           react: CustomerRefundRejected({
-            firstName:
-              ((order.shipping as { fullName?: string } | null)?.fullName || "there").split(" ")[0],
+            firstName: requesterFirstName,
             orderNumber: order.id as string,
             reason: reason || undefined,
             // C4: the customer's orders live on the /customer-portal dashboard;

@@ -30,6 +30,10 @@ export interface OrderLifecycleInput {
   buyerEmail?: string | null;
   /** Artist email — receives ArtistOrderReceived on order.placed only. */
   artistEmail?: string | null;
+  /** R4.10: recipient identities for preference/suppression resolution.
+   *  Distinct from actorUserId, which is whoever CLICKED. */
+  buyerUserId?: string | null;
+  artistUserId?: string | null;
   /** Optional template props passed through to the email body. The
    *  dispatcher already substitutes {{tokens}} in the registry subject,
    *  the component reads everything else. Caller decides what to send
@@ -42,6 +46,8 @@ export interface OrderLifecycleInput {
 interface EmailTrigger {
   to: string | null | undefined;
   template: TransactionalTemplate;
+  /** Whose mailbox this lands in, for preference/suppression identity. */
+  recipient: "buyer" | "artist";
 }
 
 /**
@@ -56,20 +62,20 @@ function emailsForEvent(
   switch (event) {
     case "order.placed":
       return [
-        { to: input.artistEmail, template: "artist_order_received" },
-        { to: input.buyerEmail, template: "order_placed" },
+        { to: input.artistEmail, template: "artist_order_received", recipient: "artist" },
+        { to: input.buyerEmail, template: "order_placed", recipient: "buyer" },
       ];
     case "order.processing":
-      return [{ to: input.buyerEmail, template: "order_processing" }];
+      return [{ to: input.buyerEmail, template: "order_processing", recipient: "buyer" }];
     case "order.out_for_delivery":
-      return [{ to: input.buyerEmail, template: "order_out_for_delivery" }];
+      return [{ to: input.buyerEmail, template: "order_out_for_delivery", recipient: "buyer" }];
     case "order.delivered":
-      return [{ to: input.buyerEmail, template: "order_delivered" }];
+      return [{ to: input.buyerEmail, template: "order_delivered", recipient: "buyer" }];
     case "order.cancelled":
       // 09 item 1.5: this used to return [] and a second branch inside
       // orders/route.ts sent the cancellation, so which email an order event
       // produces had two owners. One owner now.
-      return [{ to: input.buyerEmail, template: "order_cancelled" }];
+      return [{ to: input.buyerEmail, template: "order_cancelled", recipient: "buyer" }];
     case "order.disputed":
       // 09 item 3.7. The dispute route mails both parties itself, keyed on the
       // dispute id, because it knows who they are and this function only knows
@@ -121,12 +127,19 @@ export async function recordOrderEvent(
   let deduped = 0;
   for (const trigger of emailsForEvent(event, input)) {
     if (!trigger.to) continue;
+    // R4.10: the userId used to be the ACTOR's, so a seller marking
+    // "shipped" stamped their own id on the buyer's email - preference
+    // resolution, suppression and throttling all ran against the wrong
+    // person. It is now the recipient's id (undefined when unknown, e.g.
+    // guest buyers), never the actor's.
+    const recipientUserId =
+      trigger.recipient === "buyer" ? input.buyerUserId : input.artistUserId;
     const result = await sendTransactional({
       to: trigger.to,
       template: trigger.template,
       data: input.data,
       idempotencyKey,
-      userId: input.actorUserId ?? undefined,
+      userId: recipientUserId ?? undefined,
     });
     if (result.sent && !result.deduped) sent++;
     if (result.sent && result.deduped) deduped++;

@@ -235,7 +235,10 @@ describe("PATCH /api/orders payout + email side-effects", () => {
 
   it("WS2.7: delivered releases only THIS artist's legs and the venue's, never a co-artist's", async () => {
     const executed: string[] = [];
-    vi.mocked(executeTransfer).mockImplementation(async (id: string) => { executed.push(id); });
+    vi.mocked(executeTransfer).mockImplementation(async (id: string) => {
+      executed.push(id);
+      return null;
+    });
     const base = makeDeliveredFromMock([]);
     fromMock.mockImplementation((table: string) => {
       if (table === "stripe_transfers") {

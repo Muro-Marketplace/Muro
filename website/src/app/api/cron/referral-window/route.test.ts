@@ -62,7 +62,9 @@ describe("GET /api/cron/referral-window", () => {
     expect(res.status).toBe(200);
 
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
-    const call = sendEmailMock.mock.calls[0][0] as { idempotencyKey: string; template: string; to: string };
+    const call = (sendEmailMock.mock.calls as unknown as Array<
+      [{ idempotencyKey: string; template: string; to: string }]
+    >)[0][0];
     expect(call.template).toBe("referral_window_ending");
     expect(call.to).toBe("fin@x.com");
     // The key carries the free_until DAY: a rerun no-ops, an extended window

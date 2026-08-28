@@ -129,6 +129,8 @@ function installDb(opts: { profile?: unknown } = {}) {
     update: () => ({ eq: async () => ({ error: null }) }),
     upsert: async () => ({ error: null }),
     insert: async () => ({ error: null, data: null }),
+    // The 500 path releases the webhook dedup claim.
+    delete: () => ({ eq: async () => ({ error: null }) }),
   }));
 }
 
@@ -456,6 +458,28 @@ describe("customer.subscription.deleted reaches all three reconcilers (D13)", ()
 // half that actually happened — its select named `free_until` before migration
 // 115 created it, so the whole statement was rejected and the programme never
 // credited anyone.
+describe("recurring-invoice handler throws answer 500 (WS1.1 second half)", () => {
+  it("a paid-loan invoice.paid throw releases the claim via 500 so Stripe redelivers", async () => {
+    // Swallowing this used to keep the dedup claim: a transient DB fault
+    // during the artist-share leg silently lost a month's share forever.
+    installDb();
+    const { handleInvoicePaid } = await import("@/lib/placements/paid-loan-billing");
+    vi.mocked(handleInvoicePaid).mockRejectedValueOnce(new Error("db blink"));
+    nextEvent.value = event("invoice.paid", { id: "in_1", customer: "cus_1" });
+    const res = await POST(post());
+    expect(res.status).toBe(500);
+  });
+
+  it("a curation invoice.payment_failed throw answers 500 too", async () => {
+    installDb();
+    const { handleCurationInvoiceFailed } = await import("@/lib/curation/billing");
+    vi.mocked(handleCurationInvoiceFailed).mockRejectedValueOnce(new Error("db blink"));
+    nextEvent.value = event("invoice.payment_failed", { id: "in_2", customer: "cus_1" });
+    const res = await POST(post());
+    expect(res.status).toBe(500);
+  });
+});
+
 describe("customer.subscription.created credits the referrer atomically", () => {
   beforeEach(() => {
     rpcMock.mockClear();

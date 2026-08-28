@@ -1779,7 +1779,12 @@ async function handleWebhookEvent(
     try {
       await handleInvoicePaidPaidLoan(invoice);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and a month's artist share was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] paid-loan invoice.paid:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
   if (event.type === "invoice.payment_failed") {
@@ -1787,7 +1792,12 @@ async function handleWebhookEvent(
     try {
       await handleInvoicePaymentFailedPaidLoan(invoice);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the venue's dunning was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] paid-loan invoice.payment_failed:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
   if (event.type === "customer.subscription.deleted") {
@@ -1795,7 +1805,12 @@ async function handleWebhookEvent(
     try {
       await handleSubscriptionDeletedPaidLoan(subscription);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the billing wind-down was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] paid-loan subscription.deleted:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
 
@@ -1808,7 +1823,12 @@ async function handleWebhookEvent(
     try {
       await handleCurationInvoicePaid(invoice);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the curation receipt and status was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] curation invoice.paid:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
   if (event.type === "invoice.payment_failed") {
@@ -1816,7 +1836,12 @@ async function handleWebhookEvent(
     try {
       await handleCurationInvoiceFailed(invoice);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the curation dunning was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] curation invoice.payment_failed:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
   if (event.type === "customer.subscription.deleted") {
@@ -1824,7 +1849,12 @@ async function handleWebhookEvent(
     try {
       await handleCurationSubscriptionDeleted(subscription);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the curation wind-down was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] curation subscription.deleted:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
 
