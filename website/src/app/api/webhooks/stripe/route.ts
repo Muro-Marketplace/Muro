@@ -13,6 +13,7 @@ import { ArtistPayoutSent } from "@/emails/templates/payments/ArtistPayoutSent";
 import { ArtistPayoutFailed } from "@/emails/templates/payments/ArtistPayoutFailed";
 import { SubscriptionPaymentFailed } from "@/emails/templates/payments/SubscriptionPaymentFailed";
 import { SubscriptionTrialEnding } from "@/emails/templates/payments/SubscriptionTrialEnding";
+import { SubscriptionStarted } from "@/emails/templates/payments/SubscriptionStarted";
 import { SubscriptionUpgraded } from "@/emails/templates/payments/SubscriptionUpgraded";
 import { SubscriptionCancelled } from "@/emails/templates/payments/SubscriptionCancelled";
 import { SubscriptionRenewalReceipt } from "@/emails/templates/payments/SubscriptionRenewalReceipt";
@@ -1107,6 +1108,64 @@ async function handleWebhookEvent(
 
     if (error) console.error("Subscription update error:", error);
 
+    // ─── Started email (09 §D.5, item 3.3) ───
+    // The first paid moment produced no email at all. Six `subscription_*`
+    // templates were registered and five were wired; there was no "started", so
+    // an artist began paying and got nothing in writing. The comment on the
+    // invoice.paid branch below claimed the signup invoice was "covered by
+    // subscription_created or the checkout receipt". Neither existed. That
+    // comment is accurate as of this branch.
+    if (event.type === "customer.subscription.created") {
+      try {
+        const { data: profile } = await db
+          .from("artist_profiles")
+          .select("user_id, name")
+          .eq("stripe_customer_id", customerId)
+          .maybeSingle();
+        if (profile?.user_id) {
+          const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+          const item = subscription.items.data[0];
+          if (user?.email) {
+            const { cpStart, cpEnd } = periodFromSubscription(subscription);
+            const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
+            await sendEmail({
+              // Keyed on the subscription, so Stripe redelivering
+              // customer.subscription.created cannot send a second copy.
+              idempotencyKey: `subscription_started:${subscription.id}`,
+              template: "subscription_started",
+              category: "orders_and_payouts",
+              to: user.email,
+              userId: profile.user_id,
+              subject: `You're on Wallplace ${planName}`,
+              react: SubscriptionStarted({
+                firstName: (profile.name || "there").split(" ")[0] || "there",
+                planName,
+                amount: {
+                  amount: item?.price?.unit_amount ?? 0,
+                  currency: (item?.price?.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR",
+                },
+                billingInterval: item?.price?.recurring?.interval === "year" ? "year" : "month",
+                // On a trial the first charge is when the trial ends, not when
+                // the period started, or the email tells someone they were
+                // billed today on a plan they have not paid for yet.
+                firstBillingDate: epochToUkDate(subscription.trial_end ?? cpStart),
+                nextBillingDate: epochToUkDate(cpEnd),
+                trialEndsAt: subscription.trial_end
+                  ? epochToUkDate(subscription.trial_end)
+                  : undefined,
+                manageUrl: `${SITE}/artist-portal/billing`,
+              }),
+              metadata: { subscriptionId: subscription.id, plan },
+            });
+          }
+        }
+      } catch (err) {
+        // Non-fatal. The subscription is recorded; a mail failure must not make
+        // Stripe retry a webhook that already did its real work.
+        console.error("Started email error:", err);
+      }
+    }
+
     // ─── Upgraded email (plan changed) ───
     // Stripe's `customer.subscription.updated` fires for a lot of reasons
     // (renewal, status tick, cancel-at-period-end, plan change). We only
@@ -1448,9 +1507,12 @@ async function handleWebhookEvent(
         if (error) console.error("Invoice paid recovery error:", error);
       }
 
-      // Renewal receipt, only for recurring charges, not the initial
-      // signup invoice (which is covered by subscription_created or the
-      // checkout receipt). `billing_reason` is the source of truth.
+      // Renewal receipt, only for recurring charges, not the initial signup
+      // invoice, which is covered by the subscription_started email on
+      // customer.subscription.created above. That claim was FALSE until 09 item
+      // 3.3 built that branch: neither a "started" email nor a checkout receipt
+      // existed, so the first paid moment produced nothing and this comment was
+      // the reason nobody noticed. `billing_reason` is the source of truth.
       // Skip trial-ending invoices with zero amount.
       const isRenewal = invoice.billing_reason === "subscription_cycle";
       if (isRenewal && invoice.amount_paid > 0 && profile?.user_id) {

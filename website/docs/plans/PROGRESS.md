@@ -10954,3 +10954,56 @@ one.
 
 `npm run check` green: 0 lint errors, 235 files, 2355 tests, 133 templates, 0
 dependency violations, exit 0.
+
+### 09 item 3.3 — the first paid moment now sends something — DONE
+
+Six `subscription_*` templates were registered and five were wired. There was no
+"started", so an artist began paying Wallplace and received nothing in writing:
+no amount, no billing date, no record they could file.
+
+**The comment is why nobody noticed.** `stripe/route.ts` skipped the signup
+invoice with "which is covered by subscription_created or the checkout receipt".
+Neither existed. The comment described an intended design and read as a
+description of the code, so the gap it named looked deliberate. It is accurate as
+of this branch, and now says which item made it true.
+
+Built `SubscriptionStarted` and the `customer.subscription.created` branch. The
+amount, currency and interval come off the subscription item rather than a plan
+table, so the email quotes what Stripe will actually charge. The plan name comes
+from the price-id map, and an unrecognised price sends **nothing** rather than
+guessing, the same rule D12 imposed after an unset `STRIPE_PRICE_PRO` charged
+every Pro artist 15% instead of 5%.
+
+**A trial's first charge is the trial end, not the period start.** Otherwise the
+email tells someone they were billed today for a plan they have not paid for yet.
+
+Keyed on `subscription.id`, so a Stripe redelivery cannot send a second
+"you're on Premium". Wrapped so a mail failure still returns 200: the
+subscription is already recorded, and a non-2xx would make Stripe retry a webhook
+that did its real work.
+
+Left `isRenewal` alone, per §D.5. `billing_reason === "subscription_cycle"`
+already excludes `subscription_create`, and that is now correct rather than
+accidental, because the new email owns the first one. There is a test for it.
+
+**A new test file rather than an extension**, contrary to §D.5's suggestion.
+`stripe-webhook.test.ts` pins `constructEvent` to one hardcoded
+`checkout.session.completed`, so it cannot drive a subscription event without
+rewriting the fake every other test depends on.
+
+**One of my own tests was weak and the mutation run caught it.** "Puts the first
+charge at the trial end" asserted only that the trial date appeared somewhere in
+the body, and `trialEndsAt` renders that same date in the info box, so billing
+from the period start passed it. Now it also asserts the period-start date
+appears nowhere, and fails on that mutation.
+
+11 tests. Removing the branch fails 5, firing on `updated` too fails 1, letting
+the renewal receipt fire on the signup invoice fails 1.
+
+**Not done: `subscription_card_expiring`**, the sixth and only other unwired
+subscription template. §D.5 marks it lower priority and points at §F, and its
+trigger is either a new Stripe event handler or a monthly cron. Listed as
+outstanding rather than quietly skipped.
+
+`npm run check` green: 0 lint errors, 236 files, 2366 tests, 134 templates, 0
+dependency violations, exit 0.

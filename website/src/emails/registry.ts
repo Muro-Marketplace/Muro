@@ -135,6 +135,7 @@ import SubscriptionUpgraded from "./templates/payments/SubscriptionUpgraded";
 import SubscriptionCancelled from "./templates/payments/SubscriptionCancelled";
 import VenueRevenueShareStatement from "./templates/payments/VenueRevenueShareStatement";
 import VenuePaidLoanInvoice from "./templates/payments/VenuePaidLoanInvoice";
+import SubscriptionStarted from "./templates/payments/SubscriptionStarted";
 import SubscriptionRenewalReceipt from "./templates/payments/SubscriptionRenewalReceipt";
 import SubscriptionCardExpiring from "./templates/payments/SubscriptionCardExpiring";
 
@@ -300,6 +301,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   SubscriptionCancelled,
   VenueRevenueShareStatement,
   VenuePaidLoanInvoice,
+  SubscriptionStarted,
   SubscriptionRenewalReceipt,
   SubscriptionCardExpiring,
 
