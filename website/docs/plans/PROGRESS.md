@@ -10775,3 +10775,66 @@ count first fixes it, and it now fails on that mutation with the other two.
 
 `npm run check` green: 0 lint errors, 230 files, 2274 tests, 131 templates, 0
 dependency violations, exit 0.
+
+### 09 item 3.4 — the contact form now answers the sender — DONE
+
+Built `SupportRequestReceived` and wired it into `POST /api/contact`, which until
+now told the Wallplace team and told the sender nothing. From the sender's side a
+support request and a form that silently failed looked identical: same spinner,
+same "thanks", no email, no reference, no way to check.
+
+**§D.4's open question, answered: no, the 5/min IP limit is not sufficient.** The
+acknowledgement is a REFLECTED send, an anonymous caller names the recipient, and
+everything `sendEmail` already does is keyed on the wrong thing for that case.
+The idempotency key stops a retry, not a fresh submission with new text. The
+throttle needs `input.userId` and a stranger has none. `orders_and_payouts` sets
+`throttleCount: 0` deliberately, because a receipt must never be dropped. And the
+route's own limit is per IP, while the attack worth stopping is many IPs at one
+inbox.
+
+So `src/lib/email/unverified-recipient.ts` caps sends **per recipient**: three of
+one template to one address per hour. It fails open on a database error, because
+it guards against abuse and a Supabase blip must not silently swallow a real
+person's acknowledgement. The newsletter confirmation (3.5) has exactly the same
+shape and uses the same guard, which is why it is a module and not four lines in
+a route.
+
+**When the cap bites, only the EMAIL is refused.** The submission is still stored
+and the admin alert still goes. Someone being flooded must not also lose the
+ability to reach support.
+
+**§D.4 is wrong about the reference, in two ways, and following it literally
+would have broken the contact form.** It says to quote `submission.id` back at
+the sender, via `.insert({...}).select("id").single()`.
+
+1. `contact_submissions.id` is a **bigint sequence**, not the uuid the doc
+   assumes. Reference "6" tells the sender Wallplace has had six contact
+   submissions ever; submit twice a month apart and the gap is the growth rate.
+2. The route uses the **anon** client. That table has INSERT policies and **no
+   SELECT policy**, so PostgREST would filter the RETURNING to zero rows and the
+   route would answer 500 on every submission it had just successfully stored.
+
+**Migration 106 (written, applied to prod, verified live).** Adds
+`contact_submissions.reference`, a `WP-XXXXXXXX` opaque token with a
+`gen_random_bytes` default and a unique index. The route generates it and inserts
+it, so nothing is ever read back and the anon path is untouched. Backfilled the
+five existing rows; verified live that all 5 have distinct references matching
+the format.
+
+**A prod finding, recorded not acted on (grants are on the escalation list).**
+All 53 public tables grant `TRUNCATE`, `REFERENCES` and `TRIGGER` to `anon` and
+`authenticated`, alongside SELECT/INSERT/UPDATE/DELETE. This is Supabase's stock
+default-privilege set rather than something Wallplace did, and PostgREST exposes
+no TRUNCATE verb so it is not reachable through the API. It is still a wider
+grant than any table needs, and `contact_submissions` in particular is protected
+from reads only by the absence of a SELECT policy: add one permissive policy for
+any reason and every name, address and message body becomes publicly readable.
+Listed with the other owner decisions at the end of this file.
+
+**14 tests, each fix verified fail-before.** Removing the acknowledgement fails 7.
+Ignoring the flood guard fails 1. Returning a sequence-shaped reference fails 3.
+Sending when the insert failed fails 1. One test asserts the route never calls
+`.select()` after the insert, by giving the mock no `select` method at all.
+
+`npm run check` green: 0 lint errors, 232 files, 2299 tests, 132 templates, 0
+dependency violations, exit 0.

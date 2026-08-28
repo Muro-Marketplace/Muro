@@ -20,6 +20,7 @@ import AccountTwoFactorEnabled from "./templates/account/AccountTwoFactorEnabled
 import AccountTwoFactorDisabled from "./templates/account/AccountTwoFactorDisabled";
 import AccountTeamInvite from "./templates/account/AccountTeamInvite";
 import AccountTeamInviteAccepted from "./templates/account/AccountTeamInviteAccepted";
+import SupportRequestReceived from "./templates/account/SupportRequestReceived";
 
 // ── Onboarding ────────────────────────────────────────────────────────────
 import ArtistWelcomeChecklist from "./templates/onboarding/artist/ArtistWelcomeChecklist";
@@ -209,6 +210,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   AccountTwoFactorDisabled,
   AccountTeamInvite,
   AccountTeamInviteAccepted,
+  SupportRequestReceived,
 
   // Onboarding
   ArtistWelcomeChecklist,
