@@ -51,7 +51,7 @@ vi.mock("@/lib/stripe-connect", () => ({
   recordBlockedLeg: vi.fn(async () => {}),
 }));
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn(async () => ({ ok: true })) }));
-vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn() }));
+vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
 vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true, skipped: false })) }));
 vi.mock("@/lib/stripe", () => ({
   stripe: {
@@ -497,5 +497,191 @@ describe("customer.subscription.created credits the referrer atomically", () => 
     nextEvent.value = event("customer.subscription.created", subscription());
 
     expect((await POST(post())).status).toBe(200);
+  });
+});
+
+
+// T9 (04 Phase 8, items 8.5 + 8.6). A collect-from-venue order books like a
+// collection order — delivered immediately, no shipping lifecycle, immediate
+// payout — and the venue is TOLD, because a stranger will present an order
+// number at their counter.
+describe("checkout.session.completed books a collect_venue order", () => {
+  const CART_ROW = {
+    cart: [{ workId: "w-1", title: "Vietnamese Village", artistSlug: "fin-coles", price: 100, quantity: 1 }],
+    shipping: {
+      fullName: "Jo Bloggs",
+      email: "jo@x.com",
+      fulfilmentMethod: "collect_venue",
+      collectionAddress: "The Copper Kettle, 1 High St, Hampton",
+    },
+    source: "qr",
+    venue_slug: "the-copper-kettle",
+    artist_slugs: ["fin-coles"],
+    expected_subtotal_pence: 10000,
+    expected_shipping_pence: 0,
+  };
+
+  let orderInsert: Record<string, unknown> | null = null;
+
+  function setupCartDb(shippingOverride?: Record<string, unknown>) {
+    orderInsert = null;
+    const shippingRow = shippingOverride ?? CART_ROW.shipping;
+    fromMock.mockImplementation((table: string) => {
+      const chain: Record<string, unknown> = {
+        maybeSingle: async () => ({ data: null, error: null }),
+        single: async () => ({ data: null, error: null }),
+        order: async () => ({ data: [], error: null }),
+        limit: async () => ({ data: [], error: null }),
+        // Awaiting the chain itself (a filter with no terminal) resolves empty.
+        then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null }),
+      };
+      chain.eq = () => chain;
+      chain.or = () => chain;
+      chain.in = () => chain;
+
+      if (table === "cart_sessions") {
+        const c: Record<string, unknown> = {
+          maybeSingle: async () => ({
+            data: {
+              stripe_session_id: "cs_1",
+              cart: CART_ROW.cart,
+              shipping: shippingRow,
+              source: CART_ROW.source,
+              venue_slug: CART_ROW.venue_slug,
+              artist_slugs: CART_ROW.artist_slugs,
+              expected_subtotal_pence: CART_ROW.expected_subtotal_pence,
+              expected_shipping_pence: CART_ROW.expected_shipping_pence,
+              artist_shipping_pence: {},
+            },
+            error: null,
+          }),
+        };
+        c.eq = () => c;
+        c.gt = () => c;
+        return { select: () => c, update: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      if (table === "orders") {
+        return {
+          select: () => chain,
+          insert: (row: Record<string, unknown>) => {
+            orderInsert = row;
+            return {
+              select: () => ({ maybeSingle: async () => ({ data: { id: row.id }, error: null }) }),
+              then: (fn: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(fn),
+            };
+          },
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "artist_profiles") {
+        const c: Record<string, unknown> = {
+          maybeSingle: async () => ({ data: { user_id: "u-fin" }, error: null }),
+          single: async () => ({ data: { user_id: "u-fin" }, error: null }),
+          in: async () => ({
+            data: [{ user_id: "u-fin", slug: "fin-coles", name: "Fin Coles", subscription_plan: "core", subscription_status: "active", trial_end: null, free_until: null }],
+            error: null,
+          }),
+        };
+        c.eq = () => c;
+        return { select: () => c };
+      }
+      if (table === "venue_profiles") {
+        const c: Record<string, unknown> = {
+          maybeSingle: async () => ({ data: { user_id: "u-venue", name: "The Copper Kettle" }, error: null }),
+        };
+        c.eq = () => c;
+        return { select: () => c };
+      }
+      if (table === "placements") {
+        return { select: () => chain, update: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      return {
+        select: () => chain,
+        insert: async () => ({ error: null }),
+        upsert: async () => ({ error: null }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+    });
+  }
+
+  function completedSession() {
+    return event("checkout.session.completed", {
+      id: "cs_1",
+      mode: "payment",
+      payment_status: "paid",
+      customer_email: "jo@x.com",
+      payment_intent: "pi_1",
+      amount_total: 10000,
+      metadata: { kind: "cart_checkout", fulfilment_method: "collect_venue" },
+    });
+  }
+
+  beforeEach(() => {
+    setupCartDb();
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "venue@x.com" } } });
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  it("books the order delivered immediately, with the collection address on it", async () => {
+    await POST(post());
+
+    expect(orderInsert).toBeTruthy();
+    expect(orderInsert!).toMatchObject({
+      fulfilment_method: "collect_venue",
+      status: "delivered",
+      collection_address: "The Copper Kettle, 1 High St, Hampton",
+    });
+    expect(orderInsert!.delivered_at).toEqual(expect.any(String));
+  });
+
+  it("tells the venue: one email keyed on the order, so a redelivery cannot double it", async () => {
+    await POST(post());
+
+    const venueSends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "venue_collection_pending");
+    expect(venueSends).toHaveLength(1);
+    expect(venueSends[0].to).toBe("venue@x.com");
+    expect(venueSends[0].idempotencyKey).toMatch(/^venue_collection_pending:/);
+    expect(JSON.stringify(venueSends[0].react)).toContain("Vietnamese Village");
+  });
+
+  it("sends the venue nothing on a plain SHIP order", async () => {
+    // The cart row is the data-of-record (metadata is only the fallback), so
+    // the control varies the ROW, not the event.
+    setupCartDb({
+      fullName: "Jo Bloggs",
+      email: "jo@x.com",
+      fulfilmentMethod: "ship",
+      addressLine1: "2 Low St",
+      city: "London",
+      postcode: "SW1A 1AA",
+      country: "GB",
+    });
+    nextEvent.value = event("checkout.session.completed", {
+      id: "cs_1",
+      mode: "payment",
+      payment_status: "paid",
+      customer_email: "jo@x.com",
+      payment_intent: "pi_1",
+      amount_total: 10000,
+      metadata: { kind: "cart_checkout", fulfilment_method: "ship" },
+    });
+
+    await POST(post());
+
+    const venueSends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "venue_collection_pending");
+    expect(venueSends).toHaveLength(0);
+  });
+
+  it("books it with zero shipping cost", async () => {
+    await POST(post());
+    expect(orderInsert!.shipping_cost).toBe(0);
+  });
+
+  beforeEach(() => {
+    nextEvent.value = completedSession();
   });
 });

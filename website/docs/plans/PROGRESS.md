@@ -12468,3 +12468,54 @@ retry sweep ignores, created on explicit instruction.
 correct: the books genuinely do not reconcile for them, and the report is the
 standing reminder that the first REAL order must not join this list. D4's fix
 (the webhook refuses to book an unattributable order) is what prevents that.
+
+### Decision 13 — T9 collect-from-venue, the full vertical (04 Phase 8)
+
+Migration `119_collect_from_venue.sql` (applied to prod and verified live):
+`placements.placed_size_label`, `placements.collection_address`, and the
+orders `fulfilment_method` CHECK widened to admit `collect_venue`.
+
+The path, end to end:
+
+- **Placement accept** stamps `collection_address` from the venue's own
+  address fields at the moment the venue says yes (both accept surfaces:
+  api/placements PATCH and the message-thread accept). The address is
+  captured at accept time because the venue profile can change later; the
+  placement records where the work physically went.
+- **Artwork page** shows "Collect from {venue}" only while the work's
+  current placement is ACTIVE and the placed size matches the size being
+  bought (a null `placed_size_label` means the placement never recorded a
+  size, which imposes no restriction). The cart line carries
+  `lineFulfilment: "collect_venue"` plus the venue slug and placement id.
+- **Checkout (client)** offers the third tile only when EVERY line in the
+  cart is collectable from the same venue; mixed carts fall back to
+  ship/collect-from-artist. Zero shipping, address fields not required.
+- **Checkout (server)** re-validates the claim against the DB, never
+  trusting the client: every line must name the same venue, its placement
+  must exist, be active, belong to that artist and venue, and the placed
+  size must match the size bought (409 `collection_unavailable` /
+  `collection_size_mismatch`). The collection address is resolved
+  server-side from the placement row and saved into the cart session; the
+  client's copy is ignored.
+- **Webhook** books the order like a collection order (delivered
+  immediately, `delivered_at` pinned, no shipping lifecycle, immediate
+  payout leg), stamps the resolved `collection_address` onto the order row,
+  and TELLS THE VENUE: a `venue_collection_pending` email keyed
+  `venue_collection_pending:{orderId}` so a Stripe redelivery cannot double
+  it, plus a `collection_pending` bell. The venue is a physical party to
+  this sale; a stranger will present an order number at their counter.
+
+Tests: 8 on the checkout route (claim re-validation, both 409s, null-label
+leniency, server-side address resolution, zero shipping) and 4 on the
+webhook (delivered immediately with the address on the row, venue email
+keyed on the order, zero shipping cost, and a ship-order control that gets
+no venue email). Fail-before verified both sides: stubbing the checkout
+re-validation block failed 7, neutralising `isVenueCollection` in the
+webhook failed 2.
+
+Test-fixture notes for the next reader: the webhook tests do NOT mock
+`@/lib/cart-sessions`, so the real `loadCartSession` runs against the
+supabase mock — its chain is `.select().eq().gt().maybeSingle()` and
+`artist_slugs` is an ARRAY on the row. The ship-order control varies the
+CART ROW's `fulfilmentMethod`, not the event metadata, because the saved
+row is the data-of-record and metadata is only the fallback.

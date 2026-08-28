@@ -278,6 +278,13 @@ const checkoutItemSchema = z.object({
   type: z.enum(["work", "collection"]).optional(),
   workId: optionalString(200),
   collectionId: optionalString(200),
+  // T9 (N2a). Per-line fulfilment: absent means "follow the order-level
+  // choice". `collect_venue` lines name the placement they collect against;
+  // the server re-validates BOTH against the live placements table
+  // (api/checkout), so these are claims to check, never facts to trust.
+  lineFulfilment: z.enum(["ship", "collect_venue"]).optional(),
+  collectVenueSlug: optionalString(100),
+  collectPlacementId: optionalString(200),
 });
 
 // Shipping subset for "Collect from artist" — buyer picks up in person,
@@ -350,6 +357,18 @@ const collectionCheckoutSchema = z.object({
   ...checkoutMetaShape,
 });
 
+// T9 (N2b). Collect-from-VENUE: the buyer pays online and picks the work up
+// from the venue wall it is hanging on. Same reduced shipping shape as
+// collect-from-artist (name, email, phone; no address needed to post to), and
+// every line must carry its placement claim, which api/checkout verifies
+// against the live placements table.
+const venueCollectionCheckoutSchema = z.object({
+  fulfilmentMethod: z.literal("collect_venue"),
+  items: z.array(checkoutItemSchema).min(1).max(50),
+  shipping: collectionShippingSchema,
+  ...checkoutMetaShape,
+});
+
 export const checkoutSchema = z.preprocess(
   // Normalise an absent fulfilmentMethod to 'ship' so legacy clients that
   // didn't send the field keep working. Anything non-object falls through
@@ -360,7 +379,11 @@ export const checkoutSchema = z.preprocess(
     }
     return input;
   },
-  z.discriminatedUnion("fulfilmentMethod", [shipCheckoutSchema, collectionCheckoutSchema])
+  z.discriminatedUnion("fulfilmentMethod", [
+    shipCheckoutSchema,
+    collectionCheckoutSchema,
+    venueCollectionCheckoutSchema,
+  ])
     // Country-aware postcode format check — only meaningful on the ship
     // branch. Collection mode treats postcode as optional and may have
     // it blank, so we skip the format check there. Lives at the union

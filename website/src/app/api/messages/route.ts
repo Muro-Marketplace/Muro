@@ -673,9 +673,31 @@ export async function POST(request: Request) {
 
         // Compare-and-set on pending, so two concurrent responses cannot both
         // land and the second cannot overwrite the first.
+        // T9 (8.1): stamp the venue's collection point at accept, same as the
+        // placements PATCH, so an accept through the inbox is not the path
+        // that leaves the collect flow without an address. Hoisted above the
+        // update rather than inlined into its payload, so the two queries read
+        // as two queries.
+        let acceptExtras: Record<string, string> = {};
+        if (responseStatus === "active") {
+          const { data: vp } = await db
+            .from("venue_profiles")
+            .select("name, address_line1, address_line2, city, postcode")
+            .eq("slug", placement.venue_slug ?? "")
+            .maybeSingle<{ name: string | null; address_line1: string | null; address_line2: string | null; city: string | null; postcode: string | null }>();
+          const parts = [vp?.name, vp?.address_line1, vp?.address_line2, vp?.city, vp?.postcode]
+            .map((x) => (x ?? "").trim())
+            .filter(Boolean);
+          if (parts.length > 0) acceptExtras = { collection_address: parts.join(", ") };
+        }
+
         const { data: updated, error: updErr } = await db
           .from("placements")
-          .update({ status: responseStatus, responded_at: new Date().toISOString() })
+          .update({
+            status: responseStatus,
+            responded_at: new Date().toISOString(),
+            ...acceptExtras,
+          })
           .eq("id", placementId)
           .eq("status", "pending")
           .select("id");

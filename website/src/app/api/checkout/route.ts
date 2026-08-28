@@ -12,10 +12,11 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
-// Fulfilment method narrowed to ship | collection. Earlier revisions
-// also handled "digital", but the validations schema never accepted it
-// and no client emits it, so the branch was dead code (G2-15 follow-up).
-type FulfilmentMethod = "ship" | "collection";
+// Fulfilment methods. Earlier revisions also handled "digital", but the
+// validations schema never accepted it and no client emits it, so that branch
+// was dead code (G2-15 follow-up). `collect_venue` is T9: the buyer pays online
+// and picks the work up from the venue wall it hangs on.
+type FulfilmentMethod = "ship" | "collection" | "collect_venue";
 
 /** Row shape we need for cart re-validation. Narrow on purpose, the
  *  table has many more columns we never read here. */
@@ -44,10 +45,69 @@ export async function POST(request: Request) {
     }
 
     const { items, shipping, fulfilmentMethod: rawFulfilment } = parsed.data;
-    // The schema now narrows fulfilmentMethod to "ship" | "collection";
-    // the cast is defensive against a future schema widening.
     const fulfilmentMethod: FulfilmentMethod =
-      rawFulfilment === "collection" ? "collection" : "ship";
+      rawFulfilment === "collection" || rawFulfilment === "collect_venue"
+        ? rawFulfilment
+        : "ship";
+
+    // T9 (N2d). Collect-from-venue lines are CLAIMS about what is hanging
+    // where, and every claim is re-validated against the live placements table
+    // before any money is taken. The client's collectVenueSlug and
+    // collectPlacementId prove nothing on their own — a browser console can
+    // send any pair — so the placement row is the authority on venue, artist,
+    // liveness and size.
+    let collectVenueAddress: string | null = null;
+    if (fulfilmentMethod === "collect_venue") {
+      const placementIds = items
+        .map((i) => i.collectPlacementId)
+        .filter((x): x is string => Boolean(x));
+      if (placementIds.length !== items.length) {
+        return NextResponse.json(
+          { error: "Every item must name its collection placement." },
+          { status: 400 },
+        );
+      }
+      // One venue per collect order: a buyer cannot pick up from two bars in
+      // one checkout, and the order row has one collection_address.
+      const venues = new Set(items.map((i) => i.collectVenueSlug ?? ""));
+      if (venues.size !== 1 || venues.has("")) {
+        return NextResponse.json(
+          { error: "Collection orders can only cover one venue at a time." },
+          { status: 400 },
+        );
+      }
+
+      const { data: places } = await getSupabaseAdmin()
+        .from("placements")
+        .select("id, venue_slug, artist_slug, status, collection_address, placed_size_label")
+        .in("id", placementIds)
+        .eq("status", "active");
+      const byId = new Map((places || []).map((pl) => [pl.id, pl]));
+      for (const line of items) {
+        const pl = byId.get(line.collectPlacementId!);
+        if (!pl || pl.venue_slug !== line.collectVenueSlug || pl.artist_slug !== line.artistSlug) {
+          return NextResponse.json(
+            {
+              error: `"${line.title}" is no longer available for collection.`,
+              code: "collection_unavailable",
+            },
+            { status: 409 },
+          );
+        }
+        // NULL placed_size_label = not recorded = no size restriction; every
+        // live placement predates the column (migration 119).
+        if (pl.placed_size_label && pl.placed_size_label !== line.size) {
+          return NextResponse.json(
+            {
+              error: `Only the ${pl.placed_size_label} of "${line.title}" is at the venue.`,
+              code: "collection_size_mismatch",
+            },
+            { status: 409 },
+          );
+        }
+        collectVenueAddress = pl.collection_address ?? collectVenueAddress;
+      }
+    }
     // Task 1 review-deferred follow-up: read the metadata fields off
     // `parsed.data` rather than the raw `body`, so they go through the
     // same trim + cap as the rest of the schema-validated input.
@@ -494,7 +554,14 @@ export async function POST(request: Request) {
     await saveCartSession({
       stripeSessionId: session.id,
       cart: items,
-      shipping: { ...shipping, fulfilmentMethod, collectionNotes },
+      shipping: {
+        ...shipping,
+        fulfilmentMethod,
+        collectionNotes,
+        // T9: the address the buyer collects from, resolved server-side from
+        // the placement row, never from the client.
+        ...(collectVenueAddress ? { collectionAddress: collectVenueAddress } : {}),
+      },
       source,
       venueSlug,
       artistSlugs,

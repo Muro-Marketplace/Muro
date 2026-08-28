@@ -65,6 +65,15 @@ export interface ArtistWork {
   /** Denormalised display name of the venue currently hosting this
    *  work, kept in sync by the placements PATCH handler. Migration 038. */
   placed_at_venue?: string | null;
+  /** T9 / N1: live placement details for the collect-from-venue CTA. */
+  currentPlacement?: {
+    id: string;
+    venueSlug: string | null;
+    venueName: string | null;
+    status: string | null;
+    collectionAddress: string | null;
+    placedSizeLabel: string | null;
+  } | null;
   /** Soft FK to placements.id for the active placement on this work. */
   current_placement_id?: string | null;
 }

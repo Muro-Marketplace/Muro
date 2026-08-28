@@ -93,6 +93,7 @@ import VenueRegistrationConfirmation from "./templates/venue-lifecycle/VenueRegi
 // deleted lib/email.ts.
 import CurationEnquiryReceived from "./templates/venue-lifecycle/CurationEnquiryReceived";
 import CurationPaymentReceived from "./templates/venue-lifecycle/CurationPaymentReceived";
+import VenueCollectionPending from "./templates/venue-lifecycle/VenueCollectionPending";
 // K1: the per-sale venue notice, distinct from the periodic revenue-share statement.
 import VenueSaleFromPlacement from "./templates/venue-lifecycle/VenueSaleFromPlacement";
 
@@ -199,6 +200,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   ArtistNewPlacementInvitation,
   CurationEnquiryReceived,
   CurationPaymentReceived,
+  VenueCollectionPending,
   // Account
   AccountEmailVerification,
   AccountPasswordReset,

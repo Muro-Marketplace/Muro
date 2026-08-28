@@ -73,6 +73,29 @@ async function getUserRole(userId: string) {
 }
 
 // GET: fetch placements for the authenticated user (artist or venue)
+/**
+ * The venue's collection point, composed from its profile address at the moment
+ * a placement is accepted (T9 / 8.1). Captured onto the placement rather than
+ * joined at read time, so the buyer's confirmation shows the address the deal
+ * was struck under even if the venue later moves.
+ */
+async function collectionAddressForVenue(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  venueSlug: string | null | undefined,
+): Promise<string | null> {
+  if (!venueSlug) return null;
+  const { data } = await db
+    .from("venue_profiles")
+    .select("name, address_line1, address_line2, city, postcode")
+    .eq("slug", venueSlug)
+    .maybeSingle<{ name: string | null; address_line1: string | null; address_line2: string | null; city: string | null; postcode: string | null }>();
+  if (!data) return null;
+  const parts = [data.name, data.address_line1, data.address_line2, data.city, data.postcode]
+    .map((p) => (p ?? "").trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 export async function GET(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
@@ -1186,7 +1209,15 @@ export async function PATCH(request: Request) {
 
     if (existing.status === "pending" && (status === "active" || status === "declined")) {
       updates.responded_at = now;
-      if (status === "active") updates.accepted_at = now;
+      if (status === "active") {
+        updates.accepted_at = now;
+        // T9 (8.1): stamp the venue's collection point at accept, so the
+        // collect-from-venue flow has an address the deal was struck under.
+        // Best-effort — a venue with no address recorded just leaves it null,
+        // and checkout falls back to the venue's live profile.
+        const addr = await collectionAddressForVenue(db, (existing.venue_slug as string | null) ?? null);
+        if (addr) updates.collection_address = addr;
+      }
     }
 
     // Auto-unarchive on any engaging action. If a user previously

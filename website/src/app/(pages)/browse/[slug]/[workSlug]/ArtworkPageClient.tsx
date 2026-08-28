@@ -596,7 +596,20 @@ export default function ArtworkPageClient({
             size; for the legacy original-only flow it stays
             "Original". Shipping is £0 because the buyer collects in
             person, that's the entire point of the pickup option. */}
-        {work.available && selectedInStorePrice != null && (() => {
+        {work.available && selectedInStorePrice != null
+          && work.currentPlacement?.status === "active"
+          && (work.currentPlacement.placedSizeLabel == null
+            || !selectedPricing
+            || work.currentPlacement.placedSizeLabel === selectedPricing.label)
+          && (() => {
+          // T9 / N1: the CTA is gated on an ACTUAL live placement, not just an
+          // in-store price. Before this it rendered identically whether the
+          // piece hung on a venue wall or in the artist's flat — a price was
+          // enough. And a work on a wall is ONE object at ONE size, so when
+          // the placement records which size hangs (placed_size_label), only
+          // that size is collectable; a null label means not recorded, which
+          // keeps every pre-119 placement collectable rather than killing the
+          // flow for all of them.
           // Per-size CTA when either source resolves a size-specific
           // price: the new `pricing[i].inStorePrice` field OR the
           // legacy top-level `inStorePricing[]` array. Falls back to
@@ -628,14 +641,20 @@ export default function ArtworkPageClient({
                   price: selectedInStorePrice,
                   quantity: 1,
                   shippingPrice: 0,
+                  // T9 / N2a: the line carries its collection CLAIM — venue and
+                  // placement — which api/checkout re-validates against the
+                  // live placements table before any money is taken.
+                  lineFulfilment: "collect_venue",
+                  collectVenueSlug: work.currentPlacement?.venueSlug ?? undefined,
+                  collectPlacementId: work.currentPlacement?.id,
                 });
                 router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
               }}
               className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
             >
-              {isPerSize
-                ? `Collect from venue, £${selectedInStorePrice}`
-                : `Buy Original, £${selectedInStorePrice}`}
+              {work.currentPlacement?.venueName
+                ? `Collect from ${work.currentPlacement.venueName}, £${selectedInStorePrice}`
+                : `Collect from venue, £${selectedInStorePrice}`}
             </button>
           );
         })()}

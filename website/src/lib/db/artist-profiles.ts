@@ -52,7 +52,47 @@ export async function getArtistProfileBySlug(slug: string) {
     .eq("artist_id", profile.id)
     .order("sort_order", { ascending: true });
 
-  return { profile: profile as DbArtistProfile, works: (works || []) as DbArtistWork[] };
+  // T9 / N1: the collect-from-venue CTA must key on a LIVE placement, not on
+  // the presence of an in-store price — before this, the CTA rendered
+  // identically whether the piece hung on a venue wall or in the artist's
+  // flat. One batched read for the profile's placed works; no FK exists from
+  // artist_works.current_placement_id to placements, so this cannot be a
+  // PostgREST embed.
+  const placementIds = (works || [])
+    .map((w) => (w as { current_placement_id?: string | null }).current_placement_id)
+    .filter((x): x is string => Boolean(x));
+  const placementsById = new Map<string, {
+    id: string; venue_slug: string | null; venue: string | null; status: string | null;
+    collection_address: string | null; placed_size_label: string | null;
+  }>();
+  if (placementIds.length > 0) {
+    const { data: placementRows } = await db
+      .from("placements")
+      .select("id, venue_slug, venue, status, collection_address, placed_size_label")
+      .in("id", placementIds);
+    for (const row of placementRows || []) {
+      placementsById.set(row.id, row);
+    }
+  }
+  const worksWithPlacement = (works || []).map((w) => {
+    const pid = (w as { current_placement_id?: string | null }).current_placement_id;
+    const pl = pid ? placementsById.get(pid) : undefined;
+    return {
+      ...(w as DbArtistWork),
+      current_placement: pl
+        ? {
+            id: pl.id,
+            venueSlug: pl.venue_slug,
+            venueName: pl.venue,
+            status: pl.status,
+            collectionAddress: pl.collection_address,
+            placedSizeLabel: pl.placed_size_label,
+          }
+        : null,
+    };
+  });
+
+  return { profile: profile as DbArtistProfile, works: worksWithPlacement as DbArtistWork[] };
 }
 
 export async function getAllDatabaseArtists(): Promise<Artist[]> {

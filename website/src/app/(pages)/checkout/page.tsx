@@ -70,7 +70,18 @@ export default function CheckoutPage() {
   // Fulfilment method — buyer chooses ship (default) or collection from
   // the artist (drop-off). Collection skips shipping costs and the
   // address requirement.
-  const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection">("ship");
+  // T9 / N2c: a cart where EVERY line is a venue-collect line opens in
+  // collect_venue mode; mixed carts stay on "ship" and the collect lines are
+  // re-validated (and rejected if stale) server-side. Derived before the state
+  // so the initial render is already right.
+  const allVenueCollect =
+    items.length > 0 && items.every((i) => i.lineFulfilment === "collect_venue");
+  const collectVenueName = allVenueCollect
+    ? items[0]?.collectVenueSlug ?? null
+    : null;
+  const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection" | "collect_venue">(
+    allVenueCollect ? "collect_venue" : "ship",
+  );
   const [collectionNotes, setCollectionNotes] = useState("");
   // Buyer's preferred pickup window. Captured separately from the free
   // notes so the artist can see a concrete day + time on the order
@@ -343,7 +354,7 @@ export default function CheckoutPage() {
 
   // Collection skips delivery cost entirely — buyer picks up from the
   // artist's space. The shared helper above gives us the ship-mode total.
-  const shippingCost = fulfilmentMethod === "collection" ? 0 : totalShipping;
+  const shippingCost = fulfilmentMethod === "ship" ? totalShipping : 0;
   const total = subtotal + shippingCost;
 
   // Pick the slowest tier across all artist groups so the static
@@ -377,7 +388,7 @@ export default function CheckoutPage() {
     if (submitting) return;
     // Collection only needs name + contact; addressLine/postcode/city
     // are skipped because the artist supplies the location.
-    const required: (keyof ShippingInfo)[] = fulfilmentMethod === "collection"
+    const required: (keyof ShippingInfo)[] = fulfilmentMethod !== "ship"
       ? ["fullName", "email", "phone"]
       : ["fullName", "email", "phone", "addressLine1", "city", "postcode"];
     const newErrors: Record<string, boolean> = {};
@@ -620,7 +631,39 @@ export default function CheckoutPage() {
               advertises an unavailable option. */}
           <div>
             <h2 className="text-lg font-medium mb-4">Delivery Method</h2>
-            <div className={`grid gap-3 mb-6 ${pickupAvailable ? "grid-cols-2" : "grid-cols-1"}`}>
+            <div className={`grid gap-3 mb-6 ${
+              [true, pickupAvailable, allVenueCollect].filter(Boolean).length > 1
+                ? "grid-cols-2"
+                : "grid-cols-1"
+            }`}>
+              {/* T9 / N2c: the venue-collect tile appears only for a cart built
+                  from the collect-from-venue CTA, and is preselected. The
+                  server re-validates every line's placement at submit, so the
+                  tile is presentation, not the check. */}
+              {allVenueCollect && (
+                <button
+                  type="button"
+                  onClick={() => setFulfilmentMethod("collect_venue")}
+                  className={`text-left p-4 rounded-sm border transition-colors ${
+                    fulfilmentMethod === "collect_venue"
+                      ? "border-accent bg-accent/5"
+                      : "border-border hover:border-accent/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={fulfilmentMethod === "collect_venue" ? "text-accent" : "text-muted"}>
+                      <path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                    <p className="text-sm font-medium">Collect from the venue</p>
+                  </div>
+                  <p className="text-xs text-muted leading-snug">
+                    {collectVenueName
+                      ? `Pick it up where it hangs. Show your order number at ${collectVenueName}.`
+                      : "Pick it up where it hangs. Show your order number at the venue."}
+                  </p>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setFulfilmentMethod("ship")}
@@ -665,7 +708,7 @@ export default function CheckoutPage() {
 
           {/* Buyer details */}
           <div>
-            <h2 className="text-lg font-medium mb-4">{fulfilmentMethod === "collection" ? "Your Details" : "Delivery Details"}</h2>
+            <h2 className="text-lg font-medium mb-4">{fulfilmentMethod === "ship" ? "Delivery Details" : "Your Details"}</h2>
             <div className="space-y-3">
               {renderInput("fullName", "Full name *")}
               <div className="grid grid-cols-2 gap-3">

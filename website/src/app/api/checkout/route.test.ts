@@ -1279,3 +1279,141 @@ describe("POST /api/checkout QR enforcement fail-closed (D39)", () => {
     errSpy.mockRestore();
   });
 });
+
+
+// T9 / owner decision 13 (04 Phase 8, item 8.4). Collect-from-venue lines are
+// CLAIMS about what is hanging where. Every claim is re-validated against the
+// live placements table before money is taken: the client's collectVenueSlug
+// and collectPlacementId prove nothing, since a browser console can send any
+// pair.
+describe("POST /api/checkout collect-from-venue re-validation (T9)", () => {
+  const PLACEMENT = {
+    id: "p-1",
+    venue_slug: "the-copper-kettle",
+    artist_slug: "alice",
+    status: "active",
+    collection_address: "The Copper Kettle, 1 High St, Hampton, TW12 2TH",
+    placed_size_label: null as string | null,
+  };
+
+  function setupWithPlacements(rows: (typeof PLACEMENT)[]) {
+    setupDefaultDbMock();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "placements") {
+        return {
+          select: () => ({
+            in: () => ({
+              eq: async () => ({ data: rows, error: null }),
+            }),
+          }),
+        };
+      }
+      return base(table);
+    });
+  }
+
+  const collectItem = {
+    ...baseItem,
+    workId: "w-1",
+    lineFulfilment: "collect_venue",
+    collectVenueSlug: "the-copper-kettle",
+    collectPlacementId: "p-1",
+  };
+
+  const collectBody = {
+    fulfilmentMethod: "collect_venue",
+    items: [collectItem],
+    shipping: { ...baseShipping, addressLine1: "", city: "", postcode: "", country: "GB" },
+  };
+
+  it("accepts a valid claim and carries the placement's address into the cart session", async () => {
+    setupWithPlacements([PLACEMENT]);
+
+    const res = await POST(req(collectBody));
+
+    expect(res.status).toBe(200);
+    const saved = (saveCartSessionMock.mock.calls as unknown as Array<
+      [{ shipping: { collectionAddress?: string } }]
+    >)[0][0];
+    // Resolved SERVER-side from the placement row, never from the client.
+    expect(saved.shipping.collectionAddress).toBe(PLACEMENT.collection_address);
+  });
+
+  it("rejects a line whose placement does not exist or is not active", async () => {
+    // The .eq("status","active") filter means an ended placement simply is not
+    // in the result set: same refusal as a fabricated id.
+    setupWithPlacements([]);
+
+    const res = await POST(req(collectBody));
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("collection_unavailable");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a claim whose venue does not match the placement's", async () => {
+    setupWithPlacements([{ ...PLACEMENT, venue_slug: "somewhere-else" }]);
+
+    const res = await POST(req(collectBody));
+
+    expect(res.status).toBe(409);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a claim whose artist does not match the placement's", async () => {
+    // Otherwise artist B's checkout could ride artist A's placement.
+    setupWithPlacements([{ ...PLACEMENT, artist_slug: "someone-else" }]);
+
+    expect((await POST(req(collectBody))).status).toBe(409);
+  });
+
+  it("rejects the wrong SIZE when the placement records what hangs", async () => {
+    // A work on a wall is one object at one size.
+    setupWithPlacements([{ ...PLACEMENT, placed_size_label: "A2" }]);
+
+    const res = await POST(req(collectBody)); // cart line size is "S"
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("collection_size_mismatch");
+  });
+
+  it("accepts any size when the placement does not record one", async () => {
+    // NULL = not recorded = no restriction: every pre-119 placement, and
+    // refusing them all would kill the flow at birth.
+    setupWithPlacements([{ ...PLACEMENT, placed_size_label: null }]);
+    expect((await POST(req(collectBody))).status).toBe(200);
+  });
+
+  it("rejects a line with no placement claim at all", async () => {
+    setupWithPlacements([PLACEMENT]);
+    const res = await POST(
+      req({ ...collectBody, items: [{ ...collectItem, collectPlacementId: undefined }] }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a cart spanning two venues", async () => {
+    setupWithPlacements([PLACEMENT, { ...PLACEMENT, id: "p-2", venue_slug: "other-venue" }]);
+    const res = await POST(
+      req({
+        ...collectBody,
+        items: [
+          collectItem,
+          { ...collectItem, collectPlacementId: "p-2", collectVenueSlug: "other-venue" },
+        ],
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/one venue/i);
+  });
+
+  it("charges no shipping on a collect order", async () => {
+    setupWithPlacements([PLACEMENT]);
+    await POST(req(collectBody));
+    const saved = (saveCartSessionMock.mock.calls as unknown as Array<
+      [{ expectedShippingPence: number }]
+    >)[0][0];
+    expect(saved.expectedShippingPence).toBe(0);
+  });
+});

@@ -88,6 +88,16 @@ export interface DbArtistWork {
   /** Migration 038: denormalised venue display name and active placement
    *  pointer. Kept in sync by the placements PATCH handler. */
   placed_at_venue?: string | null;
+  /** T9 / N1: the LIVE placement behind the collect-from-venue CTA, joined in
+   *  getArtistProfileBySlug. Null when the work is not on a wall. */
+  current_placement?: {
+    id: string;
+    venueSlug: string | null;
+    venueName: string | null;
+    status: string | null;
+    collectionAddress: string | null;
+    placedSizeLabel: string | null;
+  } | null;
   current_placement_id?: string | null;
 }
 
@@ -173,6 +183,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
       frameOptions: Array.isArray(w.frame_options) ? w.frame_options : [],
       createdAt: w.created_at ?? undefined,
       placed_at_venue: w.placed_at_venue ?? null,
+      currentPlacement: w.current_placement ?? null,
       current_placement_id: w.current_placement_id ?? null,
     })),
   };

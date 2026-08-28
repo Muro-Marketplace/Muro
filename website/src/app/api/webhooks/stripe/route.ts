@@ -51,6 +51,7 @@ import { orderIdFromSession, classifyOrderIdConflict } from "@/lib/orders/order-
 import { missingStripePriceEnvs } from "@/env";
 import type Stripe from "stripe";
 import { isSettled } from "@/lib/payments/settlement";
+import { VenueCollectionPending } from "@/emails/templates/venue-lifecycle/VenueCollectionPending";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -741,7 +742,12 @@ async function handleWebhookEvent(
         // lifecycle to track. Mark the order delivered straight away
         // and pin delivered_at so refund-window logic still works.
         const fulfilmentMethod = (savedShipping as { fulfilmentMethod?: string })?.fulfilmentMethod || session.metadata?.fulfilment_method || "ship";
-        const isCollection = fulfilmentMethod === "collection";
+        // T9 (8.5): collect-from-venue behaves like collect-from-artist for
+        // status and payout timing — the artwork is handed over at (or just
+        // after) purchase, there is no shipping lifecycle, and the artist's
+        // payout releases immediately rather than waiting the 14-day hold.
+        const isVenueCollection = fulfilmentMethod === "collect_venue";
+        const isCollection = fulfilmentMethod === "collection" || isVenueCollection;
         const initialStatus: "confirmed" | "delivered" = isCollection ? "delivered" : "confirmed";
         const nowIso = new Date().toISOString();
 
@@ -787,6 +793,11 @@ async function handleWebhookEvent(
           placement_id: placementId,
           fulfilment_method: fulfilmentMethod,
           collection_notes: (savedShipping as { collectionNotes?: string })?.collectionNotes || null,
+          // T9: the venue's collection point, resolved server-side at checkout
+          // from the placement row and carried through the cart session.
+          collection_address: isVenueCollection
+            ? (savedShipping as { collectionAddress?: string })?.collectionAddress || null
+            : null,
           delivered_at: isCollection ? nowIso : null,
           created_at: nowIso,
         };
@@ -1040,6 +1051,56 @@ async function handleWebhookEvent(
               ? { slug: venueSlug, revenue: venueRevenue, artistSlug: firstArtistSlug }
               : null,
           });
+
+          // ─── T9 (8.6): tell the venue someone is coming ───
+          // A collect-from-venue sale makes the venue a physical party: a
+          // stranger will present an order number at the counter. A sale they
+          // are not told about is a confrontation waiting there. Email keyed on
+          // the order so a Stripe redelivery cannot double it, plus a bell.
+          if (isVenueCollection && venueSlug) {
+            try {
+              const { data: venueRow } = await db
+                .from("venue_profiles")
+                .select("user_id, name")
+                .eq("slug", venueSlug)
+                .maybeSingle<{ user_id: string | null; name: string | null }>();
+              if (venueRow?.user_id) {
+                const { data: { user: venueUser } } = await db.auth.admin.getUserById(venueRow.user_id);
+                const firstWork = cartItemsForNotify[0]?.title || "Artwork";
+                const artistDisplay =
+                  slugMap.get(firstArtistSlug) || firstArtistSlug || "the artist";
+                createNotification({
+                  userId: venueRow.user_id,
+                  kind: "collection_pending",
+                  title: `Sold off your wall: ${firstWork}`,
+                  body: `${savedShipping?.fullName || "The buyer"} will collect it with order ${orderId}`,
+                  link: "/venue-portal/placements",
+                }).catch((err) => console.warn("[webhook] collection bell failed:", err));
+                if (venueUser?.email) {
+                  await sendEmail({
+                    idempotencyKey: `venue_collection_pending:${orderId}`,
+                    template: "venue_collection_pending",
+                    category: "orders_and_payouts",
+                    to: venueUser.email,
+                    userId: venueRow.user_id,
+                    subject: `${firstWork} has sold and will be collected from you`,
+                    react: VenueCollectionPending({
+                      venueName: venueRow.name || "there",
+                      workTitle: firstWork,
+                      artistName: artistDisplay,
+                      orderNumber: orderId,
+                      buyerName: (savedShipping?.fullName || "The buyer").split(" ")[0],
+                      placementsUrl: `${SITE}/venue-portal/placements`,
+                      supportUrl: `${SITE}/support`,
+                    }),
+                    metadata: { orderId, venueSlug },
+                  });
+                }
+              }
+            } catch (err) {
+              console.error("[webhook] venue collection notice failed:", err);
+            }
+          }
 
           // ─── Stripe Connect transfers ───
           // Extracted into scheduleOrderLegs so the D3 duplicate-redelivery paths
