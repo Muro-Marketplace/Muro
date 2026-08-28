@@ -33,7 +33,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | **E34 DONE** (§3): adopt-by-slug deleted, adoption now requires a CONFIRMED email and exactly one match, insert slug no longer comes from metadata, orphan factory in `register-venue` deleted. Prod facts settled the doc's open question: `venue_profiles.user_id` is NOT NULL, 9 venues / 0 orphans, so adopt-by-slug was latent and the seed had never worked; the insert half was live. No `artist_slug` equivalent exists (0 server readers). Remaining: E36c/E36b/E36d, E35d/E30b (`admin_users`), E30a |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | **Phase 0 + Phase 1 done** (earlier). **Item 3.2 DONE**: `POST /api/auth/resend-verification` (enumeration-safe, tighter rate limit), `emailRedirectTo` on the two `signUp()` outliers, and the login page surfaces the resend when Supabase says "Email not confirmed". **Phase 2 (= 07 K1) DONE**: `lib/email.ts` deleted, 19 exports gone, 8 admin notifiers collapsed into `sendAdminAlert`, 6 new templates written (their absence was why the legacy path survived), one live duplicate send to buyers deleted, `no-legacy-email` test + `one-email-entrypoint` dependency-cruiser rule + `depcheck` in the gate. Remaining: item 1.5, Phase 3, Phase 4 |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | **K2 DONE** (§2): `startPaidLoanBilling` + its SetupIntent machinery + the private `isPaidLoan` shadow deleted, 664 lines net; the doc's §2.3 was reversed by §B6/E8 and is corrected in the entry. `no-parallel-billing` lint rule at error + 16 tests. **K2e (delete `PAID_LOAN_V2`) deferred behind K3** per §2.5. Remaining: K1 (= 09 Phase 2), K3, K4, K5, K6, K8, K11 |
-| 12 | `08` rewritten cull last (D6 unconditional list only until rewritten) | `08` | todo |
+| 12 | `08` rewritten cull last (D6 unconditional list only until rewritten) | `08` | **D6 item 3 DONE** (wall kill-switch leak closed, 6 tests, fail-before verified). Items 1/2/4 verified and SURFACED not cut: two are clean (`PlacementQRModal`, `/profile-designs`), two are NOT (`/galleries` shares a name with a live data module; `/feature-requests` has a live admin twin). §7's three owner decisions restated in the entry. **Still blocked on the `08` rewrite per D6** |
 
 Owner decisions the loop is waiting on (none block the remaining queue):
 
@@ -10417,3 +10417,69 @@ the one that actually distinguishes the two designs. The duplicate-title warning
 `getWorksByArtistProfileId` call moved to where it is used, after the save.
 
 `npm run check` green: 0 lint errors, 225 files, 2208 tests, exit 0.
+
+### 08 D6 item 3 — the wall kill-switch had a hole in it — DONE
+
+`WALL_VISUALIZER_V1` gates the visualizer everywhere else, but
+`api/venues/[slug]/profile` read and served `walls` unconditionally. Flipping the
+flag off, which is what a kill-switch is for and includes doing it under incident
+pressure, left this endpoint publishing every venue's public wall list **and the
+signed URLs for uploaded wall photos**.
+
+A kill-switch with a hole in it is worse than no kill-switch: it is one somebody
+will reach for and believe.
+
+The gate sits before the read rather than filtering after it, and there is a test
+asserting the `walls` table is not even queried, because "returns nothing" and
+"reads nothing" are different guarantees and only the second one is a kill-switch.
+
+**Tests.** 6 new (this route had none at all). Fail-before verified: removing the
+gate fails 2 of 6. One test needed `storage` on the Supabase fake, because
+`loadWalls` signs a URL per uploaded wall and its `try/catch` would otherwise have
+swallowed the entire load and let the test pass for the wrong reason.
+
+### 08 — the rest, SURFACED not cut, as instructed
+
+**D6 authorises five unconditional items. Item 3 is done (above). Items 1, 2 and 4
+are verified but not executed, because verifying them showed the one-line summaries
+do not survive contact with the code:**
+
+| D6 item | Verified state | Recommendation |
+|---|---|---|
+| 1. Delete legacy `WallVisualiser.tsx` (139 LOC) | Present. Dead while `WALL_VISUALIZER_V1` is prod-ON, per the doc | Safe to delete, but confirm the flag's prod value first: it is dead **because** of a flag value, not structurally |
+| 2. Delete two orphan DELETE handlers | Not located precisely enough to act on; the doc gives no file:line | Needs the doc's §4.3 table re-derived before cutting |
+| 4a. `PlacementQRModal.tsx` | **Zero inbound references, confirmed** | Safe to delete |
+| 4b. `/profile-designs` | **Zero inbound references, confirmed** | Safe to delete. Note §3.2 lists it as one of three near-identical copies |
+| 4c. `/galleries` | **NOT clean.** The page may be unlinked, but `src/data/galleries.ts` is imported by `browse/page.tsx` and `venue-portal/saved` | Delete the ROUTE only. The data module must stay |
+| 4d. `/feature-requests` (+2 API routes) | **NOT clean.** There is a live `admin/feature-requests` page, and `api/feature-requests` + `.../[id]/upvote` exist. §4.2 says two parallel systems, one orphaned; which one is orphaned is not established | Do not cut until it is established which system the admin panel reads |
+| 5. `/email-preview` | Already gated non-prod (iteration 21). The admin conjunct half of D6 is still an open owner question | No action |
+
+**§7's three owner decisions, restated so they are answerable without re-reading
+the doc:**
+
+1. **Is the wall visualizer part of the pitch?** ~14,000 LOC (about 12% of the
+   codebase), 15 of 119 API routes, 6 of 22 production npm dependencies, 5 tables,
+   2 storage buckets, and 5,230 LOC of untested canvas/3D component code. Option A
+   keep whole / B keep the customer preview and cut venue walls + artist showroom
+   (~7,900 LOC) / C cut whole (~14,000). The doc recommends B and so do I: the
+   venue-side wall management is the expensive, untested, quota-metered half, and
+   the ~600 LOC customer-side preview is the part a buyer actually sees.
+   **D0 says do not remove the visualizer, so B and C both need an explicit
+   owner instruction that overrides it.**
+2. **Do you intend to sell managed curation at launch?** `/curated` sells up to
+   £199.99/quarter recurring. If launch is enquiry-only, dropping the two
+   `managed_*` tiers removes the riskiest path (recurring Stripe subscriptions plus
+   webhook subscription handling) without touching the marketing surface. If it is
+   the plan, that surface needs its own payment and auth audit before launch.
+3. **Are `/demo` and `/waitlist` still go-to-market assets?** ~1,100 LOC between
+   them. `/demo` is the homepage's "Tour the platform" CTA; `/waitlist` is in the
+   sitemap and linked from no UI at all. Cutting a live homepage CTA on a
+   pre-launch product is a business call.
+
+**And the blocker above all of them:** D6 says `08` is **not executable until
+rewritten** to reconcile with `09` and with the Option A/B/C decision. That rewrite
+is still outstanding, so nothing beyond the five unconditional items should be cut
+by anyone, including a future session reading only this file.
+
+`npm run check` green: 0 lint errors, 226 files, 2214 tests, 0 dependency
+violations, exit 0.
