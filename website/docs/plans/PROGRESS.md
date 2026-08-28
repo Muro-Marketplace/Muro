@@ -30,9 +30,9 @@ Order of work: the "Corrected dependency order" at the end of
 | 22 | Delete the 5 strip-and-retry paths in `placements/route.ts` (supervisor D65) — same silent-data-loss class as E42-c, invisible to the phantom guard (write path) | D65 | **DONE** (9af466a). SEVEN sites, not the five listed. Every candidate column verified present in `tests/integration/schema-columns.json`, so no fallback could do what it claimed; each could only turn a real failure into a false success. Two new route tests drive an unrelated failure (permission denied) and assert a 500 with exactly ONE write attempt. Fail-before verified. Sites ~:104/:519/:754/:1021/:1294 strip columns that ALL exist in prod; delete the dance + surface the error, ONE site per iteration, confirming the trigger breadth (any-error vs pattern-matched — `:519` reads narrow, others broader) FIRST, with a test that an unrelated failure now surfaces instead of a false success. Not owner-gated |
 | 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **(a) AND (b) DONE.** (a) migration `103_venue_interested_in_local_artists.sql` written, applied and verified live (nullable boolean, no default: NULL means never answered, which 9 of 9 live venues are). Allowlist entry added, the save now sends it, and the transform reads the real column instead of hardcoding `true`. The venue-profile test assertion that pinned the column as absent is FLIPPED, as its own comment said it should be. (b) `preferred_sizes`: the only live reference was a stale comment in `writable-fields.ts` that lumped it in with `interested_in_local_artists`; corrected so the two cases read apart (vestigial vs shipped-control-awaiting-a-column), and the venue-profile route test now says which assertion flips when 23(a) lands. The strip-and-retry it referred to was already removed by E42-c. (a) `interested_in_local_artists` needs a new column, so it is blocked on the same unauthorised Supabase MCP as row 21. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, 4339efd). Remaining (**order per D67, OWNER-APPROVED 2026-07-31**): (1) **DONE — `no-authfetch-mutation` rule + grandfathered ratchet landed at `warn`, floor 94 across 44 files (468e3f1).** The rule's 94-site list IS the real E43 surface (vs 11 hand-enumerated — D67 vindicated). (2) IN PROGRESS — work the union, batching **by FILE not by call site** (supervisor D70.3: 44 files vs 94 sites; sites in a file share a shape/import/test). **E43-e done** (MessageInbox report/delete/block trio → shared `submitFlagAction` helper, floor 94→91, 7381399). **MessageInbox.tsx COMPLETE** (remaining 9 mutating `authFetch` → `mutate`, floor 91→82, e4ff19f; file now 0-flagged, 2 read GETs kept). **E43-d done** (`artist-portal/portfolio/page.tsx` shipping-settings save → `mutate` + success/error toasts, floor 82→81, e70ca39). **E43-g done** (saved-item `handleRemove` in BOTH `artist-portal/saved` + `customer-portal/saved` → `mutate`, remove-on-confirmed-delete + rollback/error-toast, floor 81→79, 516ec5f). **E43-h done** (`browse/[slug]/ArtistProfileClient.tsx` public enquiry: primary `/api/messages` → `mutate`, confirmation only on success, `/api/enquiry` best-effort, floor 79→78, 3d51a9b). **E43-i done** (`components/Header.tsx` 3 fire-and-forget mark-read `authFetch`→`mutate`, floor 78→75, 335de6c; no bespoke test — render-heavy + no user-visible outcome, covered by the ratchet + mutate contract). NEXT per D70.3: E43-j done (`VenuePortalLayout.tsx` self-heal → `mutate` + retry banner, floor 75→74, ec57636); bug-12 part 1 done (`BlogEditor.tsx` 3 saves → `mutate`, floor 74→71, b2c3769); `PlacementDetailClient.tsx` done (6 handlers → `mutate`, event-on-success-only for handleRespond, floor 71→65, 239ea48); `PlacementContextPanel.tsx` done (6 handlers → `mutate`, undo event success-only + a real catch added on all 6, floor 65→59, 13bc052); `artist-portal/billing/page.tsx` done (4 Stripe-session-redirect POSTs → `mutate`, transport-only, floor 59→55, 953e121); `artist-portal/orders/page.tsx` PARTIAL (order-STATUS PATCH → `mutate`, floor 55→54, 4ab254a; the 3 refund-path sites processRefund/issueProactiveRefund SURFACED as OWNER-GATED — they execute Stripe refunds, held per the money boundary); the other ~30 files + the 3 owner-gated refund sites, LOWERING `LITERAL_FLOOR` by each file's count in the same commit. **D70.2: 94 is a MIGRATION surface, not 94 bugs** (the rule has no res.ok exemption); the live-bug subset is the unchecked ones. Hand items E43-d/e/g/h/i/j + bug-12 are all IN the 94; **E43-f is OUT** (dead View buttons, no authFetch — own fix). (3) Flip the rule to `error` when the floor hits zero. (4) bug-12's flag-gate/notFound half is separate from its authFetch sites |
-| 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | **E34 DONE** (§3): adopt-by-slug deleted, adoption now requires a CONFIRMED email and exactly one match, insert slug no longer comes from metadata, orphan factory in `register-venue` deleted. Prod facts settled the doc's open question: `venue_profiles.user_id` is NOT NULL, 9 venues / 0 orphans, so adopt-by-slug was latent and the seed had never worked; the insert half was live. No `artist_slug` equivalent exists (0 server readers). Remaining: E36c/E36b/E36d, E35d/E30b (`admin_users`), E30a |
+| 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | **COMPLETE bar the owner-gated cutover.** E34, E36b, E36c, E36d, E35d, E30a, E30b all done. `admin_users` created (migration 101, applied+verified) and the backfill script shipped; migration 102 stops a signup declaring itself admin. ADR 0008 supersedes 0001. **Owner-gated: run `npm run admin:backfill`, then remove the `user_metadata` conjunct (D5 order).** |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | **Phase 0 + Phase 1 done** (earlier). **Item 3.2 DONE**: `POST /api/auth/resend-verification` (enumeration-safe, tighter rate limit), `emailRedirectTo` on the two `signUp()` outliers, and the login page surfaces the resend when Supabase says "Email not confirmed". **Phase 2 (= 07 K1) DONE**: `lib/email.ts` deleted, 19 exports gone, 8 admin notifiers collapsed into `sendAdminAlert`, 6 new templates written (their absence was why the legacy path survived), one live duplicate send to buyers deleted, `no-legacy-email` test + `one-email-entrypoint` dependency-cruiser rule + `depcheck` in the gate. Remaining: item 1.5, Phase 3, Phase 4 |
-| 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | **K2 DONE** (§2): `startPaidLoanBilling` + its SetupIntent machinery + the private `isPaidLoan` shadow deleted, 664 lines net; the doc's §2.3 was reversed by §B6/E8 and is corrected in the entry. `no-parallel-billing` lint rule at error + 16 tests. **K2e (delete `PAID_LOAN_V2`) deferred behind K3** per §2.5. Remaining: K1 (= 09 Phase 2), K3, K4, K5, K6, K8, K11 |
+| 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | **K1, K2, K2e, K3, K4, K5, K6 DONE. K8 PARTIAL** (code half done, the slug rename + Stripe Connect package escalated). `09 §4.1` harness DONE and `email:render` is in `check`. Remaining: K7 (already fixed by 09 Phase 1, doc unticked), K9/K10/K11 |
 | 12 | `08` rewritten cull last (D6 unconditional list only until rewritten) | `08` | **D6 item 3 DONE** (wall kill-switch leak closed, 6 tests, fail-before verified). Items 1/2/4 verified and SURFACED not cut: two are clean (`PlacementQRModal`, `/profile-designs`), two are NOT (`/galleries` shares a name with a live data module; `/feature-requests` has a live admin twin). §7's three owner decisions restated in the entry. **Still blocked on the `08` rewrite per D6** |
 
 Owner decisions the loop is waiting on (none block the remaining queue):
@@ -10539,3 +10539,85 @@ a gate the moment the five above are settled.
 
 `npm run check` green, now including `email:render`: 0 lint errors, 227 files,
 2218 tests, 131 templates rendered, 0 dependency violations, exit 0.
+
+---
+
+## Session close, 2026-08-28. What is left, and who owns it.
+
+Sixteen commits. `npm run check` is green at every one of them, and the gate is
+stricter than it was: it now runs `depcheck` and `email:render` as well as lint,
+typecheck, test and the route allowlist. 0 lint errors throughout; 1982 tests at
+the start of the session, 2218 at the end.
+
+Four migrations written, applied to prod through the Supabase MCP, and verified
+live in the same piece of work, per the standing rule. None left unapplied.
+
+| # | What | Verified |
+|---|---|---|
+| 101 | `admin_users` | table exists, RLS on, 0 policies, no anon/authenticated grants, 0 rows |
+| 102 | `strip_self_asserted_admin` trigger | both attack paths land on "customer" in a rolled-back transaction; a sign-in-shaped write leaves the existing admin admin |
+| 103 | `venue_profiles.interested_in_local_artists` | nullable boolean, no default |
+| 104 | `claim_artist_work_slot` | cap holds, an edit never consumes a slot even at limit 0; ACL `postgres=X, service_role=X` only |
+
+### Owner decisions, consolidated
+
+**1. The admin predicate cutover (D5 order, the only launch-adjacent one).**
+Run `npm run admin:backfill` in an environment holding the real `ADMIN_EMAILS`,
+confirm it reports every address resolved, then remove the `user_metadata`
+conjunct from `userIsAdmin`. Prod today: `admin_users` is empty and exactly one
+auth user carries `user_metadata.user_type = 'admin'`. **Doing the cutover before
+the backfill locks every admin out.**
+
+**2. `finlay-coles` is an approved artist whose page is unreachable.** It exists
+in `artist_profiles` alongside a separate `fin-coles`, and `next.config.ts` 308s
+`/browse/finlay-coles` to `/browse/fin-coles`. It is listed in `/browse` and every
+click lands on a different artist. Same person, or two accounts? Which row wins?
+
+**3. The demo persona package (K8 rename half).** `UPDATE artist_profiles SET
+slug='maya-chen' WHERE slug='maya-chen-demo'`, delete the `maya-chen` static seed
+and its six works, and complete Stripe Connect for the demo account so Bug 9's Buy
+Now stops 422-ing. Prod confirms the demo row has no `subscription_status` and no
+Connect account. The steps only work as one sequence: renaming first collides in
+the merge, deleting first repoints the homepage's positional pick.
+
+**4. `08` §7's three, unchanged and still unanswered.** Is the visualizer part of
+the pitch (~14,000 LOC, 12% of the codebase, and D0 currently says keep)? Is
+managed curation sold at launch? Are `/demo` and `/waitlist` still go-to-market?
+**And `08` itself is still not executable until rewritten, per D6.**
+
+**5. Drop the artist counter columns.** `total_views`, `total_placements`,
+`total_sales`, `total_enquiries` on `artist_profiles` are now written by nothing
+and read by no display. Dropping them is destructive, so it is yours.
+
+**6. Backfill `placements.monthly_fee_gbp` for the 3 rows that need it.**
+`PlacementDetailClient` still parses a fee out of the request message, with a
+"re-confirm before payout" caveat. 3 of 86 live placements have a fee in the
+message and nothing in the column, so deleting the parse would show "Free display"
+on three real negotiated placements.
+
+**7. Five `email_events` labels that are not registry ids** (`offer_received`,
+`suspicious_login`, `welcome_artist`, `welcome_customer`, `welcome_venue`).
+Renaming splits those templates' history in live rows. `npm run email:audit`
+prints them and exits 1, so it becomes a gate the moment they are settled.
+
+**8. `paused` reads as "Completed", and an unknown status reads as "Active".**
+Both surfaced by the K4 collapse, both behaviour changes 07 §4.2 says need their
+own commit and your sign-off.
+
+### Not done, stated plainly rather than left to be discovered
+
+- **09 Phase 3 items 3.3 to 3.7.** Feature builds, not wiring. 3.7 in particular
+  needs a dispute-creation path that does not exist at all: `disputes` is a table
+  written by nothing.
+- **09 items 4.3, 4.4, 4.5, 4.7, 4.8.** 4.4 depends on the CI lint flag, 4.7 is
+  DNS, 4.8 is time-based.
+- **07 K9, K10, K11.** K11 (no committed base schema) needs a real `pg_dump`;
+  reconstructing DDL from `information_schema` over the MCP would produce a schema
+  file nobody could trust, which is worse than not having one.
+- **07 §3.2's remaining JSX label sweep**, ~14 files. All four label
+  implementations, both API ladders, both eslint suppressions and the E13
+  collision are closed; what is left is hardcoded strings in list rows and
+  dialogs, with no behavioural defect, and three of them are dev-only surfaces
+  `08` should cull rather than fix.
+- **The `08` cull beyond D6 item 3.** Surfaced with per-item verification instead,
+  because two of D6's four "zero inbound link" deletions are not in fact clean.
