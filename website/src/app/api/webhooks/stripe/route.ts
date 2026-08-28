@@ -1238,6 +1238,25 @@ async function handleWebhookEvent(
     // First time this referred artist enters a paid status, extend the
     // referrer's free_until by 30 days. referral_credited_at guards against
     // double-credits if Stripe replays the event.
+    //
+    // THIS HAS NEVER RUN, and still cannot, for two independent reasons. Both
+    // are recorded rather than patched, because the second is an open owner
+    // question and fixing only the first would look like a working feature.
+    //
+    //   1. `referred_by_code` was never recorded on an application: the column
+    //      did not exist and a strip-and-retry destroyed the field silently on
+    //      every submission. Migration 109 fixed that, so codes flow from now on.
+    //   2. `artist_profiles.free_until` exists in NO migration and not in the
+    //      live table. The `.select("id, free_until")` below is therefore
+    //      rejected whole by PostgREST, `referrer` is null, and the credit is
+    //      skipped. That select is the parked floor of the phantom-column
+    //      ratchet (see tests/integration/phantom-columns.test.ts), held open
+    //      by D17.2: where a free window should be written at all, given
+    //      `trial_end` is Stripe-managed.
+    //
+    // 04 item 5.3 / D14 (making this credit atomic) waits on D17.2 for the same
+    // reason: hardening a read-modify-write on a path that cannot execute is
+    // work with no subject.
     const isPaidStatus = subscription.status === "active" || subscription.status === "trialing";
     if (isPaidStatus && event.type === "customer.subscription.created") {
       try {

@@ -11521,14 +11521,33 @@ The D4 signature, and the only order whose split does not sum.
 resolved, the user id did not, so no transfer was ever scheduled. D4's fix stops
 this recurring; it does not repair these.
 
-**10. The referral programme goes live on the next referred signup.** Migration
-109 makes `api/apply` record `referred_by_code` for the first time ever. From the
-next referred artist's first payment, the webhook credits their referrer **30
-days of `free_until`**, which feeds `platformFeePercentForArtist`, so the platform
-takes no fee from that artist for a month. That has never happened once. Nothing
-is owed retroactively: the 13 destroyed codes are unrecoverable, so no back-credit
-is possible even if you wanted one. Reverting is one line, dropping the field from
-the insert.
+**10. The referral programme is broken in TWO places. Migration 109 fixed the
+first. It still does not credit anybody, and that is deliberate.**
+
+**Correcting myself**: I first wrote this entry saying the programme "goes live on
+the next referred signup". That is wrong, and checking the second half is what
+showed it.
+
+Half one, now fixed: `api/apply` could not record `referred_by_code` because the
+column did not exist, and a strip-and-retry destroyed it silently on every
+application. Migration 109 adds it.
+
+Half two, **still open and owner-gated**: the webhook's referrer lookup is
+`.select("id, free_until")`, and **`artist_profiles.free_until` exists in no
+migration and not in the live table**. PostgREST rejects the whole query, so
+`referrer` is null and the credit is skipped. This is the parked floor of the
+phantom-column ratchet, grandfathered in `phantom-columns.test.ts` with the
+reason: *"the referral path writes a free window and where it should write is an
+open owner question (trial_end is Stripe-managed)"*. That is D17.2.
+
+So the honest position: **codes are recorded from now on, and nothing is credited
+to anybody until you answer D17.2** — where a free window should live, given
+`trial_end` is Stripe's. Nothing is owed retroactively either way: the 13
+destroyed codes are unrecoverable.
+
+**This also parks `04` item 5.3 / D14** (making the referral credit atomic).
+Hardening a read-modify-write on a path that cannot execute is work with no
+subject; it belongs immediately after D17.2, not before it.
 
 **11. Flagged messages reach no admin queue.** A message that trips the
 moderation filter now records `moderation_flagged` in its `metadata` (it
