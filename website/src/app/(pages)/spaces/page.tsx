@@ -14,7 +14,6 @@ import {
 import SpacesPlacementRequestForm, {
   type SpacesVenueOption,
 } from "@/components/SpacesPlacementRequestForm";
-import ArtworkRequestsList from "@/components/ArtworkRequestsList";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 interface ArtistWorkLite {
@@ -77,7 +76,7 @@ export default function SpacesLookingForArtPage() {
 
 function SpacesPageContent() {
   const searchParams = useSearchParams();
-  const view = searchParams?.get("view") === "requests" ? "requests" : "walls";
+  // ?view=requests retired with the artwork-requests parking (2026-08-28).
 
   const [venues, setVenues] = useState<DemandVenue[]>([]);
   const [stats, setStats] = useState<DemandStats | null>(null);
@@ -308,45 +307,8 @@ function SpacesPageContent() {
         </div>
       </section>
 
-      {/* View toggle: Walls (venue listings) vs Open requests
-          (structured demand). Driven by ?view=requests. Lives outside
-          the conditional so the tab strip is always visible — users
-          can flip between both modes from either page. */}
-      <section className="border-b border-border bg-white">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="flex items-center gap-1">
-            <Link
-              href="/spaces"
-              className={`px-1 pt-3 pb-2.5 text-sm transition-colors border-b-2 -mb-px ${
-                view === "walls"
-                  ? "font-medium text-foreground border-accent"
-                  : "text-muted border-transparent hover:text-foreground"
-              }`}
-            >
-              Walls
-            </Link>
-            <span className="w-3" />
-            <Link
-              href="/spaces?view=requests"
-              className={`px-1 pt-3 pb-2.5 text-sm transition-colors border-b-2 -mb-px ${
-                view === "requests"
-                  ? "font-medium text-foreground border-accent"
-                  : "text-muted border-transparent hover:text-foreground"
-              }`}
-            >
-              Open requests
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {view === "requests" ? (
-        <section className="py-10 lg:py-14">
-          <div className="max-w-[1200px] mx-auto px-6">
-            <ArtworkRequestsList />
-          </div>
-        </section>
-      ) : (
+      {/* Artwork requests are parked (owner decision 2026-08-28): the
+          feature returns in its own PR. The walls view is the only view. */}
       <>
       {/* Stats, computed from filtered results */}
       <section className="border-b border-border">
@@ -737,7 +699,6 @@ function SpacesPageContent() {
         </div>
       </section>
       </>
-      )}
     </div>
   );
 }

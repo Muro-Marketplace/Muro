@@ -26,7 +26,6 @@ const navItems = [
   { label: "Messages", href: "/artist-portal/messages" },
   { label: "Placements", href: "/artist-portal/placements" },
   { label: "My Offers", href: "/artist-portal/offers" },
-  { label: "Artwork Requests", href: "/artist-portal/artwork-requests" },
   { label: "Collections", href: "/artist-portal/collections" },
   { label: "Saved", href: "/artist-portal/saved" },
   { label: "Orders", href: "/artist-portal/orders" },
