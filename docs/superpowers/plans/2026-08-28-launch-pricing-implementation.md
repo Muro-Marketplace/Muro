@@ -727,7 +727,9 @@ git add "src/app/api/offers/[id]/checkout/route.ts" "src/app/api/offers/[id]/che
 git commit -m "feat(pricing): venue share applies to offer sales of placed works"
 ```
 
----### Task 6: Re-gate the tier cards and application form on capacity
+---
+
+### Task 6: Re-gate the tier cards and application form on capacity
 
 **Files:**
 - Modify: `src/components/ArtistPricingCards.tsx:17-65` and `:158`
