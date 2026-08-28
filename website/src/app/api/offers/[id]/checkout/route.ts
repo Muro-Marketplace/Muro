@@ -145,11 +145,53 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
   }
 
+  // Venue share on offers (owner decision 2026-08-28): a work hanging on a
+  // venue's wall earns that venue its placement share on ANY platform sale of
+  // the work, offers included. Resolved from the works' own placements
+  // (current_placement_id), the same source of truth the cart path uses
+  // (payouts/legs.ts). Applied only when every offered work sits on ONE
+  // active placement; a mixed-venue or unplaced offer pays no share, matching
+  // prior behaviour. `workIds` is already fully resolved here (direct offer
+  // or collection offer, both branches above land on the same variable).
+  let venueShare: { venueSlug: string; venueUserId: string; percent: number } | null = null;
+  if (workIds.length > 0) {
+    const { data: shareWorks } = await db
+      .from("artist_works")
+      .select("id, current_placement_id")
+      .in("id", workIds);
+    const worksForShare = (shareWorks || []) as Array<{ current_placement_id: string | null }>;
+    const placementIds = [
+      ...new Set(worksForShare.map((w) => w.current_placement_id).filter((v): v is string => !!v)),
+    ];
+    const allPlaced =
+      worksForShare.length === workIds.length && worksForShare.every((w) => w.current_placement_id);
+    if (allPlaced && placementIds.length === 1) {
+      const { data: pl } = await db
+        .from("placements")
+        .select("id, venue_slug, venue_user_id, revenue_share_percent, status")
+        .eq("id", placementIds[0])
+        .eq("status", "active")
+        .maybeSingle<{
+          venue_slug: string | null;
+          venue_user_id: string | null;
+          revenue_share_percent: number | null;
+        }>();
+      const percent = Math.max(0, Number(pl?.revenue_share_percent || 0));
+      if (pl?.venue_slug && pl.venue_user_id && percent > 0) {
+        venueShare = { venueSlug: pl.venue_slug, venueUserId: pl.venue_user_id, percent };
+      }
+    }
+  }
+
   // Integer pence throughout, and the net is the remainder rather than a second
-  // rounding, so fee + net is exactly the amount charged with no lost penny.
+  // rounding, so fee + venue cut + net is exactly the amount charged with no
+  // lost penny. Both the fee and the venue cut come off the artist's side.
   const feePercent = platformFeePercentForArtist(artistProfile);
   const platformFeePence = Math.round(offer.amount_pence * (feePercent / 100));
-  const artistNetPence = offer.amount_pence - platformFeePence;
+  const venueCutPence = venueShare
+    ? Math.round(offer.amount_pence * (venueShare.percent / 100))
+    : 0;
+  const artistNetPence = offer.amount_pence - platformFeePence - venueCutPence;
 
   // Build a single-line Stripe session for the agreed amount. We intentionally
   // collapse the items into one line — the offer is an aggregate price, not a
@@ -191,6 +233,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       offer_platform_fee_pence: String(platformFeePence),
       offer_artist_net_pence: String(artistNetPence),
       offer_platform_fee_percent: String(feePercent),
+      // Venue share (Task 5): empty string / "0", not omitted, when no share
+      // applies — Stripe metadata values must be strings, and the webhook
+      // reads these unconditionally.
+      offer_venue_slug: venueShare?.venueSlug || "",
+      offer_venue_user_id: venueShare?.venueUserId || "",
+      offer_venue_cut_pence: String(venueCutPence),
+      offer_venue_share_percent: String(venueShare?.percent || 0),
       // orders.buyer_email is NOT NULL. The webhook used to fall back to
       // offer_buyer_user_id, which put a UUID in an email column.
       offer_buyer_email: offer.buyer_email || auth.user!.email || "",

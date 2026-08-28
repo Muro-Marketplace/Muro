@@ -272,6 +272,15 @@ async function handleWebhookEvent(
         const feePence = Number(session.metadata.offer_platform_fee_pence || 0);
         const netPence = Number(session.metadata.offer_artist_net_pence || 0);
         const artistUserId = session.metadata.offer_artist_user_id || null;
+        // Task 5 (owner decision 2026-08-28): venue share on offer sales. The
+        // checkout route already resolved this (every offered work on one
+        // active placement, with a positive share and a venue user) and
+        // stamped it onto the session metadata; this branch just reads it,
+        // same as the fee/net split above.
+        const offerVenueSlug = session.metadata.offer_venue_slug || null;
+        const offerVenueUserId = session.metadata.offer_venue_user_id || null;
+        const offerVenueCutPence = Number(session.metadata.offer_venue_cut_pence || 0);
+        const offerVenueSharePct = Number(session.metadata.offer_venue_share_percent || 0);
 
         // E6. The order row is written FIRST and the offer is flipped to paid
         // only once it lands. The old order was the other way round with the
@@ -312,8 +321,9 @@ async function handleWebhookEvent(
           source: "purchase_offer",
           artist_slug: session.metadata.offer_artist_slug || null,
           artist_user_id: artistUserId,
-          venue_revenue: 0,
-          venue_revenue_share_percent: 0,
+          venue_slug: offerVenueSlug,
+          venue_revenue: offerVenueCutPence / 100,
+          venue_revenue_share_percent: offerVenueSharePct,
           platform_fee: feePence / 100,
           platform_fee_percent: Number(session.metadata.offer_platform_fee_percent || 0),
           artist_revenue: netPence / 100,
@@ -416,6 +426,43 @@ async function handleWebhookEvent(
             }
           } catch (transferErr) {
             console.error("[offer] artist transfer error:", transferErr);
+          }
+        }
+
+        // Task 5 / venue leg (owner decision 2026-08-28): the placement share
+        // applies to offer sales of works hanging on that venue's wall. Same
+        // gate and fallback semantics as the artist leg above: capability
+        // check first, blocked-leg ledger row when the venue cannot be paid
+        // yet. Its own try/catch, entirely separate from the artist leg's —
+        // a venue transfer failure must never affect the artist's payout or
+        // unwind the order already written above.
+        //
+        // canReceivePayout accepts a userId directly for a venue target (same
+        // as artist), so this skips the venue_profiles slug lookup the plan
+        // sketched: one fewer round trip, same capability answer.
+        if (offerVenueUserId && offerVenueCutPence > 0) {
+          try {
+            const vcap = await canReceivePayout(db, { kind: "venue", userId: offerVenueUserId });
+            if (vcap.ok && vcap.accountId) {
+              await scheduleTransfer({
+                orderId: paidOrderId,
+                recipientType: "venue",
+                recipientUserId: offerVenueUserId,
+                connectAccountId: vcap.accountId,
+                amountCents: offerVenueCutPence,
+                immediate: false,
+              });
+            } else {
+              await recordBlockedLeg(db, {
+                orderId: paidOrderId,
+                recipientType: "venue",
+                recipientUserId: offerVenueUserId,
+                amountCents: offerVenueCutPence,
+                reason: vcap.reason ?? "unknown",
+              });
+            }
+          } catch (venueTransferErr) {
+            console.error("[offer] venue transfer error:", venueTransferErr);
           }
         }
 

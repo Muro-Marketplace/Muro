@@ -670,6 +670,25 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     offer_platform_fee_percent: "15",
   };
 
+  /**
+   * Task 5: £300.00 offer for a work on a venue's wall, 15% platform fee and a
+   * 10% venue placement share, both off the artist's side: fee 4500p, venue
+   * cut 3000p, artist net 22500p (30000 - 4500 - 3000). Mirrors what the
+   * checkout route now stamps onto the session per the venue-share tests in
+   * checkout/route.test.ts.
+   */
+  const OFFER_META_WITH_VENUE = {
+    ...OFFER_META,
+    offer_amount_pence: "30000",
+    offer_platform_fee_pence: "4500",
+    offer_artist_net_pence: "22500",
+    offer_platform_fee_percent: "15",
+    offer_venue_slug: "copper-kettle",
+    offer_venue_user_id: "u-venue-1",
+    offer_venue_cut_pence: "3000",
+    offer_venue_share_percent: "10",
+  };
+
   function fireOffer(metadata: Record<string, string> = OFFER_META, amountTotal = 3300) {
     constructEventMock.mockReturnValue({
       type: "checkout.session.completed",
@@ -932,6 +951,113 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     expect(row.artist_revenue).toBe(25.65);
     expect(row.platform_fee_percent).toBe(5);
     expect(scheduleTransferMock).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 2565 }));
+  });
+
+  // ── Task 5: venue share on offer sales (work-on-wall rule) ──
+  //
+  // The checkout route resolves the venue share and stamps it onto the
+  // session metadata (checkout/route.test.ts); this webhook branch just
+  // reads those keys, writes them onto the order row, and pays the venue
+  // the same way it already pays the artist.
+
+  it("Task 5: writes the venue slug and share onto the order row, summing with the rest of the split", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer(OFFER_META_WITH_VENUE, 30000);
+    const row = state.orderInsert.row!;
+    expect(row.venue_slug).toBe("copper-kettle");
+    expect(row.venue_revenue).toBe(30);
+    expect(row.venue_revenue_share_percent).toBe(10);
+    expect(row.platform_fee).toBe(45);
+    expect(row.artist_revenue).toBe(225);
+    expect(row.total).toBe(300);
+    // total = artist_revenue + venue_revenue + platform_fee, in integer pence.
+    expect(
+      Math.round((row.artist_revenue as number) * 100) +
+        Math.round((row.venue_revenue as number) * 100) +
+        Math.round((row.platform_fee as number) * 100),
+    ).toBe(Math.round((row.total as number) * 100));
+  });
+
+  it("Task 5: schedules a venue transfer for the cut alongside the artist's, when the venue can be paid", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer(OFFER_META_WITH_VENUE, 30000);
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(2);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientType: "artist",
+        recipientUserId: "u-artist",
+        amountCents: 22500,
+      }),
+    );
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientType: "venue",
+        recipientUserId: "u-venue-1",
+        connectAccountId: "acct_venue-1",
+        amountCents: 3000,
+        immediate: false,
+      }),
+    );
+  });
+
+  it("Task 5: records a blocked leg for the venue, without touching the artist's payout, when the venue cannot be paid yet", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    blockedPayoutTargets.add("u-venue-1"); // canReceivePayout -> { ok: false, reason: "payouts_disabled" }
+    const res = await fireOffer(OFFER_META_WITH_VENUE, 30000);
+    expect(res.status).toBe(200);
+    // The artist leg is unaffected: still scheduled, for the full net.
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientType: "artist", recipientUserId: "u-artist", amountCents: 22500 }),
+    );
+    expect(recordBlockedLegMock).toHaveBeenCalledTimes(1);
+    expect(recordBlockedLegMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        recipientType: "venue",
+        recipientUserId: "u-venue-1",
+        amountCents: 3000,
+        reason: "payouts_disabled",
+      }),
+    );
+    // The order still exists; the sale is recorded and recoverable.
+    expect(state.orderInsert.row).not.toBeNull();
+  });
+
+  it("Task 5: a venue capability error does not affect the artist payout or the order (venue leg is best-effort)", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    canReceivePayoutMock.mockReset();
+    canReceivePayoutMock.mockImplementation(async (_db: unknown, target: { kind: string; userId?: string }) => {
+      if (target.kind === "venue") throw new Error("stripe unreachable");
+      return { ok: true, accountId: "acct_artist", reason: null };
+    });
+    const res = await fireOffer(OFFER_META_WITH_VENUE, 30000);
+    expect(res.status).toBe(200);
+    expect(state.orderInsert.row).not.toBeNull();
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientType: "artist", recipientUserId: "u-artist", amountCents: 22500 }),
+    );
+    // No blocked leg either: the throw is swallowed by the venue leg's own
+    // try/catch, not routed to recordBlockedLeg (that path is for a clean
+    // capability answer of "not ready", not for a thrown error).
+    expect(recordBlockedLegMock).not.toHaveBeenCalled();
+  });
+
+  it("Task 5: pays no venue share when the offer metadata carries none (unplaced or mixed-venue offer)", async () => {
+    // Same fixture as the rest of this describe block: OFFER_META has no
+    // offer_venue_* keys, matching what the checkout route stamps when no
+    // single active placement covers every offered work.
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer();
+    expect(state.orderInsert.row?.venue_slug).toBeNull();
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1); // artist only
+    expect(recordBlockedLegMock).not.toHaveBeenCalled();
   });
 });
 
