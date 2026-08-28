@@ -3,7 +3,7 @@
 import { use } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCuratedTier } from "@/lib/curated-tiers";
+import { curatedTierFooterNote, getCuratedTier } from "@/lib/curated-tiers";
 
 /**
  * /curated/[tier], deep-dive page per curation tier.
@@ -27,7 +27,7 @@ export default function CurationTierPage({
   const { tier } = use(params);
   const tierData = getCuratedTier(tier);
   if (!tierData) notFound();
-  const { label, priceLabel, cta, detail } = tierData;
+  const { label, priceLabel, cta, detail, group } = tierData;
 
   return (
     <div className="max-w-[900px] mx-auto px-6 py-14">
@@ -133,7 +133,7 @@ export default function CurationTierPage({
         <div>
           <p className="text-foreground font-medium">Ready to start?</p>
           <p className="text-sm text-muted">
-            {priceLabel} &middot; cancel any time.
+            {priceLabel} &middot; {curatedTierFooterNote(group)}
           </p>
         </div>
         <Link
