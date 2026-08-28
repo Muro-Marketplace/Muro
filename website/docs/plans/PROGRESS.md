@@ -11359,3 +11359,57 @@ which needs the secret adding first, the same blocker row 0c already carries.
 
 `npm run check` green: 0 lint errors, 241 files, 2442 tests, 0 dependency
 violations, exit 0.
+
+### Found by sweeping for the strip-and-retry class: the referral programme has never worked — DONE
+
+Row 22 found seven of these in `placements/route.ts`. 09 item 2.2 found an eighth
+in `messages/route.ts`. This is the ninth, in `api/apply`, and it is the worst,
+because the fallback did not merely hide a failure. **It deleted a field on every
+application ever submitted.**
+
+The chain, verified end to end against production:
+
+1. `api/apply/route.ts` writes `referred_by_code` into `artist_applications`.
+   **That column does not exist**, and never has. Migration 019 added it to
+   `artist_profiles` only.
+2. PostgREST therefore rejects the insert, and the strip-and-retry drops
+   `referred_by_code` and inserts again. The application saves. The code is gone.
+3. `admin/applications/[id]:202` reads `app.referred_by_code` on approval and
+   copies it onto the new `artist_profiles` row. Always undefined.
+4. The Stripe webhook credits a referrer **30 days of `free_until`** when a
+   referred artist first pays, keyed on `artist_profiles.referred_by_code`.
+   Always null, so it has **never fired**.
+
+**Production: 13 applications, 7 artists holding a referral code to share, and 0
+profiles recording who referred them.** The whole programme is dead, end to end,
+and the retry loop is exactly why nobody found out. Without it, the first
+application would have 500'd and someone would have fixed it in an hour.
+
+**Every application inserted twice, referred or not.** `referred_by_code: null`
+still names the column, so the first attempt always failed.
+
+**Migration 109 (written, applied to prod, verified live).** One nullable TEXT
+column plus the partial index 019 put on the other table. No backfill: the 13
+existing applications keep NULL, which is the truth. Their codes were destroyed
+at submission and are not recoverable from anything the database kept.
+
+The strip-and-retry is deleted. It listed six columns to drop "if the schema
+lags"; **five of them exist**, so for those it could only turn a real failure
+into a quieter, lossier write.
+
+**OWNER: this switches a dormant programme on.** Recording the code is a data
+fix. The consequence is not: from the next referred artist's first payment, the
+webhook will credit their referrer 30 days of `free_until`, and `free_until`
+feeds `platformFeePercentForArtist`, so the platform takes no fee from that
+artist for a month. That is real money, it has never happened once, and it starts
+happening now. **Nothing is owed retroactively** — the 13 destroyed codes cannot
+be recovered, so no back-credit is possible even if you wanted one. Listed with
+the owner decisions. Reverting is one line: drop the field from the insert.
+
+**The test fake rejects unknown columns the way PostgREST does, and counts
+ATTEMPTS rather than successes.** Both mattered. With a shape-only fake, the old
+code failed 2 of 5; counting only successful inserts let a strip-and-retry read
+as a single insert. With both, it fails 4 of 5.
+
+`npm run check` green: 0 lint errors, 241 files, 2447 tests, 0 dependency
+violations, exit 0.

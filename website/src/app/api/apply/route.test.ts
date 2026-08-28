@@ -1,4 +1,20 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+
+/** The real `artist_applications` columns, from the committed schema snapshot. */
+const insertAttempts: Record<string, unknown>[] = [];
+
+const APPLICATION_COLUMNS = new Set<string>(
+  (
+    JSON.parse(
+      readFileSync(
+        path.resolve(__dirname, "../../../../tests/integration/schema-columns.json"),
+        "utf8",
+      ),
+    ) as Record<string, string[]>
+  ).artist_applications,
+);
 
 const {
   applicationInsertMock,
@@ -29,6 +45,24 @@ vi.mock("@/lib/supabase-admin", () => ({
       if (table === "artist_applications") {
         return {
           insert: async (payload: Record<string, unknown>) => {
+            // Every ATTEMPT, including one PostgREST would reject. Counting only
+            // the successful call would let a strip-and-retry look like a single
+            // insert, which is precisely the thing under test.
+            insertAttempts.push(payload);
+            // PostgREST rejects the WHOLE statement when a row names a column
+            // the table lacks. Modelling that is what turns the referral tests
+            // below into a reproduction of the failure rather than an
+            // assertion about a row's shape. Columns come from the committed
+            // schema snapshot, so the fake tracks the real table.
+            const unknown = Object.keys(payload).filter((k) => !APPLICATION_COLUMNS.has(k));
+            if (unknown.length > 0) {
+              return {
+                error: {
+                  code: "PGRST204",
+                  message: `Could not find the '${unknown[0]}' column of 'artist_applications'`,
+                },
+              };
+            }
             // The return value comes from the mock so a test can drive the
             // 23505 / real-failure branches (E36d). Defaults to success so the
             // tests written before that stay unchanged.
@@ -124,6 +158,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
   applicationInsertMock.mockReset();
+  insertAttempts.length = 0;
   profilesSelectMock.mockReset();
   profilesSelectBySlugMock.mockReset();
   profilesInsertMock.mockReset();
@@ -260,5 +295,65 @@ describe("POST /api/apply is not an account-existence oracle (E36d)", () => {
     await flush();
     expect(res.status).toBe(500);
     expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+});
+
+
+// The referral programme had never recorded a single referral, and a
+// strip-and-retry is why nobody noticed.
+//
+// `api/apply` wrote `referred_by_code` into `artist_applications`. That column
+// did not exist: migration 019 added it to `artist_profiles` only. So PostgREST
+// rejected the insert, the retry dropped the field and inserted again, the
+// application saved, and the code was destroyed. Measured against production: 13
+// applications, 7 artists holding a code to share, 0 profiles recording who
+// referred them.
+//
+// Because `referred_by_code: null` still names the column, the FIRST insert
+// failed on every application, referred or not.
+describe("POST /api/apply records the referral code (migration 109)", () => {
+  it("sends referred_by_code on the insert, uppercased", async () => {
+    await POST(req({ ...VALID_BODY, referralCode: "wp-abc123" }));
+
+    expect(applicationInsertMock).toHaveBeenCalledTimes(1);
+    expect(applicationInsertMock.mock.calls[0][0]).toMatchObject({
+      referred_by_code: "WP-ABC123",
+    });
+  });
+
+  it("sends null rather than omitting the column when there is no code", async () => {
+    await POST(req());
+    expect(applicationInsertMock.mock.calls[0][0]).toHaveProperty("referred_by_code", null);
+  });
+
+  it("ATTEMPTS the insert exactly once, referred or not", async () => {
+    // THE regression. Every application used to insert twice: once with the
+    // phantom column, once without it and without the referral. Counting
+    // attempts rather than successes is the point, or the retry that made the
+    // second one succeed reads as a single insert.
+    await POST(req({ ...VALID_BODY, referralCode: "WP-ABC123" }));
+    expect(insertAttempts).toHaveLength(1);
+
+    insertAttempts.length = 0;
+    await POST(req());
+    expect(insertAttempts).toHaveLength(1);
+  });
+
+  it("names no column the table lacks", async () => {
+    // The fake rejects unknown columns the way PostgREST does, so a phantom
+    // column makes this a 500 rather than a silently lesser write.
+    const res = await POST(req({ ...VALID_BODY, referralCode: "WP-ABC123" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("surfaces a genuine insert failure instead of retrying into a lossier row", async () => {
+    applicationInsertMock.mockReturnValue({
+      error: { code: "42501", message: "permission denied" },
+    });
+
+    const res = await POST(req({ ...VALID_BODY, referralCode: "WP-ABC123" }));
+
+    expect(res.status).toBe(500);
+    expect(insertAttempts).toHaveLength(1);
   });
 });

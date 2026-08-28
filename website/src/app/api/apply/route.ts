@@ -56,9 +56,10 @@ export async function POST(request: Request) {
 
     const d = parsed.data;
 
-    // Build the row up-front so we can retry-without-new-columns if the
-    // schema lags. Drops trader_status / business_name / vat_number on
-    // the retry path so older envs still accept the application.
+    // ONE insert, no strip-and-retry. Every column below exists in production
+    // (checked against `tests/integration/schema-columns.json` and against the
+    // live schema), so the ladder that used to sit under this could not do what
+    // it claimed. What it actually did was worse than nothing: see migration 109.
     const fullRow: Record<string, unknown> = {
       name: d.name,
       email: d.email,
@@ -113,23 +114,20 @@ export async function POST(request: Request) {
     // legitimate writer, it validates through applySchema and is rate-limited
     // above, so the service-role client is the right level of trust here.
     const applyDb = getSupabaseAdmin();
-    let { error } = await applyDb.from("artist_applications").insert(fullRow);
-    if (error) {
-      const msg = String(error.message || "").toLowerCase();
-      const dropOnLegacy: string[] = [];
-      if (msg.includes("trader_status")) dropOnLegacy.push("trader_status");
-      if (msg.includes("business_name")) dropOnLegacy.push("business_name");
-      if (msg.includes("vat_number")) dropOnLegacy.push("vat_number");
-      if (msg.includes("discipline")) dropOnLegacy.push("discipline");
-      if (msg.includes("sub_styles")) dropOnLegacy.push("sub_styles");
-      if (msg.includes("referred_by_code")) dropOnLegacy.push("referred_by_code");
-      if (dropOnLegacy.length > 0) {
-        const safeRow = { ...fullRow };
-        for (const k of dropOnLegacy) delete safeRow[k];
-        const retry = await applyDb.from("artist_applications").insert(safeRow);
-        error = retry.error;
-      }
-    }
+    // The strip-and-retry that used to sit here listed six columns to drop "if
+    // the schema lags". Five of them exist. The sixth, `referred_by_code`, did
+    // NOT, and never had: migration 019 added it to `artist_profiles` only.
+    //
+    // So the first insert failed on EVERY application, referred or not, because
+    // `referred_by_code: null` still names the column. The retry dropped it and
+    // re-inserted, the application saved, and the referral code was destroyed.
+    // Measured against prod: 13 applications, 7 artists holding a code to share,
+    // 0 profiles recording who referred them. The entire referral programme has
+    // never worked, and this loop is why nobody found out.
+    //
+    // Migration 109 adds the column. One insert now, and a real failure surfaces
+    // as a 500 instead of becoming a quieter, lossier write.
+    const { error: insertError } = await applyDb.from("artist_applications").insert(fullRow);
 
     // E36d. A duplicate email used to answer 409 with "An application with this
     // email already exists", which turns a public unauthenticated form into an
@@ -140,13 +138,12 @@ export async function POST(request: Request) {
     // them by email, which only reaches someone who controls the address.
     // The duplicate still gets a server log line, which is where the signal
     // belonged.
-    const alreadyApplied = error?.code === "23505";
+    const alreadyApplied = insertError?.code === "23505";
     if (alreadyApplied) {
       console.warn("[apply] duplicate application for an existing email");
-      error = null;
     }
-    if (error) {
-      console.error("Supabase error:", error);
+    if (insertError && !alreadyApplied) {
+      console.error("Supabase error:", insertError);
       return NextResponse.json(
         { error: "Something went wrong. Please try again." },
         { status: 500 }
