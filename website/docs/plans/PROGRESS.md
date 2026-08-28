@@ -12743,3 +12743,19 @@ Verified locally with CI's exact env (placeholder Supabase +
 NEXT_PUBLIC_SITE_URL): 11/11 pass, including the two email-preview specs
 that only failed locally because the B4 gate fails closed without a site
 URL, which CI sets.
+
+## Launch fix round, 2026-08-28: every P0 and P1 from the triage, fixed
+
+41 triaged items, ~25 distinct fixes, in five commits (9b28c30 the P0s and
+my own two money bugs; 3860922 buyer flows; 814829a messaging and demo;
+a1d8411 portal gates, share semantics and the admin moderation queue;
+edf6252 copy and account). 111 new tests this round; the full gate closed
+at 268 files / 2,706 tests / 0 lint errors. Fail-before verified on the
+P0 batch by probe; each cluster's tests were written against its fix.
+
+Recorded product decisions: enquiry path instead of customer messaging;
+confirm-first unsubscribe; refund handlers migrated to mutate() with the
+authfetch ratchet lowered 7 to 3 per its own contract (server-side money
+gating untouched; confirmDelivery and the two pay buttons remain as they
+were). The triage document carries the per-item detail and the bonus
+defects found during the round.

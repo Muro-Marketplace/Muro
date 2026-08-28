@@ -18,6 +18,21 @@ against the code, 8 were real but overstated, and 0 were refuted.
 
 Effort across P0+P1: M=9, S=32.
 
+## Fix round status, 2026-08-28
+
+Every P0 and every P1 below is FIXED on this branch (commits 9b28c30, 3860922,
+814829a, a1d8411, edf6252), each with regression tests; the full gate passed
+at 2,706 tests, 0 lint errors. Product decisions taken during the round:
+customers and guests enquire via /api/enquiry rather than a rushed customer
+messaging build (the dead funnels are removed and the customer Messages page
+says so honestly); the unsubscribe page is confirm-first so link scanners
+cannot unsubscribe readers; four of the seven grandfathered refund handlers
+migrated to mutate() as the substance of C5/C6/D18/D19 (server-side money
+gating untouched, ratchet floor lowered 7 to 3 per its contract). Bonus
+defects fixed en route: the hard-delete list carried the N3 phantom column,
+the message options popup's archive posted to a route with no DELETE handler,
+and the dispute-resolved email shared the dispute-opened email's dead link.
+
 ## P0: the launch gate
 
 | Ref | Problem | Effort | Fix |
