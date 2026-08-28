@@ -11920,3 +11920,45 @@ changed password against HaveIBeenPwned and refuse a known-breached one. It is a
 dashboard toggle, it is currently disabled, and the advisor flags it at WARN. The
 only reason not to turn it on is if you object to the latency of the check, which
 is a single k-anonymity lookup.
+
+### Env-var sweep: three secret-dependent guards checked for fail-open — DONE
+
+Compared every `process.env.X` read against `src/env.ts`'s schema. 25 vars are
+read and not declared there; most are optional by design (demo config, the flag
+env keys, `EMAIL_DRY_RUN`). Three gate a security control, so each was checked
+for what happens when the secret is missing:
+
+- **`OAUTH_STATE_SECRET`** — throws. Fail-closed. Correct.
+- **`SUPABASE_WEBHOOK_SECRET`** — `verifySignature` returns false, so the route
+  refuses. Fail-closed, and the `PUBLIC_ROUTES` entry claiming HMAC auth is
+  therefore true.
+- **`TURNSTILE_SECRET_KEY`** — **fails OPEN**, and in production it did so
+  silently.
+
+That last one is E1's shape: a missing `RESEND_API_KEY` dropped every email for a
+week with no signal, and 09 §A.6 answered it with three layers rather than one.
+Here, if the key is not set in the production environment, the CAPTCHA is simply
+off, every challenge is waved through, and the response is byte-identical to a
+real verification.
+
+**I did not make it a hard fail, and that is a judgement worth seeing.** Refusing
+every signup because a CAPTCHA key is missing trades a spam problem for a total
+outage of the acquisition funnel, and nothing in this repository can see whether
+the key is actually set in production. So the bypass stays and is now loud: an
+ERROR log in production naming the consequence, and `bypass: true` in the
+response body so a monitor can see it from outside without reading logs, which is
+E1's other lesson. **Owner decision 21 is whether to make it a hard fail**, and it
+needs one fact I do not have: is `TURNSTILE_SECRET_KEY` set in Vercel production?
+
+8 tests on a route that had none, including that the `dev-bypass` token is
+rejected once a real secret is configured — otherwise the CAPTCHA would be
+opt-out by sending a magic string.
+
+`npm run check` green: 0 lint errors, 251 files, 2519 tests, exit 0.
+
+**21. Should the CAPTCHA fail closed in production?** `TURNSTILE_SECRET_KEY`
+unset means the route waves every challenge through. It now logs an ERROR and
+returns `bypass: true` so it is visible, but it still lets the request past. The
+one fact needed to decide: **is that key set in Vercel production?** If yes, make
+it a hard fail and the behaviour never changes. If no, bot protection on signup
+is currently off and that is the more urgent half.
