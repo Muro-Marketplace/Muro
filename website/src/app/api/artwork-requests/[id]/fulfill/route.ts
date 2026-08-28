@@ -163,7 +163,14 @@ export async function POST(
         revenue_share_percent: resp.proposed_revenue_share_percent ?? null,
         qr_enabled: resp.proposed_qr_enabled ?? false,
         status: "pending",
-        requester_user_id: req.venue_user_id,
+        // N3, write side. `requester_user_id` exists in NO migration and not in
+        // the live table; the real column is `proposed_by_user_id`. The N3 fix
+        // corrected the SELECT that read it and left the three INSERTS that
+        // write it, so PostgREST rejected every one of these statements whole
+        // and the placement was never created. It is 2 of 86 live rows that
+        // carry a proposer, which is what "written by almost nothing" looks
+        // like.
+        proposed_by_user_id: req.venue_user_id,
         // E22: lets uniq_placements_from_response (098) reject a second
         // placement minted from the same response, which the read-side gate
         // above cannot do for two concurrent requests.

@@ -11654,3 +11654,67 @@ guard 0.5 was really asking for; the consolidation remains available and is now
 safe to attempt, because a mistake in it fails a test instead of shipping.
 
 `npm run check` green: 0 lint errors, 244 files, 2471 tests, exit 0.
+
+### The phantom-column class, on the WRITE side — a new guard, and four live bugs
+
+`phantom-columns.test.ts` scans every `.select()` against a snapshot of the live
+schema, because a select naming a column that does not exist is rejected whole by
+PostgREST and the `?? null` fallback yields a plausible-but-wrong value. **Writes
+fail exactly the same way and were never scanned.** Migration 109 and 09 item 2.2
+both came out of that gap, and both were found by hand.
+
+`tests/integration/phantom-write-columns.test.ts` closes it: every
+`.from("t").insert({...}) / .update({...})` with an inline object literal, keys
+compared against the same snapshot. It found four more.
+
+**The first run produced eleven false positives, and the reason is in the file.**
+`.from(...)[\s\S]{0,200}?.insert(` happily spans an intervening
+`.from("other_table")`, so a `placements` insert was attributed to a
+`venue_profiles` select two lines above it. The pattern now requires the NEAREST
+`.from`. Top-level keys only, so `metadata: { foo }` contributes `metadata`, and
+a payload passed as an identifier is skipped rather than guessed at.
+
+---
+
+**1. `DELETE /api/account` — the right to erasure — was not erasing.**
+
+Nine unchecked writes, then `{ success: true }`. **Four could not have worked:**
+
+| written | reality |
+|---|---|
+| `artist_profiles.image` | the column is `profile_image`. PostgREST rejects the WHOLE update, so the artist scrub did **nothing**: name, both bios, location, Instagram and website all survived |
+| `from("waitlist")` | no such table. It is `waitlist_signups` |
+| `from("applications")` | no such table. It is `artist_applications` |
+| `artist_applications.phone` | no such column, so even the right table would have failed |
+
+All four verified against production. The shape of the failure is the worst part:
+a person asks to be deleted, gets a success response, **their auth user is then
+deleted so they cannot log in and check**, and their name, biography, location,
+social handles, waitlist entry and full application stay in the database.
+
+Fixed: correct names, `artist_statement` and `banner_image` and `postcode` added
+to the scrub (personal data that was never covered), **every step checked**, and
+the auth user is **no longer deleted while any scrub failed** — that ordering is
+precisely what made this invisible. Failures collect rather than short-circuit,
+because a scrub that stops at the first error leaves more behind than one that
+carries on and reports. The response now says the account was *not* closed and to
+contact support, rather than claiming success.
+
+10 tests on a route that had none, with a fake that rejects an unknown table and
+an unknown column the way PostgREST does. The original route fails 7 of them.
+
+**2. `placements.requester_user_id`, written by three routes.** N3 corrected the
+SELECT that read this phantom and left the three INSERTS that write it, so each
+of those statements is rejected whole and the placement is simply never created:
+`artwork-requests/[id]/fulfill`, `artwork-requests/[id]/responses/[responseId]`,
+and the `placement_request` path in `messages/route.ts` (whose error is
+`console.error`'d and swallowed, so the message appears in the thread and no
+placement exists behind it). The column is `proposed_by_user_id`, which prod
+carries on **2 of 86** rows: that is what "written by almost nothing" looks like.
+
+**3. `artist_profiles.free_until`** is grandfathered, pointing at the same D17.2
+question the SELECT side is parked on, with a note to remove both entries
+together.
+
+`npm run check` green: 0 lint errors, 246 files, 2484 tests, 0 dependency
+violations, exit 0.
