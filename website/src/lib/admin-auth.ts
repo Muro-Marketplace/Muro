@@ -6,7 +6,11 @@ import type { User } from "@supabase/supabase-js";
 // (comma-separated) or ADMIN_EMAIL (single). No hardcoded default, so a
 // misconfigured production deploy fails closed instead of granting the
 // author's personal account admin rights.
-function adminEmails(): string[] {
+//
+// Exported (K1) so lib/email/admin-alert.ts can address operational alerts to
+// the same people, rather than re-reading the env itself. The no-inline-admin-check
+// lint rule correctly flagged that duplicate the moment it appeared.
+export function adminEmails(): string[] {
   const list = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || "";
   return list.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
 }

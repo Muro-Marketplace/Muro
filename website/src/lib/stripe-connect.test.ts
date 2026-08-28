@@ -3,7 +3,15 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const { transfersCreate, fromMock, sendAdminAlertMock } = vi.hoisted(() => ({
   transfersCreate: vi.fn(),
   fromMock: vi.fn(),
-  sendAdminAlertMock: vi.fn(async () => ({ ok: true, skipped: false, messageId: "m" })),
+  // Typed via the parameter so `mock.calls[0][0]` is the alert object, not the
+  // `never` an argless async fn infers.
+  sendAdminAlertMock: vi.fn(
+    async (_input: { idempotencyKey: string; fields?: { label: string; value: string }[] }) => ({
+      ok: true as const,
+      skipped: false as const,
+      messageId: "m",
+    }),
+  ),
 }));
 
 vi.mock("@/lib/stripe", () => ({
@@ -248,12 +256,9 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
     // in `fields` rather than in named props. Assert they are all still there,
     // because an alert that omits the transfer or the order is not actionable.
     expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
-    const alert = sendAdminAlertMock.mock.calls[0][0] as {
-      idempotencyKey: string;
-      fields: { label: string; value: string }[];
-    };
+    const alert = sendAdminAlertMock.mock.calls[0][0];
     expect(alert.idempotencyKey).toContain("st_1");
-    const values = alert.fields.map((f) => f.value).join(" | ");
+    const values = (alert.fields ?? []).map((f) => f.value).join(" | ");
     expect(values).toContain("o1");
     expect(values).toContain("st_1");
     expect(values).toContain("u1");

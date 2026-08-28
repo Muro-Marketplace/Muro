@@ -11,24 +11,21 @@
 // the verified sending domain, and idempotency: a Stripe redelivery or a retried
 // route used to mean a second identical alert.
 
+import { adminEmails } from "@/lib/admin-auth";
 import { AdminAlert, type AdminAlertField } from "@/emails/templates/admin/AdminAlert";
 import { sendEmail, type SendEmailResult } from "./send";
 
 /**
  * Where operational alerts go.
  *
- * Reads the same env as the admin allowlist. The legacy module defaulted to a
- * hardcoded personal address, which meant a misconfigured deploy silently mailed
- * one person's inbox and nobody could tell it was misconfigured. This returns
- * null instead, and the caller logs loudly.
+ * The SAME list admin-auth authorises against, imported rather than re-read:
+ * operational alerts go to the people who can act on them, by construction. The
+ * legacy module read the env itself and defaulted to a hardcoded personal
+ * address, so a misconfigured deploy silently mailed one inbox with no way to
+ * tell. This returns null instead, and the caller logs loudly.
  */
 export function adminAlertRecipient(): string | null {
-  const list = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || "";
-  const first = list
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean)[0];
-  return first || null;
+  return adminEmails()[0] ?? null;
 }
 
 export interface AdminAlertInput {
