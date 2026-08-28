@@ -11807,3 +11807,34 @@ conversation-list aggregator have to honour it before a block does anything
 beyond being recorded. Both were impossible before and are possible now.
 
 `npm run check` green: 0 lint errors, 248 files, 2500 tests, exit 0.
+
+### Phantom columns in FILTERS: four more, and the class is now fully covered — DONE
+
+The third and last variant. `.select()` was guarded by `phantom-columns.test.ts`
+and writes by the guard added above; `.eq()`, `.in()`, `.gte()` and `.order()`
+were not. A rejected filter is the most convincing failure of the three, because
+**a rejected count reads as zero rather than as an error**.
+
+| where | wrong | right | what it did |
+|---|---|---|---|
+| `cron/onboarding-nudges` (×2) | `artist_works.artist_user_id` | `artist_id` (the **profile** id, not the auth user id) | the day-4 "upload your first artwork" nudge went to **every** artist, including those who had already uploaded, and day 14 read every artist as having no work |
+| `cron/weekly-venue-digest` | `analytics_events.venue_slug` | `venue_user_id` | the digest reported **zero views for every venue**, and its "fewer than 3 events, don't send" gate counted those zeros, so venues whose week was mostly views were skipped entirely |
+| `lib/outreach-cap.ts` | `placements.requester_user_id` | `proposed_by_user_id` | the anti-spam cap counted **no placement requests at all**. An artist on Core, limited to 2 first contacts a day, could send unlimited placement requests; only the messages and artwork-response legs were ever enforced |
+
+The `artist_works` one is not a rename: `artist_id` holds the `artist_profiles`
+primary key, so the fix also had to add `id` to the profile select. A blind
+find-and-replace would have swapped one phantom for a wrong join.
+
+**All three variants now have a guard**, in one file: phantom tables, phantom
+write columns and phantom filter columns, each with an allowlist that is empty on
+purpose. Each verified by reintroducing the exact bug it was written for.
+
+**Running tally for this class: 15 live defects.** Two silent data losses (a
+referral code on every application, a flagged message's type and attachments), an
+erasure endpoint that erased nothing, three shipped features writing to tables
+that did not exist, a statutory refund window that could never open, three
+placement inserts that always failed, an anti-spam cap missing a third of its
+surface, a venue digest reporting zeros, and an onboarding nudge sent to people
+who did not need it.
+
+`npm run check` green: 0 lint errors, 248 files, 2501 tests, exit 0.

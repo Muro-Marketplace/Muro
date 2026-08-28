@@ -29,8 +29,13 @@ export async function GET(request: Request) {
     if (!venue.user_id) return;
 
     const [{ count: viewCount }, { count: requestCount }, { count: activeCount }] = await Promise.all([
+      // `analytics_events` has NO `venue_slug`. It carries `venue_user_id` and
+      // `venue_name`. PostgREST rejected the whole query, so `viewCount` was
+      // always null: the digest reported zero views for every venue, and the
+      // "fewer than 3 events, do not send" gate below counted them as zero too,
+      // so venues whose week was mostly views were skipped entirely.
       db.from("analytics_events").select("id", { count: "exact", head: true })
-        .eq("event_type", "venue_view").eq("venue_slug", venue.slug).gte("created_at", weekAgo),
+        .eq("event_type", "venue_view").eq("venue_user_id", venue.user_id).gte("created_at", weekAgo),
       db.from("placements").select("id", { count: "exact", head: true })
         .eq("venue_user_id", venue.user_id).eq("status", "pending").gte("created_at", weekAgo),
       db.from("placements").select("id", { count: "exact", head: true })

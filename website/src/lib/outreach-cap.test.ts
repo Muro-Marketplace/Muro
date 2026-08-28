@@ -329,3 +329,37 @@ describe("checkArtistOutreachCap — units (multi-work placement)", () => {
     expect(result.ok).toBe(false);
   });
 });
+
+
+// N3, filter side. `placements` has no `requester_user_id`; the column is
+// `proposed_by_user_id`. PostgREST rejects the whole query, and a rejected count
+// reads as null, which this code treats as zero. So the placements leg of the
+// anti-spam cap counted nothing: placement requests were FREE. An artist on
+// Core, limited to 2 first contacts a day, could send as many as they liked, and
+// only the messages and artwork-response legs were ever enforced.
+describe("the cap counts placements against a column that exists", () => {
+  it("filters placements on proposed_by_user_id", async () => {
+    const { readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const schema = JSON.parse(
+      readFileSync(
+        path.resolve(__dirname, "../../tests/integration/schema-columns.json"),
+        "utf8",
+      ),
+    ) as Record<string, string[]>;
+    const source = readFileSync(path.resolve(__dirname, "outreach-cap.ts"), "utf8");
+
+    // Every column this module filters on must be a real one. Stated here as
+    // well as in the repo-wide sweep, because this is the file where getting it
+    // wrong turns an anti-spam control into decoration.
+    for (const m of source.matchAll(/\.eq\(\s*"([a-z_]+)"/g)) {
+      const col = m[1];
+      const inSome = ["placements", "messages", "artwork_request_responses", "artist_profiles"].some(
+        (t) => schema[t]?.includes(col),
+      );
+      expect(inSome, `${col} is not a column on any table this module reads`).toBe(true);
+    }
+    expect(source).toContain("proposed_by_user_id");
+    expect(source).not.toMatch(/\.eq\(\s*"requester_user_id"/);
+  });
+});

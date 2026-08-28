@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
   const { data: artists } = await db
     .from("artist_profiles")
-    .select("user_id, name, slug, created_at, short_bio, profile_image, primary_medium, stripe_connect_account_id, venue_types_suited_for, themes")
+    .select("id, user_id, name, slug, created_at, short_bio, profile_image, primary_medium, stripe_connect_account_id, venue_types_suited_for, themes")
     .gte("created_at", cutoff)
     .not("user_id", "is", null);
 
@@ -88,10 +88,16 @@ export async function GET(request: Request) {
 
     // Day 4, first artwork upload
     if (inDayWindow(days, 4)) {
+      // `artist_works` has NO `artist_user_id`. Its column is `artist_id`, and it
+      // holds the artist_profiles PRIMARY KEY, not the auth user id. PostgREST
+      // rejected the whole query, so `worksCount` was always null: the day-4
+      // "upload your first artwork" nudge went to every artist including those
+      // who had already uploaded, and the day-14 branch below read every artist
+      // as having no work.
       const { count: worksCount } = await db
         .from("artist_works")
         .select("id", { count: "exact", head: true })
-        .eq("artist_user_id", artist.user_id);
+        .eq("artist_id", artist.id);
       if ((worksCount ?? 0) > 0) return;
 
       await sendEmail({
@@ -152,10 +158,16 @@ export async function GET(request: Request) {
 
     // Day 14, graduation vs recap
     if (inDayWindow(days, 14)) {
+      // `artist_works` has NO `artist_user_id`. Its column is `artist_id`, and it
+      // holds the artist_profiles PRIMARY KEY, not the auth user id. PostgREST
+      // rejected the whole query, so `worksCount` was always null: the day-4
+      // "upload your first artwork" nudge went to every artist including those
+      // who had already uploaded, and the day-14 branch below read every artist
+      // as having no work.
       const { count: worksCount } = await db
         .from("artist_works")
         .select("id", { count: "exact", head: true })
-        .eq("artist_user_id", artist.user_id);
+        .eq("artist_id", artist.id);
       const fullyOnboarded =
         !!artist.short_bio &&
         !!artist.primary_medium &&

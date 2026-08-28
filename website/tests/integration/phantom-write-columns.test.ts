@@ -234,6 +234,66 @@ describe("no .from() names a table the live schema lacks", () => {
   });
 });
 
+/**
+ * Filter columns that do not exist, with the reason. Empty on purpose.
+ *
+ * A `.eq("nope", x)` is rejected exactly like a phantom select or a phantom
+ * write, and it reads as "no rows" rather than as an error, which is the most
+ * convincing wrong answer of the three.
+ */
+const PHANTOM_FILTER_ALLOWED = new Map<string, string>();
+
+const FILTER_METHODS = "eq|neq|gt|gte|lt|lte|like|ilike|is|in|contains|containedBy|order";
+
+// The third variant of the class. `.select()` is guarded by
+// phantom-columns.test.ts and writes by the block below; FILTERS were not, and
+// four were live:
+//
+//   artist_works.artist_user_id   (x2) the column is `artist_id` and it holds the
+//                                 PROFILE id, so the day-4 "upload your first
+//                                 artwork" nudge went to every artist including
+//                                 those who had already uploaded
+//   analytics_events.venue_slug   the weekly venue digest reported zero views for
+//                                 every venue, and skipped venues whose week was
+//                                 mostly views
+//   placements.requester_user_id  the anti-spam outreach cap counted zero
+//                                 placement requests, so on that surface it did
+//                                 not exist: a Core artist limited to 2 first
+//                                 contacts a day could send unlimited ones
+describe("no filter names a column the live schema lacks", () => {
+  it("filters only on columns that exist", () => {
+    const offences: string[] = [];
+    for (const file of walk(SRC)) {
+      const rel = path.relative(SRC, file);
+      const source = readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      // Nearest `.from(...)`, then its chain, bounded so a later unrelated call
+      // is not attributed to it.
+      const chains = source.matchAll(
+        /\.from\(\s*["'`]([a-z_]+)["'`]\s*\)((?:(?!\.from\()[\s\S]){0,900})/g,
+      );
+      for (const c of chains) {
+        const known = SCHEMA[c[1]];
+        if (!known) continue;
+        for (const f of c[2].matchAll(
+          new RegExp(`\\.(${FILTER_METHODS})\\(\\s*["'\`]([a-z_][a-z0-9_]*)["'\`]`, "g"),
+        )) {
+          if (known.includes(f[2])) continue;
+          if (PHANTOM_FILTER_ALLOWED.has(`${c[1]}.${f[2]}`)) continue;
+          const line = source.slice(0, (c.index ?? 0) + (f.index ?? 0)).split("\n").length;
+          offences.push(`${rel}:${line} filters ${c[1]} on .${f[1]}("${f[2]}"), which does not exist`);
+        }
+      }
+    }
+    expect(
+      offences,
+      "PostgREST rejects the whole query, and a rejected count reads as zero rather " +
+        "than as an error, which is the most convincing wrong answer this class produces.",
+    ).toEqual([]);
+  });
+});
+
 describe("no .insert/.update names a column the live schema lacks", () => {
   it("scans a realistic number of writes, so the sweep cannot pass vacuously", () => {
     const { writesChecked, keysChecked } = scan();
