@@ -63,6 +63,11 @@ jobs:
         run: npm run depcheck
       - name: Email templates render
         run: npm run email:render
+      # Owner decision 7 settled the five label mismatches, which were the only
+      # thing keeping this a report. It exits 1 on any send whose email_events
+      # label is not a registry id, per 09 §E.1's "becomes an error once clean".
+      - name: Email label audit
+        run: npm run email:audit
 
   # The Supabase advisor deliberately does NOT run here. It lives in
   # advisors-nightly.yml. See EXECUTION-DECISIONS D12 ruling 3: a clean advisor
