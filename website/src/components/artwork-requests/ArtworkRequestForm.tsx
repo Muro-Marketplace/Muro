@@ -231,8 +231,15 @@ export default function ArtworkRequestForm({ initial = {}, mode, onSubmit, onCan
 
       {intent.has("display") && (
         <div>
+          {/* E23: this field used to be labelled as the % paid TO the artist,
+              the opposite of every other venue surface. The canonical
+              direction platform-wide is the VENUE'S share of each sale
+              (placements.revenue_share_percent drives venueCutPence in the
+              payout split, and the placement request form says "% to the
+              venue on sales"). The venue enters their own cut here; artist-
+              side surfaces derive "you keep X%" from it. */}
           <label className="block text-xs uppercase tracking-wider text-muted mb-1.5" htmlFor="qrshare">
-            Revenue share for the artist (%)
+            Venue revenue share (%)
           </label>
           <div className="flex items-center gap-2">
             <input
@@ -245,7 +252,7 @@ export default function ArtworkRequestForm({ initial = {}, mode, onSubmit, onCan
               onChange={(e) => setQrRevShare(e.target.value)}
               className="w-32 px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/60"
             />
-            <span className="text-xs text-muted">% of QR sales paid to the artist.</span>
+            <span className="text-xs text-muted">% to the venue on each QR sale. The artist keeps the rest.</span>
           </div>
         </div>
       )}

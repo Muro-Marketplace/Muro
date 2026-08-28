@@ -45,7 +45,9 @@ const DEMO_EXEMPT = new Set<string>([
   "account/email/unsubscribe/route.ts",
   // Guarding these would make the demo unreachable or unresettable.
   "demo/login/route.ts",
-  "account/delete/route.ts",
+  // account/delete/route.ts left this list on 2026-08-28 (QA flag C15): the
+  // route now carries the demo guard like its siblings, so the ratchet
+  // protects it again.
   // Signup finalisation, authenticated by a one-time token rather than a
   // session. A demo session never traverses OAuth or the welcome step: the demo
   // ids are pre-seeded and entered through demo/login. Guarding here could only

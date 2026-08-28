@@ -71,6 +71,10 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // E24: success message shown when an accept keeps the venue on this
+  // page (commission accepts have no dedicated portal surface to land
+  // on, so we stay here rather than navigating to a dead route).
+  const [notice, setNotice] = useState<string | null>(null);
   // Set when the row we're showing came from the local just-submitted
   // cache (API didn't surface it). Drives a subtle "syncing" banner
   // so the user knows the row exists even if the portal hasn't fully
@@ -145,6 +149,7 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
   async function act(responseId: string, action: "accept" | "decline") {
     setBusy(responseId);
     setError(null);
+    setNotice(null);
     try {
       // mutate throws on a non-2xx (ApiError) or a dropped request, so the
       // navigate/reload only happens on a confirmed 2xx.
@@ -152,9 +157,22 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
         `/api/artwork-requests/${id}/responses/${responseId}`,
         { method: "PATCH", body: JSON.stringify({ action }) },
       );
-      if (action === "accept" && data?.nextStepLink) {
+      // E24: commission accepts point nextStepLink back at this request
+      // detail page (there is no commissions surface to land on). When
+      // the link is this page, skip the navigation and show a success
+      // state in place instead of a pointless full reload.
+      const selfPath = `/venue-portal/artwork-requests/${id}`;
+      if (
+        action === "accept" &&
+        data?.nextStepLink &&
+        data.nextStepLink !== selfPath &&
+        !data.nextStepLink.startsWith(`${selfPath}?`)
+      ) {
         window.location.href = data.nextStepLink;
       } else {
+        if (action === "accept") {
+          setNotice("Response accepted. The agreed terms are recorded on the response below.");
+        }
         await load();
       }
     } catch (err) {
@@ -265,6 +283,11 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
 
             <h2 className="text-sm font-medium uppercase tracking-wider text-muted mb-3">Artist responses ({responses.length})</h2>
             {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
+            {notice && (
+              <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-sm px-3 py-2 mb-3">
+                {notice}
+              </p>
+            )}
             {responses.length === 0 ? (
               <p className="text-sm text-muted">No responses yet. Artists who think they&rsquo;re a fit will reach out here.</p>
             ) : (
@@ -293,8 +316,11 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                             Proposed: {r.proposed_monthly_fee_pence != null && r.proposed_monthly_fee_pence > 0
                               ? `£${(r.proposed_monthly_fee_pence / 100).toFixed(2)}/mo`
                               : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
+                            {/* E23: proposed_revenue_share_percent is the venue's
+                                cut (the respond form caps it at 50% to the venue),
+                                so say so rather than an ambiguous "rev share". */}
                             {r.proposed_revenue_share_percent != null && r.proposed_revenue_share_percent > 0
-                              ? ` · ${r.proposed_revenue_share_percent}% rev share`
+                              ? ` · ${r.proposed_revenue_share_percent}% to your venue on sales`
                               : ""}
                             {r.proposed_qr_enabled ? " · QR enabled" : ""}
                           </p>
@@ -316,7 +342,10 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                     {r.status === "accepted" && (r.linked_offer_id || r.linked_commission_id || r.linked_placement_id) && (
                       <p className="text-xs text-emerald-700 pt-2 border-t border-border">
                         {r.linked_offer_id && <Link href="/venue-portal/offers" className="hover:underline">View created offer →</Link>}
-                        {r.linked_commission_id && <Link href="/venue-portal/commissions" className="hover:underline">View commission →</Link>}
+                        {/* E24: there is no commissions surface to link to
+                            (/venue-portal/commissions 404s), so this card IS
+                            the record of the agreed commission. */}
+                        {r.linked_commission_id && <span>Commission agreed. The amount and timeline above are the agreed terms.</span>}
                         {r.linked_placement_id && <Link href={`/placements/${r.linked_placement_id}`} className="hover:underline">View placement →</Link>}
                       </p>
                     )}

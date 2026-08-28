@@ -136,3 +136,61 @@ describe("artwork-request act() decline (mutate)", () => {
     expect(screen.getByText("Decline")).toBeTruthy();
   });
 });
+
+describe("artwork-request commission accept (E24)", () => {
+  const SENT_COMMISSION = {
+    ...SENT_RESPONSE,
+    response_type: "commission" as const,
+    proposed_commission_amount_pence: 120000,
+    proposed_commission_timeline: "6 to 8 weeks",
+  };
+
+  it("stays on the request detail page with a success state instead of navigating", async () => {
+    // Fail-before: the accept handler window.location.href'd to
+    // /venue-portal/commissions, which does not exist — a 404 straight
+    // after a successful accept. The API now points nextStepLink back
+    // at this page and the UI treats a self-link as "stay and reload".
+    let accepted = false;
+    authFetchMock.mockImplementation(() => {
+      const resp = accepted
+        ? { ...SENT_COMMISSION, status: "accepted", linked_commission_id: "com_1" }
+        : SENT_COMMISSION;
+      return Promise.resolve(
+        new Response(JSON.stringify({ request: OPEN_REQUEST, responses: [resp] }), { status: 200 }),
+      );
+    });
+    mutateMock.mockImplementation(() => {
+      accepted = true;
+      return Promise.resolve({
+        status: "accepted",
+        nextStepLink: "/venue-portal/artwork-requests/req1",
+      });
+    });
+
+    await renderPage();
+    fireEvent.click(await screen.findByText("Accept"));
+
+    // Success state renders in place, and the reload swapped the sent
+    // response's Accept/Decline actions for the accepted card.
+    expect(await screen.findByText(/Response accepted\./)).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("Accept")).toBeNull());
+    // authFetch ran twice (initial load + post-accept reload) — the
+    // navigate branch would have skipped the reload entirely.
+    expect(authFetchMock.mock.calls.length).toBe(2);
+  });
+
+  it("renders the accepted card as the commission record, with no dead 'View commission' link", async () => {
+    getReturns(OPEN_REQUEST, [
+      { ...SENT_COMMISSION, status: "accepted", linked_commission_id: "com_1" },
+    ]);
+
+    await renderPage();
+
+    expect(
+      await screen.findByText("Commission agreed. The amount and timeline above are the agreed terms."),
+    ).toBeTruthy();
+    // Fail-before: a "View commission →" link to the non-existent
+    // /venue-portal/commissions route.
+    expect(screen.queryByText(/View commission/)).toBeNull();
+  });
+});

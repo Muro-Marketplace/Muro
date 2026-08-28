@@ -15,6 +15,7 @@ import { useSaveAction } from "@/hooks/useSaveAction";
 import { buildFramePayload, type FramePayloadInput } from "./frame-payload";
 import { mergeBulkPricing, copySizesPricing } from "./bulk-pricing";
 import { worksToPost } from "./changed-works";
+import { partitionBulkAddDrafts } from "./bulk-add-validation";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import Combobox from "@/components/Combobox";
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
@@ -80,6 +81,9 @@ interface BulkAddDraft {
   showShipping: boolean;
   showInStore: boolean;
   showFrames: boolean;
+  /** D24: why this draft was held back on the last save attempt.
+   *  Shown on the card; cleared on any edit. */
+  error?: string;
 }
 
 interface WorkFormState {
@@ -266,6 +270,10 @@ export default function PortfolioPage() {
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [bulkAddDrafts, setBulkAddDrafts] = useState<BulkAddDraft[]>([]);
   const [bulkAddDragOver, setBulkAddDragOver] = useState(false);
+  // D24: modal-level message for the last save attempt. formError renders
+  // inside the add/edit form, which isn't on screen while the modal is, so
+  // the bulk flow needs its own.
+  const [bulkAddError, setBulkAddError] = useState<string | null>(null);
   // Two pickers, one for "Copy sizes from", one for "Copy prices
   // from". They're separated because an artist often wants to clone
   // size labels (the size table stays the same across a series) but
@@ -736,6 +744,7 @@ export default function PortfolioPage() {
   function openBulkAdd() {
     setBulkAddDrafts([]);
     setBulkAddOpen(true);
+    setBulkAddError(null);
     setBulkAddApplyKind(null);
     setBulkAddPendingSource(null);
     setBulkAddTargetIds(new Set());
@@ -838,7 +847,11 @@ export default function PortfolioPage() {
     patch: Partial<BulkAddDraft>,
   ) {
     setBulkAddDrafts((prev) =>
-      prev.map((d) => (d.draftId === draftId ? { ...d, ...patch } : d)),
+      prev.map((d) =>
+        // D24: any edit clears the draft's held-back message; it is
+        // recomputed on the next save attempt.
+        d.draftId === draftId ? { ...d, ...patch, error: undefined } : d,
+      ),
     );
   }
 
@@ -941,22 +954,20 @@ export default function PortfolioPage() {
   }
 
   /**
-   * Save every draft as a new ArtistWork. Drafts missing an image are
-   * silently dropped (the artist hasn't finished setting them up);
-   * drafts with no priced size are flagged so they can fix before
-   * saving. saveWorks() handles the network sync.
+   * Save every complete draft as a new ArtistWork. D24: incomplete drafts
+   * used to be silently discarded whenever at least one draft was valid;
+   * now each one stays in the editor with a per-draft message and only the
+   * saved drafts leave the form. saveWorks() handles the network sync.
    */
   function bulkAddSaveAll() {
-    const valid = bulkAddDrafts.filter(
-      (d) =>
-        !d.uploading &&
-        d.imageUrl &&
-        d.title.trim().length > 0 &&
-        d.sizes.some((s) => s.label && s.price > 0),
-    );
+    setBulkAddError(null);
+    const { valid, errors } = partitionBulkAddDrafts(bulkAddDrafts);
     if (valid.length === 0) {
-      setFormError(
-        "Each draft needs an image, a title, and at least one priced size.",
+      setBulkAddDrafts((prev) =>
+        prev.map((d) => ({ ...d, error: errors.get(d.draftId) })),
+      );
+      setBulkAddError(
+        "Nothing was saved. Each draft needs an image, a title, and at least one priced size.",
       );
       return;
     }
@@ -1037,8 +1048,21 @@ export default function PortfolioPage() {
       `Added ${newWorks.length} work${newWorks.length === 1 ? "" : "s"}`,
     );
     setBulkAddSaving(false);
-    setBulkAddOpen(false);
-    setBulkAddDrafts([]);
+    if (errors.size === 0) {
+      setBulkAddOpen(false);
+      setBulkAddDrafts([]);
+      return;
+    }
+    // D24: keep every incomplete draft in the editor, each carrying its own
+    // message, so nothing the artist typed or uploaded is thrown away.
+    setBulkAddDrafts((prev) =>
+      prev
+        .filter((d) => errors.has(d.draftId))
+        .map((d) => ({ ...d, error: errors.get(d.draftId) })),
+    );
+    setBulkAddError(
+      `${errors.size} draft${errors.size === 1 ? " was" : "s were"} not saved. Fix the highlighted issues, then save again.`,
+    );
   }
 
   function openBulkPricesAll() {
@@ -1717,6 +1741,13 @@ export default function PortfolioPage() {
       setFormError("Title must be under 200 characters");
       return;
     }
+    // D22: a work used to fall back to a picsum stock photo when saved
+    // without an image, and that placeholder went live on public browse as
+    // if it were the artwork. No image, no save.
+    if (!form.imagePreview) {
+      setFormError("Upload an image of the artwork before saving");
+      return;
+    }
 
     const validSizes = form.sizes.filter((s) => s.label && s.price > 0);
     if (validSizes.length === 0) {
@@ -1819,7 +1850,9 @@ export default function PortfolioPage() {
       color: "#C17C5A",
       description: form.description.trim(),
       images: form.additionalImages.filter((u) => typeof u === "string" && u.length > 0),
-      image: form.imagePreview || "https://picsum.photos/seed/new-work/900/600",
+      // D22: no stock-photo fallback. The guard above refuses to save
+      // without an image, so nothing ever publishes a placeholder.
+      image: form.imagePreview,
       orientation: form.orientation,
       ...(shippingVal != null && !isNaN(shippingVal) ? { shippingPrice: shippingVal } : {}),
       ...(inStoreVal != null && !isNaN(inStoreVal) ? { inStorePrice: inStoreVal } : {}),
@@ -4171,29 +4204,37 @@ export default function PortfolioPage() {
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-3 shrink-0">
-              <p className="text-xs text-muted">
-                {bulkAddDrafts.filter((d) => d.imageUrl && d.title.trim() && d.sizes.some((s) => s.label && s.price > 0)).length}
-                {" / "}
-                {bulkAddDrafts.length} ready to save
-              </p>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => !bulkAddSaving && setBulkAddOpen(false)}
-                  disabled={bulkAddSaving}
-                  className="text-sm text-muted hover:text-foreground px-3 py-2 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={bulkAddSaveAll}
-                  disabled={bulkAddSaving || bulkAddDrafts.length === 0}
-                  className="px-4 py-2 rounded-sm bg-accent text-white text-sm font-medium hover:bg-accent-hover disabled:opacity-50"
-                >
-                  {bulkAddSaving ? "Saving…" : `Save ${bulkAddDrafts.length} work${bulkAddDrafts.length === 1 ? "" : "s"}`}
-                </button>
+            <div className="px-5 py-3 border-t border-border shrink-0">
+              {bulkAddError && (
+                <p className="text-sm text-red-500 flex items-center gap-1 mb-2" role="alert">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {bulkAddError}
+                </p>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted">
+                  {bulkAddDrafts.filter((d) => d.imageUrl && d.title.trim() && d.sizes.some((s) => s.label && s.price > 0)).length}
+                  {" / "}
+                  {bulkAddDrafts.length} ready to save
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => !bulkAddSaving && setBulkAddOpen(false)}
+                    disabled={bulkAddSaving}
+                    className="text-sm text-muted hover:text-foreground px-3 py-2 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={bulkAddSaveAll}
+                    disabled={bulkAddSaving || bulkAddDrafts.length === 0}
+                    className="px-4 py-2 rounded-sm bg-accent text-white text-sm font-medium hover:bg-accent-hover disabled:opacity-50"
+                  >
+                    {bulkAddSaving ? "Saving…" : `Save ${bulkAddDrafts.length} work${bulkAddDrafts.length === 1 ? "" : "s"}`}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -4244,7 +4285,11 @@ function BulkAddDraftCard({
   }
 
   return (
-    <div className="border border-border rounded-md bg-background overflow-hidden">
+    <div
+      className={`border rounded-md bg-background overflow-hidden ${
+        draft.error ? "border-red-500/60" : "border-border"
+      }`}
+    >
       <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-0">
         {/* Image side */}
         <div className="relative bg-stone-100 aspect-square sm:aspect-auto sm:min-h-[180px]">
@@ -4280,6 +4325,13 @@ function BulkAddDraftCard({
 
         {/* Form side */}
         <div className="p-4 space-y-3">
+          {/* D24: why this draft was held back on the last save attempt. */}
+          {draft.error && (
+            <p className="text-xs text-red-500 flex items-center gap-1" role="alert">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {draft.error}
+            </p>
+          )}
           <div>
             <label className="block text-[11px] font-medium text-muted mb-1">Title</label>
             <input

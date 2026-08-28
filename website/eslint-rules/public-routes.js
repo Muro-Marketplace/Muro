@@ -73,6 +73,8 @@ const DEMO_EXEMPT_ROUTES = {
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
   "src/app/api/admin/disputes/[id]/route.ts":
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
+  "src/app/api/admin/moderation/route.ts":
+    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
 };
 
 module.exports = { PUBLIC_ROUTES, DEMO_EXEMPT_ROUTES };
