@@ -10662,3 +10662,41 @@ to check before deleting them.
 
 `npm run check` green: 0 lint errors, 227 files, 2218 tests, 131 templates, 0
 dependency violations, exit 0.
+
+### 09 item 4.3 — the §C.5 matrix as a test — DONE
+
+The matrix is now declared in `email-one-per-event.test.ts` rather than described
+in prose, and checked both ways: every row must name a template `EMAIL_REGISTRY`
+carries (catching a row for a template nobody built) and a template something
+actually sends (catching a row that is documentation only). Dispatcher rows
+resolve through `TEMPLATE_BINDINGS` first, or seven of them read as unsent. A
+third assertion holds §C.5's five retired templates unreferenced.
+
+**Three rows shipped under different ids from the doc's proposed names**, and the
+difference is recorded in the test rather than left to be tripped over:
+`venue_placement_sale` → `venue_sale_from_placement`, `customer_order_cancelled` →
+`customer_order_status_update`, `operational_admin_alert` → `admin_alert`. The
+first two because the shipped templates cover a wider case than the proposed name
+implies; the third because K1 collapsed eight admin notifiers into one.
+
+**The real gap this closed:** §C.5's "+1 venue email only when a revenue share
+exists" was **untested**. The item-1.1 fixture had `venue: null`, so the venue
+branch had never been exercised at all. Five new tests: nothing to the venue on a
+zero share, exactly one on a real share, buyer and artist still exactly one each
+alongside it (an addition, not a replacement), the key is order-scoped so a Stripe
+redelivery cannot double it, and the venue can actually see their share.
+
+**One of those tests was weaker than it looked, and I only found out by checking.**
+The "no revenue" case originally passed `venue: null`, which tests "no venue" —
+every implementation passes that, including one with the revenue check deleted.
+Verified by deleting `&& venue.revenue > 0` and watching it stay green. Rewritten
+to attach a venue with a zero share; it now fails on that mutation.
+
+**The last assertion moved from props to rendered HTML.** Every direct `sendEmail`
+call in this codebase passes `Template({...})` rather than
+`createElement(Template, {...})`, so the element carries the shell's props, not
+the template's, and a props assertion would have been checking the wrong object
+(it was, and passed vacuously). Rendering makes the claim stronger anyway: the
+venue actually sees "£21.00", rather than it merely having been handed over.
+
+`npm run check` green: 0 lint errors, 227 files, 2235 tests, exit 0.
