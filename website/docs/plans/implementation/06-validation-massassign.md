@@ -1673,24 +1673,24 @@ path and should land first, in order.
 
 ### Phase C: gating and guardrails
 
-- [ ] **C1. (E16)** Replace the dynamic `process.env[key]` read in
+- [x] **C1. (E16)** Replace the dynamic `process.env[key]` read in
       `feature-flags.ts:99` with the static `CLIENT_ENV` map (§4.3). Verify with
       the `grep -rl` on `.next/static/chunks` before and after.
-- [ ] **C2. (E16)** Set `GATING_V1.prodDefault: true` and rewrite its
+- [x] **C2. (E16)** Set `GATING_V1.prodDefault: true` and rewrite its
       description to match production. Keep the env var as the kill switch.
-- [ ] **C3.** Add an ESLint rule (or a unit test) that fails on a spread of an
+- [x] **C3.** Add an ESLint rule (or a unit test) that fails on a spread of an
       identifier named `body`, `payload` or `data` inside a `.insert(`,
       `.update(` or `.upsert(` call, mirroring the existing
       `no-raw-arrangement-type` rule raised to error in commit 356cd37.
-- [ ] **C4.** Add a CI check that every entry in `FLAGS` has a `CLIENT_ENV` key.
-- [ ] **C5.** Re-run the full suite and confirm the pre-existing gating tests in
+- [x] **C4.** Add a CI check that every entry in `FLAGS` has a `CLIENT_ENV` key.
+- [x] **C5.** Re-run the full suite and confirm the pre-existing gating tests in
       `artist-works/route.test.ts` and `messages/route.test.ts` still pass.
 
 ### Verification
 
-- [ ] **V1.** `npm run test` green.
-- [ ] **V2.** `npm run lint` and `npx tsc --noEmit` green.
-- [ ] **V3.** Manually replay the §1.3 E44 body against a dev server and confirm
+- [x] **V1.** `npm run test` green.
+- [x] **V2.** `npm run lint` and `npx tsc --noEmit` green.
+- [ ] **V3.** OPEN, needs a running dev server and a human. Manually replay the §1.3 E44 body against a dev server and confirm
       a 200 whose stored row is unchanged on every server-owned column.
-- [ ] **V4.** Manually replay the §3.3 E46c framed-line body and confirm Stripe
+- [ ] **V4.** OPEN, needs a Stripe test call and a human. Manually replay the §3.3 E46c framed-line body and confirm Stripe
       receives `unit_amount: 18500`, not `10000`.

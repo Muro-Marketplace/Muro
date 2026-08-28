@@ -969,53 +969,53 @@ Each numbered item is one PR: single concern, green `npm run check`, ships with 
 
 ### Group 0, make it observable (do first, half a day)
 
-- [ ] **0.1** Add `src/instrumentation.ts` boot assertion (§A.6 layer 1). Test: unit test on the extracted `missingEmailEnv()` helper.
-- [ ] **0.2** Change `send.ts:154-158` so production returns `{ok:false, error:"email_not_configured"}` and logs (§A.6 layer 2). Test: `send.test.ts` asserting both branches with `VERCEL_ENV` stubbed.
-- [ ] **0.3** Add `GET /api/health/email` returning 503 when unconfigured or when `skipped_no_api_key > 0` in 24h (§A.6 layer 3). Test: route test with a fake Supabase client.
-- [ ] **0.4** Add `EMAIL_DRY_RUN` short-circuit after the idempotency claim (§E.2 level 2). Test: dry-run writes `status:"dry_run"` and never calls the provider.
-- [ ] **0.5** **Owner:** Resend domain `tx.wallplace.co.uk` verified, DNS records live, DMARC at `p=none`, mailboxes created, Vercel env vars set (§A.1–A.3). Verify with §A.4.
+- [x] **0.1** Add `src/instrumentation.ts` boot assertion (§A.6 layer 1). Test: unit test on the extracted `missingEmailEnv()` helper.
+- [x] **0.2** Change `send.ts:154-158` so production returns `{ok:false, error:"email_not_configured"}` and logs (§A.6 layer 2). Test: `send.test.ts` asserting both branches with `VERCEL_ENV` stubbed.
+- [x] **0.3** Add `GET /api/health/email` returning 503 when unconfigured or when `skipped_no_api_key > 0` in 24h (§A.6 layer 3). Test: route test with a fake Supabase client.
+- [x] **0.4** Add `EMAIL_DRY_RUN` short-circuit after the idempotency claim (§E.2 level 2). Test: dry-run writes `status:"dry_run"` and never calls the provider.
+- [ ] **0.5** OPEN, owner. Nothing in the repository can observe DNS, Resend or Vercel env state. **Owner:** Resend domain `tx.wallplace.co.uk` verified, DNS records live, DMARC at `p=none`, mailboxes created, Vercel env vars set (§A.1–A.3). Verify with §A.4.
 
 ### Group 1, stop the duplicates (the user-visible bug)
 
-- [ ] **1.1** Write `tests/integration/email-one-per-event.test.ts` (§E.3). It must **fail** on `main`. Commit it failing behind `it.fails` or in the same PR as 1.2.
-- [ ] **1.2** Add `billingAddress?` to `CustomerOrderPlaced`, `saleAmount?` to `ArtistOrderReceived` (§C.3).
-- [ ] **1.3** Delete `stripe/route.ts:524-559`, `:571-613`, `:615`; move and enrich the `recordOrderEvent` call (§C.3). Test 1.1 goes green.
-- [ ] **1.4** Mark `customer_order_receipt`, `artist_work_sold`, `artist_order_confirmation`, `customer_shipping_confirmation`, `customer_delivery_confirmation` as retired in the registry (§C.3).
-- [ ] **1.5** Add `customer_order_cancelled`, extend `TransactionalTemplate` / `TEMPLATE_BINDINGS` / `emailsForEvent`, delete `notifyBuyerStatusUpdate` from `orders/route.ts:236-254` (§C.4).
-- [ ] **1.6** Register the orphan `artist_qr_scan_digest` (§C.3).
+- [x] **1.1** Write `tests/integration/email-one-per-event.test.ts` (§E.3). It must **fail** on `main`. Commit it failing behind `it.fails` or in the same PR as 1.2.
+- [x] **1.2** Add `billingAddress?` to `CustomerOrderPlaced`, `saleAmount?` to `ArtistOrderReceived` (§C.3).
+- [x] **1.3** Delete `stripe/route.ts:524-559`, `:571-613`, `:615`; move and enrich the `recordOrderEvent` call (§C.3). Test 1.1 goes green.
+- [x] **1.4** Retire `customer_order_receipt`, `artist_work_sold`, `artist_order_confirmation`, `customer_shipping_confirmation`, `customer_delivery_confirmation`. **Enforced by a test rather than a registry field**: `email-one-per-event.test.ts` holds all five unreferenced by any send, which a `retired: true` flag nobody reads would not.
+- [x] **1.5** Add `customer_order_cancelled`, extend `TransactionalTemplate` / `TEMPLATE_BINDINGS` / `emailsForEvent`, delete `notifyBuyerStatusUpdate` from `orders/route.ts:236-254` (§C.4).
+- [x] **1.6** Register the orphan `artist_qr_scan_digest` (§C.3).
 
 ### Group 2, one pipeline
 
-- [ ] **2.1** Add the `internal_ops` category, `OperationalAdminAlert` template, `src/lib/email/admin.ts` (§B.3).
-- [ ] **2.2** Extract `sendMessageUnreadEmail` to `src/lib/email/notifications.ts` (§B.4).
-- [ ] **2.3** Build the six new customer-facing templates from §B.4 (`artist_new_placement_request`, `customer_refund_rejected`, `artist_refund_requested`, `venue_curation_enquiry_received`, `venue_curation_payment_received`, `venue_placement_sale`) and register them. Test: they render in `email:render`.
-- [ ] **2.4** Migrate the 7 admin call sites (apply, contact, curation, enquiry, refunds/request ×2, register-venue) to `sendAdminAlert`, adding `.select("id")` where an id is needed for the key (§B.3).
-- [ ] **2.5** Migrate the 10 customer-facing call sites (§B.4), including deleting the duplicate `notifyRefundDecision` at `refunds/process:305` (E5b) and the dead `notifyPlacementResponse` import (E5d).
-- [ ] **2.6** `git rm src/lib/email.ts`. Update all 7 test files to mock `@/lib/email/send` and `@/lib/email/admin`.
-- [ ] **2.7** Add `eslint-rules/no-legacy-email-import.js`, register it, add `tests/integration/eslint-no-legacy-email-import.test.ts` with the 10 cases from §B.6.
-- [ ] **2.8** Extend `no-unawaited-critical-sideeffect` to `sendEmail`/`sendTransactional`/`sendAdminAlert`/`recordOrderEvent`; fix the resulting violation at `placements/route.ts:623`; extend its test (§B.6).
-- [ ] **2.9** Point `no-inline-admin-check`'s exemption at `src/lib/email/admin.ts` instead of the deleted `src/lib/email.ts`; add both test cases (§B.3).
+- [x] **2.1** Add the `internal_ops` category, `OperationalAdminAlert` template, `src/lib/email/admin.ts` (§B.3). **Shipped as `platform_admin` + `AdminAlert` + `src/lib/email/admin-alert.ts`.** `platform_admin` already existed with the exact three values §B.3 specifies (`stream: "tx"`, `criticalAlwaysSend: true`, `throttleCount: 0`), so a second identical category would have been the duplication this document exists to remove.
+- [x] **2.2** Extract `sendMessageUnreadEmail` to `src/lib/email/notifications.ts` (§B.4).
+- [x] **2.3** Build the six new customer-facing templates from §B.4 and register them. **Three shipped under different ids:** `artist_new_placement_request` → `venue_new_placement_request` + `artist_new_placement_invitation` (the shipped pair splits by recipient, which one name cannot), `venue_curation_enquiry_received` → `curation_enquiry_received`, `venue_curation_payment_received` → `curation_payment_received`, `venue_placement_sale` → `venue_sale_from_placement`.
+- [x] **2.4** Migrate the 7 admin call sites (apply, contact, curation, enquiry, refunds/request ×2, register-venue) to `sendAdminAlert`, adding `.select("id")` where an id is needed for the key (§B.3).
+- [x] **2.5** Migrate the 10 customer-facing call sites (§B.4), including deleting the duplicate `notifyRefundDecision` at `refunds/process:305` (E5b) and the dead `notifyPlacementResponse` import (E5d).
+- [x] **2.6** `git rm src/lib/email.ts`. Update all 7 test files to mock `@/lib/email/send` and `@/lib/email/admin`.
+- [x] **2.7** **Shipped as the `one-email-entrypoint` dependency-cruiser rule plus `tests/integration/no-legacy-email.test.ts`.** The cruiser catches relative paths to the deleted module that an import-name lint rule would miss, and it runs in `depcheck`, which `check` includes.
+- [x] **2.8** Extend `no-unawaited-critical-sideeffect` to `sendEmail`/`sendTransactional`/`sendAdminAlert`/`recordOrderEvent`; fix the resulting violation at `placements/route.ts:623`; extend its test (§B.6).
+- [x] **2.9** Point `no-inline-admin-check`'s exemption at `src/lib/email/admin.ts` instead of the deleted `src/lib/email.ts`; add both test cases (§B.3).
 
 ### Group 3, wire the gaps
 
-- [ ] **3.1** **Owner:** render and paste the three Supabase auth templates; switch Supabase Auth to Resend SMTP (§A.5). Then advance DMARC to stage 2.
-- [ ] **3.2** Add `emailRedirectTo` to the two `signUp()` calls that lack it (`AuthContext.tsx:123`, `apply/claim/page.tsx:61`); add `POST /api/auth/resend-verification` (§A.5).
-- [ ] **3.3** Build `SubscriptionStarted` + the `customer.subscription.created` branch; fix the comment at `stripe/route.ts:1050-1052` (§D.5).
-- [ ] **3.4** Build `SupportRequestReceived` + the contact-form acknowledgement, with the reflected-send rate limit (§D.4).
-- [ ] **3.5** Newsletter double opt-in: migration, `NewsletterSubscribeConfirm`, `newsletter/route.ts` send, `GET /api/newsletter/confirm` (§D.3).
-- [ ] **3.6** Dispute resolved: widen the select in `admin/disputes/[id]/route.ts:40`, send to both parties (§D.2).
-- [ ] **3.7** Dispute opened: build `POST /api/disputes` end to end, give `disputed` a real event type in `event-vocabulary.ts`, send to both parties + admin (§D.1). **Largest item in this document; it is a feature, not a wiring task.**
+- [ ] **3.1** OPEN, owner (Supabase dashboard). **Owner:** render and paste the three Supabase auth templates; switch Supabase Auth to Resend SMTP (§A.5). Then advance DMARC to stage 2.
+- [x] **3.2** Add `emailRedirectTo` to the two `signUp()` calls that lack it (`AuthContext.tsx:123`, `apply/claim/page.tsx:61`); add `POST /api/auth/resend-verification` (§A.5).
+- [x] **3.3** Build `SubscriptionStarted` + the `customer.subscription.created` branch; fix the comment at `stripe/route.ts:1050-1052` (§D.5).
+- [x] **3.4** Build `SupportRequestReceived` + the contact-form acknowledgement, with the reflected-send rate limit (§D.4).
+- [x] **3.5** Newsletter double opt-in: migration, `NewsletterSubscribeConfirm`, `newsletter/route.ts` send, `GET /api/newsletter/confirm` (§D.3).
+- [x] **3.6** Dispute resolved: widen the select in `admin/disputes/[id]/route.ts:40`, send to both parties (§D.2).
+- [x] **3.7** Dispute opened: build `POST /api/disputes` end to end, give `disputed` a real event type in `event-vocabulary.ts`, send to both parties + admin (§D.1). **Largest item in this document; it is a feature, not a wiring task.**
 
 ### Group 4, verification and cleanup
 
-- [ ] **4.1** Build `scripts/email-harness.ts` (`render` / `send` / `audit`); add `email:render` and `email:audit` npm scripts; put `email:render` in `check` (§E.1).
-- [ ] **4.2** Add `tests/integration/email-events-audit.test.ts` (§E.4).
-- [ ] **4.3** Generalise 1.1 into the table-driven matrix test over §C.5 (§E.3).
-- [ ] **4.4** Add `email:render` and `email:audit` to CI; **clear `continue-on-error: true` on the lint job** so every rule in this document actually blocks (§E.5, master runbook §1.1).
-- [ ] **4.5** Rewrite `src/emails/OUTSTANDING.md` from `email:audit` output. Delete §1.1/§1.2 (done in 0.5), §2.1 (done in 3.1), and the stale "113 · 50 · 63" line.
-- [ ] **4.6** Add `no-raw-arrangement-type` integration test (the one registered rule with no test).
-- [ ] **4.7** **Owner:** advance DMARC through stages 3 and 4 on the schedule in §A.2, watching `rua` reports at each step.
-- [ ] **4.8** After a fortnight of clean production sends, delete the five retired template files in the §08 cull pass.
+- [x] **4.1** Build `scripts/email-harness.ts` (`render` / `send` / `audit`); add `email:render` and `email:audit` npm scripts; put `email:render` in `check` (§E.1).
+- [x] **4.2** Add `tests/integration/email-events-audit.test.ts` (§E.4).
+- [x] **4.3** Generalise 1.1 into the table-driven matrix test over §C.5 (§E.3).
+- [x] **4.4** Add `email:render` and `email:audit` to CI; **clear `continue-on-error: true` on the lint job** so every rule in this document actually blocks (§E.5, master runbook §1.1).
+- [x] **4.5** Rewrite `src/emails/OUTSTANDING.md` from `email:audit` output. Delete §1.1/§1.2 (done in 0.5), §2.1 (done in 3.1), and the stale "113 · 50 · 63" line.
+- [x] **4.6** Add `no-raw-arrangement-type` integration test (the one registered rule with no test).
+- [ ] **4.7** OPEN, owner (DNS, staged over weeks). **Owner:** advance DMARC through stages 3 and 4 on the schedule in §A.2, watching `rua` reports at each step.
+- [ ] **4.8** OPEN, time-based and gated on the `08` rewrite. After a fortnight of clean production sends, delete the five retired template files in the §08 cull pass.
 
 ### Explicitly out of scope
 
