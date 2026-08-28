@@ -516,6 +516,46 @@ describe("POST /api/checkout cart re-validation (G2-15)", () => {
     expect(stripeCreate).not.toHaveBeenCalled();
   });
 
+  it("B28: rejects a quantity above remaining stock with 409", async () => {
+    mockWorks([{
+      id: "w-two-left",
+      available: true,
+      quantity_available: 2,
+      pricing: [{ label: "S", price: 100 }],
+      title: "Short run",
+    }]);
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-two-left", price: 100, size: "S", quantity: 5 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("insufficient_stock");
+    expect(body.available).toBe(2);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("B28: unlimited stock (null) accepts any sane quantity; silly quantities 400", async () => {
+    mockWorks([{
+      id: "w-open",
+      available: true,
+      quantity_available: null,
+      pricing: [{ label: "S", price: 100 }],
+      title: "Open edition",
+    }]);
+    const ok = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-open", price: 100, size: "S", quantity: 7 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(ok.status).toBe(200);
+
+    const bad = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-open", price: 100, size: "S", quantity: 0 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(bad.status).toBe(400);
+  });
+
   it("recomputes unit_amount from DB price (ignores stale client price)", async () => {
     mockWorks([{
       id: "w-1",
