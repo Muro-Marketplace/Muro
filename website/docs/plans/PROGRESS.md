@@ -12725,3 +12725,21 @@ Remaining, and who owns it (unchanged in kind, restated once):
 - Decision 4, the `08` cull: parked on the owner's instruction.
 - K10b/K10c/K11 (Docker / supabase CLI / pg_dump absent on this machine)
   and the four `09` items needing DNS or dashboards or elapsed time.
+
+### CI follow-up: the e2e specs still pointed at Maya Chen's deleted static entry
+
+First CI run on `main` after the merge: `lint + typecheck + unit` PASSED
+(first green since June), `build + playwright smoke` failed 5 specs. All
+one cause: the /browse smoke assertions and the three visualiser specs
+anchored on "Maya Chen" / "Last Light on Mare Street", which existed as
+STATIC seed data until owner decision 3 deleted that entry (she became a
+real DB row, the demo account). CI runs against placeholder Supabase, so
+only the static list can render, and her content is gone from it. Decision
+3 missed that these specs depended on the entry; `npm run check` never
+runs playwright, so local gates could not catch it.
+
+Fix: re-anchor on James Okafor / "Southwark Geometry", who remain static.
+Verified locally with CI's exact env (placeholder Supabase +
+NEXT_PUBLIC_SITE_URL): 11/11 pass, including the two email-preview specs
+that only failed locally because the B4 gate fails closed without a site
+URL, which CI sets.

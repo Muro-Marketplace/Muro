@@ -17,16 +17,20 @@ test.describe("smoke", () => {
     await page.goto("/browse");
     // The discipline nav is always present on /browse.
     await expect(page.getByRole("button", { name: "Photography", exact: true })).toBeVisible();
-    // And at least one artist name from the seed data.
-    await expect(page.getByText(/Maya Chen/i).first()).toBeVisible();
+    // And at least one artist name from the static seed data. Maya Chen no
+    // longer works here: owner decision 3 (2026-08-28) deleted her STATIC
+    // entry because she became a real DB row (the demo account), and CI runs
+    // against placeholder Supabase where only the static list can render.
+    await expect(page.getByText(/James Okafor/i).first()).toBeVisible();
   });
 
   test("/browse?view=gallery renders the masonry columns", async ({ page }) => {
     await page.goto("/browse?view=gallery");
     // Discipline nav still present.
     await expect(page.getByRole("button", { name: "Photography", exact: true })).toBeVisible();
-    // At least one work title from the seed data.
-    await expect(page.getByText(/Last Light on Mare Street/i).first()).toBeVisible();
+    // At least one work title from the static seed data (see the note above
+    // on why not a Maya Chen work).
+    await expect(page.getByText(/Southwark Geometry/i).first()).toBeVisible();
   });
 
   test("/email-preview lists the template library", async ({ page }) => {
