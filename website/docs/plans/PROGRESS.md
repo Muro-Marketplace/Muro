@@ -12380,3 +12380,20 @@ anonymised shell would otherwise stay listed in /browse under `[deleted-…]`.
 So the erasure flow is now, for the first time: scrub everything (fixed this
 morning) → refuse to proceed if any scrub failed (same) → delete the auth user,
 which succeeds (this) → the shell delists (this).
+
+### B4's admin conjunct — resolved as WON'T ADD, with the reason at the gate
+
+Approved, attempted, and reversed within the same edit, because the mechanism
+leaks. The only admin check available to a page today is the client-side
+`AdminGate` (`/api/admin/whoami`), and a client component's children are
+serialised into the RSC flight payload whether or not the gate mounts them — so
+"production, but admins only" would ship every rendered template to anyone in
+production with devtools open, which is precisely the exposure B4 closed. A
+server-side check needs the ADR 0008 stage-2 cookie session, which does not
+exist.
+
+So the shipped rule stays the strictest achievable subset of D6: `/email-preview`
+is nobody-in-production, everybody-in-preview-and-dev. An admin who needs the
+browser has preview deploys. The reasoning is recorded at the gate itself, and
+this closes the "B4 admin conjunct" open decision as answered rather than
+pending.
