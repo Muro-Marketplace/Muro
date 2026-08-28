@@ -21,9 +21,14 @@ module.exports = {
     const fn = (context.filename || context.getFilename()).replace(/\\/g, "/");
     // admin-auth.ts is the canonical home for these checks — always exempt.
     if (fn.endsWith("src/lib/admin-auth.ts")) return {};
-    // email.ts reads ADMIN_EMAIL solely as a mail-delivery address, not an
-    // auth allowlist. It makes no authorisation decision, so it is exempt.
-    if (fn.endsWith("src/lib/email.ts")) return {};
+    // NO OTHER EXEMPTION. There used to be one for src/lib/email.ts, which read
+    // ADMIN_EMAIL as a delivery address rather than an auth allowlist. K1
+    // DELETED that file, and the exemption outlived it: a dead path that would
+    // silently have covered whatever was created at that name next. 09 §2.9 says
+    // to repoint it at the replacement; deleting it is better, because the
+    // replacement does not need it. `src/lib/email/admin-alert.ts` imports
+    // `adminEmails()` from admin-auth rather than reading the env itself, so the
+    // ops inbox is the same list this rule protects, by construction.
 
     return {
       // Flag: process.env.ADMIN_EMAILS or process.env.ADMIN_EMAIL (reads only)
