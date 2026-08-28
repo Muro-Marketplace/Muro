@@ -10838,3 +10838,52 @@ Sending when the insert failed fails 1. One test asserts the route never calls
 
 `npm run check` green: 0 lint errors, 232 files, 2299 tests, 132 templates, 0
 dependency violations, exit 0.
+
+### Found while building 3.5 — one auth-user lookup, three latent duplicate-account bugs — DONE
+
+Not on the plan. Building the newsletter confirmation needed "which auth user has
+this email?", and three routes already answered it, each with its own copy of the
+same four lines:
+
+```
+const { data } = await db.auth.admin.listUsers();
+const user = data?.users?.find((u) => u.email === app.email);
+```
+
+**Both bugs were in all three copies.**
+
+`listUsers()` with no arguments returns the **first 50 users**. Production has 40
+today, so all three worked and all three were going to stop working at user 51,
+silently, by reporting "no such user" for a user that exists. In
+`admin/applications/[id]` that is not a display glitch: the miss falls through to
+the invite path and creates a **second auth account** for an artist who already
+has one, on approval.
+
+And `u.email === app.email` is case-sensitive against a store that lowercases.
+GoTrue normalises addresses; forms do not. An application submitted as
+"Maya@Example.com" never matches the existing "maya@example.com" account, at any
+user count. Same duplicate-account outcome, available today.
+
+`account/roles` had the same defect under a comment asserting the opposite:
+"admin.listUsers() paginates at 1000/page". It does not. The switch-portal menu
+was going to start silently vanishing for anyone whose second account landed past
+user 50.
+
+`src/lib/auth/find-user-by-email.ts` replaces all three, with three shapes
+because the call sites genuinely differ: `findUserByEmail` (first match, exits as
+soon as it finds one), `findAllUsersByEmail` (every account on an address, which
+is what the switch-portal menu needs, so it always reads to the end), and
+`findUserIdsByEmails` (many addresses in ONE pass, because looping the singular
+form over 20 enquiry senders pages 20 times).
+
+`tests/integration/one-user-lookup.test.ts` is the ratchet: nothing outside the
+helper may call `listUsers`, no call anywhere may omit its page size, the three
+former call sites must still import the helper, and nothing may compare an email
+with `u.email ===`. Reverting one call site to the old shape fails 3 of its 4
+assertions.
+
+25 unit tests on the helper. The pagination one builds 640 users and looks for
+number 601; the case one is a straight "Maya@Example.com" against
+"maya@example.com".
+
+`npm run check` green: 0 lint errors, 234 files, 2328 tests, exit 0.

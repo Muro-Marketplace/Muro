@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { findUserIdsByEmails } from "@/lib/auth/find-user-by-email";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { orFilter } from "@/lib/db/safe-filter";
 
@@ -71,16 +72,12 @@ export async function GET(request: Request) {
     if (enquiries && enquiries.length > 0) {
       const emails = enquiries.map((e) => e.sender_email).filter(Boolean);
       if (emails.length > 0) {
-        // Look up venue profiles by user email
-        const { data: users } = await db.auth.admin.listUsers();
-        if (users?.users) {
-          const emailToUserId = new Map<string, string>();
-          for (const u of users.users) {
-            if (u.email && emails.includes(u.email)) {
-              emailToUserId.set(u.email, u.id);
-            }
-          }
-          const userIds = Array.from(emailToUserId.values());
+        // Look up venue profiles by user email. Through the shared helper, so
+        // this pages properly and matches case-insensitively: `listUsers()`
+        // with no arguments stops at 50 users, and GoTrue stores addresses
+        // lowercased while enquiry senders type them however they like.
+        {
+          const userIds = Array.from((await findUserIdsByEmails(db, emails)).values());
           if (userIds.length > 0) {
             const { data: venueProfiles } = await db
               .from("venue_profiles")

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withAdmin } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { findUserByEmail } from "@/lib/auth/find-user-by-email";
 import { slugify } from "@/lib/slugify";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistApplicationApproved } from "@/emails/templates/artist-additions/ArtistApplicationApproved";
@@ -66,10 +67,7 @@ export async function PUT(
       // source of truth for whether the applicant has been reviewed.
       if (app.email) {
         try {
-          const listed = await db.auth.admin.listUsers();
-          const existingUser = listed?.data?.users?.find(
-            (u) => u.email === app.email,
-          );
+          const existingUser = await findUserByEmail(db, app.email);
           if (existingUser) {
             const { error: profileErr } = await db
               .from("artist_profiles")
@@ -115,11 +113,15 @@ export async function PUT(
     let userId: string;
     let invited = false;
 
-    // Check if user already exists (from old auto-signup flow)
-    const { data: existingUsers } = await db.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find(
-      (u) => u.email === app.email
-    );
+    // Check if user already exists (from old auto-signup flow).
+    //
+    // Through the shared helper now. The inline version was `listUsers()` with
+    // no arguments, which returns the FIRST 50 users, compared with `===`
+    // against an address typed into an application form. Either miss lands on
+    // the invite path below and creates a SECOND auth account for someone who
+    // already has one. The case bug bites today; the pagination bug bites at
+    // user 51.
+    const existingUser = await findUserByEmail(db, app.email);
 
     if (existingUser) {
       userId = existingUser.id;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { findAllUsersByEmail } from "@/lib/auth/find-user-by-email";
 
 // Returns the set of distinct user_metadata.user_type values across all
 // auth.users rows that share this user's email. Used to render a "Switch
@@ -8,9 +9,11 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 // account.
 //
 // We never expose the *user_ids* of other accounts, only the role labels.
-// Listing all users is acceptable while the user base is small (Supabase
-// admin.listUsers() paginates at 1000/page); for a larger base, replace
-// with a parameterised query against auth.users.
+//
+// The comment here used to say "admin.listUsers() paginates at 1000/page".
+// It does not: the default is 50, and this called it with no arguments. So the
+// switch-portal menu was going to start silently disappearing for anyone whose
+// other account landed past user 50. findAllUsersByEmail pages properly.
 export async function GET(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
@@ -20,11 +23,7 @@ export async function GET(request: Request) {
 
   try {
     const db = getSupabaseAdmin();
-    const { data: matches } = await db.auth.admin.listUsers();
-    const lc = email.toLowerCase();
-    const same = (matches?.users || []).filter(
-      (u) => u.email?.toLowerCase() === lc,
-    );
+    const same = await findAllUsersByEmail(db, email);
     const roles = Array.from(
       new Set(
         same
