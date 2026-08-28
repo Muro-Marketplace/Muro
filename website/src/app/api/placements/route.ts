@@ -18,6 +18,7 @@ import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPla
 import { ArtistPlacementRequestSent } from "@/emails/templates/placements/ArtistPlacementRequestSent";
 import { VenuePlacementAcceptedConfirmation } from "@/emails/templates/placements/VenuePlacementAcceptedConfirmation";
 import { PaidLoanSetUpPayment } from "@/emails/templates/payments/PaidLoanSetUpPayment";
+import { isPaidLoan } from "@/lib/arrangement-type";
 import { PlacementVenueDeclinedArtistRequest } from "@/emails/templates/placements/PlacementVenueDeclinedArtistRequest";
 import { PlacementCancelled } from "@/emails/templates/placements/PlacementCancelled";
 import { PlacementCounterOfferReceived } from "@/emails/templates/placements/PlacementCounterOfferReceived";
@@ -1767,7 +1768,7 @@ export async function PATCH(request: Request) {
           // placement, so the live-on-wall transition below cannot double it.
           if (
             status === "active" &&
-            existing.arrangement_type === "paid_loan" &&
+            isPaidLoan(existing.arrangement_type, existing.monthly_fee_gbp) &&
             !existing.stripe_subscription_id &&
             existing.venue_user_id
           ) {

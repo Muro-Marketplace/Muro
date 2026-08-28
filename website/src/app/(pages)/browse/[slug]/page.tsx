@@ -223,7 +223,10 @@ export default async function ArtistProfilePage({
       {/* Variant A, no banner. Mobile gets a dedicated compact
           layout (header pair, full-width CTAs, stacked metadata);
           desktop renders the three-column grid. */}
-      <section className="pt-6 lg:pt-12 pb-2">
+      {/* Owner find (2026-08-28): pb-2 left the terms pills pressed against
+          the section edge while the portfolio below over-padded the top.
+          The breathing room now sits on the correct side of the boundary. */}
+      <section className="pt-6 lg:pt-12 pb-10 lg:pb-12">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
           <Breadcrumbs
             items={[
