@@ -11456,3 +11456,48 @@ destroying every referral code ever submitted), plus these two dead ones. The
 only one deliberately kept is `upsertWork`'s, and migration 104 records why.
 
 `npm run check` green: 0 lint errors, 242 files, 2453 tests, exit 0.
+
+### The strip-and-retry guard — DONE
+
+A ratchet so the class cannot come back, since it produced nine sites across four
+files and two of them were live data loss.
+
+`tests/integration/one-write-attempt.test.ts` looks for the one thing all nine
+shared: **a property deleted from an object that is then passed to a write.**
+
+**The first version was wrong twice, and both corrections are in the file.**
+
+It began as "a `delete` and a write in the same file", which flagged
+`artwork-requests/route.ts` — where four keys are deleted from a row about to be
+**returned**, to redact a public response. So the identifier is now tracked
+through to the write, and a redaction is not a ladder.
+
+It also began with a second assertion, "no write inside an `if (error)` block".
+That was written, run, and thrown away: a window after any error branch catches
+thirteen unrelated files, because "handle the error and carry on writing" is
+ordinary code. A guard needing a thirteen-entry allowlist is a list, not a guard.
+The rejected heuristic is recorded in the file so nobody adds it back.
+
+**Two ladders are allowlisted, each with a reason the test checks is real** (over
+60 characters, and the file must still contain a ladder, so a stale exemption
+fails rather than lingering):
+
+- `upsertWork` applies each extended column individually and **reports every
+  dropped column back to the caller** through `droppedColumns` and
+  `fallbackErrors`, which the route logs. That is the opposite of the pattern.
+- The Stripe order insert, which D6 kept deliberately and hardened:
+  `REQUIRED_MONEY_COLS` can never be stripped and a retry that surfaces one
+  refuses to book. An order arriving from Stripe is money already taken, so
+  refusing to write it at all is worse than writing it without an optional field.
+
+Verified by adding a route with a textbook ladder: it is named as an offender.
+
+**One landmine noted, not defused.** `upsertWork`'s `extendedColumns` still lists
+`in_store_price`, which exists in no migration and not in the live table. The
+route stopped passing it (A8) so nothing triggers it today, but any future caller
+that does gets a guaranteed-failing per-column write. Removing it from that list
+would make the phantom fail the CORE write instead, which is louder but breaks
+the whole save, and the real fix (a migration, or removing the UI that collects
+per-size in-store prices) is already escalated.
+
+`npm run check` green: 0 lint errors, 243 files, 2456 tests, exit 0.
