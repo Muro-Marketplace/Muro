@@ -481,3 +481,93 @@ describe("PATCH /api/orders role split (E21)", () => {
     expect(res.status).toBe(422);
   });
 });
+
+
+// Migration 110. The 14-day statutory refund window could never open.
+//
+// `isRefundEligible` measures the Consumer Contracts Regulations 2013 window
+// from `orders.delivered_at`, `/returns` promises it in those words, and the
+// column existed in no migration and not in the live table. Nothing on this path
+// ever wrote it, and the one place that tried — the collection branch of the
+// webhook insert — had it in `strippableCols`, so the D6 ladder dropped it every
+// time. So `status === "delivered" && delivered_at` was false for every delivered
+// order and the customer portal never showed the refund affordance.
+describe("PATCH /api/orders stamps delivered_at", () => {
+  let updated: Record<string, unknown> | null = null;
+
+  function setupOrder(row: Record<string, unknown>) {
+    updated = null;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "orders") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: row }),
+              maybeSingle: async () => ({ data: row }),
+              or: () => ({ maybeSingle: async () => ({ data: row }) }),
+              eq: () => ({ maybeSingle: async () => ({ data: row }) }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            updated = payload;
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      return {
+        select: () => ({ eq: () => ({ single: async () => ({ data: null }), maybeSingle: async () => ({ data: null }) }) }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+      };
+    });
+  }
+
+  const ORDER = {
+    id: "ord_1",
+    status: "shipped",
+    artist_user_id: "u-artist",
+    artist_slug: "maya-chen",
+    buyer_user_id: "u-buyer",
+    buyer_email: "b@x.com",
+    venue_slug: null,
+    status_history: [],
+    delivered_at: null,
+  };
+
+  function patch(body: unknown): Request {
+    return new Request("http://localhost/api/orders", {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  beforeEach(() => actAs("buyer"));
+
+  it("stamps it on the transition into delivered", async () => {
+    setupOrder(ORDER);
+
+    await PATCH(patch({ orderId: "ord_1", status: "delivered" }));
+
+    expect(updated).toBeTruthy();
+    expect(typeof updated!.delivered_at).toBe("string");
+    expect(new Date(updated!.delivered_at as string).getTime()).toBeGreaterThan(Date.now() - 60_000);
+  });
+
+  it("does NOT restamp an order that already has one", async () => {
+    // A re-PATCH would otherwise silently restart someone's 14 days.
+    setupOrder({ ...ORDER, status: "delivered", delivered_at: "2026-01-01T00:00:00Z" });
+
+    await PATCH(patch({ orderId: "ord_1", status: "delivered" }));
+
+    expect(updated ?? {}).not.toHaveProperty("delivered_at");
+  });
+
+  it("stamps nothing on any other transition", async () => {
+    setupOrder({ ...ORDER, status: "processing" });
+
+    await PATCH(patch({ orderId: "ord_1", status: "shipped", trackingNumber: "TRK1" }));
+
+    expect(updated ?? {}).not.toHaveProperty("delivered_at");
+  });
+});

@@ -221,6 +221,18 @@ export async function PATCH(request: Request) {
 
     const updates: Record<string, unknown> = { status, status_history: parsedHistory };
     if (trackingNumber) updates.tracking_number = trackingNumber;
+    // Migration 110. `isRefundEligible` measures the 14-day Consumer Contracts
+    // Regulations 2013 window from this timestamp, and nothing ever wrote it on
+    // this path: the column did not exist, and the only code that set it at all
+    // was the collection branch of the webhook insert, where the D6 ladder
+    // stripped it. So `status === "delivered" && delivered_at` was false for
+    // every delivered order and the refund affordance never appeared.
+    //
+    // Only on the transition INTO delivered, and only when it is not already
+    // stamped, so a re-PATCH cannot silently restart someone's window.
+    if (status === "delivered" && !order.delivered_at) {
+      updates.delivered_at = new Date().toISOString();
+    }
 
     const { error } = await db.from("orders").update(updates).eq("id", orderId);
 

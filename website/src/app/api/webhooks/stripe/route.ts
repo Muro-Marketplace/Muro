@@ -848,7 +848,12 @@ async function handleWebhookEvent(
             "placement_id",
             "fulfilment_method",
             "collection_notes",
-            "delivered_at",
+            // `delivered_at` was here, and it was the only entry on this list
+            // that did not exist. So the ladder stripped it from EVERY insert,
+            // and a collection order — handed over at the point of purchase, and
+            // marked delivered immediately for exactly that reason — lost the
+            // timestamp its refund window is measured from. Migration 110 adds
+            // the column; keeping it strippable would put it straight back.
             "status_history",
           ];
           const REQUIRED_MONEY_COLS = [

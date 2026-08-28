@@ -11718,3 +11718,46 @@ together.
 
 `npm run check` green: 0 lint errors, 246 files, 2484 tests, 0 dependency
 violations, exit 0.
+
+### The write guard's second pass: the 14-day statutory refund window has never opened — DONE
+
+Extended the write-side phantom guard to resolve an IDENTIFIER payload
+(`insert(fullRow)`) to its `const fullRow = { ... }` declaration. That is not
+polish: `api/apply` hid `referred_by_code` behind exactly that indirection, and
+it destroyed a referral code on every application ever submitted. The extension
+found one more immediately.
+
+**`orders.delivered_at` exists in no migration and not in the live table**, and
+three pieces of code assume it does:
+
+1. The Stripe webhook's order insert sets it for collection orders, under the
+   comment *"pin `delivered_at` so refund-window logic still works"*. It was
+   also in `strippableCols`, and it was **the only entry on that list that did
+   not exist**, so the D6 ladder dropped it from every insert. Silently, and by
+   design, because refusing an order Stripe has already charged for is worse.
+2. `isRefundEligible` implements the window: `status === "delivered" &&
+   delivered_at` within 14 days. With the column absent the second operand is
+   always undefined, so **it returns false for every delivered order, always**.
+3. `customer-portal` gates the refund-request affordance on that function.
+
+**`/returns` cites the Consumer Contracts Regulations 2013 and promises 14 days
+from receipt to cancel for any reason.** The page also gives an email address, so
+the statutory right is not wholly unavailable, but the product's own
+implementation of it has never once worked: the moment an order is marked
+delivered, the in-product refund path closes permanently.
+
+**Migration 110 (written, applied to prod, verified live)**, plus the two changes
+that make the column mean something: `delivered_at` is removed from
+`strippableCols` (it exists now; leaving it would put it straight back), and the
+`delivered` transition in `orders/route.ts` stamps it. **Only on the transition
+in, and only when it is not already set**, so a re-PATCH cannot silently restart
+someone's fourteen days. No backfill: existing delivered orders keep NULL, and
+inventing a date would hand someone a window measured from a moment we made up.
+
+**OWNER, and it is a widening.** Delivered orders become refund-eligible in the
+portal for 14 days, where today none ever is. That restores documented, legally
+required behaviour rather than inventing a policy, and the refund handlers
+themselves are untouched and still owner-gated — this changes who can *ask*, not
+what happens when they do.
+
+`npm run check` green: 0 lint errors, 246 files, 2487 tests, exit 0.
