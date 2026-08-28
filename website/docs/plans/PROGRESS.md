@@ -11286,3 +11286,76 @@ the static `CLIENT_ENV` map, `GATING_V1.prodDefault: true`, the
 V4 stay open because both say "manually replay against a dev server".
 
 Ledger rows 3, 10 and 11 rewritten to match.
+
+### 04 §9.3 + open question 2 — the reconciliation report, and what it found — DONE (the report). The finding is OWNER.
+
+Two items from `04`'s close-out that need no fund movement to build.
+
+**Open question 2: the Stripe API version is now pinned.** `src/lib/stripe.ts`
+passed no `apiVersion`, which does not mean "latest": it means the version
+configured on the Stripe **account** applies. So the request and response shapes
+every handler reads were decided in a dashboard, not in this repository, and a
+bump made there would change them with no code change, no deploy and no review.
+The shapes that would break quietly are the invoice and subscription ones
+`paid-loan-billing.ts` reads, and `subscription.items.data[0].current_period_end`,
+which `stripe-subscription-period.ts` exists to normalise **because Stripe has
+already moved it once**.
+
+Pinned to `2026-03-25.dahlia`, the version the installed SDK is built for. That
+is the conservative pin, not an upgrade: the runtime now returns exactly the
+shapes the TypeScript types describe instead of the two being free to differ.
+**It cannot silently drift**, because the SDK types `apiVersion` as a single
+string literal, so bumping the `stripe` package without updating the line fails
+`typecheck` with both versions named in the error.
+
+**§9.3: `npm run audit:reconcile`.** The arithmetic is in
+`src/lib/finance/reconcile.ts` (18 tests, no database) and the script is a thin
+shell. Two checks per revenue-bearing order: `total` must equal
+`artist_revenue + venue_revenue + platform_fee`, and every penny of
+`artist_revenue` must have a matching `stripe_transfers` row. Exit 0 clean, 1
+drift, 2 misconfigured, so it can be a cron that pages. Refunded, cancelled,
+failed and void orders are skipped, or every refund would read as drift. A
+`blocked` transfer counts as committed: the charge happened and the money is
+owed, and treating it as absent would make a stuck payout look reconciled.
+
+It does **not** talk to Stripe, and says so. It answers "are our own books
+internally consistent", which is the question that catches D4, E9 and D16. "Does
+Stripe agree" is a different job and needs a live key.
+
+**Ran the same two rules against production, and they found things.**
+
+| | |
+|---|---|
+| Revenue-bearing orders | 12 |
+| Gross | £1,174.87 |
+| Recorded as owed to artists | £953.20 |
+| Rows in `stripe_transfers` | **0** |
+
+**`stripe_transfers` is completely empty.** Twelve real paid orders, £953.20
+booked as owed, and not one ledger row. All twelve predate the C2/C3 leg work, so
+this is history rather than a live regression, but the money is still owed and
+nothing in the system records that.
+
+**`WS-P06DDkUs` (2026-05-17, £64.49) has no artist at all.** `artist_slug` NULL,
+`artist_user_id` NULL, and `artist_revenue`, `venue_revenue` and `platform_fee`
+all zero. £64.49 collected, nobody attributed, nothing allocated. That is exactly
+the D4 signature, and it is the single order whose split does not sum.
+
+**Five more have a slug and no user id**: `WS-agEXJ0gn`, `WS-iJ7I3ENn`,
+`WS-kcsWHfhq`, `WS-duumFTnR`, `WS-rQDHDmz5`, £535.42 between them. Same class:
+the slug resolved, the user id did not, so `if (artistUserId && artistRevenue > 0)`
+was false and no transfer was ever scheduled. D4's fix stops this happening again;
+it does not repair these.
+
+**This is an owner decision and I have not touched it.** Paying, writing off or
+re-attributing any of it is fund movement. What the loop can do is make it
+visible and keep it visible, which is what the script is for. Two of the twelve
+name demo personas (`fin-coles`, `maya-chen`), so some may be test traffic; the
+owner can tell and I cannot.
+
+**Not added to `npm run check`.** It needs a service-role key and a network
+round-trip, and `check` must stay runnable offline. §9.3 wants it nightly in CI,
+which needs the secret adding first, the same blocker row 0c already carries.
+
+`npm run check` green: 0 lint errors, 241 files, 2442 tests, 0 dependency
+violations, exit 0.

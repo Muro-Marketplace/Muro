@@ -22,7 +22,8 @@
     "schema:snapshot": "tsx scripts/schema-snapshot.ts",
     "admin:backfill": "tsx scripts/backfill-admin-users.ts",
     "email:render": "tsx scripts/email-harness.ts render",
-    "email:audit": "tsx scripts/email-harness.ts audit"
+    "email:audit": "tsx scripts/email-harness.ts audit",
+    "audit:reconcile": "tsx scripts/audit/reconcile-money.ts"
   },
   "dependencies": {
     "@react-email/components": "^1.0.12",
