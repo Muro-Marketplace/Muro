@@ -5,6 +5,7 @@ import { artists as staticArtists } from "@/data/artists";
 import { venues } from "@/data/venues";
 import { getArtistBySlug } from "@/lib/db/merged-data";
 import { DEMO_ARTIST_SLUG, DEMO_VENUE_SLUG } from "@/data/demo";
+import DemoTourCard from "./DemoTourCard";
 
 export const metadata: Metadata = {
   title: "Tour Wallplace, Demo Artist & Venue Accounts",
@@ -17,20 +18,18 @@ export const metadata: Metadata = {
  * before committing. Two cards, each pointing into the relevant
  * experience for the demo account.
  *
- * Two-stage routing:
- *   1. Phase 2 (sandboxed portal tour configured): button links to
- *      `/api/demo/login?role=...&next=...` which signs the visitor in
- *      as the read-only demo user and redirects into the relevant
- *      portal landing page.
- *   2. Phase 1 fallback (no demo creds set): button links to the
- *      public artist / venue profile page. The /api/demo/login
- *      endpoint returns 503 in that mode so even a misconfigured
- *      browser can't get stuck.
- *
- * Both buttons render the Phase 2 URL, the login endpoint
- * gracefully degrades to the public profile if creds aren't set, via
- * server-side guard. We can't conditionally render server-only logic
- * here (this is an RSC), so the URL stays consistent.
+ * Two-stage routing (see DemoTourCard for the client half):
+ *   1. Phase 2 (sandboxed portal tour configured): the card POSTs to
+ *      `/api/demo/login?role=...`, feeds the returned session tokens
+ *      into `supabase.auth.setSession(...)` on the shared client, and
+ *      navigates into the relevant portal landing page. The sign-in
+ *      has to happen client-side because the app keeps sessions in
+ *      localStorage via plain supabase-js; there is no cookie-reading
+ *      middleware for a server-set session to travel through.
+ *   2. Phase 1 fallback (no demo creds set): the card is a plain link
+ *      to the public artist / venue profile page. A 503 from the
+ *      login endpoint degrades to the same place, so even a
+ *      misconfigured environment can't strand the visitor.
  */
 /**
  * Resolve a configured demo slug, loudly.
@@ -73,18 +72,14 @@ export default async function DemoLandingPage() {
   const demoArtist = dbDemoArtist ?? resolveDemo(staticArtists, DEMO_ARTIST_SLUG, "artist");
   const demoVenue = resolveDemo(venues, DEMO_VENUE_SLUG, "venue");
 
-  // Decide whether the Phase 2 portal-tour login is available. When
-  // it is, buttons hit the login endpoint; otherwise they fall back
-  // to the public profile pages (Phase 1 behaviour).
+  // Decide whether the Phase 2 portal-tour login is available. When it
+  // is, the cards run the client-side demo sign-in; otherwise they fall
+  // back to the public profile pages (Phase 1 behaviour).
   const portalTourEnabled = Boolean(
     process.env.DEMO_ARTIST_EMAIL && process.env.DEMO_VENUE_EMAIL,
   );
-  const artistHref = portalTourEnabled
-    ? `/api/demo/login?role=artist`
-    : `/browse/${demoArtist.slug}`;
-  const venueHref = portalTourEnabled
-    ? `/api/demo/login?role=venue`
-    : `/venues/${demoVenue.slug}`;
+  const artistFallbackHref = `/browse/${demoArtist.slug}`;
+  const venueFallbackHref = `/venues/${demoVenue.slug}`;
 
   return (
     <div className="bg-background min-h-screen">
@@ -109,9 +104,10 @@ export default async function DemoLandingPage() {
       <section className="px-6 lg:px-10 py-12 sm:py-16">
         <div className="max-w-[1100px] mx-auto grid md:grid-cols-2 gap-5 sm:gap-7">
           {/* Demo artist */}
-          <Link
-            href={artistHref}
-            prefetch={false}
+          <DemoTourCard
+            role="artist"
+            enabled={portalTourEnabled}
+            fallbackHref={artistFallbackHref}
             className="group block bg-surface border border-border rounded-sm overflow-hidden hover:border-accent/50 hover:shadow-sm transition-all"
           >
             <div className="aspect-[5/4] relative overflow-hidden bg-border/20">
@@ -156,12 +152,13 @@ export default async function DemoLandingPage() {
                 </svg>
               </span>
             </div>
-          </Link>
+          </DemoTourCard>
 
           {/* Demo venue */}
-          <Link
-            href={venueHref}
-            prefetch={false}
+          <DemoTourCard
+            role="venue"
+            enabled={portalTourEnabled}
+            fallbackHref={venueFallbackHref}
             className="group block bg-surface border border-border rounded-sm overflow-hidden hover:border-accent/50 hover:shadow-sm transition-all"
           >
             <div className="aspect-[5/4] relative overflow-hidden bg-border/20">
@@ -206,7 +203,7 @@ export default async function DemoLandingPage() {
                 </svg>
               </span>
             </div>
-          </Link>
+          </DemoTourCard>
         </div>
 
         {/* What you'll see */}

@@ -1,23 +1,33 @@
 /**
- * /api/demo/login?role=artist|venue
+ * POST /api/demo/login?role=artist|venue
  *
- * Funnels homepage / `/demo` visitors into the read-only sandboxed
- * demo account for the requested role and redirects them into the
- * relevant portal landing page.
+ * Signs in the sandboxed demo account for the requested role on the
+ * server and hands the resulting session tokens back to the /demo page,
+ * which applies them with `supabase.auth.setSession(...)` on the shared
+ * client and then routes into the relevant portal.
  *
  * Activation: requires four env vars
- *   - DEMO_ARTIST_USER_ID + DEMO_ARTIST_PASSWORD
- *   - DEMO_VENUE_USER_ID  + DEMO_VENUE_PASSWORD
+ *   - DEMO_ARTIST_EMAIL + DEMO_ARTIST_PASSWORD
+ *   - DEMO_VENUE_EMAIL  + DEMO_VENUE_PASSWORD
  *
  * Without them this route returns 503 with a friendly message so the
  * /demo page can fall back to the public-profile redirect.
  *
  * Auth handshake:
- *   We sign in with email + password against Supabase Auth, then set
- *   the resulting access/refresh tokens as `sb-*` cookies the client
- *   already reads via @supabase/ssr. No service-role token leaves the
- *   server, the only thing that crosses to the browser is the
- *   demo user's own short-lived session JWT.
+ *   We sign in with email + password against Supabase Auth using the
+ *   anon key, then return the session's access/refresh tokens as JSON.
+ *   The app's client is plain supabase-js with localStorage sessions
+ *   (there is no @supabase/ssr dependency and no middleware), so
+ *   httpOnly `sb-*` cookies set here would never be read by anything;
+ *   a previous version of this route set exactly those cookies and the
+ *   demo visitor bounced straight to /login. The client-side
+ *   `setSession` call is the only handshake this app understands.
+ *
+ *   Exposure note: returning the tokens in the response body is
+ *   equivalent exposure to the old cookie design. Either way the
+ *   browser ends up holding the shared demo user's own short-lived
+ *   session JWT and nothing else; no service-role token leaves the
+ *   server.
  *
  * Write protection:
  *   The `assertNotDemo` helper in @/lib/demo-guard is what actually
@@ -53,21 +63,22 @@ function readCreds(role: "artist" | "venue"): DemoCreds | null {
 // redirect construction in the app that did not go through safe-redirect.
 // startsWith("/") accepts a protocol-relative URL: `new URL("//evil.example/x",
 // "https://wallplace.co.uk/...")` resolves to https://evil.example/x, and
-// "/\evil.example" is read as a host by several browsers. The route sets the
-// sb-*-auth-token cookie on the same response, so it was a credential-adjacent
-// off-site bounce starting from a wallplace.co.uk URL, exactly the shape a
-// phishing link wants. Use the shared helper; do not grow a second one here.
+// "/\evil.example" is read as a host by several browsers. The response carries
+// the demo session's tokens, and the client navigates wherever `redirectTo`
+// says, so an off-site value here is a credential-adjacent bounce starting
+// from a wallplace.co.uk URL, exactly the shape a phishing link wants. Use
+// the shared helper; do not grow a second one here.
 function destinationFor(role: "artist" | "venue", explicit: string | null): string {
   const fallback = role === "venue" ? "/venue-portal" : "/artist-portal";
   return safeRedirect(explicit, fallback);
 }
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const url = new URL(request.url);
   const roleRaw = url.searchParams.get("role");
   const role: "artist" | "venue" =
     roleRaw === "venue" ? "venue" : "artist";
-  const next = destinationFor(role, url.searchParams.get("next"));
+  const redirectTo = destinationFor(role, url.searchParams.get("next"));
 
   const creds = readCreds(role);
   if (!creds) {
@@ -113,33 +124,16 @@ export async function GET(request: Request) {
     );
   }
 
-  // Redirect into the portal with the session's auth-bearing cookies
-  // attached. Supabase's @supabase/ssr middleware (already configured
-  // app-wide) reads these and rehydrates the session on the next
-  // request.
-  const res = NextResponse.redirect(new URL(next, request.url), {
-    status: 303, // see-other so the GET → GET handoff is correct
+  // Hand the session to the client. The /demo page feeds these straight
+  // into `supabase.auth.setSession(...)` on the shared localStorage
+  // client, then navigates to `redirectTo`. Deliberately no Set-Cookie:
+  // nothing in this app reads auth cookies, so setting one would only
+  // fake a sign-in that never happens.
+  return NextResponse.json({
+    configured: true,
+    role,
+    redirectTo,
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
   });
-
-  // Set the same access / refresh cookies the regular auth flow uses.
-  // Names match @supabase/ssr's defaults; if your project overrides
-  // them, mirror that override here.
-  const projectRef = SUPABASE_URL.replace(/^https?:\/\//, "").split(".")[0];
-  const cookieBase = `sb-${projectRef}-auth-token`;
-  const cookieValue = JSON.stringify([
-    data.session.access_token,
-    data.session.refresh_token,
-    null,
-    null,
-    null,
-  ]);
-  res.cookies.set(cookieBase, cookieValue, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: data.session.expires_in,
-  });
-
-  return res;
 }

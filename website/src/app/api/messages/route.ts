@@ -778,6 +778,7 @@ export async function POST(request: Request) {
               recipientEmail: recipientUser.email,
               recipientUserId: recipientArtist.user_id,
               recipientName: recipientArtist.name,
+              recipientPortal: "artist",
               senderName: resolvedSenderSlug,
               messagePreview: content,
               conversationId: cid || "",
@@ -799,6 +800,9 @@ export async function POST(request: Request) {
               recipientEmail: recipientUser.email,
               recipientUserId: vp.user_id,
               recipientName: vp.name,
+              // F7: venues used to get an artist-portal link here, which
+              // bounced them off a portal guard instead of opening the thread.
+              recipientPortal: "venue",
               senderName: resolvedSenderSlug,
               messagePreview: content,
               conversationId: cid || "",

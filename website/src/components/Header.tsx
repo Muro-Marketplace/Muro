@@ -174,14 +174,16 @@ export default function Header() {
   );
   const filteredMoreLinks = moreLinks.filter((l) => !primaryNavHrefs.has(l.href));
 
-  // Fetch unread message count when logged in
+  // Fetch unread message count when logged in. Customers are skipped:
+  // the messages API rejects accounts without an artist or venue
+  // profile, so for them this call could only ever 403 (F17/H9).
   const fetchUnread = useCallback(() => {
-    if (!user) return;
+    if (!user || userType === "customer") return;
     authFetch("/api/messages/unread")
       .then((r) => r.json())
       .then((data) => setUnreadCount(data.count || 0))
       .catch(() => {});
-  }, [user]);
+  }, [user, userType]);
 
   // Fetch unread notification count (mirror messages pattern, on mount + poll)
   const fetchUnreadNotifs = useCallback(() => {
@@ -482,7 +484,13 @@ export default function Header() {
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                   </svg>
                 </Link>
-                {/* Messages dropdown */}
+                {/* Messages dropdown. Hidden for customers (F17/H9):
+                    the conversations fetch behind it 403s for accounts
+                    without an artist or venue profile, so for a customer
+                    this was a permanently empty fake inbox. Customer
+                    enquiries go through artist profiles and are answered
+                    by email instead. */}
+                {userType !== "customer" && (
                 <div className="relative" ref={msgDropdownRef}>
                   <button
                     onClick={() => { setMsgDropdownOpen(!msgDropdownOpen); setNotifDropdownOpen(false); }}
@@ -581,6 +589,7 @@ export default function Header() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Notifications dropdown */}
                 <div className="relative" ref={notifDropdownRef}>

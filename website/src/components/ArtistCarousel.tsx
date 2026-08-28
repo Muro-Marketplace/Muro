@@ -40,10 +40,13 @@ export default function ArtistCarousel({
   const { user, userType } = useAuth();
   const router = useRouter();
 
-  // Logged-out users used to land on /contact?artist=…, a one-shot
-  // form with no continuation. Now we route through customer signup
-  // (#2) so the conversation has a portal home; signed-in users go
-  // straight to whichever portal Messages they belong to.
+  // Artists and venues go straight to their portal Messages. Customers
+  // and logged-out visitors go to the profile's enquiry form
+  // (B12/F17/H9): customer accounts cannot use the messages API, so
+  // the old customer-portal inbox route, and the signup redirect that
+  // funnelled guests into it, both dead-ended after the visitor had
+  // typed a message. The enquiry form works without an account and the
+  // artist replies by email.
   const messageHref = (() => {
     if (user && userType === "venue") {
       return `/venue-portal/messages?artist=${slug}&artistName=${encodeURIComponent(name)}`;
@@ -51,11 +54,7 @@ export default function ArtistCarousel({
     if (user && userType === "artist") {
       return `/artist-portal/messages?artist=${slug}&artistName=${encodeURIComponent(name)}`;
     }
-    if (user && userType === "customer") {
-      return `/customer-portal/messages?artist=${slug}&artistName=${encodeURIComponent(name)}`;
-    }
-    const next = `/customer-portal/messages?artist=${slug}&artistName=${encodeURIComponent(name)}`;
-    return `/signup/customer?next=${encodeURIComponent(next)}`;
+    return `/browse/${slug}?enquiry=1`;
   })();
 
   const goToPrev = (e: React.MouseEvent) => {
