@@ -11058,3 +11058,85 @@ display" to "Paid loan". That is the canonical answer and matches
 
 `npm run check` green: 0 lint errors, 237 files, 2375 tests, 134 templates, 0
 dependency violations, exit 0.
+
+### 07 K10d — the `002_run_me.sql` ghost, answered — DONE, and it was not harmless
+
+K10d asks whether the deleted `002_run_me.sql` was ever applied to production.
+**It was**, and the answer came with a live defect attached.
+
+`002_run_me.sql` was added in `b22c19d`, deleted in `72b1f72` the same day, and
+never joined the numbered series. Every one of its 24 objects exists in prod
+today. 21 of them are also created by `001_analytics_events.sql`, so for those
+the ghost is invisible. **Three are not.**
+
+`idx_analytics_artist`, `idx_analytics_type` and `idx_analytics_venue` are live
+in production, doing **837, 1079 and 130 scans**, and are created by **no
+committed migration**. That is direct evidence the file was pasted into the
+dashboard, not inference.
+
+**And that turns a correct-looking migration into a real divergence.** `001`
+creates the same three indexes under its own names (`idx_ae_artist_slug`,
+`idx_ae_event_type`, `idx_ae_venue_name`). `070_qa44_db_hardening.sql:88-90`
+drops all three as "redundant duplicate indexes", which was right **in
+production**, where they duplicated the `idx_analytics_*` set. But 070 could only
+drop what the repo knew about, and the repo has never known about
+`idx_analytics_*`. So:
+
+- **production** keeps the un-migrated three, and they are load-bearing;
+- **a database built from the repo alone** creates 001's three, drops them at
+  070, and ends with **no index at all** on `analytics_events(artist_slug)`,
+  `(event_type)` or `(venue_name)`.
+
+`analytics_events` is the busiest table in the system. A preview branch, a CI
+database or a rebuilt production would sequential-scan every artist analytics
+query. This is K11's thesis, "a fresh database built from the repo alone reaches
+the same schema as production", failing in one measurable place.
+
+**Migration 108 (written, applied to prod, verified live).** Creates the three
+under the names **production** uses, `IF NOT EXISTS`, so it is a genuine no-op
+there rather than a fourth copy under a fifth name. Verified after applying: the
+scan counters are unchanged at 837 / 1079 / 130, which is what a no-op looks
+like. Purely additive.
+
+**Every other index 070 drops was checked against prod and is genuinely
+covered**, each by a UNIQUE-constraint index a committed migration creates:
+`artist_profiles_user_id_key`, `artist_profiles_slug_key`,
+`artist_profiles_referral_code_key`, `artist_referrals_referral_code_key`,
+`cart_sessions_stripe_session_id_key`, `newsletter_subscribers_email_key`,
+`placement_records_placement_id_key`, `venue_profiles_slug_key`,
+`venue_profiles_user_id_key`. The analytics three were the only unreplaced drop.
+
+**`tests/integration/migration-index-drops.test.ts` is the guard**, and it is the
+general form rather than a note about these three. It replays every
+index-creating and index-dropping statement across all 108 migrations in filename
+order and fails when a `(table, columns)` pair that once had an index ends with
+nothing covering it. Getting it to be *correct* rather than noisy took three
+things the first cut lacked, each of which was a false positive it found:
+
+- **statement order within a file.** 074 drops
+  `stripe_transfers_order_recipient_uniq` and recreates it two lines later.
+  Processing all creates before all drops deleted the replacement.
+- **UNIQUE-constraint indexes.** `newsletter_subscribers(email)` and four others
+  are covered by a constraint's backing index that no `CREATE INDEX` names.
+- **leading-column prefixes.** `walls(user_id)` is served by
+  `walls_user_owner_type_idx`, exactly as 072 says.
+
+One deliberate removal is allowlisted with its reason: `021` drops
+`idx_placements_unique_active` because a venue can legitimately hold several
+works by one artist at once. That was a constraint, not an access path, and prod
+has no such index.
+
+Verified both ways: deleting migration 108 fails 2 assertions naming the three
+indexes; adding a bare `DROP INDEX idx_placements_status` fails the sweep naming
+that pair.
+
+**Still not done, and still honestly blocked: K10b, K10c, K11a.** They need the
+Supabase CLI, Docker and `pg_dump`, and this environment has **none** of the
+three (checked: `docker info` fails, `supabase`, `psql` and `pg_dump` are all
+absent). K10c's CI job is the only thing that actually proves K10 and K11, and
+writing a CI job I cannot execute once is how the 4.4 gap happened: a guard that
+passes locally and is decoration where it counts. It stays open rather than
+becoming a green tick nobody tested.
+
+`npm run check` green: 0 lint errors, 238 files, 2378 tests, 134 templates, 0
+dependency violations, exit 0.
