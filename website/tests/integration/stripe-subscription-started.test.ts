@@ -12,10 +12,13 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { fromMock, getUserByIdMock, nextEvent } = vi.hoisted(() => ({
+const { fromMock, getUserByIdMock, nextEvent, paidLoanDeletedMock, curationDeletedMock } =
+  vi.hoisted(() => ({
   fromMock: vi.fn(),
   getUserByIdMock: vi.fn(),
   nextEvent: { value: null as unknown },
+  paidLoanDeletedMock: vi.fn(async () => {}),
+  curationDeletedMock: vi.fn(async () => {}),
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
@@ -24,6 +27,17 @@ vi.mock("@/lib/supabase-admin", () => ({
     auth: { admin: { getUserById: getUserByIdMock } },
     storage: { from: () => ({ createSignedUrl: () => ({ data: null, error: null }) }) },
   }),
+}));
+vi.mock("@/lib/placements/paid-loan-billing", () => ({
+  recordPaidLoanSubscription: vi.fn(async () => {}),
+  handleInvoicePaid: vi.fn(async () => false),
+  handleInvoicePaymentFailed: vi.fn(async () => false),
+  handleSubscriptionDeleted: paidLoanDeletedMock,
+}));
+vi.mock("@/lib/curation/billing", () => ({
+  handleCurationInvoicePaid: vi.fn(async () => false),
+  handleCurationInvoiceFailed: vi.fn(async () => false),
+  handleCurationSubscriptionDeleted: curationDeletedMock,
 }));
 vi.mock("@/lib/stripe-connect", () => ({
   scheduleTransfer: vi.fn(async () => ({ ok: true })),
@@ -352,5 +366,75 @@ describe("checkout.session.completed is gated on settlement", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).not.toMatchObject({ awaiting_payment: true });
+  });
+});
+
+
+// 04 D13 / item 0.5. Three separate `customer.subscription.deleted` branches.
+//
+// The SaaS one, the paid-loan one and the curation one are three top-level `if`
+// blocks in one handler, and every one of them must run for a single event:
+// an artist upgrading a plan produces a "stale" SaaS deletion, and the paid-loan
+// and curation reconcilers still need to see it.
+//
+// D13 is what happens when they do not. The SaaS block used to `return` on the
+// stale case, which exited the WHOLE handler, so an artist changing plan could
+// leave a paid-loan billing row stuck `active` after Stripe had cancelled it.
+// That specific `return` is now a scoped `if`, but the SHAPE still invites the
+// bug: a `return` added to any of the three silently skips its siblings.
+//
+// 0.5 asks for the three to be consolidated into one branch. That is a large
+// mechanical edit inside the money webhook, whose current behaviour is correct,
+// so this pins the invariant behaviourally instead: all three run, for one
+// event, whatever the SaaS half decides. A reintroduced early return fails here.
+describe("customer.subscription.deleted reaches all three reconcilers (D13)", () => {
+  beforeEach(() => {
+    paidLoanDeletedMock.mockClear();
+    curationDeletedMock.mockClear();
+  });
+
+  function deleted(profile: unknown) {
+    fromMock.mockImplementation(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: profile }) }) }),
+      update: () => ({ eq: async () => ({ error: null }) }),
+      upsert: async () => ({ error: null }),
+      insert: async () => ({ error: null, data: null }),
+    }));
+    nextEvent.value = event("customer.subscription.deleted", subscription({ id: "sub_old" }));
+  }
+
+  it("runs the paid-loan and curation reconcilers on a normal cancellation", async () => {
+    deleted({ user_id: "u-artist", name: "Maya", subscription_plan: "premium", stripe_subscription_id: "sub_old" });
+
+    await POST(post());
+
+    expect(paidLoanDeletedMock).toHaveBeenCalledTimes(1);
+    expect(curationDeletedMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("STILL runs them when the SaaS half decides the deletion is stale", async () => {
+    // THE D13 regression. The profile already points at a newer subscription,
+    // which is what an upgrade looks like, so the SaaS half correctly does
+    // nothing. The other two must not be skipped with it.
+    deleted({ user_id: "u-artist", name: "Maya", subscription_plan: "premium", stripe_subscription_id: "sub_new" });
+
+    await POST(post());
+
+    expect(paidLoanDeletedMock).toHaveBeenCalledTimes(1);
+    expect(curationDeletedMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("still runs them when no artist profile matches the customer", async () => {
+    deleted(null);
+
+    await POST(post());
+
+    expect(paidLoanDeletedMock).toHaveBeenCalledTimes(1);
+    expect(curationDeletedMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 200 so Stripe does not redeliver a cancellation it handled", async () => {
+    deleted({ user_id: "u-artist", name: "Maya", subscription_plan: "premium", stripe_subscription_id: "sub_old" });
+    expect((await POST(post())).status).toBe(200);
   });
 });

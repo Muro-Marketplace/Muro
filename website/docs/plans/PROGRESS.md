@@ -11606,3 +11606,32 @@ asserts that a real table is reached, and fails on the `=== "paid"` mutation.
 fails two.
 
 `npm run check` green: 0 lint errors, 244 files, 2467 tests, exit 0.
+
+### 04 item 0.5 — D13's invariant pinned, and why the consolidation was NOT done
+
+0.5 asks for the duplicated `event.type` branches to be collapsed into one each.
+There are three top-level `customer.subscription.deleted` blocks (`:1329`,
+`:1480`, `:1509`), one per subsystem: SaaS, paid loan, curation.
+
+**Every one must run for a single event.** An artist changing plan produces a
+"stale" SaaS deletion, and the paid-loan and curation reconcilers still need to
+see it. D13 is what happens when they do not: the SaaS block used to `return` on
+the stale case, which exited the **whole handler**, so a plan change could leave
+a paid-loan billing row stuck `active` after Stripe had already cancelled it.
+
+That specific `return` is already a scoped `if`. The remaining problem is
+structural: the shape invites the bug back, because a `return` added to any of
+the three silently skips its siblings.
+
+**I have not restructured it, and that is a judgement I want visible.**
+Collapsing three branches inside the money webhook is a large mechanical edit to
+code whose current behaviour is correct, made unattended. The invariant is what
+matters, not the shape, so it is pinned **behaviourally** instead: four tests
+drive one `customer.subscription.deleted` and assert both other reconcilers run,
+including on the stale path that D13 broke and on the no-profile path.
+
+Reintroducing the early return fails the stale test specifically. That is the
+guard 0.5 was really asking for; the consolidation remains available and is now
+safe to attempt, because a mistake in it fails a test instead of shipping.
+
+`npm run check` green: 0 lint errors, 244 files, 2471 tests, exit 0.
