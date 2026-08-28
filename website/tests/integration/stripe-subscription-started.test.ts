@@ -768,6 +768,34 @@ describe("checkout.session.completed books a collect_venue order", () => {
     expect(venueSends).toHaveLength(0);
   });
 
+  it("a THROW inside the cart branch answers 500 and releases the claim (WS1.1, audit F1)", async () => {
+    // The audit's worst shape: money taken, an exception between the
+    // settlement gate and completion (here: the profile lookup that feeds
+    // buildArtistLegs rejects), and the old catch swallowed it into a 200
+    // that kept the dedup claim, so Stripe never retried.
+    const released: string[] = [];
+    setupCartDb();
+    nextEvent.value = completedSession();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") {
+        return {
+          insert: async () => ({ error: null }),
+          delete: () => ({ eq: async (_c: string, id: string) => { released.push(id); return { error: null }; } }),
+        };
+      }
+      if (table === "artist_profiles") {
+        return { select: () => ({ in: async () => { throw new Error("transient db fault"); }, eq: () => ({ maybeSingle: async () => ({ data: { user_id: "u" } }) }) }) };
+      }
+      return base(table);
+    });
+
+    const res = await POST(post());
+    expect(res.status).toBe(500);
+    expect(released).toHaveLength(1);
+    expect(orderInsert).toBeNull();
+  });
+
   it("without a QR scan: venue gets the notice and the offer clears, but NO revenue share (owner ruling)", async () => {
     // The 24h attribution token is the ONLY road to a venue share; a buyer
     // who never scanned still triggers the physical-world consequences.
@@ -840,5 +868,33 @@ describe("checkout.session.completed books a collect_venue order", () => {
 
   beforeEach(() => {
     nextEvent.value = completedSession();
+  });
+});
+
+// WS2.1 (audit R3.1 CRITICAL). transfer.reversed used to write the RETRYABLE
+// `failed` status, and the daily sweep then re-executed the full transfer once
+// Stripe's 24h idempotency key lapsed: every reversal became a scheduled
+// double payment. A reversal is terminal.
+describe("transfer.reversed is terminal", () => {
+  it("writes status reversed, never failed", async () => {
+    const writes: Array<Record<string, unknown>> = [];
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") {
+        return { insert: async () => ({ error: null }), delete: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      if (table === "stripe_transfers") {
+        return { update: (row: Record<string, unknown>) => { writes.push(row); return { eq: async () => ({ error: null }) }; } };
+      }
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        upsert: async () => ({ error: null }),
+      };
+    });
+    nextEvent.value = event("transfer.reversed", { id: "tr_1", amount: 1000 });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    expect(writes).toEqual([{ status: "reversed" }]);
   });
 });

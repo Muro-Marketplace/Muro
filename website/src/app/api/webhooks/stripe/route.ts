@@ -1229,7 +1229,14 @@ async function handleWebhookEvent(
           await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
         }
       } catch (err) {
+        // WS1.1 (audit F1, verified): this catch used to swallow the throw and
+        // fall through to the default 200, which KEPT the dedup claim. Money
+        // taken, no order booked, Stripe never retries, invisible to the
+        // sweep. A 500 releases the claim (see the POST wrapper) so the
+        // redelivery gets another run; every write in this branch is
+        // idempotent, so a partial first pass is completed, not doubled.
         console.error("Order processing error:", err);
+        return NextResponse.json({ error: "Order processing failed" }, { status: 500 });
       }
     }
   }
@@ -1867,9 +1874,15 @@ async function handleWebhookEvent(
   if (event.type === "transfer.reversed") {
     const transfer = event.data.object as Stripe.Transfer;
 
+    // WS2.1 (audit R3.1 CRITICAL, verified): this used to write `failed`,
+    // which is a RETRYABLE state - the daily sweep re-executed the transfer
+    // in full once the 24h Stripe idempotency key lapsed, turning every
+    // reversal (in-app refunds included, since Stripe echoes their reversal
+    // back as this event) into a scheduled double payment. A reversal is
+    // terminal: the money came back deliberately.
     const { error } = await db
       .from("stripe_transfers")
-      .update({ status: "failed" })
+      .update({ status: "reversed" })
       .eq("stripe_transfer_id", transfer.id);
 
     if (error) console.error("Transfer reversed update error:", error);
