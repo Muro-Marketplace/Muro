@@ -134,3 +134,64 @@ export async function getAdminUser(request: Request) {
 
   return { user, error: null };
 }
+
+/**
+ * Admin route wrapper: resolve the admin, run the handler, write the audit row
+ * (E30a, 03 §2.1).
+ *
+ * There is no shared wrapper today, so every admin route calls `getAdminUser`
+ * by hand and then, optionally and from memory, calls `recordAdminAction`.
+ * Nothing enforces the pairing, so audit coverage tracked whichever phase of
+ * work last touched a file: the platform's admission gate, the curation
+ * lifecycle (which includes `paid` and `refunded`) and admin-approved Stripe
+ * refunds all mutated state with no trail at all.
+ *
+ * The handler is given an `audit(context)` it calls to say what it did. It does
+ * NOT have to restructure its early returns to thread a context back, which is
+ * what made §2.1's proposed signature risky for a 250-line handler with several
+ * of them. The rules:
+ *
+ *   - handler called `audit(...)`  -> that row is written;
+ *   - handler returned 2xx without calling it -> a row is still written, with
+ *     no context, so a successful mutation is never invisible;
+ *   - handler returned non-2xx without calling it -> nothing, because a
+ *     rejected request did not change anything.
+ *
+ * The write happens BEFORE the response is returned, matching the precedent in
+ * api/messages. Keep `context` to the decision, the target id and the target's
+ * email: the column is JSONB and will otherwise accumulate PII.
+ */
+export async function withAdmin(
+  request: Request,
+  action: string,
+  handler: (ctx: {
+    user: User;
+    /**
+     * Record what this request did. The second argument refines the action
+     * name when one route covers two decisions, e.g. accept vs reject on the
+     * applications gate, so the audit log stays queryable by action.
+     */
+    audit: (context?: Record<string, unknown>, actionOverride?: string) => void;
+  }) => Promise<NextResponse>,
+): Promise<NextResponse> {
+  const { user, error } = await getAdminUser(request);
+  if (error) return error;
+
+  let requested = false;
+  let context: Record<string, unknown> | undefined;
+  let resolvedAction = action;
+  const audit = (ctx?: Record<string, unknown>, actionOverride?: string) => {
+    requested = true;
+    context = ctx;
+    if (actionOverride) resolvedAction = actionOverride;
+  };
+
+  const response = await handler({ user: user!, audit });
+
+  if (requested || response.ok) {
+    const { recordAdminAction } = await import("@/lib/admin-audit");
+    await recordAdminAction({ adminUserId: user!.id, action: resolvedAction, context });
+  }
+
+  return response;
+}

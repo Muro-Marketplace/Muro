@@ -9680,3 +9680,78 @@ is a standing blocker). The live rolled-back proof above is the verification, an
 exercises the real trigger on the real table rather than a model of it.
 
 `npm run check` green: 0 lint errors, 213 files, 2083 tests, exit 0.
+
+### E30a — admin decisions were unaudited (03 §2.1) — DONE
+
+`recordAdminAction` existed and was wired to five call sites, but nothing enforced
+the pairing with the admin check, so coverage tracked whichever phase of work last
+touched a file. The platform's admission gate, the curation lifecycle and
+admin-approved Stripe refunds all mutated state with no trail at all.
+
+**`withAdmin`, with a different signature from the one §2.1 proposed.** The doc's
+version has the handler return `{ response, context }`, which means every early
+return in a 250-line handler has to be restructured — the doc itself calls that the
+medium-risk part. Mine passes an `audit(context, actionOverride?)` into the handler
+instead, so `applications/[id]` kept all six of its early returns untouched. The
+rules:
+
+- handler called `audit(...)` → that row is written;
+- handler returned 2xx without calling it → a row is written anyway, with no
+  context, so a successful mutation is never invisible;
+- handler returned non-2xx without calling it → nothing, because a rejected request
+  changed nothing.
+
+The `actionOverride` exists because one route can cover two decisions: the
+applications gate writes `application_accepted` or `application_rejected`, not a
+single `application_decision`, so the log stays queryable by action.
+
+**Converted.** G1 `admin/applications/[id]` PUT, G2 `admin/curation` PATCH, G4
+`admin/refresh-stats` POST. G3 `refunds/process` keeps explicit
+`recordAdminAction` calls in its admin branch rather than going through the
+wrapper, exactly as §2.1 directs, because artists legitimately call it too. That
+one is a money handler, so the change is strictly additive: it adds a row next to
+the refund and changes nothing about the refund, and `recordAdminAction` never
+throws.
+
+**G4 carried one real behaviour change, which I initially mis-described in a
+comment and corrected.** It used a hand-rolled `getAuthenticatedUser` +
+`isAdminRequest` pair. 401 for a missing token and 403 for a non-admin are
+unchanged; the difference is that an unconfigured `ADMIN_EMAILS` now answers 503
+like every other `getAdminUser` route, instead of a 403 blaming the caller for a
+deployment fault.
+
+**G5, the read-only bulk exports, deliberately NOT audited.** §2.1 offers "add a
+row, or record the decision in the new ADR rather than leaving the inconsistency
+undocumented". Recorded in ADR 0008: the admin dashboard loads several of these per
+page view, so auditing them writes a handful of rows every time anyone opens
+`/admin`. `admin_audit_log` exists to answer "did anyone read X's messages", and
+burying that under routine navigation makes the table worse at its job. Revisit
+when the log has a query surface that can filter by action.
+
+**PII discipline.** Every `context` carries the decision, the target id and the
+target's email, never the row. `applications/[id]` would otherwise have written the
+applicant's artist statement and portfolio links into a JSONB column; there is a
+test asserting those keys are absent. `curation` records *that* admin notes changed,
+not what they say, with a test asserting the note text does not appear.
+
+**Tests.** 21 new: 7 for `withAdmin` in `admin-auth.test.ts`, 4 added to the
+existing `applications/[id]` suite, 6 for `curation`, 4 rewritten for
+`refresh-stats`, plus 3 more invariants in `admin-route-guard.test.ts`. The
+curation and refresh-stats suites run the REAL `withAdmin` and `getAdminUser`
+against a mocked Supabase, so they exercise the actual predicate rather than a
+stand-in.
+
+**The invariant was proved to bite.** Reverting `curation` to a hand-rolled
+`getAdminUser` with no audit call failed the coverage test, naming the file;
+restoring passed 6/6. A third invariant names `refunds/process` explicitly, because
+it sits outside the `api/admin` directory the sweep walks and would otherwise be
+silently out of scope.
+
+**Two fixture bugs the tests caught in my own work:** the existing
+`applications/[id]` suite mocks the whole `admin-auth` module, so it needed a
+faithful `withAdmin` stand-in rather than the module's real one (which would close
+over the real `getAdminUser`, not the mock). And zod's `.uuid()` validates the
+version and variant nibbles, so a "shaped like a UUID" fixture was rejected at the
+schema and three tests were asserting 400s while looking like they passed.
+
+`npm run check` green: 0 lint errors, 214 files, 2105 tests, exit 0.

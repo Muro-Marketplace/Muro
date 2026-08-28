@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminUser } from "@/lib/admin-auth";
+import { withAdmin } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { slugify } from "@/lib/slugify";
 import { sendEmail } from "@/lib/email/send";
@@ -8,13 +8,21 @@ import { ArtistApplicationRejected } from "@/emails/templates/artist-additions/A
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
+// E30a / G1. The platform's admission gate, and the worst of the audit gaps:
+// it creates or invites an auth user, REWRITES that user's user_metadata,
+// inserts an artist_profiles row marked approved, and flips the application
+// status, with nothing recorded anywhere. A compromised admin account could
+// mint a platform identity and leave admin_audit_log empty.
+//
+// withAdmin owns the audit call so it cannot be forgotten. The handler keeps
+// every one of its early returns as it was: `audit()` is called at the two
+// points where a decision was actually made, and the wrapper writes the row
+// before the response goes out.
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, error } = await getAdminUser(request);
-  if (error) return error;
-
+  return withAdmin(request, "application_decision", async ({ user, audit }) => {
   const { id } = await params;
   const body = await request.json();
   const action = body.action as "accept" | "reject";
@@ -94,6 +102,11 @@ export async function PUT(
         });
       }
 
+      // The decision, the target and the target's email. Never the row: the
+      // context column is JSONB and would otherwise accumulate the full
+      // application, portfolio links and artist statement included.
+      audit({ applicationId: id, applicantEmail: app.email, decision: "rejected" },
+        "application_rejected");
       return NextResponse.json({ success: true, status: "rejected" });
     }
 
@@ -252,6 +265,10 @@ export async function PUT(
       });
     }
 
+    audit(
+      { applicationId: id, applicantEmail: app.email, decision: "accepted", invited, userId },
+      "application_accepted",
+    );
     return NextResponse.json({
       success: true,
       status: "accepted",
@@ -263,6 +280,7 @@ export async function PUT(
     console.error("Accept/reject error:", err);
     return NextResponse.json({ error: "Operation failed" }, { status: 500 });
   }
+  });
 }
 
 type AdminDb = ReturnType<typeof getSupabaseAdmin>;

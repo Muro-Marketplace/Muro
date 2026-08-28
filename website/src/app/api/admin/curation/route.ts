@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getAdminUser } from "@/lib/admin-auth";
+import { getAdminUser, withAdmin } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request: Request) {
@@ -28,25 +28,36 @@ const patchSchema = z.object({
   adminNotes: z.string().max(4000).optional(),
 });
 
+// E30a / G2. This moves curation_requests through a lifecycle that includes
+// `paid`, `refunded` and `cancelled`, plus free-text admin_notes, and left no
+// trail at all. Money-adjacent state changed by an admin, with nothing recorded.
 export async function PATCH(request: Request) {
-  const auth = await getAdminUser(request);
-  if (auth.error) return auth.error;
+  return withAdmin(request, "curation_request_updated", async ({ audit }) => {
+    const body = await request.json().catch(() => null);
+    const parsed = patchSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
 
-  const body = await request.json().catch(() => null);
-  const parsed = patchSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (parsed.data.status) updates.status = parsed.data.status;
+    if (parsed.data.adminNotes !== undefined) updates.admin_notes = parsed.data.adminNotes;
 
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (parsed.data.status) updates.status = parsed.data.status;
-  if (parsed.data.adminNotes !== undefined) updates.admin_notes = parsed.data.adminNotes;
+    const db = getSupabaseAdmin();
+    const { error } = await db.from("curation_requests").update(updates).eq("id", parsed.data.id);
+    if (error) {
+      console.error("admin curation update error:", error);
+      return NextResponse.json({ error: "Failed to update" }, { status: 500 });
+    }
 
-  const db = getSupabaseAdmin();
-  const { error } = await db.from("curation_requests").update(updates).eq("id", parsed.data.id);
-  if (error) {
-    console.error("admin curation update error:", error);
-    return NextResponse.json({ error: "Failed to update" }, { status: 500 });
-  }
-  return NextResponse.json({ success: true });
+    // The decision and the target, not the row: `context` is JSONB and would
+    // otherwise accumulate the requester's contact details. Whether notes were
+    // touched is recorded, but not what they say.
+    audit({
+      curationRequestId: parsed.data.id,
+      status: parsed.data.status ?? null,
+      adminNotesChanged: parsed.data.adminNotes !== undefined,
+    });
+    return NextResponse.json({ success: true });
+  });
 }

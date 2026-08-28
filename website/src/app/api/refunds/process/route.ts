@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
 import { isAdminRequest } from "@/lib/admin-auth";
+import { recordAdminAction } from "@/lib/admin-audit";
 import { notifyRefundDecision } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
 import { createNotification } from "@/lib/notifications";
@@ -143,6 +144,21 @@ export async function POST(request: Request) {
           approved: false,
           reason: reason || undefined,
         }).catch((err) => { if (err) console.error("notifyRefundDecision error:", err); });
+      }
+
+      // E30a / G3. An admin rejecting an artist-raised refund is the decision
+      // that stops money moving, and it left no trail. Additive only: this adds
+      // a row, it does not change the refund. recordAdminAction never throws.
+      if (admin) {
+        await recordAdminAction({
+          adminUserId: userId,
+          action: "refund_rejected_by_admin",
+          context: {
+            orderId: order.id,
+            refundRequestId,
+            requesterType: refundReqForAuthz.requester_type,
+          },
+        });
       }
 
       return NextResponse.json({ success: true, status: "rejected" });
@@ -454,6 +470,27 @@ export async function POST(request: Request) {
         body: `Order ${order.id} was refunded. Any payout already transferred will be reversed.`,
         link: `/artist-portal/orders?id=${encodeURIComponent(order.id as string)}`,
       }).catch((err) => { if (err) console.error("Artist refund bell error:", err); });
+    }
+
+    // E30a / G3. This is the only path by which an artist-initiated refund gets
+    // approved, it moves real money through Stripe, and it left no trail.
+    // 03 §2.1 says explicitly not to force this route through withAdmin, because
+    // artists legitimately call it too; the audit belongs inside the admin
+    // branch. Additive only: it adds a row, it does not change the refund, and
+    // recordAdminAction never throws.
+    if (admin) {
+      await recordAdminAction({
+        adminUserId: userId,
+        action: "refund_approved_by_admin",
+        context: {
+          orderId: order.id,
+          refundRequestId,
+          amount: refundReq.amount,
+          stripeRefundId: stripeRefund.id,
+          orderStatus: newStatus,
+          requesterType: refundReqForAuthz.requester_type,
+        },
+      });
     }
 
     return NextResponse.json({

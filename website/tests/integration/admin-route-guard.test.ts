@@ -66,3 +66,39 @@ describe("every admin API route enforces admin auth (E30b)", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// E30a — the same failure mode, one level up: nothing enforced the pairing of
+// "check admin" with "write an audit row", so coverage tracked whichever phase
+// of work last touched a file. The platform's admission gate, the curation
+// lifecycle (which includes `paid` and `refunded`) and admin-approved Stripe
+// refunds all mutated state with no trail at all.
+describe("every mutating admin route writes an audit row (E30a)", () => {
+  const MUTATING = /export\s+(?:async\s+)?function\s+(POST|PUT|PATCH|DELETE)\b/;
+  const AUDITS = /recordAdminAction|withAdmin/;
+
+  it("has no mutating route under api/admin without an audit call", async () => {
+    const files = await adminRouteFiles();
+    const offenders = files.filter((f) => {
+      const source = readFileSync(f, "utf8");
+      return MUTATING.test(source) && !AUDITS.test(source);
+    });
+    expect(offenders, "these admin routes change state and leave no trail").toEqual([]);
+  });
+
+  it("finds mutating routes at all, so an empty sweep cannot pass vacuously", async () => {
+    const files = await adminRouteFiles();
+    const mutating = files.filter((f) => MUTATING.test(readFileSync(f, "utf8")));
+    expect(mutating.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("covers the money-adjacent refund route, which lives outside api/admin", async () => {
+    // /api/refunds/process is admin-gated on one branch but sits outside the
+    // directory the sweep above walks, because artists call it too. 03 §2.1
+    // says explicitly not to force it through withAdmin, so it is named here
+    // rather than being silently out of scope.
+    const source = readFileSync("src/app/api/refunds/process/route.ts", "utf8");
+    expect(source).toMatch(/recordAdminAction/);
+    expect(source).toMatch(/refund_approved_by_admin/);
+    expect(source).toMatch(/refund_rejected_by_admin/);
+  });
+});

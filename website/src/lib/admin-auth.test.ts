@@ -1,15 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { getUser, fromMock } = vi.hoisted(() => {
+const { getUser, fromMock, recordMock } = vi.hoisted(() => {
   const fromMock = vi.fn();
-  return { getUser: vi.fn(), fromMock };
+  return { getUser: vi.fn(), fromMock, recordMock: vi.fn() };
 });
+
+vi.mock("@/lib/admin-audit", () => ({ recordAdminAction: recordMock }));
 
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ auth: { getUser }, from: fromMock }),
 }));
 
-import { getAdminUser, isAdminRequest } from "./admin-auth";
+import { NextResponse } from "next/server";
+import { getAdminUser, isAdminRequest, withAdmin } from "./admin-auth";
 
 // Default: user is NOT in admin_users table
 function mockAdminUsersEmpty() {
@@ -36,6 +39,7 @@ function mockAdminUsersHit() {
 beforeEach(() => {
   getUser.mockReset();
   fromMock.mockReset();
+  recordMock.mockReset();
   mockAdminUsersEmpty();
   process.env.ADMIN_EMAILS = "boss@example.com";
 });
@@ -146,5 +150,100 @@ describe("isAdminRequest()", () => {
       error: new Error("invalid"),
     });
     expect(await isAdminRequest(req("Bearer bad"))).toBe(false);
+  });
+});
+
+
+// E30a — nothing enforced the pairing of "check admin" with "write an audit
+// row", so coverage tracked whichever phase of work last touched a file. The
+// admission gate, the curation lifecycle (which includes `paid` and `refunded`)
+// and admin-approved Stripe refunds all mutated state with no trail at all.
+describe("withAdmin (E30a)", () => {
+  const ADMIN_USER = {
+    id: "u-admin",
+    email: "boss@example.com",
+    user_metadata: { user_type: "admin" },
+  };
+
+  beforeEach(() => {
+    getUser.mockResolvedValue({ data: { user: ADMIN_USER }, error: null });
+  });
+
+  it("writes the row the handler asked for, before returning", async () => {
+    const res = await withAdmin(req(), "thing_done", async ({ audit }) => {
+      audit({ targetId: "t1" });
+      return NextResponse.json({ success: true });
+    });
+
+    expect(res.status).toBe(200);
+    expect(recordMock).toHaveBeenCalledTimes(1);
+    expect(recordMock.mock.calls[0][0]).toEqual({
+      adminUserId: "u-admin",
+      action: "thing_done",
+      context: { targetId: "t1" },
+    });
+  });
+
+  it("lets the handler refine the action name", async () => {
+    // One route, two decisions: the audit log has to stay queryable by action.
+    await withAdmin(req(), "application_decision", async ({ audit }) => {
+      audit({ decision: "rejected" }, "application_rejected");
+      return NextResponse.json({ success: true });
+    });
+
+    expect(recordMock.mock.calls[0][0].action).toBe("application_rejected");
+  });
+
+  it("still writes a row when a successful handler forgot to call audit", async () => {
+    // THE point of the wrapper. Forgetting is what caused the gap; a successful
+    // mutation must never be invisible.
+    await withAdmin(req(), "thing_done", async () => NextResponse.json({ success: true }));
+
+    expect(recordMock).toHaveBeenCalledTimes(1);
+    expect(recordMock.mock.calls[0][0]).toMatchObject({
+      action: "thing_done",
+      context: undefined,
+    });
+  });
+
+  it("writes nothing when the handler refused the request", async () => {
+    // A 4xx changed nothing, so there is nothing to account for.
+    const res = await withAdmin(req(), "thing_done", async () =>
+      NextResponse.json({ error: "nope" }, { status: 400 }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(recordMock).not.toHaveBeenCalled();
+  });
+
+  it("writes a row for a failed request the handler explicitly audited", async () => {
+    await withAdmin(req(), "thing_attempted", async ({ audit }) => {
+      audit({ reason: "downstream failure" });
+      return NextResponse.json({ error: "failed" }, { status: 500 });
+    });
+
+    expect(recordMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("never runs the handler for a non-admin, and audits nothing", async () => {
+    getUser.mockResolvedValue({
+      data: { user: { id: "u-x", email: "nobody@example.com", user_metadata: {} } },
+      error: null,
+    });
+    const handler = vi.fn();
+
+    const res = await withAdmin(req(), "thing_done", handler);
+
+    expect(res.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+    expect(recordMock).not.toHaveBeenCalled();
+  });
+
+  it("never runs the handler without a token", async () => {
+    const handler = vi.fn();
+    const res = await withAdmin(req(null), "thing_done", handler);
+    expect(res.status).toBe(401);
+    expect(handler).not.toHaveBeenCalled();
+    expect(recordMock).not.toHaveBeenCalled();
   });
 });

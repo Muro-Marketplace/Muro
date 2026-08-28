@@ -101,6 +101,37 @@ A true server-side gate needs `@supabase/ssr`, the session in cookies, and a
 `src/middleware.ts` matching `/admin/:path*`. There is no server-readable
 session today, so that is recorded as stage 2 and is out of scope here.
 
+## Audit coverage (E30a)
+
+The same failure mode as the surface gate, one level up: nothing enforced the
+pairing of "check admin" with "write an audit row", so coverage tracked whichever
+phase of work last touched a file. `withAdmin` now owns both, and
+`tests/integration/admin-route-guard.test.ts` fails if a mutating route under
+`api/admin` references neither `withAdmin` nor `recordAdminAction`.
+
+Converted: the applications gate (`application_accepted` / `application_rejected`),
+the curation lifecycle (`curation_request_updated`), stats refresh
+(`artist_stats_refreshed`). `api/refunds/process` keeps its own explicit calls
+(`refund_approved_by_admin`, `refund_rejected_by_admin`) rather than being forced
+through the wrapper, because artists legitimately call it too.
+
+**Decision on read-only admin lists (03 §2.1 G5), taken rather than left
+undocumented, which is what §2.1 asks for.** `api/admin/artists`, `venues`,
+`applications` (list), `disputes` (list) and `stats` bulk-export user and venue
+PII and do **not** write an audit row. That is inconsistent with
+`api/admin/financials` `GET`, which does.
+
+Not fixed, deliberately. The admin dashboard loads several of these per page view,
+so auditing them would write a handful of rows every time anyone opens `/admin`.
+`admin_audit_log` exists to answer "did anyone read X's messages"; burying that
+signal under routine navigation makes the table worse at its job, not better.
+Revisit if and when the log gets a query surface that can filter by action, at
+which point the cost is only storage.
+
+`context` on every row carries the decision, the target id and the target's email,
+never the row: the column is JSONB and would otherwise accumulate PII. The
+curation route records *that* admin notes changed, not what they say.
+
 ## Relationship to E35d
 
 Self-settable `user_type` is fixed separately, at the write side: the value is
