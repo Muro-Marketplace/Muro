@@ -1,0 +1,3362 @@
+{
+ "all": [
+  {
+   "ref": "A1",
+   "summary": "Mobile marketplace tabs never use the public variant, dropping How It Works/Blog",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "Header.tsx:917 picks only venueMarketplaceTabs or marketplaceTabs; publicMarketplaceTabs (line 27) is desktop-only. Footer still carries the links, so impact is a minor nav inconsistency.",
+   "fix": "In the mobile menu, mirror the desktop variant selection including the public tab set for logged-out users.",
+   "final": "P3"
+  },
+  {
+   "ref": "A2",
+   "summary": "Customer accounts' header messages dropdown always shows 'No messages yet'",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "Header.tsx:222-246 resolves slug only via /api/artist-profile and /api/venue-profile; customers have neither, so the fetch never runs. customer-portal/messages/page.tsx:14 uses slugify(displayName) instead.",
+   "fix": "Add a customer branch to slug resolution using the same slugify(displayName) fallback the customer portal uses.",
+   "final": "P2"
+  },
+  {
+   "ref": "A3",
+   "summary": "Role-switch passes &hint= that /login never reads, dropping the target role",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "Header.tsx:818 pushes /login?email=...&hint=...; login/page.tsx reads only ?email= (line 34), no 'hint' reference anywhere in the login directory.",
+   "fix": "Read ?hint= on /login and show 'Signing into your X account' plus route post-login to that portal.",
+   "final": "P2"
+  },
+  {
+   "ref": "A4",
+   "summary": "Cookie banner Decline and Accept are functionally identical",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "Only CookieBanner.tsx and CookieConsentContext.tsx reference the consent value; nothing else reads it and no non-essential cookies exist to decline.",
+   "fix": "Replace Accept/Decline with a single OK dismiss for the essential-only notice.",
+   "final": "P3"
+  },
+  {
+   "ref": "A5",
+   "summary": "Homepage lacks skip link, DemoBanner and FeedbackBubble",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "src/app/page.tsx sits outside (pages), rendering its own Header/Footer with no skip link; (pages)/layout.tsx:19-34 provides skip link, DemoBanner and FeedbackBubble that / never gets.",
+   "fix": "Add the skip link, DemoBanner and FeedbackBubble to page.tsx, or move / into the (pages) group.",
+   "final": "P2"
+  },
+  {
+   "ref": "A6",
+   "summary": "Social shares 404 on /og-image.png",
+   "verdict": "overstated",
+   "severity": "P3",
+   "effort": "S",
+   "why": "public/ has no og-image.png, but src/app/opengraph-image.tsx generates a site-wide og:image, and file-based metadata overrides layout.tsx:47's config. Only twitter.images (layout.tsx:60) still references the missing file.",
+   "fix": "Delete the stale /og-image.png entries from layout.tsx metadata, or add a matching twitter-image.tsx.",
+   "final": "P3"
+  },
+  {
+   "ref": "A7",
+   "summary": "Homepage trust bar counts come from static seed; /api/stats/public has zero callers",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "page.tsx:22-32 buckets artists.ts/venues.ts counts; grep finds no caller of /api/stats/public. The code comment documents this as a deliberate choice.",
+   "fix": "Wire the trust bar to /api/stats/public with the seed as fallback, or delete the endpoint.",
+   "final": "P3"
+  },
+  {
+   "ref": "A8",
+   "summary": "Three fabricated named testimonials with invented sales outcomes presented as genuine",
+   "verdict": "confirmed",
+   "severity": "P0",
+   "effort": "S",
+   "why": "page.tsx:363-386: source comment admits names/roles are placeholders, yet quotes claim specific sales ('four sales straight off the wall this quarter'). Fake consumer testimonials are a banned practice under UK consumer law.",
+   "fix": "Remove the testimonials section, or clearly label it illustrative, before launch.",
+   "final": "P0"
+  },
+  {
+   "ref": "A9",
+   "summary": "NavCard, DealCard, ValueBlock defined but never used",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "page.tsx:501,528,592 define them; grep finds no call sites anywhere in the file or elsewhere.",
+   "fix": "Delete the three unused components.",
+   "final": "P3"
+  },
+  {
+   "ref": "A10",
+   "summary": "About page says 'We handle everything from there' contradicting its own logistics copy",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "about/page.tsx:118-119 says 'We handle everything from there' while lines 66-67 and 200-201 say delivery/installation are arranged between artist and venue.",
+   "fix": "Reword the onboarding card to 'we match you with venues; you arrange delivery together'.",
+   "final": "P2"
+  },
+  {
+   "ref": "A11",
+   "summary": "'Many successful artists are accepted on their second application' is a fabricated track record",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "ArtistGuide.tsx:152 (rendered on /artists) makes a claim no pre-launch product can have data for; the feedback-on-every-application promise also lacks a wired admin flow.",
+   "fix": "Reword to 'you're welcome to reapply after three months' and drop the second-application claim.",
+   "final": "P2"
+  },
+  {
+   "ref": "A12",
+   "summary": "'Most of our artists use Parcelforce, DHL...' is an invented usage statistic",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "faqs/page.tsx:117-120 asserts courier usage of a user base that does not exist yet (the copy lives on /faqs, not /artists as the flag's section implies).",
+   "fix": "Rephrase as a recommendation: 'we suggest Parcelforce, DHL, or specialist art couriers'.",
+   "final": "P3"
+  },
+  {
+   "ref": "A13",
+   "summary": "Two different payment-timing descriptions: 'within 14 days' versus escrow-until-delivery",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "ArtistGuide.tsx:162 says paid 'within 14 days via bank transfer'; faqs/page.tsx:90-95 says funds held until delivery confirmed or 14 days without dispute. Same fact, different framing.",
+   "fix": "Adopt the /faqs escrow wording in the ArtistGuide FAQ.",
+   "final": "P2"
+  },
+  {
+   "ref": "A14",
+   "summary": "'SEE VENUE DEMAND' and 'SEARCH BY POSTCODE' both link plain /spaces",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "ArtistGuide.tsx:410-414: both Links have href=/spaces with no anchor or query differentiating them.",
+   "fix": "Point the second CTA at the postcode input anchor on /spaces, or delete it.",
+   "final": "P3"
+  },
+  {
+   "ref": "A15",
+   "summary": "Customers clicking Message on /spaces are routed into /venue-portal/messages",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "spaces/page.tsx:680: portalBase ternary is artist-or-venue only, while canMessageVenues (line 201) admits customers; a customer lands in a portal they cannot access.",
+   "fix": "Add a customer branch routing to /customer-portal/messages.",
+   "final": "P2"
+  },
+  {
+   "ref": "A16",
+   "summary": "'Upgrade to Premium to message venues' branch is unreachable",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "spaces/page.tsx:194 and 201 define canSeeDetails and canMessageVenues as identical expressions, so canSeeDetails && !canMessageVenues (line 693) can never be true.",
+   "fix": "Delete the dead branch, or differentiate the gates if messaging is meant to be Premium-only.",
+   "final": "P3"
+  },
+  {
+   "ref": "A17",
+   "summary": "'Apply for Pro' lands on the form with Core preselected",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "pricing/page.tsx:297 links plain /apply; ApplicationForm.tsx:166 defaults selectedPlan 'core' and reads no searchParams, so the Pro intent is dropped.",
+   "fix": "Link /apply?plan=pro and have ApplicationForm read the param into selectedPlan.",
+   "final": "P2"
+  },
+  {
+   "ref": "A18",
+   "summary": "Pricing cancellation FAQ contradicts Terms and promises an artwork-return service",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "pricing/page.tsx:94 says 'We will arrange the return of any artwork'; terms/page.tsx:229-230 and faqs/page.tsx:159 both make the artist collect within 30 days. Marketing contradicts the binding contract.",
+   "fix": "Align the pricing FAQ with the Terms: 30 days' notice, artist collects their own work.",
+   "final": "P2",
+   "challenge": "Copy conflict where Terms govern; harm needs an actual cancellation dispute, near-zero at launch volume. Rubric calls this a minor copy conflict."
+  },
+  {
+   "ref": "A19",
+   "summary": "'We accept around half' is an invented acceptance rate",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "HowItWorksClient.tsx:35 and apply/page.tsx:26 both state an acceptance rate a pre-launch platform has no data for.",
+   "fix": "Soften to 'we review every application personally and accept selectively'.",
+   "final": "P2"
+  },
+  {
+   "ref": "A20",
+   "summary": "'Browse hundreds of storefronts' overstates a roughly 40-artist catalogue",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "HowItWorksClient.tsx:45 and customer/page.tsx:42 claim hundreds; src/data/artists.ts holds 39 artist entries and the live DB is smaller.",
+   "fix": "Change to 'browse dozens of independent artists' or drop the number.",
+   "final": "P1",
+   "challenge": "'Hundreds of storefronts' against a roughly 39-artist catalogue is materially false copy on a primary buyer-funnel page, falsified one click later."
+  },
+  {
+   "ref": "A21",
+   "summary": "Certificate-of-authenticity promised to buyers; no such feature exists",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "HowItWorksClient.tsx:48 and CustomerGuide.tsx:43-45,106 promise a signed certificate with every sale; grep finds no certificate generation, order attachment, or Artist Agreement obligation anywhere.",
+   "fix": "Remove the certificate claims until the feature or an artist obligation exists.",
+   "final": "P2",
+   "challenge": "A signed certificate is a physical artefact fulfillable manually at launch volume, or a one-line copy edit; operational promise, not a software gate."
+  },
+  {
+   "ref": "A22",
+   "summary": "Venue tab arrangements step omits the paid-loan option",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "HowItWorksClient.tsx:29 lists only free display and outright purchase, while page.tsx:212, spaces/page.tsx:538 and ApplicationForm.tsx:738-745 treat paid loan as first-class.",
+   "fix": "Add paid loan to the venue step 03 description.",
+   "final": "P3"
+  },
+  {
+   "ref": "A23",
+   "summary": "FAQ promises onboarding call within a week and first-interest-in-2-3-weeks stat",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "faqs/page.tsx:69-77 commits to a 1-working-day email, an onboarding call within a week, and an invented 'most artists' statistic, all unverifiable pre-launch.",
+   "fix": "Keep the email promise, soften the call to 'we'll invite you', delete the statistic.",
+   "final": "P2"
+  },
+  {
+   "ref": "A24",
+   "summary": "FAQs promise 24-hour replies while the acknowledgement email says 2 days",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "faqs/page.tsx:379 says 24 hours; api/contact/route.ts:12 sets EXPECTED_REPLY_DAYS = 2, so the email arriving seconds later contradicts the page.",
+   "fix": "Pick one number and use it in both the pages and EXPECTED_REPLY_DAYS.",
+   "final": "P2"
+  },
+  {
+   "ref": "A25",
+   "summary": "Sustainability page renders a space before a comma",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "sustainability/page.tsx:124-125: 'the lifetime journey of a work\\n , first studio' puts a leading space before the comma in rendered output.",
+   "fix": "Rejoin the JSX line so the comma follows 'work' directly.",
+   "final": "P3"
+  },
+  {
+   "ref": "A26",
+   "summary": "Contact page promises 24 hours; its own acknowledgement email promises 2 days",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "ContactForm.tsx:102 and contact/page.tsx:50 say 24 hours; api/contact/route.ts:12 EXPECTED_REPLY_DAYS = 2 drives the email sent for the same submission.",
+   "fix": "Align both to one figure, same change as A24.",
+   "final": "P2"
+  },
+  {
+   "ref": "A27",
+   "summary": "Contact reference number is emailed but never returned to the page",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "api/contact/route.ts:113 returns only { success: true }; the reference (line 46) never reaches ContactForm's success screen, so a mistyped email loses it entirely.",
+   "fix": "Return reference in the JSON and display it on the success screen.",
+   "final": "P3"
+  },
+  {
+   "ref": "A28",
+   "summary": "Artist-message double-post never checks the /api/enquiry response",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "ContactForm.tsx:56-67 awaits the enquiry fetch without checking res.ok; a failed enquiry with a successful contact insert still shows 'They'll be notified by email.'",
+   "fix": "Check the enquiry response and adjust the success copy or surface an error when it fails.",
+   "final": "P2"
+  },
+  {
+   "ref": "A29",
+   "summary": "Cookie policy documents sb-access/refresh-token cookies the auth flow never sets",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "cookies/page.tsx:15,23 list those cookies; src/lib/supabase.ts uses plain createClient (localStorage sessions), no @supabase/ssr in package.json, and only /api/demo/login writes any sb-* cookie.",
+   "fix": "Rewrite the policy to describe localStorage session storage and the demo-login cookie.",
+   "final": "P2"
+  },
+  {
+   "ref": "A30",
+   "summary": "Policy lists wallplace_cookie_consent as a 12-month cookie; reality is a localStorage key",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "cookies/page.tsx:31,35 versus CookieConsentContext.tsx:5: actual key is wallplace-cookie-consent (hyphens) in localStorage with no expiry. Wrong name, mechanism and duration in a legal document.",
+   "fix": "Correct the entry to the real key name, localStorage mechanism, and no expiry.",
+   "final": "P2"
+  },
+  {
+   "ref": "A31",
+   "summary": "Blog index excerpt is raw markdown sliced to 240 characters",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "blog/page.tsx:162 renders (post.body_markdown ?? '').slice(0, 240) verbatim, so headings and image syntax show literally on the index.",
+   "fix": "Strip markdown syntax before slicing the excerpt.",
+   "final": "P3"
+  },
+  {
+   "ref": "A32",
+   "summary": "Blog post body renders markdown as literal syntax in plain paragraphs",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "blog/[slug]/page.tsx:302-303 splits body_markdown on blank lines into <p whitespace-pre-wrap>; no markdown parser anywhere, so artist-authored headings, links and images display as raw syntax publicly.",
+   "fix": "Render body_markdown through a sanitised markdown renderer, or constrain the editor to plain text.",
+   "final": "P2"
+  },
+  {
+   "ref": "A33",
+   "summary": "Waitlist silently discards phone, venueName and venueLocation",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "waitlist/page.tsx:31 posts six fields; validations.ts:17-21 waitlistSchema accepts only name, email, userType, so zod strips the other three and the insert never stores them.",
+   "fix": "Add the three optional fields to waitlistSchema and the insert, or remove them from the form.",
+   "final": "P2",
+   "challenge": "The lead (name, email, userType) is stored; dropped fields are optional enrichment recoverable by email follow-up. Funnel intact."
+  },
+  {
+   "ref": "A34",
+   "summary": "Waitlist page claims 'private beta' while signup, apply and venue registration are open",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "waitlist/page.tsx:452-453 says join the waitlist for an invitation; /signup, /apply and /signup/venue are all open, so a warm prospect may wait indefinitely.",
+   "fix": "Replace the private-beta paragraph with a line linking straight to the open signup.",
+   "final": "P2"
+  },
+  {
+   "ref": "A35",
+   "summary": "Upvote toggle shows no pressed state, so un-voting looks like a glitch",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "feature-requests/page.tsx tracks only upvotes counts (lines 16,112-117); the toggle endpoint returns upvoted but the UI and list GET never expose per-user state.",
+   "fix": "Return per-user upvoted in the list API and render an aria-pressed highlighted state.",
+   "final": "P3"
+  },
+  {
+   "ref": "A36",
+   "summary": "Feature-requests page has no metadata title",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "feature-requests/page.tsx is 'use client' with no layout.tsx in its directory, so the tab shows the root default title.",
+   "fix": "Add a layout.tsx exporting metadata with a title.",
+   "final": "P3"
+  },
+  {
+   "ref": "A37",
+   "summary": "Demo login sets an ssr-format cookie nothing in the app reads; portal tour lands logged out",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "api/demo/login/route.ts:117-146 sets httpOnly sb-<ref>-auth-token; package.json has no @supabase/ssr, no middleware.ts exists, and the client is localStorage-based supabase-js, so the portal sees no session.",
+   "fix": "Redirect with tokens to a client page calling supabase.auth.setSession, or adopt @supabase/ssr.",
+   "final": "P1"
+  },
+  {
+   "ref": "A38",
+   "summary": "Demo sign-in failure shows the visitor a raw JSON error page",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "demo/page.tsx:112-113 uses a plain Link to /api/demo/login; the route's 500/503 paths (route.ts:76-113) return JSON directly to the navigated browser tab.",
+   "fix": "Redirect failures to /demo?error=1 and render a friendly fallback there.",
+   "final": "P2"
+  },
+  {
+   "ref": "A39",
+   "summary": "/customer repeats the 'hundreds of independent artists' overclaim",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "customer/page.tsx:42 says hundreds; the seed catalogue is 39 artists and the live DB smaller. Same family as A20.",
+   "fix": "Reword to 'dozens' or drop the number, together with A20.",
+   "final": "P1",
+   "challenge": "Same 'hundreds of independent artists' overclaim on /customer, the buyer landing page; trust-damaging false copy on a high-traffic funnel surface."
+  },
+  {
+   "ref": "A40",
+   "summary": "CustomerGuide repeats the certificate-of-authenticity promise",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "CustomerGuide.tsx:43-45 ('Every sale ships with a signed certificate') and 106 repeat the promise; no certificate feature exists anywhere in src. Same defect as A21.",
+   "fix": "Remove the certificate claims alongside A21.",
+   "final": "P2",
+   "challenge": "Duplicate of A21; the same copy fix resolves both."
+  },
+  {
+   "ref": "A41",
+   "summary": "No resend-verification option on /check-your-inbox",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "check-your-inbox/page.tsx has no resend reference; the resend endpoint is surfaced only on /login after a failed sign-in (login/page.tsx:201-206).",
+   "fix": "Add a resend button on /check-your-inbox calling /api/auth/resend-verification.",
+   "final": "P3"
+  },
+  {
+   "ref": "A42",
+   "summary": "Artist signup promises going straight to the application but routes to /check-your-inbox",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "signup/artist/page.tsx:295-298 says 'Continue to Application' / 'straight to the application form'; line 121 pushes /check-your-inbox, and the doc comment (lines 28-34) still describes a removed signInWithPassword hop.",
+   "fix": "Reword button and helper to 'check your inbox to verify, then apply'; update the doc comment.",
+   "final": "P2"
+  },
+  {
+   "ref": "A43",
+   "summary": "'Other' venue type free-text is stripped by validation and never stored",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "signup/venue/page.tsx:163 posts the whole form; validations.ts:84-98 registerVenueSchema has no customVenueType, so zod strips it and the record stores only 'Other'.",
+   "fix": "Add customVenueType to registerVenueSchema and merge it into the stored venueType.",
+   "final": "P1",
+   "challenge": "Venue's typed 'Other' description is silently stripped by zod and never stored; the rubric's P1 class of forms silently discarding user input."
+  },
+  {
+   "ref": "A44",
+   "summary": "Venue confirmation email frames open registration as an application under review",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "api/register-venue/route.ts:96 and VenueRegistrationConfirmation.tsx:41 use subject 'We've received your Wallplace application', while signup/venue/page.tsx:278 promises 'start browsing immediately. No waiting.'",
+   "fix": "Change subject and body to a welcome / confirm-your-email framing.",
+   "final": "P1",
+   "challenge": "Every venue signup email claims 'application received', implying review; venues wait for approval that never comes. False transactional copy stalling the venue funnel."
+  },
+  {
+   "ref": "A45",
+   "summary": "Venue signup success screen is dead code; setSubmitted never called",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "signup/venue/page.tsx:93 declares the state, line 219 renders it, but the submit handler routes to /check-your-inbox (line 209) and nothing calls setSubmitted(true).",
+   "fix": "Delete the submitted state and its success screen.",
+   "final": "P3"
+  },
+  {
+   "ref": "A46",
+   "summary": "Venue signup hero renders 'Wallplace Curated , paid shortlists'",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "signup/venue/page.tsx:259-263: the Link and ' , paid shortlists from \u00a349.' are split across JSX lines, producing a space before the comma.",
+   "fix": "Rejoin the JSX so the comma follows the link with no space.",
+   "final": "P3"
+  },
+  {
+   "ref": "A47",
+   "summary": "Login password minLength 6 versus 8 on both signup forms",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "login/page.tsx:176 minLength={6}; signup/artist/page.tsx:191 and signup/venue/page.tsx:350 enforce 8. Harmless for existing passwords, just inconsistent.",
+   "fix": "Drop the login minLength or set it to 8 for consistency.",
+   "final": "P3"
+  },
+  {
+   "ref": "A48",
+   "summary": "/apply hero repeats the invented 'We accept roughly half' acceptance rate",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "apply/page.tsx:26 states the same fabricated statistic as HowItWorksClient.tsx:35 on a platform with no application history.",
+   "fix": "Soften to 'we review every application personally', together with A19.",
+   "final": "P2"
+  },
+  {
+   "ref": "A49",
+   "summary": "Wrong-role 'Create artist account' CTA loops forever without signing out",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "ApplicationGate.tsx:80 links /signup/artist?next=/apply with no signOut; RedirectIfLoggedIn.tsx:23-29 bounces any signed-in user straight back to /apply, re-rendering the same notice.",
+   "fix": "Have the button call supabase.auth.signOut() before navigating to /signup/artist?next=/apply.",
+   "final": "P2",
+   "challenge": "Only signed-in wrong-role users visiting /apply hit it; manual sign-out via header recovers. Confusing loop, not a funnelled dead surface."
+  },
+  {
+   "ref": "A50",
+   "summary": "/api/apply never checks the submitted email against the authenticated user",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "api/apply/route.ts:28-29 fetches the auth user but only for the profile bridge; d.email (line 65) is stored and mailed unchecked, so an authed user can file applications and trigger emails for any address.",
+   "fix": "When authenticated, reject or overwrite the email with authedUser.email.",
+   "final": "P2",
+   "challenge": "Apply deliberately accepts a typed contact email like any contact form; rate-limited 5/min; abuse vector is ordinary contact-form grade."
+  },
+  {
+   "ref": "A51",
+   "summary": "Cooling-off acknowledgement is stripped by applySchema and never persisted",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "ApplicationForm.tsx:270 posts acknowledgedCoolingOff; validations.ts applySchema (lines 39-82) has no such field, so zod strips it and no row column records the consumer-rights evidence.",
+   "fix": "Add acknowledgedCoolingOff to applySchema and store it on the application row.",
+   "final": "P2",
+   "challenge": "Checkbox is shown and ticked; only persistence is lost. Evidentiary gap, consumer rights themselves unaffected; harm speculative until a dispute."
+  },
+  {
+   "ref": "A52",
+   "summary": "Receipt email says 3-day review; every page says 5 business days",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "api/apply/route.ts:258 passes reviewTimelineDays: 3, while page.tsx:337, apply/page.tsx:106, faqs/page.tsx:62 and others all promise 5 business days.",
+   "fix": "Change reviewTimelineDays to 5.",
+   "final": "P2"
+  },
+  {
+   "ref": "A53",
+   "summary": "/apply/claim signs up a fresh account for users who already have one and are signed in",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "ApplicationForm.tsx:310-343 funnels every applicant (authed, with a pending profile row from the apply bridge) to claim/page.tsx, which never checks auth, re-signUps, and signInWithPassword with a new password fails with a false 'Account created' message.",
+   "fix": "Rewrite the page as a signed-in 'add bio and website' step, skipping signUp when a session exists.",
+   "final": "P2",
+   "challenge": "Optional 'get a head start' CTA after the application already succeeded; the account already exists and normal login works. Confusing message, funnel intact."
+  },
+  {
+   "ref": "A54",
+   "summary": "apply/claim defines a local slugify duplicating src/lib/slugify",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "claim/page.tsx:25-33 reimplements slugify; src/lib/slugify.ts already exists and is imported elsewhere (e.g. customer-portal/messages).",
+   "fix": "Import slugify from @/lib/slugify and delete the local copy.",
+   "final": "P3"
+  },
+  {
+   "ref": "A55",
+   "summary": "Reset-password one-shot getSession can show a valid link as expired",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "reset-password/page.tsx:17-22 checks getSession once with no onAuthStateChange or retry, and line 49 renders 'Invalid or Expired Link' whenever hasSession is false, including while the SDK is still exchanging the recovery hash.",
+   "fix": "Reuse the auth/callback retry loop (or subscribe to onAuthStateChange) and show a loading state first.",
+   "final": "P2"
+  },
+  {
+   "ref": "A56",
+   "summary": "/api/stats/public has zero callers",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "grep across src finds no fetch of /api/stats/public; the homepage trust bar it was built for uses the static seed (page.tsx:22-32).",
+   "fix": "Wire the trust bar to it (with seed fallback) or delete the endpoint.",
+   "final": "P3"
+  },
+  {
+   "ref": "B1",
+   "summary": "requestGeolocation never called; 'Detecting your location' branches are dead code",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "browse/page.tsx line 790 defines requestGeolocation; grep shows no caller, setGeoRequesting only inside it, so geoRequesting stays false and all three branches (1214, 2178, 2576) are unreachable.",
+   "fix": "Delete requestGeolocation, geoRequesting state and the three dead branches, or wire a 'Use my location' button.",
+   "final": "P3"
+  },
+  {
+   "ref": "B2",
+   "summary": "Artist filter badge over-counts by one via always-true mode check",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "browse/page.tsx line 1579 includes filters.mode === 'local' in the count array; mode is initialised 'local' (filterParams line 104) and never mutated, so one checkbox shows '2'.",
+   "fix": "Remove filters.mode === 'local' from the count array.",
+   "final": "P2"
+  },
+  {
+   "ref": "B3",
+   "summary": "Empty portfolios grid wrongly blames missing postcode when other filters caused it",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "browse/page.tsx line 1774: filters.mode === 'local' is always true, so the postcode branch wins whenever coords are absent; the distance filter (line 888) only applies with coords, so the guidance misleads.",
+   "fix": "Drop the mode check; show the postcode hint only when no other filter or search is active.",
+   "final": "P2"
+  },
+  {
+   "ref": "B4",
+   "summary": "Gallery 'Clear all' silently disables location filtering until reload",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "browse/page.tsx line 1176: clearGalleryFilters sets galleryLocationMode 'global'; line 1048 then skips the distance filter while the slider stays rendered; no UI ever sets it back, and filterParams serialises the non-default mode.",
+   "fix": "Stop setting galleryLocationMode in clearGalleryFilters; the mode has no toggle and should stay 'local'.",
+   "final": "P2"
+  },
+  {
+   "ref": "B5",
+   "summary": "Collections 'Clear all' and mobile '!' badge render permanently",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "browse/page.tsx line 1156: hasCollectionsFilters includes collectionsLocationMode === 'local', initialised 'local' (line 606) with no UI setter, so the predicate is always true.",
+   "fix": "Remove the collectionsLocationMode term from hasCollectionsFilters.",
+   "final": "P3"
+  },
+  {
+   "ref": "B6",
+   "summary": "Profile theme filter matches title+medium substrings, not theme tags",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "ArtistProfileClient.tsx lines 96-101 filter works by haystack of title + medium containing the theme string; works' actual theme tags are never consulted, so results are wrong both ways.",
+   "fix": "Filter on the work's theme tags where present, falling back to the substring match only for untagged works.",
+   "final": "P2"
+  },
+  {
+   "ref": "B7",
+   "summary": "Floating-bar Buy Now adds last-entered tier, not the largest",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "ArtistProfileClient.tsx line 130 takes tiers[tiers.length - 1] with a 'largest tier' comment; pricing arrays keep artist entry order and are never sorted, while bulkAskingPrice (line 118) uses Math.max, so hint and cart can diverge.",
+   "fix": "Pick the tier with the highest price instead of the last array entry.",
+   "final": "P2"
+  },
+  {
+   "ref": "B8",
+   "summary": "Lightbox has no 'No frame' option; first paid frame forced into purchase",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "ArtistProfileClient.tsx lines 905-913 map only frameOptions with selectedFrameIdx defaulting 0; the CTA (line 947) always applies frameOpts[selectedFrameIdx] uplift. ArtworkPageClient.tsx line 366 has the 'No frame' -1 option the lightbox lacks.",
+   "fix": "Add a 'No frame' value -1 option and treat it as no uplift, mirroring ArtworkPageClient.",
+   "final": "P2",
+   "challenge": "Frame uplift and total price shown transparently in the lightbox; unframed purchase available on the artwork page. No silent overcharge, alternative surface exists."
+  },
+  {
+   "ref": "B9",
+   "summary": "Lightbox enquiry form always fails for guests and customers",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "ArtistProfileClient.tsx line 1152 sends the primary POST to /api/messages, whose handler (messages/route.ts lines 256-318) needs auth and 403s accounts without artist/venue profiles; /api/enquiry only fires after that succeeds, so guests and customers always get the error toast.",
+   "fix": "For guests and customers, POST /api/enquiry directly and confirm on its success; keep /api/messages for venues.",
+   "final": "P1"
+  },
+  {
+   "ref": "B10",
+   "summary": "Frame dropdown '+\u00a3X' ignores per-size override the charge honours",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "ArtworkPageClient.tsx: charged frameUplift (lines 99-107) prefers pricesBySize; the dropdown row's scaledForRow (lines 373-407) computes only the perimeter ramp, so the two figures diverge whenever an artist sets explicit per-size frame prices.",
+   "fix": "Extract one shared uplift function checking pricesBySize first and use it for both the row and the charge.",
+   "final": "P2"
+  },
+  {
+   "ref": "B11",
+   "summary": "Shipping info block quotes work-level price while cart charges per-size",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "ArtworkPageClient.tsx line 440 passes work.shippingPrice to resolveShippingCost, but effectiveShippingPrice (lines 149-152) preferring pricing[i].shippingPrice is what the cart lines (528, 563) carry, so quoted and charged delivery differ when per-size shipping is set.",
+   "fix": "Pass effectiveShippingPrice as manualPrice in the shipping info block.",
+   "final": "P2"
+  },
+  {
+   "ref": "B12",
+   "summary": "Customer 'Message the artist' link lands in a 403-dead messages portal",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "ArtworkPageClient.tsx line 686 routes signed-in customers to /customer-portal/messages; MessageInbox hits /api/messages?slug= and POST, both of which 403 accounts without artist/venue profiles, so customers can neither load nor send. MessageArtistButton.tsx line 47 already routes customers to /contact.",
+   "fix": "Route signed-in customers to /contact?artist=<slug>, matching MessageArtistButton.",
+   "final": "P1"
+  },
+  {
+   "ref": "B13",
+   "summary": "Collection work tiles link by UUID; artwork route resolves only slugified titles",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "collections/[collectionId]/page.tsx lines 268 and 302 build /browse/<artist>/<work.id> where id is the DB UUID (collections API line 80); [workSlug]/page.tsx line 92 matches only slugify(w.title), so notFound() fires on every DB-backed tile.",
+   "fix": "Link to /browse/<artistSlug>/<slugify(work.title)> instead of work.id.",
+   "final": "P1"
+  },
+  {
+   "ref": "B14",
+   "summary": "'Placed at' chip on collection tiles can never render",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "collections/[collectionId]/page.tsx line 354 reads work.placed_at_venue, but api/collections/[id]/route.ts builds each work object (lines 79-93) without that field, so the chip condition is always falsy.",
+   "fix": "Include placed_at_venue in the API's work mapping, or delete the chip from this page.",
+   "final": "P3"
+  },
+  {
+   "ref": "B15",
+   "summary": "Collection sidebar labels paid-loan flag as 'Display'",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "collections/[collectionId]/page.tsx line 407 hardcodes 'Display' for openToFreeLoan; arrangement-labels.ts canonicalises free_loan as paid_loan ('Paid loan'), and BrowseArtistCard.tsx line 37 uses ARRANGEMENT_LABEL.paid_loan for the same flag.",
+   "fix": "Use ARRANGEMENT_LABEL.paid_loan for the openToFreeLoan chip on this page.",
+   "final": "P2"
+  },
+  {
+   "ref": "B16",
+   "summary": "Signed-in customer's placement CTA links to /signup dead end",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "collections/[collectionId]/page.tsx lines 486-488: userType 'customer' gets /signup?next=<venue-portal URL> labelled 'Switch to a venue account'; signup cannot convert an existing account, so the flow dead-ends, though the comment shows it was deliberate.",
+   "fix": "Link customers to an explainer (e.g. /partners or contact) or hide the CTA for customers.",
+   "final": "P3"
+  },
+  {
+   "ref": "B17",
+   "summary": "Venue-page request rows always link into the artist portal",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "venues/[slug]/VenueProfileBody.tsx line 243 hardcodes /artist-portal/artwork-requests/<id> for every viewer; ArtistPortalLayout.tsx line 103 router.replace('/login') for any non-artist, so signed-in customers and the venue owner hit a login bounce.",
+   "fix": "Gate the link to artist viewers; render plain non-linked cards for everyone else.",
+   "final": "P2"
+  },
+  {
+   "ref": "B18",
+   "summary": "Collect tile shows machine slug instead of venue display name",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "checkout/page.tsx lines 79-81 set collectVenueName from items[0]?.collectVenueSlug; types.ts line 34 shows cart lines carry only the slug, so buyers see 'the-copper-kettle' in the copy at line 662.",
+   "fix": "Carry collectVenueName on the cart line when adding, or humanise the slug for display.",
+   "final": "P2"
+  },
+  {
+   "ref": "B19",
+   "summary": "Visiting confirmation without a session wipes the cart",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "checkout/confirmation/page.tsx lines 66-70: clearCart() and clearQrContext() run unconditionally on mount, before the sessionId null-check, so any stray navigation to the URL destroys the visitor's cart.",
+   "fix": "Only clear cart and QR context when sessionId is present (or after the session fetch succeeds).",
+   "final": "P2"
+  },
+  {
+   "ref": "B20",
+   "summary": "Confirmation never checks payment_status before asserting payment received",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "checkout/confirmation/page.tsx line 82 sets order whenever data.id exists; the API returns status (session/route.ts line 34) but the page renders 'Order Confirmed' and 'Payment of \u00a3X received' without ever reading it.",
+   "fix": "Render the paid receipt only when status is 'paid'; otherwise show a hedged pending state.",
+   "final": "P1",
+   "challenge": "Page claims 'Payment of \u00a3X received' without reading the returned Stripe status; unpaid or expired sessions get a false money-received assertion."
+  },
+  {
+   "ref": "B21",
+   "summary": "Failed session lookup still asserts 'payment was received successfully'",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "checkout/confirmation/page.tsx lines 119-131: when sessionId is present but the fetch fails or returns no id, the fallback states 'Your payment was received successfully' and 'your order is confirmed', unverifiable and false for bogus ids.",
+   "fix": "Hedge the fallback copy: 'If your payment completed you'll receive a confirmation email shortly.'",
+   "final": "P1",
+   "challenge": "Asserts 'payment was received successfully' when the lookup failed entirely; an unverifiable money claim rendered for any bogus session id."
+  },
+  {
+   "ref": "B22",
+   "summary": "'Shipped by the artist, 5 to 7 days' shown for every order type",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "checkout/confirmation/page.tsx lines 197-206: the artist-fulfilment notice is unconditional in the success view, so collection and venue-collect orders are told they will be shipped, with a hardcoded window contradicting checkout's calculator.",
+   "fix": "Hedge to fulfilment-neutral copy, or thread the fulfilment method through session metadata and branch.",
+   "final": "P2"
+  },
+  {
+   "ref": "B23",
+   "summary": "Confirmation links /browse/collections, which 404s in both views",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "checkout/confirmation/page.tsx lines 144 and 257 link /browse/collections; no page.tsx exists there, so it resolves to browse/[slug] with slug 'collections', getArtistBySlug fails and notFound() fires ([slug]/page.tsx line 154).",
+   "fix": "Change both hrefs to /browse?view=collections.",
+   "final": "P2",
+   "challenge": "Post-purchase convenience link; the buyer funnel already completed. Confusing 404, no funnel or money harm."
+  },
+  {
+   "ref": "B24",
+   "summary": "Delivered step credits 'the carrier' though the buyer marks arrival",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "orders/[id]/page.tsx line 43 hints 'Marked as arrived by the carrier'; orders/route.ts line 25 puts 'delivered' in BUYER_STATUSES only, and no carrier integration exists, so the copy can stall buyers waiting on a carrier that never acts.",
+   "fix": "Reword the hint to 'Marked as arrived by you' or similar buyer-attributed copy.",
+   "final": "P2"
+  },
+  {
+   "ref": "B25",
+   "summary": "'Confirming delivery releases payment' overstates the button's effect",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "orders/[id]/events/route.ts POST only inserts an order.delivery_confirmed event (line 207); transfers actually execute on the delivered transition in orders/route.ts (line 188) or the 14-day cron, so payment is already released before this button.",
+   "fix": "Reword: confirming records receipt; payment releases on delivery (or automatically after the hold period).",
+   "final": "P2"
+  },
+  {
+   "ref": "B26",
+   "summary": "Timeline reads h.at but writers store timestamp, so dates never render",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "orders/track/page.tsx line 273 reads h.at; orders/route.ts line 220 and webhooks/stripe/route.ts line 311 write { status, timestamp }, and track/route.ts line 108 passes status_history through raw, so h.at is always undefined.",
+   "fix": "Read h.timestamp (with h.at fallback) in the track page timeline.",
+   "final": "P2"
+  },
+  {
+   "ref": "B27",
+   "summary": "Collect lines under a ship order keep in-store price, skip placement check",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "checkout/route.ts line 468 prices any lineFulfilment==='collect_venue' line at the in-store price regardless of order fulfilment, while placement re-validation (line 63) runs only for collect_venue orders; the checkout UI lets buyers pick 'Ship to me' with such lines.",
+   "fix": "When order fulfilment is ship, re-price collect lines at the tier price or reject them with a 409.",
+   "final": "P1"
+  },
+  {
+   "ref": "B28",
+   "summary": "Requested quantity never compared to stock server-side",
+   "verdict": "overstated",
+   "severity": "P1",
+   "effort": "S",
+   "why": "checkout/route.ts only runs isWorkSold (quantity_available <= 0) per line 258; qty vs quantity_available is never checked, so 10 can be bought with 2 in stock. But migration 085 clamps the decrement at GREATEST(0,...), so stock never goes negative as claimed.",
+   "fix": "Reject lines where quantity exceeds the row's quantity_available in the checkout gate.",
+   "final": "P2",
+   "challenge": "Lightbox caps quantity client-side, so exploiting needs a crafted request; clamp prevents negative stock; consequence is an oversell needing a refund, an admin task."
+  },
+  {
+   "ref": "B29",
+   "summary": "POST /api/disputes has no buyer-facing entry point anywhere",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "grep shows no page or component calls /api/disputes (only admin/disputes reads the admin list and event-vocabulary.ts mentions it); orders/[id]/page.tsx offers only /contact links at lines 272 and 285.",
+   "fix": "Add a 'Report a problem' form on the order page wired to POST /api/disputes.",
+   "final": "P1",
+   "challenge": "FAQ ties payout release to 'buyer dispute', but no dispute entry point exists and processPendingTransfers never checks disputes; the promised buyer protection is unusable."
+  },
+  {
+   "ref": "B30",
+   "summary": "Dispute emails deep-link /orders/<id>/dispute, a nonexistent route",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "disputes/route.ts line 130 builds /orders/<id>/dispute and the OrderDisputeOpened/Resolved templates use it; only src/app/(pages)/orders/[id]/page.tsx exists, so the link 404s. Currently latent because B29 means the emails cannot be triggered.",
+   "fix": "Point disputeUrl at /orders/<id> (optionally with a #dispute anchor).",
+   "final": "P2"
+  },
+  {
+   "ref": "B31",
+   "summary": "Offer checkout cancel_url is /customer-portal/offers, which 404s",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "offers/[id]/checkout/route.ts line 202 sets cancel_url to /customer-portal/offers; customer-portal contains only addresses, messages, saved, settings, while offers live under /venue-portal/offers, so cancelling on Stripe lands mid-payment on a 404.",
+   "fix": "Change cancel_url to /venue-portal/offers.",
+   "final": "P2",
+   "challenge": "Only fires when the buyer deliberately cancels on Stripe; no money moved; back-navigation recovers. Not a funnel surface."
+  },
+  {
+   "ref": "C1",
+   "summary": "Verify-email screen is a dead end with no resend or sign-out control",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "PortalGuard.tsx lines 119-131 render only heading and text; resend-verification is referenced solely in login/page.tsx. The global Header still offers sign-out, so the trap is partial.",
+   "fix": "Add a resend button posting /api/auth/resend-verification plus a sign-out link to the PortalGuard notice.",
+   "final": "P2"
+  },
+  {
+   "ref": "C2",
+   "summary": "Failed /api/orders fetch renders the 'No orders yet' empty state",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "customer-portal/page.tsx lines 90-96: empty catch, loading ends; lines 442-447 show the empty state whenever orders.length is 0, including after a failed fetch.",
+   "fix": "Track fetch failure in state and render an error message with a retry button instead of the empty state.",
+   "final": "P2"
+  },
+  {
+   "ref": "C3",
+   "summary": "Total Spent sums cancelled and refunded orders and hard-codes the pound sign",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "customer-portal/page.tsx line 163 reduces over every order regardless of status; line 212 renders &pound;{totalSpent} while the detail view uses formatCurrency with order.currency.",
+   "fix": "Exclude cancelled/refunded orders from the sum and format via formatCurrency, or per-currency subtotals.",
+   "final": "P2"
+  },
+  {
+   "ref": "C4",
+   "summary": "Emails, notifications and /orders/[id] link /customer-portal/orders, which 404s",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "No orders route under src/app/(pages)/customer-portal and no redirect in next.config.ts; senders confirmed at api/orders/route.ts 280/330, api/refunds/process/route.ts 157/421, orders/[id]/page.tsx 183.",
+   "fix": "Add a next.config redirect from /customer-portal/orders to /customer-portal, mapping ?id= to ?order=.",
+   "final": "P1"
+  },
+  {
+   "ref": "C5",
+   "summary": "Blank partial-refund amount: submit enabled, server 400 silently ignored",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "customer-portal/page.tsx line 410 gates submit only on reason; line 143 omits amount when blank; lines 148-156 handle only res.ok. refunds/request/route.ts line 65 returns the 400.",
+   "fix": "Disable submit until a valid partial amount is entered, and surface non-2xx errors inline.",
+   "final": "P1"
+  },
+  {
+   "ref": "C6",
+   "summary": "Refund request submission fails silently on any non-2xx or network error",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "customer-portal/page.tsx submitRefundRequest lines 148-159: no else branch for !res.ok and the catch only console.errors, so a rejected money-adjacent request shows the customer nothing.",
+   "fix": "Add an inline error state for non-2xx and network failures, mirroring confirmDelivery's confirmError pattern.",
+   "final": "P1"
+  },
+  {
+   "ref": "C7",
+   "summary": "Vanished saved works render a title-cased UUID linking to a dead browse page",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "SaveButton callers pass work.id (UUIDs) in browse pages; saved/page.tsx lines 202-206 fall back to formatName(item_id) and /browse/{item_id}; the line 32 comment still claims slug format.",
+   "fix": "Render a 'no longer available' row for unresolved works, drop the dead link, and correct the stale comment.",
+   "final": "P2"
+  },
+  {
+   "ref": "C8",
+   "summary": "Empty-state 'Add address' CTA links to '#' instead of opening the form",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "addresses/page.tsx line 305: cta href '#'. Impact is small because the working header 'Add address' button (lines 183-189) renders on the same screen.",
+   "fix": "Give EmptyState an onClick variant, or point the CTA at startCreate like the header button.",
+   "final": "P3"
+  },
+  {
+   "ref": "C9",
+   "summary": "Demo soft-200 responses would show false success toasts; latent for customers",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "customer-addresses routes return 200 {demo:true}; addresses/page.tsx uses mutate, which only throws on non-2xx. demo-guard.ts reads only DEMO_ARTIST_USER_ID/DEMO_VENUE_USER_ID, so no customer id is configurable today.",
+   "fix": "Have mutate (or the callers) check data.demo and toast a read-only notice instead of success.",
+   "final": "P3"
+  },
+  {
+   "ref": "C10",
+   "summary": "Change Password failure is silent; the button just resets",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "settings/page.tsx handlePasswordReset: 'if (!error) setResetSent(true)' with no else branch, so a Supabase rejection leaves no message and looks like nothing happened.",
+   "fix": "Set an error state on failure and render it under the button.",
+   "final": "P2"
+  },
+  {
+   "ref": "C11",
+   "summary": "Customer notification-preferences card is non-functional end to end",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "No code inserts customer_profiles rows; preferences route PATCH is UPDATE..eq(user_id) returning ok on zero rows (its own comment says prod lacks the table entirely); messages/route.ts 768-794 reads only artist/venue prefs; email_digest_enabled has no consumer.",
+   "fix": "Replace the card with links or controls backed by the real email_preferences system, or remove it.",
+   "final": "P2",
+   "challenge": "No send path reads customer prefs, so the card controls nothing that exists; dead settings control, marketing opt-out lives in email_preferences separately."
+  },
+  {
+   "ref": "C12",
+   "summary": "Hard delete destroys the auth user even when PII scrubs failed",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "account/delete/route.ts lines 131-136: per-table errors only console.error'd, then auth.admin.deleteUser runs regardless. The sibling account/route.ts collects failures and refuses auth deletion, the opposite policy.",
+   "fix": "Collect scrub failures and return 500 without deleting the auth user, mirroring DELETE /api/account.",
+   "final": "P2",
+   "challenge": "Harm requires a hypothetical per-table scrub error; the concrete demonstrated gap is C14. Speculative failure path, fix alongside C14."
+  },
+  {
+   "ref": "C13",
+   "summary": "Self-service deletion destroys orders the soft route says must be kept for tax",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "account/delete/route.ts deletes orders and refund_requests rows outright; account/route.ts anonymises them citing tax/legal preservation; AccountDangerZone.tsx line 34 wires only the hard path. Contradictory legal positions, owner ruling needed.",
+   "fix": "Owner decides retention posture; point AccountDangerZone at the surviving endpoint and align the other.",
+   "final": "P2",
+   "challenge": "Rare user action at launch, database backups mitigate, and it is an owner policy ruling; not launch-gating."
+  },
+  {
+   "ref": "C14",
+   "summary": "Hard delete leaves buyer name and address in email-keyed orders while claiming success",
+   "verdict": "confirmed",
+   "severity": "P0",
+   "effort": "S",
+   "why": "delete route's TABLES_USER_ID matches orders only by buyer_user_id; api/orders/route.ts lines 171-175 confirm all 12 live orders are email-keyed with no buyer_user_id, so erasure returns ok leaving shipping PII intact.",
+   "fix": "Add a buyer_email-keyed anonymisation pass (buyer_email and shipping) mirroring step 4 of the soft route.",
+   "final": "P1",
+   "challenge": "Erasure requests near zero at launch; GDPR allows manual fulfilment within a month and order retention has a lawful basis. Real defect is the false success claim."
+  },
+  {
+   "ref": "C15",
+   "summary": "POST /api/account/delete lacks the demo guard every sibling mutation has",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "account/route.ts calls assertNotDemo; account/delete/route.ts imports and calls no demo guard, so a configured demo artist/venue session can hard-delete the shared demo account.",
+   "fix": "Add assertNotDemo (or the strict 403 variant) at the top of the POST handler.",
+   "final": "P1",
+   "challenge": "Public demo login lets any visitor hard-delete the shared demo auth user and seeded data; sibling mutations are guarded, this one is not."
+  },
+  {
+   "ref": "C16",
+   "summary": "Soft-delete endpoint is dead code; no UI offers the anonymise option",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "Grep finds no caller of DELETE /api/account outside its own route and tests; AccountDangerZone posts only /api/account/delete. GET /api/account genuinely does not exist, matching the row's note.",
+   "fix": "Fold into the C13 owner decision; wire the chosen endpoint into the UI and delete the loser.",
+   "final": "P3"
+  },
+  {
+   "ref": "C17",
+   "summary": "userSlug derived from display name is fragile message identity",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "M",
+   "why": "messages/page.tsx line 14 derives slugify(displayName) else email local part; MessageInbox lines 481/492 send it as sender_name and line 1032 uses it as the legacy is-me fallback. sender_id remains the primary match.",
+   "fix": "Issue a stable server-side participant identifier and stop deriving sender_name client-side.",
+   "final": "P3"
+  },
+  {
+   "ref": "C18",
+   "summary": "Refund-approved notification link and sale fallback both 404 for customers",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "refunds/process/route.ts line 421 stores /customer-portal/orders?id={id}; Header.tsx line 651 falls back to {portalBase}/orders. Neither route exists for customers; working target is /customer-portal?order=.",
+   "fix": "Store /customer-portal?order={id}, fix the Header customer fallback, and add the C4 redirect as a backstop.",
+   "final": "P1"
+  },
+  {
+   "ref": "C19",
+   "summary": "Mobile 'Notifications' menu entry is a plain link to the dashboard",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "Header.tsx lines 982-992: the entry links {portalBase} with a bell icon and 'Notifications' label; no notifications page or mobile list exists anywhere.",
+   "fix": "Relabel the entry, or open the notifications dropdown content in the mobile menu.",
+   "final": "P2"
+  },
+  {
+   "ref": "C20",
+   "summary": "Portal switcher's &hint= param is never read by the login page",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "Header.tsx line 818 appends &hint={role}; login/page.tsx line 34 reads only ?email=. With one email across role accounts the hint cannot steer sign-in.",
+   "fix": "Drop hint from the switcher URL, or consume it to steer account selection at sign-in.",
+   "final": "P3"
+  },
+  {
+   "ref": "C21",
+   "summary": "Signed-out helper link lands on the unsubscribe failure state",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "account/email/page.tsx lines 98-99 link /account/email/unsubscribe with no params; the unsubscribe page (lines 57-59) renders the 'couldn't read the unsubscribe details' state without c and u.",
+   "fix": "Unlink the sentence; keep it as plain text advising the reader to use their email's link.",
+   "final": "P3"
+  },
+  {
+   "ref": "C22",
+   "summary": "digest_frequency exists on the API contract with no control and no consumer",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "email-preferences route accepts daily/weekly/off (line 83) and migration 016 defaults 'weekly', but the /account/email page renders no control and send.ts never reads it.",
+   "fix": "Drop digest_frequency from the API contract, or add the control and a digest consumer.",
+   "final": "P3"
+  },
+  {
+   "ref": "C23",
+   "summary": "Working email-preferences hub is only reachable from email footers",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "Grep finds /account/email linked only from src/emails templates and the inactive-users cron; no portal navigation or settings page links it, while the customer settings card (C11) is broken.",
+   "fix": "Link /account/email from the customer settings page (and ideally artist/venue settings).",
+   "final": "P2"
+  },
+  {
+   "ref": "C24",
+   "summary": "Visible unsubscribe link in every notify/news email always fails",
+   "verdict": "confirmed",
+   "severity": "P0",
+   "effort": "S",
+   "why": "EmailShell.tsx builds /account/email/unsubscribe?c={category} with no u; the page (lines 57-59) requires both c and u, so the primary human unsubscribe path can never succeed. PECR/GDPR working-unsubscribe issue.",
+   "fix": "Thread the recipient's user id (or a signed token) into EmailShell and append it to the link.",
+   "final": "P0"
+  },
+  {
+   "ref": "C25",
+   "summary": "RFC 8058 one-click POSTs hit the page URL and 405; purpose-built API unreferenced",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "send.ts line 229 sets List-Unsubscribe to the page path with One-Click Post enabled; App Router pages accept no POST. /api/account/email/unsubscribe has POST/GET but zero references. A mailto arm partially mitigates.",
+   "fix": "Point the List-Unsubscribe URL at /api/account/email/unsubscribe.",
+   "final": "P2",
+   "challenge": "RFC 8058 one-click is a Gmail/Yahoo bulk-sender rule (5k+/day), far beyond launch volume; mailto arm works; the legal unsubscribe gate is C24."
+  },
+  {
+   "ref": "C26",
+   "summary": "Unsubscribe u param is a raw unsigned UUID; prefetchers can silently unsubscribe",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "unsubscribe/page.tsx lines 63-72 upsert email_preferences.{key}=false for any supplied UUID during GET render, so link scanners prefetching the URL flip preferences, and anyone knowing a UUID can too.",
+   "fix": "Sign the link with an HMAC of user plus category and verify it before applying the change.",
+   "final": "P2",
+   "challenge": "Fails safe: prefetchers can only over-unsubscribe, no PII exposed; random UUIDs are unguessable. Engagement nuisance, not a compliance or security hole."
+  },
+  {
+   "ref": "C27",
+   "summary": "Unauthenticated upsert accepts arbitrary UUIDs with no FK or rate limit",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "Migration 016: email_preferences.user_id is 'uuid PRIMARY KEY' with no REFERENCES auth.users; neither the page nor the API route applies any rate limiting, so junk rows are unbounded.",
+   "fix": "Verify the user exists before upserting (or require the C26 signed token) and rate limit both entry points.",
+   "final": "P2"
+  },
+  {
+   "ref": "C28",
+   "summary": "Critical-category state links 'delete your account' to nonexistent /account/delete",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "unsubscribe/page.tsx line 92 links /account/delete; src/app/(pages)/account contains only appeal, email, export and security, so the link 404s. The state is rarely reachable (crafted c=security links).",
+   "fix": "Point the link at the portal settings pages, or create a small deletion landing page.",
+   "final": "P2"
+  },
+  {
+   "ref": "C29",
+   "summary": "Unsubscribe API GET comment claims a redirect but returns bare JSON",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "api/account/email/unsubscribe/route.ts lines 66-75: comment says 'redirect to the page-side success view', handler returns NextResponse.json. Cosmetic while nothing links the API.",
+   "fix": "Make GET redirect to the page's success view when the C25 fix lands, or correct the comment.",
+   "final": "P3"
+  },
+  {
+   "ref": "C30",
+   "summary": "Export page POSTs an API that only exports GET, so every export 405s",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "account/export/page.tsx line 26 calls mutate with method POST; api/account/export/route.ts exports only GET. Every attempt lands in the error state with the privacy@ manual fallback, so self-service access is dead.",
+   "fix": "Switch the page to a GET download link (or add a POST handler); one side must change verb.",
+   "final": "P2",
+   "challenge": "Error state surfaces the privacy@ manual route; GDPR access can be fulfilled manually at launch volume. Not a dead end."
+  },
+  {
+   "ref": "C31",
+   "summary": "Ready state promises an email link that no job will ever send",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "The route streams JSON inline with Content-Disposition and returns no downloadUrl; no export email job exists. The branch is also unreachable today because of the C30 405.",
+   "fix": "Remove the email-promise branch and link the authenticated GET directly as the download.",
+   "final": "P2"
+  },
+  {
+   "ref": "C32",
+   "summary": "HTML entity &rsquo; renders literally inside a JSX string expression",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "account/export/page.tsx line 78: \"We&rsquo;ll email you...\" sits in a JS string inside a ternary, where entities are not decoded. Currently unreachable due to the C30 405.",
+   "fix": "Use a real apostrophe or the JSX entity outside the string expression.",
+   "final": "P3"
+  },
+  {
+   "ref": "C33",
+   "summary": "Data export silently omits several tables and queries two nonexistent ones",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "export/route.ts lines 68-71 query 'applications' and 'waitlist' (real names artist_applications, waitlist_signups per the delete route) and key artist_collections.artist_id by user id (it holds artist_profiles.id, migration 005); fetchAll swallows errors; customer_addresses, email_preferences, purchase_offers, commissions and visualizer tables absent; no rate limit.",
+   "fix": "Correct table names and keys, add the omitted tables, and rate limit the endpoint.",
+   "final": "P2",
+   "challenge": "Unreachable until C30 is fixed (export never runs); manual fulfilment covers access requests meanwhile. Fix with C30."
+  },
+  {
+   "ref": "C34",
+   "summary": "Security page tells readers to review recent activity, which does not exist",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "account/security/page.tsx line 33 says 'resetting your password and reviewing recent activity'; no session or activity surface exists anywhere, and the customer destination offers only a password reset.",
+   "fix": "Trim the sentence to the password reset.",
+   "final": "P2"
+  },
+  {
+   "ref": "C35",
+   "summary": "Pre-confirmation terms acceptances keyed only by body email remain forgeable",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "M",
+   "why": "All signup callers (signup/customer, artist, venue, ApplicationForm) POST /api/terms/accept unauthenticated with a body email before confirmation. Documented residual awaiting an owner decision on when evidence is stamped.",
+   "fix": "Record acceptance post-confirmation from the verified token; keep it on the owner's launch list meanwhile.",
+   "final": "P3"
+  },
+  {
+   "ref": "C36",
+   "summary": "No mechanism prompts existing users to re-accept revised terms",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "M",
+   "why": "termsVersion 'v1.0-2026-04' is hard-coded in the four signup callers; nothing compares accepted versions to a current version, and /api/terms/accept has no other call sites.",
+   "fix": "Record as a follow-up: a version-check gate prompting re-acceptance when the terms version bumps.",
+   "final": "P3"
+  },
+  {
+   "ref": "D1",
+   "summary": "Trial-copy gate promises free trial to the one audience charged immediately",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "PortalGuard.tsx:96-143 shows the gate only for past_due/canceled, and subscribe/route.ts:84-85 sets trialDays=0 for exactly those statuses, so the promise is false for every viewer.",
+   "fix": "Swap the gate copy for reactivating users to state billing restarts immediately, no trial.",
+   "final": "P2",
+   "challenge": "Gate audience is past_due/canceled only, an empty set at launch; Stripe checkout shows the real charge before payment. Fix before first cancellations, weeks away."
+  },
+  {
+   "ref": "D2",
+   "summary": "Payouts checklist ticks when Stripe onboarding has merely started",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "artist-portal/page.tsx:142 ticks on stripe_connect_account_id; stripe-connect/onboard/route.ts:59-99 stores that id before redirecting to Stripe; status/route.ts:37 exposes the real onboardingComplete billing already uses.",
+   "fix": "Drive the checklist tick from /api/stripe-connect/status onboardingComplete instead of account-id presence.",
+   "final": "P2"
+  },
+  {
+   "ref": "D3",
+   "summary": "\"Enquiries This Month\" tile shows an all-time count",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "artist-portal/page.tsx:412 labels the tile \"This Month\"; api/dashboard/route.ts:107 calls artistTotals, and lib/analytics/artist-totals.ts counts enquiries with no date window.",
+   "fix": "Relabel the tile \"Total Enquiries\", or pass a month window into the count.",
+   "final": "P2"
+  },
+  {
+   "ref": "D4",
+   "summary": "Refund and notification deep links to orders?id= select nothing",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "orders/page.tsx has no useSearchParams (grep confirms), while artist-portal/page.tsx:191,221 and refunds/process/route.ts:485, refunds/request/route.ts:218 all mint ?id= links.",
+   "fix": "Read the id query param in orders/page.tsx and preselect that order on load.",
+   "final": "P2"
+  },
+  {
+   "ref": "D5",
+   "summary": "Quick Action \"Update Availability\" opens Placements, not where availability lives",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "artist-portal/page.tsx:479 links the label to /artist-portal/placements; work availability is edited on portfolio/page.tsx (bulkSetAvailability, per-work available toggles).",
+   "fix": "Point the link at /artist-portal/portfolio or rename it \"View Placements\".",
+   "final": "P3"
+  },
+  {
+   "ref": "D6",
+   "summary": "Earnings chart is fixed last-7-months but captioned with the selected range",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "analytics/page.tsx:139-157 builds earningsData over a hard-coded 7-month loop from an unfiltered /api/orders fetch, while line 368 prints {dateRange} beside \"Earnings Over Time\".",
+   "fix": "Remove the {dateRange} caption from that card, or filter orders to the range.",
+   "final": "P2"
+  },
+  {
+   "ref": "D7",
+   "summary": "Analytics placements table badges compare title-case against lower-case statuses",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "analytics/page.tsx:82 keeps raw p.status (lower-case), lines 414-416 compare to \"Active\"/\"Sold\"/\"Pending\", so every badge hits the grey default; lines 111-115 fixed the counts case-insensitively but not the badges.",
+   "fix": "Normalise status case before comparing, matching the counts fix on the same page.",
+   "final": "P3"
+  },
+  {
+   "ref": "D8",
+   "summary": "Locked feed tab labelled \"(Pro)\" though any paid plan unlocks it",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "artwork-requests/page.tsx:40 gates on sub.active, which lib/subscriptions.ts:33 derives from status alone (plan-agnostic), yet line 107 annotates the tab \"(Pro)\".",
+   "fix": "Change the annotation to \"(Paid)\" or drop it; UpgradePrompt copy is already right.",
+   "final": "P3"
+  },
+  {
+   "ref": "D9",
+   "summary": "Referral panel is dead code and redemption is unwired",
+   "verdict": "overstated",
+   "severity": "P2",
+   "effort": "S",
+   "why": "Panel part is real: billing/page.tsx:120-133 fetchSub never copies referral_code, so line 382 never renders. But redemption IS wired: webhooks/stripe/route.ts:1331-1346 credits 30 days via extend_free_until.",
+   "fix": "Copy referral_code through fetchSub state; redemption already works in the webhook.",
+   "final": "P2"
+  },
+  {
+   "ref": "D10",
+   "summary": "Plan-picker footer promises first month free to reactivating users",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "billing/page.tsx:285 hides the picker only for active/trialing, so canceled/past_due see line 444's promise, while subscribe/route.ts:84-85 gives them trialDays=0.",
+   "fix": "Hide or reword the first-month-free footer when subscription_status is canceled or past_due.",
+   "final": "P2",
+   "challenge": "Same empty-at-launch audience as D1; nobody is canceled or past_due on day one, and Stripe displays the actual amount due."
+  },
+  {
+   "ref": "D11",
+   "summary": "\"Prorated automatically\" copy vs replace-then-cancel checkout mechanism",
+   "verdict": "overstated",
+   "severity": "P2",
+   "effort": "S",
+   "why": "subscribe/route.ts:95 starts a new Checkout with cancel_previous metadata, but webhooks/stripe/route.ts:1208 cancels the old sub with prorate:true, so unused time is credited; the switcher still pays full upfront with credit landing later.",
+   "fix": "Reword to \"unused time on your old plan is credited to your next invoice\".",
+   "final": "P2"
+  },
+  {
+   "ref": "D12",
+   "summary": "Pro \"Unlimited works\" contradicts hard 50 cap; Core bullets disagree across surfaces",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "artist-works/route.ts:94 caps pro at 50 with a 403, while billing/page.tsx:485 and ArtistPricingCards.tsx:57 say unlimited; ArtistPricingCards.tsx:27 gives Core \"Message venues directly\", billing's Core bullets omit it.",
+   "fix": "Say \"Up to 50 works\" everywhere and reconcile the Core messaging bullet between surfaces.",
+   "final": "P2"
+  },
+  {
+   "ref": "D13",
+   "summary": "Demo subscribe shows generic \"Failed to start checkout\" instead of demo message",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "subscribe/route.ts:22 soft-guards (200 {demo:true}, no url); billing/page.tsx:194-200 checks only data.url and toasts the generic error, never reading data.demo.",
+   "fix": "Check data.demo in handleSubscribe and toast the guard's own message.",
+   "final": "P3"
+  },
+  {
+   "ref": "D14",
+   "summary": "Blog DELETE API exists but no delete button anywhere in artist UI",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "api/blogs/[id]/route.ts:246 implements owner DELETE; grep finds no delete affordance in blogs/page.tsx or BlogEditor.tsx.",
+   "fix": "Add a delete action to the blog list rows, or accept the gap for launch.",
+   "final": "P3"
+  },
+  {
+   "ref": "D15",
+   "summary": "Collections publish live with no subscription gate, unlike works",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "artist-works/route.ts:77-86 402-gates available=true under GATING_V1; collections/route.ts POST/PATCH has no gate (only demo guard), and collections/[id]/route.ts:39 serves any available=true row publicly.",
+   "fix": "Apply the same GATING_V1 402 check to collections POST/PATCH when available is true.",
+   "final": "P1",
+   "challenge": "GATING_V1 prodDefault is true (feature-flags.ts:74), so the paid publish gate is live while collections publish publicly ungated: a full paywall bypass."
+  },
+  {
+   "ref": "D16",
+   "summary": "Labels page never sets venueSlug, breaking venue QR revenue-share attribution",
+   "verdict": "confirmed",
+   "severity": "P0",
+   "effort": "M",
+   "why": "labels/page.tsx:161-199 sets only venueName (names fetched at 110-118); LabelSheet.tsx:83 emits vs only from venueSlug; qr/[slug]/route.ts resolves venue_user_id, redirect venue param and signed va only from vs, so venue share silently zeroes.",
+   "fix": "Thread venue_slug from /api/placements through the dropdown, buildLabels, and the placements deep link.",
+   "final": "P0"
+  },
+  {
+   "ref": "D17",
+   "summary": "\"Required for \u00a3100+ orders\" tracking rule is enforced nowhere",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "orders/page.tsx:245 shows the copy; line 88 sends trackingNumber only if entered, and api/orders/route.ts:223 applies it conditionally with no value-based requirement on shipped.",
+   "fix": "Soften the helper text to a recommendation, or block shipped over \u00a3100 without tracking.",
+   "final": "P3"
+  },
+  {
+   "ref": "D18",
+   "summary": "Refund approve/reject fails silently on any non-2xx response",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "orders/page.tsx:125-145 updates state only if res.ok; api-client.ts authFetch never throws on non-2xx, so 403/409/500 produce no toast, no inline error, nothing.",
+   "fix": "Handle non-ok responses in processRefund with a toast carrying the server's error message.",
+   "final": "P1"
+  },
+  {
+   "ref": "D19",
+   "summary": "\"Issue Refund\" always 403s on self-approve yet UI closes as if refunded",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "orders/page.tsx:147-177 chains request then process; refunds/process/route.ts:93-94 403s artist-raised requests without admin, and the client closes the form unconditionally, adding nothing to the list, saying nothing.",
+   "fix": "Rename to \"Request refund\", skip the doomed approve call, and show a queued-for-admin state.",
+   "final": "P1"
+  },
+  {
+   "ref": "D20",
+   "summary": "Pro client limit 9999 vs API cap 50; no at-limit UI at 50",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "portfolio/page.tsx:204 sets PORTFOLIO_LIMITS.pro=9999 while artist-works/route.ts:94 caps at 50, so the client never enters at-limit state; the 51st save surfaces only the API's 403 message via mutate.",
+   "fix": "Set PORTFOLIO_LIMITS.pro to 50 and align the \"Unlimited works\" marketing strings.",
+   "final": "P3"
+  },
+  {
+   "ref": "D21",
+   "summary": "Oversized primary image upload leaves button stuck on \"Uploading...\"",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "portfolio/page.tsx:1608 awaits uploadImage with no try/catch; lib/upload.ts:104-109 throws on bad type or >10MB, so setUploading(false) at 1618 never runs; the additional-images path (1644-1656) has the try/catch.",
+   "fix": "Wrap handleImageFile's upload in try/catch/finally, setting formError and resetting uploading; same for profile photo.",
+   "final": "P2",
+   "challenge": "Stuck button, recoverable with a refresh and re-upload; artist-side only, no data loss. Confusing UX with a workaround."
+  },
+  {
+   "ref": "D22",
+   "summary": "Saving without an image publishes a picsum stock photo as the artwork",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "portfolio/page.tsx:1822 falls back to https://picsum.photos/seed/new-work/900/600; the submit validation (title, priced size) never checks imagePreview, so imageless works go available on public browse.",
+   "fix": "Require an image before save, or force imageless works to available=false drafts.",
+   "final": "P1"
+  },
+  {
+   "ref": "D23",
+   "summary": "Five bulk portfolio paths toast success before the server confirms",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "portfolio/page.tsx:534-537 saveWorks is fire-and-forget (errors console-only); bulkSetAvailability (589), bulk add (1035), bulk prices (1143), copy-from apply (1370) and reorder (559) all toast immediately; in-code E41-e acknowledges it.",
+   "fix": "Migrate the five saveWorks callers onto the awaited postWorks/save-control path like single add/delete.",
+   "final": "P2"
+  },
+  {
+   "ref": "D24",
+   "summary": "Bulk add silently discards incomplete drafts when any draft is valid",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "portfolio/page.tsx:950-962 filters to valid drafts and errors only when none are valid; after saving, setBulkAddDrafts([]) discards the rest with only \"Added N works\" shown.",
+   "fix": "Keep invalid drafts in the modal with per-draft errors instead of clearing them.",
+   "final": "P1",
+   "challenge": "Bulk add silently discards typed titles and uploaded images of incomplete drafts whenever any draft is valid; the rubric's silent-input-discard class."
+  },
+  {
+   "ref": "D25",
+   "summary": "\"Now showing at\" matches placements of any status, ignored status param",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "posts/page.tsx:26 requests ?status=active but placements/route.ts:150 reads only archived; the find at posts/page.tsx:45-47 matches on title alone, so pending/declined/completed placements yield the banner.",
+   "fix": "Filter client-side to placements with status active before matching titles.",
+   "final": "P2"
+  },
+  {
+   "ref": "D26",
+   "summary": "Revenue share percent has no upper bound client or server side",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "profile/page.tsx:912-916 has min=0 only; revenue_share_percent sits on ARTIST_PROFILE_WRITABLE (writable-fields.ts:51) with no clamp in artist-profile/route.ts, and placements/route.ts:502 carries it into placement terms unclamped.",
+   "fix": "Clamp 0-100 in the input (max attr) and in the artist-profile PUT route.",
+   "final": "P2",
+   "challenge": "Needs self-inflicted invalid input by the artist; terms are visible to the counterparty before acceptance; clamp is a trivial post-launch fix."
+  },
+  {
+   "ref": "D27",
+   "summary": "Unresolved saved works link to /browse/{workId}, which cannot resolve",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "saved/page.tsx:44-47 returns /browse/${itemId} for type \"work\" where itemId is a work id; the /browse/[slug] route expects an artist slug, so the fallback link dead-ends.",
+   "fix": "Render unmatched saved works unlinked with their saved date, as the title fallback already does.",
+   "final": "P3"
+  },
+  {
+   "ref": "D28",
+   "summary": "\"Current password\" field is collected but never read or verified",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "settings/page.tsx:64-90 validates only newPassword/confirm and calls supabase.auth.updateUser({password}) at line 79; currentPassword is only cleared at line 86, never checked.",
+   "fix": "Verify via signInWithPassword before updating, or remove the decorative field.",
+   "final": "P2"
+  },
+  {
+   "ref": "D29",
+   "summary": "Demo sessions see ordinary success toasts for writes that never happened",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "Grep finds no data.demo consumer across src/app/(pages)/artist-portal; demo-guard.ts soft guard returns 200 {demo:true}, so optimistic toasts stand; only strict-guarded stripe-connect routes (403) surface it.",
+   "fix": "Check the demo flag centrally in mutate()/useSaveAction and toast the guard's message once.",
+   "final": "P3"
+  },
+  {
+   "ref": "E1",
+   "summary": "/venue-portal/enquiries reachable from dashboard but absent from sidebar nav",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "src/components/VenuePortalLayout.tsx lines 11-25 list every nav item; no enquiries entry. Dashboard page.tsx line 383 links to it. The page itself is dead (see E27).",
+   "fix": "Remove the page and the dashboard Quick Action rather than adding a nav entry.",
+   "final": "P2"
+  },
+  {
+   "ref": "E2",
+   "summary": "Venue dashboard Total Spent sums customer QR sales as venue spending",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "src/app/api/dashboard/route.ts line 132 matches orders by venue_slug OR buyer_email; venue-portal/page.tsx line 111 sums o.total over all rows, so placement sales inflate Total Spent.",
+   "fix": "Sum only buyer_email-matched orders, mirroring the Orders page classification.",
+   "final": "P2"
+  },
+  {
+   "ref": "E3",
+   "summary": "Any sent message completes Send your first enquiry checklist item",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "dashboard/route.ts line 133 counts all messages with sender_name = slug; venue-portal/page.tsx line 144 uses sentMessageCount > 0 and links to /browse. Replies count too.",
+   "fix": "Accept as-is, or relabel to Message an artist and keep the loose counter.",
+   "final": "P3"
+  },
+  {
+   "ref": "E4",
+   "summary": "Set up payouts ticks when Stripe account row exists, before onboarding completes",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "stripe-connect/onboard/route.ts line 99 stores the account id at creation; venue-portal/page.tsx line 145 keys completion on stripe_connect_account_id truthiness, while status uses charges_enabled and details_submitted.",
+   "fix": "Key completion on the stripe-connect status endpoint's complete flag instead of the raw id.",
+   "final": "P2"
+  },
+  {
+   "ref": "E5",
+   "summary": "Dashboard View Enquiries quick action funnels venues to a permanently empty page",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "venue-portal/page.tsx line 383 links to /venue-portal/enquiries; src/app/api/enquiry/route.ts exports only POST, so the page's GET always fails and the list is empty forever.",
+   "fix": "Point the quick action at /venue-portal/messages and delete the enquiries page.",
+   "final": "P2",
+   "challenge": "No producer of venue-directed enquiries exists, so the empty page misses nothing real; a plausible empty state, not lost data."
+  },
+  {
+   "ref": "E6",
+   "summary": "Profile section Cancel hides inputs but keeps edits; next Save persists them",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "venue-portal/profile/page.tsx lines 423 and 656: Cancel only calls setEditing(null); detail*/display* state and the dirty flag are untouched, and handleSave always sends them.",
+   "fix": "On Cancel, reset the section's state from the loaded venue record.",
+   "final": "P2"
+  },
+  {
+   "ref": "E7",
+   "summary": "interested_in_collections never editable in portal while /spaces filters read it",
+   "verdict": "overstated",
+   "severity": "P3",
+   "effort": "S",
+   "why": "No control on profile/page.tsx and none in the save payload, true. But spaces/page.tsx filters only on free-loan/revenue/purchase; nothing user-facing reads interestedInCollections, only /api/venues/demand serves it.",
+   "fix": "Add a toggle alongside the other interest switches, or drop the field from the demand payload.",
+   "final": "P3"
+  },
+  {
+   "ref": "E8",
+   "summary": "Empty profiles pre-select fabricated styles and themes that Save silently persists",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "profile/page.tsx lines 251-252 default styles to Contemporary/Minimal/Photography and themes to Nature/City/Architecture when the row is empty; handleSave sends them, so artists target venues on invented preferences.",
+   "fix": "Initialise styles and themes to empty arrays when the saved row has none.",
+   "final": "P2",
+   "challenge": "Defaults are editable and only degrade matching quality; wrong-but-harmless data, no money or destruction involved."
+  },
+  {
+   "ref": "E9",
+   "summary": "Preferred Artwork Sizes pills are decorative; selection never saved",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "profile/page.tsx line 253 hardcodes sizes to Medium+Large on every load; the handleSave payload has no sizes key, and writable-fields.ts documents preferred_sizes as vestigial, existing in no schema.",
+   "fix": "Remove the sizes control until a preferred_sizes column exists.",
+   "final": "P2"
+  },
+  {
+   "ref": "E10",
+   "summary": "Venue cannot edit contact name, phone or address anywhere in the portal",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "VENUE_PROFILE_WRITABLE in src/lib/db/writable-fields.ts allows contact_name, email, phone, address fields, but profile/page.tsx exposes no inputs for any of them and Settings' fields are dead (E12).",
+   "fix": "Add a Contact Details section on the profile page wired to the already-allowlisted columns.",
+   "final": "P2"
+  },
+  {
+   "ref": "E11",
+   "summary": "Demo venue sees false Saved confirmation for writes that never landed",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "api/venue-profile/route.ts returns 200 {demo:true} via assertNotDemo; profile/page.tsx handleSave ignores the response body and sets saved=true unconditionally.",
+   "fix": "Check data.demo in handleSave and show the demo toast instead of Saved.",
+   "final": "P3"
+  },
+  {
+   "ref": "E12",
+   "summary": "Settings account fields are a dead form; typed input silently discarded",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "venue-portal/settings/page.tsx: Field renders an uncontrolled input with defaultValue only (lines 33-54); no onChange, no save button, no submit handler anywhere in the section.",
+   "fix": "Render the three values read-only with an edit link to the profile page.",
+   "final": "P2",
+   "challenge": "With no save button the form never claims persistence, so nothing lies to the user; display-only settings section."
+  },
+  {
+   "ref": "E13",
+   "summary": "Preferences GET 500s for every venue; checkboxes always show defaults",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "api/account/preferences/route.ts selects all three PREF_FIELDS from venue_profiles; tests/integration/schema-columns.json confirms venue_profiles lacks order_notifications_enabled, so the SELECT errors and useNotificationPrefs swallows it, showing opt-in defaults.",
+   "fix": "Use a per-role field list, selecting only columns that exist on venue_profiles.",
+   "final": "P2",
+   "challenge": "Checkboxes show defaults for transactional notification toggles; no marketing or legal exposure, cosmetic wrong state."
+  },
+  {
+   "ref": "E14",
+   "summary": "Order updates toggle PATCHes a missing column and fails every time",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "use-notification-prefs.ts PATCHes {order_notifications_enabled}; the venue_profiles update hits the non-existent column, 500s, and the checkbox reverts with Could not save preference.",
+   "fix": "Hide the Order updates row for venues, or add the column via migration.",
+   "final": "P2"
+  },
+  {
+   "ref": "E15",
+   "summary": "Digest checkbox writes a column the email send path never reads",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "src/lib/email/send.ts line 112 consults only email_preferences for opt-outs; venue_profiles.email_digest_enabled is written by settings but read by nothing, so the checkbox cannot stop the weekly digest.",
+   "fix": "Back the checkbox with email_preferences.digests_enabled, or remove it and link the email-preferences page.",
+   "final": "P2",
+   "challenge": "One weekly digest; harm requires the digest actually sending and a venue trying to opt out; fix rides the email-preferences work."
+  },
+  {
+   "ref": "E16",
+   "summary": "Expanded placement row shows venue's cut as percent to artist",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "venue-portal/placements/page.tsx line 1533 renders {pct}% to artist; src/lib/payouts/legs.ts lines 173-174 compute venueCutPence from the same revenue_share_percent, and the request form (line 1037) says % to the venue.",
+   "fix": "Change the label to % to your venue on sales.",
+   "final": "P2",
+   "challenge": "Display label only on the expanded row; the request form and payout maths agree, so no money moves wrongly. Copy fix."
+  },
+  {
+   "ref": "E17",
+   "summary": "Per-placement QR scan counts exclude modern-label scans; near-guaranteed zero",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "api/placements/route.ts lines 225-232 compare event work_id (a UUID from qr/[slug]/route.ts line 74) with work TITLE, and venue_name (display name, line 62) with venue_slug; both predicates reject modern events.",
+   "fix": "Reuse the analytics endpoint's venue_user_id plus work_id attribution for the per-placement count.",
+   "final": "P2"
+  },
+  {
+   "ref": "E18",
+   "summary": "Mobile placement card hardcodes QR Scans to literal 0",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "venue-portal/placements/page.tsx line 1869 renders a literal 0 in the mobile expanded card while the desktop cell at line 1562 renders p.qrScans.",
+   "fix": "Render p.qrScans ?? 0 like the desktop cell.",
+   "final": "P3"
+  },
+  {
+   "ref": "E19",
+   "summary": "Mobile Loan record button is byte-identical to Open full placement",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "placements/page.tsx lines 1962 and 1969 both link to /placements/{id}; the ?record=open param that PlacementDetailClient.tsx line 151 reads is only appended on the desktop link (line 1692).",
+   "fix": "Append ?record=open to the mobile Loan record link.",
+   "final": "P3"
+  },
+  {
+   "ref": "E20",
+   "summary": "Request form claims paid-loan billing is manual; billing is automated",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "placements/page.tsx line 1007 says Billing is handled manually for now, yet the same page renders PaidLoanPaymentChip driving Stripe subscription setup at /placements/[id]/payment, which exists.",
+   "fix": "Rewrite the helper text to say billing is set up after installation via Stripe.",
+   "final": "P2"
+  },
+  {
+   "ref": "E21",
+   "summary": "Optimistic placement insert uses fake p- id whose links 404 until refresh",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "placements/page.tsx line 640 generates p-{Date.now()} locally after POST and never reads the server id, so the row's Open/QR-label links target /placements/p-... which does not exist.",
+   "fix": "Use the id the API returns, or reload the list after a confirmed submit.",
+   "final": "P2"
+  },
+  {
+   "ref": "E22",
+   "summary": "Min-only budgets render as nonsense \u00a3300 to \u00a30",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "venue-portal/artwork-requests/page.tsx line 150 renders \u00a3{min||0} to \u00a3{max||0}, so a request with only budget_min_pence shows an upper bound of \u00a30.",
+   "fix": "Render open-ended bounds as from \u00a3300 or up to \u00a3500.",
+   "final": "P3"
+  },
+  {
+   "ref": "E23",
+   "summary": "Artwork-request share field uses opposite direction to placements' venue-cut semantics",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "ArtworkRequestForm.tsx lines 235-248 label the share as paid to the artist; accepting a placement response (responses/[responseId]/route.ts line 182) writes it into placements.revenue_share_percent, which payouts/legs.ts treats as the venue's cut.",
+   "fix": "Standardise on the venue-cut direction platform-wide and relabel this field to match.",
+   "final": "P1"
+  },
+  {
+   "ref": "E24",
+   "summary": "Accepting a commission response navigates the venue straight to a 404",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "responses/[responseId]/route.ts line 121 sets nextStepLink to /venue-portal/commissions and line 250 to /artist-portal/commissions; neither directory exists under src/app/(pages), and the detail page window.location.href's it on accept.",
+   "fix": "Retarget nextStepLink to the request detail page until a commissions surface exists.",
+   "final": "P1"
+  },
+  {
+   "ref": "E25",
+   "summary": "View commission link on accepted responses points at a nonexistent route",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "venue-portal/artwork-requests/[id]/page.tsx line 319 links linked_commission_id rows to /venue-portal/commissions, which has no page; same root cause as E24.",
+   "fix": "Point the link at the request detail or remove it until the route ships.",
+   "final": "P2",
+   "challenge": "Secondary link with the same root cause as E24 (kept P1); one fix covers both."
+  },
+  {
+   "ref": "E26",
+   "summary": "Mark fulfilled on linked responses can only ever return 409",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "fulfill/route.ts lines 117-120 reject any response carrying a linked_* id with 409; accept writes those ids (responses route lines 231-233), and the detail page shows the button on every accepted response.",
+   "fix": "Hide the per-response button when a linked_* id exists; header Mark fulfilled covers the flip.",
+   "final": "P2"
+  },
+  {
+   "ref": "E27",
+   "summary": "Enquiries page fetches a GET that does not exist; permanently empty list",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "venue-portal/enquiries/page.tsx fetches GET /api/enquiry; src/app/api/enquiry/route.ts exports only POST, so the fetch 405s, .catch swallows it, and every venue sees the empty state forever.",
+   "fix": "Delete the page and its dashboard entry point; the Messages inbox covers the job.",
+   "final": "P2",
+   "challenge": "Same as E5: no venue-directed enquiries are ever created, so the permanently empty list loses nothing."
+  },
+  {
+   "ref": "E28",
+   "summary": "Enquiries status tabs use a capitalised union the DB never stores",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "enquiries/page.tsx types Status as Pending/Responded/Closed while api/enquiry/route.ts inserts lowercase pending; the cast at mapping would keep the raw value, so filters and badge lookup would miss. Moot on a dead fetch.",
+   "fix": "Dies with the page removal; no separate fix needed.",
+   "final": "P3"
+  },
+  {
+   "ref": "E29",
+   "summary": "Enquiries data model has no venue scoping even server-side",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "enquiries rows (api/enquiry/route.ts insert) carry sender_name/sender_email/artist_slug only; nothing links them to a venue account, so a working GET would need a from-scratch design. Concept belongs to Messages.",
+   "fix": "Remove the page; do not build a venue-scoped GET.",
+   "final": "P3"
+  },
+  {
+   "ref": "E30",
+   "summary": "Messages shell spins forever when the venue profile never resolves",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "venue-portal/messages/page.tsx renders Loading messages... while loading || !venue?.slug; useCurrentVenue.ts sets venue null with loading false when the API has no row and the static fallback misses, so the shell never advances.",
+   "fix": "When loading is false and venue is null, render the self-heal failure banner with Retry.",
+   "final": "P2"
+  },
+  {
+   "ref": "E31",
+   "summary": "Saved works tab silently drops works saved from the live database",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "venue-portal/saved/page.tsx resolves saved ids against getGalleryWorks(), which src/data/galleries.ts builds from static seed artists only; DB UUIDs find no match and are filtered out, while /api/walls/saved-works resolves them fine.",
+   "fix": "Resolve the works tab through /api/walls/saved-works like the wall visualiser does.",
+   "final": "P2",
+   "challenge": "Saves persist and render correctly in the wall visualizer via /api/walls/saved-works; display filter bug on one tab, no data loss."
+  },
+  {
+   "ref": "E32",
+   "summary": "LabelPreview per-label size selector is dead for venues",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "venue-portal/labels/page.tsx line 560 passes availableSizes={[]}; LabelPreview.tsx line 187 maps over it so no options render, whereas artist-portal/labels/page.tsx line 544 passes real sizes.",
+   "fix": "Pass the work's pricing labels, or hide the size block when the list is empty.",
+   "final": "P3"
+  },
+  {
+   "ref": "E33",
+   "summary": "Analytics API computes scans_over_time and placement_revenue the page never renders",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "api/analytics/venue/route.ts returns scans_over_time, placement_revenue and placement_revenue_total (lines 158-162); venue-portal/analytics/page.tsx declares scans_over_time in its interface and renders neither.",
+   "fix": "Chart the time series, or strip the unused fields from this endpoint's response.",
+   "final": "P3"
+  },
+  {
+   "ref": "E34",
+   "summary": "Layout-creation failure after wall create silently dumps user on the list",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "venue-portal/walls/new/page.tsx lines 233-238: the comment says surface the issue but the code only router.replace's to the list with no message. Recoverable, the editor self-creates a layout on open.",
+   "fix": "Show a toast explaining the wall was created but its layout needs reopening.",
+   "final": "P3"
+  },
+  {
+   "ref": "E35",
+   "summary": "Wall colour edits on saved preset walls are never persisted",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "WallVisualizer.tsx saveLayout (lines 213-278) PATCHes only dims and items, never wall_color_hex, though api/walls/[id]/route.ts line 117 accepts it; the config bar keeps the colour controls enabled, so recolours vanish on reload.",
+   "fix": "Include wall_color_hex in the wall PATCH when the background colour changed.",
+   "final": "P2"
+  },
+  {
+   "ref": "E36",
+   "summary": "Curated hero asset contradicts its own gallery-interior comment; alt says Patagonia",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "CuratedClient.tsx line 285 uses /images/auth-bg.jpg, which I inspected: it genuinely is Mt. Fitz Roy, so the alt is accurate and the comment/asset choice is what is wrong, inverting the flag's suggested fix.",
+   "fix": "Swap in an actual gallery-interior asset and update the alt to match.",
+   "final": "P3"
+  },
+  {
+   "ref": "E37",
+   "summary": "Curation submissions from signed-in venues are stored anonymous",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "CuratedClient.tsx line 217 submits via plain fetch with only Content-Type; api/curation/route.ts lines 103-108 resolve requester_user_id solely from a bearer token, so it is always null.",
+   "fix": "Use authFetch when a session exists so requester_user_id is captured.",
+   "final": "P2"
+  },
+  {
+   "ref": "E38",
+   "summary": "Every tier detail footer promises cancel any time, including one-off payments",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "curated/[tier]/page.tsx line 136 renders {priceLabel} \u00b7 cancel any time. unconditionally; Single wall, Full space and Bespoke are one-off or quoted, where the real promise is refund-if-nothing-fits.",
+   "fix": "Show cancel any time only for the managed subscription tiers.",
+   "final": "P1",
+   "challenge": "'Cancel any time' printed under one-off and quoted tiers is a false term of sale on a purchase decision surface; refund-expectation liability."
+  },
+  {
+   "ref": "F1",
+   "summary": "Venue empty-state copy invites messaging with no compose control in the inbox",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "MessageInbox.tsx:855 renders the copy; compose only opens via initialArtistSlug prop (line 303-315). No compose button exists anywhere in the inbox.",
+   "fix": "Link the venue empty state to /browse so the CTA is actionable.",
+   "final": "P2"
+  },
+  {
+   "ref": "F2",
+   "summary": "Hover-X delete hard-deletes both parties' copies; confirm gives no warning",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "MessageInbox.tsx:788 confirm has no body copy; api/messages/[conversationId]/route.ts DELETE removes every row for the conversation, destroying the counterparty's thread and the placement_request trail requester inference relies on.",
+   "fix": "Implement per-user archiving (hidden flags) or warn explicitly that both parties lose the thread.",
+   "final": "P1"
+  },
+  {
+   "ref": "F3",
+   "summary": "Unread count checks artist profile first, ignores dual-role user's venue slug",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "api/messages/unread/route.ts returns early on the artist slug; mark-read paths (messages/[conversationId] PATCH, messages PATCH) handle both slugs via assertConversationParticipant, so counts disagree.",
+   "fix": "Count unread across both slugs like the mark-read paths do.",
+   "final": "P3"
+  },
+  {
+   "ref": "F4",
+   "summary": "Reply field is single-line input; Shift+Enter newline impossible, multi-line messages impossible",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "MessageInbox.tsx:1540 and :913 use <input type=\"text\"> with Enter-to-send; Shift+Enter cannot insert a newline in a single-line input despite the documented behaviour.",
+   "fix": "Swap the reply input for an auto-growing textarea keeping Enter-to-send.",
+   "final": "P2"
+  },
+  {
+   "ref": "F5",
+   "summary": "Unknown-recipient 404 copy invites a 'reply' no channel can carry",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "api/messages/route.ts:334 returns 'reply with their email and we'll send them an onboarding link' inside a 404 error where the message never sent and nothing ingests replies.",
+   "fix": "Reword the 404 to point at /contact or an invite form.",
+   "final": "P3"
+  },
+  {
+   "ref": "F6",
+   "summary": "Attachment-only sends always fail with 'Message too short'",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "api/messages/route.ts:276 allows empty content with attachments, then line 281 unconditionally runs moderateMessage; lib/moderation.ts rejects trimmed length <2. UI (MessageInbox.tsx:1541) enables Send with attachments only.",
+   "fix": "Skip the length guard when attachments exist; add client-side minimum-length hint.",
+   "final": "P2",
+   "challenge": "Visible 'Message too short' error with a trivial workaround: type a word. Not silent, not a dead surface."
+  },
+  {
+   "ref": "F7",
+   "summary": "Message email links venues into artist portal, never auto-opens thread, subject uses raw slug",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "lib/email/notifications.ts:53,58 hard-codes /artist-portal/messages?c= and subject `${senderName} sent you a message` where senderName is resolvedSenderSlug; no page reads ?c= (only unsubscribe uses 'c').",
+   "fix": "Resolve portal per recipient role, pass display name, and honour ?c= to preselect the thread.",
+   "final": "P1"
+  },
+  {
+   "ref": "F8",
+   "summary": "Outreach cap counts replies into existing threads as new contacts, blocking genuine outreach",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "lib/outreach-cap.ts builds conversationsToday from every conversation the artist sent any message into today; used includes replies to venue-initiated/old threads, exemption only covers the current thread.",
+   "fix": "Count only conversations the artist initiated today, exempting all replies as documented.",
+   "final": "P2",
+   "challenge": "Replies within the open thread are exempt; the cap only mis-bites artists active in 5+ distinct threads in one day, rare at launch volume."
+  },
+  {
+   "ref": "F9",
+   "summary": "placement_response via POST /api/messages always emails the artist, never the venue responder case",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "api/messages/route.ts:718-758 sends accepted/declined templates to placement.artist_user_id regardless of responder; no client sends placement_response through this endpoint (MessageInbox uses PATCH /api/placements), so blast radius is nil today.",
+   "fix": "Email the counterparty of the responder, mirroring the placements PATCH logic.",
+   "final": "P3"
+  },
+  {
+   "ref": "F10",
+   "summary": "Pinned bar comment claims click-to-scroll; no scroll handler exists",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "MessageInbox.tsx:1003 comment says 'Click to scroll'; the bar div (1009-1025) has no onClick beyond the unpin X.",
+   "fix": "Add scroll-to-message on bar click or delete the comment.",
+   "final": "P3"
+  },
+  {
+   "ref": "F11",
+   "summary": "Help copy promises new tab; Link navigates same-tab, losing the thread",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "MessageInbox.tsx:1662-1668, Link href=/faqs with copy 'Open the FAQ in a new tab.' and no target=_blank.",
+   "fix": "Add target=\"_blank\" rel=\"noopener\" or reword the copy.",
+   "final": "P2"
+  },
+  {
+   "ref": "F12",
+   "summary": "Report uses window.prompt inside the options modal; suppressed in some browsers",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "MessageInbox.tsx:1676 calls prompt() for the reason; in-app browsers that suppress prompt() make Report silently return (null reason aborts).",
+   "fix": "Replace prompt with a textarea step inside the existing modal.",
+   "final": "P2"
+  },
+  {
+   "ref": "F13",
+   "summary": "Modal 'archive' claims restorable; actually the call 405s, archive never works at all",
+   "verdict": "overstated",
+   "severity": "P2",
+   "effort": "S",
+   "why": "MessageInbox.tsx:1714 sends DELETE to /api/messages, which exports no DELETE handler, so it 405s and only the error toast shows; the flag's claimed hard-delete happens only via the hover-X path.",
+   "fix": "Point the modal at a real per-user archive endpoint and drop the 'restored by support' copy.",
+   "final": "P2"
+  },
+  {
+   "ref": "F14",
+   "summary": "Blocks enforced only in /api/messages; offers and placements writers bypass them",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "user_blocks consulted only in api/messages/route.ts (lines 162, 363); api/offers/route.ts:459 and the many message inserts in api/placements/route.ts never check blocks, so blocked users still trigger cards, bells, and emails.",
+   "fix": "Add the block check before message inserts and notifications in offers and placements routes.",
+   "final": "P2",
+   "challenge": "Block usage is near zero at launch and the primary contact vector (messages) is enforced; ancillary bypass harm is speculative."
+  },
+  {
+   "ref": "F15",
+   "summary": "Customer portal Messages invents a client-side slug; API 403s, inbox permanently empty",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "customer-portal/messages/page.tsx slugifies displayName/email; api/messages GET verifies slug against artist/venue profiles and 403s; MessageInbox swallows the failure into 'No conversations yet'.",
+   "fix": "Give customers a server-side messaging identity, or remove the nav item and route to /contact.",
+   "final": "P1"
+  },
+  {
+   "ref": "F16",
+   "summary": "Customer sends 403 with 'complete your artist or venue profile' copy",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "api/messages/route.ts:312-317 rejects senders without artist/venue profiles; every customer send fails with copy meaningless to customers.",
+   "fix": "Support a customer sender identity or return customer-appropriate copy routing to /contact.",
+   "final": "P2",
+   "challenge": "Error copy on a surface already dead per F15 (kept P1); becomes moot when that surface is fixed or removed."
+  },
+  {
+   "ref": "F17",
+   "summary": "Logged-out Message CTA funnels signups into the dead customer messaging surface",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "MessageArtistButton.tsx:56-57 pushes /signup/customer?next=/customer-portal/messages?artist=..., whose compose send is guaranteed to 403 (F15/F16).",
+   "fix": "Route logged-out shoppers to /contact?artist=<slug> like the logged-in customer path.",
+   "final": "P1"
+  },
+  {
+   "ref": "F18",
+   "summary": "MessageInbox reads any load failure as friendly empty state, hiding hard errors",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "MessageInbox.tsx:268-282 checks only data.conversations; a 403/500 leaves the list empty with 'No conversations yet' and no error UI.",
+   "fix": "Detect non-2xx in loadConversations and render an error state with retry.",
+   "final": "P2"
+  },
+  {
+   "ref": "F19",
+   "summary": "Ungated enquiry modal collects name/email but the send 401s/403s for its audience",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "ArtistProfileClient.tsx:1152 posts primary to /api/messages, which requires auth plus artist/venue profile; /api/enquiry (the public path) only fires after the primary succeeds, so anonymous enquiries never land anywhere.",
+   "fix": "Make /api/enquiry the primary for anonymous/customer senders; keep /api/messages for profiled users.",
+   "final": "P1"
+  },
+  {
+   "ref": "F20",
+   "summary": "'They typically respond within 48 hours' is an invented, unmeasured SLA",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "ArtistProfileClient.tsx:1123; nothing measures or enforces artist response time anywhere in the codebase.",
+   "fix": "Soften to 'We'll let you know when they reply' or similar.",
+   "final": "P3"
+  },
+  {
+   "ref": "F21",
+   "summary": "Legacy request cards without placementId: Accept/Decline click silently does nothing",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "MessageInbox.tsx:642-683 skips the PATCH when metadata.placementId is absent and just refreshes; buttons still render (line 1349-1365), so the click produces no state change, message, or error.",
+   "fix": "Disable the buttons with an explanatory tooltip when placementId is missing.",
+   "final": "P3"
+  },
+  {
+   "ref": "F22",
+   "summary": "Cancelled pill reuses declined red styling; distinct icon only, self-described nitpick",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "MessageInbox.tsx:1392-1399, wrapper class is accepted?green:red while cancelled gets its own icon branch; the flag itself concludes 'treat as Yes'.",
+   "fix": "Optionally give cancelled a neutral grey style; otherwise accept as-is.",
+   "final": "P3"
+  },
+  {
+   "ref": "F23",
+   "summary": "Artist accepting a venue offer fires a doomed checkout call, 403 swallowed",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "MessageInbox.tsx:629 tests recipientUserId===user.id, not buyer; offers/[id]/checkout/route.ts:45 403s 'Only the buyer can check out' and the catch falls through to refresh.",
+   "fix": "Gate the checkout call on the viewer being the offer's buyer.",
+   "final": "P3"
+  },
+  {
+   "ref": "F24",
+   "summary": "canRespond reads requester_user_id the list API never emits; panel respond buttons never show",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "placements GET (route.ts:289-304) emits resolved proposed_by_user_id only; schema-columns.json has no requester_user_id; placement-permissions.ts canRespond refuses when the field is missing, so PlacementContextPanel and both portal lists never show Accept/Counter/Decline.",
+   "fix": "Emit requester_user_id (resolved requester) alongside proposed_by_user_id in the list API.",
+   "final": "P2",
+   "challenge": "Verified: /placements/[id] API infers requester_user_id and the detail page renders working Accept/Counter/Decline; lists link straight to it. One-click workaround."
+  },
+  {
+   "ref": "F25",
+   "summary": "Sent/Received direction tag never renders from list-API consumers",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "PlacementDirectionTag.tsx:71 returns null without requester_user_id, which GET /api/placements never provides (same root as F24).",
+   "fix": "Same one-line API fix as F24 restores the tag everywhere.",
+   "final": "P2"
+  },
+  {
+   "ref": "F26",
+   "summary": "Declined state shows requester the decliner's copy and hides the Counter re-open",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "PlacementContextPanel.tsx:756 iAmRequester is always false without requester_user_id, so the requester reads 'You declined, the other party can come back' and never sees Counter.",
+   "fix": "Fixed by the F24 API field mapping.",
+   "final": "P2"
+  },
+  {
+   "ref": "F27",
+   "summary": "Panel counter derives free_loan for paid loans; dialog sends paid_loan; neither sends mixed",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "PlacementContextPanel.tsx:381-385 maps counterPaidLoan to 'free_loan' (comment claims it's the DB value); CounterPlacementDialog.tsx:73-77 sends 'paid_loan'; PATCH stores the raw client string (route.ts:1009).",
+   "fix": "Call deriveArrangementType client-side or drop arrangementType and derive server-side.",
+   "final": "P2"
+  },
+  {
+   "ref": "F28",
+   "summary": "Stage-advance errors swallowed; button appears to do nothing on a 422",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "PlacementDetailClient.tsx:296 catch { /* ignore; next load will reconcile */ } after the PATCH; the undo path toasts, the advance path does not.",
+   "fix": "Show an error toast in the catch, matching the undo path.",
+   "final": "P2"
+  },
+  {
+   "ref": "F29",
+   "summary": "Detail-page requester chain never reads proposed_by_user_id; message scan capped at 50 platform-wide",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "placements/[id]/route.ts:78 reads phantom placement.requester_user_id (always undefined); fallback scans latest 50 placement_request messages platform-wide (line 86) before filtering; unresolvable rows leave both parties on 'Awaiting their response'.",
+   "fix": "Read proposed_by_user_id and filter the message query by metadata placementId.",
+   "final": "P2"
+  },
+  {
+   "ref": "F30",
+   "summary": "Background-sync toast prints raw lowercase DB statuses",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "PlacementDetailClient.tsx:241 interpolates prev.status and next.status directly into the toast, bypassing the display normaliser used by every badge.",
+   "fix": "Pass both statuses through the display-label normaliser.",
+   "final": "P3"
+  },
+  {
+   "ref": "F31",
+   "summary": "Requester-inference message scans use platform-wide caps that stop covering older placements",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "placements/route.ts:254 limit(1000) and route.ts:920/[id]/route.ts:86 limit(50) fetch platform-wide before client-side placementId filtering; coverage silently shrinks with volume.",
+   "fix": "Filter metadata->>placementId server-side per placement in each query.",
+   "final": "P3"
+  },
+  {
+   "ref": "F32",
+   "summary": "Counter PATCH stores client arrangementType verbatim; schema allows 100% share vs UI's 50",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "placements/route.ts:1009 writes counter.arrangementType directly (deriveArrangementType used only at POST line 499); validations.ts counter schema allows revenueSharePercent max 100 while all UIs cap 50.",
+   "fix": "Re-derive arrangement_type from fee/QR/share in the counter path; cap share at 50.",
+   "final": "P2"
+  },
+  {
+   "ref": "F33",
+   "summary": "Artist told 'we've nudged the venue' but no nudge mechanism exists",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "PaidLoanPaymentChip.tsx:104,107 makes the claim; src/app/api/cron has no paid-loan nudge and no other code notifies venues about unstarted billing.",
+   "fix": "Reword the copy honestly, or add the venue nudge notification.",
+   "final": "P2"
+  },
+  {
+   "ref": "F34",
+   "summary": "Payment page headline shows artist slug: 'Pay maya-chen monthly'",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "placements/[id]/payment/page.tsx:64 passes placement.artist_slug || placement.artist_name; schema-columns.json confirms no artist_name column, so the slug always wins.",
+   "fix": "Fetch the artist profile name for the payment summary.",
+   "final": "P2"
+  },
+  {
+   "ref": "F35",
+   "summary": "'Charged at the start of each month' misstates the Stripe anniversary anchor",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "PaymentClient.tsx:52-54 makes the claim; payment/setup/route.ts creates a subscription Checkout session with no billing_cycle_anchor, so charges land on the signup anniversary.",
+   "fix": "Reword to 'each month from your setup date', or anchor billing to month start.",
+   "final": "P2"
+  },
+  {
+   "ref": "F36",
+   "summary": "'Internal notes' label on a shared record both parties read and edit",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "PlacementLoanForm.tsx:616; the loan record is one shared placement_records row returned to both parties by placements/[id]/route.ts, with no per-side scoping.",
+   "fix": "Rename to 'Shared notes' or scope the field per party.",
+   "final": "P3"
+  },
+  {
+   "ref": "F37",
+   "summary": "Photo caption is API-supported and rendered but no UI ever collects one",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "photos/route.ts:10 accepts caption; PlacementDetailClient.tsx:394 POSTs only { url }; the lightbox render (1284-1286) and notification caption branch can never fire.",
+   "fix": "Add a caption input at upload, or strip the dead plumbing.",
+   "final": "P3"
+  },
+  {
+   "ref": "F38",
+   "summary": "Reviews accepted on pending/active placements despite wound-down-only design",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "placements/[id]/review/route.ts checks party membership and uniqueness but never placement.status; the header comment and the 7-days-post-collection cron both assume post-completion reviews.",
+   "fix": "Reject reviews unless status is completed or cancelled.",
+   "final": "P2"
+  },
+  {
+   "ref": "F39",
+   "summary": "'Tap to read your review' links to a page that renders no reviews",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "review route links bell/email to /placements/[id]; placement_reviews is read by nothing (only the insert and account-delete reference it), and PlacementDetailClient has zero review rendering.",
+   "fix": "Render reviews on the placement page, or link the notification somewhere that shows them.",
+   "final": "P2"
+  },
+  {
+   "ref": "F40",
+   "summary": "Withdraw confirm names 'the artist' even when the artist is withdrawing",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "OffersList.tsx:564 hard-codes 'The artist will see this offer as withdrawn'; the component is shared by artist-portal/offers and venue-portal/offers.",
+   "fix": "Use counterparty-neutral copy ('The other party will see...').",
+   "final": "P3"
+  },
+  {
+   "ref": "F41",
+   "summary": "Offer expiry stored and typed but never displayed, enforced, or expired",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "offers/route.ts:368 stores expires_at; offers/[id]/route.ts has no expiry check; nothing renders it; the only 'expired' writer is the checkout stock check (checkout/route.ts:101).",
+   "fix": "Reject actions on time-expired offers at PATCH/checkout and show the deadline, or stop accepting the field.",
+   "final": "P2"
+  },
+  {
+   "ref": "F42",
+   "summary": "Stripe cancel_url points at /customer-portal/offers, which does not exist",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "offers/[id]/checkout/route.ts:202; the customer-portal directory has no offers page, and the buyer is a venue, so backing out of Stripe lands on a 404.",
+   "fix": "Change cancel_url to /venue-portal/offers.",
+   "final": "P2",
+   "challenge": "Duplicate of B31; deliberate cancel path, no money moved, recoverable by navigation."
+  },
+  {
+   "ref": "F43",
+   "summary": "Sign-in CTA hard-codes next=/spaces?view=requests from every host page",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "ArtworkRequestsList.tsx:110; the component is also rendered by /artwork-requests (ArtworkRequestsClient.tsx), whose users are relocated to the /spaces tab after login.",
+   "fix": "Pass the host page's path as the next target via a prop.",
+   "final": "P3"
+  },
+  {
+   "ref": "F44",
+   "summary": "'Required for revenue share' unenforced; share>0 with QR off creates contradictory placement",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "artist artwork-request page and responses/route.ts schema allow proposedRevenueSharePercent>0 with proposedQrEnabled=false; [responseId]/route.ts:187 then creates revenue_share with qr_enabled=false since ?? only covers null.",
+   "fix": "Validate the share-requires-QR pairing at submit and force QR on at accept.",
+   "final": "P2"
+  },
+  {
+   "ref": "F45",
+   "summary": "No duplicate-response guard or up-front closed-state on the respond page",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "artist-portal/artwork-requests/[id]/page.tsx never renders prior responses or checks req status; responses POST has no per-artist uniqueness, and each duplicate passes checkArtistOutreachCap, burning quota; closed briefs fail only at submit with 409.",
+   "fix": "Show prior responses, disable resubmission, and gate the form when the brief is closed.",
+   "final": "P2"
+  },
+  {
+   "ref": "F46",
+   "summary": "Core-only insert fallback silently drops the artist's proposed terms",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "responses/route.ts:236-265 retries with coreRow, logs droppedColumns operator-side only, and still returns success:true; the artist sees 'Response sent' while fee/share/QR vanished. Environment-conditional.",
+   "fix": "Return droppedColumns in the response and surface a warning to the artist.",
+   "final": "P3"
+  },
+  {
+   "ref": "F47",
+   "summary": "Accept-of-placement-response skips T9 address stamp and the review/subscription gates",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "[responseId]/route.ts:168-205 inserts status active with accepted_at but no collection_address (both placements PATCH and messages placement_response stamp it), no pending-review or subscription check, and work_title falls back to the brief title.",
+   "fix": "Stamp the venue collection address and apply the same acceptance gates as the placements PATCH.",
+   "final": "P2"
+  },
+  {
+   "ref": "F48",
+   "summary": "Artwork-request accept/decline is bell-only: no email, no thread message",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "[responseId]/route.ts uses createNotification only for both branches; placements and offers mirror every state change into the dm thread and email, so an inbox-dwelling artist can miss an acceptance.",
+   "fix": "Send the accept/decline email and write a status message into the dm conversation.",
+   "final": "P2"
+  },
+  {
+   "ref": "F49",
+   "summary": "Legacy existing_works 'order' can mint an accepted, payable \u00a30.00 offer",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "fulfill/route.ts prices amount_pence as proposed_offer_amount_pence ?? proposed_commission_amount_pence ?? 0; checkout builds the Stripe line from offer.amount_pence with no positive-amount guard (Stripe would likely reject, but the bad offer row persists).",
+   "fix": "Refuse the order branch when no positive amount exists on the response.",
+   "final": "P2"
+  },
+  {
+   "ref": "F50",
+   "summary": "Support-thread replies 404 unless a profile row owns wallplace-support",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "messages POST resolves recipients only via artist/venue profiles (route.ts:327-337); nothing in src/, supabase/, or scripts/ creates a wallplace-support profile, and MessageInbox keeps the reply box on support threads.",
+   "fix": "Special-case support replies (route to /contact) or seed a profile owning the slug.",
+   "final": "P2"
+  },
+  {
+   "ref": "F51",
+   "summary": "Systemic requester_user_id vs proposed_by_user_id mismatch across every list-API consumer",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "GET /api/placements emits proposed_by_user_id (route.ts:289-304) while PlacementContextPanel, both portal placement pages, PlacementDirectionTag.directionFor, and PlacementActionItems all read requester_user_id, which production rows lack (schema-columns.json).",
+   "fix": "Emit both names from the list API; one line restores respond buttons, direction tags, and declined copy.",
+   "final": "P2",
+   "challenge": "Same workaround as F24: the detail page resolves the requester and shows respond actions, so the placement funnel completes despite list-surface gaps."
+  },
+  {
+   "ref": "G1",
+   "summary": "AdminPortalLayout metadata check contradicts server admin predicate",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "AdminPortalLayout.tsx redirects unless userType==='admin' (from user_metadata via AuthContext.tsx:150); admin-auth.ts userIsAdmin (ADR 0008) uses only env allowlist plus admin_users. A table-only admin passes AdminGate then bounces to /login.",
+   "fix": "Drop the metadata check in AdminPortalLayout, or gate on the whoami response AdminGate already fetched.",
+   "final": "P2"
+  },
+  {
+   "ref": "G2",
+   "summary": "No Refunds sidebar item despite live admin refund-approval API",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "AdminPortalLayout.tsx navItems has no Refunds entry; /api/refunds/process exists and 403s artist-initiated requests pending admin action. Same underlying gap as G28.",
+   "fix": "Add a Refunds admin page plus nav item calling /api/refunds and /api/refunds/process (G28's fix).",
+   "final": "P2",
+   "challenge": "Missing nav item only; the substantive gap is G28. Admin inconvenience."
+  },
+  {
+   "ref": "G3",
+   "summary": "Stats route 500s entirely on orders failure, contradicting its comment",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "lib/finance/revenue.ts fetchOrders throws on query error; grossMerchandiseValuePence runs inside the single try/catch in api/admin/stats/route.ts, so a broken orders table fails the whole response despite the 'degrades independently' docblock.",
+   "fix": "Catch the GMV call and return zeros for that section, or correct the comment.",
+   "final": "P3"
+  },
+  {
+   "ref": "G4",
+   "summary": "Accept modal promises an invite email unconditionally",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "admin/applications/page.tsx:81 says 'An invite email will be sent.'; api/admin/applications/[id]/route.ts only calls inviteUserByEmail when findUserByEmail misses; existing accounts get the approval email only.",
+   "fix": "Change the modal body to 'They will be emailed.'",
+   "final": "P3"
+  },
+  {
+   "ref": "G5",
+   "summary": "Accept clobbers existing account's role metadata to artist",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "api/admin/applications/[id]/route.ts:129 unconditionally sets user_type:'artist', display_name, artist_slug on existing accounts, so a venue-role applicant loses that identity. Whether unrelated keys survive depends on GoTrue merge semantics; the role clobber is certain.",
+   "fix": "Read the existing user's metadata and merge, refusing or warning when user_type is already another role.",
+   "final": "P2"
+  },
+  {
+   "ref": "G6",
+   "summary": "welcomeMessage and rejection feedback fields unreachable from admin UI",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "API reads body.welcomeMessage and body.feedback (route.ts:95,264) but admin/applications/page.tsx confirm modals via ConfirmContext have no text inputs, so every rejection sends only generic copy.",
+   "fix": "Add an optional textarea to the accept/reject confirm dialogs and pass it through.",
+   "final": "P3"
+  },
+  {
+   "ref": "G7",
+   "summary": "Rejected applicants have no linked appeal route",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "ArtistApplicationRejected.tsx links only supportUrl; account/appeal/page.tsx covers suspensions and account decisions via appeals@wallplace.co.uk and asks for a case reference no application email carries. Likely intended (reapply in 6 months).",
+   "fix": "Either add an appeal line to the rejection email or record the exclusion as deliberate.",
+   "final": "P3"
+  },
+  {
+   "ref": "G8",
+   "summary": "Artists admin page is read-only with no moderation tooling",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "L",
+   "why": "admin/artists/page.tsx is a bare table; api/admin/artists/route.ts selects no review_status; OperationalPolicyViolationWarning and OperationalAccountRestricted appear only in registry.ts and their own template files, sent by nothing.",
+   "fix": "Add review_status to the list now (S); schedule suspend/unpublish/contact actions post-launch.",
+   "final": "P2"
+  },
+  {
+   "ref": "G9",
+   "summary": "Venues admin page has no management actions",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "L",
+   "why": "admin/venues/page.tsx contains one button (the expand chevron); no PATCH/POST calls anywhere on the page, so approve/suspend/edit/remove do not exist. Read-only CRM as flagged.",
+   "fix": "Accept for launch with DB-side workaround; build venue actions with the artist ones.",
+   "final": "P2"
+  },
+  {
+   "ref": "G10",
+   "summary": "Curation status select misrenders reconciler-owned past_due/paused rows",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "admin/curation/page.tsx STATUS_ORDER omits past_due/paused, so the controlled select's value matches no option (renders blank/first option) and any change silently overwrites reconciler state via PATCH.",
+   "fix": "Render the excluded status as a disabled selected option when the row holds it.",
+   "final": "P2"
+  },
+  {
+   "ref": "G11",
+   "summary": "Managed curation refund never refunds: Invoice.payment_intent gone on pinned API",
+   "verdict": "confirmed",
+   "severity": "P0",
+   "effort": "S",
+   "why": "stripe.ts pins 2026-03-25.dahlia; installed SDK's Invoice interface has payments but no payment_intent (verified in node_modules types); refund/route.ts:118-124 casts and skips the refund when null, marking the row cancelled with no email. Tests mock the legacy shape.",
+   "fix": "List the invoice with expand:['data.payments'] and refund via payments.data[0].payment.payment_intent; update tests.",
+   "final": "P1",
+   "challenge": "Admin-triggered, rare flow with a manual workaround (Stripe dashboard refund); kept P1 not P2 because the false cancelled-without-refund state is silent."
+  },
+  {
+   "ref": "G12",
+   "summary": "Curation page drops the API's refunded-vs-cancelled distinction",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "refundRow in admin/curation/page.tsx ignores the mutate response and just calls load(), so a managed row with no paid invoice flips to Cancelled with no explanation of whether money moved, despite the API reporting refunded:false.",
+   "fix": "Read the response and show 'Subscription cancelled, nothing to refund' vs 'Refunded \u00a3X'.",
+   "final": "P2"
+  },
+  {
+   "ref": "G13",
+   "summary": "Admin approves blogs seen only as a 200-character excerpt",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "admin/blogs/page.tsx renders payload title and excerpt only, no link or preview; approval publishes via api/admin/blogs/[id]. Minor nuance: resubmission inserts a fresh queue row with a new excerpt, but pending-row edits do go stale.",
+   "fix": "Fetch and render body_markdown (or link a draft preview) in the queue row before the Approve button.",
+   "final": "P2"
+  },
+  {
+   "ref": "G14",
+   "summary": "Rejection reason promised to author is never surfaced to them",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "admin/blogs/page.tsx:49 prompt says 'visible to the author'; the reason lands only in moderation_queue.reason; artist-portal/blogs/page.tsx shows a bare 'Rejected' badge and nothing reads the column back.",
+   "fix": "Surface the reason on the author's blogs list, or reword the prompt to 'internal'.",
+   "final": "P2"
+  },
+  {
+   "ref": "G15",
+   "summary": "No author notification on blog approve or reject",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "api/admin/blogs/[id]/route.ts sends no email and creates no notification on either decision (grep finds no sendEmail/notif); authors discover outcomes only by revisiting their list, unlike the applications gate.",
+   "fix": "Send a decision email (new template) or in-app notification from the blogs PATCH.",
+   "final": "P2"
+  },
+  {
+   "ref": "G16",
+   "summary": "Blog edit API action unreachable; writes fake body_json structure",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "Page has only Approve/Reject buttons; the edit branch (route.ts:98-126) is invocable only by hand-crafted calls and writes body_json {type:'doc', body: markdown}; public rendering reads body_markdown (blog/[slug]/page.tsx:302), so inert today.",
+   "fix": "Remove the edit action and Edited tab, or leave documented as dead until an editor exists.",
+   "final": "P3"
+  },
+  {
+   "ref": "G17",
+   "summary": "Dispute conversation shown as raw API incantation, not a viewer",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "admin/disputes/page.tsx:139-141 renders literal 'GET /api/messages?dispute_id={id}' in a code tag; the admin-only server branch in api/messages/route.ts works but nothing in the portal calls it.",
+   "fix": "Fetch the thread via authFetch and render it in the expanded dispute row.",
+   "final": "P2"
+  },
+  {
+   "ref": "G18",
+   "summary": "Resolution prompt says internal but text is emailed to both parties",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "admin/disputes/page.tsx:45 prompt reads 'visible internally'; api/admin/disputes/[id]/route.ts:109 emails the same text as the outcome in OrderDisputeResolved to buyer and artist. Candid internal shorthand would go straight to customers.",
+   "fix": "Change the prompt to 'Resolution note (emailed to buyer and artist):'.",
+   "final": "P2",
+   "challenge": "Harm requires an admin writing candid shorthand into a rare dispute flow; a one-line instruction to the admin avoids it entirely."
+  },
+  {
+   "ref": "G19",
+   "summary": "Resolving non-order disputes notifies nobody",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "api/admin/disputes/[id]/route.ts:90 gates all notification on dispute.order_id; placement or conversation-only disputes get no email or in-app notice, so the opener must poll, the failure the 09 SD.2 fix targeted.",
+   "fix": "Notify the dispute opener (opened_by_user_id) on resolve for disputes without an order_id.",
+   "final": "P2"
+  },
+  {
+   "ref": "G20",
+   "summary": "Escalate destroys the dispute's original category",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "route.ts:77 sets category='escalated', overwriting the classification the row heading displays; the note lives only in the audit context and no UI reads it back.",
+   "fix": "Add an escalated boolean or separate flag column; keep category intact.",
+   "final": "P2"
+  },
+  {
+   "ref": "G21",
+   "summary": "Total subs MRR tile duplicates the MRR tile exactly",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "admin/financials/page.tsx lines 85 and 101-103 both render fmt(data.subscriptions.mrrPence); identical number under two labels.",
+   "fix": "Delete the duplicate tile or repurpose it for managed-curation MRR.",
+   "final": "P3"
+  },
+  {
+   "ref": "G22",
+   "summary": "Failed payments tile counts current state, not failure events",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "api/admin/financials/route.ts:69-79 counts artist_profiles currently past_due bucketed by updated_at; any profile update moves rows between months and recovery erases history, so it is not a payment-failure count.",
+   "fix": "Relabel as 'currently past due', or count invoice.payment_failed events from an event source.",
+   "final": "P2"
+  },
+  {
+   "ref": "G23",
+   "summary": "Top venues and artists listed as raw user-id UUIDs",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "financials/page.tsx:106-123 renders v.userId/a.userId in code tags; the API returns only {userId, totalPence} from venueSpendPence/artistEarningsPence, so no names reach the page.",
+   "fix": "Join profile names/slugs server-side in the financials route.",
+   "final": "P2"
+  },
+  {
+   "ref": "G24",
+   "summary": "Money reconciliation exists only as an offline CLI script",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "M",
+   "why": "scripts/audit/reconcile-money.ts with npm run audit:reconcile (package.json:26); no admin route or page invokes it, so ledger drift detection depends on someone remembering.",
+   "fix": "Add a scheduled run or an admin endpoint surfacing the reconciliation result; runbook entry meanwhile.",
+   "final": "P3"
+  },
+  {
+   "ref": "G25",
+   "summary": "Feature-request Approved/Rejected tabs are permanently empty",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "api/admin/moderation/route.ts exports GET only; the sole queue-row status writes (api/admin/blogs/[id]) are scoped entity_type='blog', so feature_request rows can never leave pending.",
+   "fix": "Remove the dead tabs now; add a decision endpoint when triage is needed.",
+   "final": "P2"
+  },
+  {
+   "ref": "G26",
+   "summary": "Feedback tabs equally dead; rows cannot leave pending",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "Same GET-only moderation API; no write path touches entity_type='feedback' rows, so admin/feedback/page.tsx Approved/Rejected tabs can never populate and the inbox cannot be cleared.",
+   "fix": "Remove the dead tabs or share the decision endpoint with feature requests.",
+   "final": "P2"
+  },
+  {
+   "ref": "G27",
+   "summary": "Flagged-message moderation queue has no admin page",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "api/messages/route.ts:490 inserts entity_type:'message' rows and the moderation GET whitelist includes 'message' (route.ts:14), but no page queries it; flagged abusive messages accumulate unseen.",
+   "fix": "Add a Messages tab or page reusing the feature-requests queue pattern with entity_type=message.",
+   "final": "P1",
+   "challenge": "Users' abuse reports insert moderation_queue rows no page reads; reports silently vanish with no admin surface. A safety funnel dead end-to-end."
+  },
+  {
+   "ref": "G28",
+   "summary": "Complete refund-request money path has no admin surface",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "Only artist-portal/orders and customer-portal call /api/refunds*; artists are 403'd on their own requests (process/route.ts:94), so artist-initiated refunds can only be approved by hand-crafted admin API calls.",
+   "fix": "Build an admin Refunds page listing /api/refunds with approve/reject via /api/refunds/process.",
+   "final": "P2",
+   "challenge": "Rubric-exact admin inconvenience with manual workarounds: the process API is callable directly and Stripe dashboard refunds work; launch refund volume near zero. Needs a runbook."
+  },
+  {
+   "ref": "G29",
+   "summary": "Audit-blocks-response guarantee on dispute message reads is dead code",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "recordAdminAction (admin-audit.ts) catches internally and never throws, and Supabase insert errors resolve rather than throw, so the try/catch and 500 'Audit log failed' branch in api/messages/route.ts:70-80 can never fire.",
+   "fix": "Add a throwing recordAdminActionOrThrow that checks the insert error, and use it there.",
+   "final": "P3"
+  },
+  {
+   "ref": "G30",
+   "summary": "admin_audit_log is write-only; no portal surface reads it",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "M",
+   "why": "grep finds admin_audit_log only in admin-audit.ts inserts and route comments; no page or GET endpoint reads it, so the trail is inspectable only via direct DB access.",
+   "fix": "Accept for launch (DB access suffices); add a read-only audit page later.",
+   "final": "P3"
+  },
+  {
+   "ref": "H1",
+   "summary": "Login-page OAuth silently creates customer accounts with no role choice or terms record",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "login/page.tsx lines 246-295 mint oauth-sign-state with role customer and never call /api/terms/accept; oauth-finalize stamps user_type customer for brand-new users. Recoverable via /apply; terms gap overlaps H15.",
+   "fix": "Route login OAuth through the signup role/terms surface, or record terms server-side in oauth-finalize.",
+   "final": "P2"
+  },
+  {
+   "ref": "H2",
+   "summary": "Admin accept wipes user metadata and force-flips customer accounts to artist",
+   "verdict": "overstated",
+   "severity": "P2",
+   "effort": "S",
+   "why": "admin/applications/[id]/route.ts:129 does call updateUserById without spreading, but GoTrue shallow-merges user_metadata top-level keys, so provider keys survive. The force-flip to artist (losing /customer-portal) is real and unannounced.",
+   "fix": "Keep the flip but email the converted user; drop the metadata-loss half, merge semantics already protect it.",
+   "final": "P2"
+  },
+  {
+   "ref": "H3",
+   "summary": "Portal switch forces sign-out plus password re-entry; hint param is dead",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "Header.tsx:816-823 signs out and pushes /login?email=&hint=; login/page.tsx reads only ?email (line 34), nothing reads hint; OAuth-created accounts have no password so the pre-filled form cannot complete.",
+   "fix": "Read hint on login to show role guidance and surface the OAuth buttons; later, tokened account switching.",
+   "final": "P2"
+  },
+  {
+   "ref": "H4",
+   "summary": "Admin sees Artist Portal header label linking to a portal that bounces them",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "Header.tsx:160 defaults portalBase to /artist-portal for any non-venue/non-customer role; the label ternaries at lines 731 and 947 have no admin case, so PortalGuard bounces admins to /admin with a toast.",
+   "fix": "Add an admin branch: label Admin, link /admin.",
+   "final": "P3"
+  },
+  {
+   "ref": "H5",
+   "summary": "Mobile marketplace tabs never use the public variant for logged-out visitors",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "Header.tsx:917 selects only venueMarketplaceTabs or the default set; the public variant with How It Works and Blog exists at lines 111-112 but only the desktop branch passes it.",
+   "fix": "Pass the same three-way variant selection to the mobile tab branch.",
+   "final": "P3"
+  },
+  {
+   "ref": "H6",
+   "summary": "Portal dropdown parity comment stale; offers and artwork-request links missing",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "Header.tsx dropdown lists (lines 754-790) omit My Offers, Artwork Requests, Social Posts and flag-gated Blogs that ArtistPortalLayout.tsx:28-39 and VenuePortalLayout.tsx:15-16 both carry, despite the now-its-parity comment at line 751.",
+   "fix": "Derive the dropdown from the shared sidebar nav arrays instead of duplicated inline lists.",
+   "final": "P2"
+  },
+  {
+   "ref": "H7",
+   "summary": "Header messages dropdown never loads conversations for customers",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "Header.tsx:218-236 resolves a slug only from /api/artist-profile then /api/venue-profile; customers have neither profile so resolvedSlug stays empty and the load effect at line 241 returns early forever.",
+   "fix": "Hide the messages dropdown for customers until customer messaging exists.",
+   "final": "P2"
+  },
+  {
+   "ref": "H8",
+   "summary": "Every customer Messages surface dead-ends at a 403 API",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "CustomerPortalLayout.tsx:13 and the portal dropdown offer Messages; the page slugifies displayName; api/messages/route.ts returns 403 for non-profile slugs on GET (lines 107-109) and POST (314-315).",
+   "fix": "Remove customer Messages nav, dropdown entry and page until customer conversations are built.",
+   "final": "P1"
+  },
+  {
+   "ref": "H9",
+   "summary": "Logged-out message CTA signs shoppers up into the dead messages page",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "MessageArtistButton.tsx:55-56 routes logged-out visitors to /signup/customer?next=/customer-portal/messages?artist=..., a page that 403s per H8, while logged-in customers correctly get /contact?artist=.",
+   "fix": "Send logged-out visitors through the same /contact?artist= flow as logged-in customers.",
+   "final": "P1"
+  },
+  {
+   "ref": "H10",
+   "summary": "Demo login sets auth cookies nothing reads; portal tour bounces to login",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "M",
+   "why": "api/demo/login/route.ts sets an sb-* httpOnly cookie claiming @supabase/ssr middleware reads it; package.json has no @supabase/ssr, no middleware.ts exists, and src/lib/supabase.ts uses default localStorage storage, so PortalGuard sees no session.",
+   "fix": "Redirect to a client bridge page carrying tokens and call supabase.auth.setSession, or adopt @supabase/ssr.",
+   "final": "P1"
+  },
+  {
+   "ref": "H11",
+   "summary": "Soft demo guard's toast payload is read by no client code",
+   "verdict": "overstated",
+   "severity": "P3",
+   "effort": "S",
+   "why": "No component or helper reads data.demo (repo-wide grep), so the message string is never shown, as claimed. But DemoBanner.tsx:58 already says changes aren't saved, the flag's own accept-and-say-so remedy.",
+   "fix": "Surface data.demo as a toast in the shared authFetch mutate path.",
+   "final": "P3"
+  },
+  {
+   "ref": "H12",
+   "summary": "Server and banner demo env pairs can silently disagree",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "demo-guard.ts reads DEMO_*_USER_ID; DemoBanner.tsx:30-31 reads separate NEXT_PUBLIC_ mirrors; nothing validates agreement, only scripts/seed-demo-accounts.ts prints both for manual copying.",
+   "fix": "Add a build or startup check asserting the mirrored pairs match.",
+   "final": "P3"
+  },
+  {
+   "ref": "H13",
+   "summary": "?demo=1 makes any real artist's profile claim demo, hiding Message and Buy",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "browse/[slug]/page.tsx:163-167 ORs the query flag into isDemoProfile for any slug, so a crafted link removes a real artist's CTAs and shows tour copy.",
+   "fix": "Honour ?demo only when slug matches DEMO_ARTIST_SLUG or outside production.",
+   "final": "P3"
+  },
+  {
+   "ref": "H14",
+   "summary": "Pre-signup terms acceptance rows are forgeable; fix awaits owner decision",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "api/terms/accept/route.ts documents it in full: the pre-signup branch must trust the body email (no session exists yet) and states the sound fix, recording post-confirmation, is an owner legal-trail decision.",
+   "fix": "Owner decides; then record acceptance after email confirmation from the verified token.",
+   "final": "P3"
+  },
+  {
+   "ref": "H15",
+   "summary": "OAuth signups never record terms acceptance server-side",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "terms/accept callers are only the three signup pages' password submit handlers plus ApplicationForm; the customer and artist OAuth branches skip it and oauth-finalize/route.ts contains no terms call, so OAuth users have no terms_acceptances row.",
+   "fix": "Record platform_tos in oauth-finalize when stamping a new OAuth user's role.",
+   "final": "P1"
+  },
+  {
+   "ref": "H16",
+   "summary": "No mechanism exists to demand terms re-acceptance when versions change",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "M",
+   "why": "Only terms/accept writes terms_version; no current-version constant, login check or portal gate exists; LegalTermsUpdate/LegalPrivacyUpdate are registered in emails/registry.ts:355-356 with no send site anywhere.",
+   "fix": "Accept for launch; build a version-gate and broadcast when terms first change.",
+   "final": "P3"
+  },
+  {
+   "ref": "H17",
+   "summary": "Suppression list is decorative; nothing ever writes email_suppressions",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "email/send.ts:92 is the only reader; src/app/api/webhooks contains only stripe and supabase; no Resend bounce/complaint webhook exists, so hard bounces and complaints never populate the table.",
+   "fix": "Add a signature-verified Resend webhook inserting email_suppressions rows on bounce and complaint.",
+   "final": "P2"
+  },
+  {
+   "ref": "H18",
+   "summary": "One-click unsubscribe header targets a POST-less page and is unsigned",
+   "verdict": "confirmed",
+   "severity": "P0",
+   "effort": "S",
+   "why": "send.ts:229 points List-Unsubscribe at /account/email/unsubscribe, a page.tsx with no POST handler, so RFC 8058 one-click fails; the API route accepts bare u and c unsigned, and eslint-rules/public-routes.js:43 falsely claims a signed token.",
+   "fix": "Point the header at /api/account/email/unsubscribe and HMAC-sign the userId/category pair.",
+   "final": "P2",
+   "challenge": "Header one-click is bulk-sender-scale deliverability, not the legal path; verified mailto arm exists and the header URL does carry u. C24 (kept P0) is the compliance gate."
+  },
+  {
+   "ref": "H19",
+   "summary": "Suspicious-login email has a receiver but no known sender",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "webhooks/supabase/route.ts:85 handles auth.suspicious_login, but nothing in the repo emits it and stock Supabase auth has no such event; firing depends on an unverifiable dashboard-side custom hook.",
+   "fix": "Wire a Supabase auth hook or mark the template dormant in OUTSTANDING.",
+   "final": "P3"
+  },
+  {
+   "ref": "H20",
+   "summary": "Message notification emails link every recipient to the artist portal",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "email/notifications.ts:58 hardcodes conversationUrl to /artist-portal/messages?c= for all recipients; a venue clicking it gets PortalGuard-bounced to /venue-portal, losing the conversation deep link.",
+   "fix": "Pass the recipient's portal base into sendMessageUnreadEmail from each call site.",
+   "final": "P1",
+   "challenge": "Every venue message-notification email deep-links /artist-portal; PortalGuard bounces venues, losing the conversation. Broken notification links across the core messaging loop."
+  },
+  {
+   "ref": "H21",
+   "summary": "Trial-ending billing warning is categorised as opt-in promotions",
+   "verdict": "confirmed",
+   "severity": "P1",
+   "effort": "S",
+   "why": "webhooks/stripe/route.ts:1391 sends subscription_trial_ending as category promotions; categories.ts:44 makes that preference-gated (default off) and throttled 2/720h, so most users are charged with no warning delivered.",
+   "fix": "Recategorise subscription_trial_ending as orders_and_payouts.",
+   "final": "P2",
+   "challenge": "No trial can end until a full trial period after launch, so a fix window exists before any user is charged unwarned. Fix-soon, not a gate."
+  },
+  {
+   "ref": "H22",
+   "summary": "Inactive re-engagement emails ship hardcoded zero stats",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "cron/inactive-users/route.ts hardcodes profileViews 0 (line 97), zeroed portfolioStats (110), empty suggestedArtists (150) and recommendedWorks (186), telling returning users they had zero activity regardless of truth.",
+   "fix": "Compute real counts or strip the stats blocks from the inactive templates.",
+   "final": "P2"
+  },
+  {
+   "ref": "H23",
+   "summary": "Artist weekly digest ships empty topWorks and mislabelled message counts",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "cron/weekly-artist-digest/route.ts:69 always sends topWorks []; lines 70-73 are canned actions; line 43 filters messages on is_read=false at send time, so read messages vanish from the received count and threshold.",
+   "fix": "Drop the is_read filter; populate topWorks or remove that template section.",
+   "final": "P2"
+  },
+  {
+   "ref": "H24",
+   "summary": "Venue weekly digest hardcodes zero artist matches",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "cron/weekly-venue-digest/route.ts:64 sends artistMatches: 0 and line 67 suggestedArtists: [] on every send, so the template's matches panel is permanently dead weight.",
+   "fix": "Remove the matches panel from the template until matching exists.",
+   "final": "P2"
+  },
+  {
+   "ref": "H25",
+   "summary": "Daily cron slot burned on a job that can only skip",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "cron/placement-ending-soon/route.ts returns an honest skip because placements has no end-date column (D60), yet vercel.json:5 still schedules it daily at 10:00 UTC pending an owner decision.",
+   "fix": "Owner picks: build placements.end_date and re-enable, or delete cron entry plus template.",
+   "final": "P3"
+  },
+  {
+   "ref": "H26",
+   "summary": "Inactive sweep: fake zero stats, admins mailed as customers, 1000-user cap",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "M",
+   "why": "All three sub-claims hold in cron/inactive-users/route.ts: hardcoded zeros (97, 110, 150, 186); the customer branch (175+) catches any user without artist/venue profile rows, including admins; line 62 fetches one listUsers page of 1000.",
+   "fix": "Strip fake stats, exclude admin-role users, and paginate listUsers.",
+   "final": "P2"
+  },
+  {
+   "ref": "H27",
+   "summary": "Nudge day window is exact equality; the \u00b112h comment is wrong",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "cron/onboarding-nudges/route.ts:36-39: inDayWindow is days >= target && days <= target, pure equality, so a missed cron day permanently skips that day's cohort despite the \u00b112h comment.",
+   "fix": "Widen to a catch-up range; per-user idempotency keys already prevent duplicates.",
+   "final": "P3"
+  },
+  {
+   "ref": "H28",
+   "summary": "Advertised wall-upload daily limits are never enforced",
+   "verdict": "confirmed",
+   "severity": "P2",
+   "effort": "S",
+   "why": "tier-limits.ts defines wall_uploads_daily for every tier and quota.ts:213-218 burst-lists wall_upload, but api/walls/upload-photo/route.ts never imports or calls consumeQuota; only the 15MB cap and MIME check apply, so uploads are unmetered.",
+   "fix": "Call consumeQuota with action wall_upload in upload-photo, refunding on storage failure.",
+   "final": "P2"
+  },
+  {
+   "ref": "H29",
+   "summary": "Welcome email and dashboard disagree on when the profile step completes",
+   "verdict": "confirmed",
+   "severity": "P3",
+   "effort": "S",
+   "why": "email/welcome.ts:80 requires bio plus location or postcode; artist-portal/page.tsx:128-131 requires bio plus location plus a style tag, so finishing what the email asked can leave the dashboard step incomplete.",
+   "fix": "Export one shared profileComplete predicate used by both surfaces.",
+   "final": "P3"
+  }
+ ],
+ "demote": [
+  {
+   "ref": "A18",
+   "newSeverity": "P2",
+   "reason": "Copy conflict where Terms govern; harm needs an actual cancellation dispute, near-zero at launch volume. Rubric calls this a minor copy conflict."
+  },
+  {
+   "ref": "A21",
+   "newSeverity": "P2",
+   "reason": "A signed certificate is a physical artefact fulfillable manually at launch volume, or a one-line copy edit; operational promise, not a software gate."
+  },
+  {
+   "ref": "A33",
+   "newSeverity": "P2",
+   "reason": "The lead (name, email, userType) is stored; dropped fields are optional enrichment recoverable by email follow-up. Funnel intact."
+  },
+  {
+   "ref": "A40",
+   "newSeverity": "P2",
+   "reason": "Duplicate of A21; the same copy fix resolves both."
+  },
+  {
+   "ref": "A49",
+   "newSeverity": "P2",
+   "reason": "Only signed-in wrong-role users visiting /apply hit it; manual sign-out via header recovers. Confusing loop, not a funnelled dead surface."
+  },
+  {
+   "ref": "A50",
+   "newSeverity": "P2",
+   "reason": "Apply deliberately accepts a typed contact email like any contact form; rate-limited 5/min; abuse vector is ordinary contact-form grade."
+  },
+  {
+   "ref": "A51",
+   "newSeverity": "P2",
+   "reason": "Checkbox is shown and ticked; only persistence is lost. Evidentiary gap, consumer rights themselves unaffected; harm speculative until a dispute."
+  },
+  {
+   "ref": "A53",
+   "newSeverity": "P2",
+   "reason": "Optional 'get a head start' CTA after the application already succeeded; the account already exists and normal login works. Confusing message, funnel intact."
+  },
+  {
+   "ref": "B8",
+   "newSeverity": "P2",
+   "reason": "Frame uplift and total price shown transparently in the lightbox; unframed purchase available on the artwork page. No silent overcharge, alternative surface exists."
+  },
+  {
+   "ref": "B23",
+   "newSeverity": "P2",
+   "reason": "Post-purchase convenience link; the buyer funnel already completed. Confusing 404, no funnel or money harm."
+  },
+  {
+   "ref": "B28",
+   "newSeverity": "P2",
+   "reason": "Lightbox caps quantity client-side, so exploiting needs a crafted request; clamp prevents negative stock; consequence is an oversell needing a refund, an admin task."
+  },
+  {
+   "ref": "B31",
+   "newSeverity": "P2",
+   "reason": "Only fires when the buyer deliberately cancels on Stripe; no money moved; back-navigation recovers. Not a funnel surface."
+  },
+  {
+   "ref": "C11",
+   "newSeverity": "P2",
+   "reason": "No send path reads customer prefs, so the card controls nothing that exists; dead settings control, marketing opt-out lives in email_preferences separately."
+  },
+  {
+   "ref": "C12",
+   "newSeverity": "P2",
+   "reason": "Harm requires a hypothetical per-table scrub error; the concrete demonstrated gap is C14. Speculative failure path, fix alongside C14."
+  },
+  {
+   "ref": "C13",
+   "newSeverity": "P2",
+   "reason": "Rare user action at launch, database backups mitigate, and it is an owner policy ruling; not launch-gating."
+  },
+  {
+   "ref": "C14",
+   "newSeverity": "P1",
+   "reason": "Erasure requests near zero at launch; GDPR allows manual fulfilment within a month and order retention has a lawful basis. Real defect is the false success claim."
+  },
+  {
+   "ref": "C25",
+   "newSeverity": "P2",
+   "reason": "RFC 8058 one-click is a Gmail/Yahoo bulk-sender rule (5k+/day), far beyond launch volume; mailto arm works; the legal unsubscribe gate is C24."
+  },
+  {
+   "ref": "C26",
+   "newSeverity": "P2",
+   "reason": "Fails safe: prefetchers can only over-unsubscribe, no PII exposed; random UUIDs are unguessable. Engagement nuisance, not a compliance or security hole."
+  },
+  {
+   "ref": "C30",
+   "newSeverity": "P2",
+   "reason": "Error state surfaces the privacy@ manual route; GDPR access can be fulfilled manually at launch volume. Not a dead end."
+  },
+  {
+   "ref": "C33",
+   "newSeverity": "P2",
+   "reason": "Unreachable until C30 is fixed (export never runs); manual fulfilment covers access requests meanwhile. Fix with C30."
+  },
+  {
+   "ref": "D1",
+   "newSeverity": "P2",
+   "reason": "Gate audience is past_due/canceled only, an empty set at launch; Stripe checkout shows the real charge before payment. Fix before first cancellations, weeks away."
+  },
+  {
+   "ref": "D10",
+   "newSeverity": "P2",
+   "reason": "Same empty-at-launch audience as D1; nobody is canceled or past_due on day one, and Stripe displays the actual amount due."
+  },
+  {
+   "ref": "D21",
+   "newSeverity": "P2",
+   "reason": "Stuck button, recoverable with a refresh and re-upload; artist-side only, no data loss. Confusing UX with a workaround."
+  },
+  {
+   "ref": "D26",
+   "newSeverity": "P2",
+   "reason": "Needs self-inflicted invalid input by the artist; terms are visible to the counterparty before acceptance; clamp is a trivial post-launch fix."
+  },
+  {
+   "ref": "E5",
+   "newSeverity": "P2",
+   "reason": "No producer of venue-directed enquiries exists, so the empty page misses nothing real; a plausible empty state, not lost data."
+  },
+  {
+   "ref": "E8",
+   "newSeverity": "P2",
+   "reason": "Defaults are editable and only degrade matching quality; wrong-but-harmless data, no money or destruction involved."
+  },
+  {
+   "ref": "E12",
+   "newSeverity": "P2",
+   "reason": "With no save button the form never claims persistence, so nothing lies to the user; display-only settings section."
+  },
+  {
+   "ref": "E13",
+   "newSeverity": "P2",
+   "reason": "Checkboxes show defaults for transactional notification toggles; no marketing or legal exposure, cosmetic wrong state."
+  },
+  {
+   "ref": "E15",
+   "newSeverity": "P2",
+   "reason": "One weekly digest; harm requires the digest actually sending and a venue trying to opt out; fix rides the email-preferences work."
+  },
+  {
+   "ref": "E16",
+   "newSeverity": "P2",
+   "reason": "Display label only on the expanded row; the request form and payout maths agree, so no money moves wrongly. Copy fix."
+  },
+  {
+   "ref": "E25",
+   "newSeverity": "P2",
+   "reason": "Secondary link with the same root cause as E24 (kept P1); one fix covers both."
+  },
+  {
+   "ref": "E27",
+   "newSeverity": "P2",
+   "reason": "Same as E5: no venue-directed enquiries are ever created, so the permanently empty list loses nothing."
+  },
+  {
+   "ref": "E31",
+   "newSeverity": "P2",
+   "reason": "Saves persist and render correctly in the wall visualizer via /api/walls/saved-works; display filter bug on one tab, no data loss."
+  },
+  {
+   "ref": "F6",
+   "newSeverity": "P2",
+   "reason": "Visible 'Message too short' error with a trivial workaround: type a word. Not silent, not a dead surface."
+  },
+  {
+   "ref": "F8",
+   "newSeverity": "P2",
+   "reason": "Replies within the open thread are exempt; the cap only mis-bites artists active in 5+ distinct threads in one day, rare at launch volume."
+  },
+  {
+   "ref": "F14",
+   "newSeverity": "P2",
+   "reason": "Block usage is near zero at launch and the primary contact vector (messages) is enforced; ancillary bypass harm is speculative."
+  },
+  {
+   "ref": "F16",
+   "newSeverity": "P2",
+   "reason": "Error copy on a surface already dead per F15 (kept P1); becomes moot when that surface is fixed or removed."
+  },
+  {
+   "ref": "F24",
+   "newSeverity": "P2",
+   "reason": "Verified: /placements/[id] API infers requester_user_id and the detail page renders working Accept/Counter/Decline; lists link straight to it. One-click workaround."
+  },
+  {
+   "ref": "F42",
+   "newSeverity": "P2",
+   "reason": "Duplicate of B31; deliberate cancel path, no money moved, recoverable by navigation."
+  },
+  {
+   "ref": "F51",
+   "newSeverity": "P2",
+   "reason": "Same workaround as F24: the detail page resolves the requester and shows respond actions, so the placement funnel completes despite list-surface gaps."
+  },
+  {
+   "ref": "G2",
+   "newSeverity": "P2",
+   "reason": "Missing nav item only; the substantive gap is G28. Admin inconvenience."
+  },
+  {
+   "ref": "G18",
+   "newSeverity": "P2",
+   "reason": "Harm requires an admin writing candid shorthand into a rare dispute flow; a one-line instruction to the admin avoids it entirely."
+  },
+  {
+   "ref": "G28",
+   "newSeverity": "P2",
+   "reason": "Rubric-exact admin inconvenience with manual workarounds: the process API is callable directly and Stripe dashboard refunds work; launch refund volume near zero. Needs a runbook."
+  },
+  {
+   "ref": "G11",
+   "newSeverity": "P1",
+   "reason": "Admin-triggered, rare flow with a manual workaround (Stripe dashboard refund); kept P1 not P2 because the false cancelled-without-refund state is silent."
+  },
+  {
+   "ref": "H18",
+   "newSeverity": "P2",
+   "reason": "Header one-click is bulk-sender-scale deliverability, not the legal path; verified mailto arm exists and the header URL does carry u. C24 (kept P0) is the compliance gate."
+  },
+  {
+   "ref": "H21",
+   "newSeverity": "P2",
+   "reason": "No trial can end until a full trial period after launch, so a fix window exists before any user is charged unwarned. Fix-soon, not a gate."
+  }
+ ],
+ "promote": [
+  {
+   "ref": "B20",
+   "newSeverity": "P1",
+   "reason": "Page claims 'Payment of \u00a3X received' without reading the returned Stripe status; unpaid or expired sessions get a false money-received assertion."
+  },
+  {
+   "ref": "B21",
+   "newSeverity": "P1",
+   "reason": "Asserts 'payment was received successfully' when the lookup failed entirely; an unverifiable money claim rendered for any bogus session id."
+  },
+  {
+   "ref": "B29",
+   "newSeverity": "P1",
+   "reason": "FAQ ties payout release to 'buyer dispute', but no dispute entry point exists and processPendingTransfers never checks disputes; the promised buyer protection is unusable."
+  },
+  {
+   "ref": "C15",
+   "newSeverity": "P1",
+   "reason": "Public demo login lets any visitor hard-delete the shared demo auth user and seeded data; sibling mutations are guarded, this one is not."
+  },
+  {
+   "ref": "A44",
+   "newSeverity": "P1",
+   "reason": "Every venue signup email claims 'application received', implying review; venues wait for approval that never comes. False transactional copy stalling the venue funnel."
+  },
+  {
+   "ref": "H20",
+   "newSeverity": "P1",
+   "reason": "Every venue message-notification email deep-links /artist-portal; PortalGuard bounces venues, losing the conversation. Broken notification links across the core messaging loop."
+  },
+  {
+   "ref": "D15",
+   "newSeverity": "P1",
+   "reason": "GATING_V1 prodDefault is true (feature-flags.ts:74), so the paid publish gate is live while collections publish publicly ungated: a full paywall bypass."
+  },
+  {
+   "ref": "D24",
+   "newSeverity": "P1",
+   "reason": "Bulk add silently discards typed titles and uploaded images of incomplete drafts whenever any draft is valid; the rubric's silent-input-discard class."
+  },
+  {
+   "ref": "G27",
+   "newSeverity": "P1",
+   "reason": "Users' abuse reports insert moderation_queue rows no page reads; reports silently vanish with no admin surface. A safety funnel dead end-to-end."
+  },
+  {
+   "ref": "A20",
+   "newSeverity": "P1",
+   "reason": "'Hundreds of storefronts' against a roughly 39-artist catalogue is materially false copy on a primary buyer-funnel page, falsified one click later."
+  },
+  {
+   "ref": "A39",
+   "newSeverity": "P1",
+   "reason": "Same 'hundreds of independent artists' overclaim on /customer, the buyer landing page; trust-damaging false copy on a high-traffic funnel surface."
+  },
+  {
+   "ref": "E38",
+   "newSeverity": "P1",
+   "reason": "'Cancel any time' printed under one-off and quoted tiers is a false term of sale on a purchase decision surface; refund-expectation liability."
+  },
+  {
+   "ref": "A43",
+   "newSeverity": "P1",
+   "reason": "Venue's typed 'Other' description is silently stripped by zod and never stored; the rubric's P1 class of forms silently discarding user input."
+  }
+ ]
+}
