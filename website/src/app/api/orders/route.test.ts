@@ -27,6 +27,8 @@ vi.mock("@/lib/supabase-admin", () => ({
 // does not cover (cancelled / disputed / refunded) go through sendEmail now.
 vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/stripe-connect", () => ({ executeTransfer: vi.fn(async () => {}) }));
+vi.mock("@/lib/refunds/cancellation", () => ({ processCancellationRefund: vi.fn(async () => {}) }));
+vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn(async () => ({ ok: true })) }));
 
 import { PATCH } from "./route";
 import { executeTransfer } from "@/lib/stripe-connect";
@@ -160,7 +162,7 @@ describe("PATCH /api/orders payout + email side-effects", () => {
               eq: () => Promise.resolve({ data: transferIds.map((id) => ({ id })) }),
             }),
           }),
-          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
+          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }), in: () => Promise.resolve({ error: null }) }) }),
         };
       }
       // orders table
@@ -290,7 +292,8 @@ describe("PATCH /api/orders payout + email side-effects", () => {
     fromMock.mockImplementation((table: string) => {
       if (table === "stripe_transfers") {
         return {
-          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
+          select: () => ({ eq: () => ({ eq: async () => ({ data: [], error: null }) }) }),
+          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }), in: () => Promise.resolve({ error: null }) }) }),
         };
       }
       if (table === "orders") {
@@ -569,5 +572,99 @@ describe("PATCH /api/orders stamps delivered_at", () => {
     await PATCH(patch({ orderId: "ord_1", status: "shipped", trackingNumber: "TRK1" }));
 
     expect(updated ?? {}).not.toHaveProperty("delivered_at");
+  });
+});
+
+// ─── WS3.1 (missing-events gap 1): cancelling a PAID order refunds the buyer ───
+import { processCancellationRefund } from "@/lib/refunds/cancellation";
+
+describe("cancellation refunds the buyer (WS3.1)", () => {
+  function req(body: unknown): Request {
+    return new Request("http://localhost/api/orders", {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function installCancelDb(inserted: Array<Record<string, unknown>>) {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      user: { id: "u-artist", email: "artist@x.com" },
+      error: null,
+    } as never);
+    let orderSelectCalled = false;
+    const paidRow = {
+      id: "o1", artist_user_id: "u-artist", artist_slug: "alice",
+      buyer_user_id: null, buyer_email: "b@x.com", status: "confirmed",
+      status_history: [], placement_id: null, venue_revenue: null,
+      shipping: {}, items: [{ workId: "w-1", quantity: 1 }],
+      stripe_payment_intent_id: "pi_1", total: 100,
+    };
+    fromMock.mockImplementation((table: string) => {
+      if (table === "refund_requests") {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            inserted.push(row);
+            return { select: () => ({ single: async () => ({ data: { id: "rr-new" }, error: null }) }) };
+          },
+        };
+      }
+      if (table === "stripe_transfers") {
+        return {
+          select: () => ({ eq: () => ({ eq: async () => ({ data: [], error: null }) }) }),
+          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }), in: () => Promise.resolve({ error: null }) }) }),
+        };
+      }
+      if (table === "orders") {
+        if (!orderSelectCalled) {
+          orderSelectCalled = true;
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: paidRow }),
+                or: () => ({ maybeSingle: async () => ({ data: paidRow }) }),
+                single: async () => ({ data: paidRow }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: paidRow }),
+              or: () => ({ maybeSingle: async () => ({ data: paidRow }) }),
+              single: async () => ({ data: paidRow }),
+            }),
+          }),
+          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        };
+      }
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }),
+        update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        insert: async () => ({ error: null }),
+      };
+    });
+  }
+
+  it("files an approved refund request and runs the cancellation refund", async () => {
+    const inserted: Array<Record<string, unknown>> = [];
+    installCancelDb(inserted);
+    const res = await PATCH(req({ orderId: "o1", status: "cancelled" }));
+    expect(res.status).toBe(200);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ order_id: "o1", type: "full", status: "pending", reason: "Order cancelled" });
+    expect(vi.mocked(processCancellationRefund)).toHaveBeenCalledWith(expect.anything(), {
+      refundRequestId: "rr-new",
+      orderId: "o1",
+    });
+  });
+
+  it("a refund failure keeps the cancellation and does not 500", async () => {
+    const inserted: Array<Record<string, unknown>> = [];
+    installCancelDb(inserted);
+    vi.mocked(processCancellationRefund).mockRejectedValueOnce(new Error("stripe down"));
+    const res = await PATCH(req({ orderId: "o1", status: "cancelled" }));
+    expect(res.status).toBe(200);
   });
 });
