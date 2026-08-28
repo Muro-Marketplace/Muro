@@ -1,7 +1,9 @@
 # ADR 0003 - Unified artist daily outreach cap
 
-**Status:** Accepted  
+**Status:** Accepted, amended by [ADR 0009](0009-weekly-rolling-outreach-window.md) (2026-08-28)  
 **Date:** 2026-06-15
+
+> **Amendment note.** The cross-surface aggregation described here still stands and is the reason this ADR exists. Three specifics below are out of date: the window is now a rolling 7 days rather than a calendar day, the limits are Core 3 / Premium 6 / Pro 15 per week rather than 2 / 5 / 10 per day, and the placements leg counts `created_by_user_id` (migration 122) rather than `proposed_by_user_id`, which four unrelated code paths rewrite. See ADR 0009.
 
 ---
 

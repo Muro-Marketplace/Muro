@@ -4,7 +4,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { isAdminRequest } from "@/lib/admin-auth";
 import { messageSchema } from "@/lib/validations";
-import { checkArtistOutreachCap } from "@/lib/outreach-cap";
+import { checkArtistOutreachCap, outreachCapPayload } from "@/lib/outreach-cap";
 import { orFilter } from "@/lib/db/safe-filter";
 import { assertPlacementParty, handleAuthzError } from "@/lib/authz";
 import { canPlacementTransition } from "@/lib/placements/state-machine";
@@ -405,16 +405,7 @@ export async function POST(request: Request) {
         exemptConversationId: cidLocal,
       });
       if (!cap.ok) {
-        return NextResponse.json(
-          {
-            error: "outreach_limit_reached",
-            message: cap.result.message,
-            limit: cap.result.limit,
-            sent: cap.result.used,
-            plan: cap.result.plan,
-          },
-          { status: 429 },
-        );
+        return NextResponse.json(outreachCapPayload(cap.result), { status: 429 });
       }
     }
 
@@ -543,6 +534,8 @@ export async function POST(request: Request) {
           // carry a proposer, which is what "written by almost nothing" looks
           // like.
           proposed_by_user_id: auth.user!.id,
+          // Immutable creator stamp the outreach cap counts (migration 122).
+          created_by_user_id: auth.user!.id,
           created_at: new Date().toISOString(),
         });
         if (placementError) console.error("Placement insert error:", placementError);

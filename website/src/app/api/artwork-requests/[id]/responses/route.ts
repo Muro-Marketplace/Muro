@@ -17,7 +17,7 @@ import {
   type ArtworkRequestViewerRole,
 } from "@/lib/authz";
 import { createNotification } from "@/lib/notifications";
-import { checkArtistOutreachCap } from "@/lib/outreach-cap";
+import { checkArtistOutreachCap, outreachCapPayload } from "@/lib/outreach-cap";
 
 export const runtime = "nodejs";
 
@@ -167,11 +167,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!req) return NextResponse.json({ error: "Request not found" }, { status: 404 });
   if (req.status !== "open") return NextResponse.json({ error: "Request is closed" }, { status: 409 });
 
-  // Daily cap — shared bucket with placement requests + first-contact
-  // messages. Per spec: Core 2 / Premium 5 / Pro 10 across all three.
+  // Rolling-week cap — shared bucket with placement requests + first-contact
+  // messages. Core 3 / Premium 6 / Pro 15 across all three, per 7 days.
+  // This used to return `cap.result` raw, which has no `error` key, so every
+  // client reading `data.error` showed "Request failed (429)" instead of the
+  // sentence explaining the cap.
   const cap = await checkArtistOutreachCap(db, auth.user!.id, 1);
   if (!cap.ok) {
-    return NextResponse.json(cap.result, { status: cap.result.status });
+    return NextResponse.json(outreachCapPayload(cap.result), { status: cap.result.status });
   }
 
   // Normalise `workSelections` (new shape) and `workIds` (legacy). When

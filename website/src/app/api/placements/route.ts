@@ -9,7 +9,7 @@ import { deriveArrangementType } from "@/lib/placements/arrangement";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
-import { checkArtistOutreachCap } from "@/lib/outreach-cap";
+import { checkArtistOutreachCap, outreachCapPayload } from "@/lib/outreach-cap";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
 import { VenueNewPlacementRequest } from "@/emails/templates/placements/VenueNewPlacementRequest";
@@ -439,22 +439,13 @@ export async function POST(request: Request) {
       }
 
       // Anti-spam outreach cap (#39). Unified across all surfaces: caps
-      // NEW venue contacts per calendar day per tier (Core 2, Premium 5,
-      // Pro 10) counting placements + first-contact messages +
+      // NEW venue contacts over a rolling 7 days per tier (Core 3, Premium 6,
+      // Pro 15) counting placements + first-contact messages +
       // artwork-request responses together. The canonical helper owns the
       // logic; this route no longer maintains its own counter.
       const cap = await checkArtistOutreachCap(db, auth.user!.id, parsed.data.length);
       if (!cap.ok) {
-        return NextResponse.json(
-          {
-            error: "outreach_limit_reached",
-            message: cap.result.message,
-            limit: cap.result.limit,
-            sent: cap.result.used,
-            plan: cap.result.plan,
-          },
-          { status: 429 },
-        );
+        return NextResponse.json(outreachCapPayload(cap.result), { status: 429 });
       }
 
       const venueSlug = parsed.data[0].venueSlug;
@@ -513,12 +504,17 @@ export async function POST(request: Request) {
       revenue: null,
       notes: p.notes || null,
       proposed_by_user_id: auth.user!.id,
+      // Immutable "who created this row" (migration 122). proposed_by_user_id
+      // above tracks the CURRENT proposer and is rewritten by counters and
+      // stage advances; the outreach cap counts this one instead.
+      created_by_user_id: auth.user!.id,
       created_at: new Date().toISOString(),
     }));
 
     // Row 22 (D65): the strip-and-retry loop that used to sit here is DELETED.
-    // All eight candidate columns (proposed_by_user_id, venue_slug, artist_slug,
-    // monthly_fee_gbp, qr_enabled, message, extra_works, work_size) exist in prod,
+    // All nine candidate columns (proposed_by_user_id, created_by_user_id,
+    // venue_slug, artist_slug, monthly_fee_gbp, qr_enabled, message,
+    // extra_works, work_size) exist in prod once migration 122 is applied,
     // so a rejected insert is never "the column is missing" — it is a real failure,
     // and re-inserting without the payment terms silently created a placement whose
     // agreed fee and QR setting were gone while the caller got a 200.
