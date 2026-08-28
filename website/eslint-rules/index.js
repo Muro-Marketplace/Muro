@@ -9,6 +9,7 @@ const noRawArrangementType = require("./no-raw-arrangement-type");
 const requireAuthzOnMutation = require("./require-authz-on-mutation");
 const noSpreadIntoDbWrite = require("./no-spread-into-db-write");
 const noAuthfetchMutation = require("./no-authfetch-mutation");
+const noParallelBilling = require("./no-parallel-billing");
 
 module.exports = {
   meta: {
@@ -25,5 +26,6 @@ module.exports = {
     "require-authz-on-mutation": requireAuthzOnMutation,
     "no-spread-into-db-write": noSpreadIntoDbWrite,
     "no-authfetch-mutation": noAuthfetchMutation,
+    "no-parallel-billing": noParallelBilling,
   },
 };

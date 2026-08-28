@@ -280,39 +280,6 @@ export async function notifyAdminNewVenue(venue: {
  * wall, and nobody is being charged. Nothing else in the system notices, so it is
  * mailed to the admin rather than only logged.
  */
-export async function notifyAdminBillingStalled(params: {
-  placementId: string;
-  status: string;
-}) {
-  const resend = getResend();
-  if (!resend) return;
-  try {
-    await resend.emails.send({
-      from: FROM,
-      to: ADMIN_EMAIL,
-      subject: `Paid-loan billing did not start: ${params.placementId}`,
-      html: `
-        <h2>Paid-loan billing stalled</h2>
-        <p>The venue's card was attached successfully, but starting the monthly
-        subscription returned <strong>${params.status}</strong>. The placement is
-        live and nobody is being charged.</p>
-        <ul>
-          <li><strong>Placement:</strong> ${params.placementId}</li>
-          <li><strong>Billing result:</strong> ${params.status}</li>
-        </ul>
-        <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin">Open the admin dashboard</a></p>
-      `,
-    });
-  } catch (err) {
-    console.error("Email send error (paid-loan billing stalled):", err);
-  }
-}
-
-/**
- * Notify admin that a payout has exhausted its retries and needs manual
- * intervention (C4). The transfer will not be retried again by the sweep, so
- * this is the only signal an operator gets that money is owed and stuck.
- */
 export async function notifyAdminPayoutExhausted(params: {
   transferId: string;
   orderId: string;

@@ -40,6 +40,11 @@ const eslintConfig = defineConfig([
       // (tests/integration/authfetch-mutation-ratchet.test.ts); flip to "error"
       // when the ratchet reaches zero.
       "wallplace/no-authfetch-mutation": "warn",
+      // K2 (07 §2.7): subscription creation lives in one place per product.
+      // "error" from the start, because nothing in src/ violates it once
+      // startPaidLoanBilling is deleted — the allowlist in the rule is the
+      // complete set of billing entry points, and adding to it is deliberate.
+      "wallplace/no-parallel-billing": "error",
     },
   },
   // The eslint-rules/ plugin files are CommonJS by design — they cannot use

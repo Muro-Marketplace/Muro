@@ -32,7 +32,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, 4339efd). Remaining (**order per D67, OWNER-APPROVED 2026-07-31**): (1) **DONE — `no-authfetch-mutation` rule + grandfathered ratchet landed at `warn`, floor 94 across 44 files (468e3f1).** The rule's 94-site list IS the real E43 surface (vs 11 hand-enumerated — D67 vindicated). (2) IN PROGRESS — work the union, batching **by FILE not by call site** (supervisor D70.3: 44 files vs 94 sites; sites in a file share a shape/import/test). **E43-e done** (MessageInbox report/delete/block trio → shared `submitFlagAction` helper, floor 94→91, 7381399). **MessageInbox.tsx COMPLETE** (remaining 9 mutating `authFetch` → `mutate`, floor 91→82, e4ff19f; file now 0-flagged, 2 read GETs kept). **E43-d done** (`artist-portal/portfolio/page.tsx` shipping-settings save → `mutate` + success/error toasts, floor 82→81, e70ca39). **E43-g done** (saved-item `handleRemove` in BOTH `artist-portal/saved` + `customer-portal/saved` → `mutate`, remove-on-confirmed-delete + rollback/error-toast, floor 81→79, 516ec5f). **E43-h done** (`browse/[slug]/ArtistProfileClient.tsx` public enquiry: primary `/api/messages` → `mutate`, confirmation only on success, `/api/enquiry` best-effort, floor 79→78, 3d51a9b). **E43-i done** (`components/Header.tsx` 3 fire-and-forget mark-read `authFetch`→`mutate`, floor 78→75, 335de6c; no bespoke test — render-heavy + no user-visible outcome, covered by the ratchet + mutate contract). NEXT per D70.3: E43-j done (`VenuePortalLayout.tsx` self-heal → `mutate` + retry banner, floor 75→74, ec57636); bug-12 part 1 done (`BlogEditor.tsx` 3 saves → `mutate`, floor 74→71, b2c3769); `PlacementDetailClient.tsx` done (6 handlers → `mutate`, event-on-success-only for handleRespond, floor 71→65, 239ea48); `PlacementContextPanel.tsx` done (6 handlers → `mutate`, undo event success-only + a real catch added on all 6, floor 65→59, 13bc052); `artist-portal/billing/page.tsx` done (4 Stripe-session-redirect POSTs → `mutate`, transport-only, floor 59→55, 953e121); `artist-portal/orders/page.tsx` PARTIAL (order-STATUS PATCH → `mutate`, floor 55→54, 4ab254a; the 3 refund-path sites processRefund/issueProactiveRefund SURFACED as OWNER-GATED — they execute Stripe refunds, held per the money boundary); the other ~30 files + the 3 owner-gated refund sites, LOWERING `LITERAL_FLOOR` by each file's count in the same commit. **D70.2: 94 is a MIGRATION surface, not 94 bugs** (the rule has no res.ok exemption); the live-bug subset is the unchecked ones. Hand items E43-d/e/g/h/i/j + bug-12 are all IN the 94; **E43-f is OUT** (dead View buttons, no authFetch — own fix). (3) Flip the rule to `error` when the floor hits zero. (4) bug-12's flag-gate/notFound half is separate from its authFetch sites |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | **E34 DONE** (§3): adopt-by-slug deleted, adoption now requires a CONFIRMED email and exactly one match, insert slug no longer comes from metadata, orphan factory in `register-venue` deleted. Prod facts settled the doc's open question: `venue_profiles.user_id` is NOT NULL, 9 venues / 0 orphans, so adopt-by-slug was latent and the seed had never worked; the insert half was live. No `artist_slug` equivalent exists (0 server readers). Remaining: E36c/E36b/E36d, E35d/E30b (`admin_users`), E30a |
 | 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | todo |
-| 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | todo |
+| 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | **K2 DONE** (§2): `startPaidLoanBilling` + its SetupIntent machinery + the private `isPaidLoan` shadow deleted, 664 lines net; the doc's §2.3 was reversed by §B6/E8 and is corrected in the entry. `no-parallel-billing` lint rule at error + 16 tests. **K2e (delete `PAID_LOAN_V2`) deferred behind K3** per §2.5. Remaining: K1 (= 09 Phase 2), K3, K4, K5, K6, K8, K11 |
 | 12 | `08` rewritten cull last (D6 unconditional list only until rewritten) | `08` | todo |
 
 Owner decisions the loop is waiting on (none block the remaining queue):
@@ -9755,3 +9755,77 @@ version and variant nibbles, so a "shaped like a UUID" fixture was rejected at t
 schema and three tests were asserting 400s while looking like they passed.
 
 `npm run check` green: 0 lint errors, 214 files, 2105 tests, exit 0.
+
+### 07 K2 — two paid-loan billing implementations — DONE
+
+**The doc is materially stale and I did not follow its §2.3.** It says implementation
+A (destination charge via Checkout) survives and the transfer call in
+`handleInvoicePaid` is deleted because "destination charges already settled the
+artist's share". That was reversed by §B6 during the 04 T6 work (E8, commit ab96b2d,
+"gate setup on payout capability, delete the destination charge"). The destination
+charge is already gone; the surviving money model is the platform collecting in full
+and paying the artist by a separate transfer through the `stripe_transfers` ledger,
+because a destination charge bypasses that ledger and leaves refunds, reversals, the
+payout dashboard and admin/financials blind to the money.
+
+So both paths already shared one money model. **This collapse changes no money flow**,
+which is worth being precise about given what it touches. What differed was the entry
+point and the card-collection mechanism.
+
+**What was deleted (664 lines net):**
+
+- `startPaidLoanBilling` and its private helpers `ensureVenueCustomer`,
+  `hasAttachedCard`, and the SetupIntent fallback. Checkout collects the card inside
+  the session, so this machinery was redundant rather than merely duplicated.
+- The private `isPaidLoan` shadow and its `PAID_LOAN_TYPES` set. §2.3 calls this "a
+  third duplicate hiding inside B", and it is worse than a duplicate: unlike the
+  canonical `arrangement-type.ts` predicate it never classified a legacy `free_loan`
+  row with a positive monthly fee as a paid loan, so the billing module would never
+  have billed a row the rest of the app displays as a paid loan. Deleted for free.
+- The accept-path call in `placements/route.ts`, plus the whole `billingPrompt`
+  return. **That was dead:** the API returned `{success, billingPrompt}` carrying a
+  SetupIntent client secret for a Stripe Elements flow, and nothing in `src/` ever
+  read `billingPrompt` off a response. The comment describing "the venue UI mounts
+  Stripe Elements with the secret" described something that was never built.
+- The `setup_intent.succeeded` webhook branch (E7d, 72 lines), whose only job was
+  re-invoking the deleted creator. Nothing mints a paid-loan SetupIntent now.
+- `notifyAdminBillingStalled` in `lib/email.ts`, left with zero callers by that.
+
+**What I did NOT do, and why.** §2.4 says to replace the accept-path call with a
+`pending` row in `placement_recurring_billings` "and surface the Set up payment CTA".
+The CTA already exists and does not need one: `PaidLoanPaymentChip` keys off
+`arrangement_type`, `monthly_fee_gbp` and `subscription_status`, and renders from the
+moment a paid-loan placement goes active. A pending row would be a table write with
+no reader. §2.5 step 4 also says to delete the file and create `paid-loan-webhooks.ts`;
+the file is kept because `cancelPaidLoanBilling` is not a webhook handler and the
+rename would mislabel it. Its header is rewritten to state exactly what it owns and
+that it creates no subscriptions.
+
+**PAID_LOAN_V2 is NOT deleted** (§2.5 step 5). Its remaining call sites are the two
+label branches in `PlacementDetailClient.tsx`, which is K3's territory, and §2.5 is
+explicit that K3 must land first or the label collapses to the wrong side. Checked
+that this does not strand the surviving path: the payment CTA is not flag-gated.
+
+**Guards.** New `eslint-rules/no-parallel-billing.js` at **error** from the start
+(nothing violates it once the creator is gone): forbids `stripe.subscriptions.create`
+and subscription-mode `checkout.sessions.create` outside an allowlist of exactly the
+three billing entry points. One-off payment sessions are left alone deliberately, or
+the rule would be noise across cart, offer and curation checkouts.
+
+**Tests.** `tests/integration/paid-loan-single-path.test.ts` (7) and
+`eslint-no-parallel-billing.test.ts` (9). The single-path file strips comments before
+asserting: the comments deliberately name the deleted functions to explain why they
+are gone, and an assertion that tripped on that would push people to delete the
+explanation.
+
+**Both guards proved to bite.** Re-adding a `startPaidLoanBilling` that calls
+`stripe.subscriptions.create` fails 3 of the 7 integration tests AND produces a lint
+error naming the rule; reverting restored 7/7 and 0 errors.
+
+**Tests rewritten rather than deleted:** the `startPaidLoanBilling()` describe (188
+lines) and the `setup_intent.succeeded` describe (159 lines) are replaced by tests
+asserting the absence, not just removed. The webhook one needed its own `beforeEach`
+for the replay-guard table, because the block I replaced carried the setup the
+remaining test still needs.
+
+`npm run check` green: 0 lint errors, 216 files, 2106 tests, exit 0.

@@ -39,7 +39,6 @@ vi.mock("@/lib/platform-fee", () => ({
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: getAdminMock }));
 
 import {
-  startPaidLoanBilling,
   cancelPaidLoanBilling,
   handleInvoicePaid,
   handleInvoicePaymentFailed,
@@ -191,194 +190,6 @@ function buildDb(opts: {
     upserts,
   };
 }
-
-describe("startPaidLoanBilling()", () => {
-  it("short-circuits when PAID_LOAN_V2 flag is off", async () => {
-    isFlagOnMock.mockReturnValue(false);
-    const res = await startPaidLoanBilling(
-      {
-        placementId: "p1",
-        venueUserId: "v1",
-        artistUserId: "a1",
-        arrangementType: "paid_loan",
-        monthlyFeePence: 5000,
-      },
-      buildDb().db as Parameters<typeof startPaidLoanBilling>[1],
-    );
-    expect(res).toEqual({ status: "skipped" });
-    expect(subscriptionsCreateMock).not.toHaveBeenCalled();
-  });
-
-  it("short-circuits for non-paid arrangement types", async () => {
-    isFlagOnMock.mockReturnValue(true);
-    const res = await startPaidLoanBilling(
-      {
-        placementId: "p1",
-        venueUserId: "v1",
-        artistUserId: "a1",
-        arrangementType: "revenue_share",
-        monthlyFeePence: 5000,
-      },
-      buildDb().db as Parameters<typeof startPaidLoanBilling>[1],
-    );
-    expect(res.status).toBe("skipped");
-    expect(subscriptionsCreateMock).not.toHaveBeenCalled();
-  });
-
-  it("returns already_started when a billing row + Stripe sub already exist", async () => {
-    isFlagOnMock.mockReturnValue(true);
-    const { db } = buildDb({
-      billingForPlacement: {
-        id: "row1",
-        stripe_subscription_id: "sub_111",
-        status: "active",
-      },
-    });
-    const res = await startPaidLoanBilling(
-      {
-        placementId: "p1",
-        venueUserId: "v1",
-        artistUserId: "a1",
-        arrangementType: "paid_loan",
-        monthlyFeePence: 5000,
-      },
-      db as Parameters<typeof startPaidLoanBilling>[1],
-    );
-    expect(res).toEqual({ status: "already_started", subscriptionId: "sub_111" });
-    expect(subscriptionsCreateMock).not.toHaveBeenCalled();
-  });
-
-  it("mints a setup intent when the venue has no card on file", async () => {
-    isFlagOnMock.mockReturnValue(true);
-    paymentMethodsListMock.mockResolvedValue({ data: [] });
-    setupIntentsCreateMock.mockResolvedValue({ client_secret: "seti_secret_123" });
-    const { db } = buildDb({
-      venue: {
-        user_id: "v1",
-        stripe_customer_id: "cus_existing",
-        email: "v@e.com",
-        name: "Venue",
-      },
-    });
-    const res = await startPaidLoanBilling(
-      {
-        placementId: "p1",
-        venueUserId: "v1",
-        artistUserId: "a1",
-        arrangementType: "paid_loan",
-        monthlyFeePence: 5000,
-      },
-      db as Parameters<typeof startPaidLoanBilling>[1],
-    );
-    expect(res).toEqual({
-      status: "missing_payment_method",
-      customerId: "cus_existing",
-      setupIntentClientSecret: "seti_secret_123",
-    });
-    expect(subscriptionsCreateMock).not.toHaveBeenCalled();
-  });
-
-  it("creates the Stripe customer with the venue's email column, not the auth fallback (row 19 #6)", async () => {
-    isFlagOnMock.mockReturnValue(true);
-    paymentMethodsListMock.mockResolvedValue({ data: [] });
-    setupIntentsCreateMock.mockResolvedValue({ client_secret: "seti_secret_123" });
-    customersCreateMock.mockResolvedValue({ id: "cus_new" });
-    const { db } = buildDb({
-      // No stripe_customer_id yet, so ensureVenueCustomer mints one; venue has an
-      // email, which the phantom `contact_email` select used to miss.
-      venue: { user_id: "v1", stripe_customer_id: null, email: "venue-real@e.com", name: "Venue" },
-    });
-    await startPaidLoanBilling(
-      { placementId: "p1", venueUserId: "v1", artistUserId: "a1", arrangementType: "paid_loan", monthlyFeePence: 5000 },
-      db as Parameters<typeof startPaidLoanBilling>[1],
-    );
-    // Fail-before: the old code read venue.contact_email (absent -> undefined) and
-    // fell back to the auth email "venue@example.com" for the Stripe customer.
-    expect(customersCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "venue-real@e.com" }),
-    );
-  });
-
-  it("returns skipped with a warning when STRIPE_PAID_LOAN_PRODUCT_ID is unset", async () => {
-    isFlagOnMock.mockReturnValue(true);
-    paymentMethodsListMock.mockResolvedValue({ data: [{ id: "pm_card" }] });
-    delete process.env.STRIPE_PAID_LOAN_PRODUCT_ID;
-    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { db } = buildDb({
-      venue: {
-        user_id: "v1",
-        stripe_customer_id: "cus_existing",
-        email: "v@e.com",
-        name: "Venue",
-      },
-    });
-    const res = await startPaidLoanBilling(
-      {
-        placementId: "p1",
-        venueUserId: "v1",
-        artistUserId: "a1",
-        arrangementType: "paid_loan",
-        monthlyFeePence: 5000,
-      },
-      db as Parameters<typeof startPaidLoanBilling>[1],
-    );
-    expect(res.status).toBe("skipped");
-    expect(subscriptionsCreateMock).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
-  it("creates a Stripe subscription when card is on file and inserts the billing row", async () => {
-    isFlagOnMock.mockReturnValue(true);
-    paymentMethodsListMock.mockResolvedValue({ data: [{ id: "pm_card" }] });
-    // SDK 22+ carries the period bounds on the first ITEM. The old fixture put
-    // them on the subscription, where the code has never read them, so it proved
-    // nothing about the dates.
-    subscriptionsCreateMock.mockResolvedValue({
-      id: "sub_new",
-      items: { data: [{ current_period_start: 1_700_000_000, current_period_end: 1_702_000_000 }] },
-    });
-    const { db, upserts, updates } = buildDb({
-      venue: {
-        user_id: "v1",
-        stripe_customer_id: "cus_existing",
-        email: "v@e.com",
-        name: "Venue",
-      },
-      placement: { stripe_subscription_id: null },
-    });
-    const res = await startPaidLoanBilling(
-      {
-        placementId: "p1",
-        venueUserId: "v1",
-        artistUserId: "a1",
-        arrangementType: "mixed",
-        monthlyFeePence: 7500,
-      },
-      db as Parameters<typeof startPaidLoanBilling>[1],
-    );
-    expect(res.status).toBe("started");
-    expect(res.subscriptionId).toBe("sub_new");
-    expect(upserts).toHaveLength(1);
-    expect((upserts[0] as { stripe_subscription_id: string }).stripe_subscription_id).toBe(
-      "sub_new",
-    );
-    // Period bounds come off the item, so no row is stamped 1970 (E11b).
-    expect((upserts[0] as { current_period_end: string }).current_period_end).toBe(
-      new Date(1_702_000_000 * 1000).toISOString(),
-    );
-    // E7a: this path did not mirror onto placements either, so the setup route's
-    // "already set up" guard stayed false for subscriptions started here too.
-    expect(updates).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          table: "placements",
-          row: expect.objectContaining({ stripe_subscription_id: "sub_new", subscription_status: "active" }),
-        }),
-      ]),
-    );
-  });
-});
 
 describe("cancelPaidLoanBilling()", () => {
   // This test used to assert `{ status: "skipped" }` with the flag off, i.e. it
@@ -780,15 +591,13 @@ describe("webhook reconcilers ignore PAID_LOAN_V2 (E11)", () => {
     );
   });
 
-  it("startPaidLoanBilling is STILL gated, because creation is what the flag is for", async () => {
-    const res = await startPaidLoanBilling({
-      placementId: "p1",
-      venueUserId: "v1",
-      artistUserId: "a1",
-      arrangementType: "paid_loan",
-      monthlyFeePence: 5000,
-    }, buildDb().db as Parameters<typeof startPaidLoanBilling>[1]);
-    expect(res).toEqual({ status: "skipped" });
+  it("no longer exports a subscription creator at all (K2)", async () => {
+    // startPaidLoanBilling was the second implementation that could start a
+    // monthly charge for a placement. With PAID_LOAN_V2 on, an accepted
+    // placement whose venue then clicked "Set up payment" would have produced
+    // two live Stripe subscriptions billing the same venue twice.
+    const mod = await import("./paid-loan-billing");
+    expect(mod).not.toHaveProperty("startPaidLoanBilling");
     expect(subscriptionsCreateMock).not.toHaveBeenCalled();
   });
 });

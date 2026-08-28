@@ -4,7 +4,7 @@ import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { handleAuthzError } from "@/lib/authz";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
-import { startPaidLoanBilling, cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
+import { cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
 import { deriveArrangementType } from "@/lib/placements/arrangement";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
@@ -1257,27 +1257,30 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Failed to update placement" }, { status: 500 });
     }
 
-    // ─── G3 (Phase 2.2): paid-loan recurring billing ───
-    // On pending → active for a paid_loan / mixed placement, kick off
-    // monthly Stripe billing. Flag-gated inside the helper, so this is
-    // a no-op when PAID_LOAN_V2 is off. On active → cancelled, stop the
-    // Stripe sub at period-end (no current-month refund per spec).
+    // ─── Paid-loan recurring billing ───
+    // K2: accepting a placement no longer starts a Stripe subscription.
+    // startPaidLoanBilling was the second of two implementations that could each
+    // begin a monthly charge for the same placement, and with PAID_LOAN_V2 on it
+    // would have produced two live subscriptions billing one venue twice. The
+    // surviving entry point is the venue clicking "Set up payment"
+    // (api/placements/[id]/payment/setup), which PaidLoanPaymentChip already
+    // surfaces from the moment a paid-loan placement goes active.
     //
-    // billingPrompt carries a setup-intent client secret back to the
-    // caller when the venue has no card on file yet — the venue UI
-    // mounts Stripe Elements with the secret and the venue completes
-    // card attach, after which a PATCH re-invocation actually creates
-    // the subscription. Without this, billing silently never started.
-    let billingPrompt: {
-      status: "missing_payment_method";
-      setupIntentClientSecret: string;
-      customerId: string;
-    } | null = null;
+    // Nothing replaces the call. The chip keys off arrangement_type,
+    // monthly_fee_gbp and subscription_status, so a 'pending' billing row would
+    // be a write with no reader.
+    //
+    // The `billingPrompt` this used to return went with it: it carried a
+    // SetupIntent client secret for a Stripe Elements flow that was never built.
+    // Nothing in src/ read it off the response.
+    //
+    // Cancellation stays: on active → terminal, stop the Stripe subscription at
+    // period-end (no current-month refund per spec).
+    //
     // Active→declined is dead code in the canonical state machine
     // (decline is pending-only), but we keep the second branch
     // defensive in case a malformed PATCH lands.
     try {
-      const goingActive = existing.status === "pending" && status === "active";
       // D8: billing must stop whenever a placement leaves 'active' for a terminal
       // state, not only on an explicit cancel. A collection is the important case
       // and the one the plan's fix would miss: it arrives as stage: "collected",
@@ -1292,41 +1295,7 @@ export async function PATCH(request: Request) {
         (effectiveNewStatus === "cancelled" ||
           effectiveNewStatus === "completed" ||
           effectiveNewStatus === "sold");
-      if (goingActive) {
-        const { data: full } = await db
-          .from("placements")
-          .select(
-            "id, artist_user_id, venue_user_id, arrangement_type, monthly_fee_gbp",
-          )
-          .eq("id", id)
-          .maybeSingle<{
-            id: string;
-            artist_user_id: string | null;
-            venue_user_id: string | null;
-            arrangement_type: string | null;
-            monthly_fee_gbp: number | null;
-          }>();
-        if (full?.artist_user_id && full?.venue_user_id) {
-          const billingResult = await startPaidLoanBilling({
-            placementId: full.id,
-            artistUserId: full.artist_user_id,
-            venueUserId: full.venue_user_id,
-            arrangementType: full.arrangement_type ?? "",
-            monthlyFeePence: Math.round((full.monthly_fee_gbp ?? 0) * 100),
-          });
-          if (
-            billingResult.status === "missing_payment_method" &&
-            billingResult.setupIntentClientSecret &&
-            billingResult.customerId
-          ) {
-            billingPrompt = {
-              status: "missing_payment_method",
-              setupIntentClientSecret: billingResult.setupIntentClientSecret,
-              customerId: billingResult.customerId,
-            };
-          }
-        }
-      } else if (goingInactive) {
+      if (goingInactive) {
         await cancelPaidLoanBilling(id);
       }
     } catch (billingErr) {
@@ -1983,13 +1952,6 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Surface the Setup Intent if the venue needs to attach a card
-    // before paid-loan billing can begin. The client mounts Stripe
-    // Elements with this secret, the venue completes card attach, and
-    // a follow-up PATCH (re-attempt) actually creates the subscription.
-    if (billingPrompt) {
-      return NextResponse.json({ success: true, billingPrompt });
-    }
     return NextResponse.json({ success: true });
   } catch (err) {
     // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for

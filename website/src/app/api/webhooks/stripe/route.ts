@@ -3,7 +3,7 @@ import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
 import { canReceivePayout } from "@/lib/payouts/capability";
-import { notifyCurationCustomerPaid, notifyAdminCurationPaid, notifyAdminBillingStalled } from "@/lib/email";
+import { notifyCurationCustomerPaid, notifyAdminCurationPaid } from "@/lib/email";
 import { CURATION_TIERS, type CurationTierKey } from "@/lib/curation-tiers";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
@@ -35,7 +35,6 @@ import {
 } from "@/lib/stripe-subscription-period";
 import {
   recordPaidLoanSubscription,
-  startPaidLoanBilling,
   handleInvoicePaid as handleInvoicePaidPaidLoan,
   handleInvoicePaymentFailed as handleInvoicePaymentFailedPaidLoan,
   handleSubscriptionDeleted as handleSubscriptionDeletedPaidLoan,
@@ -503,77 +502,13 @@ async function handleWebhookEvent(
     return NextResponse.json({ received: true });
   }
 
-  // ─── Setup Intent succeeded: the venue just attached a card (E7d) ───
-  //
-  // paid-loan-billing.ts documents that the flow is "re-invoked after
-  // setup_intent.succeeded lands on the webhook". There was no such branch (zero
-  // matches for setup_intent in this file), and the client cannot re-invoke by
-  // PATCH either, because that path requires status 'pending' and the placement is
-  // already 'active' by then. So a paid-loan placement whose venue had no card on
-  // file went live and never billed anyone.
-  if (event.type === "setup_intent.succeeded") {
-    const si = event.data.object as Stripe.SetupIntent;
-    const placementId = si.metadata?.placement_id;
-    const venueUserId = si.metadata?.venue_user_id;
-    // The same three metadata keys startPaidLoanBilling stamps on the intent.
-    if (si.metadata?.source !== "wallplace_paid_loan_billing" || !placementId || !venueUserId) {
-      return NextResponse.json({ received: true, ignored: "not_paid_loan" });
-    }
-
-    // Make the new card the customer's default so the subscription can charge it
-    // off-session. Without this Stripe has a payment method attached but no
-    // instruction to use it for invoices.
-    const customerId = typeof si.customer === "string" ? si.customer : si.customer?.id;
-    const pmId = typeof si.payment_method === "string" ? si.payment_method : si.payment_method?.id;
-    if (customerId && pmId) {
-      try {
-        await stripe.customers.update(customerId, {
-          invoice_settings: { default_payment_method: pmId },
-        });
-      } catch (err) {
-        console.error("[webhook] could not set the default payment method", { customerId, err });
-      }
-    }
-
-    const { data: placement } = await db
-      .from("placements")
-      .select("id, venue_user_id, artist_user_id, arrangement_type, monthly_fee_gbp")
-      .eq("id", placementId)
-      .maybeSingle();
-    if (!placement) {
-      console.error("[webhook] setup_intent for unknown placement", { placementId });
-      return NextResponse.json({ received: true, ignored: "unknown_placement" });
-    }
-
-    const result = await startPaidLoanBilling({
-      placementId,
-      venueUserId: placement.venue_user_id,
-      artistUserId: placement.artist_user_id,
-      arrangementType: placement.arrangement_type,
-      monthlyFeePence: Math.round(Number(placement.monthly_fee_gbp) * 100),
-    });
-
-    // "skipped" is not a stall. startPaidLoanBilling short-circuits to it whenever
-    // PAID_LOAN_V2 is off, which is its state in prod, so §C5's version would have
-    // mailed the admin on every single card attachment. A stall is the case where
-    // the flag is ON, the card is attached, and billing still did not begin.
-    if (result.status === "skipped") {
-      console.warn("[webhook] paid-loan billing not started, helper skipped", {
-        placementId,
-        reason: "flag off, not a paid loan, or no monthly fee",
-      });
-    } else if (result.status !== "started" && result.status !== "already_started") {
-      // The card is attached but billing did not start: a silent revenue hole, so
-      // make it loud.
-      console.error("[webhook] setup_intent succeeded but billing did not start", {
-        placementId,
-        status: result.status,
-      });
-      await notifyAdminBillingStalled({ placementId, status: result.status }).catch(() => {});
-    }
-
-    return NextResponse.json({ received: true, billing: result.status });
-  }
+  // K2: there was a `setup_intent.succeeded` branch here (E7d) whose entire job
+  // was to re-invoke startPaidLoanBilling once a venue attached a card. That
+  // creator is deleted, and nothing mints a paid-loan SetupIntent any more:
+  // the surviving path is Stripe Checkout in subscription mode, which collects
+  // the card as part of the session and lands on checkout.session.completed
+  // below. A stray setup_intent event now falls through to the default
+  // acknowledgement, which is correct — there is nothing to do with it.
 
   // ─── Art purchase checkout ───
   if (event.type === "checkout.session.completed") {

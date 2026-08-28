@@ -1,42 +1,54 @@
-// Phase 2 chunk G3. Monthly paid-loan billing on top of Stripe
-// subscriptions. Gated by feature flag PAID_LOAN_V2: when the flag is
-// off, every helper here short-circuits to a no-op so existing
-// placement create / accept paths keep their pre-Phase-2 behaviour.
+// Paid-loan monthly billing: everything that happens to a Stripe subscription
+// AFTER one exists. This module deliberately creates none.
+//
+// K2 (07 §2). There used to be two implementations that could each start a
+// monthly charge for the same placement:
+//
+//   A  api/placements/[id]/payment/setup  — venue clicks "Set up payment",
+//      Stripe Checkout in subscription mode collects the card. Never
+//      flag-gated, live in production.
+//   B  startPaidLoanBilling() here        — fired automatically on placement
+//      acceptance, gated by PAID_LOAN_V2, created the subscription
+//      server-side after a SetupIntent dance to attach a card.
+//
+// B is deleted. With PAID_LOAN_V2 flipped on, an accepted placement whose venue
+// then clicked "Set up payment" would have produced two live Stripe
+// subscriptions billing the same venue for the same placement. The doc calls it
+// the most dangerous knot in the codebase and it is right.
+//
+// A survives because it is what runs in production, because Checkout collects
+// the card itself (so B's ensureVenueCustomer + hasAttachedCard + SetupIntent
+// machinery is redundant, not merely duplicated), and because it is a fraction
+// of the code. Both paths already shared one money model — the platform
+// collects in full and the artist is paid by a separate transfer through the
+// stripe_transfers ledger — since §B6 deleted the destination charge, so this
+// collapse changes no money flow.
+//
+// What survives here, and why it is not flag-gated (E11): a subscription that
+// exists in Stripe has to be reconciled and has to be cancellable whatever a
+// flag says. Gating these was how a failed venue card came to do nothing at all.
+//
+//   recordPaidLoanSubscription   the webhook's paid_loan_monthly branch calls
+//                                this to record A's subscription
+//   cancelPaidLoanBilling        placement leaves 'active'
+//   handleInvoicePaid            update period bounds, transfer the artist's
+//                                share through the ledger
+//   handleInvoicePaymentFailed   dunning: past_due/paused, notify both parties
+//   handleSubscriptionDeleted    mark cancelled and stop dispatch
 //
 // Data shape:
-//   - placements row carries arrangement_type, monthly_fee_gbp, qr_enabled.
-//   - venue_profiles row carries stripe_customer_id (Phase 2.0a) and the
-//     billing portal email.
-//   - placement_recurring_billings row holds the Stripe subscription id,
-//     period bounds, status, and the payer/payee user ids (Phase 1g).
+//   - placements carries arrangement_type, monthly_fee_gbp, qr_enabled and a
+//     stripe_subscription_id mirror.
+//   - placement_recurring_billings holds the authoritative subscription id,
+//     period bounds, status, and the payer/payee user ids.
 //
-// Webhook hand-off:
-//   - invoice.paid:        update period bounds + trigger artist payout via
-//                          Stripe Connect.
-//   - invoice.payment_failed (final attempt): mark past_due/paused,
-//                          notify both parties, pause placement display.
-//   - customer.subscription.deleted: mark cancelled and stop dispatch.
-//
-// What this file does NOT own:
-//   - The Setup Intent flow that collects a venue's card the first time
-//     they accept a paid loan. The placement-acceptance route owns that
-//     because it has the user session already; this module just reads
-//     the resulting payment method back from Stripe.
-//   - Stripe webhook signature verification. The webhook route already
-//     verifies signatures; this module assumes inputs are trusted.
-//
-// Flag gating, after E11: PAID_LOAN_V2 gates CREATION only
-// (startPaidLoanBilling). The webhook reconcilers (invoice.paid,
-// invoice.payment_failed, customer.subscription.deleted) and cancellation run
-// regardless, because a subscription that already exists in Stripe has to be
-// reconciled and has to be cancellable whatever the flag says. Gating them was
-// how a failed venue card came to do nothing at all.
+// Stripe webhook signature verification is the webhook route's job; this module
+// assumes its inputs are trusted.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { isFlagOn } from "@/lib/feature-flags";
 import { scheduleTransfer } from "@/lib/stripe-connect";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
 // E11b: moved to a neutral home once the artist-subscription webhook branch needed
@@ -46,28 +58,6 @@ import { periodFromSubscription, epochToIso, readSubscriptionIdFromInvoice } fro
 export { periodFromSubscription };
 
 // ── Types ──────────────────────────────────────────────────────────────
-
-export interface StartBillingInput {
-  placementId: string;
-  venueUserId: string;
-  artistUserId: string;
-  arrangementType: string;
-  monthlyFeePence: number;
-}
-
-export interface StartBillingResult {
-  status: "skipped" | "started" | "already_started" | "missing_payment_method";
-  subscriptionId?: string;
-  customerId?: string;
-  /** Stripe Setup Intent client secret, set when the venue needs to
-   *  attach a card before billing can begin. The placement-acceptance
-   *  UI presents Stripe Elements with this secret. */
-  setupIntentClientSecret?: string;
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────
-
-const PAID_LOAN_TYPES = new Set(["paid_loan", "mixed"]);
 
 export interface RecordSubscriptionInput {
   placementId: string;
@@ -177,218 +167,6 @@ export async function recordPaidLoanSubscription(
   }
 
   return { ok: true, newlyLinked };
-}
-
-function isPaidLoan(arrangementType: string | null | undefined): boolean {
-  return PAID_LOAN_TYPES.has((arrangementType ?? "").toLowerCase());
-}
-
-// nextFirstOfMonthUnix was used by the previous billing_cycle_anchor
-// path; dropped during the audit. Phase 3 will bring back proper 1st-
-// of-month anchoring with an immediate proration invoice.
-
-/**
- * Resolve a Stripe customer for the venue, creating one if absent.
- * Persists the id back to venue_profiles.stripe_customer_id.
- */
-async function ensureVenueCustomer(
-  db: SupabaseClient,
-  venueUserId: string,
-): Promise<{ customerId: string; email: string | null } | null> {
-  const { data: venue } = await db
-    .from("venue_profiles")
-    .select("user_id, stripe_customer_id, email, name")
-    .eq("user_id", venueUserId)
-    .maybeSingle<{
-      user_id: string;
-      stripe_customer_id: string | null;
-      email: string | null;
-      name: string | null;
-    }>();
-
-  if (!venue) {
-    console.warn("[paid-loan-billing] venue_profiles missing for", venueUserId);
-    return null;
-  }
-
-  if (venue.stripe_customer_id) {
-    return { customerId: venue.stripe_customer_id, email: venue.email };
-  }
-
-  // Look up the auth user's email as a fallback. Resend / Stripe receipts
-  // both prefer the venue contact email when we have one. Guarded
-  // against empty/invalid venueUserId so the admin client doesn't
-  // throw "Expected parameter to be UUID".
-  let fallbackEmail = venue.email;
-  if (!fallbackEmail && venueUserId) {
-    try {
-      const { data: authUser } = await db.auth.admin.getUserById(venueUserId);
-      fallbackEmail = authUser.user?.email ?? null;
-    } catch {
-      fallbackEmail = null;
-    }
-  }
-
-  const customer = await stripe.customers.create({
-    email: fallbackEmail ?? undefined,
-    name: venue.name ?? undefined,
-    metadata: {
-      venue_user_id: venueUserId,
-      source: "wallplace_paid_loan_billing",
-    },
-  });
-
-  await db
-    .from("venue_profiles")
-    .update({ stripe_customer_id: customer.id })
-    .eq("user_id", venueUserId);
-
-  return { customerId: customer.id, email: fallbackEmail };
-}
-
-/**
- * Whether the Stripe customer has at least one attached payment method
- * (card). If not, the caller mints a Setup Intent so the venue can
- * attach one before billing starts.
- */
-async function hasAttachedCard(customerId: string): Promise<boolean> {
-  const list = await stripe.paymentMethods.list({
-    customer: customerId,
-    type: "card",
-    limit: 1,
-  });
-  return list.data.length > 0;
-}
-
-/**
- * Start monthly billing for a paid-loan / mixed placement. Idempotent
- * by placement_id, repeat calls return `already_started`.
- *
- * Returns `missing_payment_method` along with a Setup Intent client
- * secret when the venue hasn't given us a card yet. The
- * placement-acceptance UI shows Stripe Elements with this secret, then
- * re-invokes the flow after `setup_intent.succeeded` lands on the
- * webhook.
- */
-export async function startPaidLoanBilling(
-  input: StartBillingInput,
-  client?: SupabaseClient,
-): Promise<StartBillingResult> {
-  if (!isFlagOn("PAID_LOAN_V2")) return { status: "skipped" };
-  if (!isPaidLoan(input.arrangementType)) return { status: "skipped" };
-  if (input.monthlyFeePence <= 0) return { status: "skipped" };
-
-  const db = client ?? getSupabaseAdmin();
-
-  // Idempotency: if a billing row already exists for this placement
-  // (and the underlying Stripe subscription is still alive), return.
-  const { data: existing } = await db
-    .from("placement_recurring_billings")
-    .select("id, stripe_subscription_id, status")
-    .eq("placement_id", input.placementId)
-    .maybeSingle<{
-      id: string;
-      stripe_subscription_id: string | null;
-      status: string;
-    }>();
-
-  if (existing?.stripe_subscription_id && existing.status !== "cancelled") {
-    return {
-      status: "already_started",
-      subscriptionId: existing.stripe_subscription_id,
-    };
-  }
-
-  const customer = await ensureVenueCustomer(db, input.venueUserId);
-  if (!customer) {
-    return { status: "skipped" };
-  }
-
-  // If no card on file yet, mint a Setup Intent and tell the caller
-  // to collect one before re-invoking.
-  if (!(await hasAttachedCard(customer.customerId))) {
-    const setupIntent = await stripe.setupIntents.create({
-      customer: customer.customerId,
-      payment_method_types: ["card"],
-      usage: "off_session",
-      metadata: {
-        placement_id: input.placementId,
-        venue_user_id: input.venueUserId,
-        source: "wallplace_paid_loan_billing",
-      },
-    });
-    return {
-      status: "missing_payment_method",
-      customerId: customer.customerId,
-      setupIntentClientSecret: setupIntent.client_secret ?? undefined,
-    };
-  }
-
-  // Stripe SDK 22 requires a pre-existing product reference on
-  // price_data; we don't ship a fallback id because Stripe rejects
-  // unknown products with "No such product" and the catch upstream
-  // would swallow that into a silent "billing didn't start". Audit
-  // follow-up: hard-fail when the env is unset so the operator notices.
-  const productId = process.env.STRIPE_PAID_LOAN_PRODUCT_ID;
-  if (!productId) {
-    console.error(
-      "[paid-loan-billing] STRIPE_PAID_LOAN_PRODUCT_ID is not set; refusing to create subscription",
-    );
-    return { status: "skipped" };
-  }
-
-  // Audit follow-up on first-month proration: setting
-  // billing_cycle_anchor to a future date (next 1st of month) plus
-  // proration_behavior: "create_prorations" tells Stripe to wait
-  // until the anchor before issuing any invoice, so the venue would
-  // pay £0 between acceptance and the next month. The spec wants
-  // immediate proration, which requires an immediate first invoice
-  // via add_invoice_items + a one-off price; this is a Phase 3
-  // follow-up. For now we cycle billing from the acceptance date so
-  // the venue is actually charged. Renewals fall on the same day of
-  // each month rather than the 1st — acceptable for v1.
-  const subscription = await stripe.subscriptions.create({
-    customer: customer.customerId,
-    items: [
-      {
-        price_data: {
-          currency: "gbp",
-          recurring: { interval: "month" },
-          unit_amount: input.monthlyFeePence,
-          product: productId,
-        },
-      },
-    ],
-    proration_behavior: "create_prorations",
-    collection_method: "charge_automatically",
-    metadata: {
-      placement_id: input.placementId,
-      venue_user_id: input.venueUserId,
-      artist_user_id: input.artistUserId,
-      source: "wallplace_paid_loan_billing",
-    },
-  });
-
-  const { cpStart, cpEnd } = periodFromSubscription(subscription);
-  await recordPaidLoanSubscription(
-    {
-      placementId: input.placementId,
-      subscriptionId: subscription.id,
-      customerId: customer.customerId,
-      payerUserId: input.venueUserId,
-      payeeUserId: input.artistUserId,
-      monthlyAmountPence: input.monthlyFeePence,
-      cpStart,
-      cpEnd,
-    },
-    db,
-  );
-
-  return {
-    status: "started",
-    subscriptionId: subscription.id,
-    customerId: customer.customerId,
-  };
 }
 
 /**
