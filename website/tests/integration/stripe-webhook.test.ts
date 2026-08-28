@@ -27,10 +27,9 @@ vi.mock("@/lib/stripe-connect", () => ({
   scheduleTransfer: vi.fn(async () => ({ ok: true })),
 }));
 
-vi.mock("@/lib/email", () => ({
-  notifyArtistNewOrder: vi.fn(),
-  notifyVenueOrderFromPlacement: vi.fn(),
-  notifyCurationCustomerPaid: vi.fn(),
+// K1: the legacy @/lib/email is deleted.
+vi.mock("@/lib/email/admin-alert", () => ({
+  sendAdminAlert: vi.fn(async () => ({ ok: true, skipped: false, messageId: "m" })),
 }));
 
 vi.mock("@/lib/notifications", () => ({

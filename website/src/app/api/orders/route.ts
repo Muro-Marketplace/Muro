@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
-import { notifyBuyerStatusUpdate } from "@/lib/email";
 // Phase 2.3 J1 audit: legacy customer-side shipped/delivered emails
 // removed in favour of the dispatcher path (recordOrderEvent). The
 // templates themselves stay in the registry for the email-preview
@@ -25,6 +24,11 @@ const SELLER_STATUSES = new Set<string>([
 ]);
 const BUYER_STATUSES = new Set<string>(["delivered", "disputed", "cancelled"]);
 import { recordOrderEvent } from "@/lib/orders/lifecycle";
+import { sendEmail } from "@/lib/email/send";
+import {
+  CustomerOrderStatusUpdate,
+  orderStatusText,
+} from "@/emails/templates/orders/CustomerOrderStatusUpdate";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -274,9 +278,12 @@ export async function PATCH(request: Request) {
     // the Phase 2.0c templates. The old inline sendEmail calls used
     // a different idempotency key shape, so both paths fired and the
     // customer received duplicate messages for the same lifecycle
-    // event. We keep the legacy `notifyBuyerStatusUpdate` only for
-    // statuses the dispatcher doesn't cover (cancelled / disputed /
-    // refunded), so cancellation notes still go out today.
+    // event. This send covers only the statuses the dispatcher doesn't
+    // (cancelled / disputed / refunded), so cancellation notes still go out.
+    //
+    // K1: that used to be the legacy `notifyBuyerStatusUpdate`, hand-written
+    // HTML from an unverified domain with no audit trail. Same scope, one
+    // pipeline.
     //
     // Finding 7.3: await the email so it completes before the function
     // returns (Vercel serverless can freeze/kill unawaited promises).
@@ -284,11 +291,22 @@ export async function PATCH(request: Request) {
     // change already committed successfully above.
     if (order.buyer_email && status !== "shipped" && status !== "delivered" && status !== "processing") {
       try {
-        await notifyBuyerStatusUpdate({
-          email: order.buyer_email,
-          orderId,
-          status,
-          trackingNumber,
+        const shippingBlob = (order.shipping ?? {}) as { fullName?: string };
+        await sendEmail({
+          idempotencyKey: `order_status_update:${orderId}:${status}`,
+          template: "customer_order_status_update",
+          category: "orders_and_payouts",
+          to: order.buyer_email,
+          subject: `Update on order ${orderId}`,
+          react: CustomerOrderStatusUpdate({
+            firstName: (shippingBlob.fullName || order.buyer_email.split("@")[0] || "there").split(" ")[0],
+            orderNumber: orderId,
+            statusText: orderStatusText(status),
+            trackingNumber: trackingNumber || undefined,
+            ordersUrl: `${SITE}/customer-portal/orders`,
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { orderId, status },
         });
       } catch (err) {
         console.error("[orders PATCH] status email failed", { orderId, status, err });

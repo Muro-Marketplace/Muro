@@ -31,7 +31,7 @@ Order of work: the "Corrected dependency order" at the end of
 | 23 | E42-b, reassigned from the owner to the loop (supervisor D66) — two halves: `interested_in_local_artists` (build) + `preferred_sizes` (drop) | D66 | **(b) DONE, (a) BLOCKED.** (b) `preferred_sizes`: the only live reference was a stale comment in `writable-fields.ts` that lumped it in with `interested_in_local_artists`; corrected so the two cases read apart (vestigial vs shipped-control-awaiting-a-column), and the venue-profile route test now says which assertion flips when 23(a) lands. The strip-and-retry it referred to was already removed by E42-c. (a) `interested_in_local_artists` needs a new column, so it is blocked on the same unauthorised Supabase MCP as row 21. NOT owner-gated (D66 overrides the earlier block). (a) `interested_in_local_artists`: a shipped checkbox bound to state + hydrated (`venue-portal/profile/page.tsx` :212/:249/:616) whose value is discarded — add one nullable boolean column (migration above the highest on disk, applied to prod + verified) and the `writable-fields.ts` allowlist entry, so the tick persists and reads back. (b) `preferred_sizes`: vestigial (only a comment at `writable-fields.ts:170`, no UI/reader/data) — delete the dead refs. `preferred_styles` already exists in prod, so this was an incomplete migration, not a design decision |
 | 8 | `05` frontend saves + listing (after D10 fixes) | `05` | **§1.1 done** (`mutate` primitive, 80a7c41), **§1.2 done** (`useSaveAction` hook, 093a08c), **E41-a done** (add/edit awaits the write, c9a4925), **E41-b done** (deletes await the DELETE, bd2df65), **E41-d done** (frame payload keeps pricesBySize, 181906c), **E41-e done** (bulk editor preserves per-size shipping/in-store, a595ae5), **E41-f done** (deleted the dead localStorage artwork editor, 6a25cc6). **E41-c done** (POST only changed works via `changed-works.ts` diff, 642a3f5; residual server-side TOCTOU reassigned to **row 21** per D64, not owner-gated). **E41-g = void** (already correct; mirror removed in E41-f). **E42-a done** (venue profile input `value` split from display fallback, 6b67966), **E42-c done** (venue-profiles DAO stops stripping images/display_*, 9d8835c), **E42-d done** (venue fields clearable via `|| null`, f7e81d9), **E42-e done** (venue unsaved-changes guard now uses the shared `useUnsavedWarning` hook, 33a15f2). **E42-b un-blocked → row 23** (supervisor D66: no longer owner-gated; build `interested_in_local_artists` as a nullable boolean, drop dead `preferred_sizes` refs; runs after `05` with rows 21/22). Every E42 item under this doc is now done. **E43-a done** (placement `updateStatus` in BOTH portals now routes through one shared `updatePlacementStatus` helper: res.ok check, snapshot-rollback, cross-portal event on success only, e462197). **E43-b done** (withdraw offer `OffersList.tsx`: `act()` now returns `Promise<boolean>`, the withdraw toast is gated on it, 37b4ea9). **E43-c done** (artwork-request `setStatus` now checks res.ok + surfaces the error via the file's `setError` idiom, 4339efd). Remaining (**order per D67, OWNER-APPROVED 2026-07-31**): (1) **DONE — `no-authfetch-mutation` rule + grandfathered ratchet landed at `warn`, floor 94 across 44 files (468e3f1).** The rule's 94-site list IS the real E43 surface (vs 11 hand-enumerated — D67 vindicated). (2) IN PROGRESS — work the union, batching **by FILE not by call site** (supervisor D70.3: 44 files vs 94 sites; sites in a file share a shape/import/test). **E43-e done** (MessageInbox report/delete/block trio → shared `submitFlagAction` helper, floor 94→91, 7381399). **MessageInbox.tsx COMPLETE** (remaining 9 mutating `authFetch` → `mutate`, floor 91→82, e4ff19f; file now 0-flagged, 2 read GETs kept). **E43-d done** (`artist-portal/portfolio/page.tsx` shipping-settings save → `mutate` + success/error toasts, floor 82→81, e70ca39). **E43-g done** (saved-item `handleRemove` in BOTH `artist-portal/saved` + `customer-portal/saved` → `mutate`, remove-on-confirmed-delete + rollback/error-toast, floor 81→79, 516ec5f). **E43-h done** (`browse/[slug]/ArtistProfileClient.tsx` public enquiry: primary `/api/messages` → `mutate`, confirmation only on success, `/api/enquiry` best-effort, floor 79→78, 3d51a9b). **E43-i done** (`components/Header.tsx` 3 fire-and-forget mark-read `authFetch`→`mutate`, floor 78→75, 335de6c; no bespoke test — render-heavy + no user-visible outcome, covered by the ratchet + mutate contract). NEXT per D70.3: E43-j done (`VenuePortalLayout.tsx` self-heal → `mutate` + retry banner, floor 75→74, ec57636); bug-12 part 1 done (`BlogEditor.tsx` 3 saves → `mutate`, floor 74→71, b2c3769); `PlacementDetailClient.tsx` done (6 handlers → `mutate`, event-on-success-only for handleRespond, floor 71→65, 239ea48); `PlacementContextPanel.tsx` done (6 handlers → `mutate`, undo event success-only + a real catch added on all 6, floor 65→59, 13bc052); `artist-portal/billing/page.tsx` done (4 Stripe-session-redirect POSTs → `mutate`, transport-only, floor 59→55, 953e121); `artist-portal/orders/page.tsx` PARTIAL (order-STATUS PATCH → `mutate`, floor 55→54, 4ab254a; the 3 refund-path sites processRefund/issueProactiveRefund SURFACED as OWNER-GATED — they execute Stripe refunds, held per the money boundary); the other ~30 files + the 3 owner-gated refund sites, LOWERING `LITERAL_FLOOR` by each file's count in the same commit. **D70.2: 94 is a MIGRATION surface, not 94 bugs** (the rule has no res.ok exemption); the live-bug subset is the unchecked ones. Hand items E43-d/e/g/h/i/j + bug-12 are all IN the 94; **E43-f is OUT** (dead View buttons, no authFetch — own fix). (3) Flip the rule to `error` when the floor hits zero. (4) bug-12's flag-gate/notFound half is separate from its authFetch sites |
 | 9 | `03` auth/admin, D5 order: create+backfill `admin_users` **before** dropping the `user_metadata` conjunct | `03` | **E34 DONE** (§3): adopt-by-slug deleted, adoption now requires a CONFIRMED email and exactly one match, insert slug no longer comes from metadata, orphan factory in `register-venue` deleted. Prod facts settled the doc's open question: `venue_profiles.user_id` is NOT NULL, 9 venues / 0 orphans, so adopt-by-slug was latent and the seed had never worked; the insert half was live. No `artist_slug` equivalent exists (0 server readers). Remaining: E36c/E36b/E36d, E35d/E30b (`admin_users`), E30a |
-| 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | **Phase 0 + Phase 1 done** (earlier). **Item 3.2 DONE**: `POST /api/auth/resend-verification` (enumeration-safe, tighter rate limit), `emailRedirectTo` on the two `signUp()` outliers, and the login page surfaces the resend when Supabase says "Email not confirmed". Remaining: Phase 2 (= 07 K1, delete `lib/email.ts`), item 1.5, Phase 3, Phase 4 |
+| 10 | `09` emails (artist-sale trigger first, provisioning dropped per D9) | `09` | **Phase 0 + Phase 1 done** (earlier). **Item 3.2 DONE**: `POST /api/auth/resend-verification` (enumeration-safe, tighter rate limit), `emailRedirectTo` on the two `signUp()` outliers, and the login page surfaces the resend when Supabase says "Email not confirmed". **Phase 2 (= 07 K1) DONE**: `lib/email.ts` deleted, 19 exports gone, 8 admin notifiers collapsed into `sendAdminAlert`, 6 new templates written (their absence was why the legacy path survived), one live duplicate send to buyers deleted, `no-legacy-email` test + `one-email-entrypoint` dependency-cruiser rule + `depcheck` in the gate. Remaining: item 1.5, Phase 3, Phase 4 |
 | 11 | `07` K5a/K5b before `08` PR#2; `09 §4.1` harness before `08` PR#5 | `07`, `09` | **K2 DONE** (§2): `startPaidLoanBilling` + its SetupIntent machinery + the private `isPaidLoan` shadow deleted, 664 lines net; the doc's §2.3 was reversed by §B6/E8 and is corrected in the entry. `no-parallel-billing` lint rule at error + 16 tests. **K2e (delete `PAID_LOAN_V2`) deferred behind K3** per §2.5. Remaining: K1 (= 09 Phase 2), K3, K4, K5, K6, K8, K11 |
 | 12 | `08` rewritten cull last (D6 unconditional list only until rewritten) | `08` | todo |
 
@@ -9976,3 +9976,79 @@ the rate limit blocks before any send.
   the label to the wrong side (07 §2.5 step 5).
 - **`admin_users` backfill has not been run.** `npm run admin:backfill` must run in
   an environment holding the real `ADMIN_EMAILS` before the predicate cutover.
+
+### 07 K1 / 09 Phase 2 — two email systems — DONE. `src/lib/email.ts` is deleted.
+
+**The doc's inventory is stale.** §1.3 lists 16 exports / 15 live functions across
+12 files. There were **19 exports across 13 importing files** —
+`notifyAdminPayoutExhausted`, `notifyAdminCurationCancelled` and
+`notifyAdminCurationPaid` were added after the doc was written, which is the
+duplication doing exactly what a duplication does when nobody deletes it.
+
+**Two were genuinely dead** (`confirmApplicationToArtist`, `notifyArtistNewOrder`).
+Seventeen were live.
+
+**Eight admin notifiers collapsed into one helper.** They differed only in the
+heading and which fields they listed, so `sendAdminAlert` + one `AdminAlert`
+template replaces all eight. Adding a ninth kind of alert is a call, not a file.
+
+**Nine user-facing sends moved to templates.** Five already existed
+(`MessageUnreadNotification`, `VenueNewPlacementRequest`, `ArtistPlacementAccepted`,
+`ArtistPlacementDeclined`, `CustomerRefundConfirmation`). **Six did not, and their
+absence is precisely why the legacy module survived** — each legacy call sat behind
+a comment explaining that the polished path could not cover this case:
+
+| New template | The comment that kept the legacy call alive |
+|---|---|
+| `ArtistNewPlacementInvitation` | "for venue-initiated (artist receives), we don't yet have a matching polished template, so fall back to the legacy helper" |
+| `ArtistRefundRequested` | none existed; `ArtistRefundNotification` is past tense ("we've issued a refund") and would have told an artist money had moved when it had not |
+| `CustomerRefundRejected` | the approve half was already on the pipeline; only the decline had no template |
+| `CustomerOrderStatusUpdate` | "we keep the legacy `notifyBuyerStatusUpdate` only for statuses the dispatcher doesn't cover" |
+| `VenueSaleFromPlacement` | distinct from the periodic `VenueRevenueShareStatement`; this one carries money |
+| `CurationEnquiryReceived` / `CurationPaymentReceived` | no curation customer templates at all |
+
+**One live duplicate send found and deleted.** `refunds/process` called the legacy
+`notifyRefundDecision` "as safety net" *beside* the polished
+`CustomerRefundConfirmation`, so **a buyer whose refund was approved received two
+emails about it**, one of them from an unverified domain with no unsubscribe header.
+That is the K1 defect in its purest form and it was live.
+
+**K1g done too** (§1.4 step 7), because it was blocking a one-place change.
+`EmailStream` and `EmailCategory` were each declared twice with no cross-import;
+`lib/email` owns them now (it carries the behaviour) and `emails/types` re-exports.
+Adding the `platform_admin` category was then a single edit — and the exhaustive
+`Record<EmailCategory, string>` in the unsubscribe page caught its own omission at
+compile time, which is the whole point of the collapse.
+
+**Also collapsed while here:** `placementTermsSummary`. Two identical inline IIFEs
+in `placements/route.ts` plus a third, differently-worded version inside
+`notifyPlacementRequest` ("Revenue Share (10%)" against "Revenue share · 10%"), so
+the two halves of one event described the same arrangement in two vocabularies
+depending on which system sent the mail. Built on the canonical
+`arrangement-labels`.
+
+**Guards.**
+- `tests/integration/no-legacy-email.test.ts` (5). The load-bearing one is "only
+  one module constructs a Resend client": a second `new Resend(...)` is a second
+  sending identity with its own `from` and no shared suppression list, which is
+  how the first split happened. It also asserts every template id the migrated
+  routes name is actually in `EMAIL_REGISTRY`, because item 1.6 found a template
+  sitting outside it and therefore invisible to every audit.
+- `.dependency-cruiser.cjs` gains `one-email-entrypoint`: importing `resend`
+  outside `send.ts` is an error. **§1.6's snippet does not work** — it matches
+  `path: "^resend$"`, but dependency-cruiser reports the RESOLVED path, so the
+  import arrives as `node_modules/resend/dist/index.cjs` and the rule never fires.
+  Found by adding a probe module and reading the graph; corrected to
+  `^node_modules/resend(/|$)` and re-verified (probe → 1 error, removed → clean).
+- `npm run depcheck` added to `npm run check`, per §14.1. It was already passing
+  and gating nothing.
+
+**Ten test files updated.** The interesting ones: `curation/billing.test.ts` had
+two mocks for two near-identical notifiers and now has one, with the tests telling
+the alerts apart by subject; `stripe-connect.test.ts` and
+`webhooks/stripe/route.test.ts` moved from asserting named props to asserting the
+alert's fields still carry every identifier, because an alert that omits the order
+or transfer id is not actionable.
+
+`npm run check` green (now including depcheck): 0 lint errors, 220 files, 2144
+tests, 0 dependency violations, exit 0.

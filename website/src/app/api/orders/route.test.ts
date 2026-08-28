@@ -23,12 +23,14 @@ vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ from: fromMock, auth: { admin: { getUserById: async () => ({ data: null }) } } }),
 }));
 
-vi.mock("@/lib/email", () => ({ notifyBuyerStatusUpdate: vi.fn(async () => {}) }));
+// K1: the legacy @/lib/email is deleted. The statuses the lifecycle dispatcher
+// does not cover (cancelled / disputed / refunded) go through sendEmail now.
+vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/stripe-connect", () => ({ executeTransfer: vi.fn(async () => {}) }));
 
 import { PATCH } from "./route";
 import { executeTransfer } from "@/lib/stripe-connect";
-import { notifyBuyerStatusUpdate } from "@/lib/email";
+import { sendEmail } from "@/lib/email/send";
 
 /**
  * assertOrderParty (E21) reads the order with .select("*").eq("id").or(...)
@@ -224,7 +226,7 @@ describe("PATCH /api/orders payout + email side-effects", () => {
     // transfers these tests are about.
     actAs("buyer");
     vi.mocked(executeTransfer).mockReset();
-    vi.mocked(notifyBuyerStatusUpdate).mockReset();
+    vi.mocked(sendEmail).mockReset();
     fromMock.mockReset();
   });
 
@@ -271,11 +273,15 @@ describe("PATCH /api/orders payout + email side-effects", () => {
     expect(vi.mocked(executeTransfer)).toHaveBeenCalledTimes(1);
   });
 
-  it("cancelled PATCH where notifyBuyerStatusUpdate rejects still returns 200", async () => {
-    // RED: currently notifyBuyerStatusUpdate is fire-and-forget so the
-    // test will currently pass — but once we await it the test must still
-    // confirm the request does NOT fail when the email throws.
-    vi.mocked(notifyBuyerStatusUpdate).mockRejectedValue(new Error("SMTP error"));
+  it("cancelled PATCH where the status email rejects still returns 200", async () => {
+    // The status change already committed; a mail failure must not turn a
+    // successful cancellation into an error the caller retries.
+    //
+    // K1: this used to drive the legacy notifyBuyerStatusUpdate. sendEmail is
+    // contractually non-throwing, so a rejection here is stricter than
+    // production can actually produce — which is the point: the route must
+    // survive it either way.
+    vi.mocked(sendEmail).mockRejectedValue(new Error("SMTP error"));
 
     // fromMock for cancelled: single order select (status=confirmed so
     // confirmed→cancelled is a valid transition), then update, then
@@ -353,8 +359,12 @@ describe("PATCH /api/orders payout + email side-effects", () => {
 
     const res = await PATCH(req({ orderId: "o1", status: "cancelled" }));
     expect(res.status).toBe(200);
-    // Email was attempted
-    expect(vi.mocked(notifyBuyerStatusUpdate)).toHaveBeenCalledTimes(1);
+    // Email was attempted, on the status-update template (K1).
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendEmail).mock.calls[0][0]).toMatchObject({
+      template: "customer_order_status_update",
+      to: "b@x.com",
+    });
   });
 });
 

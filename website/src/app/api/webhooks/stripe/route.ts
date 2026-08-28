@@ -3,7 +3,8 @@ import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
 import { canReceivePayout } from "@/lib/payouts/capability";
-import { notifyCurationCustomerPaid, notifyAdminCurationPaid } from "@/lib/email";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { CurationPaymentReceived } from "@/emails/templates/venue-lifecycle/CurationPaymentReceived";
 import { CURATION_TIERS, type CurationTierKey } from "@/lib/curation-tiers";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
@@ -170,24 +171,45 @@ async function handleWebhookEvent(
           // fired at submit, before payment, so without this an admin cannot tell a paid
           // brief from an abandoned checkout without opening Stripe. Fires whether or not
           // the venue left a contact email.
-          await notifyAdminCurationPaid({
-            requestId,
-            tier: tierLabel,
-            amountGbp: amountPaid,
-            venueName: existing.venue_name,
-            contactName: existing.contact_name,
-            contactEmail: existing.contact_email,
-            isSubscription,
-          }).catch((err) => { if (err) console.error("notifyAdminCurationPaid error:", err); });
+          // K1: was notifyAdminCurationPaid.
+          await sendAdminAlert({
+            idempotencyKey: `admin_curation_paid:${requestId}`,
+            subject: `Curation paid (£${amountPaid}): ${existing.venue_name}`,
+            summary: `${existing.venue_name} paid £${amountPaid} for ${tierLabel}. The brief is paid and ready to curate.`,
+            fields: [
+              { label: "Tier", value: tierLabel },
+              { label: "Amount", value: `£${amountPaid}` },
+              {
+                label: "Contact",
+                value: `${existing.contact_name}${existing.contact_email ? ` <${existing.contact_email}>` : ""}`,
+              },
+              {
+                label: "Kind",
+                value: isSubscription ? "Managed subscription, first payment" : "One-off payment",
+              },
+            ],
+            actionPath: "/admin/curation",
+            actionLabel: "View in admin",
+          });
 
           if (existing.contact_email) {
-            await notifyCurationCustomerPaid({
-              email: existing.contact_email,
-              contactName: existing.contact_name,
-              venueName: existing.venue_name,
-              tierLabel,
-              amountGbp: amountPaid,
-            }).catch((err) => { if (err) console.error("notifyCurationCustomerPaid error:", err); });
+            // K1: was notifyCurationCustomerPaid. This is a receipt, so losing
+            // its audit trail mattered more than most.
+            await sendEmail({
+              idempotencyKey: `curation_payment_received:${requestId}`,
+              template: "curation_payment_received",
+              category: "orders_and_payouts",
+              to: existing.contact_email,
+              subject: "Your Wallplace curation is underway",
+              react: CurationPaymentReceived({
+                contactFirstName: (existing.contact_name || "there").split(" ")[0],
+                venueName: existing.venue_name,
+                tierLabel,
+                amount: { amount: Math.round(amountPaid * 100), currency: "GBP" },
+                shortlistDays: 5,
+              }),
+              metadata: { curationRequestId: requestId },
+            });
           }
         }
       }

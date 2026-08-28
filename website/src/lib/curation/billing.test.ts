@@ -10,16 +10,26 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 
-const { notifyAdminCurationCancelledMock, notifyAdminCurationPaidMock } = vi.hoisted(() => ({
-  notifyAdminCurationCancelledMock: vi.fn(async () => {}),
-  notifyAdminCurationPaidMock: vi.fn(async () => {}),
+const { sendAdminAlertMock } = vi.hoisted(() => ({
+  sendAdminAlertMock: vi.fn(
+    async (_input: {
+      idempotencyKey: string;
+      subject: string;
+      fields?: { label: string; value: string }[];
+    }) => ({ ok: true as const, skipped: false as const, messageId: "m" }),
+  ),
 }));
 
+/** The single alert the call under test sent, or undefined if it sent none. */
+function lastAlert() {
+  return sendAdminAlertMock.mock.calls.at(-1)?.[0];
+}
+
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({}) }));
-vi.mock("@/lib/email", () => ({
-  notifyAdminCurationCancelled: notifyAdminCurationCancelledMock,
-  notifyAdminCurationPaid: notifyAdminCurationPaidMock,
-}));
+// K1: both were near-identical hand-written admin notifiers in the deleted
+// @/lib/email. One helper now, so the two mocks collapse into one and the tests
+// tell them apart by the alert's subject.
+vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: sendAdminAlertMock }));
 
 import {
   handleCurationInvoicePaid,
@@ -117,9 +127,13 @@ describe("handleCurationInvoicePaid", () => {
       db,
     );
 
-    expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
-      expect.objectContaining({ requestId: "cr_1", amountGbp: 79.99, isRenewal: true, isSubscription: true }),
-    );
+    // K1: one generic alert helper now, so the identifying detail lives in the
+    // subject and fields rather than in named props.
+    const alert = lastAlert();
+    expect(alert?.subject).toContain("Curation renewal paid");
+    expect(alert?.subject).toContain("79.99");
+    const values = (alert?.fields ?? []).map((f) => f.value).join(" | ");
+    expect(values).toContain("Managed subscription renewal");
   });
 
   it("D23: does NOT ping the admin on the first invoice (subscription_create)", async () => {
@@ -133,7 +147,7 @@ describe("handleCurationInvoicePaid", () => {
     // Still reconciles the row, just no admin ping (the checkout webhook already sent one).
     expect(handled).toBe(true);
     expect(updates[0].status).toBe("in_progress");
-    expect(notifyAdminCurationPaidMock).not.toHaveBeenCalled();
+    expect(sendAdminAlertMock).not.toHaveBeenCalled();
   });
 });
 
@@ -149,11 +163,12 @@ describe("handleCurationSubscriptionDeleted", () => {
     expect(handled).toBe(true);
     expect(updates[0].status).toBe("cancelled");
     expect(updates[0].cancelled_at).toEqual(expect.any(String));
-    expect(notifyAdminCurationCancelledMock).toHaveBeenCalledWith({
-      requestId: "cr_1",
-      venueName: "The Copper Kettle",
-      tier: "managed_monthly",
-    });
+    const alert = lastAlert();
+    expect(alert?.subject).toContain("Curation subscription cancelled");
+    const values = (alert?.fields ?? []).map((f) => f.value).join(" | ");
+    expect(values).toContain("cr_1");
+    expect(values).toContain("The Copper Kettle");
+    expect(values).toContain("managed_monthly");
   });
 
   it("returns false and does not notify when the subscription is not a curation one", async () => {
@@ -166,7 +181,7 @@ describe("handleCurationSubscriptionDeleted", () => {
 
     expect(handled).toBe(false);
     expect(updates).toHaveLength(0);
-    expect(notifyAdminCurationCancelledMock).not.toHaveBeenCalled();
+    expect(sendAdminAlertMock).not.toHaveBeenCalled();
   });
 });
 

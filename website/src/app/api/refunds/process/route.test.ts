@@ -26,9 +26,8 @@ vi.mock("@/lib/supabase-admin", () => ({
   }),
 }));
 vi.mock("@/lib/stripe", () => ({ stripe: stripeMock }));
-vi.mock("@/lib/email", () => ({
-  notifyRefundDecision: vi.fn(async () => {}),
-}));
+// K1: the legacy @/lib/email is deleted. Both refund outcomes go through
+// sendEmail, which is already mocked below.
 vi.mock("@/lib/email/send", () => ({
   sendEmail: vi.fn(async () => ({ ok: true })),
 }));

@@ -32,11 +32,8 @@ vi.mock("@/lib/supabase-admin", () => ({
   }),
 }));
 vi.mock("@/lib/feature-flags", () => ({ isFlagOn: isFlagOnMock }));
-vi.mock("@/lib/email", () => ({
-  notifyPlacementRequest: vi.fn(async () => {}),
-  notifyPlacementResponse: vi.fn(async () => {}),
-  notifyVenuePlacementResponse: vi.fn(async () => {}),
-}));
+// K1: the legacy @/lib/email is deleted; both directions of the placement
+// event go through sendEmail now.
 vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
 

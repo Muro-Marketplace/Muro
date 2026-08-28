@@ -40,10 +40,10 @@ vi.mock("@/lib/stripe", () => ({
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ auth: { getUser: getUserMock }, from: fromMock }),
 }));
-vi.mock("@/lib/email", () => ({
-  notifyAdminCurationRequest: notifyAdminMock,
-  notifyCurationCustomerEnquiry: notifyEnquiryMock,
-}));
+// K1: the legacy @/lib/email is deleted. The admin ping is an operational
+// alert; the customer acknowledgement is a template through the pipeline.
+vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: notifyAdminMock }));
+vi.mock("@/lib/email/send", () => ({ sendEmail: notifyEnquiryMock }));
 
 import { POST } from "./route";
 

@@ -10,9 +10,13 @@ import { assertPlacementParty, handleAuthzError } from "@/lib/authz";
 import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { moderateMessage } from "@/lib/moderation";
 import { isFlagOn } from "@/lib/feature-flags";
-import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
 import { MessageUnreadNotification } from "@/emails/templates/messages/MessageUnreadNotification";
+import { ArtistNewPlacementInvitation } from "@/emails/templates/placements/ArtistNewPlacementInvitation";
+import { VenueNewPlacementRequest } from "@/emails/templates/placements/VenueNewPlacementRequest";
+import { ArtistPlacementAccepted } from "@/emails/templates/placements/ArtistPlacementAccepted";
+import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPlacementDeclined";
+import { placementTermsSummary } from "@/lib/placements/terms-summary";
 import { artists as staticArtists } from "@/data/artists";
 import { venues as staticVenues } from "@/data/venues";
 
@@ -501,16 +505,71 @@ export async function POST(request: Request) {
         if (recipientProfile?.user_id) {
           const { data: { user: recipientUser } } = await db.auth.admin.getUserById(recipientProfile.user_id);
           if (recipientUser?.email) {
-            const senderProfile = senderIsArtist ? artistProfile : venueProfileData;
-            await notifyPlacementRequest({
-              email: recipientUser.email,
-              venueName: venueProfileData.name,
-              artistName: artistProfile.name,
-              workTitles: [(m.workTitle as string) || "Artwork"],
-              arrangementType: (m.arrangementType as string) || "free_loan",
-              revenueSharePercent: m.revenueSharePercent as number | undefined,
-              message: content,
-            }).catch((err) => { if (err) console.error("notifyPlacementRequest error:", err); });
+            // K1: was notifyPlacementRequest, which sent the same hand-written
+            // HTML to either party. Through the pipeline each side gets the
+            // template written for it, plus suppression, preferences and a row
+            // in email_events saying it was attempted.
+            const workTitle = (m.workTitle as string) || "Artwork";
+            const terms = placementTermsSummary(
+              (m.arrangementType as string) || "free_loan",
+              m.revenueSharePercent as number | undefined,
+            );
+            const placementUrl = `${SITE}/placements/${encodeURIComponent(placementId)}`;
+            if (recipientIsArtist) {
+              await sendEmail({
+                idempotencyKey: `placement_request:${placementId}:to_artist`,
+                template: "artist_new_placement_invitation",
+                category: "placements",
+                to: recipientUser.email,
+                subject: `${venueProfileData.name} would like to display your work`,
+                userId: recipientProfile.user_id,
+                react: ArtistNewPlacementInvitation({
+                  firstName: (artistProfile.name || "there").split(" ")[0],
+                  venue: {
+                    id: venueProfileData.user_id || "",
+                    name: venueProfileData.name,
+                    slug: venueProfileData.slug,
+                    image: "",
+                    location: "",
+                    type: "",
+                    url: `${SITE}/venues/${venueProfileData.slug}`,
+                  },
+                  placementUrl,
+                  requestedWorks: [workTitle],
+                  proposedTerms: terms,
+                  message: content,
+                }),
+                metadata: { placementId },
+              });
+            } else {
+              await sendEmail({
+                idempotencyKey: `placement_request:${placementId}:to_venue`,
+                template: "venue_new_placement_request",
+                category: "placements",
+                to: recipientUser.email,
+                subject: `New placement request from ${artistProfile.name}`,
+                userId: recipientProfile.user_id,
+                react: VenueNewPlacementRequest({
+                  firstName: (venueProfileData.name || "there").split(" ")[0],
+                  venueName: venueProfileData.name,
+                  artist: {
+                    id: artistProfile.user_id || "",
+                    name: artistProfile.name,
+                    slug: artistProfile.slug,
+                    avatar: "",
+                    location: "",
+                    primaryMedium: "",
+                    url: `${SITE}/browse/${artistProfile.slug}`,
+                  },
+                  artistProfileUrl: `${SITE}/browse/${artistProfile.slug}`,
+                  placementUrl,
+                  requestedWorks: [workTitle],
+                  proposedTerms: terms,
+                  message: content,
+                }),
+                metadata: { placementId },
+              });
+            }
           }
         }
       }
@@ -579,12 +638,43 @@ export async function POST(request: Request) {
           const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", placement.artist_user_id).single();
           const { data: { user: artistUser } } = await db.auth.admin.getUserById(placement.artist_user_id);
           if (artistUser?.email && artistProfile) {
-            await notifyPlacementResponse({
-              email: artistUser.email,
-              artistName: artistProfile.name,
-              venueName: placement.venue || "Venue",
-              accepted: responseStatus === "active",
-            }).catch((err) => { if (err) console.error("notifyPlacementResponse error:", err); });
+            // K1: was notifyPlacementResponse. The accepted/declined split now
+            // uses the two templates already written for it, which
+            // placements/route.ts was already using for the same event.
+            const venueName = placement.venue || "Venue";
+            const accepted = responseStatus === "active";
+            const firstName = (artistProfile.name || "there").split(" ")[0];
+            const placementUrl = `${SITE}/placements/${encodeURIComponent(placementId)}`;
+            await sendEmail({
+              idempotencyKey: `placement_response:${placementId}:${accepted ? "accepted" : "declined"}`,
+              template: accepted ? "artist_placement_accepted" : "artist_placement_declined",
+              category: "placements",
+              to: artistUser.email,
+              subject: `${venueName} ${accepted ? "accepted" : "declined"} your placement request`,
+              userId: placement.artist_user_id,
+              react: accepted
+                ? ArtistPlacementAccepted({
+                    firstName,
+                    venueName,
+                    placementUrl,
+                    // Same three next steps placements/route.ts uses for this
+                    // event, so the artist reads the same instructions whichever
+                    // surface the response came through.
+                    nextSteps: [
+                      `Confirm install date with ${venueName}`,
+                      "Print QR labels for each piece",
+                      "Finalise the consignment record",
+                    ],
+                    qrLabelsUrl: `${SITE}/artist-portal/labels`,
+                    consignmentRecordUrl: `${placementUrl}?record=open`,
+                  })
+                : ArtistPlacementDeclined({
+                    firstName,
+                    venueName,
+                    discoverMoreVenuesUrl: `${SITE}/spaces`,
+                  }),
+              metadata: { placementId },
+            });
           }
         }
       }

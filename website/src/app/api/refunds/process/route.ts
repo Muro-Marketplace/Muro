@@ -5,11 +5,11 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
 import { isAdminRequest } from "@/lib/admin-auth";
 import { recordAdminAction } from "@/lib/admin-audit";
-import { notifyRefundDecision } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
 import { createNotification } from "@/lib/notifications";
 import { CustomerRefundConfirmation } from "@/emails/templates/orders/CustomerRefundConfirmation";
 import { ArtistRefundNotification } from "@/emails/templates/orders/ArtistRefundNotification";
+import { CustomerRefundRejected } from "@/emails/templates/orders/CustomerRefundRejected";
 import { claimPending, releaseClaim } from "@/lib/api/idempotency";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -138,12 +138,27 @@ export async function POST(request: Request) {
       const requesterEmail = refundReq.requester_email as string | null | undefined;
       const buyerEmailFallback = order.buyer_email as string | null | undefined;
       if (requesterEmail || buyerEmailFallback) {
-        await notifyRefundDecision({
-          buyerEmail: (requesterEmail || buyerEmailFallback) as string,
-          orderId: order.id,
-          approved: false,
-          reason: reason || undefined,
-        }).catch((err) => { if (err) console.error("notifyRefundDecision error:", err); });
+        // K1: was notifyRefundDecision with an `approved` boolean. The approved
+        // half already went through the pipeline as CustomerRefundConfirmation;
+        // only the decline had no template, which is what kept the legacy
+        // function alive. Both halves are on one pipeline now.
+        const declineTo = (requesterEmail || buyerEmailFallback) as string;
+        await sendEmail({
+          idempotencyKey: `customer_refund_rejected:${refundRequestId}`,
+          template: "customer_refund_rejected",
+          category: "orders_and_payouts",
+          to: declineTo,
+          subject: `Refund decision for order ${order.id}`,
+          react: CustomerRefundRejected({
+            firstName:
+              ((order.shipping as { fullName?: string } | null)?.fullName || "there").split(" ")[0],
+            orderNumber: order.id as string,
+            reason: reason || undefined,
+            ordersUrl: `${SITE}/customer-portal/orders`,
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { orderId: order.id, refundRequestId },
+        });
       }
 
       // E30a / G3. An admin rejecting an artist-raised refund is the decision
@@ -378,19 +393,18 @@ export async function POST(request: Request) {
       })
       .eq("id", refundRequestId);
 
-    // 5. Notify the buyer (legacy helper, retained as safety net) + send
-    // the polished CustomerRefundConfirmation via the new pipeline so the
-    // email lands in email_events and respects preferences.
+    // 5. Notify the buyer.
+    //
+    // K1: there were TWO sends here for one approved refund. The legacy
+    // notifyRefundDecision was kept "as safety net" beside the polished
+    // CustomerRefundConfirmation below, so a buyer whose refund was approved
+    // received two emails about it — one of them from an unverified domain with
+    // no unsubscribe header and no record it was attempted. The safety net is
+    // gone; the pipeline send stays.
     const refundRequesterEmail = refundReq.requester_email as string | null | undefined;
     const orderBuyerEmail = order.buyer_email as string | null | undefined;
     if (refundRequesterEmail || orderBuyerEmail) {
       const buyerEmail = (refundRequesterEmail || orderBuyerEmail) as string;
-      await notifyRefundDecision({
-        buyerEmail,
-        orderId: order.id,
-        approved: true,
-        amount: refundReq.amount as number,
-      }).catch((err) => { if (err) console.error("notifyRefundDecision error:", err); });
 
       // In-app bell for the buyer if they're an account holder. The
       // refund_requests row carries the requester's user id, fall back

@@ -107,12 +107,10 @@ vi.mock("@/lib/curation/billing", () => ({
   handleCurationSubscriptionDeleted: curationSubDeletedMock,
 }));
 
-vi.mock("@/lib/email", () => ({
-  notifyArtistNewOrder: vi.fn(async () => {}),
-  notifyVenueOrderFromPlacement: vi.fn(async () => {}),
-  notifyCurationCustomerPaid: vi.fn(async () => {}),
-  notifyAdminCurationPaid: notifyAdminCurationPaidMock,
-  notifyAdminBillingStalled: notifyAdminBillingStalledMock,
+// K1: the legacy @/lib/email is deleted. The curation admin ping is an
+// operational alert now; the customer receipt goes through sendEmail.
+vi.mock("@/lib/email/admin-alert", () => ({
+  sendAdminAlert: notifyAdminCurationPaidMock,
 }));
 
 vi.mock("@/lib/notifications", () => ({
@@ -2358,14 +2356,19 @@ describe("Stripe webhook — curation payment id storage (D20)", () => {
 
     await fireCuration({ mode: "subscription", payment_intent: null, subscription: "sub_x", amount_total: 7999 });
 
-    expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        isSubscription: true,
-        amountGbp: 79.99,
-        venueName: "The Copper Kettle",
-        tier: "Managed, monthly rotation",
-      }),
-    );
+    // K1: one generic alert helper now, so the identifying detail lives in the
+    // subject and fields rather than in named props.
+    const alert = (notifyAdminCurationPaidMock.mock.calls.at(-1) as unknown[] | undefined)?.[0] as {
+      subject: string;
+      summary: string;
+      fields?: { label: string; value: string }[];
+    };
+    expect(alert.subject).toContain("Curation paid");
+    expect(alert.subject).toContain("The Copper Kettle");
+    const values = (alert.fields ?? []).map((f) => f.value).join(" | ");
+    expect(values).toContain("Managed, monthly rotation");
+    expect(values).toContain("79.99");
+    expect(values).toContain("Managed subscription, first payment");
   });
 });
 

@@ -40,6 +40,9 @@ import CustomerFollowArtistNudge from "./templates/onboarding/customer/CustomerF
 
 // ── Placements ────────────────────────────────────────────────────────────
 import VenueNewPlacementRequest from "./templates/placements/VenueNewPlacementRequest";
+// K1: the mirror of the above, for venue-initiated requests. Its absence is why
+// a legacy hand-written fallback survived on that half of the flow.
+import ArtistNewPlacementInvitation from "./templates/placements/ArtistNewPlacementInvitation";
 import ArtistPlacementRequestSent from "./templates/placements/ArtistPlacementRequestSent";
 import ArtistPlacementAccepted from "./templates/placements/ArtistPlacementAccepted";
 import VenuePlacementAcceptedConfirmation from "./templates/placements/VenuePlacementAcceptedConfirmation";
@@ -89,6 +92,8 @@ import VenueRegistrationConfirmation from "./templates/venue-lifecycle/VenueRegi
 // deleted lib/email.ts.
 import CurationEnquiryReceived from "./templates/venue-lifecycle/CurationEnquiryReceived";
 import CurationPaymentReceived from "./templates/venue-lifecycle/CurationPaymentReceived";
+// K1: the per-sale venue notice, distinct from the periodic revenue-share statement.
+import VenueSaleFromPlacement from "./templates/venue-lifecycle/VenueSaleFromPlacement";
 
 // ── Orders ────────────────────────────────────────────────────────────────
 import CustomerOrderReceipt from "./templates/orders/CustomerOrderReceipt";
@@ -99,7 +104,15 @@ import CustomerDeliveryConfirmation from "./templates/orders/CustomerDeliveryCon
 import CustomerPostPurchaseCare from "./templates/orders/CustomerPostPurchaseCare";
 import CustomerPurchaseReviewRequest from "./templates/orders/CustomerPurchaseReviewRequest";
 import CustomerRefundConfirmation from "./templates/orders/CustomerRefundConfirmation";
+// K1: the decline counterpart. Its absence is why the legacy notifyRefundDecision
+// survived after the approve half had already moved to the pipeline.
+import CustomerRefundRejected from "./templates/orders/CustomerRefundRejected";
+// K1: the statuses the purpose-built lifecycle templates do not cover.
+import CustomerOrderStatusUpdate from "./templates/orders/CustomerOrderStatusUpdate";
 import ArtistRefundNotification from "./templates/orders/ArtistRefundNotification";
+// K1: distinct from the above. That one says a refund HAS been issued; this one
+// says one has been asked for and nothing has moved yet.
+import ArtistRefundRequested from "./templates/orders/ArtistRefundRequested";
 import OrderDisputeOpened from "./templates/orders/OrderDisputeOpened";
 import OrderDisputeResolved from "./templates/orders/OrderDisputeResolved";
 
@@ -176,6 +189,11 @@ import OperationalAccountRestored from "./templates/legal/OperationalAccountRest
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   AdminAlert,
+  VenueSaleFromPlacement,
+  CustomerOrderStatusUpdate,
+  CustomerRefundRejected,
+  ArtistRefundRequested,
+  ArtistNewPlacementInvitation,
   CurationEnquiryReceived,
   CurationPaymentReceived,
   // Account

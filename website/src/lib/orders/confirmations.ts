@@ -20,7 +20,7 @@ import { sendEmail } from "@/lib/email/send";
 import { createNotification } from "@/lib/notifications";
 import { recordOrderEvent } from "@/lib/orders/lifecycle";
 import { signOrderToken } from "@/lib/order-tracking-token";
-import { notifyVenueOrderFromPlacement } from "@/lib/email";
+import { VenueSaleFromPlacement } from "@/emails/templates/venue-lifecycle/VenueSaleFromPlacement";
 import { CustomerOrderReceipt } from "@/emails/templates/orders/CustomerOrderReceipt";
 import { ArtistWorkSold } from "@/emails/templates/orders/ArtistWorkSold";
 import { ArtistOrderConfirmation } from "@/emails/templates/orders/ArtistOrderConfirmation";
@@ -192,14 +192,28 @@ export async function sendOrderConfirmations(
       const { data: ap } = await db
         .from("artist_profiles").select("name").eq("slug", venue.artistSlug).single();
       if (venueUser?.email) {
-        await notifyVenueOrderFromPlacement({
-          email: venueUser.email,
-          venueName: vp.name,
-          artistName: ap?.name || venue.artistSlug,
-          itemTitle: firstItemTitle,
-          total,
-          venueRevenue: venue.revenue,
-        }).catch((err) => { if (err) console.error("notifyVenueOrderFromPlacement error:", err); });
+        // K1: was notifyVenueOrderFromPlacement, hand-written HTML from an
+        // unverified domain with no email_events row. This one carries money,
+        // so "did the venue ever get told about their share?" was unanswerable.
+        await sendEmail({
+          idempotencyKey: `venue_sale_from_placement:${orderId}`,
+          template: "venue_sale_from_placement",
+          category: "orders_and_payouts",
+          to: venueUser.email,
+          userId: vp.user_id,
+          subject: `Sale from your venue: ${firstItemTitle}`,
+          react: VenueSaleFromPlacement({
+            firstName: (vp.name || "there").split(" ")[0],
+            venueName: vp.name,
+            artistName: ap?.name || venue.artistSlug,
+            workTitle: firstItemTitle,
+            saleTotal: { amount: Math.round(total * 100), currency: "GBP" },
+            venueShare: { amount: Math.round(venue.revenue * 100), currency: "GBP" },
+            ordersUrl: `${SITE}/venue-portal/orders`,
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { orderId, venueSlug: venue.slug },
+        });
       }
       createNotification({
         userId: vp.user_id,

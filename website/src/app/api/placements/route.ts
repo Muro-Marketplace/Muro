@@ -10,7 +10,6 @@ import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
 import { checkArtistOutreachCap } from "@/lib/outreach-cap";
-import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
 import { VenueNewPlacementRequest } from "@/emails/templates/placements/VenueNewPlacementRequest";
@@ -25,6 +24,8 @@ import { PlacementScheduled } from "@/emails/templates/placements/PlacementSched
 import { PlacementArtworkInstalled } from "@/emails/templates/placements/PlacementArtworkInstalled";
 import { PlacementEnded } from "@/emails/templates/placements/PlacementEnded";
 import { z } from "zod";
+import { ArtistNewPlacementInvitation } from "@/emails/templates/placements/ArtistNewPlacementInvitation";
+import { placementTermsSummary } from "@/lib/placements/terms-summary";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -510,26 +511,22 @@ export async function POST(request: Request) {
       if (notifyUser?.email) {
         const placementIdForLink = parsed.data[0]?.id;
         // Build an arrangement-summary string the shared template expects.
-        const termsSummary = (() => {
-          const parts: string[] = [];
-          const t = parsed.data[0].type;
-          const fee = parsed.data[0].monthlyFeeGbp ?? 0;
-          const rev = parsed.data[0].revenueSharePercent ?? 0;
-          if (t === "revenue_share") parts.push(`Revenue share · ${rev || 0}%`);
-          else if (t === "purchase") parts.push("Direct purchase");
-          else parts.push("Paid loan");
-          if (fee > 0) parts.push(`£${fee}/mo`);
-          if (rev > 0 && t !== "revenue_share") parts.push(`${rev}% on QR sales`);
-          return parts.join(" · ");
-        })();
+        // K1: was an inline IIFE, duplicated verbatim below and worded a third
+        // way inside the legacy notifyPlacementRequest.
+        const termsSummary = placementTermsSummary(
+          parsed.data[0].type,
+          parsed.data[0].revenueSharePercent,
+          parsed.data[0].monthlyFeeGbp,
+        );
         const placementUrl = placementIdForLink
           ? `${SITE}/placements/${encodeURIComponent(placementIdForLink)}`
           : `${SITE}/${fromVenue ? "artist-portal" : "venue-portal"}/placements`;
 
-        // If the artist initiated the request, the venue is the recipient,
-        // send the polished VenueNewPlacementRequest template. For
-        // venue-initiated (artist receives), we don't yet have a matching
-        // polished template, so fall back to the legacy helper.
+        // Both directions of one event go through the same pipeline now (K1).
+        // The venue-initiated half used to fall back to a hand-written legacy
+        // helper "because we don't yet have a matching polished template", so
+        // half the recipients of this event got mail with no suppression check,
+        // no preference check and no record it was attempted.
         if (!fromVenue) {
           await sendEmail({
             idempotencyKey: `placement_request:${placementIdForLink}:to_venue`,
@@ -559,15 +556,32 @@ export async function POST(request: Request) {
             metadata: { placementId: placementIdForLink, arrangementType: parsed.data[0].type },
           });
         } else {
-          await notifyPlacementRequest({
-            email: notifyUser.email,
-            venueName: venueProfile!.name,
-            artistName: artistProfile!.name,
-            workTitles: parsed.data.map((p) => p.workTitle),
-            arrangementType: parsed.data[0].type,
-            revenueSharePercent: parsed.data[0].revenueSharePercent,
-            message: parsed.data[0].message,
-          }).catch((err) => { if (err) console.error("notifyPlacementRequest error:", err); });
+          await sendEmail({
+            idempotencyKey: `placement_request:${placementIdForLink}:to_artist`,
+            template: "artist_new_placement_invitation",
+            category: "placements",
+            to: notifyUser.email,
+            subject: `${venueProfile!.name} would like to display your work`,
+            userId: notifyUserId,
+            react: ArtistNewPlacementInvitation({
+              firstName:
+                notifyUser.user_metadata?.first_name || artistProfile!.name.split(" ")[0] || "there",
+              venue: {
+                id: venueProfile!.user_id || "",
+                name: venueProfile!.name,
+                slug: venueProfile!.slug,
+                image: "",
+                location: "",
+                type: "",
+                url: `${SITE}/venues/${venueProfile!.slug}`,
+              },
+              placementUrl,
+              requestedWorks: parsed.data.map((p) => p.workTitle),
+              proposedTerms: termsSummary,
+              message: parsed.data[0].message || undefined,
+            }),
+            metadata: { placementId: placementIdForLink, arrangementType: parsed.data[0].type },
+          });
         }
       }
 
@@ -588,18 +602,13 @@ export async function POST(request: Request) {
         const placementUrl = placementIdForLink
           ? `${SITE}/placements/${encodeURIComponent(placementIdForLink)}`
           : `${SITE}/artist-portal/placements`;
-        const termsSummary = (() => {
-          const parts: string[] = [];
-          const t = parsed.data[0].type;
-          const fee = parsed.data[0].monthlyFeeGbp ?? 0;
-          const rev = parsed.data[0].revenueSharePercent ?? 0;
-          if (t === "revenue_share") parts.push(`Revenue share · ${rev || 0}%`);
-          else if (t === "purchase") parts.push("Direct purchase");
-          else parts.push("Paid loan");
-          if (fee > 0) parts.push(`£${fee}/mo`);
-          if (rev > 0 && t !== "revenue_share") parts.push(`${rev}% on QR sales`);
-          return parts.join(" · ");
-        })();
+        // K1: was an inline IIFE, duplicated verbatim below and worded a third
+        // way inside the legacy notifyPlacementRequest.
+        const termsSummary = placementTermsSummary(
+          parsed.data[0].type,
+          parsed.data[0].revenueSharePercent,
+          parsed.data[0].monthlyFeeGbp,
+        );
         sendEmail({
           idempotencyKey: `placement_request:${placementIdForLink}:to_artist`,
           template: "artist_placement_request_sent",

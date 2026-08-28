@@ -23,7 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { readSubscriptionIdFromInvoice } from "@/lib/stripe-subscription-period";
-import { notifyAdminCurationCancelled, notifyAdminCurationPaid } from "@/lib/email";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
 import { CURATION_TIERS, type CurationTierKey } from "@/lib/curation-tiers";
 
 interface CurationRow {
@@ -77,17 +77,23 @@ export async function handleCurationInvoicePaid(
   // by the checkout webhook's notifyAdminCurationPaid, so guarding here avoids a
   // double send at signup.
   if (invoice.billing_reason === "subscription_cycle") {
-    await notifyAdminCurationPaid({
-      requestId: row.id,
-      tier: CURATION_TIERS[row.tier as CurationTierKey]?.label || row.tier || "",
-      amountGbp: (invoice.amount_paid ?? 0) / 100,
-      venueName: row.venue_name ?? "",
-      contactName: row.contact_name ?? "",
-      contactEmail: row.contact_email,
-      isSubscription: true,
-      isRenewal: true,
-    }).catch((err) => {
-      if (err) console.error("notifyAdminCurationPaid (renewal) error:", err);
+    // K1: was notifyAdminCurationPaid. Keyed on the invoice, so a Stripe
+    // redelivery of the same renewal cannot re-alert.
+    await sendAdminAlert({
+      idempotencyKey: `admin_curation_paid:renewal:${invoice.id}`,
+      subject: `Curation renewal paid (£${((invoice.amount_paid ?? 0) / 100).toFixed(2)}): ${row.venue_name ?? ""}`,
+      summary: `${row.venue_name ?? "A venue"} renewed their managed curation subscription.`,
+      fields: [
+        { label: "Tier", value: CURATION_TIERS[row.tier as CurationTierKey]?.label || row.tier || "" },
+        { label: "Amount", value: `£${((invoice.amount_paid ?? 0) / 100).toFixed(2)}` },
+        {
+          label: "Contact",
+          value: `${row.contact_name ?? ""}${row.contact_email ? ` <${row.contact_email}>` : ""}`,
+        },
+        { label: "Kind", value: "Managed subscription renewal" },
+      ],
+      actionPath: "/admin/curation",
+      actionLabel: "View in admin",
     });
   }
   return true;
@@ -115,12 +121,19 @@ export async function handleCurationSubscriptionDeleted(
     })
     .eq("id", row.id);
 
-  await notifyAdminCurationCancelled({
-    requestId: row.id,
-    venueName: row.venue_name ?? "",
-    tier: row.tier ?? "",
-  }).catch((err) => {
-    if (err) console.error("notifyAdminCurationCancelled error:", err);
+  // K1: was notifyAdminCurationCancelled.
+  await sendAdminAlert({
+    idempotencyKey: `admin_curation_cancelled:${row.id}`,
+    subject: `Curation subscription cancelled: ${row.venue_name ?? ""}`,
+    summary:
+      "Stripe has confirmed the cancellation. The curator should stop work, which is now unpaid.",
+    fields: [
+      { label: "Request", value: row.id },
+      { label: "Venue", value: row.venue_name ?? "" },
+      { label: "Tier", value: row.tier ?? "" },
+    ],
+    actionPath: "/admin/curation",
+    actionLabel: "View in admin",
   });
   return true;
 }
