@@ -40,9 +40,10 @@ beforeEach(() => {
 const noPlacements = new Map<string, { id: string; revenue_share_percent: number }>();
 
 function build(
-  cartItems: Array<{ artistSlug?: string; price?: number; qty?: number; quantity?: number }>,
+  cartItems: Array<{ artistSlug?: string; workId?: string; price?: number; qty?: number; quantity?: number }>,
   opts: {
     placements?: Map<string, { id: string; revenue_share_percent: number }>;
+    workPlacements?: Map<string, { id: string; revenue_share_percent: number }>;
     artistShippingPence?: Record<string, number>;
     shippingTotalPence?: number;
   } = {},
@@ -50,6 +51,7 @@ function build(
   return buildArtistLegs(db, {
     cartItems,
     placementByArtistSlug: opts.placements ?? noPlacements,
+    placementByWorkId: opts.workPlacements,
     artistShippingPence: opts.artistShippingPence ?? {},
     shippingTotalPence: opts.shippingTotalPence ?? 0,
   });
@@ -202,6 +204,67 @@ describe("buildArtistLegs, venue revenue share", () => {
       { placements },
     );
     expect(bySlug(legs, "bob").venueCutPence).toBe(0);
+  });
+});
+
+describe("buildArtistLegs, work-level placement rates (2026-08-28)", () => {
+  // The owner's live find: fin-coles had 40+ placements at one venue, and a
+  // sale of a work on a 3% placement paid the venue the oldest-active
+  // placement's 5%. The WORK's own placement decides the rate.
+  it("the sold work's own placement rate beats the artist-level fallback", async () => {
+    const placements = new Map([["alice", { id: "p-old", revenue_share_percent: 5 }]]);
+    const workPlacements = new Map([["w-guanaco", { id: "p-work", revenue_share_percent: 3 }]]);
+    const legs = await build(
+      [{ artistSlug: "alice", workId: "w-guanaco", price: 100, quantity: 1 }],
+      { placements, workPlacements },
+    );
+    expect(bySlug(legs, "alice").venueCutPence).toBe(300);
+  });
+
+  it("two works by one artist each pay their own placement's rate", async () => {
+    const placements = new Map([["alice", { id: "p-old", revenue_share_percent: 5 }]]);
+    const workPlacements = new Map([
+      ["w-a", { id: "p-a", revenue_share_percent: 3 }],
+      ["w-b", { id: "p-b", revenue_share_percent: 30 }],
+    ]);
+    const legs = await build(
+      [
+        { artistSlug: "alice", workId: "w-a", price: 100, quantity: 1 },
+        { artistSlug: "alice", workId: "w-b", price: 100, quantity: 1 },
+      ],
+      { placements, workPlacements },
+    );
+    // 3% of 10000 + 30% of 10000, aggregated on the single alice leg.
+    expect(bySlug(legs, "alice").venueCutPence).toBe(300 + 3000);
+  });
+
+  it("a line whose work has no placement link falls back to the artist-level rate", async () => {
+    const placements = new Map([["alice", { id: "p-old", revenue_share_percent: 5 }]]);
+    const workPlacements = new Map([["w-known", { id: "p-w", revenue_share_percent: 3 }]]);
+    const legs = await build(
+      [
+        { artistSlug: "alice", workId: "w-known", price: 100, quantity: 1 },
+        { artistSlug: "alice", workId: "w-unlinked", price: 100, quantity: 1 },
+      ],
+      { placements, workPlacements },
+    );
+    expect(bySlug(legs, "alice").venueCutPence).toBe(300 + 500);
+  });
+
+  it("still reconciles to the penny with mixed per-line rates", async () => {
+    const placements = new Map([["alice", { id: "p-old", revenue_share_percent: 7 }]]);
+    const workPlacements = new Map([["w-a", { id: "p-a", revenue_share_percent: 13 }]]);
+    const legs = await build(
+      [
+        { artistSlug: "alice", workId: "w-a", price: 33.33, quantity: 1 },
+        { artistSlug: "alice", price: 66.67, quantity: 1 },
+      ],
+      { placements, workPlacements },
+    );
+    const leg = bySlug(legs, "alice");
+    // 13% of 3333 = 433 (rounded), 7% of 6667 = 467 (rounded); per-line rounding.
+    expect(leg.venueCutPence).toBe(Math.round(3333 * 0.13) + Math.round(6667 * 0.07));
+    expect(leg.netPence).toBe(leg.grossPence - leg.venueCutPence - leg.platformFeePence + leg.shippingPence);
   });
 });
 

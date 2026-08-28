@@ -12759,3 +12759,23 @@ authfetch ratchet lowered 7 to 3 per its own contract (server-side money
 gating untouched; confirmDelivery and the two pay buttons remain as they
 were). The triage document carries the per-item detail and the bonus
 defects found during the round.
+
+## Owner live-testing round, 2026-08-28 afternoon
+
+### P0: the venue's cut is now the SOLD WORK's placement rate
+
+Owner-reported and reproduced in prod: with 43 placements between fin-coles
+and testing-venue, a QR sale paid the venue the OLDEST active placement's
+rate (5%) whatever work sold. `WS-NFXKMWTVH8FVKZHD` (Guanaco in Patagonia)
+booked at 5% when the work's own placement says 3%; `WS-9CSPWT8FNI0RRKSG`
+(Mt. Fitz Roy) sits on a paid-loan placement (no revenue share) and should
+have paid 0%. Both are the owner's test orders; nothing to unwind.
+
+placements has no work_id column; the link is artist_works.
+current_placement_id. The webhook now resolves each cart line's work to its
+own ACTIVE placement at the venue and buildArtistLegs computes the venue
+cut PER LINE (work-level rate first, the old artist-level first-wins map
+only as fallback), so two works by one artist each pay their own rate and
+the totals still reconcile to the penny. The order's single placement_id
+column now prefers the first line's work-level placement. 4 new legs tests
+(fail-before probed) plus the untouched 129 across checkout and webhook.

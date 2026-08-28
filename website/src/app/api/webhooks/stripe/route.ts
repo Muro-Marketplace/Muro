@@ -684,12 +684,65 @@ async function handleWebhookEvent(
               });
             }
           }
-          // Schema still records a single placement_id per order. Pick the
-          // first cart line whose artist has a placement so the choice is
-          // deterministic across replayed webhook deliveries.
-          for (const item of cartItems as Array<{ artistSlug?: string }>) {
-            const slug = item.artistSlug || "";
-            const place = placementByArtistSlug.get(slug);
+        }
+
+        // Work-level placement resolution (owner-reported money bug,
+        // 2026-08-28). placements has no work_id column; the link is
+        // artist_works.current_placement_id. The work the buyer actually
+        // bought decides the venue's rate; the artist-level first-wins map
+        // above remains only as the fallback for legacy lines. Both maps
+        // feed buildArtistLegs, which prefers the work-level rate per line.
+        const placementByWorkId = new Map<string, { id: string; revenue_share_percent: number }>();
+        const cartWorkIds = Array.from(new Set(
+          (cartItems as Array<{ workId?: string }>).map((i) => i.workId || "").filter(Boolean),
+        ));
+        if (venueSlug && cartWorkIds.length > 0) {
+          const { data: workRows } = await db.from("artist_works")
+            .select("id, current_placement_id")
+            .in("id", cartWorkIds);
+          const placementIdByWork = new Map<string, string>();
+          for (const w of (workRows || []) as Array<{ id: string; current_placement_id: string | null }>) {
+            if (w.current_placement_id) placementIdByWork.set(w.id, w.current_placement_id);
+          }
+          const linkedIds = Array.from(new Set(placementIdByWork.values()));
+          if (linkedIds.length > 0) {
+            const { data: linked } = await db.from("placements")
+              .select("id, revenue_share_percent, venue_slug, status")
+              .in("id", linkedIds)
+              .eq("venue_slug", venueSlug)
+              .eq("status", "active");
+            const byId = new Map(
+              ((linked || []) as Array<{ id: string; revenue_share_percent: number | null }>).map(
+                (pl) => [pl.id, pl],
+              ),
+            );
+            for (const [workId, plId] of placementIdByWork) {
+              const pl = byId.get(plId);
+              if (!pl) continue;
+              placementByWorkId.set(workId, {
+                id: pl.id,
+                revenue_share_percent: pl.revenue_share_percent || 0,
+              });
+              const artistLevel = placementByArtistSlug.get(
+                (cartItems as Array<{ workId?: string; artistSlug?: string }>).find((i) => i.workId === workId)?.artistSlug || "",
+              );
+              if (artistLevel && artistLevel.id !== pl.id) {
+                console.warn("[webhook] work-level placement overrides artist-level rate", {
+                  orderId, workId, workPlacement: pl.id, artistPlacement: artistLevel.id,
+                });
+              }
+            }
+          }
+        }
+
+        if (venueSlug) {
+          // Schema still records a single placement_id per order. Prefer the
+          // first line's WORK-level placement, then the artist-level fallback;
+          // both orderings are deterministic across replayed deliveries.
+          for (const item of cartItems as Array<{ artistSlug?: string; workId?: string }>) {
+            const place =
+              (item.workId ? placementByWorkId.get(item.workId) : undefined) ||
+              placementByArtistSlug.get(item.artistSlug || "");
             if (place) {
               placementId = place.id;
               break;
@@ -711,6 +764,7 @@ async function handleWebhookEvent(
         const legs = await buildArtistLegs(db, {
           cartItems: cartItems as CartLine[],
           placementByArtistSlug,
+          placementByWorkId,
           artistShippingPence: saved.artistShippingPence || {},
           shippingTotalPence: totalPence - subtotalPence,
         });
