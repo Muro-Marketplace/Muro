@@ -2,7 +2,7 @@
 // Kept dependency-free (no React) so it can run on the server and the client.
 
 export type RawStatus = "pending" | "active" | "declined" | "completed" | "sold" | "paused" | "cancelled";
-export type DisplayStatus = "Pending" | "Active" | "Declined" | "Completed" | "Sold" | "Cancelled" | "Paused";
+export type DisplayStatus = "Pending" | "Active" | "Declined" | "Completed" | "Sold" | "Cancelled" | "Paused" | "Unknown";
 export type Stage = "accepted" | "scheduled" | "installed" | "live" | "collected";
 
 export const STAGE_ORDER: Stage[] = ["accepted", "scheduled", "installed", "live", "collected"];
@@ -30,7 +30,15 @@ export function normaliseStatus(raw: string | null | undefined): DisplayStatus {
     // it is expected back. Zero live rows carry `paused` today, so this changes
     // what a FUTURE pause reads as, not any current screen.
     case "paused": return "Paused";
-    default: return "Active";
+    // Owner decision 8b (07 §4.2 item 2, approved 2026-08-28). The default was
+    // "Active", so a row with a status nobody recognises wore the live badge
+    // and, worse, matched every `displayStatus === "Active"` gate: the context
+    // panel's stage-advance and undo controls, whose collected transition
+    // cancels paid-loan billing and repoints inventory. Defaulting a
+    // money-adjacent surface to its most permissive label is the wrong
+    // direction. "Unknown" matches no gate, so an unrecognised row shows its
+    // badge and offers nothing until someone looks at it.
+    default: return "Unknown";
   }
 }
 
@@ -47,6 +55,9 @@ export function statusBadgeClass(status: DisplayStatus): string {
     // Softer than Completed's neutral, and not green: paused is neither live
     // nor over.
     case "Paused":    return "bg-sky-50 text-sky-700 border border-sky-200";
+    // Louder than Pending's amber on purpose: this state is a data problem, and
+    // the badge is the only place it will ever be seen.
+    case "Unknown":   return "bg-orange-50 text-orange-700 border border-orange-300";
   }
 }
 

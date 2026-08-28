@@ -12126,3 +12126,26 @@ paragraph describing the five as current is rewritten to say they are settled.
 One thing deliberately untouched: `kind: "offer_received"` at
 `offers/route.ts:407` is an in-app **notification** kind, not an email label,
 and renaming it would orphan existing notification rows for zero gain.
+
+### Decision 8 — the two status-label lies, fixed in two commits — DONE
+
+**8a: `paused` no longer reads as "Completed".** Completed means the arrangement
+ended; paused means the work is expected back. Paused is its own `DisplayStatus`
+with its own badge. The two portals' local `PlacementStatus` mirror and the `as`
+cast at their wrappers are replaced with the shared type, because the cast was
+what let a union widening compile clean while every tab tally silently
+mishandled the new value. Zero live rows carry `paused`, so both halves of this
+decision change what FUTURE data reads as, not any current screen.
+
+**8b: an unknown status no longer reads as "Active".** The old default meant a
+row nobody recognised wore the live badge and matched every
+`displayStatus === "Active"` gate — including the context panel's stage-advance
+controls, whose collected transition cancels paid-loan billing and repoints
+inventory. It now reads "Unknown", which matches no gate: the row shows a loud
+badge and offers nothing until someone looks at it. The doc offered "Pending" as
+the alternative; "Unknown" was chosen because Pending implies the other party
+owes a response, which is also a claim nobody can stand behind for a status
+nobody recognises.
+
+Both fail-before verified. Both were the doc's own recommendation, held back
+only for sign-off, which decision 8 gave.

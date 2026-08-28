@@ -46,21 +46,24 @@ describe("normaliseStatus", () => {
     expect(normaliseStatus("PENDING")).toBe("Pending");
   });
 
-  it("defaults an unknown or missing status to Active", () => {
-    // Worth pinning rather than assuming: the default is NOT "Pending", so a
-    // row with a status nobody recognises reads as live rather than as awaiting
-    // a response. Changing it would change who the panel asks to act.
-    expect(normaliseStatus("nonsense")).toBe("Active");
-    expect(normaliseStatus(null)).toBe("Active");
-    expect(normaliseStatus(undefined)).toBe("Active");
-    expect(normaliseStatus("")).toBe("Active");
+  it("defaults an unknown or missing status to Unknown, never to Active", () => {
+    // Owner decision 8b (07 §4.2 item 2). The default was "Active", so a row
+    // with a status nobody recognised wore the live badge and matched every
+    // `displayStatus === "Active"` gate, including the context panel's
+    // stage-advance controls whose collected transition cancels paid-loan
+    // billing. "Unknown" matches no gate: the row shows its badge and offers
+    // nothing until someone looks at it.
+    expect(normaliseStatus("nonsense")).toBe("Unknown");
+    expect(normaliseStatus(null)).toBe("Unknown");
+    expect(normaliseStatus(undefined)).toBe("Unknown");
+    expect(normaliseStatus("")).toBe("Unknown");
   });
 });
 
 describe("statusBadgeClass", () => {
   it("returns a class string for every display status", () => {
     const statuses: DisplayStatus[] = [
-      "Active", "Pending", "Declined", "Cancelled", "Sold", "Completed", "Paused",
+      "Active", "Pending", "Declined", "Cancelled", "Sold", "Completed", "Paused", "Unknown",
     ];
     for (const status of statuses) {
       expect(statusBadgeClass(status), status).toMatch(/\S/);
@@ -69,6 +72,12 @@ describe("statusBadgeClass", () => {
 
   it("gives the two negative outcomes the same treatment", () => {
     expect(statusBadgeClass("Cancelled")).toBe(statusBadgeClass("Declined"));
+  });
+
+  it("does not dress Unknown as anything that already has a meaning", () => {
+    for (const other of ["Active", "Pending", "Completed", "Cancelled"] as const) {
+      expect(statusBadgeClass("Unknown"), other).not.toBe(statusBadgeClass(other));
+    }
   });
 
   it("does not dress Paused as Completed or as Active", () => {
