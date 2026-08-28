@@ -37,10 +37,13 @@ Order of work: the "Corrected dependency order" at the end of
 
 Owner decisions the loop is waiting on (none block the remaining queue):
 
-- **G-B part 2, the venue slug.** Is a venue's name paywalled enough to give up the
-  /spaces click-through, or is the click-through worth the name leak? Detail in
-  iteration 23. Options: accept the leak; invest in opaque ids plus route
-  resolution; or drop the click-through for unentitled viewers.
+- **G-B part 2, the venue slug — DECIDED 2026-08-28: accept the leak.** The
+  blanket approval delegated the call; the click-through funnel was judged worth
+  more than hiding a venue's name from unentitled viewers, and the acceptance is
+  recorded IN `redactDemandVenue` itself with the priced alternatives, so the
+  next person to touch the redaction sees it is a decision, not an omission.
+  Revisit if venue identity ever becomes contractually confidential rather than
+  merely paywalled.
 - **B4 admin conjunct.** D6 says "admin+non-prod"; iteration 21 shipped non-prod
   only. Say if you want the admin check too.
 - **Migration ledger divergence.** Iteration 4: rewrite prod's ledger, adopt

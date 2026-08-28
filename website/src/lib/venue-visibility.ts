@@ -50,6 +50,16 @@ export function redactDemandVenue(
     displayLighting: "",
     displayInstallNotes: "",
     displayRotationFrequency: "",
+    // THE SLUG STAYS, as an ACCEPTED leak (G-B part 2, owner decision
+    // 2026-08-28). A slug like `the-copper-kettle` spells the name this
+    // function just blanked, so a paywalled identity can be read out of the
+    // card's href. The alternatives were priced in PROGRESS (iteration 23):
+    // opaque ids need a resolver, ids for the static venues, and a public URL
+    // change; dropping the href closes the leak by removing the /spaces →
+    // /venues funnel, whose stated intent is that logged-out visitors land on
+    // the read-only profile. The click-through was judged worth more than the
+    // name. Revisit if venue identity ever becomes contractually confidential
+    // rather than merely paywalled.
   };
 }
 
