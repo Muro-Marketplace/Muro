@@ -417,6 +417,7 @@ describe("POST /api/messages placement_response authz (E33)", () => {
 // nothing errored.
 describe("POST /api/messages writes ONE row, with everything on it", () => {
   const inserts: Record<string, unknown>[] = [];
+  const queueInserts: Record<string, unknown>[] = [];
 
   /** The real `messages` columns, from the committed schema snapshot. */
   const MESSAGE_COLUMNS = new Set<string>(
@@ -427,7 +428,7 @@ describe("POST /api/messages writes ONE row, with everything on it", () => {
     ).messages,
   );
 
-  function setupInsertDb(opts: { insertError?: unknown } = {}) {
+  function setupInsertDb(opts: { insertError?: unknown; queueError?: unknown } = {}) {
     inserts.length = 0;
     fromMock.mockImplementation((table: string) => {
       // Sender and recipient both resolve, or the route 404s the recipient
@@ -435,6 +436,14 @@ describe("POST /api/messages writes ONE row, with everything on it", () => {
       if (table === "artist_profiles") return chainSelectMaybe(null);
       if (table === "venue_profiles") {
         return chainSelectMaybe({ slug: "alice", user_id: "u-venue", name: "Alice" });
+      }
+      if (table === "moderation_queue") {
+        return {
+          insert: async (row: Record<string, unknown>) => {
+            queueInserts.push(row);
+            return { error: opts.queueError ?? null };
+          },
+        };
       }
       if (table === "messages") {
         return {
@@ -477,6 +486,7 @@ describe("POST /api/messages writes ONE row, with everything on it", () => {
 
   beforeEach(() => {
     isFlagOnMock.mockReturnValue(false);
+    queueInserts.length = 0;
     setupInsertDb();
   });
 
@@ -524,6 +534,45 @@ describe("POST /api/messages writes ONE row, with everything on it", () => {
     await send({ metadata: { arrangementType: "purchase" } });
 
     expect(inserts[0].metadata).toEqual({ arrangementType: "purchase" });
+  });
+
+  it("puts a FLAGGED message in the moderation queue (owner decision 11)", async () => {
+    // 09 item 2.2 made the flag survive on the row; until migration 116 there
+    // was still no queue member for messages, so no admin ever saw it.
+    moderateMock.mockReturnValue({ allowed: true, flagged: true, reason: "spammy link" });
+
+    await send({ content: "Buy cheap prints at dodgy.example right now please" });
+
+    expect(queueInserts).toHaveLength(1);
+    expect(queueInserts[0]).toMatchObject({
+      entity_type: "message",
+      entity_id: "msg-42",
+      status: "pending",
+    });
+    expect(queueInserts[0].payload).toMatchObject({
+      type: "message",
+      message_id: "msg-42",
+      flag_reason: "spammy link",
+    });
+  });
+
+  it("keeps a clean message out of the queue", async () => {
+    await send();
+    expect(queueInserts).toHaveLength(0);
+  });
+
+  it("still delivers the message when the queue insert fails", async () => {
+    // Moderation visibility must not block delivery: the flag survives on the
+    // row regardless.
+    moderateMock.mockReturnValue({ allowed: true, flagged: true, reason: "spammy link" });
+    setupInsertDb({ queueError: { message: "queue down" } });
+
+    await send();
+
+    // The message row landed; the queue attempt was made and its failure did
+    // not become a second message insert or a dropped delivery.
+    expect(inserts).toHaveLength(1);
+    expect(queueInserts).toHaveLength(1);
   });
 
   it("attempts the insert exactly ONCE, and surfaces a failure", async () => {

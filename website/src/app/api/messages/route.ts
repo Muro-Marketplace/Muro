@@ -19,6 +19,7 @@ import { placementTermsSummary } from "@/lib/placements/terms-summary";
 import { artists as staticArtists } from "@/data/artists";
 import { venues as staticVenues } from "@/data/venues";
 import { sendMessageUnreadEmail } from "@/lib/email/notifications";
+import { parsePayload } from "@/lib/moderation/types";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -438,6 +439,35 @@ export async function POST(request: Request) {
     }
 
     if (moderation.flagged) {
+      // Owner decision 11: a flagged message now lands in the ADMIN QUEUE, not
+      // just in its own metadata and a log line nobody reads. Best-effort after
+      // the message insert: moderation visibility must not block delivery, and
+      // the flag already survives on the row either way (09 item 2.2).
+      const queuePayload = parsePayload("message", {
+        message_id: inserted.id,
+        conversation_id: cid || "",
+        sender_slug: resolvedSenderSlug,
+        recipient_slug: recipientSlug,
+        flag_reason: moderation.reason || "flagged",
+        excerpt: content.slice(0, 200),
+      });
+      if (queuePayload) {
+        const { error: queueErr } = await db.from("moderation_queue").insert({
+          entity_type: "message",
+          entity_id: inserted.id,
+          submitted_by_user_id: auth.user!.id,
+          submitted_by_email: auth.user!.email ?? null,
+          status: "pending",
+          payload: queuePayload,
+        });
+        if (queueErr) {
+          console.error("[moderation] flagged message could not join the queue:", queueErr.message);
+        }
+      } else {
+        console.error("[moderation] flagged-message payload failed its own parser", {
+          messageId: inserted.id,
+        });
+      }
       console.warn(`[moderation] Message flagged: sender=${resolvedSenderSlug} reason="${moderation.reason}"`);
     }
 

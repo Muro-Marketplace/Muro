@@ -37,10 +37,29 @@ export interface FeedbackModerationPayload {
   user_agent?: string;
 }
 
+/**
+ * Owner decision 11 (2026-08-28). A message the moderation filter flags now has
+ * somewhere to go: until migration 116 widened the entity_type CHECK, the queue
+ * had no member for messages, so the flag lived only in the message row's
+ * metadata, queryable and watched by nobody.
+ */
+export interface MessageModerationPayload {
+  type: "message";
+  message_id: string;
+  conversation_id: string;
+  sender_slug: string;
+  recipient_slug: string;
+  /** Why the filter flagged it. */
+  flag_reason: string;
+  /** First ~200 chars, plain text — enough to triage, same budget as blogs. */
+  excerpt: string;
+}
+
 export type ModerationPayload =
   | BlogModerationPayload
   | FeatureRequestModerationPayload
-  | FeedbackModerationPayload;
+  | FeedbackModerationPayload
+  | MessageModerationPayload;
 
 export type ModerationEntityType = ModerationPayload["type"];
 
@@ -94,6 +113,27 @@ export function parsePayload(
       description,
       contact_email: asOptionalString(p.contact_email),
       user_agent: asOptionalString(p.user_agent),
+    };
+  }
+
+  if (entityType === "message") {
+    const messageId = asString(p.message_id);
+    const conversationId = asString(p.conversation_id);
+    const senderSlug = asString(p.sender_slug);
+    const recipientSlug = asString(p.recipient_slug);
+    const flagReason = asString(p.flag_reason);
+    const excerpt = asString(p.excerpt);
+    if (!messageId || !conversationId || !senderSlug || !recipientSlug || !flagReason || !excerpt) {
+      return null;
+    }
+    return {
+      type: "message",
+      message_id: messageId,
+      conversation_id: conversationId,
+      sender_slug: senderSlug,
+      recipient_slug: recipientSlug,
+      flag_reason: flagReason,
+      excerpt,
     };
   }
 

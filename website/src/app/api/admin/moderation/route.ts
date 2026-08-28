@@ -11,7 +11,7 @@ import { recordAdminAction } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
-const ALLOWED_TYPES = new Set(["blog", "feature_request", "feedback"]);
+const ALLOWED_TYPES = new Set(["blog", "feature_request", "feedback", "message"]);
 const ALLOWED_STATUSES = new Set(["pending", "approved", "rejected", "edited"]);
 
 export async function GET(request: Request) {
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
   if (!ALLOWED_TYPES.has(entityType)) {
     return NextResponse.json(
-      { error: "entity_type must be one of: blog, feature_request, feedback" },
+      { error: "entity_type must be one of: blog, feature_request, feedback, message" },
       { status: 400 },
     );
   }

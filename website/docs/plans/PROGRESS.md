@@ -12276,3 +12276,27 @@ application (109) → copied to the profile on approval (existing) → credited
 atomically on first payment (115) → 0% fee applied on sales and paid-loan fees
 while the window is open (this change). Nothing is owed retroactively; the 13
 destroyed codes remain unrecoverable.
+
+### Decision 11 — flagged messages reach the admin queue — DONE
+
+09 item 2.2 made the flag survive on the message row; this puts it in front of a
+person. **Migration 116** widens `moderation_queue.entity_type` to admit
+`message` (the same additive drop-and-add as 105's). The payload union gains
+`MessageModerationPayload` — message id, conversation, both slugs, the filter's
+reason, and a 200-char excerpt, the same triage budget blogs use — with its
+`parsePayload` branch, so the write boundary validates it like every other
+member. The admin list route accepts `entity_type=message`.
+
+The messages route queues the flagged message **after** the insert,
+best-effort: moderation visibility must not block delivery, and the flag
+already survives in the row's metadata regardless. A queue failure is an ERROR
+log, not a dropped message.
+
+Tests: the parser's required-field matrix, a flagged message lands in the queue
+with the right payload, a clean one does not, and delivery survives a queue
+outage. Fail-before verified by removing the wiring.
+
+One honest limit: there is no dedicated admin PAGE for the message queue yet —
+the shared endpoint serves it, and the blogs/feature-requests/feedback pages
+each read their own type. A `/admin/moderation?entity_type=message` surface is
+frontend work on the same endpoint, noted rather than smuggled in.
