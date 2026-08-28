@@ -42,9 +42,11 @@ describe("enquiryTypeLabel", () => {
     // The badge rendered `enquiry.type` raw, and the form had its own copy of
     // the option text. Naming both files means deleting either import is a
     // failing test rather than a silent return to two vocabularies.
+    // (E27: the badge moved from the dead venue-portal enquiries page to the
+    // artist-portal enquiries page, where the audience always was.)
     const root = path.resolve(__dirname, "../..");
     for (const file of [
-      "src/app/(pages)/venue-portal/enquiries/page.tsx",
+      "src/app/(pages)/artist-portal/enquiries/page.tsx",
       "src/app/(pages)/browse/[slug]/ArtistProfileClient.tsx",
     ]) {
       expect(readFileSync(path.join(root, file), "utf8"), file).toContain("@/lib/enquiry-types");

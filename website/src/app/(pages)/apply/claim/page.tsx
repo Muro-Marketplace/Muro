@@ -142,6 +142,23 @@ function ClaimForm() {
     }
   }
 
+  if (authLoading) {
+    return (
+      <div className="max-w-[640px] mx-auto px-6 py-20 text-sm text-muted">Loading…</div>
+    );
+  }
+
+  if (user) {
+    return (
+      <div className="max-w-[640px] mx-auto px-6 py-20 text-center">
+        <p className="text-sm text-muted">
+          You&rsquo;re already signed in, so your Wallplace profile is ready and
+          waiting. Taking you to it&hellip;
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-[640px] mx-auto px-6 pt-10 pb-20">
       <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-3">

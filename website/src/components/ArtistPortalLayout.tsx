@@ -23,6 +23,10 @@ const navItems = [
   { label: "Edit Profile", href: "/artist-portal/profile" },
   { label: "My Portfolio", href: "/artist-portal/portfolio" },
   { label: "Messages", href: "/artist-portal/messages" },
+  // E27: enquiries are public-profile messages addressed to artists; this
+  // view lists them and lets the artist mark each handled. The dead venue
+  // equivalent (whose API GET never existed) is removed.
+  { label: "Enquiries", href: "/artist-portal/enquiries" },
   { label: "Placements", href: "/artist-portal/placements" },
   { label: "My Offers", href: "/artist-portal/offers" },
   { label: "Collections", href: "/artist-portal/collections" },

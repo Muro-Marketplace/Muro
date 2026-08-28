@@ -62,3 +62,43 @@ describe("billing Manage Subscription (05 mutate migration)", () => {
     expect(mutateMock).toHaveBeenCalledWith("/api/subscribe/portal", expect.objectContaining({ method: "POST" }));
   });
 });
+
+describe("billing referral panel (D9)", () => {
+  it("renders the referral code with a Copy button when the profile carries one", async () => {
+    // Fail-before: fetchSub never copied referral_code into state, so
+    // sub?.referral_code was always undefined and this panel could not
+    // render for anyone.
+    authFetchMock.mockImplementation((url: string) => {
+      if (url.includes("stripe-connect")) {
+        return Promise.resolve(new Response(JSON.stringify({ status: "none" }), { status: 200 }));
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            profile: {
+              subscription_plan: "premium",
+              subscription_status: "active",
+              referral_code: "WP-MAYA123",
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    });
+
+    render(<BillingPage />);
+
+    expect(await screen.findByText("WP-MAYA123")).toBeTruthy();
+    expect(screen.getByText("Copy")).toBeTruthy();
+    // Renders for a SUBSCRIBED artist too — the panel used to live only in
+    // the no-plan branch, hiding it from exactly the artists most likely to
+    // refer.
+    expect(screen.getByText("Manage Subscription")).toBeTruthy();
+  });
+
+  it("renders no referral panel when the profile has no code", async () => {
+    render(<BillingPage />);
+    await screen.findByText("Manage Subscription");
+    expect(screen.queryByText(/your referral code/i)).toBeNull();
+  });
+});

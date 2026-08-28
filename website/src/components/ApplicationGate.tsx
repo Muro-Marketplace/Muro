@@ -58,7 +58,11 @@ export default function ApplicationGate() {
     if (!user && !redirected) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRedirected(true);
-      router.replace("/signup/artist?next=/apply");
+      // A17: carry the current query string (e.g. ?plan=pro from the
+      // pricing page) through the signup hop so the plan preselect
+      // survives account creation and email verification.
+      const search = typeof window !== "undefined" ? window.location.search : "";
+      router.replace(`/signup/artist?next=${encodeURIComponent(`/apply${search}`)}`);
     }
   }, [loading, user, redirected, router]);
 

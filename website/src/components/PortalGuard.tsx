@@ -195,12 +195,15 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="max-w-md text-center px-6">
+          {/* D1: this gate only ever renders for past_due and canceled
+              subscribers, and /api/subscribe gives returning subscribers
+              zero trial days, so no free-trial promise belongs here. */}
           <h2 className="text-xl font-serif mb-3">Choose Your Plan</h2>
           <p className="text-sm text-muted mb-2">
-            Pick a plan to get started. All plans include a free trial, and you won&rsquo;t be charged until it ends.
+            Your subscription isn&rsquo;t active. Pick a plan to carry on where you left off.
           </p>
           <p className="text-xs text-muted mb-6">
-            All plans include a first month free.
+            Billing starts as soon as you subscribe.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
