@@ -12028,3 +12028,43 @@ is not, signup has no bot protection right now.
 
 **Owner decision 15**: anyone who has already deleted their account still has
 their data. Their auth user is gone, so they cannot ask again.
+
+---
+
+## 2026-08-28, daytime session. Owner approvals received.
+
+**The owner has approved every open decision except the `08` cull** (decision 4
+stays parked, including its §7 questions and the rewrite). Working through the
+rest in order of risk, one commit per decision as before.
+
+### Decision 12 — the client grants, taken back — DONE
+
+Migrations 112 and 113, both applied to production and verified live.
+
+**112, part 1**: every service-role-only table (RLS on, zero policies — the 20
+from `docs/security/service-role-only-tables.md`) loses ALL `anon` and
+`authenticated` grants. Safe by construction: RLS with no policy already denied
+every client operation, so any path this could break was a path that did not
+work. The one client-looking reference (`account/email/unsubscribe/page.tsx`
+touching `email_preferences`) is a server component on the service-role client.
+
+**112, part 2**: every other table loses TRUNCATE, REFERENCES and TRIGGER only.
+Their SELECT/INSERT/UPDATE/DELETE grants stay, because those tables genuinely
+serve clients through RLS policies. The reason part 2 exists at all: **TRUNCATE
+is not subject to RLS.** Policies filter row operations; a table-level TRUNCATE
+right is not one, so RLS was never the last line of defence it read as.
+
+**113**: 112's sweep filtered on `relkind='r'` and missed the one VIEW,
+`email_recent_sends`, which held the full stock grant set. Nothing in `src/`
+reads it and it is `security_invoker`, so it gets the full revoke. The sweep now
+covers every relkind that can carry a grant.
+
+**`ALTER DEFAULT PRIVILEGES`** stops future tables inheriting the three, and
+`new-table-lockdown.test.ts` enforces the half a default cannot: any table
+created from migration 111 on must revoke its own client grants, named or by
+sweep. Verified by adding a bare CREATE TABLE migration: named as an offender.
+
+Verified live after both: **zero** TRUNCATE/REFERENCES/TRIGGER grants remain for
+client roles anywhere in `public`, zero grants of any kind on the
+service-role-only set, and the 32 client-serving objects keep exactly their four
+row-level verbs.
