@@ -97,13 +97,26 @@ describe("buildArtistLegs, per-artist fee rates", () => {
     expect(legs[0].platformFeePercent).toBe(15);
   });
 
-  it("never names free_until, which would reject the whole statement", async () => {
-    // §C2's snippet selects free_until. It exists in no migration and not in the
-    // live table, so PostgREST would reject this select whole, every slug would
-    // look missing, and this would throw on every multi-artist cart.
+  it("selects free_until, or the referral reward silently never applies here", async () => {
+    // INVERTED 2026-08-28 (owner decision 10). This used to assert the select
+    // NEVER names free_until, because the column did not exist and naming it
+    // rejected the whole statement. Migration 115 created it as the
+    // platform-owned referral window, so the hazard flipped: omitting it hands
+    // platformFeePercentForArtist undefined and the 0% reward never applies on
+    // the highest-volume path, with nothing failing.
     await build([{ artistSlug: "alice", price: 10, quantity: 1 }]);
-    expect(selectedColumns).not.toContain("free_until");
+    expect(selectedColumns).toContain("free_until");
     expect(selectedColumns).toContain("trial_end");
+  });
+
+  it("charges 0% for an artist inside their referral window", async () => {
+    profileRows = [{
+      ...ALICE,
+      free_until: new Date(Date.now() + 10 * 86_400_000).toISOString(),
+    }];
+    const legs = await build([{ artistSlug: "alice", price: 100, quantity: 1 }]);
+    expect(legs[0].platformFeePercent).toBe(0);
+    expect(legs[0].platformFeePence).toBe(0);
   });
 });
 

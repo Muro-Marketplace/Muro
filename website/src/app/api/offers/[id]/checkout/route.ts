@@ -119,7 +119,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   // active/trialing). Omitting subscription_status would hand the helper undefined
   // and over-charge an active artist the 15% default. trial_end is intentionally
   // not selected here: offers have never honoured the trial 0% window, and adding
-  // it would change what trialing artists are charged on offers.
+  // it would change what trialing artists are charged on offers. `free_until`
+  // (migration 115, the referral reward) is excluded for the same reason and by
+  // the same logic: this route's fee behaviour is pinned, and widening the
+  // reward to offers is a separate decision from creating the column.
   const { data: artistProfile } = await db
     .from("artist_profiles")
     .select("slug, subscription_plan, subscription_status")

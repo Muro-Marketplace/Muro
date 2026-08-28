@@ -54,17 +54,9 @@ const SCHEMA: Record<string, string[]> = JSON.parse(
  * is understood. Shrink it, never grow it.
  */
 const GRANDFATHERED: Array<{ file: string; table: string; phantom: string; why: string }> = [
-  {
-    file: "app/api/webhooks/stripe/route.ts",
-    table: "artist_profiles",
-    phantom: "free_until",
-    why:
-      "D17.2, the same parked question the SELECT side is grandfathered on in " +
-      "phantom-columns.test.ts. The referral credit writes a free window and WHERE it " +
-      "should be written is an open owner decision, because trial_end is Stripe-managed. " +
-      "Left as the silent no-op it already is; remove both entries together when D17.2 " +
-      "is answered.",
-  },
+  // EMPTY. The one entry ever held here (the referral credit's `free_until`)
+  // became a real column in migration 115, removed together with the SELECT
+  // side's entry as both said to do. Ratchet: shrink only.
 ];
 
 function walk(dir: string): string[] {

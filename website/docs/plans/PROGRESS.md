@@ -12234,3 +12234,45 @@ interactive KYC flow in a browser; no API call from here can complete it. Until
 it is done, Bug 9 stands: Buy Now on the demo artist's works 422s at checkout.
 That is the one remaining piece of decision 3 and it needs a human in the
 Stripe dashboard, signed in as the demo account.
+
+### Decision 10 — the referral programme actually works now — DONE
+
+D17.2 is answered the way its own framing pointed: **a platform-owned reward
+needs a platform-owned column.** `trial_end` belongs to Stripe, which overwrites
+it from the subscription object on every update, so a reward written there
+evaporates on the next webhook. **Migration 115** creates
+`artist_profiles.free_until` for real, with a column comment saying exactly what
+it is.
+
+**The credit is atomic (04 item 5.3 / D14, done with it).** `extend_free_until`
+claims `referral_credited_at` first — the idempotency guard, so a Stripe
+redelivery updates 0 rows and stops — then extends from
+`GREATEST(now, free_until)` so stacked credits chain rather than overwrite, and
+raises on a dangling code rather than burning the referred artist's one credit.
+SECURITY DEFINER with the 085/087/104 lockdown (it moves an entitlement).
+**Proven live in a rolled-back transaction**: first call opens a 29–31 day
+window, second call cannot double it.
+
+**The fee logic honours it behind the status gate**: an active/trialing artist
+inside the window pays 0%; a cancelled artist gets no reward, preserving
+D40/E52. The webhook credit block now selects only the referred row's `id` and
+calls the RPC.
+
+**The inverse phantom, closed on the paths that matter.** `legs.ts` (every sale)
+and `paid-loan-billing.ts` now fetch `free_until`, or the helper would get
+undefined and the reward would silently never apply. The legs test that pinned
+"never names free_until" is **inverted** with its history recorded — the same
+assertion, both directions, six weeks apart, each correct for its schema.
+`offers/checkout` deliberately still excludes it, matching its existing
+exclusion of `trial_end`: that route's fee behaviour is pinned, and widening the
+reward to offers is a separate decision from creating the column.
+
+**Both phantom grandfather lists are now EMPTY**, and the select-side ratchet
+closed 12 → 1 → 0. The parked floor that row 19 said "cannot shrink below 1
+without an owner decision" got its owner decision.
+
+End-to-end referral chain, all four links now live: code recorded on
+application (109) → copied to the profile on approval (existing) → credited
+atomically on first payment (115) → 0% fee applied on sales and paid-loan fees
+while the window is open (this change). Nothing is owed retroactively; the 13
+destroyed codes remain unrecoverable.

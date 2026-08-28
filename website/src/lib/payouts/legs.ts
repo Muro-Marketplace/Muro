@@ -128,15 +128,16 @@ export async function buildArtistLegs(
 
   // 2. One round trip for every artist's plan and user id.
   //
-  //    NOT `free_until`: §C2's version selects it, but that column exists in no
-  //    migration and not in the live table, so PostgREST would reject this
-  //    statement whole, `profiles` would be null, every slug would land in
-  //    `missing` below, and this would throw on EVERY multi-artist cart. The real
-  //    column is `trial_end` (D17.1), which is what platformFeePercentForArtist
-  //    reads.
+  //    `free_until` is BACK in this select as of migration 115 (owner decision
+  //    10): it is a real column now, the platform-owned referral fee-free
+  //    window, and platformFeePercentForArtist returns 0 while it is in the
+  //    future. Omitting it here would hand the helper undefined and the reward
+  //    would silently never apply on the highest-volume path — the inverse
+  //    phantom this comment used to warn about from the other direction, when
+  //    the column did not exist and selecting it rejected the whole statement.
   const { data: profiles, error } = await db
     .from("artist_profiles")
-    .select("user_id, slug, subscription_plan, subscription_status, trial_end")
+    .select("user_id, slug, subscription_plan, subscription_status, trial_end, free_until")
     .in("slug", slugs);
   if (error) throw new Error(`buildArtistLegs: profile lookup failed: ${error.message}`);
 
@@ -146,6 +147,7 @@ export async function buildArtistLegs(
     subscription_plan: string | null;
     subscription_status: string | null;
     trial_end: string | null;
+    free_until: string | null;
   };
   const bySlug = new Map<string, ProfileRow>(
     ((profiles || []) as ProfileRow[]).map((p) => [(p.slug || "").toLowerCase(), p]),

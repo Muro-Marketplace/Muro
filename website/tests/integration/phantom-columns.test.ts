@@ -56,12 +56,9 @@ const SCHEMA: Record<string, string[]> = JSON.parse(
  * would silently un-guard every other select in the same file.
  */
 const GRANDFATHERED: Array<{ file: string; columns: string; phantom: string[]; why: string }> = [
-  {
-    file: "app/api/webhooks/stripe/route.ts",
-    columns: "id, free_until",
-    phantom: ["free_until"],
-    why: "D17.2: the referral path writes a free window and where it should write is an open owner question (trial_end is Stripe-managed). Left as the silent no-op it already is. Remove when D17.2 is answered.",
-  },
+  // EMPTY, and reaching empty took from D17.1 to owner decision 10: the last
+  // entry was the referral credit's `free_until`, parked on D17.2 and made a
+  // real column by migration 115 on 2026-08-28. Ratchet: shrink only.
 ];
 
 function walk(dir: string): string[] {
@@ -176,8 +173,9 @@ describe("no .select() names a column the live schema lacks (D17.3, full form)",
 
   it("holds the grandfathered list at its recorded size, so new debt fails the build", () => {
     // A ratchet, not a cap on effort: shrink it by fixing a select, and lower the
-    // number in the same commit. It must never grow.
-    expect(GRANDFATHERED).toHaveLength(1);
+    // number in the same commit. It must never grow. ZERO as of owner decision
+    // 10 (migration 115 made free_until real): the ratchet closed 12 → 1 → 0.
+    expect(GRANDFATHERED).toHaveLength(0);
     for (const g of GRANDFATHERED) {
       expect(g.phantom.length, "each entry lists the phantom column(s) it parks").toBeGreaterThan(0);
       expect(g.why.length, "each entry names the real column and why it is not fixed here").toBeGreaterThan(60);

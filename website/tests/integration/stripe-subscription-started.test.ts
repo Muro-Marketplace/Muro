@@ -12,18 +12,25 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { fromMock, getUserByIdMock, nextEvent, paidLoanDeletedMock, curationDeletedMock } =
+const { fromMock, getUserByIdMock, nextEvent, paidLoanDeletedMock, curationDeletedMock, rpcMock } =
   vi.hoisted(() => ({
   fromMock: vi.fn(),
   getUserByIdMock: vi.fn(),
   nextEvent: { value: null as unknown },
   paidLoanDeletedMock: vi.fn(async () => {}),
   curationDeletedMock: vi.fn(async () => {}),
+  rpcMock: vi.fn(
+    async (): Promise<{ data: unknown; error: { message: string } | null }> => ({
+      data: [{ credited: true, referrer_id: "u-ref", new_free_until: "2026-09-27" }],
+      error: null,
+    }),
+  ),
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
     from: fromMock,
+    rpc: rpcMock,
     auth: { admin: { getUserById: getUserByIdMock } },
     storage: { from: () => ({ createSignedUrl: () => ({ data: null, error: null }) }) },
   }),
@@ -108,7 +115,7 @@ function event(type: string, object: unknown) {
 
 /** Table router. Only what this branch touches needs to be real. */
 function installDb(opts: { profile?: unknown } = {}) {
-  const profile = "profile" in opts ? opts.profile : { user_id: "u-artist", name: "Maya Chen" };
+  const profile = "profile" in opts ? opts.profile : { id: "u-artist", user_id: "u-artist", name: "Maya Chen" };
   fromMock.mockImplementation(() => ({
     select: () => ({
       eq: () => ({
@@ -435,6 +442,60 @@ describe("customer.subscription.deleted reaches all three reconcilers (D13)", ()
 
   it("returns 200 so Stripe does not redeliver a cancellation it handled", async () => {
     deleted({ user_id: "u-artist", name: "Maya", subscription_plan: "premium", stripe_subscription_id: "sub_old" });
+    expect((await POST(post())).status).toBe(200);
+  });
+});
+
+
+// Owner decision 10 / 04 item 5.3 / D14. The referral credit goes through ONE
+// atomic RPC. The old shape was read-modify-write across two rows in two
+// statements, so a Stripe redelivery could double a 30-day credit, and — the
+// half that actually happened — its select named `free_until` before migration
+// 115 created it, so the whole statement was rejected and the programme never
+// credited anyone.
+describe("customer.subscription.created credits the referrer atomically", () => {
+  beforeEach(() => {
+    rpcMock.mockClear();
+    installDb();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  it("calls extend_free_until for the referred artist, 30 days", async () => {
+    nextEvent.value = event("customer.subscription.created", subscription());
+
+    await POST(post());
+
+    expect(rpcMock).toHaveBeenCalledWith("extend_free_until", {
+      p_referred_id: "u-artist",
+      p_days: 30,
+    });
+  });
+
+  it("calls it ONCE per event: idempotency lives in the RPC, not in a re-read", async () => {
+    nextEvent.value = event("customer.subscription.created", subscription());
+    await POST(post());
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not credit on customer.subscription.updated", async () => {
+    // A plan change or a status tick is not a first payment.
+    nextEvent.value = event("customer.subscription.updated", subscription());
+    await POST(post());
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("does not credit an unpaid status", async () => {
+    nextEvent.value = event("customer.subscription.created", subscription({ status: "incomplete" }));
+    await POST(post());
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("still answers 200 when the credit RPC fails", async () => {
+    // The subscription is recorded; a credit failure must not make Stripe
+    // redeliver an event whose real work is done.
+    rpcMock.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+    nextEvent.value = event("customer.subscription.created", subscription());
+
     expect((await POST(post())).status).toBe(200);
   });
 });

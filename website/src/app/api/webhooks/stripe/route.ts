@@ -1241,55 +1241,45 @@ async function handleWebhookEvent(
 
     // ─── Referral credit (item 25) ───
     // First time this referred artist enters a paid status, extend the
-    // referrer's free_until by 30 days. referral_credited_at guards against
-    // double-credits if Stripe replays the event.
+    // referrer's fee-free window by 30 days.
     //
-    // THIS HAS NEVER RUN, and still cannot, for two independent reasons. Both
-    // are recorded rather than patched, because the second is an open owner
-    // question and fixing only the first would look like a working feature.
+    // BOTH halves of this were broken until 2026-08-28, and each fix is its own
+    // migration: 109 made `referred_by_code` recordable at all (a
+    // strip-and-retry destroyed it on every application), and 115 (owner
+    // decision 10) created `free_until` — the column this credit writes — which
+    // had never existed, so the select was rejected whole and the credit was
+    // skipped for as long as the programme has been live.
     //
-    //   1. `referred_by_code` was never recorded on an application: the column
-    //      did not exist and a strip-and-retry destroyed the field silently on
-    //      every submission. Migration 109 fixed that, so codes flow from now on.
-    //   2. `artist_profiles.free_until` exists in NO migration and not in the
-    //      live table. The `.select("id, free_until")` below is therefore
-    //      rejected whole by PostgREST, `referrer` is null, and the credit is
-    //      skipped. That select is the parked floor of the phantom-column
-    //      ratchet (see tests/integration/phantom-columns.test.ts), held open
-    //      by D17.2: where a free window should be written at all, given
-    //      `trial_end` is Stripe-managed.
-    //
-    // 04 item 5.3 / D14 (making this credit atomic) waits on D17.2 for the same
-    // reason: hardening a read-modify-write on a path that cannot execute is
-    // work with no subject.
+    // The credit itself is `extend_free_until` now (04 item 5.3 / D14): the old
+    // read-modify-write across two rows meant a Stripe redelivery could double
+    // a 30-day credit or stamp the guard without crediting. The RPC claims
+    // `referral_credited_at` first (the idempotency guard), extends from
+    // GREATEST(now, free_until) so stacked credits chain, and refuses with an
+    // exception on a dangling code rather than burning the one credit.
     const isPaidStatus = subscription.status === "active" || subscription.status === "trialing";
     if (isPaidStatus && event.type === "customer.subscription.created") {
       try {
         const { data: referred } = await db
           .from("artist_profiles")
-          .select("id, referred_by_code, referral_credited_at")
+          .select("id")
           .eq("stripe_customer_id", customerId)
-          .maybeSingle();
-        if (referred && referred.referred_by_code && !referred.referral_credited_at) {
-          const { data: referrer } = await db
-            .from("artist_profiles")
-            .select("id, free_until")
-            .eq("referral_code", referred.referred_by_code)
-            .maybeSingle();
-          if (referrer) {
-            const now = new Date();
-            const base = referrer.free_until && new Date(referrer.free_until) > now
-              ? new Date(referrer.free_until)
-              : now;
-            const newFreeUntil = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
-            await db
-              .from("artist_profiles")
-              .update({ free_until: newFreeUntil.toISOString() })
-              .eq("id", referrer.id);
-            await db
-              .from("artist_profiles")
-              .update({ referral_credited_at: now.toISOString() })
-              .eq("id", referred.id);
+          .maybeSingle<{ id: string }>();
+        if (referred) {
+          const { data: credit, error: creditErr } = await db.rpc("extend_free_until", {
+            p_referred_id: referred.id,
+            p_days: 30,
+          });
+          if (creditErr) {
+            console.error("Referral credit error:", creditErr.message);
+          } else {
+            const row = Array.isArray(credit) ? credit[0] : credit;
+            if (row?.credited) {
+              console.log("[webhook] referral credited", {
+                referredId: referred.id,
+                referrerId: row.referrer_id,
+                freeUntil: row.new_free_until,
+              });
+            }
           }
         }
       } catch (referralErr) {

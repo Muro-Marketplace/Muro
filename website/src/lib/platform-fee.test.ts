@@ -90,3 +90,56 @@ describe("platformFeePercentForArtist()", () => {
     });
   });
 });
+
+
+// Owner decision 10 / D17.2. `free_until` is the platform-owned fee-free window
+// (the referral reward: 30 days at 0% when someone you referred first pays).
+// Migration 115 made it a real column; this pins the semantics.
+describe("platformFeePercentForArtist honours free_until", () => {
+  const future = new Date(Date.now() + 10 * 86_400_000).toISOString();
+  const past = new Date(Date.now() - 10 * 86_400_000).toISOString();
+
+  it("charges 0% while the window is open, on an active subscription", () => {
+    expect(
+      platformFeePercentForArtist({
+        subscription_plan: "core",
+        subscription_status: "active",
+        free_until: future,
+      }),
+    ).toBe(0);
+  });
+
+  it("reverts to the plan rate once the window has passed", () => {
+    expect(
+      platformFeePercentForArtist({
+        subscription_plan: "premium",
+        subscription_status: "active",
+        free_until: past,
+      }),
+    ).toBe(8);
+  });
+
+  it("gives a CANCELLED artist no reward: the status gate comes first", () => {
+    // The D40/E52 invariant. A reward must not resurrect discounts for an
+    // artist whose subscription has lapsed.
+    expect(
+      platformFeePercentForArtist({
+        subscription_plan: "pro",
+        subscription_status: "canceled",
+        free_until: future,
+      }),
+    ).toBe(15);
+  });
+
+  it("treats an absent free_until as no window, not as an error", () => {
+    // The inverse-phantom case: a caller that forgets to select the column
+    // hands undefined here, and the artist pays their normal rate rather than
+    // anything surprising. The select-side guard is what catches the forget.
+    expect(
+      platformFeePercentForArtist({
+        subscription_plan: "pro",
+        subscription_status: "active",
+      }),
+    ).toBe(5);
+  });
+});

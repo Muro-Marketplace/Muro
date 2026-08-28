@@ -281,13 +281,14 @@ export async function handleInvoicePaid(
   // unique-by-order-id payout pipeline still works.
   const { data: artistProfile } = await db
     .from("artist_profiles")
-    .select("stripe_connect_account_id, subscription_plan, subscription_status, trial_end")
+    .select("stripe_connect_account_id, subscription_plan, subscription_status, trial_end, free_until")
     .eq("user_id", billing.payee_user_id)
     .maybeSingle<{
       stripe_connect_account_id: string | null;
       subscription_plan: string | null;
       subscription_status: string | null;
       trial_end: string | null;
+      free_until: string | null;
     }>();
   const platformFeePct = platformFeePercentForArtist(artistProfile ?? null);
   const artistShareCents = Math.max(
