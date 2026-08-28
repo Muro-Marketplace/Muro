@@ -11914,3 +11914,9 @@ is off. Owner decision 20. Performance: no ERRORs, 79 unused-index INFOs (ADR
 unindexed FKs, all pre-existing and none introduced tonight.
 
 `npm run check` green: 0 lint errors, 250 files, 2511 tests, exit 0.
+
+**20. Leaked-password protection is off.** Supabase Auth can check every new or
+changed password against HaveIBeenPwned and refuse a known-breached one. It is a
+dashboard toggle, it is currently disabled, and the advisor flags it at WARN. The
+only reason not to turn it on is if you object to the latency of the check, which
+is a single k-anonymity lookup.
