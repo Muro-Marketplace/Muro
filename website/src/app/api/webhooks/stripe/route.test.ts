@@ -1071,7 +1071,7 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
     {
       user_id: "u-bob",
       slug: "bob",
-      subscription_plan: "pro", // 5%
+      subscription_plan: "pro", // 15%
       subscription_status: "active",
       stripe_connect_account_id: "acct_bob",
       stripe_connect_onboarding_complete: true,
@@ -1123,11 +1123,11 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
 
     const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
     expect(artistTransfers).toHaveLength(2);
-    // Alice: 10000 - 15% = 8500. Bob: 10000 - 5% = 9500.
+    // Alice: 10000 - 15% = 8500. Bob: 10000 - 15% = 8500 (flat rate, owner decision 2026-08-28).
     expect(artistTransfers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ recipientUserId: "u-alice", connectAccountId: "acct_alice", amountCents: 8500 }),
-        expect.objectContaining({ recipientUserId: "u-bob", connectAccountId: "acct_bob", amountCents: 9500 }),
+        expect.objectContaining({ recipientUserId: "u-bob", connectAccountId: "acct_bob", amountCents: 8500 }),
       ]),
     );
   });
@@ -1161,9 +1161,9 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
     expect(venuePence + feePence + legTotal).toBe(20000);
     // The order row's blended figures are the sum of the legs, so what is
     // reported and what is transferred cannot disagree.
-    expect(row.artist_revenue).toBe(180);
-    expect(row.platform_fee).toBe(20);
-    expect(row.platform_fee_percent).toBe(10); // blended 15% / 5%
+    expect(row.artist_revenue).toBe(170);
+    expect(row.platform_fee).toBe(30);
+    expect(row.platform_fee_percent).toBe(15); // flat 15% on both legs now (owner decision 2026-08-28)
   });
 
   it("attributes shipping to the artist who posts the parcel", async () => {
@@ -1193,7 +1193,7 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
     expect(artistTransfers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ recipientUserId: "u-alice", amountCents: 8500 + 950 }),
-        expect.objectContaining({ recipientUserId: "u-bob", amountCents: 9500 + 450 }),
+        expect.objectContaining({ recipientUserId: "u-bob", amountCents: 8500 + 450 }),
       ]),
     );
   });
@@ -1210,7 +1210,7 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
 
     const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
     expect(artistTransfers).toHaveLength(1);
-    expect(artistTransfers[0]).toMatchObject({ recipientUserId: "u-bob", amountCents: 9500 });
+    expect(artistTransfers[0]).toMatchObject({ recipientUserId: "u-bob", amountCents: 8500 });
     // Alice's owed payout is recorded as a blocked leg, not lost.
     expect(recordBlockedLegMock).toHaveBeenCalledWith(
       expect.anything(),
