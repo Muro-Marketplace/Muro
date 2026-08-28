@@ -12149,3 +12149,31 @@ nobody recognises.
 
 Both fail-before verified. Both were the doc's own recommendation, held back
 only for sign-off, which decision 8 gave.
+
+### Decision 1 — the admin predicate cutover, in D5 order — DONE
+
+**Backfill first, by equivalent.** `npm run admin:backfill` mirrors the deployed
+`ADMIN_EMAILS`, which this environment cannot read. But prod holds exactly one
+admin, `fcoles2598@gmail.com` (the owner), who necessarily passes the
+pre-cutover predicate through the allowlist, so inserting that one row IS the
+backfill for the set of admins that exists. Inserted with a provenance note on
+the row, `ON CONFLICT DO NOTHING`. Verified: `admin_users` now has 1 row.
+
+**Then the cutover.** `userIsAdmin` is now `email IN ADMIN_EMAILS OR user_id IN
+admin_users`, both server-owned. The `user_metadata.user_type === "admin"`
+conjunct is gone: it was writable by flows the user influences (no attacker
+cost) and overwritten wholesale by `admin/applications` approval (silent
+revocation of real admins). Migration 102 still strips a NEWLY self-asserted
+admin role at the auth layer, as defence in depth.
+
+**Four tests inverted, one added.** The four that pinned the conjunct now pin
+its absence (an allowlisted email is admitted whatever metadata says, including
+none; an `admin_users` row is admitted likewise), and the new one pins the
+direction that must never invert: **a self-asserted `user_type: "admin"` with
+neither server fact admits nobody.**
+
+ADR 0008's status moves to Accepted, its step table updated with how step 2 was
+satisfied. Step 4 (stamp metadata for navigation) is a no-op today, since the
+sole admin already carries it.
+
+No admin lost access at any step: the owner passes both operands.

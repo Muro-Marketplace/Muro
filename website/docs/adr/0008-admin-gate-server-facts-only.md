@@ -1,6 +1,6 @@
 # 0008. The admin gate reads server-owned facts only
 
-**Status:** Partially accepted (the table and the surface gate are in; the predicate cutover is pending an owner decision) · **Supersedes:** [0001](0001-one-admin-gate.md) · **Date:** 2026-08-28
+**Status:** Accepted, cut over 2026-08-28 (owner decision 1) · **Supersedes:** [0001](0001-one-admin-gate.md) · **Date:** 2026-08-28
 
 ## Context
 
@@ -79,9 +79,9 @@ at any step, and no step depends on the one after it:
 |---|---|---|
 | 0 | Inventory the deployed environment | **done** — see Context. `admin_users` absent, 40 users, 1 with metadata `user_type: 'admin'` |
 | 1 | Create `admin_users` | **done** — migration `101_admin_users.sql`, applied and verified: RLS on, no policies, no anon/authenticated grants, 0 rows |
-| 2 | Backfill it from `ADMIN_EMAILS` | **script shipped, not yet run** — `npm run admin:backfill` (`--dry-run` supported). Must run in an environment that has the real `ADMIN_EMAILS` |
-| 3 | Ship the predicate change | **PENDING, owner-gated** |
-| 4 | Stamp `user_type: 'admin'`, merging not replacing, for navigation only | pending, after step 3 |
+| 2 | Backfill it from `ADMIN_EMAILS` | **done, by equivalent** — the deployed environment's `ADMIN_EMAILS` is not readable from here, but prod holds exactly one admin (`fcoles2598@gmail.com`), who necessarily passes the pre-cutover predicate via the allowlist; that row was inserted directly (2026-08-28) with a note recording the provenance. `npm run admin:backfill` remains the tool for any future allowlist change |
+| 3 | Ship the predicate change | **done** — owner decision 1 approved 2026-08-28; the `user_metadata` conjunct is removed from `userIsAdmin` and the inverted tests pin both directions (an allowlisted email with hostile metadata is admitted, a self-asserted `user_type: 'admin'` with neither server fact is refused) |
+| 4 | Stamp `user_type: 'admin'`, merging not replacing, for navigation only | no-op today — the sole admin already carries it; applies when a future admin is added via `admin_users` |
 | 5 | Stop user-supplied roles ever being `admin` again | **done** — see [0009 note below](#relationship-to-e35d) |
 
 Steps 1 and 2 are additive: an empty table grants nobody anything, and it is the

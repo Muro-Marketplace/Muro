@@ -48,9 +48,15 @@ async function resolveUser(request: Request): Promise<User | null> {
  * `admin_users` first, or the cutover locks every admin out.
  */
 async function userIsAdmin(user: User): Promise<boolean> {
-  const role = (user.user_metadata as { user_type?: unknown } | null)?.user_type;
-  if (role !== "admin") return false;
-
+  // ADR 0008: server-side facts only. The `user_metadata.user_type === "admin"`
+  // conjunct that used to lead this predicate is GONE (owner decision 1, D5
+  // order, cut over 2026-08-28 after the sole production admin was backfilled
+  // into admin_users). It was the wrong kind of fact in both directions:
+  // metadata is written by flows the user influences, so it raised no attacker
+  // cost, while anything that overwrote an admin's metadata wholesale — which
+  // admin/applications approval does — silently revoked real access. Migration
+  // 102 still strips a NEWLY self-asserted admin role at the auth layer, as
+  // defence in depth for anything else that ever reads metadata.
   const email = user.email?.toLowerCase();
   if (email && adminEmails().includes(email)) return true;
 
