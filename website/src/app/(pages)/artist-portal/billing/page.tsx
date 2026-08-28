@@ -7,6 +7,7 @@ import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 
 interface ProfileSubscription {
   subscription_status: string;
@@ -18,11 +19,15 @@ interface ProfileSubscription {
 }
 
 // Monthly prices; annual saves ~17% (10 months' equivalent).
-const PLAN_DETAILS: Record<string, { name: string; priceMonthly: number; priceAnnual: number; fee: string }> = {
-  core: { name: "Core", priceMonthly: 9.99, priceAnnual: 99.99, fee: "15%" },
-  premium: { name: "Premium", priceMonthly: 24.99, priceAnnual: 249.99, fee: "8%" },
-  pro: { name: "Pro", priceMonthly: 49.99, priceAnnual: 499.99, fee: "5%" },
-  none: { name: "No plan", priceMonthly: 0, priceAnnual: 0, fee: "\u2014" },
+const PLAN_DETAILS: Record<string, { name: string; priceMonthly: number; priceAnnual: number; fee: string; approaches: number | null }> = {
+  // `approaches` mirrors WEEKLY_LIMITS in src/lib/outreach-cap.ts. The live
+  // remaining count comes from /api/outreach/allowance; this is the plan's
+  // headline figure, shown next to the price so the page says what the plan
+  // buys and not only what it costs.
+  core: { name: "Core", priceMonthly: 9.99, priceAnnual: 99.99, fee: "15%", approaches: 3 },
+  premium: { name: "Premium", priceMonthly: 24.99, priceAnnual: 249.99, fee: "8%", approaches: 6 },
+  pro: { name: "Pro", priceMonthly: 49.99, priceAnnual: 499.99, fee: "5%", approaches: 15 },
+  none: { name: "No plan", priceMonthly: 0, priceAnnual: 0, fee: "\u2014", approaches: null },
 };
 
 function annualMonthlyEquivalent(priceAnnual: number): string {
@@ -82,6 +87,9 @@ export default function BillingPage() {
   const [sub, setSub] = useState<ProfileSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
+  // Live remaining approaches for the rolling week, so the upgrade decision
+  // is made against the real number rather than the plan's headline.
+  const allowance = useOutreachAllowance();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [planChanged, setPlanChanged] = useState(false);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
@@ -312,6 +320,10 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* What the plan is actually buying this week. Renders nothing while the
+          lookup is in flight, for a venue, or on an unlimited plan. */}
+      <OutreachAllowanceBadge allowance={allowance} variant="card" className="mb-5" />
+
       {/* Current plan */}
       {hasSubscription ? (
         <div className="bg-surface border border-border rounded-sm p-6 mb-5">
@@ -323,6 +335,7 @@ export default function BillingPage() {
               </div>
               <p className="text-sm text-muted">
                 {details.priceMonthly > 0 ? `\u00a3${details.priceMonthly}/mo or \u00a3${details.priceAnnual}/yr` : "\u2014"} &middot; {details.fee} platform fee on sales
+                {details.approaches !== null && ` \u00b7 ${details.approaches} new venue approaches a week`}
               </p>
             </div>
             <button

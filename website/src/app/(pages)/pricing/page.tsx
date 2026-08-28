@@ -36,6 +36,12 @@ const comparisonRows = [
     pro: "Yes",
   },
   {
+    feature: "New venue approaches",
+    core: "3 a week",
+    premium: "6 a week",
+    pro: "15 a week",
+  },
+  {
     feature: "Venue matching",
     core: "Curated visibility",
     premium: "Proactive matching",
@@ -72,6 +78,11 @@ const faqItems = [
     question: "What is a platform fee?",
     answer:
       "The platform fee is the percentage Wallplace takes when a sale is made through the platform, whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is separate from your membership cost. Core artists pay 15%, Premium 8%, and Pro artists pay 5%, so our fees run 5 to 15% depending on plan. You keep the rest.",
+  },
+  {
+    question: "How many venues can I approach?",
+    answer:
+      "Core covers 3 new venue approaches a week, Premium 6, and Pro 15. The allowance is shared: placement requests, the first message you send a venue, and artwork request responses all draw on the same pool, so you can spend it however suits you. It runs on a rolling 7 days rather than resetting on a fixed day, so an approach you made last Tuesday comes back to you this Tuesday. Replying to a venue that has already replied to you is always free and never counts. You can see what you have left on any venue's request form.",
   },
   {
     question: "Is the first month really free?",

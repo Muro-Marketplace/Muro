@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import PlacementActionItems from "@/components/PlacementActionItems";
+import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 import Button from "@/components/Button";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -92,6 +93,10 @@ interface OnboardingItem {
 export default function ArtistPortalPage() {
   const { displayName, user, subscriptionStatus: authSubscriptionStatus, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({ placements: 0, sales: "£0", enquiries: 0, views: 0 });
+  // Venue approaches left this week. The dashboard is where an artist plans
+  // their outreach, so the number belongs here rather than only inside the
+  // request form on Spaces.
+  const allowance = useOutreachAllowance();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>("none");
   const [onboardingItems, setOnboardingItems] = useState<OnboardingItem[]>([]);
@@ -418,6 +423,10 @@ export default function ArtistPortalPage() {
           </div>
         ))}
       </div>
+
+      {/* Venue approaches left this week (renders nothing on an unlimited
+          plan, or before the lookup resolves). */}
+      <OutreachAllowanceBadge allowance={allowance} variant="card" className="mb-8" />
 
       {/* Placement Action Items */}
       <PlacementActionItems userId={user?.id} role="artist" />

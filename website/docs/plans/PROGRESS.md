@@ -12759,3 +12759,53 @@ authfetch ratchet lowered 7 to 3 per its own contract (server-side money
 gating untouched; confirmDelivery and the two pay buttons remain as they
 were). The triage document carries the per-item detail and the bonus
 defects found during the round.
+
+## Outreach allowance: rolling week, honest column, visible number, 2026-08-28
+
+The cap was 2/5/10 per calendar day, counted on `placements.proposed_by_user_id`,
+and mentioned nowhere. Three problems, fixed together (ADR 0009).
+
+**It moved on its own.** `proposed_by_user_id` is migration 024's milestone
+proposer, rewritten by counter-offers, stage advances and a list-page backfill.
+An artist countering a venue's same-day request silently spent an approach,
+though counters are meant to be free; a placement reaching a milestone the same
+day handed one back. Migration 122 adds `created_by_user_id`, stamped once at
+insert on all four placement-insert paths and frozen by a trigger. The two
+venue-side inserts stamp the venue, since the artist's unit was already spent on
+the response that produced the placement.
+
+**The window fought how artists work.** Now a rolling 7 days, Core 3 / Premium 6
+/ Pro 15. Roughly 5x the daily numbers, not 7x: flat total volume, far more
+usable, and no Monday-midnight reset to game. Accepted trade-off: one artist can
+approach a venue several times in an evening, self-correcting because they then
+have nothing for a week.
+
+**It was invisible, then it was a code.** Two routes returned the sentence in
+`message` while the request form read `data.error`, so a capped artist saw the
+literal string `outreach_limit_reached`; the artwork-response route returned no
+`error` key at all, reading as "Request failed (429)". One `outreachCapPayload()`
+now builds all three bodies, and the form reads `message` first. New
+`GET /api/outreach/allowance`, read through one hook and one badge
+(`components/OutreachAllowance.tsx`), puts the number on the request form ("2 of
+3 venue approaches left this week", send disabled at zero), the Spaces filter
+bar, the portal dashboard and the billing page. It renders nothing while
+loading, for venues, on an unlimited plan, or on a failed read, so a broken
+lookup cannot block outreach. Publicly: a "New venue approaches" row in the
+pricing table, the number on each plan card instead of "Message venues
+directly", and an FAQ on the shared pool.
+
+`no-ad-hoc-cap` widened: the helper no longer uses a count indicator (it needs
+timestamps to say when the next approach frees up), so the rule now also fires on
+a `created_at` window plus an actor-column `.eq()`.
+
+Cap tests rewritten for the new window and column (29, up from 18), plus 15 for
+the badge and hook, 6 form tests, 5 for the allowance endpoint and 4 new
+lint-rule cases. Full suite 271 files / 2,747 tests green, 0 lint errors.
+
+**One thing is not verifiable here and must be done at deploy:** migration 122
+has not been applied (this machine has placeholder Supabase credentials), so
+`tests/integration/schema-columns.json` was hand-edited to add
+`placements.created_by_user_id` where a regeneration would put it. Apply the
+migration, then run `npm run schema:snapshot` to replace the hand edit with the
+real thing. The migration must land before the code deploys: the placements
+insert has no strip-and-retry fallback, so a missing column is a hard 500.

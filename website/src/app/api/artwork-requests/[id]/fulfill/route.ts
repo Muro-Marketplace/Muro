@@ -171,6 +171,12 @@ export async function POST(
         // carry a proposer, which is what "written by almost nothing" looks
         // like.
         proposed_by_user_id: req.venue_user_id,
+        // Immutable creator stamp (migration 122). The ACTING user is the
+        // venue (both routes assert req.venue_user_id === auth.user.id), and
+        // that is deliberate: the artist's outreach unit was already spent on
+        // the artwork-request response that produced this placement, so
+        // stamping the artist here would charge them for it twice.
+        created_by_user_id: auth.user!.id,
         // E22: lets uniq_placements_from_response (098) reject a second
         // placement minted from the same response, which the read-side gate
         // above cannot do for two concurrent requests.

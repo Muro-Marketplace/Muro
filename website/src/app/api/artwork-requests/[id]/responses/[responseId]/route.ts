@@ -209,6 +209,12 @@ export async function PATCH(
         // carry a proposer, which is what "written by almost nothing" looks
         // like.
         proposed_by_user_id: resp.artist_user_id,
+        // Immutable creator stamp (migration 122). The ACTING user is the
+        // venue (both routes assert req.venue_user_id === auth.user.id), and
+        // that is deliberate: the artist's outreach unit was already spent on
+        // the artwork-request response that produced this placement, so
+        // stamping the artist here would charge them for it twice.
+        created_by_user_id: auth.user!.id,
         created_at: new Date().toISOString(),
         notes: null,
       });

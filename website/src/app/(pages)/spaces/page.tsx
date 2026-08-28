@@ -16,6 +16,7 @@ import SpacesPlacementRequestForm, {
 } from "@/components/SpacesPlacementRequestForm";
 import ArtworkRequestsList from "@/components/ArtworkRequestsList";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 
 interface ArtistWorkLite {
   id: string;
@@ -110,6 +111,10 @@ function SpacesPageContent() {
   //   this session, so the card flips to a success state.
   const [myWorks, setMyWorks] = useState<ArtistWorkLite[]>([]);
   const [worksLoading, setWorksLoading] = useState(false);
+  // What the artist has left this week, shown above the venue list so the
+  // limit is visible while they are choosing who to approach, not only once
+  // they have opened a request form.
+  const allowance = useOutreachAllowance();
   const [requestOpenSlug, setRequestOpenSlug] = useState<string | null>(null);
   const [sentRequests, setSentRequests] = useState<Record<string, string>>({});
 
@@ -374,6 +379,7 @@ function SpacesPageContent() {
       {/* Filters */}
       <section className="border-b border-border bg-[#FAF8F5]">
         <div className="max-w-[1200px] mx-auto px-6 py-3">
+          <OutreachAllowanceBadge allowance={allowance} className="mb-2.5" />
           <div className="flex items-center gap-4 overflow-x-auto">
             <div className="flex items-center gap-1.5">
               {VENUE_TYPES.map((t) => (
