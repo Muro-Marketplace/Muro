@@ -167,7 +167,12 @@ function CustomerPortalContent() {
     setRefundSubmitting(false);
   }
 
-  const totalSpent = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+  // C3: cancelled and refunded orders are money the customer did not end up
+  // spending, so they don't belong in the headline figure.
+  const totalSpent = orders.reduce(
+    (sum, o) => (o.status === "cancelled" || o.status === "refunded" ? sum : sum + (o.total || 0)),
+    0,
+  );
 
   const filteredOrders = useMemo(() => {
     const q = query.trim().toLowerCase();

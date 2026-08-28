@@ -15,7 +15,7 @@ const comparisonRows = [
     feature: "Portfolio works",
     core: "Up to 8",
     premium: "Up to 20",
-    pro: "Unlimited",
+    pro: "Up to 50",
   },
   {
     feature: "Artist profile",
@@ -92,7 +92,7 @@ const faqItems = [
   {
     question: "Can I change my tier?",
     answer:
-      "Yes, you can upgrade or downgrade at any time. If you upgrade mid-cycle, the difference is prorated. Downgrading takes effect at the start of your next billing period.",
+      "Yes, you can upgrade or downgrade at any time from your billing page. You check out for the new plan, it starts straight away, and your old plan is cancelled as soon as the new one is running.",
   },
   {
     question: "Is placement guaranteed?",
@@ -102,7 +102,7 @@ const faqItems = [
   {
     question: "What happens when I cancel?",
     answer:
-      "You can cancel at any time. Your membership remains active until the end of the period you have paid for. We will arrange the return of any artwork currently on display with venues, and your profile will be removed from the platform. No cancellation fees.",
+      "You can cancel with 30 days' written notice, by email or from your account settings. Your membership remains active until the end of the notice period. You collect any artwork on display with venues within 30 days of cancelling, and your profile is then removed from the platform. No cancellation fees.",
   },
   {
     question: "Are there any other fees?",
@@ -305,7 +305,7 @@ export default function PricingPage() {
                 For artists actively using the platform and generating consistent
                 venue enquiries, Pro is the commercially obvious choice.
               </p>
-              <Button href="/apply" size="md">
+              <Button href="/apply?plan=pro" size="md">
                 Apply for Pro
               </Button>
             </div>

@@ -30,7 +30,7 @@ export default function AccountSecurityPage() {
         <div className="max-w-[640px] mx-auto px-6">
           <h1 className="text-3xl lg:text-4xl mb-4">Account security</h1>
           <p className="text-muted leading-relaxed mb-6">
-            If you didn&rsquo;t request a recent sign-in or change to your account, secure it now by resetting your password and reviewing recent activity.
+            If you didn&rsquo;t request a recent sign-in or change to your account, secure it now by resetting your password.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
             <Link

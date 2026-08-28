@@ -25,13 +25,12 @@
  *   - signUp creates the user with `user_type: "artist"` metadata,
  *     which downstream auth-aware routes use to gate / land them on
  *     the artist portal.
- *   - We immediately signInWithPassword so they don't have to wait
- *     for email verification before filling in the application.
- *     Email verification is still enforced by Supabase config; until
- *     verified the artist can read /apply but other portal areas
- *     stay restricted.
- *   - router.push("/apply"), so they continue straight into Step 2
- *     instead of seeing a "thanks" page.
+ *   - router.push("/check-your-inbox"): the applicant must click the
+ *     verification link Supabase emails them, then sign in. The
+ *     login link in that email carries ?next= so they land on /apply
+ *     (Step 2) straight after signing in. There is no immediate
+ *     signInWithPassword any more, so nothing on this page should
+ *     promise a straight-through hop into the application form.
  */
 
 import { useState } from "react";
@@ -146,8 +145,8 @@ export default function ArtistSignUpPage() {
             Apply to join as an artist
           </h1>
           <p className="text-white/50 text-sm">
-            Create your account first, we&rsquo;ll take you straight to the
-            application
+            Create your account, verify your email, and the application
+            form is your next stop
           </p>
         </div>
 
@@ -292,12 +291,13 @@ export default function ArtistSignUpPage() {
               disabled={loading || !agreedToTos || !turnstileToken}
               className="w-full px-6 py-3 bg-accent text-white text-sm font-semibold uppercase tracking-wider rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
-              {loading ? "Creating Account..." : "Continue to Application"}
+              {loading ? "Creating Account..." : "Create Account"}
             </button>
             <p className="text-[11px] text-muted text-center leading-relaxed">
-              You&rsquo;ll go straight to the application form after this.
-              Approval emails take you back to login, your account is
-              already set up.
+              We&rsquo;ll email you a verification link. Verify, sign in,
+              and you&rsquo;ll land on the application form. Approval
+              emails take you back to login, your account is already
+              set up.
             </p>
           </form>
         </div>

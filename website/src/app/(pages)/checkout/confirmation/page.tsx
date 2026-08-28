@@ -78,6 +78,21 @@ function ConfirmationContent() {
     "loading" | "no_session" | "error" | "processing" | "paid"
   >(() => (sessionId ? "loading" : "no_session"));
 
+  // B22: the fulfilment method the buyer chose, written to localStorage
+  // by the checkout page immediately before the Stripe redirect. The
+  // session API intentionally exposes no fulfilment data (E39), so this
+  // is the only signal; when it's missing (cleared storage, another
+  // device) the notice falls back to fulfilment-neutral copy.
+  const [fulfilment, setFulfilment] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFulfilment(localStorage.getItem("wallplace-last-fulfilment"));
+    } catch {
+      /* storage unavailable: neutral copy */
+    }
+  }, []);
+
   useEffect(() => {
     if (!sessionId) return;
 
@@ -286,7 +301,13 @@ function ConfirmationContent() {
           anyone with the session id could read it (E39). The buyer has the
           address in their confirmation email. */}
 
-      {/* Artist fulfilment */}
+      {/* Artist fulfilment. B22: this used to assert "packed and shipped
+          ... within 5 to 7 working days" for every order, including
+          collection orders where nothing ships, and hardcoded a window
+          the checkout calculates per artist. The copy now follows the
+          fulfilment method the buyer chose (read from localStorage,
+          written by the checkout page just before the Stripe redirect)
+          and makes no dispatch-time promise. */}
       <div className="bg-accent/5 border border-accent/20 rounded-sm p-4 mb-8 text-left flex gap-3">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5" aria-hidden="true">
           <rect x="1" y="3" width="15" height="13" rx="2" />
@@ -295,8 +316,11 @@ function ConfirmationContent() {
           <circle cx="18.5" cy="18.5" r="2.5" />
         </svg>
         <p className="text-sm text-foreground/70">
-          Your order will be packed and shipped directly by the artist. Dispatch within 5 to 7 working days.
-          You&apos;ll receive updates by email.
+          {fulfilment === "collection" || fulfilment === "collect_venue"
+            ? "You're collecting this order, so there's nothing to ship. You'll receive updates by email as it's made ready."
+            : fulfilment === "ship"
+              ? "Your order will be packed and shipped directly by the artist. You'll receive updates by email."
+              : "The artist takes it from here. You'll receive updates by email as your order progresses."}
         </p>
       </div>
 

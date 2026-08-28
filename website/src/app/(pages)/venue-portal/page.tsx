@@ -106,9 +106,27 @@ export default function VenueDashboardPage() {
       // `range=all` so the dashboard tile shows the lifetime number rather
       // than a 30-day window.
       authFetch("/api/analytics/venue?range=all").then((r) => r.json()).catch(() => ({ totals: { qr_scans: 0 } })),
-    ]).then(([dashboardData, placementsData, analyticsData]) => {
+      // E4: the payouts checklist tick needs the real onboarding fact.
+      // An account id alone is stored the moment onboarding STARTS.
+      authFetch("/api/stripe-connect/status")
+        .then((r) => r.json())
+        .catch(() => ({} as { onboardingComplete?: boolean })),
+    ]).then(([dashboardData, placementsData, analyticsData, connectData]) => {
       const orders = dashboardData.orders || [];
-      const totalSpent = orders.reduce((sum: number, o: { total?: number }) => sum + (o.total || 0), 0);
+      // E2: /api/dashboard's venue branch returns orders matched by
+      // venue_slug OR buyer_email, so it includes customer QR sales AT the
+      // venue. "Total Spent" must only sum the venue's own purchases
+      // (buyer_email match, the same rule the Orders page uses), and skips
+      // cancelled/refunded orders like the customer portal does.
+      const venueEmail = (user?.email || "").toLowerCase();
+      const totalSpent = orders.reduce(
+        (sum: number, o: { total?: number; buyer_email?: string; status?: string }) => {
+          const isOwnPurchase = !!venueEmail && (o.buyer_email || "").toLowerCase() === venueEmail;
+          const isVoided = o.status === "cancelled" || o.status === "refunded";
+          return isOwnPurchase && !isVoided ? sum + (o.total || 0) : sum;
+        },
+        0,
+      );
       const placements = placementsData.placements || [];
       const revenueEarned = placements.reduce(
         (sum: number, p: { revenue?: number }) => sum + (p.revenue || 0), 0
@@ -142,7 +160,9 @@ export default function VenueDashboardPage() {
         { key: "preferences", label: "Describe what you're looking for",  complete: hasPreferences,                           href: "/venue-portal/profile" },
         { key: "browse",      label: "Browse artist portfolios",          complete: hasBrowsed,                               href: "/browse" },
         { key: "enquiry",     label: "Send your first enquiry",           complete: sentMessageCount > 0,                     href: "/browse" },
-        { key: "payouts",     label: "Set up payouts",                    complete: !!profile.stripe_connect_account_id,       href: "/venue-portal/settings" },
+        // E4: keyed on the status endpoint's onboardingComplete
+        // (charges_enabled && details_submitted), not the raw account id.
+        { key: "payouts",     label: "Set up payouts",                    complete: connectData?.onboardingComplete === true,  href: "/venue-portal/settings" },
       ];
       setOnboardingItems(items);
 
@@ -199,7 +219,9 @@ export default function VenueDashboardPage() {
       activityItems.sort((a, b) => b.sortTime - a.sortTime);
       setActivity(activityItems.slice(0, 8));
     }).finally(() => setLoading(false));
-  }, [savedArtistCount]);
+    // user?.email feeds the Total Spent purchase match above; re-run once
+    // the auth context resolves so the tile doesn't stick at £0.
+  }, [savedArtistCount, user?.email]);
 
   const onboardingComplete = onboardingItems.filter((i) => i.complete).length;
   const onboardingTotal = onboardingItems.length;
@@ -383,7 +405,10 @@ export default function VenueDashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               { label: "Browse Portfolios", href: "/browse", description: "Find art for your space" },
-              { label: "View Enquiries", href: "/venue-portal/enquiries", description: "Check your messages" },
+              // E5/E27: was "View Enquiries" → /venue-portal/enquiries, a page
+              // whose backing API GET never existed (enquiries belong to
+              // artists). Conversations with artists live in Messages.
+              { label: "Your Messages", href: "/venue-portal/messages", description: "Chat with artists" },
               { label: "Your Orders", href: "/venue-portal/orders", description: "Track purchases" },
               { label: "Update Preferences", href: "/venue-portal/profile", description: "Tell artists what you need" },
             ].map((action) => (

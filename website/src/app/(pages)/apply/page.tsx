@@ -23,8 +23,8 @@ export default function ApplyPage() {
             <p className="text-xl text-muted leading-relaxed mb-6">
               Wallplace is a curated platform connecting artists with venues
               that are genuinely looking for artwork. We review every
-              application personally. We accept roughly half. Being accepted
-              means your work has been judged ready for commercial spaces.
+              application personally. Being accepted means your work has
+              been judged ready for commercial spaces.
             </p>
             <p className="text-muted leading-relaxed">
               We are selective because curation is our value. Venues trust us

@@ -365,7 +365,10 @@ export default function AnalyticsPage() {
       <div className="bg-surface border border-border rounded-sm mb-6 overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <h2 className="text-base font-medium">Earnings Over Time</h2>
-          <span className="text-xs text-muted">{dateRange}</span>
+          {/* D6: this chart is always the fixed last 7 calendar months and
+              ignores the page's selected range, so the caption must say
+              that rather than echoing {dateRange}. */}
+          <span className="text-xs text-muted">Last 7 months</span>
         </div>
         <div className="px-6 py-6">
           <EarningsChart data={earningsData} />

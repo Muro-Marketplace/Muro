@@ -521,6 +521,12 @@ export default function CheckoutPage() {
       if (data.url) {
         // Save shipping to localStorage for confirmation fallback
         localStorage.setItem("wallplace-last-shipping", JSON.stringify(shipping));
+        // B22: the confirmation page's fulfilment notice needs to know
+        // whether anything is actually being shipped. The session API
+        // deliberately returns no fulfilment data (E39), so hand the
+        // chosen method over via localStorage for the immediate
+        // post-checkout render.
+        localStorage.setItem("wallplace-last-fulfilment", fulfilmentMethod);
         window.location.href = data.url;
         // Leave `submitting` true so the button stays disabled while
         // the browser navigates to Stripe. Resetting it here flickers

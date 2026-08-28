@@ -15,11 +15,21 @@ import PaymentClient from "./PaymentClient";
  * flow (platform-fee split, destination charge vs transfer, VAT, etc.) can
  * land in a single place once the billing model is decided.
  */
+// F34: the placements row only carries the artist's SLUG, so the headline
+// used to read "Pay maya-chen monthly". Resolve the display name the same
+// way the venue placements list does (browse-artists lookup, slug
+// formatting as the fallback).
+function formatSlug(slug: string): string {
+  if (!slug) return "";
+  return slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
 export default function PlacementPaymentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user, loading } = useAuth();
   const router = useRouter();
   const [placement, setPlacement] = useState<Record<string, unknown> | null>(null);
+  const [artistName, setArtistName] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "not-found" | "forbidden" | "no-fee">("loading");
 
@@ -31,11 +41,21 @@ export default function PlacementPaymentPage({ params }: { params: Promise<{ id:
     }
     authFetch(`/api/placements?id=${encodeURIComponent(id)}`)
       .then((r) => r.json())
-      .then((data) => {
+      .then(async (data) => {
         const p = (data.placements || []).find((x: { id: string }) => x.id === id);
         if (!p) { setState("not-found"); return; }
         if (p.venue_user_id !== user.id) { setState("forbidden"); return; }
         if (!p.monthly_fee_gbp || p.monthly_fee_gbp <= 0) { setState("no-fee"); return; }
+        if (p.artist_slug) {
+          try {
+            const artistRes = await fetch("/api/browse-artists");
+            const artistData = await artistRes.json();
+            const match = (artistData.artists || []).find(
+              (a: { slug?: string; name?: string }) => a.slug === p.artist_slug,
+            );
+            if (match?.name) setArtistName(match.name);
+          } catch { /* fall back to the formatted slug */ }
+        }
         setPlacement(p);
         setState("ready");
       })
@@ -61,7 +81,7 @@ export default function PlacementPaymentPage({ params }: { params: Promise<{ id:
       placementId={String(placement.id)}
       workTitle={String(placement.work_title || "Artwork")}
       monthlyFeeGbp={Number(placement.monthly_fee_gbp) || 0}
-      artistName={String(placement.artist_slug || placement.artist_name || "the artist")}
+      artistName={artistName || formatSlug(String(placement.artist_slug || "")) || "the artist"}
       qrEnabled={Boolean(placement.qr_enabled)}
     />
   );

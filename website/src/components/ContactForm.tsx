@@ -99,7 +99,7 @@ export default function ContactForm() {
         <p className="text-sm text-muted">
           {artistSlug
             ? `Your message has been sent to ${artistName || "the artist"}. They'll be notified by email.`
-            : "Thanks for reaching out. We respond within 24 hours."}
+            : "Thanks for reaching out. We respond within 2 working days."}
         </p>
       </div>
     );

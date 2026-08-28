@@ -110,9 +110,17 @@ export default function ArtistPortalPage() {
   }, []);
 
   useEffect(() => {
-    // Single API call for entire dashboard
+    // Single API call for entire dashboard, plus the Stripe Connect status
+    // for the payouts checklist item (D2): the tick needs the real
+    // "onboarding complete" fact, not the mere existence of an account id,
+    // which is stored the moment onboarding STARTS.
     async function loadDashboard() {
-      const data = await authFetch("/api/dashboard").then((r) => r.json()).catch(() => ({}));
+      const [data, connect] = await Promise.all([
+        authFetch("/api/dashboard").then((r) => r.json()).catch(() => ({})),
+        authFetch("/api/stripe-connect/status")
+          .then((r) => r.json())
+          .catch(() => ({} as { onboardingComplete?: boolean })),
+      ]);
 
       if (data.profile?.subscription_status) setSubscriptionStatus(data.profile.subscription_status);
 
@@ -144,7 +152,10 @@ export default function ArtistPortalPage() {
       const items: OnboardingItem[] = [
         { key: "profile",  label: "Complete your profile",   complete: profileComplete,                                  href: "/artist-portal/profile" },
         { key: "work",     label: "Upload your first work",  complete: worksCount > 0,                                   href: "/artist-portal/portfolio" },
-        { key: "payouts",  label: "Set up payouts",          complete: !!profile.stripe_connect_account_id,              href: "/artist-portal/billing" },
+        // D2: keyed on the status endpoint's onboardingComplete
+        // (charges_enabled && details_submitted), the same fact billing
+        // shows. An account id alone means onboarding merely started.
+        { key: "payouts",  label: "Set up payouts",          complete: connect?.onboardingComplete === true,             href: "/artist-portal/billing" },
         { key: "placement",label: "Get your first placement", complete: placements.some((p: { status: string }) => p.status === "active"), href: "/artist-portal/placements" },
       ];
       setOnboardingItems(items);
@@ -417,7 +428,9 @@ export default function ArtistPortalPage() {
         {[
           { label: "Active Placements", value: String(stats.placements) },
           { label: "Total Sales", value: stats.sales },
-          { label: "Enquiries This Month", value: String(stats.enquiries) },
+          // D3: /api/dashboard returns an all-time enquiry count (no date
+          // window), so the label must not claim a monthly figure.
+          { label: "Total Enquiries", value: String(stats.enquiries) },
           { label: "Profile Views", value: String(stats.views) },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface border border-border rounded-sm p-5">
