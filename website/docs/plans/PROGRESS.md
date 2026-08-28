@@ -11761,3 +11761,49 @@ themselves are untouched and still owner-gated — this changes who can *ask*, n
 what happens when they do.
 
 `npm run check` green: 0 lint errors, 246 files, 2487 tests, exit 0.
+
+### Phantom TABLES: three shipped features writing to tables that never existed — DONE
+
+Extended the sweep from phantom columns to phantom **tables**. A table that does
+not exist fails exactly like a column that does not exist, and it hid in the same
+place: `DELETE /api/account` wrote to `from("waitlist")` and
+`from("applications")`, neither of which is a table.
+
+Three more, all verified absent from production, all written by shipped features,
+**all three swallowing the error into a `console.warn` behind an `{ ok: true }`**:
+
+| table | what it means |
+|---|---|
+| `conversation_reports` | `POST /api/messages/report`. Every report anyone has made, about harassment or anything else, existed only as a line in a Vercel log |
+| `user_blocks` | `POST /api/messages/block`. A person who blocked someone was told it worked. Nothing was recorded, so the blocked account could still message them |
+| `placement_record_versions` | the consignment-record audit trail, whose own comment says the snapshot "is what gives each side confidence the other isn't editing behind their back". Never one row |
+
+Two of the three are **safety features**, and each route's own header describes
+the fallback as a courtesy for a lagging migration. The migration never came, so
+the fallback was the behaviour, for as long as the features have existed.
+
+**Migration 111 (written, applied to prod, verified live).** Column shapes taken
+from the insert call sites verbatim so the existing code works unchanged; the
+`user_blocks` primary key is exactly the `onConflict` pair the route upserts on,
+or every re-block would 23505. Service-role only, the 101 pattern: RLS on, 0
+policies, 0 leaky grants, `service_role` only. Verified live for all three.
+
+**The swallows are gone.** A report or a block that does not persist is not a
+report or a block, and answering `ok` for a failed write is what kept this
+invisible. The record-version snapshot stays non-fatal, because blocking
+someone's edit over a failed audit row is the wrong trade, but it logs as an
+error rather than a "skipped".
+
+**A phantom-table guard now covers the class**, with an allowlist that is empty
+on purpose. Verified by adding a route that reads `from("waitlist")`.
+
+11 tests across the two safety routes, which had none. Restoring the swallow
+fails the two that matter.
+
+**Two follow-ups, surfaced not done.** The report modal shows "submitted"
+whatever the API answers, so a 500 still does not reach the person; that is a
+frontend change. And **nothing reads `user_blocks` yet** — the send path and the
+conversation-list aggregator have to honour it before a block does anything
+beyond being recorded. Both were impossible before and are possible now.
+
+`npm run check` green: 0 lint errors, 248 files, 2500 tests, exit 0.

@@ -180,6 +180,60 @@ function scan() {
   return { offences, writesChecked, keysChecked };
 }
 
+/**
+ * Tables the code may name that the snapshot does not carry, with the reason.
+ *
+ * Empty on purpose. Three entries would have belonged here and are now real
+ * tables instead (migration 111): `conversation_reports`, `user_blocks` and
+ * `placement_record_versions`, each written by a shipped feature, each write
+ * failing, each error swallowed into a `console.warn` behind an `{ ok: true }`.
+ */
+const PHANTOM_TABLE_ALLOWED = new Map<string, string>();
+
+/** Every `.from("table")` in the source, whatever it does with it. */
+function tablesNamed(source: string): { table: string; line: number }[] {
+  const out: { table: string; line: number }[] = [];
+  for (const m of source.matchAll(/\.from\(\s*["'`]([a-z_][a-z0-9_]*)["'`]\s*\)/g)) {
+    out.push({ table: m[1], line: source.slice(0, m.index ?? 0).split("\n").length });
+  }
+  return out;
+}
+
+// A table that does not exist fails EXACTLY like a column that does not exist,
+// and it hid in the same place: `DELETE /api/account` wrote to `from("waitlist")`
+// and `from("applications")`, neither of which is a table (they are
+// `waitlist_signups` and `artist_applications`), so a person's right to erasure
+// silently left their waitlist entry and their whole application in place.
+describe("no .from() names a table the live schema lacks", () => {
+  it("names only tables that exist", () => {
+    const offences: string[] = [];
+    for (const file of walk(SRC)) {
+      const rel = path.relative(SRC, file);
+      const source = readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      for (const { table, line } of tablesNamed(source)) {
+        if (SCHEMA[table]) continue;
+        if (PHANTOM_TABLE_ALLOWED.has(table)) continue;
+        offences.push(`${rel}:${line} reads or writes "${table}", which is not a table`);
+      }
+    }
+    expect(
+      offences,
+      "PostgREST rejects the whole statement, so this does nothing at all. Check the " +
+        "name against tests/integration/schema-columns.json, or add the table (migration " +
+        "111 is the worked example).",
+    ).toEqual([]);
+  });
+
+  it("keeps the allowlist honest", () => {
+    for (const [table, why] of PHANTOM_TABLE_ALLOWED) {
+      expect(why.length, `${table} needs a real reason`).toBeGreaterThan(40);
+      expect(SCHEMA[table], `${table} exists now; remove its entry`).toBeUndefined();
+    }
+  });
+});
+
 describe("no .insert/.update names a column the live schema lacks", () => {
   it("scans a realistic number of writes, so the sweep cannot pass vacuously", () => {
     const { writesChecked, keysChecked } = scan();
