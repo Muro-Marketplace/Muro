@@ -6,7 +6,7 @@
 
 import { useRouter } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import ArtworkRequestForm, { type ArtworkRequestPayload } from "@/components/artwork-requests/ArtworkRequestForm";
 import { recordSubmission } from "@/lib/recent-artwork-requests";
 
@@ -14,13 +14,18 @@ export default function NewArtworkRequestPage() {
   const router = useRouter();
 
   async function submit(payload: ArtworkRequestPayload) {
-    const res = await authFetch("/api/artwork-requests", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || data.error || "Could not create request.");
+    // mutate throws ApiError on a non-2xx, whose .message keeps the old
+    // body.message -> body.error precedence for the form's error display.
+    let data: { id: string };
+    try {
+      data = await mutate<{ id: string }>("/api/artwork-requests", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      throw new Error(
+        err instanceof ApiError ? err.message || "Could not create request." : "Network error. Please try again.",
+      );
     }
     // QA flagged that the API's `?mine=1` GET sometimes fails to
     // surface a row the venue has just inserted, so they land on a

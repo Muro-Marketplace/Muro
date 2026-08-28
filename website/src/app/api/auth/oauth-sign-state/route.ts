@@ -6,7 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { signOAuthState } from "@/lib/oauth-state";
-import { isRole } from "@/lib/auth-roles";
+import { isSignupRole } from "@/lib/auth-roles";
 import { safeRedirect } from "@/lib/safe-redirect";
 
 export async function POST(request: Request) {
@@ -16,7 +16,11 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  if (!isRole(body.role)) {
+  // E35d: was `isRole`, which accepts "admin". This route is unauthenticated,
+  // so POST {"role":"admin"} minted a validly HMAC-signed state token claiming
+  // admin, and that token is what the whole OAuth flow trusts downstream.
+  // A role someone ASKS for is never admin; admin is granted server-side only.
+  if (!isSignupRole(body.role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
   const next = safeRedirect(body.next, "/browse");

@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { isFlagOn } from "@/lib/feature-flags";
 
 // Nav order: Dashboard → Profile / Portfolio → Messages → Placements → rest.
 // (See plan item #8, Profile first, then Messages, then Placements.)
@@ -31,8 +32,11 @@ const navItems = [
   { label: "Orders", href: "/artist-portal/orders" },
   { label: "QR Labels", href: "/artist-portal/labels" },
   { label: "Social Posts", href: "/artist-portal/posts" },
-  // Phase 2.7 I1: artist blog editor.
-  { label: "Blogs", href: "/artist-portal/blogs" },
+  // Phase 2.7 I1: artist blog editor. bug-12: only shown when BLOGS_V1 is on.
+  // Without this, prod (where the flag is off) advertised a Blogs entry point
+  // whose editor 403s on every save. The three blog pages notFound() as well,
+  // so the gate holds even if someone types the URL.
+  ...(isFlagOn("BLOGS_V1") ? [{ label: "Blogs", href: "/artist-portal/blogs" }] : []),
   { label: "Analytics", href: "/artist-portal/analytics" },
   { label: "Billing", href: "/artist-portal/billing" },
 ];

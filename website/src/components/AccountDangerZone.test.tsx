@@ -13,10 +13,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
 
-const authFetchMock = vi.fn();
-vi.mock("@/lib/api-client", () => ({
-  authFetch: (...args: unknown[]) => authFetchMock(...args),
-}));
+// 05: the delete POST now goes through mutate (throws on a non-2xx) rather than
+// authFetch, so sign-out + redirect can only run on a confirmed delete.
+const mutateMock = vi.fn();
+vi.mock("@/lib/api-client", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api-client")>();
+  return { ...actual, mutate: (...args: unknown[]) => mutateMock(...args) };
+});
 
 const signOutMock = vi.fn();
 vi.mock("@/lib/supabase", () => ({
@@ -28,10 +31,11 @@ vi.mock("@/lib/supabase", () => ({
 }));
 
 import AccountDangerZone from "./AccountDangerZone";
+import { ApiError } from "@/lib/api-client";
 
 beforeEach(() => {
   push.mockReset();
-  authFetchMock.mockReset();
+  mutateMock.mockReset();
   signOutMock.mockReset();
   signOutMock.mockResolvedValue({ error: null });
 });
@@ -66,14 +70,11 @@ describe("<AccountDangerZone />", () => {
       name: /permanently delete my account/i,
     });
     fireEvent.click(button); // disabled; no-op
-    expect(authFetchMock).not.toHaveBeenCalled();
+    expect(mutateMock).not.toHaveBeenCalled();
   });
 
   it("POSTs { confirm: 'DELETE MY ACCOUNT' } to /api/account/delete on submit and redirects on success", async () => {
-    authFetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true }),
-    });
+    mutateMock.mockResolvedValue({ ok: true });
 
     render(<AccountDangerZone />);
     const input = screen.getByPlaceholderText(/type DELETE MY ACCOUNT/i);
@@ -82,8 +83,8 @@ describe("<AccountDangerZone />", () => {
       screen.getByRole("button", { name: /permanently delete my account/i }),
     );
 
-    await waitFor(() => expect(authFetchMock).toHaveBeenCalledTimes(1));
-    expect(authFetchMock).toHaveBeenCalledWith("/api/account/delete", {
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+    expect(mutateMock).toHaveBeenCalledWith("/api/account/delete", {
       method: "POST",
       body: JSON.stringify({ confirm: "DELETE MY ACCOUNT" }),
     });
@@ -92,10 +93,9 @@ describe("<AccountDangerZone />", () => {
   });
 
   it("shows the API's error message when the response is not ok", async () => {
-    authFetchMock.mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: "Could not complete account deletion. Contact support." }),
-    });
+    mutateMock.mockRejectedValue(
+      new ApiError(500, "Could not complete account deletion. Contact support.", "Could not complete account deletion. Contact support.", {}),
+    );
 
     render(<AccountDangerZone />);
     const input = screen.getByPlaceholderText(/type DELETE MY ACCOUNT/i);
@@ -112,7 +112,7 @@ describe("<AccountDangerZone />", () => {
   });
 
   it("shows a network-error message when the fetch throws", async () => {
-    authFetchMock.mockRejectedValue(new Error("net"));
+    mutateMock.mockRejectedValue(new Error("net"));
 
     render(<AccountDangerZone />);
     const input = screen.getByPlaceholderText(/type DELETE MY ACCOUNT/i);

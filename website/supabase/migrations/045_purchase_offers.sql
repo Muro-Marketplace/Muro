@@ -1,4 +1,4 @@
--- 042_purchase_offers.sql
+-- 045_purchase_offers.sql
 -- Request 1 — Purchase offers on works or whole collections.
 
 CREATE TABLE IF NOT EXISTS purchase_offers (

@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate } from "@/lib/api-client";
 import type { SavedItem } from "@/lib/types";
 
 interface SavedContextValue {
@@ -103,12 +103,14 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
       if (exists) {
         setSavedItems((prev) => prev.filter((s) => !(s.type === type && s.id === id)));
         if (user) {
-          authFetch("/api/saved", {
+          // mutate rejects on a non-2xx (ApiError) or a dropped request, so the
+          // manual `if (!res.ok) throw` is no longer needed: the catch below is
+          // the single rollback path.
+          mutate("/api/saved", {
             method: "DELETE",
             body: JSON.stringify({ itemType: type, itemId: id }),
           })
-            .then((res) => {
-              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            .then(() => {
               showToast(`${label} removed from favourites`);
             })
             .catch(() => {
@@ -124,12 +126,11 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
       } else {
         setSavedItems((prev) => [...prev, { type, id, savedAt: new Date().toISOString() }]);
         if (user) {
-          authFetch("/api/saved", {
+          mutate("/api/saved", {
             method: "POST",
             body: JSON.stringify({ itemType: type, itemId: id }),
           })
-            .then((res) => {
-              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            .then(() => {
               showToast(`${label} added to favourites`);
             })
             .catch(() => {

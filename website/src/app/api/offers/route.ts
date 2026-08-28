@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { createNotification } from "@/lib/notifications";
 import { orFilter } from "@/lib/db/safe-filter";
 import { sendEmail } from "@/lib/email/send";
@@ -170,8 +171,8 @@ export async function GET(request: Request) {
       ? db.from("artist_works").select("id, title, image, dimensions, medium").in("id", allWorkIds)
       : Promise.resolve({ data: [] as Array<{ id: string; title: string; image: string | null; dimensions: string | null; medium: string | null }> }),
     collectionIds.length
-      ? db.from("artist_collections").select("id, title, work_ids").in("id", collectionIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; title: string; work_ids: string[] | null }> }),
+      ? db.from("artist_collections").select("id, name, work_ids").in("id", collectionIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string; work_ids: string[] | null }> }),
     venueIds.length
       ? db.from("venue_profiles").select("user_id, name, slug, location").in("user_id", venueIds)
       : Promise.resolve({ data: [] as Array<{ user_id: string; name: string; slug: string | null; location: string | null }> }),
@@ -199,6 +200,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: the demo guard existed but had ZERO call sites, while two doc comments
+  // claimed it was wired. This handler reaches real people (real emails, real
+  // money, or content on a public page), so it takes the STRICT 403 variant.
+  const demoBlocked = assertNotDemoStrict(auth.user!.id);
+  if (demoBlocked) return demoBlocked;
 
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
@@ -439,10 +445,10 @@ export async function POST(request: Request) {
           if (collectionId) {
             const { data: collection } = await db
               .from("artist_collections")
-              .select("title")
+              .select("name")
               .eq("id", collectionId)
-              .maybeSingle<{ title: string | null }>();
-            collectionTitle = collection?.title ?? null;
+              .maybeSingle<{ name: string | null }>();
+            collectionTitle = collection?.name ?? null;
           }
 
           const primary = workDetails[0];
@@ -515,7 +521,11 @@ export async function POST(request: Request) {
           const emailOffersUrl = `${SITE}${link}?focus=${encodeURIComponent(id)}`;
           await sendEmail({
             idempotencyKey: `offer:${id}:${recipient}`,
-            template: "offer_received",
+                        // Owner decision 7 (2026-08-28): this label was "offer_received", which is not a
+            // registry id, so the audit could not connect the send to the template it
+            // renders. The 22 live email_events rows carrying the five old labels were
+            // UPDATEd to the new ones in the same change, so history did not split.
+            template: "offer_received_notification",
             category: "placements",
             to: target.email,
             subject: subjectLine,

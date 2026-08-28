@@ -5,7 +5,7 @@ import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import { useToast } from "@/context/ToastContext";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { COUNTRIES, labelForCountry } from "@/lib/iso-countries";
 
 interface Address {
@@ -106,20 +106,25 @@ export default function CustomerAddressesPage() {
     const method = editingId ? "PATCH" : "POST";
     const url = editingId ? `/api/customer-addresses/${editingId}` : "/api/customer-addresses";
     try {
-      const res = await authFetch(url, { method, body: JSON.stringify(payload) });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const flat = err.issues?.fieldErrors;
-        const firstField = flat ? Object.values(flat)[0] : null;
-        const msg = (Array.isArray(firstField) && firstField[0]) || err.error || "Couldn't save address.";
-        showToast(msg, { variant: "error", durationMs: 4500 });
-        return;
-      }
+      // Not ratchet-flagged (the verb is the `method` variable, not a literal), but
+      // it is a mutation, so migrate it too. mutate throws ApiError on a non-2xx and
+      // carries the parsed body on `.payload`, which is where the zod field errors live.
+      await mutate(url, { method, body: JSON.stringify(payload) });
       showToast(editingId ? "Address updated" : "Address saved");
       cancelEdit();
       loadAddresses();
-    } catch {
-      showToast("Network error, please try again.", { variant: "error" });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const body = err.payload as { issues?: { fieldErrors?: Record<string, string[]> } } | null;
+        const flat = body?.issues?.fieldErrors;
+        const firstField = flat ? Object.values(flat)[0] : null;
+        // err.code mirrors the old body.error, so the friendly default still wins
+        // when the server sent neither a field error nor an error string.
+        const msg = (Array.isArray(firstField) && firstField[0]) || err.code || "Couldn't save address.";
+        showToast(msg, { variant: "error", durationMs: 4500 });
+      } else {
+        showToast("Network error, please try again.", { variant: "error" });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -128,18 +133,17 @@ export default function CustomerAddressesPage() {
   async function setDefault(address: Address) {
     if (address.is_default) return;
     try {
-      const res = await authFetch(`/api/customer-addresses/${address.id}`, {
+      await mutate(`/api/customer-addresses/${address.id}`, {
         method: "PATCH",
         body: JSON.stringify({ isDefault: true }),
       });
-      if (!res.ok) {
-        showToast("Couldn't set default. Try again.", { variant: "error" });
-        return;
-      }
       showToast("Default address updated");
       loadAddresses();
-    } catch {
-      showToast("Network error, please try again.", { variant: "error" });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? "Couldn't set default. Try again." : "Network error, please try again.",
+        { variant: "error" },
+      );
     }
   }
 
@@ -147,17 +151,16 @@ export default function CustomerAddressesPage() {
     void payload;
     if (!pendingDelete) return;
     try {
-      const res = await authFetch(`/api/customer-addresses/${pendingDelete.id}`, {
+      await mutate(`/api/customer-addresses/${pendingDelete.id}`, {
         method: "DELETE",
       });
-      if (!res.ok) {
-        showToast("Couldn't delete address.", { variant: "error" });
-        return;
-      }
       showToast("Address removed");
       loadAddresses();
-    } catch {
-      showToast("Network error, please try again.", { variant: "error" });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? "Couldn't delete address." : "Network error, please try again.",
+        { variant: "error" },
+      );
     } finally {
       setPendingDelete(null);
     }

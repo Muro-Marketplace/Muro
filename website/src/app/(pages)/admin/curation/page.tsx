@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 
 interface CurationRow {
   id: string;
@@ -22,6 +22,8 @@ interface CurationRow {
   references_notes: string;
   status: string;
   amount_paid_gbp: number | null;
+  stripe_payment_intent_id: string | null;
+  stripe_subscription_id: string | null;
   paid_at: string | null;
   admin_notes: string;
   created_at: string;
@@ -37,6 +39,9 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Completed",
   cancelled: "Cancelled",
   refunded: "Refunded",
+  // D21: set by the managed-curation subscription reconcilers, not by an admin.
+  past_due: "Past due",
+  paused: "Paused",
 };
 
 const STATUS_ORDER: string[] = [
@@ -66,9 +71,11 @@ function statusBadge(status: string): string {
       return "bg-green-100 text-green-700";
     case "awaiting_quote":
     case "pending_payment":
+    case "past_due":
       return "bg-amber-100 text-amber-700";
     case "cancelled":
     case "refunded":
+    case "paused":
       return "bg-red-100 text-red-600";
     default:
       return "bg-gray-100 text-gray-600";
@@ -106,16 +113,43 @@ export default function AdminCurationPage() {
 
   async function updateRow(id: string, patch: { status?: string; adminNotes?: string }) {
     setSavingId(id);
+    setError(null);
     try {
-      const res = await authFetch("/api/admin/curation", {
+      await mutate("/api/admin/curation", {
         method: "PATCH",
         body: JSON.stringify({ id, ...patch }),
       });
-      if (res.ok) {
-        setRequests((prev) => prev.map((r) => r.id === id
-          ? { ...r, ...(patch.status ? { status: patch.status } : {}), ...(patch.adminNotes !== undefined ? { admin_notes: patch.adminNotes } : {}) }
-          : r));
-      }
+      setRequests((prev) => prev.map((r) => r.id === id
+        ? { ...r, ...(patch.status ? { status: patch.status } : {}), ...(patch.adminNotes !== undefined ? { admin_notes: patch.adminNotes } : {}) }
+        : r));
+    } catch (err) {
+      // Previously the failure branch was empty: a rejected PATCH left the row
+      // unchanged with no message, so the admin could not tell a save from a no-op.
+      setError(err instanceof ApiError ? err.code || "Could not save that change." : "Network error. Please try again.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  // D18: the money path. The status dropdown is bookkeeping; this is the only
+  // control that actually returns money, so it confirms with the amount and
+  // reloads the list afterwards rather than guessing the resulting status
+  // (refunded, or cancelled when a managed row had no paid invoice).
+  async function refundRow(r: CurationRow) {
+    const what = r.stripe_subscription_id
+      ? `cancel the subscription and refund the last paid invoice for ${r.venue_name}`
+      : `refund £${r.amount_paid_gbp ?? "?"} to ${r.venue_name}`;
+    if (!window.confirm(`This will ${what}. Continue?`)) return;
+    setSavingId(r.id);
+    setError(null);
+    try {
+      await mutate("/api/admin/curation/refund", {
+        method: "POST",
+        body: JSON.stringify({ id: r.id }),
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code || "Refund failed." : "Network error. Please try again.");
     } finally {
       setSavingId(null);
     }
@@ -216,6 +250,22 @@ export default function AdminCurationPage() {
                         />
                       </div>
                     </div>
+
+                    {(r.stripe_payment_intent_id || r.stripe_subscription_id) && r.status !== "refunded" && (
+                      <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                        <p className="text-[11px] text-muted">
+                          Setting the status above moves no money. This does.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={savingId === r.id}
+                          onClick={() => refundRow(r)}
+                          className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-sm transition-colors disabled:opacity-60"
+                        >
+                          {r.stripe_subscription_id ? "Cancel and refund via Stripe" : "Refund via Stripe"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

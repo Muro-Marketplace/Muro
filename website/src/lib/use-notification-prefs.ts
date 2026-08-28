@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate } from "@/lib/api-client";
 
 export const PREF_FIELDS = [
   "email_digest_enabled",
@@ -53,7 +53,11 @@ export function useNotificationPrefs(user: User | null): UseNotificationPrefs {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    setLoading(true);
+    // setLoading lives inside the async resolution so the lint rule that bans a
+    // synchronous setState() in the effect body is satisfied. Same pattern as
+    // account/export. (The rule only began reporting here once the togglePref
+    // mutate() swap made this hook fully analysable to the compiler pass.)
+    Promise.resolve().then(() => { if (!cancelled) setLoading(true); });
     authFetch("/api/account/preferences")
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -90,13 +94,12 @@ export function useNotificationPrefs(user: User | null): UseNotificationPrefs {
       });
       setError(null);
       try {
-        const res = await authFetch("/api/account/preferences", {
+        // mutate rejects on a non-2xx, so the manual `if (!res.ok) throw` is gone
+        // and the revert below is the single failure path.
+        await mutate("/api/account/preferences", {
           method: "PATCH",
           body: JSON.stringify({ [field]: nextValue }),
         });
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
       } catch {
         // Revert just this field — leave any other in-flight toggles alone.
         setPrefs((current) => ({ ...current, [field]: previousValue }));

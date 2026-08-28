@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { notifyRefundRequested } from "@/lib/email";
+import { assertNotDemo } from "@/lib/demo-guard";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { sendEmail } from "@/lib/email/send";
+import { ArtistRefundRequested } from "@/emails/templates/orders/ArtistRefundRequested";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 import { createNotification } from "@/lib/notifications";
 import { verifyOrderToken } from "@/lib/order-tracking-token";
 import type { RefundRequestRow, RefundRequestCreateResponse } from "../types";
@@ -31,6 +36,11 @@ export async function POST(request: Request) {
   } else {
     const auth = await getAuthenticatedUser(request);
     if (auth.error) return auth.error;
+    // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
+    // unwinding optimistic state. The helper had zero call sites while two doc
+    // comments claimed it was enforced.
+    const demoResp = assertNotDemo(auth.user!.id);
+    if (demoResp) return demoResp;
     userId = auth.user!.id;
     userEmail = (auth.user!.email || "").toLowerCase();
   }
@@ -152,16 +162,46 @@ export async function POST(request: Request) {
         .eq("user_id", order.artist_user_id)
         .single();
 
-      await notifyRefundRequested({
-        artistEmail: artistUser?.email || undefined,
-        artistName: artistProfile?.name || undefined,
-        requesterName: userEmail,
-        requesterType,
-        orderId,
-        reason,
-        amount: refundAmount,
-        type,
-      }).catch((err) => { if (err) console.error("notifyRefundRequested error:", err); });
+      // K1: notifyRefundRequested sent an admin copy AND an artist copy from one
+      // function, both hand-written HTML with no audit trail. Split by audience:
+      // the admin half needs a decision, so it is an operational alert.
+      await sendAdminAlert({
+        idempotencyKey: `admin_refund_requested:${refundRequest.id}`,
+        subject: `Refund request for order ${orderId}`,
+        summary: `${userEmail} (${requesterType}) requested a refund.`,
+        fields: [
+          { label: "Order", value: orderId },
+          { label: "Requester", value: `${userEmail} (${requesterType})` },
+          {
+            label: "Type",
+            value: type === "full" ? "Full refund" : `Partial refund (£${refundAmount.toFixed(2)})`,
+          },
+          { label: "Reason", value: reason },
+        ],
+      });
+
+      // The artist's own notice. ArtistRefundNotification is deliberately NOT
+      // used: it is past tense ("we've issued a refund") and would tell the
+      // artist money had moved when it has not.
+      if (artistUser?.email) {
+        await sendEmail({
+          idempotencyKey: `artist_refund_requested:${refundRequest.id}`,
+          template: "artist_refund_requested",
+          category: "orders_and_payouts",
+          to: artistUser.email,
+          subject: `Refund request for order ${orderId}`,
+          react: ArtistRefundRequested({
+            firstName: (artistProfile?.name || "there").split(" ")[0],
+            orderNumber: orderId,
+            requesterName: userEmail,
+            refundAmount: { amount: Math.round(refundAmount * 100), currency: "GBP" },
+            isFullRefund: type === "full",
+            reason,
+            ordersUrl: `${SITE}/artist-portal/orders`,
+          }),
+          metadata: { orderId, refundRequestId: refundRequest.id },
+        });
+      }
 
       // In-app bell. Deep-link to the orders page so the artist can
       // approve / reject directly. The buyer's identity (not the
@@ -179,15 +219,24 @@ export async function POST(request: Request) {
         });
       }
     } else {
-      // No artist, still notify admin via the email pipeline.
-      await notifyRefundRequested({
-        requesterName: userEmail,
-        requesterType,
-        orderId,
-        reason,
-        amount: refundAmount,
-        type,
-      }).catch((err) => { if (err) console.error("notifyRefundRequested error:", err); });
+      // No artist to tell, but the admin still needs the decision (K1).
+      // K1: notifyRefundRequested sent an admin copy AND an artist copy from one
+      // function, both hand-written HTML with no audit trail. Split by audience:
+      // the admin half needs a decision, so it is an operational alert.
+      await sendAdminAlert({
+        idempotencyKey: `admin_refund_requested:${refundRequest.id}`,
+        subject: `Refund request for order ${orderId}`,
+        summary: `${userEmail} (${requesterType}) requested a refund.`,
+        fields: [
+          { label: "Order", value: orderId },
+          { label: "Requester", value: `${userEmail} (${requesterType})` },
+          {
+            label: "Type",
+            value: type === "full" ? "Full refund" : `Partial refund (£${refundAmount.toFixed(2)})`,
+          },
+          { label: "Reason", value: reason },
+        ],
+      });
     }
 
     const responseBody: RefundRequestCreateResponse = {

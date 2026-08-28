@@ -40,13 +40,41 @@ jobs:
           cache-dependency-path: website/package-lock.json
 
       - run: npm ci
-      # Lint surfaces pre-existing React Compiler warnings — informational
-      # only until the backlog is cleared. Flip to blocking once green.
-      - name: Lint (informational)
+      # Lint blocks CI. Rules set to "error" (e.g. no-raw-arrangement-type)
+      # fail the build; the residual React Compiler / unused-vars warning
+      # backlog does not, since eslint exits 0 when only warnings remain.
+      # Locked by tests/integration/ci-lint-blocking.test.ts.
+      - name: Lint
         run: npm run lint
-        continue-on-error: true
       - run: npm run typecheck
       - run: npm run test
+      # 09 item 4.4. These three are part of `npm run check` and were NOT run
+      # here, so every guard behind them was decoration: the public-route
+      # allowlist, the one-email-entrypoint dependency rule, and the template
+      # render pass all passed locally and gated nothing on a PR.
+      #
+      # Kept as separate steps rather than a single `npm run check` so a red
+      # build names the gate that broke. ci-gates.test.ts derives the required
+      # list from package.json's `check` script, so adding anything to `check`
+      # without adding a step here fails the test.
+      - name: Public-route allowlist
+        run: npm run audit:allowlist
+      - name: Dependency rules
+        run: npm run depcheck
+      - name: Email templates render
+        run: npm run email:render
+      # Owner decision 7 settled the five label mismatches, which were the only
+      # thing keeping this a report. It exits 1 on any send whose email_events
+      # label is not a registry id, per 09 §E.1's "becomes an error once clean".
+      - name: Email label audit
+        run: npm run email:audit
+
+  # The Supabase advisor deliberately does NOT run here. It lives in
+  # advisors-nightly.yml. See EXECUTION-DECISIONS D12 ruling 3: a clean advisor
+  # run is not evidence of RLS health (it misses this codebase's leak class), fork
+  # PRs get no secrets, and a per-PR job holding a prod management token widens
+  # the blast radius. The blocking RLS gate is the pg_policies assertion, run via
+  # the Supabase MCP pre-merge.
 
   # ─── Build + Playwright smoke. Runs on main + PRs. ───
   e2e:
@@ -55,8 +83,20 @@ jobs:
     timeout-minutes: 20
     needs: check
     env:
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOi_PLACEHOLDER_CI_ANON_KEY
+      # Real project when the secrets exist, placeholders otherwise (D13.1). The
+      # anon key is already public in the shipped browser bundle, so this exposes
+      # nothing new, and it is what lets security-no-leaks.spec.ts assert against
+      # real data instead of an empty app.
+      #
+      # The `||` fallback is deliberate: an unset secret expands to "" and
+      # src/env.ts requires a valid URL, so a bare `secrets.*` reference would
+      # break the *build* rather than the one spec that needs it. With the
+      # fallback, a missing secret (or any fork PR, which never receives secrets)
+      # leaves the placeholder in place and that spec skips loudly.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOi_PLACEHOLDER_CI_ANON_KEY' }}
+      # Service-role key stays a placeholder. Nothing in the e2e suite needs it,
+      # and a real one in CI would be a genuine escalation of blast radius.
       SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOi_PLACEHOLDER_CI_SVC_KEY
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       # src/lib/stripe.ts instantiates `new Stripe(...)` at module load,

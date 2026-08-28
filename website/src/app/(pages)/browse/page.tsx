@@ -10,6 +10,7 @@ import { artistsToGalleryWorks } from "@/data/galleries";
 import { collections as staticCollections, type ArtistCollection } from "@/data/collections";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, resolveDiscipline, disciplineLabel } from "@/data/categories";
 import { slugify } from "@/lib/slugify";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { formatPriceRange } from "@/lib/format-currency";
 import { geocodePostcode } from "@/lib/geocode";
 import { useAuth } from "@/context/AuthContext";
@@ -2518,9 +2519,9 @@ function BrowsePortfoliosPageInner() {
                                   which are the two paths a venue cares
                                   most about. */}
                               {[
-                                work.openToRevenueShare ? "Revenue Share" : "",
-                                work.openToFreeLoan ? "Paid Loan" : "",
-                                work.openToOutrightPurchase ? "Purchase" : "",
+                                work.openToRevenueShare ? ARRANGEMENT_LABEL.revenue_share : "",
+                                work.openToFreeLoan ? ARRANGEMENT_LABEL.paid_loan : "",
+                                work.openToOutrightPurchase ? ARRANGEMENT_LABEL.purchase : "",
                               ].filter(Boolean).join(" · ")}
                             </p>
                             {/* Reserve a row for the revenue-share line on every

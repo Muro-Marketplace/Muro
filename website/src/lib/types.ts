@@ -23,6 +23,16 @@ export interface CartItem {
   dimensions?: string;
   /** True when this is the framed variant, affects weight + tier. */
   framed?: boolean;
+  /** E46c: which frame, so checkout can resolve the uplift server-side from the
+      work's own frame_options instead of trusting the line's total. */
+  frameLabel?: string;
+  /** T9 / N2a: per-line fulfilment. Absent = follow the order-level choice.
+      Collect-from-venue lines carry their placement claim; api/checkout
+      re-validates it against the live placements table before any money moves,
+      so these are claims to check, never facts to trust. */
+  lineFulfilment?: "ship" | "collect_venue";
+  collectVenueSlug?: string;
+  collectPlacementId?: string;
 }
 
 export interface ShippingInfo {

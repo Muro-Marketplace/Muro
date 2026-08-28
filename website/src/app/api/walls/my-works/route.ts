@@ -28,7 +28,6 @@ export const dynamic = "force-dynamic";
 
 interface PlacementRow {
   id: string;
-  work_id: string | null;
   work_title: string | null;
   work_image: string | null;
   status: string | null;
@@ -43,6 +42,7 @@ interface ArtistWorkRow {
   dimensions: string | null;
   pricing: unknown;
   orientation?: string | null;
+  current_placement_id?: string | null;
 }
 
 interface WorkResponse {
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
   const { data: placements, error: pErr } = await db
     .from("placements")
     .select(
-      "id, work_id, work_title, work_image, status, artist_user_id, artist_slug",
+      "id, work_title, work_image, status, artist_user_id, artist_slug",
     )
     .eq("venue_user_id", auth.user!.id)
     .eq("status", "active");
@@ -85,18 +85,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ works: [] });
   }
 
-  // 2. Resolve work data, prefer artist_works rows when work_id matches.
-  const workIds = Array.from(
-    new Set(rows.map((r) => r.work_id).filter((x): x is string => !!x)),
-  );
-  const worksById: Record<string, ArtistWorkRow> = {};
-  if (workIds.length > 0) {
+  // 2. Resolve full work data (pricing/dimensions the placement row lacks) via the
+  //    reverse link: placements has no work_id column, but artist_works carries
+  //    current_placement_id (migration 038), pointing back at the placement it is
+  //    currently on. So map each placement to the work whose current_placement_id
+  //    matches it.
+  const placementIds = rows.map((r) => r.id);
+  const worksByPlacementId: Record<string, ArtistWorkRow> = {};
+  if (placementIds.length > 0) {
     const { data: works } = await db
       .from("artist_works")
-      .select("id, title, image, dimensions, pricing, orientation")
-      .in("id", workIds);
+      .select("id, title, image, dimensions, pricing, orientation, current_placement_id")
+      .in("current_placement_id", placementIds);
     for (const row of (works ?? []) as ArtistWorkRow[]) {
-      worksById[row.id] = row;
+      if (row.current_placement_id) worksByPlacementId[row.current_placement_id] = row;
     }
   }
 
@@ -125,8 +127,8 @@ export async function GET(request: Request) {
   const out: WorkResponse[] = [];
   const seenIds = new Set<string>();
   for (const p of rows) {
-    const work = p.work_id ? worksById[p.work_id] : undefined;
-    const id = p.work_id ?? p.id;
+    const work = worksByPlacementId[p.id];
+    const id = work?.id ?? p.id;
     if (seenIds.has(id)) continue;
     seenIds.add(id);
 

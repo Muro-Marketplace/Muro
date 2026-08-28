@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemo } from "@/lib/demo-guard";
 import { isAdminRequest } from "@/lib/admin-auth";
-import { notifyRefundDecision } from "@/lib/email";
+import { recordAdminAction } from "@/lib/admin-audit";
 import { sendEmail } from "@/lib/email/send";
 import { createNotification } from "@/lib/notifications";
 import { CustomerRefundConfirmation } from "@/emails/templates/orders/CustomerRefundConfirmation";
 import { ArtistRefundNotification } from "@/emails/templates/orders/ArtistRefundNotification";
+import { CustomerRefundRejected } from "@/emails/templates/orders/CustomerRefundRejected";
 import { claimPending, releaseClaim } from "@/lib/api/idempotency";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
@@ -15,6 +17,11 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
+  // unwinding optimistic state. The helper had zero call sites while two doc
+  // comments claimed it was enforced.
+  const demoResp = assertNotDemo(auth.user!.id);
+  if (demoResp) return demoResp;
 
   // A malformed JSON body is the ONLY thing that should ever produce a 400 here.
   // Parse it in isolation so a genuine downstream failure can't be misreported
@@ -131,12 +138,42 @@ export async function POST(request: Request) {
       const requesterEmail = refundReq.requester_email as string | null | undefined;
       const buyerEmailFallback = order.buyer_email as string | null | undefined;
       if (requesterEmail || buyerEmailFallback) {
-        await notifyRefundDecision({
-          buyerEmail: (requesterEmail || buyerEmailFallback) as string,
-          orderId: order.id,
-          approved: false,
-          reason: reason || undefined,
-        }).catch((err) => { if (err) console.error("notifyRefundDecision error:", err); });
+        // K1: was notifyRefundDecision with an `approved` boolean. The approved
+        // half already went through the pipeline as CustomerRefundConfirmation;
+        // only the decline had no template, which is what kept the legacy
+        // function alive. Both halves are on one pipeline now.
+        const declineTo = (requesterEmail || buyerEmailFallback) as string;
+        await sendEmail({
+          idempotencyKey: `customer_refund_rejected:${refundRequestId}`,
+          template: "customer_refund_rejected",
+          category: "orders_and_payouts",
+          to: declineTo,
+          subject: `Refund decision for order ${order.id}`,
+          react: CustomerRefundRejected({
+            firstName:
+              ((order.shipping as { fullName?: string } | null)?.fullName || "there").split(" ")[0],
+            orderNumber: order.id as string,
+            reason: reason || undefined,
+            ordersUrl: `${SITE}/customer-portal/orders`,
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { orderId: order.id, refundRequestId },
+        });
+      }
+
+      // E30a / G3. An admin rejecting an artist-raised refund is the decision
+      // that stops money moving, and it left no trail. Additive only: this adds
+      // a row, it does not change the refund. recordAdminAction never throws.
+      if (admin) {
+        await recordAdminAction({
+          adminUserId: userId,
+          action: "refund_rejected_by_admin",
+          context: {
+            orderId: order.id,
+            refundRequestId,
+            requesterType: refundReqForAuthz.requester_type,
+          },
+        });
       }
 
       return NextResponse.json({ success: true, status: "rejected" });
@@ -154,6 +191,29 @@ export async function POST(request: Request) {
 
     const refundAmountCents = Math.round((refundReq.amount as number) * 100);
     const isFullRefund = refundReq.type === "full";
+
+    // D16 guard: never reverse or refund more than the order was worth. The
+    // request route enforces this at submission time, but the order total can be
+    // re-read between request and process, so re-assert here. Release the claim
+    // so the row returns to 'pending' rather than being stranded in 'processing'.
+    const orderTotalCents = Math.round(Number(order.total) * 100);
+    if (refundAmountCents > orderTotalCents) {
+      await releaseClaim(db, "refund_requests", refundRequestId);
+      return NextResponse.json(
+        { error: "Refund amount exceeds the order total." },
+        { status: 400 },
+      );
+    }
+
+    // D16: shipping is NOT shared revenue. The artist keeps 100% of it and pays
+    // the courier from it (webhooks/stripe adds shippingCost straight to
+    // artistRevenue), so a partial reversal must pro-rate against the SUBTOTAL,
+    // not order.total. Reversing against total would claw back a slice of the
+    // shipping the artist already spent. A shipping-inclusive partial refund
+    // reverses the shipping portion against the artist leg only.
+    const subtotalPence = Math.round(Number(order.subtotal) * 100);
+    const artworkRefundPence = Math.min(refundAmountCents, subtotalPence);
+    const shippingRefundPence = Math.max(0, refundAmountCents - subtotalPence);
 
     // Look up transfers for this order
     const { data: transfers } = await db
@@ -180,7 +240,14 @@ export async function POST(request: Request) {
           try {
             const reverseAmount = isFullRefund
               ? transfer.amount_cents
-              : Math.round(transfer.amount_cents * (refundAmountCents / Math.round(order.total * 100)));
+              : (() => {
+                  const base = subtotalPence > 0
+                    ? Math.round(transfer.amount_cents * (artworkRefundPence / subtotalPence))
+                    : 0;
+                  // Only the artist leg carries shipping.
+                  const ship = transfer.recipient_type === "artist" ? shippingRefundPence : 0;
+                  return Math.min(transfer.amount_cents, base + ship);
+                })();
 
             // Idempotency key scoped per transfer so retries dedupe safely.
             await stripe.transfers.createReversal(
@@ -257,6 +324,37 @@ export async function POST(request: Request) {
       })
       .eq("id", order.id);
 
+    // D17: a full refund returns the piece(s) to sale, so restock each work.
+    // Only full refunds restock — a partial refund is a price adjustment, the
+    // buyer keeps the artwork. Best-effort: the money has already moved, so a
+    // restock failure is logged, never fatal (blocking here would strand the
+    // refund). Two item shapes exist in prod: cart orders carry a work id per
+    // line (workId, persisted since D17); offer orders carry a work_ids array on
+    // a single synthetic item. Handle both; legacy cart orders predating the
+    // persisted workId simply have nothing to key on and are skipped.
+    if (isFullRefund) {
+      const items = Array.isArray(order.items) ? order.items : [];
+      const restocks: Array<{ workId: string; qty: number }> = [];
+      for (const raw of items as Array<Record<string, unknown>>) {
+        if (Array.isArray(raw.work_ids)) {
+          for (const id of raw.work_ids as unknown[]) {
+            if (typeof id === "string" && id) restocks.push({ workId: id, qty: 1 });
+          }
+          continue;
+        }
+        const workId = (raw.workId || raw.id) as string | undefined;
+        const qty = Number((raw.quantity ?? raw.qty) ?? 1);
+        if (workId && Number.isFinite(qty) && qty > 0) restocks.push({ workId, qty });
+      }
+      for (const { workId, qty } of restocks) {
+        const { error: restockErr } = await db.rpc("restock_work", {
+          p_work_id: workId,
+          p_qty: qty,
+        });
+        if (restockErr) console.error("[refunds/process] restock failed", { workId, restockErr });
+      }
+    }
+
     // Phase 2.3 J1: full refunds drop a lifecycle event so the K3
     // stepper / future order-events consumers see the state change.
     // Partial refunds don't currently produce a lifecycle event —
@@ -295,19 +393,18 @@ export async function POST(request: Request) {
       })
       .eq("id", refundRequestId);
 
-    // 5. Notify the buyer (legacy helper, retained as safety net) + send
-    // the polished CustomerRefundConfirmation via the new pipeline so the
-    // email lands in email_events and respects preferences.
+    // 5. Notify the buyer.
+    //
+    // K1: there were TWO sends here for one approved refund. The legacy
+    // notifyRefundDecision was kept "as safety net" beside the polished
+    // CustomerRefundConfirmation below, so a buyer whose refund was approved
+    // received two emails about it — one of them from an unverified domain with
+    // no unsubscribe header and no record it was attempted. The safety net is
+    // gone; the pipeline send stays.
     const refundRequesterEmail = refundReq.requester_email as string | null | undefined;
     const orderBuyerEmail = order.buyer_email as string | null | undefined;
     if (refundRequesterEmail || orderBuyerEmail) {
       const buyerEmail = (refundRequesterEmail || orderBuyerEmail) as string;
-      await notifyRefundDecision({
-        buyerEmail,
-        orderId: order.id,
-        approved: true,
-        amount: refundReq.amount as number,
-      }).catch((err) => { if (err) console.error("notifyRefundDecision error:", err); });
 
       // In-app bell for the buyer if they're an account holder. The
       // refund_requests row carries the requester's user id, fall back
@@ -387,6 +484,27 @@ export async function POST(request: Request) {
         body: `Order ${order.id} was refunded. Any payout already transferred will be reversed.`,
         link: `/artist-portal/orders?id=${encodeURIComponent(order.id as string)}`,
       }).catch((err) => { if (err) console.error("Artist refund bell error:", err); });
+    }
+
+    // E30a / G3. This is the only path by which an artist-initiated refund gets
+    // approved, it moves real money through Stripe, and it left no trail.
+    // 03 §2.1 says explicitly not to force this route through withAdmin, because
+    // artists legitimately call it too; the audit belongs inside the admin
+    // branch. Additive only: it adds a row, it does not change the refund, and
+    // recordAdminAction never throws.
+    if (admin) {
+      await recordAdminAction({
+        adminUserId: userId,
+        action: "refund_approved_by_admin",
+        context: {
+          orderId: order.id,
+          refundRequestId,
+          amount: refundReq.amount,
+          stripeRefundId: stripeRefund.id,
+          orderStatus: newStatus,
+          requesterType: refundReqForAuthz.requester_type,
+        },
+      });
     }
 
     return NextResponse.json({

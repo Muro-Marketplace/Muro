@@ -31,18 +31,28 @@ module.exports = {
 
   create(context) {
     const filename = (context.filename || context.getFilename() || "").replace(/\\/g, "/");
-    // The canonical helper and the label map legitimately define these values.
-    if (
-      filename.endsWith("/src/lib/arrangement-type.ts") ||
-      filename.endsWith("/src/lib/arrangement-labels.ts") ||
-      // The placement request form types its arrangement as a strict
-      // "revenue_share" | "free_loan" | "purchase" union, where free_loan IS
-      // the paid-loan option (paid_loan is not a possible value there), so its
-      // comparisons are type-checked and correct, not the bug pattern.
-      filename.endsWith("/src/components/SpacesPlacementRequestForm.tsx")
-    ) {
-      return {};
-    }
+
+    // Files that legitimately name these values: the canonical predicate module
+    // and label map define them, and the placement request form types its
+    // arrangement as a strict "revenue_share" | "free_loan" | "purchase" union
+    // where free_loan IS the paid-loan option (paid_loan is not a possible
+    // value there), so its comparisons are type-checked and correct.
+    const EXEMPT = [
+      "src/lib/arrangement-type.ts",
+      "src/lib/arrangement-labels.ts",
+      "src/components/SpacesPlacementRequestForm.tsx",
+    ];
+
+    // 09 item 4.6: these used to be matched as `endsWith("/src/lib/...")`, with
+    // a leading slash, so an exemption only fired when ESLint supplied an
+    // ABSOLUTE path. It does here, which is why lint stayed green and the gap
+    // went unseen until this rule finally got a test. no-ad-hoc-cap already
+    // handles both forms deliberately; this one now does too, so a relative
+    // filename cannot start flagging the module that defines the values.
+    const isExempt = EXEMPT.some(
+      (suffix) => filename === suffix || filename.endsWith("/" + suffix),
+    );
+    if (isExempt) return {};
 
     const FLAGGED = new Set(["free_loan", "paid_loan"]);
 

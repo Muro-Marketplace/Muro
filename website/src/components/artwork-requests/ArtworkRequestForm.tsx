@@ -10,6 +10,7 @@
 // callback, instead of forking a near-duplicate page.
 
 import { useState } from "react";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 const INTENT_OPTIONS: {
   key: "purchase" | "commission" | "display" | "loan";
@@ -19,7 +20,7 @@ const INTENT_OPTIONS: {
   { key: "purchase", label: "Purchase", hint: "Buy outright at an agreed price." },
   { key: "commission", label: "Commission", hint: "Custom-make something for the space." },
   { key: "display", label: "QR-enabled display", hint: "Show the work; QR drives sales with a revenue share." },
-  { key: "loan", label: "Paid Loan", hint: "Pay a monthly fee to display." },
+  { key: "loan", label: ARRANGEMENT_LABEL.paid_loan, hint: "Pay a monthly fee to display." },
 ];
 
 const TIMESCALE_OPTIONS: { key: "asap" | "weeks" | "months" | "flexible"; label: string }[] = [

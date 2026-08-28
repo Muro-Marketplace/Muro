@@ -110,6 +110,22 @@ const nextConfig: NextConfig = {
       { source: "/artist-portal/social", destination: "/artist-portal/posts", permanent: true },
       // Phase 2.1: phantom slug. /browse/finlay-coles is referenced in
       // some early launch posts; the canonical slug is fin-coles.
+      //
+      // K8: `permanent: true` is a 308, and browsers cache those indefinitely.
+      // The target is a DB row in artist_profiles with NO static seed entry
+      // behind it, so deleting that row turns this into a permanent 404 for
+      // everyone whose browser already made the hop. Do not remove `fin-coles`
+      // without removing this rule in the same change.
+      // tests/integration/redirect-targets.test.ts holds that pairing.
+      //
+      // Resolved (owner decision 2, 2026-08-28): both slugs are the owner's own
+      // accounts. `fin-coles` (18 works, 10 orders, 68 placements) is the real
+      // test artist and this redirect's target; `finlay-coles` was the ADMIN
+      // account's incidental profile (0 works, 0 orders), approved and
+      // therefore listed in /browse while this rule made its page land on a
+      // different artist. Its review_status is now `pending`, which delists it,
+      // so the listing agrees with the redirect. To make that account a public
+      // artist instead: re-approve it AND delete this rule in the same change.
       { source: "/browse/finlay-coles", destination: "/browse/fin-coles", permanent: true },
     ];
   },

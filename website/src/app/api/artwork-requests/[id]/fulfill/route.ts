@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemo } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -32,6 +33,11 @@ export async function POST(
 ) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
+  // unwinding optimistic state. The helper had zero call sites while two doc
+  // comments claimed it was enforced.
+  const demoResp = assertNotDemo(auth.user!.id);
+  if (demoResp) return demoResp;
   const { id: requestId } = await context.params;
   const body = await request.json().catch(() => null);
   const parsed = fulfillSchema.safeParse(body);
@@ -90,6 +96,31 @@ export async function POST(
     );
   }
 
+  // E22. Nothing here was idempotent. req.status was selected and never tested,
+  // resp.status stayed "accepted" after a successful fulfil so the gate above
+  // passed again, and the linked_* ids were read as routing hints rather than as
+  // "already done" markers. Every replay, including a double-click on a flaky
+  // connection, minted a fresh artifact: another purchase_offers row at status
+  // "accepted" and therefore independently payable, or another pending
+  // placements row so the artist received N requests for one agreement. The ids
+  // embed Date.now(), so replays never collided.
+  //
+  // Three independent markers, any one of which means this is a replay. The
+  // sibling route api/artwork-requests/[id]/responses/[responseId] already has
+  // this shape; the fulfil route was the same code without the gate.
+  if (req.status === "fulfilled") {
+    return NextResponse.json(
+      { error: "already_fulfilled", message: "This request has already been fulfilled." },
+      { status: 409 },
+    );
+  }
+  if (resp.linked_placement_id || resp.linked_offer_id || resp.linked_commission_id) {
+    return NextResponse.json(
+      { error: "already_fulfilled", message: "This response has already been fulfilled." },
+      { status: 409 },
+    );
+  }
+
   let routeTo: string | null = null;
 
   const type = resp.response_type;
@@ -132,7 +163,18 @@ export async function POST(
         revenue_share_percent: resp.proposed_revenue_share_percent ?? null,
         qr_enabled: resp.proposed_qr_enabled ?? false,
         status: "pending",
-        requester_user_id: req.venue_user_id,
+        // N3, write side. `requester_user_id` exists in NO migration and not in
+        // the live table; the real column is `proposed_by_user_id`. The N3 fix
+        // corrected the SELECT that read it and left the three INSERTS that
+        // write it, so PostgREST rejected every one of these statements whole
+        // and the placement was never created. It is 2 of 86 live rows that
+        // carry a proposer, which is what "written by almost nothing" looks
+        // like.
+        proposed_by_user_id: req.venue_user_id,
+        // E22: lets uniq_placements_from_response (098) reject a second
+        // placement minted from the same response, which the read-side gate
+        // above cannot do for two concurrent requests.
+        source_response_id: resp.id,
       });
       await db
         .from("artwork_request_responses")
@@ -160,6 +202,9 @@ export async function POST(
         message: `Existing-works purchase from artwork request "${req.title}"`,
         status: "accepted",
         accepted_at: new Date().toISOString(),
+        // E22: uniq_purchase_offers_from_response (098) makes a duplicate
+        // payable offer a constraint violation rather than a silent second row.
+        source_response_id: resp.id,
       });
       await db
         .from("artwork_request_responses")
@@ -178,6 +223,29 @@ export async function POST(
     .from("artwork_requests")
     .update({ status: "fulfilled" })
     .eq("id", requestId);
+
+  // E22. Advance the response too, so the "accepted" gate above cannot pass a
+  // second time even if one of the linked_* writes failed. Compare-and-set on
+  // "accepted": a concurrent second request updates 0 rows.
+  //
+  // 'fulfilled' is only a legal status because migration 098 widened the CHECK.
+  // Before that this UPDATE would have violated it and, since the result is not
+  // awaited into the response, failed silently and left the scheme inert. That
+  // is why the migration ships first (01 §E22.6).
+  const { error: consumeErr } = await db
+    .from("artwork_request_responses")
+    .update({ status: "fulfilled", updated_at: new Date().toISOString() })
+    .eq("id", resp.id)
+    .eq("status", "accepted");
+  if (consumeErr) {
+    // Loud, not silent: the artifact exists but the response is still
+    // consumable, which is exactly the replay window this finding is about.
+    console.error("[fulfill] could not mark response fulfilled", {
+      responseId: resp.id,
+      requestId,
+      error: consumeErr.message,
+    });
+  }
 
   return NextResponse.json({ status: "ok", route_to: routeTo });
 }

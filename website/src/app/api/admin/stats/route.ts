@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAllArtists } from "@/lib/db/merged-data";
+import { grossMerchandiseValuePence } from "@/lib/finance/revenue";
 
 /**
  * GET /api/admin/stats
@@ -42,14 +43,18 @@ export async function GET(request: Request) {
           .select("id", { count: "exact", head: true })
           .eq("event_type", "qr_scan")
           .gte("created_at", thirtyDaysAgo),
-        // Orders, pull amount + status for the gross-revenue computation.
-        // We restrict to paid statuses so refunded/abandoned orders don't
-        // inflate the headline number on the dashboard.
-        db.from("orders").select("total, amount_cents, status, created_at"),
-        db
-          .from("orders")
-          .select("total, amount_cents, status, created_at")
-          .gte("created_at", thirtyDaysAgo),
+        // K6: the two order queries and the summing that followed them used to
+        // live here, with their own status filter and their own pounds→pence
+        // conversion, while /api/admin/financials had a different copy of both.
+        // lib/finance owns the question now; this route just asks it. Same query
+        // count as before.
+        //
+        // Bug 15 is why the module selects `total` and not `amount_cents`: that
+        // column exists in no migration and not in the live table, so selecting
+        // it made PostgREST reject the whole statement and the dashboard read £0
+        // against 12 real paid orders.
+        grossMerchandiseValuePence(db),
+        grossMerchandiseValuePence(db, { from: thirtyDaysAgo }),
       ]);
 
     const applications = apps.data || [];
@@ -74,43 +79,8 @@ export async function GET(request: Request) {
       cancelled: countPlacement("cancelled", "declined"),
     };
 
-    // Orders → gross-paid sum + count, plus a last-30d slice. We treat
-    // any row with a non-failed status as "paid" since the lifecycle
-    // varies (paid / shipped / delivered / etc.). Refunded / cancelled
-    // are explicitly excluded.
-    const PAID_EXCLUDE = new Set(["refunded", "cancelled", "failed", "void"]);
-    function sumPaid(rows: Array<{ amount_cents?: number | null; total?: number | null; status?: string | null }>): {
-      gross: number;
-      count: number;
-    } {
-      let gross = 0;
-      let count = 0;
-      for (const row of rows) {
-        if (PAID_EXCLUDE.has(((row.status as string) || "").toLowerCase())) continue;
-        // Orders are written by the Stripe webhook as `total` in pounds and
-        // never populated amount_cents, so the headline read £0. Prefer
-        // amount_cents when present (legacy rows) else convert pounds to pence.
-        const cents =
-          row.amount_cents != null
-            ? Number(row.amount_cents)
-            : Math.round(Number(row.total || 0) * 100);
-        gross += cents;
-        count += 1;
-      }
-      return { gross, count };
-    }
-    const ordersAllRows = (ordersAll.data || []) as Array<{
-      amount_cents?: number | null;
-      total?: number | null;
-      status?: string | null;
-    }>;
-    const orders30dRows = (orders30d.data || []) as Array<{
-      amount_cents?: number | null;
-      total?: number | null;
-      status?: string | null;
-    }>;
-    const allTime = sumPaid(ordersAllRows);
-    const last30 = sumPaid(orders30dRows);
+    const allTime = ordersAll;
+    const last30 = orders30d;
 
     // Bug 24: the public marketplace count (approved DB artists + static seed)
     // so the admin "Registered Artists (DB)" number reconciles with the public
@@ -130,9 +100,9 @@ export async function GET(request: Request) {
       },
       payouts: {
         // Cents, the UI formats these to £ before rendering.
-        grossCents: allTime.gross,
+        grossCents: allTime.pence,
         count: allTime.count,
-        last30dCents: last30.gross,
+        last30dCents: last30.pence,
         last30dCount: last30.count,
       },
     });

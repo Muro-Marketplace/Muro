@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { enquiryTypeLabel } from "@/lib/enquiry-types";
 
 type Status = "Pending" | "Responded" | "Closed";
 type FilterTab = "All" | Status;
@@ -11,7 +12,14 @@ interface Enquiry {
   id: number | string;
   artist: string;
   subject: string;
-  type: "Paid Loan" | "Revenue Share" | "Purchase" | "Display";
+  /**
+   * The stored `enquiry_type`. This was typed as the ARRANGEMENT vocabulary
+   * ("Paid Loan" | "Revenue Share" | ...), which this column has never held,
+   * and populated by casting `e.enquiry_type` into it. The real values are
+   * venue_looking / purchasing / custom_piece / general, so the union was
+   * fiction and the badge rendered the raw slug.
+   */
+  type: string;
   dateSent: string;
   status: Status;
 }
@@ -34,19 +42,29 @@ const statusBadge = (status: Status) => {
 const FILTER_TABS: FilterTab[] = ["All", "Pending", "Responded", "Closed"];
 
 export default function EnquiriesPage() {
+  const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
 
-  useEffect(() => {
-    authFetch("/api/orders")
-      .then((r) => r.json())
-      .then((data) => {
-        // For now, enquiries come from a simple endpoint; using orders as fallback
-        // When a dedicated enquiry endpoint exists, swap it in
-      })
-      .catch(() => {});
+  // E43-f: both "View" buttons had no onClick, no href and no form association,
+  // so the only way to open an enquiry from this page did nothing. Enquiry threads
+  // live in the messages inbox, which selects a thread from `?artist=<slug>` (the
+  // plan doc suggested `?conversation=<id>`; that param does not exist — the
+  // messages page reads `artist` / `artistName`). `enquiry.artist` already holds
+  // the artist slug, so it maps straight across. Rows whose slug is missing fall
+  // back to the unfiltered inbox rather than pushing a dead query.
+  function openEnquiry(enquiry: Enquiry) {
+    router.push(
+      enquiry.artist && enquiry.artist !== "Unknown"
+        ? `/venue-portal/messages?artist=${encodeURIComponent(enquiry.artist)}`
+        : "/venue-portal/messages",
+    );
+  }
 
-    // Try to load enquiries from the enquiry endpoint
+  useEffect(() => {
+    // E43-f: an /api/orders fetch used to run here whose .then body was empty (a
+    // comment about a "fallback" that was never written), so every page load spent
+    // a request on data it immediately discarded. Deleted.
     fetch("/api/enquiry")
       .then((r) => r.json())
       .then((data) => {
@@ -55,7 +73,7 @@ export default function EnquiriesPage() {
             id: e.id,
             artist: e.artist_slug || "Unknown",
             subject: (e.message as string)?.slice(0, 80) || "Enquiry",
-            type: (e.enquiry_type as string) || "Display",
+            type: (e.enquiry_type as string) || "general",
             dateSent: e.created_at ? new Date(e.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
             status: (e.status as Status) || "Pending",
           })));
@@ -141,7 +159,7 @@ export default function EnquiriesPage() {
                 </td>
                 <td className="px-5 py-4 whitespace-nowrap">
                   <span className="text-xs px-2 py-0.5 bg-background border border-border rounded-sm text-foreground/70">
-                    {enquiry.type}
+                    {enquiryTypeLabel(enquiry.type)}
                   </span>
                 </td>
                 <td className="px-5 py-4 text-muted whitespace-nowrap">
@@ -153,6 +171,7 @@ export default function EnquiriesPage() {
                 <td className="px-5 py-4 text-right whitespace-nowrap">
                   <button
                     type="button"
+                    onClick={() => openEnquiry(enquiry)}
                     className="text-xs text-accent hover:underline cursor-pointer"
                   >
                     View
@@ -195,10 +214,11 @@ export default function EnquiriesPage() {
               </p>
               <div className="flex items-center justify-between">
                 <span className="text-xs px-2 py-0.5 bg-background border border-border rounded-sm text-foreground/70">
-                  {enquiry.type}
+                  {enquiryTypeLabel(enquiry.type)}
                 </span>
                 <button
                   type="button"
+                  onClick={() => openEnquiry(enquiry)}
                   className="text-xs text-accent hover:underline cursor-pointer"
                 >
                   View Details

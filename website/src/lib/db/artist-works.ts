@@ -19,15 +19,57 @@ export async function upsertWork(
   const db = getSupabaseAdmin();
   const row = { ...work, artist_id: artistProfileId };
 
+  // E32. This client is the service-role client, so it bypasses RLS entirely and
+  // ownership has to be enforced here. Matching on `id` alone let any artist
+  // update any other artist's row, and because `row` carries the caller's
+  // artist_id the update ALSO transferred ownership: steal the listing, then
+  // point the payout at your own Connect account. The predicate goes in the same
+  // query as the fetch, so a non-owner sees zero rows rather than someone else's.
+  // deleteWork below has always been scoped this way.
   const { data: existing } = await db
     .from("artist_works")
     .select("id")
     .eq("id", work.id)
-    .single();
+    .eq("artist_id", artistProfileId)
+    .maybeSingle();
+
+  if (!existing) {
+    // Not ours. Either the id is free, which is a genuine new work, or it belongs
+    // to somebody else, in which case refuse rather than falling through to an
+    // insert that would surface as an opaque primary-key conflict.
+    const { data: takenByAnother } = await db
+      .from("artist_works")
+      .select("id")
+      .eq("id", work.id)
+      .maybeSingle();
+    if (takenByAnother) {
+      return {
+        error: {
+          message: "That artwork isn't in your portfolio.",
+          code: "work_not_owned",
+          details: "",
+          hint: "",
+          name: "WorkNotOwnedError",
+        },
+        droppedColumns: [],
+        savedRow: null,
+        fallbackErrors: [],
+      };
+    }
+  }
+
+  /** Every update is scoped by artist_id, not just the first one. */
+  function scopedUpdate(r: Record<string, unknown>) {
+    return db
+      .from("artist_works")
+      .update(r)
+      .eq("id", work.id)
+      .eq("artist_id", artistProfileId);
+  }
 
   async function attempt(r: Record<string, unknown>) {
     if (existing) {
-      return db.from("artist_works").update(r).eq("id", work.id);
+      return scopedUpdate(r);
     }
     return db.from("artist_works").insert(r);
   }
@@ -74,10 +116,7 @@ export async function upsertWork(
     // per-column error doesn't block the others.
     for (const col of extendedColumns) {
       if (!Object.prototype.hasOwnProperty.call(extendedRow, col)) continue;
-      const { error: perColErr } = await db
-        .from("artist_works")
-        .update({ [col]: extendedRow[col] })
-        .eq("id", work.id);
+      const { error: perColErr } = await scopedUpdate({ [col]: extendedRow[col] });
       if (perColErr) {
         droppedColumns.push(col);
         fallbackErrors.push(`${col}: ${perColErr.message}`);
@@ -96,6 +135,7 @@ export async function upsertWork(
       .from("artist_works")
       .select("*")
       .eq("id", work.id)
+      .eq("artist_id", artistProfileId)
       .single();
     savedRow = (data as DbArtistWork | null) ?? null;
 
@@ -104,10 +144,7 @@ export async function upsertWork(
     // but the core+per-col path was skipped because the full-write
     // appeared to succeed), do one targeted update.
     if (typeof row.description === "string" && row.description.length > 0 && savedRow && !savedRow.description) {
-      const { error: fixErr } = await db
-        .from("artist_works")
-        .update({ description: row.description })
-        .eq("id", work.id);
+      const { error: fixErr } = await scopedUpdate({ description: row.description });
       if (fixErr) {
         fallbackErrors.push(`description-repair: ${fixErr.message}`);
       } else {
@@ -115,6 +152,7 @@ export async function upsertWork(
           .from("artist_works")
           .select("*")
           .eq("id", work.id)
+          .eq("artist_id", artistProfileId)
           .single();
         savedRow = (refetched as DbArtistWork | null) ?? savedRow;
       }

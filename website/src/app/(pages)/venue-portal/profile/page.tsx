@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useToast } from "@/context/ToastContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
+import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 
 const STYLE_TAGS = [
   "Contemporary",
@@ -300,13 +302,11 @@ export default function VenueProfilePage() {
   // Track unsaved changes
   const markDirty = useCallback(() => setHasUnsavedChanges(true), []);
 
-  // Warn on unload if unsaved changes
-  useEffect(() => {
-    if (!hasUnsavedChanges) return;
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [hasUnsavedChanges]);
+  // E42-e: warn on unsaved changes via the shared hook. The old hand-rolled
+  // effect only called e.preventDefault() (no e.returnValue = "", which some
+  // browsers still need to show the prompt) and did not intercept Next.js
+  // client-side <Link> navigation. useUnsavedWarning does both.
+  useUnsavedWarning(hasUnsavedChanges);
 
   const toggleStyle = (s: string) => {
     setStyles((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -324,40 +324,48 @@ export default function VenueProfilePage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await authFetch("/api/venue-profile", {
+      await mutate("/api/venue-profile", {
         method: "PUT",
         body: JSON.stringify({
-          name: detailName || undefined,
-          type: detailType || undefined,
-          location: detailLocation || undefined,
-          wall_space: detailWallSpace || undefined,
-          approximate_footfall: detailFootfall || undefined,
+          // E42-d: `|| null`, not `|| undefined` — JSON.stringify omits undefined, so
+          // an emptied field used to be dropped from the payload and never cleared.
+          // Sending null writes NULL (E42-c removed the server strip, so it lands).
+          name: detailName || null,
+          type: detailType || null,
+          location: detailLocation || null,
+          wall_space: detailWallSpace || null,
+          approximate_footfall: detailFootfall || null,
           preferred_styles: styles,
           preferred_themes: themes,
           images: venueImages,
           interested_in_free_loan: freeLoan,
           interested_in_revenue_share: revenueShare,
           interested_in_direct_purchase: directPurchase,
-          display_wall_space: displayWallSpace || undefined,
-          display_lighting: displayLighting || undefined,
-          display_install_notes: displayInstall || undefined,
-          display_rotation_frequency: displayRotation || undefined,
+          // Row 23a: the control has always been on this form; until migration
+          // 103 there was no column to send it to, so this line was missing and
+          // the tick was silently discarded.
+          interested_in_local_artists: localArtists,
+          display_wall_space: displayWallSpace || null,
+          display_lighting: displayLighting || null,
+          display_install_notes: displayInstall || null,
+          display_rotation_frequency: displayRotation || null,
         }),
       });
-
-      if (!res.ok) {
-        showToast("Failed to save profile. Please try again.", { variant: "error" });
-        setSaving(false);
-        return;
-      }
 
       setSaved(true);
       setHasUnsavedChanges(false);
       setEditing(null);
       refetch();
       setTimeout(() => setSaved(false), 2500);
-    } catch {
-      showToast("Failed to save. Please check your connection.", { variant: "error" });
+    } catch (err) {
+      // mutate throws on a non-2xx (ApiError) or a dropped request; keep the two
+      // distinct messages the old !res.ok / catch pair had.
+      showToast(
+        err instanceof ApiError
+          ? err.message || "Failed to save profile. Please try again."
+          : "Failed to save. Please check your connection.",
+        { variant: "error" },
+      );
     } finally {
       setSaving(false);
     }
@@ -421,12 +429,16 @@ export default function VenueProfilePage() {
           </div>
           <div className="p-5 space-y-4">
             {([
-              { label: "Venue Name", value: detailName || venue?.name || "Your Venue", setter: setDetailName, placeholder: "", inputType: "text" as const },
-              { label: "Venue Type", value: detailType || venue?.type || "Not set", setter: setDetailType, placeholder: "", inputType: "text" as const },
-              { label: "Location", value: detailLocation || venue?.location || "Not set", setter: setDetailLocation, placeholder: "", inputType: "text" as const },
-              { label: "Wall Space", value: detailWallSpace || venue?.wallSpace || "Not set", setter: setDetailWallSpace, placeholder: "", inputType: "text" as const },
-              { label: "Visitors per day (approx.)", value: detailFootfall || venue?.approximateFootfall || "Not set", setter: setDetailFootfall, placeholder: "e.g. 250", inputType: "number" as const },
-            ] as const).map(({ label, value, setter, placeholder, inputType }) => (
+              // E42-a: `value` is the editable state ONLY (never the "Not set" /
+              // "Your Venue" display string, which used to leak into the controlled
+              // input and produce "Not setCafe" on the first keystroke). `display` is
+              // the read-only fallback chain.
+              { label: "Venue Name", value: detailName, display: detailName || venue?.name || "Your Venue", setter: setDetailName, placeholder: "Your venue's name", inputType: "text" as const },
+              { label: "Venue Type", value: detailType, display: detailType || venue?.type || "Not set", setter: setDetailType, placeholder: "e.g. Independent cafe", inputType: "text" as const },
+              { label: "Location", value: detailLocation, display: detailLocation || venue?.location || "Not set", setter: setDetailLocation, placeholder: "e.g. Hackney, London", inputType: "text" as const },
+              { label: "Wall Space", value: detailWallSpace, display: detailWallSpace || venue?.wallSpace || "Not set", setter: setDetailWallSpace, placeholder: "e.g. 3 walls, 12 linear metres", inputType: "text" as const },
+              { label: "Visitors per day (approx.)", value: detailFootfall, display: detailFootfall || venue?.approximateFootfall || "Not set", setter: setDetailFootfall, placeholder: "e.g. 250", inputType: "number" as const },
+            ] as const).map(({ label, value, display, setter, placeholder, inputType }) => (
               <div key={label}>
                 <p className="text-xs font-medium text-muted mb-1">{label}</p>
                 {editing === "details" ? (
@@ -452,7 +464,7 @@ export default function VenueProfilePage() {
                     className="w-full px-3 py-2 border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 bg-background"
                   />
                 ) : (
-                  <p className="text-sm text-foreground">{value}</p>
+                  <p className={`text-sm ${value ? "text-foreground" : "text-muted italic"}`}>{display}</p>
                 )}
               </div>
             ))}
@@ -552,17 +564,17 @@ export default function VenueProfilePage() {
                 <Toggle
                   checked={revenueShare}
                   onChange={(v) => { setRevenueShare(v); markDirty(); }}
-                  label="Revenue Share"
+                  label={ARRANGEMENT_LABEL.revenue_share}
                 />
                 <Toggle
                   checked={freeLoan}
                   onChange={(v) => { setFreeLoan(v); markDirty(); }}
-                  label="Paid Loan"
+                  label={ARRANGEMENT_LABEL.paid_loan}
                 />
                 <Toggle
                   checked={directPurchase}
                   onChange={(v) => { setDirectPurchase(v); markDirty(); }}
-                  label="Direct Purchase"
+                  label={ARRANGEMENT_LABEL.purchase}
                 />
               </div>
             </div>
@@ -716,9 +728,9 @@ export default function VenueProfilePage() {
               styles={styles}
               themes={themes}
               arrangements={[
-                revenueShare && "Revenue share",
-                freeLoan && "Paid loan",
-                directPurchase && "Direct purchase",
+                revenueShare && ARRANGEMENT_LABEL.revenue_share,
+                freeLoan && ARRANGEMENT_LABEL.paid_loan,
+                directPurchase && ARRANGEMENT_LABEL.purchase,
               ].filter(Boolean) as string[]}
               displayWallSpace={displayWallSpace}
               displayLighting={displayLighting}

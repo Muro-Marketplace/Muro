@@ -11,6 +11,16 @@
       "env": {
         "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
       }
+    },
+    {
+      "name": "wallspace-prod",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeArgs": ["node_modules/.bin/next", "start", "--port", "3098"],
+      "port": 3098,
+      "cwd": "website",
+      "env": {
+        "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
+      }
     }
   ]
 }

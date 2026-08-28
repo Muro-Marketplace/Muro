@@ -33,6 +33,11 @@ const CATEGORY_LABELS: Record<EmailCategory, string> = {
   tips: "Tips and product updates",
   newsletter: "Newsletter",
   promotions: "Offers and promotions",
+  // K1: internal operational alerts to the Wallplace team. Listed so this map
+  // stays exhaustive over EmailCategory (that exhaustiveness is what surfaced
+  // the omission at compile time), but never shown: it is not in the
+  // TOGGLEABLE list above, because no user is its recipient.
+  platform_admin: "Internal platform alerts",
 };
 
 interface SearchParams {

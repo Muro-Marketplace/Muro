@@ -103,7 +103,14 @@ async function sendArtistWelcome(
 
   const result = await sendEmail({
     idempotencyKey: `welcome:${userId}`,
-    template: "welcome_artist",
+    // Owner decision 7 (2026-08-28): this label was "welcome_artist", which is
+    // not a registry id, so the audit could not connect the send to the
+    // template it renders and the tips-category throttle keyed on a name no
+    // registry entry owns. The 22 live email_events rows carrying the five old
+    // labels were UPDATEd to the new ones in the same change, so history did
+    // not split. Same change at the customer and venue sends below, at
+    // offers/route.ts and at webhooks/supabase.
+    template: "artist_welcome_checklist",
     category: "tips",
     to: email,
     subject: "Welcome to Wallplace, let's get your first placement",
@@ -179,7 +186,7 @@ async function sendCustomerWelcome(
 
   const result = await sendEmail({
     idempotencyKey: `welcome:${userId}`,
-    template: "welcome_customer",
+    template: "customer_welcome",
     category: "tips",
     to: email,
     subject: "Welcome to Wallplace",
@@ -222,7 +229,7 @@ async function sendVenueWelcome(
   // data later, expand here without touching callers.
   const result = await sendEmail({
     idempotencyKey: `welcome:${userId}`,
-    template: "welcome_venue",
+    template: "venue_welcome_checklist",
     category: "tips",
     to: email,
     subject: "Welcome to Wallplace, find your first artwork",

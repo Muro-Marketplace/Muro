@@ -31,3 +31,22 @@ emails to the public) must follow these rules:
   commas, full stops, "to", "and", etc. instead.
 - These rules do NOT apply to code, comments, internal logic, JSON, or
   developer-facing tooling output.
+
+## Data invariants
+
+Derived aggregates are computed in one exported function.
+
+A database column that mirrors a computed value must be either (i) written by a
+DB trigger, or (ii) written by a scheduled job listed in `vercel.json`. **A
+column written only by a manual admin endpoint is banned.** It is stale by
+construction: it holds whatever the last human-triggered refresh computed, which
+for a new row is the column default, forever.
+
+That is not hypothetical. `artist_profiles.total_views` and its three siblings
+were written only by `POST /api/admin/refresh-stats`, which no cron ever hit, so
+an artist's dashboard reported 0 profile views while their own analytics page
+reported 9, against 2,295 real view events across 54 artists, with 1 of 14
+profile rows carrying a non-zero cached value. See 07 K5.
+
+If performance ever demands a cache, add a materialised view with a defined
+refresh, not hand-updated columns.

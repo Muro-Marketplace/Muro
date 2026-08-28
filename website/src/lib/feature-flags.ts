@@ -20,8 +20,12 @@
  *
  * Convention:
  *   - One flag per major in-flight feature.
- *   - Off by default in production.
- *   - On in dev (so local testing doesn't need to touch .env).
+ *   - An in-flight feature is off in prod and on in dev, so local testing
+ *     needs no .env edit.
+ *   - Once a feature has shipped, its prodDefault flips to true and the env
+ *     var becomes a kill switch (set it to 0 to disable without a code
+ *     change). WALL_VISUALIZER_V1 and GATING_V1 are both at that stage, so
+ *     "off by default in production" is no longer true of every flag here.
  *
  * Usage:
  *   import { isFlagOn } from "@/lib/feature-flags";
@@ -31,7 +35,6 @@
 export type FeatureFlag =
   | "WALL_VISUALIZER_V1"
   | "OAUTH_GOOGLE_APPLE"
-  | "PAID_LOAN_V2"
   | "GATING_V1"
   | "BLOGS_V1";
 
@@ -44,7 +47,7 @@ interface FlagDef {
   description: string;
 }
 
-const FLAGS: Record<FeatureFlag, FlagDef> = {
+export const FLAGS: Record<FeatureFlag, FlagDef> = {
   WALL_VISUALIZER_V1: {
     envKey: "NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1",
     devDefault: true,
@@ -65,24 +68,18 @@ const FLAGS: Record<FeatureFlag, FlagDef> = {
       "credentials (Google Cloud, Apple Developer) are configured. Flip to 1 " +
       "in Vercel once both are live.",
   },
-  PAID_LOAN_V2: {
-    envKey: "NEXT_PUBLIC_FLAG_PAID_LOAN_V2",
-    devDefault: true,
-    prodDefault: false,
-    description:
-      "Phase 2.2: monthly Stripe subscription billing for paid_loan and " +
-      "mixed placements, plus the corrected arrangement-type read paths. " +
-      "On in dev so local QA can exercise the billing flow; off in prod " +
-      "until the Stripe webhook surface is verified end-to-end.",
-  },
   GATING_V1: {
     envKey: "NEXT_PUBLIC_FLAG_GATING_V1",
     devDefault: false,
-    prodDefault: false,
+    prodDefault: true,
     description:
-      "Phase 2.5: subscription gating across publish, placements, and " +
-      "/browse visibility. Default off everywhere until the upgrade " +
-      "modal copy is locked.",
+      "Phase 2.5: subscription gating across publish, placements, " +
+      "artist-to-artist first contact, and /browse visibility. On in prod, " +
+      "where the env var is already set to 1, so this default now agrees " +
+      "with it instead of contradicting it. Set " +
+      "NEXT_PUBLIC_FLAG_GATING_V1=0 in Vercel to kill-switch, the same " +
+      "pattern WALL_VISUALIZER_V1 uses. Off in dev so local QA does not " +
+      "need a subscription.",
   },
   BLOGS_V1: {
     envKey: "NEXT_PUBLIC_FLAG_BLOGS_V1",
@@ -95,8 +92,36 @@ const FLAGS: Record<FeatureFlag, FlagDef> = {
   },
 };
 
+/**
+ * One static read per flag, so webpack's DefinePlugin can inline the values into
+ * the client bundle (E16, 06-validation-massassign.md §4.3).
+ *
+ * DefinePlugin only substitutes a statically-written member expression such as
+ * `process.env.NEXT_PUBLIC_FLAG_GATING_V1`. It cannot substitute
+ * `process.env[key]` with a computed key: the compiled chunk kept that as a
+ * call-time lookup (`t.default.env[e]`) against the bundled `process` polyfill,
+ * whose `env` is empty in the browser. So every client-side flag read returned
+ * null from readBoolEnv and fell through to prodDefault, meaning the env var had
+ * no effect on the client at all, in either direction. Upgrade prompts and
+ * paywall affordances stayed hidden with gating on, and a kill switch flipped to
+ * 0 kept rendering the feature it was meant to kill.
+ *
+ * The map must list every FLAGS envKey. C4 adds the CI check for that.
+ */
+export const CLIENT_ENV: Record<string, string | undefined> = {
+  NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1: process.env.NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1,
+  NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE: process.env.NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE,
+  NEXT_PUBLIC_FLAG_GATING_V1: process.env.NEXT_PUBLIC_FLAG_GATING_V1,
+  NEXT_PUBLIC_FLAG_BLOGS_V1: process.env.NEXT_PUBLIC_FLAG_BLOGS_V1,
+};
+
 function readBoolEnv(key: string): boolean | null {
-  const raw = process.env[key];
+  // Live value first, build-time snapshot second. The server has a real,
+  // current process.env and should keep using it (§4.3 suggests the reverse
+  // order, which would pin the value to whatever was set when this module was
+  // first evaluated). In the browser the first read is always undefined, so the
+  // inlined snapshot is what answers.
+  const raw = process.env[key] ?? CLIENT_ENV[key];
   if (raw === undefined || raw === null || raw === "") return null;
   const v = raw.toLowerCase().trim();
   if (v === "1" || v === "true" || v === "on" || v === "yes") return true;

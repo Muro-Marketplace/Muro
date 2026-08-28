@@ -11,11 +11,12 @@
  *   shopping the marketplace, so it's already the most-aspirational
  *   surface we have. No auth required, nothing can break.
  *
- * Phase 2 (future): a `/api/demo/login?role=artist|venue` endpoint
- *   signs the visitor into a sandboxed read-only demo account so they
- *   can also explore the artist-portal / venue-portal views.
- *   Mutations get blocked at the API layer via a `assertNotDemo`
- *   helper. See the demo-accounts task in the running brief.
+ * Phase 2 (SHIPPED, contrary to the "future" this used to say):
+ *   `/api/demo/login?role=artist|venue` signs the visitor into a
+ *   sandboxed demo account, and mutations are blocked at the API layer
+ *   by `assertNotDemo` from `src/lib/demo-guard.ts`. E23a wired that
+ *   helper across every outward-facing and in-portal route; 07 §8.3's
+ *   claim that it "has zero call sites in the entire repo" is stale.
  */
 
 export const DEMO_ARTIST_SLUG =
@@ -24,17 +25,9 @@ export const DEMO_ARTIST_SLUG =
 export const DEMO_VENUE_SLUG =
   process.env.NEXT_PUBLIC_DEMO_VENUE_SLUG || "the-copper-kettle";
 
-/**
- * IDs of the future sandboxed demo Supabase users. Empty until Phase 2
- * is wired, the helper below short-circuits to `false` so no mutation
- * routes are accidentally blocked.
- */
-export const DEMO_USER_IDS: readonly string[] = [
-  // process.env.DEMO_ARTIST_USER_ID,
-  // process.env.DEMO_VENUE_USER_ID,
-].filter(Boolean) as string[];
-
-export function isDemoUser(userId: string | null | undefined): boolean {
-  if (!userId) return false;
-  return DEMO_USER_IDS.includes(userId);
-}
+// K8 (07 §13.19). `DEMO_USER_IDS` and an `isDemoUser` lived here, a dead
+// duplicate of the real pair in `src/lib/demo-guard.ts`. The array's two entries
+// were commented out, so it was permanently empty and this `isDemoUser` returned
+// false for everyone, including the actual demo accounts. Nothing outside this
+// file imported either. The live implementation reads DEMO_ARTIST_USER_ID /
+// DEMO_VENUE_USER_ID from the environment; import from demo-guard.

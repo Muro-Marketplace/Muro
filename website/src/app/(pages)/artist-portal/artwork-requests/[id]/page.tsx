@@ -9,7 +9,7 @@ import Link from "next/link";
 import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import ImageWithFallback from "@/components/ImageWithFallback";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 
 // Painterly backdrop, same texture treatment as the public marketing
@@ -83,7 +83,7 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`/api/artwork-requests/${id}`);
+      const res = await authFetch(`/api/artwork-requests/${id}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.request) {
         setLoadError(
@@ -161,20 +161,15 @@ export default function ArtistArtworkRequestRespondPage({ params }: { params: Pr
         }
         body.proposedQrEnabled = proposedQrEnabled;
       }
-      const res = await authFetch(`/api/artwork-requests/${id}/responses`, {
+      await mutate(`/api/artwork-requests/${id}/responses`, {
         method: "POST",
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        // Cap-hit error → show the friendly message verbatim.
-        setError(data.message || data.error || "Could not send response.");
-        setSubmitting(false);
-        return;
-      }
       setSubmitted(true);
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      // ApiError.message already prefers body.message over body.error, which is
+      // exactly the old precedence (cap-hit errors show their friendly message).
+      setError(err instanceof ApiError ? err.message || "Could not send response." : "Network error. Please try again.");
       setSubmitting(false);
     }
   }

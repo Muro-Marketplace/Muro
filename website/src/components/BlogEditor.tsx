@@ -12,7 +12,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { describeSaveError } from "@/lib/blogs/describe-save-error";
 
 interface BlogEditorProps {
@@ -68,7 +68,10 @@ export default function BlogEditor({
     if (!currentId) return;
     setSaving("saving");
     try {
-      const res = await authFetch(`/api/blogs/${currentId}`, {
+      // bug-12: mutate throws on a non-2xx (ApiError carries the parsed body as
+      // .payload), so a rejected save cannot report "saved". The old authFetch
+      // resolved on a non-2xx and relied on a manual res.ok check.
+      await mutate(`/api/blogs/${currentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -78,17 +81,11 @@ export default function BlogEditor({
           featured_artwork_ids: featured,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(describeSaveError(data));
-        setSaving("error");
-        return;
-      }
       setSaving("saved");
       setError(null);
-    } catch {
+    } catch (err) {
       setSaving("error");
-      setError("Network error");
+      setError(err instanceof ApiError ? describeSaveError(err.payload) : "Network error");
     }
   }, [currentId, title, body, cover, featured]);
 
@@ -113,7 +110,7 @@ export default function BlogEditor({
     setSaving("saving");
     setError(null);
     try {
-      const res = await authFetch("/api/blogs", {
+      const data = await mutate<{ blog: { id: string } }>("/api/blogs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -123,19 +120,13 @@ export default function BlogEditor({
           featured_artwork_ids: featured,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(describeSaveError(data));
-        setSaving("error");
-        return null;
-      }
       setCurrentId(data.blog.id);
       setSaving("saved");
       router.replace(`/artist-portal/blogs/${data.blog.id}/edit`);
-      return data.blog.id as string;
-    } catch {
+      return data.blog.id;
+    } catch (err) {
       setSaving("error");
-      setError("Network error");
+      setError(err instanceof ApiError ? describeSaveError(err.payload) : "Network error");
       return null;
     }
   }
@@ -152,7 +143,7 @@ export default function BlogEditor({
     }
     setSaving("saving");
     try {
-      const res = await authFetch(`/api/blogs/${id}`, {
+      await mutate(`/api/blogs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -163,17 +154,11 @@ export default function BlogEditor({
           submit_for_review: true,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(describeSaveError(data));
-        setSaving("error");
-        return;
-      }
       setStatus("pending_review");
       setSaving("saved");
-    } catch {
+    } catch (err) {
       setSaving("error");
-      setError("Network error");
+      setError(err instanceof ApiError ? describeSaveError(err.payload) : "Network error");
     }
   }
 

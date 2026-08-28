@@ -23,7 +23,7 @@ vi.mock("@/emails/templates/messages/OfferReceivedNotification", () => ({
   OfferReceivedNotification: vi.fn(() => null),
 }));
 
-import { POST } from "./route";
+import { GET, POST } from "./route";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -189,5 +189,75 @@ describe("POST /api/offers — 4.3 customer gate", () => {
     // The artist passes the customer gate. Deeper logic (ownership check on the
     // parent offer) will likely return a different error, but not the customer gate.
     expect(body.error).not.toBe("customer_cannot_make_offers");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// row 19 #7 — artist_collections has `name`, not `title`. The GET enrichment
+// selected `id, title, work_ids`; PostgREST rejects a select naming a column that
+// does not exist, which nulled every collection on the offers list. The mock below
+// models that rejection faithfully (a naive mock that ignores the select string
+// would mask the bug), so the test fails before the fix and passes after.
+// ---------------------------------------------------------------------------
+
+// Real columns of artist_collections (tests/integration/schema-columns.json).
+const COLLECTION_COLUMNS = new Set([
+  "id", "artist_id", "artist_slug", "name", "description", "bundle_price",
+  "work_ids", "available", "created_at", "thumbnail", "banner_image",
+  "updated_at", "work_sizes",
+]);
+
+function getEnrichmentDb(collectionRow: Record<string, unknown>) {
+  return (table: string) => {
+    if (table === "purchase_offers") {
+      const chain: Record<string, unknown> = {};
+      chain.select = () => chain;
+      chain.order = () => chain;
+      chain.eq = () => chain;
+      chain.or = () => chain;
+      chain.limit = async () => ({
+        data: [
+          {
+            id: "o1", buyer_user_id: "u-test", artist_user_id: "u-alice",
+            artist_slug: null, work_ids: [], collection_id: "c1",
+            amount_pence: 5000, status: "pending",
+          },
+        ],
+        error: null,
+      });
+      return chain;
+    }
+    if (table === "artist_collections") {
+      return {
+        select: (cols: string) => ({
+          in: async () => {
+            // Simulate PostgREST: reject the whole query if the select names a
+            // column the table does not have.
+            const phantom = cols
+              .split(",")
+              .map((c) => c.trim())
+              .find((c) => !COLLECTION_COLUMNS.has(c));
+            if (phantom) {
+              return { data: null, error: { message: `column artist_collections.${phantom} does not exist` } };
+            }
+            return { data: [collectionRow], error: null };
+          },
+        }),
+      };
+    }
+    // venue_profiles / artist_works / artist_profiles enrichment — empty is fine.
+    return { select: () => ({ in: async () => ({ data: [], error: null }) }) };
+  };
+}
+
+describe("GET /api/offers — collection enrichment (row 19 #7)", () => {
+  it("surfaces the collection name (real column), not the phantom title", async () => {
+    fromMock.mockImplementation(getEnrichmentDb({ id: "c1", name: "Spring Set", work_ids: [] }));
+    const res = await GET(new Request("http://localhost/api/offers"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Fail-before: the old select named artist_collections.title, so PostgREST
+    // rejected the whole query and every offer's collection came back null.
+    expect(body.offers[0].collection).toMatchObject({ id: "c1", name: "Spring Set" });
   });
 });

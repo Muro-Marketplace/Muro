@@ -14,18 +14,20 @@ vi.mock("@/lib/supabase", () => ({
   },
 }));
 
+// 05: oauth-finalize goes through mutate now (returns the parsed body on 2xx,
+// throws on a non-2xx) instead of authFetch returning a raw Response.
 vi.mock("@/lib/api-client", () => ({
-  authFetch: vi.fn(),
+  mutate: vi.fn(),
 }));
 
 // Import component and mocked modules AFTER vi.mock declarations.
 import AuthCallbackPage from "./page";
 import { supabase } from "@/lib/supabase";
-import { authFetch } from "@/lib/api-client";
+import { mutate } from "@/lib/api-client";
 
 // Typed spies retrieved after import.
 const mockGetSession = vi.mocked(supabase.auth.getSession);
-const mockAuthFetch = vi.mocked(authFetch);
+const mockMutate = vi.mocked(mutate);
 
 // window.location stub — track calls to replace().
 const locationReplace = vi.fn();
@@ -49,7 +51,7 @@ function mockSession() {
 beforeEach(() => {
   locationReplace.mockReset();
   mockGetSession.mockReset();
-  mockAuthFetch.mockReset();
+  mockMutate.mockReset();
   stubLocation("");
 });
 
@@ -83,10 +85,7 @@ describe("AuthCallbackPage — open-redirect guard", () => {
   it("uses state-derived next path when state returns a safe internal path", async () => {
     stubLocation("?state=validtoken&next=/should-be-ignored");
     mockSession();
-    mockAuthFetch.mockResolvedValue({
-      json: async () => ({ next: "/artist-portal" }),
-      ok: true,
-    } as unknown as Response);
+    mockMutate.mockResolvedValue({ next: "/artist-portal" });
 
     render(<AuthCallbackPage />);
 
@@ -98,10 +97,7 @@ describe("AuthCallbackPage — open-redirect guard", () => {
   it("falls back to /browse when state returns an external next (defence-in-depth)", async () => {
     stubLocation("?state=validtoken");
     mockSession();
-    mockAuthFetch.mockResolvedValue({
-      json: async () => ({ next: "https://evil.com" }),
-      ok: true,
-    } as unknown as Response);
+    mockMutate.mockResolvedValue({ next: "https://evil.com" });
 
     render(<AuthCallbackPage />);
 

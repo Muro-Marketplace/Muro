@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemo } from "@/lib/demo-guard";
 import { createNotification } from "@/lib/notifications";
 import { z } from "zod";
 
@@ -14,6 +15,11 @@ const addSchema = z.object({
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
+  // unwinding optimistic state. The helper had zero call sites while two doc
+  // comments claimed it was enforced.
+  const demoResp = assertNotDemo(auth.user!.id);
+  if (demoResp) return demoResp;
 
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
@@ -74,6 +80,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
+  // unwinding optimistic state. The helper had zero call sites while two doc
+  // comments claimed it was enforced.
+  const demoResp = assertNotDemo(auth.user!.id);
+  if (demoResp) return demoResp;
 
   const { id } = await context.params;
   const url = new URL(request.url);

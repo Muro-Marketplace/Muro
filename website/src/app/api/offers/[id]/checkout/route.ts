@@ -8,6 +8,10 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemoStrict } from "@/lib/demo-guard";
+import { platformFeePercentForArtist } from "@/lib/platform-fee";
+import { canReceivePayout } from "@/lib/payouts/capability";
+import { isWorkSold } from "@/lib/work-stock";
 
 export const runtime = "nodejs";
 
@@ -27,6 +31,11 @@ interface OfferRow {
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: the demo guard existed but had ZERO call sites, while two doc comments
+  // claimed it was wired. This handler reaches real people (real emails, real
+  // money, or content on a public page), so it takes the STRICT 403 variant.
+  const demoBlocked = assertNotDemoStrict(auth.user!.id);
+  if (demoBlocked) return demoBlocked;
 
   const { id } = await context.params;
   const db = getSupabaseAdmin();
@@ -38,6 +47,109 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (offer.status !== "accepted") {
     return NextResponse.json({ error: "Offer is not in an accepted state" }, { status: 409 });
   }
+
+  // D7: purchase_offers has no link to stock, so an offer accepted on Monday can
+  // still be paid on Friday for a work that sold through the cart on Wednesday.
+  // The cart checkout has re-validated at session creation all along; this branch
+  // never inherited it. Runs before the payout pre-flight so a dead offer costs
+  // no extra round trips and never reaches Stripe.
+  //
+  // Both offer shapes are covered. `chk_target_shape` in the live table enforces
+  // "work_ids non-empty XOR collection_id set", so the plan's `work_ids.length >
+  // 0` guard would have skipped every collection offer, which is precisely the
+  // half where the works are not named on the offer row.
+  let workIds: string[] = [...new Set(offer.work_ids)];
+  let collectionWithdrawn = false;
+  if (workIds.length === 0 && offer.collection_id) {
+    const { data: collection } = await db
+      .from("artist_collections")
+      .select("work_ids, available")
+      .eq("id", offer.collection_id)
+      .maybeSingle<{ work_ids: string[] | null; available: boolean | null }>();
+    if (!collection || collection.available === false) {
+      collectionWithdrawn = true;
+    } else {
+      workIds = [...new Set(collection.work_ids || [])];
+    }
+  }
+
+  let soldOrMissing = collectionWithdrawn;
+  if (!soldOrMissing && workIds.length > 0) {
+    const { data: works } = await db
+      .from("artist_works")
+      .select("id, title, available, quantity_available")
+      .in("id", workIds);
+    const found = (works || []) as Array<{
+      id: string;
+      title: string | null;
+      available: boolean | null;
+      quantity_available: number | null;
+    }>;
+    // A work deleted since the offer was accepted counts as gone too, hence the
+    // length comparison. work_ids is de-duplicated above so a repeated id cannot
+    // fake a shortfall and close a live offer.
+    soldOrMissing = found.length !== workIds.length || found.some(isWorkSold);
+  }
+
+  if (soldOrMissing) {
+    // Compare-and-set on `accepted`. Without it, a buyer paying in one tab while
+    // this runs in another would have their completed payment overwritten:
+    // the webhook sets 'paid', this would stamp 'expired' on top and the offer
+    // would no longer look like it had been paid for.
+    await db
+      .from("purchase_offers")
+      .update({ status: "expired", updated_at: new Date().toISOString() })
+      .eq("id", offer.id)
+      .eq("status", "accepted");
+    return NextResponse.json(
+      {
+        error: "One or more works on this offer have sold. The offer has been closed.",
+        code: "work_sold",
+      },
+      { status: 409 },
+    );
+  }
+
+  // E6: resolve the artist's payout capability and fee BEFORE taking any money.
+  // The old route charged the buyer and left the webhook with nothing to split,
+  // so the artist was never paid.
+  //
+  // Select every column platformFeePercentForArtist reads: subscription_plan AND
+  // subscription_status (D40/E52 — the discount only applies while the sub is
+  // active/trialing). Omitting subscription_status would hand the helper undefined
+  // and over-charge an active artist the 15% default. trial_end is intentionally
+  // not selected here: offers have never honoured the trial 0% window, and adding
+  // it would change what trialing artists are charged on offers. `free_until`
+  // (migration 115, the referral reward) is excluded for the same reason and by
+  // the same logic: this route's fee behaviour is pinned, and widening the
+  // reward to offers is a separate decision from creating the column.
+  const { data: artistProfile } = await db
+    .from("artist_profiles")
+    .select("slug, subscription_plan, subscription_status")
+    .eq("user_id", offer.artist_user_id)
+    .maybeSingle<{ slug: string; subscription_plan: string | null; subscription_status: string | null }>();
+
+  if (!artistProfile) {
+    return NextResponse.json({ error: "Artist profile unavailable" }, { status: 500 });
+  }
+
+  // Refuse to take the money if we cannot pay it out. Same primitive and the
+  // same fail-closed behaviour as the cart checkout's pre-flight.
+  if (!(await canReceivePayout(db, { kind: "artist", slug: artistProfile.slug })).ok) {
+    return NextResponse.json(
+      {
+        error: "This artist isn't set up to receive payouts yet. Try again shortly.",
+        reason: "payouts_unavailable",
+      },
+      { status: 422 },
+    );
+  }
+
+  // Integer pence throughout, and the net is the remainder rather than a second
+  // rounding, so fee + net is exactly the amount charged with no lost penny.
+  const feePercent = platformFeePercentForArtist(artistProfile);
+  const platformFeePence = Math.round(offer.amount_pence * (feePercent / 100));
+  const artistNetPence = offer.amount_pence - platformFeePence;
 
   // Build a single-line Stripe session for the agreed amount. We intentionally
   // collapse the items into one line — the offer is an aggregate price, not a
@@ -74,6 +186,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       offer_work_ids: offer.work_ids.join(","),
       offer_collection_id: offer.collection_id || "",
       offer_amount_pence: String(offer.amount_pence),
+      // E6: the split travels with the session so the webhook writes a complete
+      // order instead of one with empty money columns.
+      offer_platform_fee_pence: String(platformFeePence),
+      offer_artist_net_pence: String(artistNetPence),
+      offer_platform_fee_percent: String(feePercent),
+      // orders.buyer_email is NOT NULL. The webhook used to fall back to
+      // offer_buyer_user_id, which put a UUID in an email column.
+      offer_buyer_email: offer.buyer_email || auth.user!.email || "",
       // Flag so the Stripe webhook knows to treat this differently from a
       // standard cart checkout — no shipping line, link back to the offer row.
       checkout_kind: "purchase_offer",

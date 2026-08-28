@@ -13,6 +13,12 @@ import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { recordAdminAction } from "@/lib/admin-audit";
+import {
+  artistEarningsPence,
+  grossMerchandiseValuePence,
+  subscriptionMrrPence,
+  venueSpendPence,
+} from "@/lib/finance/revenue";
 
 export const runtime = "nodejs";
 
@@ -54,20 +60,9 @@ export async function GET(request: Request) {
     if (p in subsByPlan) subsByPlan[p]++;
   }
 
-  // MRR. Pull list prices from env so the dashboard doesn't ship a
-  // hard-coded number that drifts when pricing changes.
-  const PRICES_PENCE: Record<string, number> = {
-    // Bug 17: defaults must match the real plan prices (Core £9.99,
-    // Premium £24.99, Pro £49.99). The previous 2900/9900/19900 figures
-    // inflated MRR ~3x whenever the PRICE_*_PENCE env vars weren't set.
-    core: Number(process.env.PRICE_CORE_PENCE ?? 999),
-    premium: Number(process.env.PRICE_PREMIUM_PENCE ?? 2_499),
-    pro: Number(process.env.PRICE_PRO_PENCE ?? 4_999),
-  };
-  const mrrPence = Object.entries(subsByPlan).reduce(
-    (sum, [plan, count]) => sum + (PRICES_PENCE[plan] ?? 0) * count,
-    0,
-  );
+  // K6: the price map and the multiply lived here. Moved to lib/finance so
+  // there is one definition of MRR.
+  const mrrPence = subscriptionMrrPence(subsByPlan);
 
   // Failed payments this month + last month (artist_profiles flips
   // to subscription_status='past_due' on a failed invoice).
@@ -93,63 +88,28 @@ export async function GET(request: Request) {
     .lte("current_period_end", sevenDaysOut.toISOString())
     .order("current_period_end", { ascending: true });
 
-  // Revenue. Sum orders.total + revenue from paid-loan invoices within
-  // the period. orders.total is in pounds; convert to pence for one
-  // consistent unit at the API boundary.
-  const sumOrders = async (gte: string, lt?: string): Promise<number> => {
-    let q = db
-      .from("orders")
-      .select("total")
-      .gte("created_at", gte)
-      .neq("status", "cancelled");
-    if (lt) q = q.lt("created_at", lt);
-    const { data } = await q;
-    return (data ?? []).reduce(
-      (s, r) => s + Math.round(((r as { total: number | null }).total ?? 0) * 100),
-      0,
-    );
-  };
-  const revenueThisMonthPence = await sumOrders(thisMonthStart.toISOString());
-  const revenueYearAgoPence = await sumOrders(
-    yearAgoMonthStart.toISOString(),
-    new Date(Date.UTC(yearAgoMonthStart.getUTCFullYear(), yearAgoMonthStart.getUTCMonth() + 1, 1)).toISOString(),
-  );
+  // K6: this had its own sumOrders that excluded ONLY `cancelled`, so a refunded
+  // order counted as revenue here while /api/admin/stats excluded it. Same word,
+  // different number. Both go through grossMerchandiseValuePence now, which owns
+  // the status filter and the pounds→pence conversion.
+  const revenueThisMonthPence = (
+    await grossMerchandiseValuePence(db, { from: thisMonthStart.toISOString() })
+  ).pence;
+  const revenueYearAgoPence = (
+    await grossMerchandiseValuePence(db, {
+      from: yearAgoMonthStart.toISOString(),
+      to: new Date(
+        Date.UTC(yearAgoMonthStart.getUTCFullYear(), yearAgoMonthStart.getUTCMonth() + 1, 1),
+      ).toISOString(),
+    })
+  ).pence;
 
-  // Top 10 venues by spend.
-  const { data: venueSpend } = await db
-    .from("placement_recurring_billings")
-    .select("payer_user_id, monthly_amount_pence")
-    .eq("status", "active");
-  const venueTotals = new Map<string, number>();
-  for (const r of (venueSpend ?? []) as Array<{
-    payer_user_id: string;
-    monthly_amount_pence: number;
-  }>) {
-    venueTotals.set(
-      r.payer_user_id,
-      (venueTotals.get(r.payer_user_id) ?? 0) + r.monthly_amount_pence,
-    );
-  }
-  const topVenues = [...venueTotals.entries()]
+  // Top 10 venues by spend, and top 10 artists by earnings. Both aggregations
+  // moved to lib/finance with the rest (K6).
+  const topVenues = [...(await venueSpendPence(db)).entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
-
-  // Top 10 artists by earnings (stripe_transfers ledger).
-  const { data: artistEarnings } = await db
-    .from("stripe_transfers")
-    .select("recipient_user_id, amount_cents")
-    .eq("recipient_type", "artist");
-  const artistTotals = new Map<string, number>();
-  for (const r of (artistEarnings ?? []) as Array<{
-    recipient_user_id: string;
-    amount_cents: number;
-  }>) {
-    artistTotals.set(
-      r.recipient_user_id,
-      (artistTotals.get(r.recipient_user_id) ?? 0) + r.amount_cents,
-    );
-  }
-  const topArtists = [...artistTotals.entries()]
+  const topArtists = [...(await artistEarningsPence(db)).entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
 

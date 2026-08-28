@@ -37,7 +37,7 @@ export const mock: ArtistOrderConfirmationProps = {
 const entry: TemplateEntry<ArtistOrderConfirmationProps> = {
   id: "artist_order_confirmation",
   name: "Artist: order confirmation",
-  description: "Artist's operational receipt for a customer order.",
+  description: "RETIRED, superseded by artist_order_received. Not wired to any trigger.",
   stream: "tx",
   persona: "artist",
   category: "orders_and_payouts",
@@ -47,6 +47,6 @@ const entry: TemplateEntry<ArtistOrderConfirmationProps> = {
   mock,
   canUnsubscribe: false,
   hasInAppEquivalent: true,
-  priority: 2,
+  priority: 3,
 };
 export default entry;

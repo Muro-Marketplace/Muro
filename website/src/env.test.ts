@@ -2,7 +2,7 @@
 // required vars throw clearly; optional vars stay optional; the cache returns
 // the same object across calls so we don't re-parse every request.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 
 describe("env, server", () => {
   beforeEach(() => {
@@ -82,5 +82,46 @@ describe("env, server", () => {
     } finally {
       Object.assign(process.env, snap);
     }
+  });
+});
+
+describe("Stripe price env assertion (D12)", () => {
+  const SNAP = { ...process.env };
+  beforeEach(() => {
+    vi.resetModules();
+    for (const k of [
+      "STRIPE_PRICE_CORE", "STRIPE_PRICE_CORE_ANNUAL",
+      "STRIPE_PRICE_PREMIUM", "STRIPE_PRICE_PREMIUM_ANNUAL",
+      "STRIPE_PRICE_PRO", "STRIPE_PRICE_PRO_ANNUAL",
+    ]) process.env[k] = `price_${k.toLowerCase()}`;
+  });
+  afterEach(() => {
+    process.env = { ...SNAP };
+  });
+
+  it("missingStripePriceEnvs lists the unset ones", async () => {
+    delete process.env.STRIPE_PRICE_PRO_ANNUAL;
+    const { missingStripePriceEnvs } = await import("./env");
+    expect(missingStripePriceEnvs()).toEqual(["STRIPE_PRICE_PRO_ANNUAL"]);
+  });
+
+  it("assertStripePricesConfigured throws in production when one is missing", async () => {
+    (process.env as Record<string, string>).NODE_ENV = "production";
+    delete process.env.STRIPE_PRICE_PRO;
+    const { assertStripePricesConfigured } = await import("./env");
+    expect(() => assertStripePricesConfigured()).toThrow(/STRIPE_PRICE_PRO/);
+  });
+
+  it("does not throw in production when all six are set", async () => {
+    (process.env as Record<string, string>).NODE_ENV = "production";
+    const { assertStripePricesConfigured } = await import("./env");
+    expect(() => assertStripePricesConfigured()).not.toThrow();
+  });
+
+  it("is a no-op outside production even when envs are missing", async () => {
+    (process.env as Record<string, string>).NODE_ENV = "development";
+    delete process.env.STRIPE_PRICE_PRO;
+    const { assertStripePricesConfigured } = await import("./env");
+    expect(() => assertStripePricesConfigured()).not.toThrow();
   });
 });

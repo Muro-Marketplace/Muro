@@ -36,7 +36,6 @@ export interface ResolveTierInput {
 interface ArtistProfileRow {
   user_id: string;
   subscription_plan: string | null;
-  free_until: string | null;
 }
 
 interface VenueProfileRow {
@@ -92,7 +91,7 @@ async function readArtistTier(
   try {
     const { data, error } = await db
       .from("artist_profiles")
-      .select("user_id, subscription_plan, free_until")
+      .select("user_id, subscription_plan")
       .eq("user_id", userId)
       .maybeSingle<ArtistProfileRow>();
     if (error) {
@@ -149,8 +148,11 @@ async function readVenueTier(
 /**
  * Map artist subscription_plan to a VisualizerTier. Mirrors the
  * platform-fee mapping (core/premium/pro). Note we don't downgrade based
- * on free_until, a Premium artist on a founding-artist 0% period still
- * gets Premium visualizer access, which matches the user's expectation.
+ * on the trial window: a Premium artist inside a 0%-fee period still gets
+ * Premium visualizer access, which matches the user's expectation. The select
+ * used to fetch `free_until` for this and never read it, and because that column
+ * does not exist PostgREST rejected the whole query, so this resolver returned
+ * null and silently downgraded every artist's tier (D17.1).
  */
 export function artistPlanToTier(plan: string | null | undefined): VisualizerTier {
   const p = (plan || "").toLowerCase().trim();

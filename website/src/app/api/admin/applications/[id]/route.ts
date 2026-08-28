@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getAdminUser } from "@/lib/admin-auth";
+import { withAdmin } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { findUserByEmail } from "@/lib/auth/find-user-by-email";
 import { slugify } from "@/lib/slugify";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistApplicationApproved } from "@/emails/templates/artist-additions/ArtistApplicationApproved";
@@ -8,13 +9,21 @@ import { ArtistApplicationRejected } from "@/emails/templates/artist-additions/A
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
+// E30a / G1. The platform's admission gate, and the worst of the audit gaps:
+// it creates or invites an auth user, REWRITES that user's user_metadata,
+// inserts an artist_profiles row marked approved, and flips the application
+// status, with nothing recorded anywhere. A compromised admin account could
+// mint a platform identity and leave admin_audit_log empty.
+//
+// withAdmin owns the audit call so it cannot be forgotten. The handler keeps
+// every one of its early returns as it was: `audit()` is called at the two
+// points where a decision was actually made, and the wrapper writes the row
+// before the response goes out.
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, error } = await getAdminUser(request);
-  if (error) return error;
-
+  return withAdmin(request, "application_decision", async ({ user, audit }) => {
   const { id } = await params;
   const body = await request.json();
   const action = body.action as "accept" | "reject";
@@ -58,10 +67,7 @@ export async function PUT(
       // source of truth for whether the applicant has been reviewed.
       if (app.email) {
         try {
-          const listed = await db.auth.admin.listUsers();
-          const existingUser = listed?.data?.users?.find(
-            (u) => u.email === app.email,
-          );
+          const existingUser = await findUserByEmail(db, app.email);
           if (existingUser) {
             const { error: profileErr } = await db
               .from("artist_profiles")
@@ -94,6 +100,11 @@ export async function PUT(
         });
       }
 
+      // The decision, the target and the target's email. Never the row: the
+      // context column is JSONB and would otherwise accumulate the full
+      // application, portfolio links and artist statement included.
+      audit({ applicationId: id, applicantEmail: app.email, decision: "rejected" },
+        "application_rejected");
       return NextResponse.json({ success: true, status: "rejected" });
     }
 
@@ -102,11 +113,15 @@ export async function PUT(
     let userId: string;
     let invited = false;
 
-    // Check if user already exists (from old auto-signup flow)
-    const { data: existingUsers } = await db.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find(
-      (u) => u.email === app.email
-    );
+    // Check if user already exists (from old auto-signup flow).
+    //
+    // Through the shared helper now. The inline version was `listUsers()` with
+    // no arguments, which returns the FIRST 50 users, compared with `===`
+    // against an address typed into an application form. Either miss lands on
+    // the invite path below and creates a SECOND auth account for someone who
+    // already has one. The case bug bites today; the pagination bug bites at
+    // user 51.
+    const existingUser = await findUserByEmail(db, app.email);
 
     if (existingUser) {
       userId = existingUser.id;
@@ -252,6 +267,10 @@ export async function PUT(
       });
     }
 
+    audit(
+      { applicationId: id, applicantEmail: app.email, decision: "accepted", invited, userId },
+      "application_accepted",
+    );
     return NextResponse.json({
       success: true,
       status: "accepted",
@@ -263,18 +282,25 @@ export async function PUT(
     console.error("Accept/reject error:", err);
     return NextResponse.json({ error: "Operation failed" }, { status: 500 });
   }
+  });
 }
 
 type AdminDb = ReturnType<typeof getSupabaseAdmin>;
 
 /**
- * Flip artist_applications.status with retry on missing reviewed_at /
- * reviewed_by columns. Migration 052 added these and the original update
- * here had no error check, so an env that hasn't run 052 yet would
- * silently leave the row at status='pending' and the admin list would
- * keep showing the applicant as awaiting review even after Accept was
- * clicked. The retry path drops the optional columns and tries again
- * with the bare status + best-effort logging.
+ * Flip artist_applications.status, and record who reviewed it and when.
+ *
+ * The error check is the part that matters and is kept: the original update had
+ * none, so a failure left the row at status='pending' and the admin list kept
+ * showing an applicant as awaiting review after Accept was clicked.
+ *
+ * The strip-and-retry that used to sit under it is DELETED. It dropped
+ * `reviewed_at` and `reviewed_by` "for a legacy schema". Both columns exist in
+ * production (migration 052, confirmed against the live schema and against
+ * `tests/integration/schema-columns.json`), so the branch could never fire, and
+ * if it ever did it would silently discard the audit trail on an admin decision
+ * while reporting success. Same class as migration 109's, which destroyed a
+ * referral code on every application for the same reason.
  */
 async function updateApplicationStatus(
   db: AdminDb,
@@ -293,24 +319,5 @@ async function updateApplicationStatus(
     .update(fullPayload)
     .eq("id", id);
 
-  if (!error) return null;
-
-  const msg = String(error.message || "").toLowerCase();
-  const missingMeta =
-    msg.includes("reviewed_at") || msg.includes("reviewed_by");
-  if (!missingMeta) {
-    return { message: error.message || "Unknown error" };
-  }
-
-  // Legacy schema, retry without the metadata columns. Status is the
-  // only column the admin list actually filters on, so dropping the
-  // others is acceptable for unblocking the gate.
-  const { error: retryError } = await db
-    .from("artist_applications")
-    .update({ status })
-    .eq("id", id);
-  if (retryError) {
-    return { message: retryError.message || "Unknown error" };
-  }
-  return null;
+  return error ? { message: error.message || "Unknown error" } : null;
 }

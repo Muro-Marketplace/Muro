@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { startPaidLoanBilling, cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
+import { handleAuthzError } from "@/lib/authz";
+import { assertNotDemoStrict } from "@/lib/demo-guard";
+import { cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
 import { deriveArrangementType } from "@/lib/placements/arrangement";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
 import { checkArtistOutreachCap } from "@/lib/outreach-cap";
-import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
 import { VenueNewPlacementRequest } from "@/emails/templates/placements/VenueNewPlacementRequest";
@@ -22,6 +24,11 @@ import { PlacementScheduled } from "@/emails/templates/placements/PlacementSched
 import { PlacementArtworkInstalled } from "@/emails/templates/placements/PlacementArtworkInstalled";
 import { PlacementEnded } from "@/emails/templates/placements/PlacementEnded";
 import { z } from "zod";
+import { ArtistNewPlacementInvitation } from "@/emails/templates/placements/ArtistNewPlacementInvitation";
+import { placementTermsSummary } from "@/lib/placements/terms-summary";
+import { labelForArrangement } from "@/lib/arrangement-labels";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import { afterResponse } from "@/lib/after-response";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -66,6 +73,29 @@ async function getUserRole(userId: string) {
 }
 
 // GET: fetch placements for the authenticated user (artist or venue)
+/**
+ * The venue's collection point, composed from its profile address at the moment
+ * a placement is accepted (T9 / 8.1). Captured onto the placement rather than
+ * joined at read time, so the buyer's confirmation shows the address the deal
+ * was struck under even if the venue later moves.
+ */
+async function collectionAddressForVenue(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  venueSlug: string | null | undefined,
+): Promise<string | null> {
+  if (!venueSlug) return null;
+  const { data } = await db
+    .from("venue_profiles")
+    .select("name, address_line1, address_line2, city, postcode")
+    .eq("slug", venueSlug)
+    .maybeSingle<{ name: string | null; address_line1: string | null; address_line2: string | null; city: string | null; postcode: string | null }>();
+  if (!data) return null;
+  const parts = [data.name, data.address_line1, data.address_line2, data.city, data.postcode]
+    .map((p) => (p ?? "").trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 export async function GET(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
@@ -96,20 +126,11 @@ export async function GET(request: Request) {
     // tab that makes this surface useful as an inbox, so the filter
     // is now a no-op. The query param is kept so callers don't break.
 
-    let { data, error } = await query.order("created_at", { ascending: false });
-
-    // Retry without any envs where the hidden_for_* columns don't exist
-    // yet (pre-migration 026). We select("*") so it should always
-    // succeed, but some SELECT statements in deployments may be strict.
-    if (error && String(error.message || "").toLowerCase().includes("hidden_for")) {
-      const retry = await db
-        .from("placements")
-        .select("*")
-        .eq(role.type === "artist" ? "artist_user_id" : "venue_user_id", auth.user!.id)
-        .order("created_at", { ascending: false });
-      data = retry.data;
-      error = retry.error;
-    }
+    // Row 22 (D65): the hidden_for_* retry that used to sit here is DELETED.
+    // Both columns exist in prod (verified against tests/integration/schema-columns.json),
+    // so the fallback could never fire for the reason it claimed; all it could do
+    // was re-run the query without the caller's filters and mask a real failure.
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (error) {
       console.error("Supabase error:", error);
@@ -218,10 +239,10 @@ export async function GET(request: Request) {
 
     // Scan placement_request messages once and derive two things:
     //   1. inferredRequesters, the FIRST sender per placement, used
-    //      to backfill legacy rows where requester_user_id is NULL.
+    //      to backfill legacy rows where proposed_by_user_id is NULL.
     //   2. latestCountererByPlacement, the sender of the MOST RECENT
     //      counter message, which is the authoritative current
-    //      requester even if the placements.requester_user_id column
+    //      requester even if the placements.proposed_by_user_id column
     //      never got flipped. This is what prevents a counter-sender
     //      from accepting their own counter offer, the DB column can
     //      lag behind the message trail, but the messages are the
@@ -239,7 +260,7 @@ export async function GET(request: Request) {
         const pid = m.metadata?.placementId as string | undefined;
         if (!pid || !placementIds.includes(pid)) continue;
         // First sender is the original requester (when the row's own
-        // requester_user_id is missing).
+        // proposed_by_user_id is missing).
         if (!inferredRequesters[pid] && m.sender_id) {
           inferredRequesters[pid] = m.sender_id;
         }
@@ -259,8 +280,8 @@ export async function GET(request: Request) {
       // reads short-circuit the scan.
       for (const [pid, uid] of Object.entries(inferredRequesters)) {
         const row = placements.find((p) => p.id === pid);
-        if (row && !row.requester_user_id) {
-          db.from("placements").update({ requester_user_id: uid }).eq("id", pid).then(() => {}, () => {});
+        if (row && !row.proposed_by_user_id) {
+          db.from("placements").update({ proposed_by_user_id: uid }).eq("id", pid).then(() => {}, () => {});
         }
       }
     }
@@ -271,16 +292,16 @@ export async function GET(request: Request) {
       //   1. The latest counter message (source of truth, even if the
       //      DB column didn't flip, the counter sender should not be
       //      able to accept / decline their own counter).
-      //   2. The placements.requester_user_id column.
+      //   2. The placements.proposed_by_user_id column.
       //   3. The inferred original requester.
       const counterer = pid ? latestCountererByPlacement[pid] : null;
       const resolvedRequester = counterer?.userId
-        || p.requester_user_id
+        || p.proposed_by_user_id
         || (pid ? inferredRequesters[pid] : null)
         || null;
       return {
         ...p,
-        requester_user_id: resolvedRequester,
+        proposed_by_user_id: resolvedRequester,
         revenue_earned_gbp: pid && earnedByPlacement[pid]
           ? Math.round(earnedByPlacement[pid] * 100) / 100
           : 0,
@@ -289,7 +310,15 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ placements: enriched, userType: role.type });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[placements] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -298,6 +327,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: the demo guard existed but had ZERO call sites, while two doc comments
+  // claimed it was wired. This handler reaches real people (real emails, real
+  // money, or content on a public page), so it takes the STRICT 403 variant.
+  const demoBlocked = assertNotDemoStrict(auth.user!.id);
+  if (demoBlocked) return demoBlocked;
 
   try {
     const body = await request.json();
@@ -438,16 +472,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Build rows. `baseRows` now keeps the critical ownership columns
-    // (artist_slug / venue_user_id / venue_slug / requester_user_id) so
-    // the fallback retry still produces rows the subsequent GET can
-    // find via its .eq("venue_user_id", auth.user.id) filter. Previously
-    // the fallback silently stripped venue_user_id and the placement
-    // became invisible on reload.
-    // Full row with every column the app understands. The fallback chain
-    // below only drops columns the DB specifically complains about, it
-    // does not blanket-strip monthly_fee_gbp / qr_enabled / message, which
-    // used to cause paid-loan placements to be saved without their £ value.
+    // Full row with every column the app understands. There is no fallback
+    // chain any more (row 22): every column here exists in prod, so a failed
+    // insert is a real error and is surfaced as one.
     const fullRows = parsed.data.map((p) => ({
       id: p.id,
       artist_user_id: artistProfile!.user_id || null,
@@ -456,12 +483,10 @@ export async function POST(request: Request) {
       venue_slug: venueProfile!.slug,
       work_title: p.workTitle,
       work_image: p.workImage || null,
-      // Size requested for the primary work. Migration 032 adds the
-      // column; retry-strip handles older environments.
+      // Size requested for the primary work (migration 032).
       work_size: p.requestedDimensions || null,
-      // Additional works sharing the same placement row. Saved into
-      // extra_works (migration 027); if the column isn't applied yet
-      // the retry logic below strips it gracefully.
+      // Additional works sharing the same placement row, saved into
+      // extra_works (migration 027).
       extra_works: Array.isArray(p.extraWorks) && p.extraWorks.length > 0
         ? p.extraWorks.map((w) => ({ title: w.title, image: w.image || null, size: w.size || null }))
         : null,
@@ -485,35 +510,17 @@ export async function POST(request: Request) {
       status: "pending",
       revenue: null,
       notes: p.notes || null,
-      requester_user_id: auth.user!.id,
+      proposed_by_user_id: auth.user!.id,
       created_at: new Date().toISOString(),
     }));
 
-    async function insertWithout(drop: string[]) {
-      const clean = fullRows.map((row) => {
-        const next = { ...row } as Record<string, unknown>;
-        for (const k of drop) delete next[k];
-        return next;
-      });
-      return db.from("placements").insert(clean);
-    }
-
-    let { error } = await db.from("placements").insert(fullRows);
-
-    // Pattern-match the error message and strip only the columns the DB
-    // actually rejected, so we don't silently drop payment info.
-    const stripped = new Set<string>();
-    const candidates = ["requester_user_id", "venue_slug", "artist_slug", "monthly_fee_gbp", "qr_enabled", "message", "extra_works", "work_size"];
-    while (error) {
-      const msg = error.message || "";
-      const newStrip = candidates.filter((c) => !stripped.has(c) && new RegExp(`\\b${c}\\b`).test(msg));
-      if (newStrip.length === 0) break;
-      newStrip.forEach((c) => stripped.add(c));
-      console.warn(`Placement insert missing columns [${Array.from(stripped).join(", ")}], retrying:`, msg);
-      const r = await insertWithout(Array.from(stripped));
-      error = r.error;
-    }
-    if (error) console.warn("Placement insert failed:", error.message);
+    // Row 22 (D65): the strip-and-retry loop that used to sit here is DELETED.
+    // All eight candidate columns (proposed_by_user_id, venue_slug, artist_slug,
+    // monthly_fee_gbp, qr_enabled, message, extra_works, work_size) exist in prod,
+    // so a rejected insert is never "the column is missing" — it is a real failure,
+    // and re-inserting without the payment terms silently created a placement whose
+    // agreed fee and QR setting were gone while the caller got a 200.
+    const { error } = await db.from("placements").insert(fullRows);
 
     if (error) {
       console.error("Supabase error:", error);
@@ -530,26 +537,22 @@ export async function POST(request: Request) {
       if (notifyUser?.email) {
         const placementIdForLink = parsed.data[0]?.id;
         // Build an arrangement-summary string the shared template expects.
-        const termsSummary = (() => {
-          const parts: string[] = [];
-          const t = parsed.data[0].type;
-          const fee = parsed.data[0].monthlyFeeGbp ?? 0;
-          const rev = parsed.data[0].revenueSharePercent ?? 0;
-          if (t === "revenue_share") parts.push(`Revenue share · ${rev || 0}%`);
-          else if (t === "purchase") parts.push("Direct purchase");
-          else parts.push("Paid loan");
-          if (fee > 0) parts.push(`£${fee}/mo`);
-          if (rev > 0 && t !== "revenue_share") parts.push(`${rev}% on QR sales`);
-          return parts.join(" · ");
-        })();
+        // K1: was an inline IIFE, duplicated verbatim below and worded a third
+        // way inside the legacy notifyPlacementRequest.
+        const termsSummary = placementTermsSummary(
+          parsed.data[0].type,
+          parsed.data[0].revenueSharePercent,
+          parsed.data[0].monthlyFeeGbp,
+        );
         const placementUrl = placementIdForLink
           ? `${SITE}/placements/${encodeURIComponent(placementIdForLink)}`
           : `${SITE}/${fromVenue ? "artist-portal" : "venue-portal"}/placements`;
 
-        // If the artist initiated the request, the venue is the recipient,
-        // send the polished VenueNewPlacementRequest template. For
-        // venue-initiated (artist receives), we don't yet have a matching
-        // polished template, so fall back to the legacy helper.
+        // Both directions of one event go through the same pipeline now (K1).
+        // The venue-initiated half used to fall back to a hand-written legacy
+        // helper "because we don't yet have a matching polished template", so
+        // half the recipients of this event got mail with no suppression check,
+        // no preference check and no record it was attempted.
         if (!fromVenue) {
           await sendEmail({
             idempotencyKey: `placement_request:${placementIdForLink}:to_venue`,
@@ -579,15 +582,32 @@ export async function POST(request: Request) {
             metadata: { placementId: placementIdForLink, arrangementType: parsed.data[0].type },
           });
         } else {
-          await notifyPlacementRequest({
-            email: notifyUser.email,
-            venueName: venueProfile!.name,
-            artistName: artistProfile!.name,
-            workTitles: parsed.data.map((p) => p.workTitle),
-            arrangementType: parsed.data[0].type,
-            revenueSharePercent: parsed.data[0].revenueSharePercent,
-            message: parsed.data[0].message,
-          }).catch((err) => { if (err) console.error("notifyPlacementRequest error:", err); });
+          await sendEmail({
+            idempotencyKey: `placement_request:${placementIdForLink}:to_artist`,
+            template: "artist_new_placement_invitation",
+            category: "placements",
+            to: notifyUser.email,
+            subject: `${venueProfile!.name} would like to display your work`,
+            userId: notifyUserId,
+            react: ArtistNewPlacementInvitation({
+              firstName:
+                notifyUser.user_metadata?.first_name || artistProfile!.name.split(" ")[0] || "there",
+              venue: {
+                id: venueProfile!.user_id || "",
+                name: venueProfile!.name,
+                slug: venueProfile!.slug,
+                image: "",
+                location: "",
+                type: "",
+                url: `${SITE}/venues/${venueProfile!.slug}`,
+              },
+              placementUrl,
+              requestedWorks: parsed.data.map((p) => p.workTitle),
+              proposedTerms: termsSummary,
+              message: parsed.data[0].message || undefined,
+            }),
+            metadata: { placementId: placementIdForLink, arrangementType: parsed.data[0].type },
+          });
         }
       }
 
@@ -608,35 +628,40 @@ export async function POST(request: Request) {
         const placementUrl = placementIdForLink
           ? `${SITE}/placements/${encodeURIComponent(placementIdForLink)}`
           : `${SITE}/artist-portal/placements`;
-        const termsSummary = (() => {
-          const parts: string[] = [];
-          const t = parsed.data[0].type;
-          const fee = parsed.data[0].monthlyFeeGbp ?? 0;
-          const rev = parsed.data[0].revenueSharePercent ?? 0;
-          if (t === "revenue_share") parts.push(`Revenue share · ${rev || 0}%`);
-          else if (t === "purchase") parts.push("Direct purchase");
-          else parts.push("Paid loan");
-          if (fee > 0) parts.push(`£${fee}/mo`);
-          if (rev > 0 && t !== "revenue_share") parts.push(`${rev}% on QR sales`);
-          return parts.join(" · ");
-        })();
-        sendEmail({
-          idempotencyKey: `placement_request:${placementIdForLink}:to_artist`,
-          template: "artist_placement_request_sent",
-          category: "placements",
-          to: senderEmail,
-          subject: `Request sent to ${venueProfile!.name}`,
-          userId: senderUserId,
-          react: ArtistPlacementRequestSent({
-            firstName: senderFirstName,
-            venueName: venueProfile!.name,
-            placementUrl,
-            requestedWorks: parsed.data.map((p) => p.workTitle),
-            proposedTerms: termsSummary,
-          }),
-          metadata: { placementId: placementIdForLink },
-        }).catch((err) => {
-          if (err) console.error("Artist receipt email failed:", err);
+        // K1: was an inline IIFE, duplicated verbatim below and worded a third
+        // way inside the legacy notifyPlacementRequest.
+        const termsSummary = placementTermsSummary(
+          parsed.data[0].type,
+          parsed.data[0].revenueSharePercent,
+          parsed.data[0].monthlyFeeGbp,
+        );
+        // 09 item 2.8. This was fire-and-forget, and the guard could not see it
+        // because its denylist still named the notify* functions K1 deleted. On
+        // Vercel an un-awaited promise left running after the response can be
+        // killed mid-flight, so the confirmation silently never sends and
+        // `email_events` records nothing, which is the exact failure that table
+        // exists to make visible. `afterResponse` is the pattern the other three
+        // routes use: the runtime keeps the function alive, and the sender does
+        // not wait on the send.
+        afterResponse(async () => {
+          await sendEmail({
+            idempotencyKey: `placement_request:${placementIdForLink}:to_artist`,
+            template: "artist_placement_request_sent",
+            category: "placements",
+            to: senderEmail,
+            subject: `Request sent to ${venueProfile!.name}`,
+            userId: senderUserId,
+            react: ArtistPlacementRequestSent({
+              firstName: senderFirstName,
+              venueName: venueProfile!.name,
+              placementUrl,
+              requestedWorks: parsed.data.map((p) => p.workTitle),
+              proposedTerms: termsSummary,
+            }),
+            metadata: { placementId: placementIdForLink },
+          }).catch((err) => {
+            if (err) console.error("Artist receipt email failed:", err);
+          });
         });
       }
 
@@ -733,12 +758,11 @@ export async function POST(request: Request) {
         },
       };
 
-      let { error: msgErr } = await db.from("messages").insert(extendedMsg);
-      if (msgErr) {
-        // Retry without message_type/metadata if columns missing
-        const retry = await db.from("messages").insert(baseMsg);
-        msgErr = retry.error;
-      }
+      // Row 22 (D65): the "retry without message_type/metadata" fallback is DELETED.
+      // Both columns exist in prod, and the metadata is what gates the recipient's
+      // Accept/Decline controls — re-inserting without it produced a message that
+      // looked delivered but could not be acted on.
+      const { error: msgErr } = await db.from("messages").insert(extendedMsg);
       if (msgErr) {
         console.warn("Auto-message on placement skipped:", msgErr.message);
       }
@@ -747,7 +771,15 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[placements] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -756,6 +788,11 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: the demo guard existed but had ZERO call sites, while two doc comments
+  // claimed it was wired. This handler reaches real people (real emails, real
+  // money, or content on a public page), so it takes the STRICT 403 variant.
+  const demoBlocked = assertNotDemoStrict(auth.user!.id);
+  if (demoBlocked) return demoBlocked;
 
   try {
     const body = await request.json();
@@ -772,22 +809,14 @@ export async function PATCH(request: Request) {
 
     const db = getSupabaseAdmin();
 
-    // Fetch the placement (include requester_user_id where available)
-    let { data: existing } = await db
+    // Fetch the placement. 7c: proposed_by_user_id is a real column, so the
+    // select succeeds; the old "retry without the column" fallback that this
+    // relied on (the phantom requester_user_id rejected the whole query) is gone.
+    const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, requester_user_id")
+      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id")
       .eq("id", id)
       .single();
-
-    // Retry without requester_user_id / venue_slug if the columns don't exist yet
-    if (!existing) {
-      const fallback = await db
-        .from("placements")
-        .select("artist_user_id, venue_user_id, artist_slug, venue, status")
-        .eq("id", id)
-        .single();
-      existing = fallback.data as typeof existing;
-    }
 
     if (!existing) {
       return NextResponse.json({ error: "Placement not found" }, { status: 404 });
@@ -798,6 +827,27 @@ export async function PATCH(request: Request) {
 
     if (!isArtist && !isVenue) {
       return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+    }
+
+    // E20. Every caller-supplied status write goes through the state machine.
+    // Without it, `existing.status` was consulted only for two same-state
+    // no-ops, so declined/cancelled/completed → active all fell through to the
+    // unconditional `updates.status = status` below. A party who had been
+    // REJECTED could force their own deal live, and because every downstream
+    // hook keys on `pending → active`, the row went active with no Stripe
+    // subscription, no inventory decrement and no accepted_at.
+    //
+    // Scoped to the `status` body field on purpose. The stage path
+    // (stage="collected" → completed) and the undo path (unsetStage="collected"
+    // → active) write updates.status directly and are server-chosen, not
+    // caller-asserted, so they legitimately bypass this gate. Verified in the
+    // source rather than assumed, because completed has no outgoing transition
+    // and gating the undo would have broken it.
+    if (status) {
+      const transition = canPlacementTransition(existing.status, status);
+      if (!transition.ok) {
+        return NextResponse.json({ error: transition.reason }, { status: 422 });
+      }
     }
 
     // B3 (Phase 2.5, gated by GATING_V1): non-subscribed artists can't
@@ -842,10 +892,10 @@ export async function PATCH(request: Request) {
     //   1. Block only the requester from accepting their own request.
     //   2. Block a true self-placement (both parties are the same user).
     //   3. Any authenticated party that is NOT the requester may accept/decline.
-    // If requester_user_id is unknown (legacy row or missing column), we still
+    // If proposed_by_user_id is unknown (legacy row or missing column), we still
     // allow either party to accept, the previous "only venue accepts" fallback
     // was wrong for venue-initiated placements.
-    const requesterId = existing.requester_user_id || null;
+    const requesterId = existing.proposed_by_user_id || null;
     let isRequester = requesterId !== null && requesterId === auth.user!.id;
     const isSelfPlacement =
       !!existing.artist_user_id &&
@@ -892,7 +942,12 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (existing.status === "pending" && (status === "active" || status === "declined")) {
+    // E20(b): no longer scoped to `existing.status === "pending"`. The pending
+    // scope meant the guard did not run for a declined or cancelled row, which
+    // is exactly where the force-activation happened. Defence in depth now that
+    // the state machine above rejects those transitions anyway, and it covers
+    // any future path that reaches active from a non-pending state.
+    if (status === "active" || status === "declined") {
       if (isSelfPlacement) {
         return NextResponse.json(
           { error: "You cannot accept a placement you created yourself" },
@@ -945,9 +1000,8 @@ export async function PATCH(request: Request) {
       }
 
       // Build the terms-only update (no role flip yet). We apply it with
-      // .select() so the response tells us exactly which columns the DB
-      // accepted, and we narrow the retry to the column that actually
-      // failed rather than blanket-stripping requester_user_id.
+      // .select() so the response tells us whether a row was actually
+      // updated, not just whether the statement errored.
       const termsUpdates: Record<string, unknown> = {};
       if (counter.revenueSharePercent !== undefined) termsUpdates.revenue_share_percent = counter.revenueSharePercent;
       if (counter.qrEnabled !== undefined) termsUpdates.qr_enabled = counter.qrEnabled;
@@ -971,20 +1025,14 @@ export async function PATCH(request: Request) {
         if (!termsErr && Array.isArray(data) && data.length > 0) {
           termsSaved = true;
         } else if (termsErr) {
-          // Retry by progressively stripping columns that the DB doesn't
-          // know about. We only drop columns mentioned in the error
-          // message, everything else we want to keep trying.
-          const msg = String(termsErr.message || "").toLowerCase();
-          const safe = { ...termsUpdates };
-          if (msg.includes("qr_enabled")) delete safe.qr_enabled;
-          if (msg.includes("monthly_fee_gbp")) delete safe.monthly_fee_gbp;
-          if (msg.includes("arrangement_type")) delete safe.arrangement_type;
-          if (msg.includes("hidden_for_artist")) delete safe.hidden_for_artist;
-          if (msg.includes("hidden_for_venue")) delete safe.hidden_for_venue;
-          if (Object.keys(safe).length > 0) {
-            const retry = await db.from("placements").update(safe).eq("id", id).select("id");
-            if (!retry.error && Array.isArray(retry.data) && retry.data.length > 0) termsSaved = true;
-          }
+          // Row 22 (D65): the column-stripping retry that used to sit here is
+          // DELETED. qr_enabled, monthly_fee_gbp, arrangement_type and both
+          // hidden_for_* columns exist in prod, so the retry could not be doing
+          // what it claimed — and a "successful" retry that had dropped
+          // monthly_fee_gbp reported the counter as sent while the DB still held
+          // the OLD fee, which is the worst possible outcome for a negotiation.
+          // termsSaved stays false, so the caller gets the 500 below.
+          console.error("Counter terms update failed for placement", id, termsErr.message);
         }
       }
 
@@ -996,17 +1044,17 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "Failed to save counter offer" }, { status: 500 });
       }
 
-      // Role flip, write separately so a missing requester_user_id column
+      // Role flip, write separately so a missing proposed_by_user_id column
       // on older environments doesn't roll back the terms update we just
       // confirmed. Fire-and-forget the retry; the terms are the critical
       // part of the counter.
       {
         const { error: flipErr } = await db
           .from("placements")
-          .update({ requester_user_id: auth.user!.id })
+          .update({ proposed_by_user_id: auth.user!.id })
           .eq("id", id);
         if (flipErr) {
-          console.warn("Counter role-flip failed (requester_user_id):", flipErr.message);
+          console.warn("Counter role-flip failed (proposed_by_user_id):", flipErr.message);
         }
       }
 
@@ -1038,19 +1086,25 @@ export async function PATCH(request: Request) {
             .limit(1)
             .maybeSingle();
           cid = existingThread?.conversation_id || deterministicConversationId(mine.slug, theirs.slug);
+          // K3: this was a five-way ladder with two eslint-disable suppressions
+          // of no-raw-arrangement-type, producing yet another vocabulary
+          // ("Free loan arrangement", which no other surface says). The
+          // canonical labeller names the arrangement; only the percentage,
+          // which is genuinely local to a counter-offer, is composed here.
           const terms: string[] = [];
-          if (counter.arrangementType === "revenue_share" && counter.revenueSharePercent !== undefined) {
-            terms.push(`Revenue share: ${counter.revenueSharePercent}% to the venue`);
-          // eslint-disable-next-line wallplace/no-raw-arrangement-type -- negotiation-log term text; paid_loan and free_loan are both handled with their own copy, neither is missed
-          } else if (counter.arrangementType === "paid_loan") {
-            terms.push("Paid loan arrangement");
-          // eslint-disable-next-line wallplace/no-raw-arrangement-type -- see above
-          } else if (counter.arrangementType === "free_loan") {
-            terms.push("Free loan arrangement");
-          } else if (counter.arrangementType === "purchase") {
-            terms.push("Purchase arrangement");
-          } else if (counter.revenueSharePercent !== undefined) {
-            terms.push(`Revenue share: ${counter.revenueSharePercent}%`);
+          if (counter.arrangementType || counter.revenueSharePercent !== undefined) {
+            const label = counter.arrangementType
+              ? labelForArrangement({
+                  arrangementType: counter.arrangementType,
+                  monthlyFeeGbp: counter.monthlyFeeGbp,
+                  qrEnabled: counter.qrEnabled,
+                })
+              : ARRANGEMENT_LABEL.revenue_share;
+            terms.push(
+              counter.revenueSharePercent !== undefined
+                ? `${label}: ${counter.revenueSharePercent}% to the venue`
+                : label,
+            );
           }
           if (counter.monthlyFeeGbp !== undefined) terms.push(`Monthly fee: \u00a3${counter.monthlyFeeGbp}`);
           if (counter.qrEnabled !== undefined) terms.push(counter.qrEnabled ? "QR enabled" : "QR disabled");
@@ -1155,7 +1209,15 @@ export async function PATCH(request: Request) {
 
     if (existing.status === "pending" && (status === "active" || status === "declined")) {
       updates.responded_at = now;
-      if (status === "active") updates.accepted_at = now;
+      if (status === "active") {
+        updates.accepted_at = now;
+        // T9 (8.1): stamp the venue's collection point at accept, so the
+        // collect-from-venue flow has an address the deal was struck under.
+        // Best-effort — a venue with no address recorded just leaves it null,
+        // and checkout falls back to the venue's live profile.
+        const addr = await collectionAddressForVenue(db, (existing.venue_slug as string | null) ?? null);
+        if (addr) updates.collection_address = addr;
+      }
     }
 
     // Auto-unarchive on any engaging action. If a user previously
@@ -1242,91 +1304,57 @@ export async function PATCH(request: Request) {
       }
     }
 
-    let { error } = await db.from("placements").update(updates).eq("id", id);
-
-    // Retry without the new lifecycle / proposal / archive columns if the
-    // DB isn't migrated yet (pre-024 lifecycle, pre-026 archive).
-    if (error) {
-      const {
-        accepted_at: _a,
-        scheduled_for: _s,
-        installed_at: _i,
-        live_from: _l,
-        collected_at: _c,
-        proposed_stage: _ps,
-        proposed_by_user_id: _pbu,
-        proposed_at: _pa,
-        hidden_for_artist: _ha,
-        hidden_for_venue: _hv,
-        ...safe
-      } = updates as Record<string, unknown>;
-      const retry = await db.from("placements").update(safe).eq("id", id);
-      error = retry.error;
-    }
+    // Row 22 (D65): the blanket retry that used to sit here is DELETED. It was the
+    // broadest of the five — it fired on ANY error (a permission failure, a
+    // constraint violation, a bad id) and stripped all ten lifecycle / proposal /
+    // archive columns, so a stage advance could report success having written
+    // nothing the caller asked for. Every one of those columns exists in prod.
+    const { error } = await db.from("placements").update(updates).eq("id", id);
 
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Failed to update placement" }, { status: 500 });
     }
 
-    // ─── G3 (Phase 2.2): paid-loan recurring billing ───
-    // On pending → active for a paid_loan / mixed placement, kick off
-    // monthly Stripe billing. Flag-gated inside the helper, so this is
-    // a no-op when PAID_LOAN_V2 is off. On active → cancelled, stop the
-    // Stripe sub at period-end (no current-month refund per spec).
+    // ─── Paid-loan recurring billing ───
+    // K2: accepting a placement no longer starts a Stripe subscription.
+    // startPaidLoanBilling was the second of two implementations that could each
+    // begin a monthly charge for the same placement, and with PAID_LOAN_V2 on it
+    // would have produced two live subscriptions billing one venue twice. The
+    // surviving entry point is the venue clicking "Set up payment"
+    // (api/placements/[id]/payment/setup), which PaidLoanPaymentChip already
+    // surfaces from the moment a paid-loan placement goes active.
     //
-    // billingPrompt carries a setup-intent client secret back to the
-    // caller when the venue has no card on file yet — the venue UI
-    // mounts Stripe Elements with the secret and the venue completes
-    // card attach, after which a PATCH re-invocation actually creates
-    // the subscription. Without this, billing silently never started.
-    let billingPrompt: {
-      status: "missing_payment_method";
-      setupIntentClientSecret: string;
-      customerId: string;
-    } | null = null;
+    // Nothing replaces the call. The chip keys off arrangement_type,
+    // monthly_fee_gbp and subscription_status, so a 'pending' billing row would
+    // be a write with no reader.
+    //
+    // The `billingPrompt` this used to return went with it: it carried a
+    // SetupIntent client secret for a Stripe Elements flow that was never built.
+    // Nothing in src/ read it off the response.
+    //
+    // Cancellation stays: on active → terminal, stop the Stripe subscription at
+    // period-end (no current-month refund per spec).
+    //
     // Active→declined is dead code in the canonical state machine
     // (decline is pending-only), but we keep the second branch
     // defensive in case a malformed PATCH lands.
     try {
-      const goingActive = existing.status === "pending" && status === "active";
-      const goingCancelled =
-        existing.status === "active" && status === "cancelled";
-      if (goingActive) {
-        const { data: full } = await db
-          .from("placements")
-          .select(
-            "id, artist_user_id, venue_user_id, arrangement_type, monthly_fee_gbp",
-          )
-          .eq("id", id)
-          .maybeSingle<{
-            id: string;
-            artist_user_id: string | null;
-            venue_user_id: string | null;
-            arrangement_type: string | null;
-            monthly_fee_gbp: number | null;
-          }>();
-        if (full?.artist_user_id && full?.venue_user_id) {
-          const billingResult = await startPaidLoanBilling({
-            placementId: full.id,
-            artistUserId: full.artist_user_id,
-            venueUserId: full.venue_user_id,
-            arrangementType: full.arrangement_type ?? "",
-            monthlyFeePence: Math.round((full.monthly_fee_gbp ?? 0) * 100),
-          });
-          if (
-            billingResult.status === "missing_payment_method" &&
-            billingResult.setupIntentClientSecret &&
-            billingResult.customerId
-          ) {
-            billingPrompt = {
-              status: "missing_payment_method",
-              setupIntentClientSecret: billingResult.setupIntentClientSecret,
-              customerId: billingResult.customerId,
-            };
-          }
-        }
-      } else if (goingCancelled) {
+      // D8: billing must stop whenever a placement leaves 'active' for a terminal
+      // state, not only on an explicit cancel. A collection is the important case
+      // and the one the plan's fix would miss: it arrives as stage: "collected",
+      // which sets updates.status = "completed" rather than the body `status`, so
+      // this reads the EFFECTIVE new status (the same `updates.status ?? existing`
+      // the inventory block below already uses). `sold` is covered for the same
+      // reason. Otherwise the venue keeps paying a monthly fee for a piece that has
+      // come off the wall.
+      const effectiveNewStatus = (updates.status as string | undefined) ?? existing.status;
+      const goingInactive =
+        existing.status === "active" &&
+        (effectiveNewStatus === "cancelled" ||
+          effectiveNewStatus === "completed" ||
+          effectiveNewStatus === "sold");
+      if (goingInactive) {
         await cancelPaidLoanBilling(id);
       }
     } catch (billingErr) {
@@ -1350,7 +1378,15 @@ export async function PATCH(request: Request) {
     // migration; here the update will return an error which we swallow.
     try {
       const becameActive = existing.status === "pending" && status === "active";
-      const becameCollected = existing.status === "active" && stage === "collected";
+      // E23b. This keyed on the STAGE, so a direct {status:"completed"} write
+      // left it false: quantity_available was never restored, `available`
+      // stayed false where the decrement had hit zero, and placed_at_venue kept
+      // pointing at a finished placement. Any party could burn an artist's
+      // inventory with a legitimate-looking request. Keyed on the resulting
+      // status now, whichever path produced it.
+      const effectiveStatus = (updates.status as string | undefined) ?? existing.status;
+      const becameCollected =
+        existing.status === "active" && effectiveStatus === "completed";
       if (becameActive || becameCollected) {
         // Production schema stores work data denormalised on the
         // placement (work_title + extra_works JSONB), there is no
@@ -1616,7 +1652,7 @@ export async function PATCH(request: Request) {
     // assumption: the responder is by definition not the requester, so
     // the other side of the deal is the right notification target.
     // This stops "no email + no bell" from silently happening on
-    // placements with a NULL requester_user_id.
+    // placements with a NULL proposed_by_user_id.
     if (!notifyRequesterId) {
       if (auth.user!.id === existing.artist_user_id && existing.venue_user_id) {
         notifyRequesterId = existing.venue_user_id;
@@ -1631,7 +1667,7 @@ export async function PATCH(request: Request) {
     // to know the two slugs, and it's essential for the messages view
     // to reflect the latest decision. (Previously both were inside the
     // same `if (notifyRequesterId && …)`, so any placement with a
-    // missing requester_user_id AND no recoverable fallback silently
+    // missing proposed_by_user_id AND no recoverable fallback silently
     // left the messages panel stuck on Accept/Counter/Decline.)
     if (
       notifyRequesterId &&
@@ -1835,12 +1871,8 @@ export async function PATCH(request: Request) {
             message_type: "placement_response",
             metadata: { placementId: id, status },
           };
-          let { error: msgErr } = await db.from("messages").insert(extendedMsg);
-          if (msgErr) {
-            // Fall back without message_type/metadata if columns missing
-            const retry = await db.from("messages").insert(baseMsg);
-            msgErr = retry.error;
-          }
+          // Row 22 (D65): same deleted fallback as the other message inserts.
+          const { error: msgErr } = await db.from("messages").insert(extendedMsg);
           if (msgErr) {
             console.warn("Auto placement_response message failed:", msgErr.message);
           }
@@ -1965,11 +1997,8 @@ export async function PATCH(request: Request) {
               message_type: "placement_response",
               metadata: { placementId: id, status: "cancelled" },
             };
-            let { error: msgErr } = await db.from("messages").insert(extendedMsg);
-            if (msgErr) {
-              const retry = await db.from("messages").insert(baseMsg);
-              msgErr = retry.error;
-            }
+            // Row 22 (D65): same deleted fallback as the other message inserts.
+            const { error: msgErr } = await db.from("messages").insert(extendedMsg);
             if (msgErr) {
               console.warn("Auto cancellation message failed:", msgErr.message);
             }
@@ -1982,15 +2011,16 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Surface the Setup Intent if the venue needs to attach a card
-    // before paid-loan billing can begin. The client mounts Stripe
-    // Elements with this secret, the venue completes card attach, and
-    // a follow-up PATCH (re-attempt) actually creates the subscription.
-    if (billingPrompt) {
-      return NextResponse.json({ success: true, billingPrompt });
-    }
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[placements] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -2011,7 +2041,7 @@ export async function DELETE(request: Request) {
     const db = getSupabaseAdmin();
     // Fetch only the two ownership columns, these are the only ones we
     // need to authorise the archive action, and every env has them.
-    // requester_user_id was previously also requested here but some
+    // proposed_by_user_id was previously also requested here but some
     // Supabase instances predate migration 008 and don't have that
     // column; its absence made the SELECT error, `existing` come back
     // null, the endpoint return 404, and the client interpret 404 as
@@ -2132,6 +2162,12 @@ export async function DELETE(request: Request) {
       id,
     });
   } catch (err) {
+    // 01 §1.3, Phase E item 14. This one already bound and logged the error, so
+    // it was never silent, but it still flattened an AuthzError's 403/404 into a
+    // 400. Found by the surfacing gate rather than by the `} catch {` sweep,
+    // which could not match a catch that was already bound.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
     console.error("DELETE /api/placements exception:", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }

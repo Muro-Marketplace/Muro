@@ -27,6 +27,8 @@ export interface DbVenueProfile {
   interested_in_revenue_share: boolean;
   interested_in_direct_purchase: boolean;
   interested_in_collections: boolean;
+  /** Row 23a / migration 103. Nullable: NULL means the venue never answered. */
+  interested_in_local_artists?: boolean | null;
   preferred_styles: string[];
   preferred_themes: string[];
   message_notifications_enabled?: boolean;
@@ -50,7 +52,11 @@ export function dbVenueToVenue(v: DbVenueProfile): Venue {
     interestedInRevenueShare: v.interested_in_revenue_share,
     interestedInDirectPurchase: v.interested_in_direct_purchase,
     interestedInCollections: v.interested_in_collections,
-    interestedInLocalArtists: true,
+    // Row 23a: was hardcoded `true`, so every venue was told they had said yes,
+    // including the ones who unticked it. NULL means the venue has never
+    // answered, and `?? false` reads that as "not stated" for display purposes;
+    // the column itself keeps the three-state distinction.
+    interestedInLocalArtists: v.interested_in_local_artists ?? false,
     interestedInFramedWork: true,
     interestedInRotatingArtwork: true,
     wallSpace: v.wall_space,

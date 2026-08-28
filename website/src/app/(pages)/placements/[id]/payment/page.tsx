@@ -62,7 +62,6 @@ export default function PlacementPaymentPage({ params }: { params: Promise<{ id:
       workTitle={String(placement.work_title || "Artwork")}
       monthlyFeeGbp={Number(placement.monthly_fee_gbp) || 0}
       artistName={String(placement.artist_slug || placement.artist_name || "the artist")}
-      artistReady={Boolean(placement.artist_stripe_ready)}
       qrEnabled={Boolean(placement.qr_enabled)}
     />
   );

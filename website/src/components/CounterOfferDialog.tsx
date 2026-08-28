@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 
 /**
  * Inline counter-offer dialog for purchase_offer cards inside the
@@ -90,7 +90,9 @@ export default function CounterOfferDialog({ offerId, currentAmountPence, title,
     setBusy(true);
     setError(null);
     try {
-      const res = await authFetch("/api/offers", {
+      // A counter creates a child offer row (negotiation), not a payment.
+      // ApiError.message keeps the old body.message -> body.error precedence.
+      await mutate("/api/offers", {
         method: "POST",
         body: JSON.stringify({
           artistSlug: offer.artist_slug,
@@ -101,14 +103,9 @@ export default function CounterOfferDialog({ offerId, currentAmountPence, title,
           parentOfferId: offerId,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.message || data?.error || "Could not send counter.");
-        return;
-      }
       onSuccess();
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not send counter." : "Network error. Please try again.");
     } finally {
       setBusy(false);
     }

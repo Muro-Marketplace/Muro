@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemo } from "@/lib/demo-guard";
 import { sendEmail } from "@/lib/email/send";
 import { createNotification } from "@/lib/notifications";
 import { PlacementConsignmentRecordCreated } from "@/emails/templates/placements/PlacementConsignmentRecordCreated";
@@ -56,6 +57,11 @@ const recordSchema = z.object({
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
+  // unwinding optimistic state. The helper had zero call sites while two doc
+  // comments claimed it was enforced.
+  const demoResp = assertNotDemo(auth.user!.id);
+  if (demoResp) return demoResp;
 
   const { id } = await context.params;
   if (!id || id.length > 100) {
@@ -201,9 +207,17 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       changed_fields: changedFields,
     });
     if (versionInsert.error) {
-      // Non-fatal: if the migration hasn't been applied, we still save
-      // the edit rather than blocking the user.
-      console.warn("placement_record_versions insert skipped:", versionInsert.error.message);
+      // Still non-fatal: blocking someone's edit because the audit row failed
+      // would be the wrong trade. But it is an ERROR now, not a "skipped".
+      // `placement_record_versions` had never existed (migration 111 creates
+      // it), so this branch was taken on every content change since the feature
+      // shipped, and the snapshot that "gives each side confidence the other
+      // isn't editing behind their back" was never once written.
+      console.error(
+        "[placements record] version snapshot FAILED, the audit trail has a hole:",
+        versionInsert.error.message,
+        { placementId: id, changedFields },
+      );
     }
     // Reset approvals, force a re-sign by both parties.
     row.venue_approved = false;

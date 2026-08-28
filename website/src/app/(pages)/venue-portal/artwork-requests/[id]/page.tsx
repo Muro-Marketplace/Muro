@@ -6,8 +6,9 @@
 import { use, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { getRecentRequestById } from "@/lib/recent-artwork-requests";
+import { labelForArrangement } from "@/lib/arrangement-labels";
 
 // Display label for an artist response. The API returns the artist's
 // public slug ("fin-coles") rather than their display name; titlecasing
@@ -145,33 +146,40 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
     setBusy(responseId);
     setError(null);
     try {
-      const res = await authFetch(`/api/artwork-requests/${id}/responses/${responseId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Could not update response.");
-      } else if (action === "accept" && data.nextStepLink) {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the
+      // navigate/reload only happens on a confirmed 2xx.
+      const data = await mutate<{ nextStepLink?: string }>(
+        `/api/artwork-requests/${id}/responses/${responseId}`,
+        { method: "PATCH", body: JSON.stringify({ action }) },
+      );
+      if (action === "accept" && data?.nextStepLink) {
         window.location.href = data.nextStepLink;
       } else {
         await load();
       }
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not update response." : "Network error. Please try again.");
     } finally {
       setBusy(null);
     }
   }
 
   async function setStatus(status: "open" | "closed" | "fulfilled") {
+    // E43-c: this used to skip the res.ok check and swallow the catch, so a
+    // 403/500/network failure on "Mark fulfilled" / "Close" silently did
+    // nothing with no feedback. It now goes through mutate, which throws on a
+    // non-2xx (ApiError) or a dropped request, so the reload only runs on a
+    // confirmed 2xx and the reason always surfaces. Mirrors act()/fulfillResponse().
+    setError(null);
     try {
-      await authFetch(`/api/artwork-requests/${id}`, {
+      await mutate(`/api/artwork-requests/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
       await load();
-    } catch { /* swallow */ }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not update the request status. Please try again." : "Network error. Please try again.");
+    }
   }
 
   // D3 (Phase 2.9): "Mark fulfilled" routes through the new fulfill
@@ -187,21 +195,19 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
     setBusy(responseId);
     setError(null);
     try {
-      const res = await authFetch(`/api/artwork-requests/${id}/fulfill`, {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the
+      // navigate/reload only happens on a confirmed 2xx.
+      const data = await mutate<{ route_to?: string }>(`/api/artwork-requests/${id}/fulfill`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ response_id: responseId, action }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Could not fulfil response.");
-      } else if (data.route_to) {
+      if (data?.route_to) {
         window.location.href = data.route_to;
       } else {
         await load();
       }
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not fulfil response." : "Network error. Please try again.");
     } finally {
       setBusy(null);
       setExistingWorksPrompt(null);
@@ -286,7 +292,7 @@ export default function VenueArtworkRequestDetailPage({ params }: { params: Prom
                           <p className="text-xs text-muted mt-1">
                             Proposed: {r.proposed_monthly_fee_pence != null && r.proposed_monthly_fee_pence > 0
                               ? `£${(r.proposed_monthly_fee_pence / 100).toFixed(2)}/mo`
-                              : "Free display"}
+                              : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
                             {r.proposed_revenue_share_percent != null && r.proposed_revenue_share_percent > 0
                               ? ` · ${r.proposed_revenue_share_percent}% rev share`
                               : ""}

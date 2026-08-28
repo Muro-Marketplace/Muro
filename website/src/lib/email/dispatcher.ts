@@ -11,6 +11,9 @@ import { findTemplate } from "@/emails/registry";
 import type { TemplateEntry } from "@/emails/registry-types";
 import { sendEmail } from "@/lib/email/send";
 import { createElement } from "react";
+// 09 item 4.1: moved out so a script can import it without dragging
+// `server-only` in through sendEmail. One substitution, one owner.
+import { substituteTokens } from "./subject-tokens";
 
 export type TransactionalTemplate =
   | "artist_order_received"
@@ -18,6 +21,7 @@ export type TransactionalTemplate =
   | "order_processing"
   | "order_out_for_delivery"
   | "order_delivered"
+  | "order_cancelled"
   | "customer_confirm_delivery";
 
 export interface SendTransactionalInput {
@@ -45,6 +49,12 @@ const TEMPLATE_BINDINGS: Record<TransactionalTemplate, string> = {
   order_processing: "customer_order_processing",
   order_out_for_delivery: "customer_order_out_for_delivery",
   order_delivered: "customer_order_delivered",
+  // 09 item 1.5 / §C.4. Cancellation used to be decided in a second place, an
+  // `if (status !== shipped && !== delivered && !== processing)` branch inside
+  // orders/route.ts, so which email an order event produces had two owners.
+  // The generic status-update template backs it: a bespoke one per remaining
+  // status would be several files nobody maintains.
+  order_cancelled: "customer_order_status_update",
   customer_confirm_delivery: "customer_confirm_delivery_48h",
 };
 
@@ -52,13 +62,6 @@ const TEMPLATE_BINDINGS: Record<TransactionalTemplate, string> = {
 // registry-types.ts). Substitute against `data` before the wire so the
 // inbox doesn't show the literal token. Unmatched tokens are left in
 // place to surface the gap during testing rather than silently dropping.
-function substituteTokens(template: string, data: Record<string, unknown>): string {
-  return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, key) => {
-    const val = data[key];
-    if (val === undefined || val === null) return match;
-    return typeof val === "string" ? val : String(val);
-  });
-}
 
 /**
  * Send a transactional order email with idempotency. Returns `{sent, deduped}`

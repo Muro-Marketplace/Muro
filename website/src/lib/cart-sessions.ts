@@ -12,6 +12,13 @@ export interface SavedCart {
   artistSlugs: string[] | null;
   expectedSubtotalPence: number | null;
   expectedShippingPence: number | null;
+  /**
+   * artistSlug -> shipping pence for that artist's group (E9, migration 082).
+   * calculateOrderShipping() computes this per artist and only the total used to
+   * survive, so the webhook pooled postage onto the first artist. `{}` for rows
+   * written before 082, which buildArtistLegs handles by pro-rata split.
+   */
+  artistShippingPence: Record<string, number>;
 }
 
 export interface SaveInput {
@@ -23,6 +30,7 @@ export interface SaveInput {
   artistSlugs: string[];
   expectedSubtotalPence: number;
   expectedShippingPence: number;
+  artistShippingPence: Record<string, number>;
 }
 
 export async function saveCartSession(input: SaveInput): Promise<void> {
@@ -36,6 +44,7 @@ export async function saveCartSession(input: SaveInput): Promise<void> {
     artist_slugs: input.artistSlugs.length > 0 ? input.artistSlugs : null,
     expected_subtotal_pence: input.expectedSubtotalPence,
     expected_shipping_pence: input.expectedShippingPence,
+    artist_shipping_pence: input.artistShippingPence,
   });
   if (error) {
     console.error("[cart-sessions] save failed:", error);
@@ -50,7 +59,9 @@ export async function loadCartSession(
   const { data } = await db
     .from("cart_sessions")
     .select(
-      "cart, shipping, source, venue_slug, artist_slugs, expected_subtotal_pence, expected_shipping_pence",
+      // One string literal on purpose: the typed client parses this at the type
+      // level, and concatenating it collapses `data` to GenericStringError.
+      "cart, shipping, source, venue_slug, artist_slugs, expected_subtotal_pence, expected_shipping_pence, artist_shipping_pence",
     )
     .eq("stripe_session_id", stripeSessionId)
     .gt("expires_at", new Date().toISOString())
@@ -64,5 +75,9 @@ export async function loadCartSession(
     artistSlugs: data.artist_slugs,
     expectedSubtotalPence: data.expected_subtotal_pence,
     expectedShippingPence: data.expected_shipping_pence,
+    artistShippingPence:
+      typeof data.artist_shipping_pence === "object" && data.artist_shipping_pence !== null
+        ? (data.artist_shipping_pence as Record<string, number>)
+        : {},
   };
 }

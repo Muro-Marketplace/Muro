@@ -70,7 +70,18 @@ export default function CheckoutPage() {
   // Fulfilment method — buyer chooses ship (default) or collection from
   // the artist (drop-off). Collection skips shipping costs and the
   // address requirement.
-  const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection">("ship");
+  // T9 / N2c: a cart where EVERY line is a venue-collect line opens in
+  // collect_venue mode; mixed carts stay on "ship" and the collect lines are
+  // re-validated (and rejected if stale) server-side. Derived before the state
+  // so the initial render is already right.
+  const allVenueCollect =
+    items.length > 0 && items.every((i) => i.lineFulfilment === "collect_venue");
+  const collectVenueName = allVenueCollect
+    ? items[0]?.collectVenueSlug ?? null
+    : null;
+  const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection" | "collect_venue">(
+    allVenueCollect ? "collect_venue" : "ship",
+  );
   const [collectionNotes, setCollectionNotes] = useState("");
   // Buyer's preferred pickup window. Captured separately from the free
   // notes so the artist can see a concrete day + time on the order
@@ -88,6 +99,9 @@ export default function CheckoutPage() {
   // empty; the fetch below populates it. Until it resolves we render the
   // option but disable it, so a determined click can't beat the lookup.
   const [pickupBySlug, setPickupBySlug] = useState<Record<string, boolean>>({});
+  // G-C / Bug 10. Same source and the same fail-closed rule as pickup: the
+  // artist's own answer decides, and if we can't read it we assume UK only.
+  const [intlBySlug, setIntlBySlug] = useState<Record<string, boolean>>({});
   const [pickupLoaded, setPickupLoaded] = useState(false);
 
   // Pre-fill the email from a QR-scan ref so the buyer doesn't have to
@@ -152,6 +166,7 @@ export default function CheckoutPage() {
     if (slugs.length === 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPickupBySlug({});
+      setIntlBySlug({});
       setPickupLoaded(true);
       return;
     }
@@ -161,22 +176,32 @@ export default function CheckoutPage() {
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        const artists: Array<{ slug?: string; offersPickup?: boolean }> = Array.isArray(data?.artists) ? data.artists : [];
+        const artists: Array<{
+          slug?: string;
+          offersPickup?: boolean;
+          shipsInternationally?: boolean;
+        }> = Array.isArray(data?.artists) ? data.artists : [];
         const next: Record<string, boolean> = {};
+        const nextIntl: Record<string, boolean> = {};
         for (const slug of slugs) {
           const match = artists.find((a) => a.slug === slug);
           next[slug] = match?.offersPickup === true;
+          nextIntl[slug] = match?.shipsInternationally === true;
         }
         setPickupBySlug(next);
+        setIntlBySlug(nextIntl);
       })
       .catch(() => {
         if (cancelled) return;
         // Network failure means we can't confirm consent. Default to
         // "no pickup available" so we never accidentally book a buyer
         // into a collection arrangement the artist hasn't agreed to.
+        // Same for international delivery: no confirmation means UK only,
+        // which is what api/checkout would enforce anyway (G-C / Bug 10).
         const next: Record<string, boolean> = {};
         for (const slug of slugs) next[slug] = false;
         setPickupBySlug(next);
+        setIntlBySlug(next);
       })
       .finally(() => {
         if (!cancelled) setPickupLoaded(true);
@@ -198,6 +223,22 @@ export default function CheckoutPage() {
     cartArtistSlugs.length > 0 &&
     cartArtistSlugs.every((s) => pickupBySlug[s] === true);
 
+  // G-C / Bug 10. Non-UK delivery is offered only when EVERY artist in the cart
+  // ships abroad, the same all-or-nothing rule as pickup: one UK-only artist and
+  // the parcel can't go, because v1 doesn't split a cart across destinations.
+  // The dropdown is a courtesy, api/checkout is the gate. Until the artist data
+  // has loaded we show UK only, so the buyer is never offered a country that the
+  // submit would then refuse.
+  const internationalAvailable =
+    pickupLoaded &&
+    cartArtistSlugs.length > 0 &&
+    cartArtistSlugs.every((s) => intlBySlug[s] === true);
+
+  const countryOptions = useMemo(
+    () => (internationalAvailable ? COUNTRIES : COUNTRIES.filter((c) => c.code === "GB")),
+    [internationalAvailable],
+  );
+
   // If the user had collection selected and the cart changes such that
   // it's no longer available, snap them back to shipping so the order
   // can still be placed.
@@ -207,6 +248,23 @@ export default function CheckoutPage() {
       setFulfilmentMethod("ship");
     }
   }, [pickupLoaded, pickupAvailable, fulfilmentMethod]);
+
+  // Same snap-back for the destination. A cart edit can remove the artist who
+  // made the selected country reachable, and leaving a stale country in the form
+  // would send the buyer to a 400 from api/checkout on submit.
+  useEffect(() => {
+    if (pickupLoaded && !internationalAvailable && shipping.country !== "GB") {
+      // setShipping rather than updateField: updateField is declared further down
+      // the component and reading it here trips "cannot access variable before it
+      // is declared". Clearing the postcode format error matters as much as the
+      // country itself, because a valid AU postcode is not a valid UK one.
+      // Same snap-back shape as the fulfilment effect above, so the same
+      // cascading-render exemption applies.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShipping((prev) => ({ ...prev, country: "GB" }));
+      setErrors((prev) => ({ ...prev, country: false, postcodeFormat: false }));
+    }
+  }, [pickupLoaded, internationalAvailable, shipping.country]);
 
   function applySavedAddress(id: string) {
     setSavedAddressId(id);
@@ -256,6 +314,8 @@ export default function CheckoutPage() {
         internationalShippingPrice: it.internationalShippingPrice ?? null,
         dimensions: it.dimensions || null,
         framed: it.framed,
+        // E46c: forwarded so the API can resolve the uplift server-side.
+        frameLabel: it.frameLabel,
         price: it.price,
         quantity: it.quantity,
       })),
@@ -294,7 +354,7 @@ export default function CheckoutPage() {
 
   // Collection skips delivery cost entirely — buyer picks up from the
   // artist's space. The shared helper above gives us the ship-mode total.
-  const shippingCost = fulfilmentMethod === "collection" ? 0 : totalShipping;
+  const shippingCost = fulfilmentMethod === "ship" ? totalShipping : 0;
   const total = subtotal + shippingCost;
 
   // Pick the slowest tier across all artist groups so the static
@@ -328,7 +388,7 @@ export default function CheckoutPage() {
     if (submitting) return;
     // Collection only needs name + contact; addressLine/postcode/city
     // are skipped because the artist supplies the location.
-    const required: (keyof ShippingInfo)[] = fulfilmentMethod === "collection"
+    const required: (keyof ShippingInfo)[] = fulfilmentMethod !== "ship"
       ? ["fullName", "email", "phone"]
       : ["fullName", "email", "phone", "addressLine1", "city", "postcode"];
     const newErrors: Record<string, boolean> = {};
@@ -406,6 +466,9 @@ export default function CheckoutPage() {
           // legacy/non-QR direct deep-links working.
           source: (typeof window !== "undefined" && (readQrContext()?.source || new URLSearchParams(window.location.search).get("ref"))) || "direct",
           venueSlug: (typeof window !== "undefined" && (readQrContext()?.venueSlug || new URLSearchParams(window.location.search).get("venue"))) || "",
+          // D10: the server-signed attribution, preferred by the API over the bare
+          // slug above. From localStorage first, URL `va` as the fallback.
+          venueAttributionToken: (typeof window !== "undefined" && (readQrContext()?.attributionToken || new URLSearchParams(window.location.search).get("va"))) || undefined,
           fulfilmentMethod,
           collectionNotes: composedCollectionNotes,
         }),
@@ -488,7 +551,7 @@ export default function CheckoutPage() {
           <p className="text-sm text-muted mb-6">Browse the marketplace to find artwork for your space.</p>
           <Link
             href="/browse"
-            className="inline-flex items-center justify-center px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 bg-accent-text text-white text-sm font-medium rounded-sm hover:bg-accent-text-hover transition-colors"
           >
             Discover Art
           </Link>
@@ -568,7 +631,39 @@ export default function CheckoutPage() {
               advertises an unavailable option. */}
           <div>
             <h2 className="text-lg font-medium mb-4">Delivery Method</h2>
-            <div className={`grid gap-3 mb-6 ${pickupAvailable ? "grid-cols-2" : "grid-cols-1"}`}>
+            <div className={`grid gap-3 mb-6 ${
+              [true, pickupAvailable, allVenueCollect].filter(Boolean).length > 1
+                ? "grid-cols-2"
+                : "grid-cols-1"
+            }`}>
+              {/* T9 / N2c: the venue-collect tile appears only for a cart built
+                  from the collect-from-venue CTA, and is preselected. The
+                  server re-validates every line's placement at submit, so the
+                  tile is presentation, not the check. */}
+              {allVenueCollect && (
+                <button
+                  type="button"
+                  onClick={() => setFulfilmentMethod("collect_venue")}
+                  className={`text-left p-4 rounded-sm border transition-colors ${
+                    fulfilmentMethod === "collect_venue"
+                      ? "border-accent bg-accent/5"
+                      : "border-border hover:border-accent/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={fulfilmentMethod === "collect_venue" ? "text-accent" : "text-muted"}>
+                      <path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                    <p className="text-sm font-medium">Collect from the venue</p>
+                  </div>
+                  <p className="text-xs text-muted leading-snug">
+                    {collectVenueName
+                      ? `Pick it up where it hangs. Show your order number at ${collectVenueName}.`
+                      : "Pick it up where it hangs. Show your order number at the venue."}
+                  </p>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setFulfilmentMethod("ship")}
@@ -613,7 +708,7 @@ export default function CheckoutPage() {
 
           {/* Buyer details */}
           <div>
-            <h2 className="text-lg font-medium mb-4">{fulfilmentMethod === "collection" ? "Your Details" : "Delivery Details"}</h2>
+            <h2 className="text-lg font-medium mb-4">{fulfilmentMethod === "ship" ? "Delivery Details" : "Your Details"}</h2>
             <div className="space-y-3">
               {renderInput("fullName", "Full name *")}
               <div className="grid grid-cols-2 gap-3">
@@ -697,12 +792,19 @@ export default function CheckoutPage() {
                         onChange={(e) => updateField("country", e.target.value)}
                         className={inputClass("country")}
                       >
-                      {COUNTRIES.map((c) => (
+                      {countryOptions.map((c) => (
                         <option key={c.code} value={c.code}>
                           {c.label}
                         </option>
                       ))}
                       </select>
+                      {!internationalAvailable && (
+                        <p className="text-xs text-muted mt-1">
+                          {cartArtistSlugs.length > 1
+                            ? "These artists ship within the UK only."
+                            : "This artist ships within the UK only."}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <textarea

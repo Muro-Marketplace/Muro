@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { applySchema } from "@/lib/validations";
-import { notifyAdminNewApplication } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistApplicationSubmitted } from "@/emails/templates/artist-additions/ArtistApplicationSubmitted";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { afterResponse } from "@/lib/after-response";
 import { slugify } from "@/lib/slugify";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -56,9 +56,10 @@ export async function POST(request: Request) {
 
     const d = parsed.data;
 
-    // Build the row up-front so we can retry-without-new-columns if the
-    // schema lags. Drops trader_status / business_name / vat_number on
-    // the retry path so older envs still accept the application.
+    // ONE insert, no strip-and-retry. Every column below exists in production
+    // (checked against `tests/integration/schema-columns.json` and against the
+    // live schema), so the ladder that used to sit under this could not do what
+    // it claimed. What it actually did was worse than nothing: see migration 109.
     const fullRow: Record<string, unknown> = {
       name: d.name,
       email: d.email,
@@ -106,32 +107,43 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     };
 
-    let { error } = await supabase.from("artist_applications").insert(fullRow);
-    if (error) {
-      const msg = String(error.message || "").toLowerCase();
-      const dropOnLegacy: string[] = [];
-      if (msg.includes("trader_status")) dropOnLegacy.push("trader_status");
-      if (msg.includes("business_name")) dropOnLegacy.push("business_name");
-      if (msg.includes("vat_number")) dropOnLegacy.push("vat_number");
-      if (msg.includes("discipline")) dropOnLegacy.push("discipline");
-      if (msg.includes("sub_styles")) dropOnLegacy.push("sub_styles");
-      if (msg.includes("referred_by_code")) dropOnLegacy.push("referred_by_code");
-      if (dropOnLegacy.length > 0) {
-        const safeRow = { ...fullRow };
-        for (const k of dropOnLegacy) delete safeRow[k];
-        const retry = await supabase.from("artist_applications").insert(safeRow);
-        error = retry.error;
-      }
-    }
+    // X3 / 074. Was the anon client. Migration 074 drops both
+    // `WITH CHECK (true)` INSERT policies on artist_applications, so an anon
+    // insert now fails RLS: this switch and that migration MUST ship together
+    // (D15.4), or public applications break silently. The route is the only
+    // legitimate writer, it validates through applySchema and is rate-limited
+    // above, so the service-role client is the right level of trust here.
+    const applyDb = getSupabaseAdmin();
+    // The strip-and-retry that used to sit here listed six columns to drop "if
+    // the schema lags". Five of them exist. The sixth, `referred_by_code`, did
+    // NOT, and never had: migration 019 added it to `artist_profiles` only.
+    //
+    // So the first insert failed on EVERY application, referred or not, because
+    // `referred_by_code: null` still names the column. The retry dropped it and
+    // re-inserted, the application saved, and the referral code was destroyed.
+    // Measured against prod: 13 applications, 7 artists holding a code to share,
+    // 0 profiles recording who referred them. The entire referral programme has
+    // never worked, and this loop is why nobody found out.
+    //
+    // Migration 109 adds the column. One insert now, and a real failure surfaces
+    // as a 500 instead of becoming a quieter, lossier write.
+    const { error: insertError } = await applyDb.from("artist_applications").insert(fullRow);
 
-    if (error) {
-      if (error.code === "23505") {
-        return NextResponse.json(
-          { error: "An application with this email already exists" },
-          { status: 409 }
-        );
-      }
-      console.error("Supabase error:", error);
+    // E36d. A duplicate email used to answer 409 with "An application with this
+    // email already exists", which turns a public unauthenticated form into an
+    // account-existence oracle: submit an address, read the status, learn
+    // whether that person has applied. It now returns byte-identical output to
+    // a fresh submission. The repeat submitter sees the success screen, which
+    // is the right trade for a public form; if we ever need to tell them, tell
+    // them by email, which only reaches someone who controls the address.
+    // The duplicate still gets a server log line, which is where the signal
+    // belonged.
+    const alreadyApplied = insertError?.code === "23505";
+    if (alreadyApplied) {
+      console.warn("[apply] duplicate application for an existing email");
+    }
+    if (insertError && !alreadyApplied) {
+      console.error("Supabase error:", insertError);
       return NextResponse.json(
         { error: "Something went wrong. Please try again." },
         { status: 500 }
@@ -146,7 +158,7 @@ export async function POST(request: Request) {
     // marketplace and outbound actions (placements, sales) stay gated
     // by review_status='approved' so a pending profile doesn't leak
     // onto /browse or send placement requests.
-    if (authedUser) {
+    if (authedUser && !alreadyApplied) {
       try {
         const db = getSupabaseAdmin();
         const { data: existingProfile } = await db
@@ -205,27 +217,51 @@ export async function POST(request: Request) {
       }
     }
 
-    // Admin ping, keep the legacy helper, it's internal only.
-    // primaryMedium is optional now; fall back to a placeholder so
-    // the admin notification helper's required-string contract holds.
-    await notifyAdminNewApplication({ name: d.name, email: d.email, location: d.location, primaryMedium: d.primaryMedium || "-" }).catch((err) => { if (err) console.error("notifyAdminNewApplication error:", err); });
+    // E36d. Both sends move off the response path. Awaiting them here is what
+    // made the duplicate branch measurably faster than the fresh one, so the
+    // status fix above would have leaked through latency instead. Skipped
+    // entirely on a duplicate: the applicant already has their receipt (the
+    // idempotency key would suppress it anyway) and the admin already has
+    // their ping.
+    if (!alreadyApplied) {
+      afterResponse(async () => {
+        // Admin ping, keep the legacy helper, it's internal only.
+        // primaryMedium is optional now; fall back to a placeholder so
+        // the admin notification helper's required-string contract holds.
+        // K1: was notifyAdminNewApplication in the legacy module. Through the
+        // pipeline it gets an email_events row and an idempotency key, so a
+        // retried submission no longer pings the admin twice.
+        await sendAdminAlert({
+          idempotencyKey: `admin_new_application:${d.email.toLowerCase()}`,
+          subject: `New artist application: ${d.name}`,
+          summary: `${d.name} has applied to join Wallplace.`,
+          fields: [
+            { label: "Email", value: d.email },
+            { label: "Location", value: d.location },
+            { label: "Medium", value: d.primaryMedium || "-" },
+          ],
+          actionPath: "/admin",
+          actionLabel: "Review in the admin dashboard",
+        });
 
-    // Applicant receipt via the new pipeline (polished template, logged,
-    // preference-aware). We key idempotency off the email address so a
-    // double-submit from the form doesn't double-send.
-    await sendEmail({
-      idempotencyKey: `artist_application_submitted:${d.email.toLowerCase()}`,
-      template: "artist_application_submitted",
-      category: "placements",
-      to: d.email,
-      subject: "We've received your Wallplace application",
-      react: ArtistApplicationSubmitted({
-        firstName: (d.name || "there").split(" ")[0],
-        reviewTimelineDays: 3,
-        portfolioUrl: `${SITE}/artist-portal/portfolio`,
-      }),
-      metadata: { email: d.email, location: d.location },
-    });
+        // Applicant receipt via the new pipeline (polished template, logged,
+        // preference-aware). We key idempotency off the email address so a
+        // double-submit from the form doesn't double-send.
+        await sendEmail({
+          idempotencyKey: `artist_application_submitted:${d.email.toLowerCase()}`,
+          template: "artist_application_submitted",
+          category: "placements",
+          to: d.email,
+          subject: "We've received your Wallplace application",
+          react: ArtistApplicationSubmitted({
+            firstName: (d.name || "there").split(" ")[0],
+            reviewTimelineDays: 3,
+            portfolioUrl: `${SITE}/artist-portal/portfolio`,
+          }),
+          metadata: { email: d.email, location: d.location },
+        });
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch {

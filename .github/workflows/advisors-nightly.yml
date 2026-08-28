@@ -1,0 +1,53 @@
+name: Supabase advisors (nightly)
+
+# Drift detector for the live Supabase project, not a PR gate.
+#
+# EXECUTION-DECISIONS D12 ruling 3 rules out gating PRs on this: the advisor
+# misses this codebase's actual leak class (it skips permissive SELECT policies,
+# so it flagged none of the five live `auth.role() = 'authenticated'` / `USING
+# (true)` list leaks), GitHub withholds secrets from fork PRs so the job would
+# hard-fail on any external contribution, and a per-PR job holding a prod
+# management token widens the blast radius for little gain.
+#
+# What it does catch: a *new* advisor lint appearing on the project between runs,
+# which is worth knowing about within a day. Failing loudly is the point, there is
+# no continue-on-error here because a red nightly run is the only signal.
+#
+# The blocking RLS gate is the pg_policies assertion in D12 ruling 1, run via the
+# Supabase MCP before merge.
+#
+# Requires the SUPABASE_ACCESS_TOKEN repo secret (a Supabase personal access
+# token from https://supabase.com/dashboard/account/tokens). Until that exists
+# this workflow fails with "SUPABASE_ACCESS_TOKEN not set" (exit 2). Per D12
+# ruling 4 that is not a blocker for anything else.
+
+on:
+  schedule:
+    # 03:00 UTC daily. Scheduled runs always use the default branch.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: website
+
+jobs:
+  advisors:
+    name: advisor drift check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - run: npm ci
+      - run: npm run audit:advisors

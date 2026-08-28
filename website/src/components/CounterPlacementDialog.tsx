@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import Toggle from "@/components/Toggle";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 const NOTE_MAX = 600;
 
@@ -76,7 +77,9 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
           : "free_loan";
       const finalMonthlyFee = paidLoan && typeof fee === "number" ? fee : null;
       const finalRevShare = qr && typeof revShare === "number" && revShare > 0 ? revShare : null;
-      const res = await authFetch("/api/placements", {
+      // mutate throws on a non-2xx, so the counter event below only fires on a
+      // confirmed 2xx (same success-only gating as the other placement handlers).
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({
           id: placementId,
@@ -89,12 +92,6 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
           },
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Could not send counter");
-        setBusy(false);
-        return;
-      }
       const result: CounterResult = {
         placementId,
         monthlyFeeGbp: finalMonthlyFee,
@@ -117,8 +114,8 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
       }
       onSuccess?.(result);
       onClose();
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code || "Could not send counter" : "Network error. Please try again.");
       setBusy(false);
     }
   }
@@ -153,10 +150,10 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
           {/* Paid loan toggle */}
           <label className="flex items-center justify-between gap-3 cursor-pointer">
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-foreground">Paid loan</p>
+              <p className="text-sm text-foreground">{ARRANGEMENT_LABEL.paid_loan}</p>
               <p className="text-[11px] text-muted leading-snug">Venue pays the artist monthly to display the work.</p>
             </div>
-            <Toggle checked={paidLoan} onChange={setPaidLoan} ariaLabel="Paid loan" />
+            <Toggle checked={paidLoan} onChange={setPaidLoan} ariaLabel={ARRANGEMENT_LABEL.paid_loan} />
           </label>
           {paidLoan && (
             <div className="flex items-center gap-2">
@@ -189,7 +186,7 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
           {qr && (
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted flex-1">{paidLoan ? "Share on QR sales" : "Revenue share"}</span>
+                <span className="text-xs text-muted flex-1">{paidLoan ? "Share on QR sales" : ARRANGEMENT_LABEL.revenue_share}</span>
                 <input
                   type="number"
                   min={0}

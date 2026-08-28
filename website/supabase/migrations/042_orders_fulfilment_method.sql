@@ -1,4 +1,4 @@
--- 039_orders_fulfilment_method.sql
+-- 042_orders_fulfilment_method.sql
 -- F1 — buyer chooses ship vs collection (drop-off) at checkout.
 
 ALTER TABLE orders

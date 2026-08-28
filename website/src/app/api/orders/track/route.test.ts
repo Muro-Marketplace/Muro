@@ -26,6 +26,9 @@ function req(body: unknown): Request {
   });
 }
 
+// Mirrors the REAL orders columns (schema-columns.json), not the phantom ones the
+// route used to name. The old mock returned total_amount/shipping_amount/cart_items,
+// which do not exist, so the suite stayed green while the live route 500'd.
 function mockOrderRow(buyerEmail: string) {
   fromMock.mockReturnValue({
     select: () => ({
@@ -33,19 +36,15 @@ function mockOrderRow(buyerEmail: string) {
         maybeSingle: async () => ({
           data: {
             id: "ord-1",
+            order_number: "WP-1",
             status: "confirmed",
             buyer_email: buyerEmail,
-            buyer_name: "Test Buyer",
             artist_slug: "alice",
-            total_amount: 100,
-            shipping_amount: 5,
-            currency: "gbp",
-            cart_items: [],
+            total: 100,
+            shipping_cost: 5,
+            items: [{ title: "Sunset", price: 100, qty: 1 }],
             status_history: [],
             tracking_number: null,
-            tracking_url: null,
-            shipped_at: null,
-            delivered_at: null,
             created_at: "2026-05-01T00:00:00Z",
           },
           error: null,
@@ -56,13 +55,21 @@ function mockOrderRow(buyerEmail: string) {
 }
 
 describe("POST /api/orders/track", () => {
-  it("accepts a signed token and returns the order", async () => {
+  it("accepts a signed token and maps the real columns into the response", async () => {
     mockOrderRow("buyer@x.com");
     const token = await signOrderToken({ orderId: "ord-1", email: "buyer@x.com" });
     const res = await POST(req({ token }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.order?.id).toBe("ord-1");
+    // Fail-before: the old route read total_amount/shipping_amount/cart_items, so
+    // against a real-columns row these came back undefined/empty.
+    expect(body.order).toMatchObject({
+      id: "ord-1",
+      total: 100,
+      shipping: 5,
+      currency: "gbp",
+      items: [{ title: "Sunset", price: 100, qty: 1 }],
+    });
   });
 
   it("rejects a tampered token with 401", async () => {

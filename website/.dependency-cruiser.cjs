@@ -2,6 +2,24 @@
 module.exports = {
   forbidden: [
     {
+      name: "one-email-entrypoint",
+      comment:
+        "All outbound mail goes through src/lib/email/send.ts, which owns the " +
+        "suppression list, the category preferences, the unsubscribe headers, the " +
+        "idempotency key and the email_events audit trail. Importing the `resend` " +
+        "package anywhere else re-creates the K1 split: src/lib/email.ts had its own " +
+        "Resend client, its own hardcoded `from` on an unverified domain, and none of " +
+        "those controls, and it was still sending. A second client is a second sending " +
+        "identity nobody is watching.",
+      severity: "error",
+      from: { pathNot: "^src/lib/email/send\\.ts$" },
+      // 07 §1.6's snippet says `path: "^resend$"`, which never matches:
+      // dependency-cruiser reports the RESOLVED path, so an import of "resend"
+      // arrives as `node_modules/resend/dist/index.cjs`. Verified by adding a
+      // probe module and reading the graph.
+      to: { path: "^node_modules/resend(/|$)", dependencyTypes: ["npm"] },
+    },
+    {
       name: "no-admin-client-in-client",
       comment:
         "The PRIMARY guard is the `import 'server-only'` directive at the top of " +

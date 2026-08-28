@@ -8,7 +8,7 @@ import type { ArtistWork } from "@/data/artists";
 import { slugify } from "@/lib/slugify";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
 import ArtworkThumb from "@/components/ArtworkThumb";
@@ -17,6 +17,7 @@ import { saveQrContext } from "@/lib/qr-context";
 import { getProfileTheme, themeCssVars, canCustomiseTheme, DEFAULT_PROFILE_THEME } from "@/lib/profile-themes";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
+import { ENQUIRY_TYPES } from "@/lib/enquiry-types";
 
 interface ArtistProfileClientProps {
   artistName: string;
@@ -317,6 +318,9 @@ export default function ArtistProfileClient({
   const qrVenueSlug = isQrScan ? searchParams.get("venue") : null;
   const qrVenueNameParam = isQrScan ? searchParams.get("venueName") : null;
   const qrVenueName = qrVenueNameParam || qrVenueSlug;
+  // D10: the signed venue attribution minted by the QR redirect (`va`). Stored
+  // alongside the slug and preferred at checkout.
+  const qrAttributionToken = isQrScan ? searchParams.get("va") : null;
 
   // Stash the QR context in localStorage so the venue attribution
   // survives the navigation away from this page (buy buttons push
@@ -328,8 +332,9 @@ export default function ArtistProfileClient({
       venueSlug: qrVenueSlug,
       venueName: qrVenueNameParam || undefined,
       source: "qr",
+      attributionToken: qrAttributionToken || undefined,
     });
-  }, [isQrScan, qrVenueSlug, qrVenueNameParam]);
+  }, [isQrScan, qrVenueSlug, qrVenueNameParam, qrAttributionToken]);
 
   // Premium+ artists pick a profile theme via the artist portal; Core
   // artists see the picker locked behind an upsell, so render-side we
@@ -1139,7 +1144,12 @@ export default function ArtistProfileClient({
                       // so the messaging UI can read it without
                       // contaminating the human-readable content.
                       const enquiryType = (data.get("enquiryType") as string) || "general";
-                      await authFetch("/api/messages", {
+                      // E43-h: the primary send goes through mutate (throws on a
+                      // non-2xx), so the "enquiry sent" confirmation is shown ONLY when
+                      // the message actually lands. The old code used authFetch (resolves
+                      // on a 403/500) AND set enquirySent in the catch, so a failed
+                      // enquiry told the visitor it had been sent.
+                      await mutate("/api/messages", {
                         method: "POST",
                         body: JSON.stringify({
                           senderId: user?.id || null,
@@ -1150,22 +1160,29 @@ export default function ArtistProfileClient({
                           metadata: { enquiryType },
                         }),
                       });
-                      // Also save to enquiries table for backward compatibility
-                      await fetch("/api/enquiry", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          senderName,
-                          senderEmail: data.get("senderEmail") || user?.email || "",
-                          artistSlug,
-                          workTitle: currentWork?.title || null,
-                          enquiryType: data.get("enquiryType"),
-                          message: data.get("message"),
-                        }),
-                      });
+                      // Also save to the enquiries table for backward compatibility.
+                      // Best-effort: a failure here must not undo the confirmation, since
+                      // the message itself already landed.
+                      try {
+                        await fetch("/api/enquiry", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            senderName,
+                            senderEmail: data.get("senderEmail") || user?.email || "",
+                            artistSlug,
+                            workTitle: currentWork?.title || null,
+                            enquiryType: data.get("enquiryType"),
+                            message: data.get("message"),
+                          }),
+                        });
+                      } catch { /* best-effort secondary notification */ }
                       setEnquirySent(true);
-                    } catch {
-                      setEnquirySent(true);
+                    } catch (err) {
+                      showToast(
+                        err instanceof ApiError ? err.message : "Could not send your enquiry. Please try again.",
+                        { variant: "error" },
+                      );
                     }
                   }}
                   className="space-y-3"
@@ -1173,10 +1190,9 @@ export default function ArtistProfileClient({
                   <input type="text" name="senderName" placeholder="Your name" required defaultValue={authDisplayName || ""} className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
                   <input type="email" name="senderEmail" placeholder="Your email" required defaultValue={user?.email || ""} className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
                   <select name="enquiryType" className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm text-muted focus:outline-none focus:border-accent/50">
-                    <option value="venue_looking">I&apos;m a venue looking for art</option>
-                    <option value="purchasing">I&apos;m interested in purchasing</option>
-                    <option value="custom_piece">Request a custom piece</option>
-                    <option value="general">General question</option>
+                    {ENQUIRY_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.option}</option>
+                    ))}
                   </select>
                   <textarea name="message" placeholder="Your message..." rows={3} required className="w-full px-3 py-2.5 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50" />
                   <button type="submit" className="w-full px-5 py-2.5 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors">

@@ -93,4 +93,55 @@ describe("wallplace/no-unawaited-critical-sideeffect", () => {
     const messages = lint("notifyX({})", API_TEST_FILE);
     expect(messages).toHaveLength(0);
   });
+
+  // ──── 09 item 2.8: the four names that replaced the notify* functions ─────
+  //
+  // The denylist was `executeTransfer` plus /^notify/, and K1 DELETED every
+  // notify* function when it removed src/lib/email.ts. So the rule guarded one
+  // real name and a pattern that matched nothing, while the four functions that
+  // took over the job were uncovered. On Vercel an un-awaited promise left
+  // running after the response can be killed mid-flight: the send is dropped and
+  // `email_events` records nothing, which is the exact failure that table exists
+  // to make visible.
+
+  const CRITICAL = [
+    "sendEmail",
+    "sendTransactional",
+    "sendAdminAlert",
+    "sendMessageUnreadEmail",
+    "recordOrderEvent",
+  ];
+
+  for (const name of CRITICAL) {
+    it(`flags a bare ${name}(...) at statement level`, () => {
+      const messages = lint(`${name}({})`);
+      expect(messages).toHaveLength(1);
+      expect(messages[0].ruleId).toBe(RULE_NAME);
+    });
+
+    it(`flags ${name}(...).catch(...), which looks handled and is not`, () => {
+      // A `.catch()` stops an unhandled rejection. It does not keep the runtime
+      // alive long enough for the send to finish.
+      const messages = lint(`${name}({}).catch(() => {})`);
+      expect(messages).toHaveLength(1);
+    });
+
+    it(`allows an awaited ${name}`, () => {
+      expect(lint(`await ${name}({})`)).toHaveLength(0);
+    });
+
+    it(`allows ${name} inside afterResponse, which keeps the function alive`, () => {
+      expect(lint(`afterResponse(async () => { await ${name}({}) })`)).toHaveLength(0);
+    });
+  }
+
+  it("still flags a hand-rolled notify* function, so a new one is caught on the way in", () => {
+    // The pattern is kept even though it currently matches nothing.
+    expect(lint("notifySomethingNew({})")).toHaveLength(1);
+  });
+
+  it("does not flag a call that merely contains a critical name", () => {
+    // `sendEmailPreferencesLink` is not `sendEmail`.
+    expect(lint("sendEmailPreferencesLink({})")).toHaveLength(0);
+  });
 });

@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
+import { artistPayoutPounds, formatPounds } from "@/lib/finance/order-money";
 
 interface Order {
   id: string;
@@ -43,10 +44,15 @@ type RefundRequest = RefundRequestRow & {
   resolved_reason?: string;
 };
 
+// E21. The `shipped → delivered` action is gone, not disabled. Confirming
+// delivery releases the 14-day escrow hold, so the seller cannot attest it: the
+// API refuses it with a 403 and leaving the button would only produce an error
+// the artist cannot act on. The buyer confirms from the customer portal, and
+// support can force it via /api/admin/orders. An unconfirmed order still pays
+// out on the 14-day cron, which is the intended default.
 const statusActions: Record<string, { next: string; label: string; color: string }> = {
   confirmed: { next: "processing", label: "Mark as Processing", color: "bg-blue-600 hover:bg-blue-700" },
   processing: { next: "shipped", label: "Mark as Shipped", color: "bg-accent hover:bg-accent-hover" },
-  shipped: { next: "delivered", label: "Mark as Delivered", color: "bg-green-600 hover:bg-green-700" },
 };
 
 export default function ArtistOrdersPage() {
@@ -81,21 +87,14 @@ export default function ArtistOrdersPage() {
       const body: Record<string, string> = { orderId, status: newStatus };
       if (newStatus === "shipped" && trackingInput) body.trackingNumber = trackingInput;
 
-      const res = await authFetch("/api/orders", {
+      // Order STATUS update only (shipped/tracking). Not a refund/money path —
+      // mutate throws on a non-2xx, so a rejected update surfaces the real reason
+      // (the common cause is a legacy order missing artist_user_id, which the 403
+      // check can't authorise) instead of the old authFetch resolving.
+      await mutate("/api/orders", {
         method: "PATCH",
         body: JSON.stringify(body),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        // Surface the real reason. The most common failure here is the
-        // order not having artist_user_id set (legacy rows predating
-        // migration 0XX), without it the 403 check can't authorise
-        // the artist. Now the user at least sees *why* it silently
-        // failed previously.
-        setStatusError(data.error || `Could not update order (HTTP ${res.status}). Contact support if this keeps happening.`);
-        setUpdating(false);
-        return;
-      }
       setOrders((prev) => prev.map((o) =>
         o.id === orderId ? {
           ...o,
@@ -107,7 +106,11 @@ export default function ArtistOrdersPage() {
       setTrackingInput("");
     } catch (err) {
       console.error("Status update failed:", err);
-      setStatusError("Network error. Please try again.");
+      setStatusError(
+        err instanceof ApiError
+          ? err.message || "Could not update order. Contact support if this keeps happening."
+          : "Network error. Please try again.",
+      );
     }
     setUpdating(false);
   }
@@ -583,7 +586,12 @@ export default function ArtistOrdersPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium">&pound;{order.artist_revenue?.toFixed(2) || order.total?.toFixed(2)}</p>
+                  {/* K6: was `order.artist_revenue?.toFixed(2) || order.total?.toFixed(2)`,
+                      the one copy of the payout rule with no finite guard, so a
+                      NaN rendered "£NaN" instead of falling back. (The doc claims
+                      the `||` also made a legitimate £0 show the gross; it does
+                      not — `(0).toFixed(2)` is the truthy string "0.00".) */}
+                  <p className="text-sm font-medium">&pound;{formatPounds(artistPayoutPounds(order))}</p>
                   <OrderStatusTracker currentStatus={order.status} compact />
                 </div>
               </div>

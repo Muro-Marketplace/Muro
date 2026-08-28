@@ -6,7 +6,11 @@ import type { User } from "@supabase/supabase-js";
 // (comma-separated) or ADMIN_EMAIL (single). No hardcoded default, so a
 // misconfigured production deploy fails closed instead of granting the
 // author's personal account admin rights.
-function adminEmails(): string[] {
+//
+// Exported (K1) so lib/email/admin-alert.ts can address operational alerts to
+// the same people, rather than re-reading the env itself. The no-inline-admin-check
+// lint rule correctly flagged that duplicate the moment it appeared.
+export function adminEmails(): string[] {
   const list = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || "";
   return list.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
 }
@@ -34,19 +38,54 @@ async function resolveUser(request: Request): Promise<User | null> {
  *
  * The metadata check comes first so we never reach the DB for non-admin roles.
  * The email allowlist short-circuits so allowlisted admins never hit the DB.
+ *
+ * The `user_metadata` conjunct is a known weakness, documented in 03 §1.2: the
+ * field is writable by the user it belongs to (anon-key signUp, and GoTrue's
+ * PUT /auth/v1/user), so it raises no attacker cost, while anything that
+ * overwrites an admin's metadata silently revokes their access. Removing it is
+ * an owner-gated cutover and deliberately NOT done here. Migration 101 and the
+ * backfill script are its prerequisites, per 03 §1.4: create and backfill
+ * `admin_users` first, or the cutover locks every admin out.
  */
 async function userIsAdmin(user: User): Promise<boolean> {
-  const role = (user.user_metadata as { user_type?: unknown } | null)?.user_type;
-  if (role !== "admin") return false;
-
+  // ADR 0008: server-side facts only. The `user_metadata.user_type === "admin"`
+  // conjunct that used to lead this predicate is GONE (owner decision 1, D5
+  // order, cut over 2026-08-28 after the sole production admin was backfilled
+  // into admin_users). It was the wrong kind of fact in both directions:
+  // metadata is written by flows the user influences, so it raised no attacker
+  // cost, while anything that overwrote an admin's metadata wholesale — which
+  // admin/applications approval does — silently revoked real access. Migration
+  // 102 still strips a NEWLY self-asserted admin role at the auth layer, as
+  // defence in depth for anything else that ever reads metadata.
   const email = user.email?.toLowerCase();
   if (email && adminEmails().includes(email)) return true;
 
-  const { data } = await getSupabaseAdmin()
+  return adminUsersHasRow(user.id);
+}
+
+/**
+ * True iff `admin_users` carries a row for this user.
+ *
+ * Migration 101 created the table. Before it, the table did not exist in any
+ * environment (verified against prod 2026-08-28: `to_regclass` returned NULL),
+ * the select below errored, `data` came back null, and this branch silently
+ * returned false for everyone. So the deployed rule was never ADR 0001's
+ * three-source conjunction, it was `metadata AND email IN ADMIN_EMAILS`. The
+ * select also asked for `id`, a column the table does not have.
+ *
+ * A failure is logged rather than swallowed, so the next time this branch stops
+ * working it says so instead of quietly denying every table-only admin.
+ */
+async function adminUsersHasRow(userId: string): Promise<boolean> {
+  const { data, error } = await getSupabaseAdmin()
     .from("admin_users")
-    .select("id")
-    .eq("user_id", user.id)
+    .select("user_id")
+    .eq("user_id", userId)
     .limit(1);
+  if (error) {
+    console.error("[admin-auth] admin_users lookup failed:", error.message);
+    return false;
+  }
   return Array.isArray(data) && data.length > 0;
 }
 
@@ -104,4 +143,65 @@ export async function getAdminUser(request: Request) {
   }
 
   return { user, error: null };
+}
+
+/**
+ * Admin route wrapper: resolve the admin, run the handler, write the audit row
+ * (E30a, 03 §2.1).
+ *
+ * There is no shared wrapper today, so every admin route calls `getAdminUser`
+ * by hand and then, optionally and from memory, calls `recordAdminAction`.
+ * Nothing enforces the pairing, so audit coverage tracked whichever phase of
+ * work last touched a file: the platform's admission gate, the curation
+ * lifecycle (which includes `paid` and `refunded`) and admin-approved Stripe
+ * refunds all mutated state with no trail at all.
+ *
+ * The handler is given an `audit(context)` it calls to say what it did. It does
+ * NOT have to restructure its early returns to thread a context back, which is
+ * what made §2.1's proposed signature risky for a 250-line handler with several
+ * of them. The rules:
+ *
+ *   - handler called `audit(...)`  -> that row is written;
+ *   - handler returned 2xx without calling it -> a row is still written, with
+ *     no context, so a successful mutation is never invisible;
+ *   - handler returned non-2xx without calling it -> nothing, because a
+ *     rejected request did not change anything.
+ *
+ * The write happens BEFORE the response is returned, matching the precedent in
+ * api/messages. Keep `context` to the decision, the target id and the target's
+ * email: the column is JSONB and will otherwise accumulate PII.
+ */
+export async function withAdmin(
+  request: Request,
+  action: string,
+  handler: (ctx: {
+    user: User;
+    /**
+     * Record what this request did. The second argument refines the action
+     * name when one route covers two decisions, e.g. accept vs reject on the
+     * applications gate, so the audit log stays queryable by action.
+     */
+    audit: (context?: Record<string, unknown>, actionOverride?: string) => void;
+  }) => Promise<NextResponse>,
+): Promise<NextResponse> {
+  const { user, error } = await getAdminUser(request);
+  if (error) return error;
+
+  let requested = false;
+  let context: Record<string, unknown> | undefined;
+  let resolvedAction = action;
+  const audit = (ctx?: Record<string, unknown>, actionOverride?: string) => {
+    requested = true;
+    context = ctx;
+    if (actionOverride) resolvedAction = actionOverride;
+  };
+
+  const response = await handler({ user: user!, audit });
+
+  if (requested || response.ok) {
+    const { recordAdminAction } = await import("@/lib/admin-audit");
+    await recordAdminAction({ adminUserId: user!.id, action: resolvedAction, context });
+  }
+
+  return response;
 }

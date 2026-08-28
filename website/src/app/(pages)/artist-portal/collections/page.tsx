@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import { useConfirm } from "@/context/ConfirmContext";
 
@@ -156,17 +156,16 @@ export default function CollectionsPage() {
     setFormError(null);
 
     try {
-      const res = await authFetch(
-        editingId ? "/api/collections" : "/api/collections",
-        {
-          method: editingId ? "PATCH" : "POST",
-          body: JSON.stringify(editingId ? { id: editingId, ...payload } : payload),
-        }
-      );
-      const data = await res.json();
+      // Not flagged by the ratchet (the verb is a ternary, not a string literal),
+      // but it is still a mutating call, so migrate it too. mutate throws on a
+      // non-2xx (ApiError); a 2xx without a collection is still treated as a failure.
+      const data = await mutate<{ collection?: ServerCollection }>("/api/collections", {
+        method: editingId ? "PATCH" : "POST",
+        body: JSON.stringify(editingId ? { id: editingId, ...payload } : payload),
+      });
 
-      if (!res.ok || !data.collection) {
-        setFormError(data.error || "Failed to save collection");
+      if (!data.collection) {
+        setFormError("Failed to save collection");
         return;
       }
 
@@ -176,8 +175,8 @@ export default function CollectionsPage() {
         return [saved, ...without];
       });
       resetForm();
-    } catch {
-      setFormError("Network error. Please try again.");
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message || "Failed to save collection" : "Network error. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -198,13 +197,11 @@ export default function CollectionsPage() {
       const prev = userCollections;
       setUserCollections(prev.filter((c) => c.id !== id));
       try {
-        const res = await authFetch(`/api/collections?id=${encodeURIComponent(id)}`, {
+        // mutate throws on a non-2xx or a dropped request; either way we revert
+        // the optimistic remove (same as the old !res.ok / catch pair).
+        await mutate(`/api/collections?id=${encodeURIComponent(id)}`, {
           method: "DELETE",
         });
-        if (!res.ok) {
-          // Revert on failure
-          setUserCollections(prev);
-        }
       } catch {
         setUserCollections(prev);
       }
@@ -225,7 +222,9 @@ export default function CollectionsPage() {
       );
 
       try {
-        const res = await authFetch("/api/collections", {
+        // mutate throws on a non-2xx or a dropped request, so the revert lives in
+        // one catch; on success reconcile with the server's row if it returned one.
+        const data = await mutate<{ collection?: ServerCollection }>("/api/collections", {
           method: "PATCH",
           body: JSON.stringify({
             id,
@@ -239,18 +238,10 @@ export default function CollectionsPage() {
             available: nextAvailable,
           }),
         });
-        if (!res.ok) {
-          // Revert
+        if (data.collection) {
           setUserCollections((prev) =>
-            prev.map((c) => (c.id === id ? { ...c, available: !nextAvailable } : c))
+            prev.map((c) => (c.id === id ? data.collection! : c))
           );
-        } else {
-          const data = await res.json();
-          if (data.collection) {
-            setUserCollections((prev) =>
-              prev.map((c) => (c.id === id ? data.collection : c))
-            );
-          }
         }
       } catch {
         setUserCollections((prev) =>

@@ -4,14 +4,13 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
-import Combobox from "@/components/Combobox";
 import { type ArtistWork, type Artist } from "@/data/artists";
 import { themes as allThemes } from "@/data/themes";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { slugify } from "@/lib/slugify";
@@ -37,115 +36,6 @@ import {
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
 export { WORK_MEDIUM_OPTIONS };
 
-// ── Work image dropzone ────────────────────────────────────────────────
-
-/**
- * Drag-and-drop or click-to-pick image upload for the work form.
- *
- * Behaviour:
- *   - Click anywhere on the panel to open the system file picker.
- *   - Drag a file (or paste from clipboard, supported by the browser)
- *     and the panel highlights to confirm it'll accept the drop.
- *   - Multiple files dropped → uses the first one.
- *   - Non-image dropped → ignored (the OS already filters most cases).
- *
- * Picker copy nudges users towards the broader file selection (#9):
- * macOS Safari/Chrome show the "Photos" folder by default unless the
- * user explicitly browses elsewhere, surfacing "Browse all files" in
- * the hint helps them find their iPhotos / Pictures folders. We can't
- * change the OS picker chrome itself.
- */
-function WorkImageDropzone({
-  imageUrl,
-  inputRef,
-  onChange,
-  onFile,
-}: {
-  imageUrl: string;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onFile: (file: File) => void | Promise<void>;
-}) {
-  const [hover, setHover] = useState(false);
-
-  return (
-    <div
-      onClick={() => inputRef.current?.click()}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "copy";
-        if (!hover) setHover(true);
-      }}
-      onDragLeave={() => setHover(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setHover(false);
-        const file = Array.from(e.dataTransfer.files).find((f) =>
-          f.type.startsWith("image/"),
-        );
-        if (file) onFile(file);
-      }}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          inputRef.current?.click();
-        }
-      }}
-      className={`flex items-center gap-4 p-3 rounded-sm border-2 border-dashed cursor-pointer transition-colors ${
-        hover
-          ? "border-accent bg-accent/5"
-          : "border-border hover:border-foreground/30"
-      }`}
-    >
-      {imageUrl ? (
-        <div className="w-28 h-20 relative rounded-sm overflow-hidden bg-border/20 shrink-0">
-          <Image
-            src={imageUrl}
-            alt="Preview"
-            fill
-            className="object-cover"
-            sizes="112px"
-          />
-        </div>
-      ) : (
-        <div className="w-28 h-20 rounded-sm bg-border/20 shrink-0 flex items-center justify-center">
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            className="text-muted"
-          >
-            <path d="M12 4v12M6 10l6-6 6 6" />
-            <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-          </svg>
-        </div>
-      )}
-      <div className="flex-1">
-        <p className="text-sm font-medium text-foreground">
-          {imageUrl ? "Replace image" : "Upload image"}
-        </p>
-        <p className="text-[11px] text-muted mt-1 leading-snug">
-          Drag &amp; drop here, or click to browse all files (Pictures,
-          iPhotos, Downloads…). JPG, PNG, or WebP.
-        </p>
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        onChange={onChange}
-        onClick={(e) => e.stopPropagation()}
-        className="hidden"
-      />
-    </div>
-  );
-}
 
 // ── Tags field ──────────────────────────────────────────────────────────
 
@@ -487,11 +377,6 @@ export default function ProfileEditorPage() {
 
   // All hooks must be declared before any conditional returns
   const [works, setWorks] = useState<ArtistWork[]>([]);
-  const [showWorkForm, setShowWorkForm] = useState(false);
-  const [editingWorkIndex, setEditingWorkIndex] = useState<number | null>(null);
-  const [workForm, setWorkForm] = useState<{ title: string; medium: string; dimensions: string; image: string; orientation: "portrait" | "landscape" | "square"; available: boolean; sizes: { label: string; price: number }[] }>({ title: "", medium: "", dimensions: "", image: "", orientation: "landscape", available: true, sizes: [{ label: '8\u00d710" (A4)', price: 0 }] });
-  const workImageRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
   // Tracks which avatar slot has a drag over it so we can light up the
   // right dropzone (banner vs profile pic) without the other one
   // flashing too.
@@ -540,10 +425,8 @@ export default function ProfileEditorPage() {
     file: File,
   ) {
     if (!file.type.startsWith("image/")) return;
-    setUploading(true);
     const url = await uploadImage(file, "avatars");
     update(field, url);
-    setUploading(false);
   }
 
   async function handleFileUpload(
@@ -555,81 +438,6 @@ export default function ProfileEditorPage() {
     if (e.target) e.target.value = "";
   }
 
-  function saveWorks(updated: ArtistWork[]) {
-    setWorks(updated);
-    localStorage.setItem("wallplace-artist-works", JSON.stringify(updated));
-  }
-
-  function openAddWork() {
-    setWorkForm({ title: "", medium: "", dimensions: "", image: "", orientation: "landscape", available: true, sizes: [{ label: '8\u00d710" (A4)', price: 0 }] });
-    setEditingWorkIndex(null);
-    setShowWorkForm(true);
-  }
-
-  function openEditWork(index: number) {
-    const w = works[index];
-    setWorkForm({ title: w.title, medium: w.medium, dimensions: w.dimensions, image: w.image, orientation: w.orientation || "landscape", available: w.available, sizes: w.pricing.map((p) => ({ label: p.label, price: p.price })) });
-    setEditingWorkIndex(index);
-    setShowWorkForm(true);
-  }
-
-  async function handleWorkImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    const url = await uploadImage(file, "artworks");
-
-    // Read the image's natural dimensions in parallel, used to set
-    // orientation automatically + suggest a dimensions string the user
-    // can refine. Without this, replacing an image left the form's
-    // orientation pointing at the *previous* image's aspect ratio.
-    const detected = await new Promise<{
-      orientation: "landscape" | "portrait" | "square";
-    } | null>((resolve) => {
-      try {
-        const img = new globalThis.Image();
-        img.onload = () => {
-          const ratio = img.naturalWidth / img.naturalHeight;
-          if (ratio > 1.05) resolve({ orientation: "landscape" });
-          else if (ratio < 0.95) resolve({ orientation: "portrait" });
-          else resolve({ orientation: "square" });
-        };
-        img.onerror = () => resolve(null);
-        img.src = url;
-      } catch {
-        resolve(null);
-      }
-    });
-
-    setWorkForm((p) => ({
-      ...p,
-      image: url,
-      // Replace orientation based on the new image. If the user typed a
-      // dimensions string already, keep it (they may know better than
-      // pixel aspect, a print can crop differently). Otherwise leave
-      // dimensions blank so they can fill it in fresh.
-      orientation: detected?.orientation ?? p.orientation,
-    }));
-    setUploading(false);
-  }
-
-  function submitWork() {
-    const validSizes = workForm.sizes.filter((s) => s.label && s.price > 0);
-    if (!workForm.title || !workForm.medium || validSizes.length === 0) return;
-    const lowestPrice = Math.min(...validSizes.map((s) => s.price));
-    const newWork: ArtistWork = {
-      id: editingWorkIndex !== null ? works[editingWorkIndex].id : `${artist!.slug}-${Date.now()}`,
-      title: workForm.title, medium: workForm.medium, dimensions: workForm.dimensions,
-      priceBand: `From \u00a3${lowestPrice}`,
-      pricing: validSizes.map((s) => ({ label: s.label, price: s.price })),
-      available: workForm.available, color: "#C17C5A",
-      image: workForm.image || "https://picsum.photos/seed/new-work/900/600",
-      orientation: workForm.orientation,
-    };
-    const updated = editingWorkIndex !== null ? works.map((w, i) => (i === editingWorkIndex ? newWork : w)) : [...works, newWork];
-    saveWorks(updated);
-    setShowWorkForm(false);
-  }
 
   function update<K extends keyof ProfileState>(key: K, value: ProfileState[K]) {
     setProfile((prev) => prev ? { ...prev, [key]: value } : prev);
@@ -687,7 +495,7 @@ export default function ProfileEditorPage() {
       // style_tags is the full list (catch-all + custom entries).
       const styleTags = profile.tags;
 
-      const res = await authFetch("/api/artist-profile", {
+      await mutate("/api/artist-profile", {
         method: "PUT",
         body: JSON.stringify({
           name: profile.name,
@@ -733,18 +541,18 @@ export default function ProfileEditorPage() {
         }),
       });
 
-      if (!res.ok) {
-        showToast("Failed to save profile. Please try again.", { variant: "error" });
-        return;
-      }
     } catch (err) {
-      console.error("Profile save error:", err);
-      showToast("Failed to save profile. Please check your connection.", { variant: "error" });
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the old
+      // !res.ok branch and this catch merge; keep the two distinct messages.
+      if (err instanceof ApiError) {
+        showToast(err.message || "Failed to save profile. Please try again.", { variant: "error" });
+      } else {
+        console.error("Profile save error:", err);
+        showToast("Failed to save profile. Please check your connection.", { variant: "error" });
+      }
       return;
     }
 
-    // Also keep localStorage as fallback
-    localStorage.setItem("wallplace-artist-profile", JSON.stringify(profile));
     setSaved(true);
     setHasUnsavedChanges(false);
     refetch();
@@ -1164,109 +972,14 @@ export default function ProfileEditorPage() {
             </Link>
           </div>
 
-          {/* Add/Edit Work Form */}
-          {showWorkForm && (
-            <div className="bg-background border border-border rounded-sm p-5 mb-5 space-y-4">
-              <h3 className="text-sm font-medium">{editingWorkIndex !== null ? "Edit Work" : "Add New Work"}</h3>
-
-              {/* Image upload, clickable + drag-drop target. Drop a
-                  file from Finder / Explorer / iPhotos and it uploads
-                  the same way as the file-picker path. The whole zone
-                  is the drop target so users don't have to aim at a
-                  small button. */}
-              <WorkImageDropzone
-                imageUrl={workForm.image}
-                inputRef={workImageRef}
-                onChange={handleWorkImageUpload}
-                onFile={async (file) => {
-                  // Mirror the existing handler's logic (upload +
-                  // detect orientation) by synthesising a fake event.
-                  // Keeps a single source of truth for the upload flow
-                  // and dimension auto-detection.
-                  const dt = new DataTransfer();
-                  dt.items.add(file);
-                  const fakeEvent = {
-                    target: { files: dt.files },
-                  } as unknown as React.ChangeEvent<HTMLInputElement>;
-                  await handleWorkImageUpload(fakeEvent);
-                }}
-              />
-
-              <div className="grid grid-cols-2 gap-3">
-                <input type="text" value={workForm.title} onChange={(e) => setWorkForm((p) => ({ ...p, title: e.target.value }))} placeholder="Title *" className={inputClass} />
-                {/* Medium, searchable + mandatory combobox. Suggests
-                    standard mediums (oil, acrylic, watercolour…) but
-                    accepts free text via "Use 'foo'" for one-off
-                    techniques. Required to submit. */}
-                <Combobox
-                  value={workForm.medium}
-                  onChange={(next) => setWorkForm((p) => ({ ...p, medium: next }))}
-                  options={WORK_MEDIUM_OPTIONS}
-                  allowCustom
-                  required
-                  placeholder="Medium * (search or type)"
-                  className={inputClass}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input type="text" value={workForm.dimensions} onChange={(e) => setWorkForm((p) => ({ ...p, dimensions: e.target.value }))} placeholder="Dimensions" className={inputClass} />
-                <select value={workForm.orientation} onChange={(e) => setWorkForm((p) => ({ ...p, orientation: e.target.value as "portrait" | "landscape" | "square" }))} className={`${inputClass} wp-select`}>
-                  <option value="landscape">Landscape</option>
-                  <option value="portrait">Portrait</option>
-                  <option value="square">Square</option>
-                </select>
-              </div>
-
-              {/* Sizes & Prices */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium">Sizes & Prices *</span>
-                  <button type="button" onClick={() => setWorkForm((p) => ({ ...p, sizes: [...p.sizes, { label: "", price: 0 }] }))} className="text-[10px] text-accent hover:text-accent-hover">+ Add size</button>
-                </div>
-                <div className="space-y-1.5">
-                  {workForm.sizes.map((s, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input type="text" value={s.label} onChange={(e) => setWorkForm((p) => ({ ...p, sizes: p.sizes.map((sz, j) => j === i ? { ...sz, label: e.target.value } : sz) }))} placeholder='e.g. 12×16" (A3)' className={`${inputClass} flex-1`} />
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-muted">&pound;</span>
-                        <input type="number" min={0} value={s.price || ""} onChange={(e) => setWorkForm((p) => ({ ...p, sizes: p.sizes.map((sz, j) => j === i ? { ...sz, price: Number(e.target.value) || 0 } : sz) }))} placeholder="Price" className="w-20 bg-background border border-border rounded-sm px-2 py-3 text-sm text-right focus:outline-none focus:border-accent/60" />
-                      </div>
-                      {workForm.sizes.length > 1 && (
-                        <button type="button" onClick={() => setWorkForm((p) => ({ ...p, sizes: p.sizes.filter((_, j) => j !== i) }))} className="text-muted hover:text-red-500 shrink-0">
-                          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <button type="button" onClick={() => setWorkForm((p) => ({ ...p, available: !p.available }))} className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-colors ${workForm.available ? "bg-accent border-accent" : "bg-white border-border"}`}>
-                  {workForm.available && <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>}
-                </button>
-                <span className="text-sm">Available for purchase</span>
-              </label>
-
-              <div className="flex gap-2">
-                <button onClick={submitWork} disabled={!workForm.title || !workForm.medium || workForm.sizes.filter((s) => s.label && s.price > 0).length === 0} className="px-5 py-2 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                  {editingWorkIndex !== null ? "Save" : "Add Work"}
-                </button>
-                <button onClick={() => setShowWorkForm(false)} className="px-5 py-2 text-sm text-muted border border-border rounded-sm hover:text-foreground transition-colors">Cancel</button>
-              </div>
-            </div>
-          )}
 
           {/* Works grid */}
           {works.length > 0 ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-              {works.map((work, index) => (
-                <div key={work.id} className="group relative rounded-sm overflow-hidden border border-border cursor-pointer" onClick={() => openEditWork(index)}>
+              {works.map((work) => (
+                <div key={work.id} className="relative rounded-sm overflow-hidden border border-border">
                   <div className="aspect-square relative bg-border/20">
                     <Image src={work.image} alt={work.title} fill className="object-cover" sizes="120px" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                      <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">Edit</span>
-                    </div>
                   </div>
                   <div className="p-2">
                     <p className="text-[10px] font-medium truncate">{work.title}</p>
@@ -1276,7 +989,7 @@ export default function ProfileEditorPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted text-center py-8">No works yet. Add your first piece above.</p>
+            <p className="text-sm text-muted text-center py-8">No works yet. Use &ldquo;+ Add Work&rdquo; to add your first piece in the portfolio.</p>
           )}
         </div>
 

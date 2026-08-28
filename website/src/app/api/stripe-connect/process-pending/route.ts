@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { processPendingTransfers } from "@/lib/stripe-connect";
+import { processPendingTransfers, reconcileOrdersWithoutLegs } from "@/lib/stripe-connect";
 import { requireCronAuth } from "@/app/api/cron/_auth";
 
 /**
@@ -24,10 +24,22 @@ async function handle(request: Request) {
 
   try {
     const result = await processPendingTransfers();
+    // D52.3: also catch orders that are owed money but have NO ledger row at all,
+    // which a retry-existing-rows sweep is blind to. Recorded as blocked legs so
+    // an operator sees the owed money.
+    const reconciled = await reconcileOrdersWithoutLegs();
     return NextResponse.json({
       success: true,
       processed: result.processed,
-      errors: result.errors?.length ? result.errors : undefined,
+      retried: result.retried,
+      exhausted: result.exhausted,
+      reconciledFlagged: reconciled.flagged,
+      // D55.3: the order ids, not just a count, so an operator can chase them.
+      reconciledUnresolved: reconciled.unresolved,
+      reconciledUnresolvedCount: reconciled.unresolved.length,
+      errors: [...result.errors, ...reconciled.errors].length
+        ? [...result.errors, ...reconciled.errors]
+        : undefined,
     });
   } catch (err) {
     console.error("Process pending transfers error:", err);

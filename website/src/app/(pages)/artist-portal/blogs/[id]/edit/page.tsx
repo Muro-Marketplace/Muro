@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import BlogEditor from "@/components/BlogEditor";
 import { authFetch } from "@/lib/api-client";
+import { isFlagOn } from "@/lib/feature-flags";
 
 interface BlogRow {
   id: string;
@@ -15,6 +16,8 @@ interface BlogRow {
 }
 
 export default function EditBlogPage() {
+  // bug-12: same BLOGS_V1 gate as the list and new-blog pages.
+  if (!isFlagOn("BLOGS_V1")) notFound();
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const [blog, setBlog] = useState<BlogRow | null>(null);

@@ -27,6 +27,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { safeRedirect } from "@/lib/safe-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -48,9 +49,17 @@ function readCreds(role: "artist" | "venue"): DemoCreds | null {
   return { email, password };
 }
 
+// E36b. This used to be a hand-rolled `explicit.startsWith("/")`, the only
+// redirect construction in the app that did not go through safe-redirect.
+// startsWith("/") accepts a protocol-relative URL: `new URL("//evil.example/x",
+// "https://wallplace.co.uk/...")` resolves to https://evil.example/x, and
+// "/\evil.example" is read as a host by several browsers. The route sets the
+// sb-*-auth-token cookie on the same response, so it was a credential-adjacent
+// off-site bounce starting from a wallplace.co.uk URL, exactly the shape a
+// phishing link wants. Use the shared helper; do not grow a second one here.
 function destinationFor(role: "artist" | "venue", explicit: string | null): string {
-  if (explicit && explicit.startsWith("/")) return explicit;
-  return role === "venue" ? "/venue-portal" : "/artist-portal";
+  const fallback = role === "venue" ? "/venue-portal" : "/artist-portal";
+  return safeRedirect(explicit, fallback);
 }
 
 export async function GET(request: Request) {

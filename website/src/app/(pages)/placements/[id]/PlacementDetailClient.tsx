@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import PlacementLoanForm from "./PlacementLoanForm";
@@ -15,8 +15,9 @@ import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
-import { isFlagOn } from "@/lib/feature-flags";
-import { isLoan } from "@/lib/arrangement-type";
+import { isLoan, isPurchase } from "@/lib/arrangement-type";
+import { ARRANGEMENT_LABEL, labelForArrangement } from "@/lib/arrangement-labels";
+import { normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
 
 interface PlacementRow {
   id: string;
@@ -286,11 +287,10 @@ export default function PlacementDetailClient({ placementId }: Props) {
     try {
       const body: Record<string, unknown> = { id: placement.id, stage };
       if (explicitDate) body.stageDate = explicitDate;
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify(body),
       });
-      if (!res.ok) return;
       await load({ silent: true });
       setSchedulePickerOpen(false);
     } catch { /* ignore; next load will reconcile */ }
@@ -346,18 +346,16 @@ export default function PlacementDetailClient({ placementId }: Props) {
     });
     if (!ok) return;
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: placement.id, unsetStage: stage }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        showToast(data.error || "Could not undo stage.", { variant: "error" });
-        return;
-      }
       await load({ silent: true });
-    } catch {
-      showToast("Network error. Please try again.", { variant: "error" });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.message || "Could not undo stage." : "Network error. Please try again.",
+        { variant: "error" },
+      );
     }
   }
 
@@ -366,21 +364,20 @@ export default function PlacementDetailClient({ placementId }: Props) {
     setResponding(accept ? "accept" : "decline");
     setRespondError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: placement.id, status: accept ? "active" : "declined" }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setRespondError(data.error || "Could not update placement");
-        return;
-      }
       await load({ silent: true });
       if (typeof window !== "undefined") {
+        // Only on a confirmed change (mutate throws on a non-2xx), so a rejected
+        // accept/decline no longer fans the cross-portal event out (E43-a class).
         window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: placement.id, action: accept ? "accept" : "decline" } }));
       }
-    } catch {
-      setRespondError("Network error. Please try again.");
+    } catch (err) {
+      setRespondError(
+        err instanceof ApiError ? err.message || "Could not update placement" : "Network error. Please try again.",
+      );
     } finally {
       setResponding(null);
     }
@@ -392,14 +389,11 @@ export default function PlacementDetailClient({ placementId }: Props) {
     try {
       for (const file of Array.from(files)) {
         const url = await uploadImage(file, "artworks");
-        const res = await authFetch(`/api/placements/${encodeURIComponent(placementId)}/photos`, {
-          method: "POST",
-          body: JSON.stringify({ url }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setPhotos((prev) => [data.photo, ...prev]);
-        }
+        const data = await mutate<{ photo: (typeof photos)[number] }>(
+          `/api/placements/${encodeURIComponent(placementId)}/photos`,
+          { method: "POST", body: JSON.stringify({ url }) },
+        );
+        setPhotos((prev) => [data.photo, ...prev]);
       }
     } catch (e) {
       console.error(e);
@@ -410,10 +404,17 @@ export default function PlacementDetailClient({ placementId }: Props) {
   }
 
   async function handleDeletePhoto(photoId: string) {
-    const res = await authFetch(`/api/placements/${encodeURIComponent(placementId)}/photos?photoId=${encodeURIComponent(photoId)}`, {
-      method: "DELETE",
-    });
-    if (res.ok) setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    try {
+      await mutate(`/api/placements/${encodeURIComponent(placementId)}/photos?photoId=${encodeURIComponent(photoId)}`, {
+        method: "DELETE",
+      });
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.message || "Could not remove photo." : "Could not remove photo.",
+        { variant: "error" },
+      );
+    }
   }
 
   if (loading || authLoading) {
@@ -448,21 +449,24 @@ export default function PlacementDetailClient({ placementId }: Props) {
       if (typeof placement.monthly_fee_gbp === "number" && placement.monthly_fee_gbp > 0) {
         body.monthlyDisplayFeeGbp = placement.monthly_fee_gbp;
       }
-      const res = await authFetch(`/api/placements/${encodeURIComponent(placementId)}/record`, {
+      await mutate(`/api/placements/${encodeURIComponent(placementId)}/record`, {
         method: "PUT",
         body: JSON.stringify(body),
       });
-      if (res.ok) {
-        await load({ silent: true });
-        // Keep the user in place on the record section instead of
-        // letting the re-render move scroll. A silent load + smooth
-        // scroll to the record anchor makes this feel like the record
-        // just "appeared" under the Add button.
-        setLoanRecordOpen(true);
-        requestAnimationFrame(() => {
-          loanRecordRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-      }
+      await load({ silent: true });
+      // Keep the user in place on the record section instead of
+      // letting the re-render move scroll. A silent load + smooth
+      // scroll to the record anchor makes this feel like the record
+      // just "appeared" under the Add button.
+      setLoanRecordOpen(true);
+      requestAnimationFrame(() => {
+        loanRecordRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } catch (err) {
+      showToast(
+        err instanceof ApiError ? err.message || "Could not create the loan record." : "Could not create the loan record.",
+        { variant: "error" },
+      );
     } finally {
       setCreatingRecord(false);
     }
@@ -501,43 +505,30 @@ export default function PlacementDetailClient({ placementId }: Props) {
         )}
         <div className="flex-1 min-w-0">
           <p className="text-xs uppercase tracking-wider text-muted mb-1">
-            {/* G1 (Phase 2.2): read placement.arrangement_type directly
-                so the header matches what was written. Gated by
-                PAID_LOAN_V2 per the spec's "with flag off: zero
-                behaviour change" requirement — when the flag is off
-                we keep the pre-Phase-2 mapping (free_loan → "Paid Loan").
-            */}
-            {isFlagOn("PAID_LOAN_V2")
-              ? (() => {
-                  const t = placement.arrangement_type;
-                  const pct = placement.revenue_share_percent
-                    ? ` (${placement.revenue_share_percent}%)`
-                    : "";
-                  if (t === "purchase") return "Purchase";
-                  // eslint-disable-next-line wallplace/no-raw-arrangement-type -- flag-on detail label; every value is handled explicitly (paid_loan is not missed) and free_loan -> "Display" is the deliberate flag-on nuance per ADR 0007
-                  if (t === "paid_loan") return "Paid Loan";
-                  // eslint-disable-next-line wallplace/no-raw-arrangement-type -- see above
-                  if (t === "free_loan") return "Display";
-                  if (t === "revenue_share") return `Revenue Share${pct}`;
-                  if (t === "mixed") return `Paid Loan + Rev Share${pct}`;
-                  return "Placement";
-                })()
-              : placement.arrangement_type === "revenue_share"
-                ? `Revenue Share${placement.revenue_share_percent ? ` (${placement.revenue_share_percent}%)` : ""}`
-                : isLoan(placement.arrangement_type)
-                  ? "Paid Loan"
-                  : "Purchase"}
+            {/* K3: this was a PAID_LOAN_V2-gated ladder with a SECOND ladder in
+                its else branch, producing a fifth arrangement vocabulary
+                ("Paid Loan", "Rev Share", "Display", title-cased differently
+                from every other surface) and carrying two eslint-disable
+                suppressions of no-raw-arrangement-type. Both ladders are gone.
+                The flag gated a copy difference, not a behaviour, so removing
+                it removes the difference rather than picking a side. */}
+            {labelForArrangement({
+              arrangementType: placement.arrangement_type,
+              monthlyFeeGbp: placement.monthly_fee_gbp,
+              qrEnabled: placement.qr_enabled,
+            })}
+            {placement.revenue_share_percent ? ` (${placement.revenue_share_percent}%)` : ""}
           </p>
-          {/* G2 (Phase 2.2): "Venue owns the work" on purchase, else
-              "On loan from artist". Same flag-gate as G1 — pre-Phase-2
-              the page had no ownership text at all. */}
-          {isFlagOn("PAID_LOAN_V2") && (
-            <p className="text-[11px] text-muted mb-2">
-              {placement.arrangement_type === "purchase"
-                ? "Venue owns the work"
-                : "On loan from artist"}
-            </p>
-          )}
+          {/* G2 (Phase 2.2): "Venue owns the work" on purchase, else "On loan
+              from artist". K3: the PAID_LOAN_V2 gate is gone with the label
+              ladder above. It hid a true, useful sentence behind a flag that is
+              off in production, so a venue looking at a purchase was not told
+              they own the work. */}
+          <p className="text-[11px] text-muted mb-2">
+            {isPurchase(placement.arrangement_type)
+              ? "Venue owns the work"
+              : "On loan from artist"}
+          </p>
           <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-2">{placement.work_title}</h1>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             {artist && (
@@ -550,14 +541,22 @@ export default function PlacementDetailClient({ placementId }: Props) {
             {venue?.location && <><span className="text-muted">&middot;</span><span className="text-muted">{venue.location}</span></>}
           </div>
           <div className="mt-3 flex items-center gap-3 flex-wrap">
-            <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${
-              placement.status === "active" ? "bg-green-100 text-green-700" :
-              placement.status === "pending" ? "bg-amber-100 text-amber-700" :
-              placement.status === "declined" ? "bg-red-100 text-red-600" :
-              placement.status === "cancelled" ? "bg-red-100 text-red-600" :
-              "bg-gray-100 text-gray-600"
-            }`}>
-              {placement.status.charAt(0).toUpperCase() + placement.status.slice(1)}
+            {/* K4: this was a hand-rolled colour switch and a raw
+                `charAt(0).toUpperCase()`, in a file that did not import from
+                @/lib/placements/status at all. Same row, same moment, two
+                answers: a `paused` placement read "Paused" with a grey badge
+                here and "Completed" with a bordered neutral badge in both
+                portals, and `sold` was grey here and blue there. Finding E14.
+
+                This is a deliberate VISUAL change: -50 fills with borders
+                instead of -100 fills without, and `paused` now reads
+                "Completed" everywhere. Whether "Completed" is the right word
+                for a paused placement is a real question, and 07 §4.2 is
+                explicit that changing it is a behaviour change needing its own
+                commit and the owner's sign-off rather than being smuggled into
+                a collapse. Recorded as an open item. */}
+            <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${statusBadgeClass(normaliseStatus(placement.status))}`}>
+              {normaliseStatus(placement.status)}
             </span>
             {/* QR label, deep-link into the Labels page with this
                 placement's work (and venue, on the artist side) already
@@ -934,7 +933,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
         {placement.arrangement_type === "revenue_share" ? (
           <>
             <div className="bg-surface border border-border rounded-sm p-4">
-              <p className="text-xs text-muted uppercase tracking-wider mb-1">Revenue share</p>
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">{ARRANGEMENT_LABEL.revenue_share}</p>
               <p className="text-lg font-medium text-foreground">
                 {placement.revenue_share_percent != null ? `${placement.revenue_share_percent}%` : "Not set"}
               </p>
@@ -952,28 +951,25 @@ export default function PlacementDetailClient({ placementId }: Props) {
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Monthly fee</p>
               {(() => {
-                // Prefer the stored number. For legacy rows where the fee
-                // column wasn't populated but the message text mentions an
-                // amount, parse it out so the card doesn't lie with
-                // "Free display" when the request clearly said £X/month.
+                // The column is the only source. This used to fall back to
+                // regexing the free-text message for "£X/month" on legacy rows,
+                // with a "re-confirm before payout" caveat rendered beside the
+                // number — a monetary amount inferred from prose someone typed.
+                // Owner decision 6 (approved 2026-08-28) backfilled the three
+                // live rows that relied on it (p-msg-1776868867800 £80,
+                // p-msg-1776868880328 £80, p-msg-1776874146924 £20, each stated
+                // verbatim in its own negotiated message), so the parse now has
+                // zero rows to serve and inference-from-prose is gone from the
+                // last surface that did it.
                 const stored = placement.monthly_fee_gbp;
-                const msg = placement.message || "";
-                const mentionsFee = /(?:\u00a3|gbp)\s?(\d{2,5})\s?(?:\/?\s?m|per|a\s)/i.test(msg);
-                const parsed = mentionsFee ? parseFloat(RegExp.$1) : 0;
-                const hasStored = typeof stored === "number" && stored > 0;
-                const fee = hasStored ? stored : parsed;
-                const isPaidLoan = fee > 0;
+                const isPaidLoan = typeof stored === "number" && stored > 0;
                 return (
                   <>
                     <p className="text-lg font-medium text-foreground">
-                      {isPaidLoan ? `\u00a3${fee.toLocaleString()}/month` : "Free display"}
+                      {isPaidLoan ? `\u00a3${stored.toLocaleString()}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
                     </p>
                     <p className="text-[11px] text-muted mt-1">
-                      {isPaidLoan
-                        ? (hasStored
-                            ? "Venue pays artist to display the work"
-                            : "Parsed from request message, re-confirm with the other party before payout")
-                        : "No rental fee agreed"}
+                      {isPaidLoan ? "Venue pays artist to display the work" : "No rental fee agreed"}
                     </p>
                   </>
                 );
@@ -992,7 +988,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
         ) : (
           <>
             <div className="bg-surface border border-border rounded-sm p-4">
-              <p className="text-xs text-muted uppercase tracking-wider mb-1">Direct purchase</p>
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">{ARRANGEMENT_LABEL.purchase}</p>
               <p className="text-lg font-medium text-foreground">Venue owns the work</p>
               <p className="text-[11px] text-muted mt-1">Outright sale, no ongoing split</p>
             </div>

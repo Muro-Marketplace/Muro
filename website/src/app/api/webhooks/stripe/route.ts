@@ -1,32 +1,57 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { scheduleTransfer } from "@/lib/stripe-connect";
-import { notifyArtistNewOrder, notifyVenueOrderFromPlacement, notifyCurationCustomerPaid } from "@/lib/email";
+import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
+import { canReceivePayout } from "@/lib/payouts/capability";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { CurationPaymentReceived } from "@/emails/templates/venue-lifecycle/CurationPaymentReceived";
+import { CURATION_TIERS, type CurationTierKey } from "@/lib/curation-tiers";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
-import { CustomerOrderReceipt } from "@/emails/templates/orders/CustomerOrderReceipt";
 import { resolveArtistNamesBulk } from "@/emails/_helpers/resolve-artist-name";
-import { ArtistOrderConfirmation } from "@/emails/templates/orders/ArtistOrderConfirmation";
-import { ArtistWorkSold } from "@/emails/templates/orders/ArtistWorkSold";
 import { ArtistPayoutSent } from "@/emails/templates/payments/ArtistPayoutSent";
 import { ArtistPayoutFailed } from "@/emails/templates/payments/ArtistPayoutFailed";
 import { SubscriptionPaymentFailed } from "@/emails/templates/payments/SubscriptionPaymentFailed";
 import { SubscriptionTrialEnding } from "@/emails/templates/payments/SubscriptionTrialEnding";
+import { SubscriptionStarted } from "@/emails/templates/payments/SubscriptionStarted";
 import { SubscriptionUpgraded } from "@/emails/templates/payments/SubscriptionUpgraded";
 import { SubscriptionCancelled } from "@/emails/templates/payments/SubscriptionCancelled";
 import { SubscriptionRenewalReceipt } from "@/emails/templates/payments/SubscriptionRenewalReceipt";
 import { ArtistStripeKycNeeded } from "@/emails/templates/artist-additions/ArtistStripeKycNeeded";
-import { platformFeePercentForArtist, DEFAULT_PLAN_FEE_PERCENT } from "@/lib/platform-fee";
-import { loadCartSession } from "@/lib/cart-sessions";
-import { signOrderToken } from "@/lib/order-tracking-token";
+// Only the default remains here: the per-artist rate is resolved inside
+// buildArtistLegs, one artist at a time (E9).
+import { DEFAULT_PLAN_FEE_PERCENT } from "@/lib/platform-fee";
 import {
+  buildArtistLegs,
+  assertLegsReconcile,
+  reconcilePlatformFee,
+  penceToGbp,
+  type CartLine,
+  type ArtistLeg,
+} from "@/lib/payouts/legs";
+import { loadCartSession } from "@/lib/cart-sessions";
+import {
+  periodFromSubscription,
+  epochToIso,
+  epochToUkDate,
+} from "@/lib/stripe-subscription-period";
+import {
+  recordPaidLoanSubscription,
   handleInvoicePaid as handleInvoicePaidPaidLoan,
   handleInvoicePaymentFailed as handleInvoicePaymentFailedPaidLoan,
   handleSubscriptionDeleted as handleSubscriptionDeletedPaidLoan,
 } from "@/lib/placements/paid-loan-billing";
-import { recordOrderEvent } from "@/lib/orders/lifecycle";
+import {
+  handleCurationInvoicePaid,
+  handleCurationInvoiceFailed,
+  handleCurationSubscriptionDeleted,
+} from "@/lib/curation/billing";
+import { sendOrderConfirmations, type OrderEmailItem } from "@/lib/orders/confirmations";
+import { orderIdFromSession, classifyOrderIdConflict } from "@/lib/orders/order-id";
+import { missingStripePriceEnvs } from "@/env";
 import type Stripe from "stripe";
+import { isSettled } from "@/lib/payments/settlement";
+import { VenueCollectionPending } from "@/emails/templates/venue-lifecycle/VenueCollectionPending";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -54,6 +79,85 @@ export async function POST(request: Request) {
 
   const db = getSupabaseAdmin();
 
+  // D1 (04 §B0): global replay guard. Claim this event id before any branch runs,
+  // so a Stripe redelivery is a no-op rather than a second order. Some branches
+  // had their own idempotency (payment-intent unique, offer compare-and-set); this
+  // closes the gap once, for every branch.
+  const claim = await db
+    .from("stripe_webhook_events")
+    .insert({ event_id: event.id, event_type: event.type });
+  if (claim.error) {
+    if ((claim.error as { code?: string }).code === "23505") {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+    // A real DB failure must 500 so Stripe retries, rather than us silently
+    // processing an event we could not record.
+    console.error("[webhook] dedup insert failed", claim.error);
+    return NextResponse.json({ error: "Dedup unavailable" }, { status: 500 });
+  }
+
+  // A THROW from any branch (a Stripe SDK call, an email render) must land in
+  // the same release path as a returned 500. Without this, the claim row
+  // survives the crash and Stripe's retry is waved through as a duplicate,
+  // which turns a transient fault into a permanently dropped event - the exact
+  // failure the release below exists to prevent.
+  let res: NextResponse;
+  try {
+    res = await handleWebhookEvent(event, db);
+  } catch (err) {
+    console.error("[webhook] unhandled processing error", { eventId: event.id, eventType: event.type, err });
+    res = NextResponse.json({ error: "Processing failed" }, { status: 500 });
+  }
+
+  // Release the claim if processing failed, so Stripe's retry can reprocess. The
+  // plan's snippet claimed the event and never released it, which turned any
+  // transient 500 (a DB write that should be retried) into a permanent drop: the
+  // retry would hit 23505 and be waved through as a duplicate with the work never
+  // done.
+  if (res.status >= 500) {
+    const { error: relErr } = await db
+      .from("stripe_webhook_events")
+      .delete()
+      .eq("event_id", event.id);
+    if (relErr) {
+      console.error("[webhook] could not release the event claim", { eventId: event.id, relErr });
+    }
+  }
+  return res;
+}
+
+async function handleWebhookEvent(
+  event: Stripe.Event,
+  db: ReturnType<typeof getSupabaseAdmin>,
+): Promise<NextResponse> {
+  // ─── D1 / 04 item 0.2: completed does not mean paid ───
+  //
+  // `checkout.session.completed` fires when the customer finishes the flow, not
+  // when the money arrives. A delayed payment method (BACS Direct Debit, SEPA,
+  // bank transfer, some cards under SCA) fires it with `payment_status:
+  // "unpaid"` and settles days later, or never.
+  //
+  // Every branch below books something against that session: an order row, a
+  // stock decrement, an artist transfer, a curation request marked paid. So the
+  // gate is ONE check here rather than four inside them, which is also the only
+  // shape a fifth branch cannot forget.
+  //
+  // 200, not an error: Stripe must NOT retry. There is nothing wrong, the money
+  // simply has not landed. `checkout.session.async_payment_succeeded` is the
+  // event that says it has, and the branches below already accept it, so
+  // refusing here loses nothing.
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    if (!isSettled(session)) {
+      console.warn("[webhook] checkout.session.completed is not settled, waiting", {
+        sessionId: session.id,
+        paymentStatus: session.payment_status,
+        kind: session.metadata?.kind ?? session.metadata?.checkout_kind ?? session.mode,
+      });
+      return NextResponse.json({ received: true, awaiting_payment: true });
+    }
+  }
+
   // ─── Curation checkout (one-off OR managed subscription) ───
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
@@ -64,9 +168,12 @@ export async function POST(request: Request) {
         const paymentIntentId = typeof session.payment_intent === "string"
           ? session.payment_intent
           : session.payment_intent?.id || "";
+        // D20-complete: a managed tier is a subscription; its id now has a
+        // dedicated column (migration 099) instead of contaminating the payment
+        // intent column. NULL for a one-off tier (no subscription).
         const subscriptionId = typeof session.subscription === "string"
           ? session.subscription
-          : session.subscription?.id || "";
+          : (session.subscription?.id ?? null);
         const amountPaid = (session.amount_total || 0) / 100;
         const { data: existing } = await db
           .from("curation_requests")
@@ -81,7 +188,15 @@ export async function POST(request: Request) {
             .from("curation_requests")
             .update({
               status: newStatus,
-              stripe_payment_intent_id: paymentIntentId || subscriptionId,
+              // D20: stripe_payment_intent_id is a payment intent, so it holds a
+              // real pi_… id or null. A managed tier is a subscription with no
+              // top-level payment intent; its id goes in stripe_subscription_id
+              // (migration 099), NOT here. The old `paymentIntentId ||
+              // subscriptionId` stored a sub_… id in this column, so any refund
+              // keyed on it would call
+              // stripe.refunds.create({ payment_intent: "sub_…" }) and fail.
+              stripe_payment_intent_id: paymentIntentId || null,
+              stripe_subscription_id: subscriptionId,
               amount_paid_gbp: amountPaid,
               paid_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -91,21 +206,52 @@ export async function POST(request: Request) {
             console.error("curation_requests update error:", updErr);
             return NextResponse.json({ error: "DB update failed" }, { status: 500 });
           }
+          // One label source: CURATION_TIERS, not a second inline map that could drift.
+          const tierLabel = CURATION_TIERS[existing.tier as CurationTierKey]?.label || existing.tier;
+
+          // D23: tell the curator the money actually landed. notifyAdminCurationRequest
+          // fired at submit, before payment, so without this an admin cannot tell a paid
+          // brief from an abandoned checkout without opening Stripe. Fires whether or not
+          // the venue left a contact email.
+          // K1: was notifyAdminCurationPaid.
+          await sendAdminAlert({
+            idempotencyKey: `admin_curation_paid:${requestId}`,
+            subject: `Curation paid (£${amountPaid}): ${existing.venue_name}`,
+            summary: `${existing.venue_name} paid £${amountPaid} for ${tierLabel}. The brief is paid and ready to curate.`,
+            fields: [
+              { label: "Tier", value: tierLabel },
+              { label: "Amount", value: `£${amountPaid}` },
+              {
+                label: "Contact",
+                value: `${existing.contact_name}${existing.contact_email ? ` <${existing.contact_email}>` : ""}`,
+              },
+              {
+                label: "Kind",
+                value: isSubscription ? "Managed subscription, first payment" : "One-off payment",
+              },
+            ],
+            actionPath: "/admin/curation",
+            actionLabel: "View in admin",
+          });
+
           if (existing.contact_email) {
-            const tierLabels: Record<string, string> = {
-              single_wall: "Single wall",
-              full_space: "Full space",
-              bespoke: "Bespoke project",
-              managed_monthly: "Managed, monthly rotation",
-              managed_quarterly: "Managed, quarterly refresh",
-            };
-            await notifyCurationCustomerPaid({
-              email: existing.contact_email,
-              contactName: existing.contact_name,
-              venueName: existing.venue_name,
-              tierLabel: tierLabels[existing.tier] || existing.tier,
-              amountGbp: amountPaid,
-            }).catch((err) => { if (err) console.error("notifyCurationCustomerPaid error:", err); });
+            // K1: was notifyCurationCustomerPaid. This is a receipt, so losing
+            // its audit trail mattered more than most.
+            await sendEmail({
+              idempotencyKey: `curation_payment_received:${requestId}`,
+              template: "curation_payment_received",
+              category: "orders_and_payouts",
+              to: existing.contact_email,
+              subject: "Your Wallplace curation is underway",
+              react: CurationPaymentReceived({
+                contactFirstName: (existing.contact_name || "there").split(" ")[0],
+                venueName: existing.venue_name,
+                tierLabel,
+                amount: { amount: Math.round(amountPaid * 100), currency: "GBP" },
+                shortlistDays: 5,
+              }),
+              metadata: { curationRequestId: requestId },
+            });
           }
         }
       }
@@ -119,45 +265,314 @@ export async function POST(request: Request) {
     if (session.metadata?.checkout_kind === "purchase_offer") {
       const offerId = session.metadata.offer_id;
       if (offerId) {
-        const paidOrderId = `OFR-${session.id.slice(-8)}`;
-        // Mark offer paid + persist a minimal order row so the order
-        // lifecycle (refunds, fulfilment, payouts) plumbing reuses the
-        // same primitives as a normal purchase.
+        const paidOrderId = orderIdFromSession("OFR", session.id);
+        const nowIso = new Date().toISOString();
+        const workIds = (session.metadata.offer_work_ids || "").split(",").filter(Boolean);
+        const totalGbp = (session.amount_total || 0) / 100;
+        const feePence = Number(session.metadata.offer_platform_fee_pence || 0);
+        const netPence = Number(session.metadata.offer_artist_net_pence || 0);
+        const artistUserId = session.metadata.offer_artist_user_id || null;
+
+        // E6. The order row is written FIRST and the offer is flipped to paid
+        // only once it lands. The old order was the other way round with the
+        // insert's failure swallowed into a console.warn, which is why both
+        // real paid offers in prod carry a paid_order_id pointing at an order
+        // row that does not exist: `orders.shipping` is NOT NULL and this
+        // insert omitted it, so every purchase-offer payment failed with 23502
+        // and nobody found out. Money in, no order, no payout, no email.
+        const { error: insErr } = await db.from("orders").insert({
+          id: paidOrderId,
+          stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : null,
+          buyer_email: session.customer_email || session.metadata.offer_buyer_email || "",
+          items: [{
+            offer_id: offerId,
+            work_ids: workIds,
+            collection_id: session.metadata.offer_collection_id || null,
+          }],
+          // NOT NULL, and the offer flow collects no delivery address. Same
+          // nine-field shape the cart path writes so the order views, which all
+          // read shipping?.fullName and friends, keep working.
+          shipping: {
+            fullName: "",
+            email: session.customer_email || session.metadata.offer_buyer_email || "",
+            phone: "",
+            addressLine1: "",
+            addressLine2: "",
+            city: "",
+            postcode: "",
+            country: "GB",
+            notes: `Accepted offer ${offerId}. No delivery address collected at checkout.`,
+          },
+          subtotal: totalGbp,
+          shipping_cost: 0,
+          total: totalGbp,
+          status: "confirmed",
+          // jsonb column — store the array raw (Plan B Task 13).
+          status_history: [{ status: "confirmed", timestamp: nowIso }],
+          source: "purchase_offer",
+          artist_slug: session.metadata.offer_artist_slug || null,
+          artist_user_id: artistUserId,
+          venue_revenue: 0,
+          venue_revenue_share_percent: 0,
+          platform_fee: feePence / 100,
+          platform_fee_percent: Number(session.metadata.offer_platform_fee_percent || 0),
+          artist_revenue: netPence / 100,
+          fulfilment_method: "ship",
+          created_at: nowIso,
+        });
+
+        // 23505 is our own retry landing on a row we already wrote: idempotent,
+        // carry on. Anything else means the money is captured and we have no
+        // order, so fail loudly and let Stripe retry rather than marking the
+        // offer paid against an order that isn't there.
+        const offerIntentId =
+          typeof session.payment_intent === "string" ? session.payment_intent : null;
+        if (insErr) {
+          if ((insErr as { code?: string }).code === "23505") {
+            // D3: only proceed if this is our own row (same payment intent). A
+            // collision on the OFR- id would otherwise flip THIS offer to paid
+            // against a different payment's order.
+            if ((await classifyOrderIdConflict(db, paidOrderId, offerIntentId)) === "collision") {
+              console.error("[offer order insert] order id collision", { offerId, paidOrderId });
+              return NextResponse.json({ error: "Order id collision" }, { status: 500 });
+            }
+          } else {
+            console.error("[offer order insert] failed, offer left unpaid for retry", {
+              offerId,
+              paidOrderId,
+              code: (insErr as { code?: string }).code,
+              message: insErr.message,
+            });
+            return NextResponse.json({ error: "Order save failed" }, { status: 500 });
+          }
+        }
+
         await db
           .from("purchase_offers")
           .update({
             status: "paid",
-            paid_at: new Date().toISOString(),
+            paid_at: nowIso,
             paid_order_id: paidOrderId,
-            updated_at: new Date().toISOString(),
+            updated_at: nowIso,
           })
           .eq("id", offerId);
 
-        await db.from("orders").insert({
-          id: paidOrderId,
-          stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : null,
-          buyer_email: session.customer_email || session.metadata.offer_buyer_user_id || null,
-          items: [{
-            offer_id: offerId,
-            work_ids: (session.metadata.offer_work_ids || "").split(",").filter(Boolean),
-            collection_id: session.metadata.offer_collection_id || null,
-          }],
-          subtotal: (session.amount_total || 0) / 100,
-          shipping_cost: 0,
-          total: (session.amount_total || 0) / 100,
-          status: "confirmed",
-          // jsonb column — store the array raw (Plan B Task 13).
-          status_history: [{ status: "confirmed", timestamp: new Date().toISOString() }],
-          source: "purchase_offer",
-          artist_slug: session.metadata.offer_artist_slug || null,
-          artist_user_id: session.metadata.offer_artist_user_id || null,
-          fulfilment_method: "ship",
-          created_at: new Date().toISOString(),
-        }).then(() => {}, (err) => console.warn("[offer order insert]", err));
+        // E10 decremented offer stock read-then-write; D5 moves it to the shared
+        // atomic RPC so the same race the cart path had is closed here too (E10's
+        // own comment deferred this to D5). The title read stays separate: it feeds
+        // the confirmation email and is display-only, so it need not be atomic and a
+        // failure just means a less specific email. Both are best-effort for the
+        // same reason as the cart path: the offer is already flipped to paid above,
+        // so a 500 here cannot cleanly unwind it.
+        const workTitles: string[] = [];
+        for (const workId of workIds) {
+          const { data: work } = await db
+            .from("artist_works")
+            .select("title")
+            .eq("id", workId)
+            .maybeSingle();
+          if (work?.title) workTitles.push(work.title as string);
+          const { error: stockErr } = await db.rpc("decrement_work_stock", {
+            p_work_id: workId,
+            p_qty: 1,
+          });
+          if (stockErr) {
+            console.warn("[offer] stock decrement failed", { workId, stockErr });
+          }
+        }
+
+        // E6: pay the artist. Without this the platform kept 100% of every
+        // accepted offer and no stripe_transfers ledger row was ever written.
+        if (artistUserId && netPence > 0) {
+          try {
+            // D52: gate on canReceivePayout (payouts_enabled + a fresh Stripe
+            // check), not the stale stripe_connect_onboarding_complete boolean C1
+            // replaced — that predicate cannot tell a mid-KYC payout hold from a
+            // live account, so it would schedule a transfer into an unpayable
+            // balance. On a block, record the owed payout with the real reason.
+            const cap = await canReceivePayout(db, { kind: "artist", userId: artistUserId });
+            if (cap.ok && cap.accountId) {
+              await scheduleTransfer({
+                orderId: paidOrderId,
+                recipientType: "artist",
+                recipientUserId: artistUserId,
+                connectAccountId: cap.accountId,
+                amountCents: netPence,
+                immediate: false,
+              });
+            } else {
+              console.error("[offer] artist cannot be paid out, transfer skipped", {
+                paidOrderId,
+                artistUserId,
+                netPence,
+                reason: cap.reason,
+              });
+              await recordBlockedLeg(db, {
+                orderId: paidOrderId,
+                recipientUserId: artistUserId,
+                amountCents: netPence,
+                reason: cap.reason ?? "unknown",
+              });
+            }
+          } catch (transferErr) {
+            console.error("[offer] artist transfer error:", transferErr);
+          }
+        }
+
+        // E6 part 3: the offer branch sent nothing at all. The buyer got no
+        // receipt (CCR 2013 requires one) and the artist was never told they
+        // had sold anything. Same module as the cart path, because the reason
+        // this branch drifted in the first place was that the sends were
+        // inline in the other one.
+        //
+        // One aggregate line, not one per work: an offer is a single agreed
+        // price, so splitting it across pieces would invent per-line figures
+        // that do not exist and would not sum back to what was charged.
+        const offerTitle = session.metadata.offer_collection_id
+          ? `Collection ${session.metadata.offer_collection_id}`
+          : workTitles.length === 1
+            ? workTitles[0]
+            : `${workIds.length} work${workIds.length === 1 ? "" : "s"}`;
+        const { data: offerArtist } = await db
+          .from("artist_profiles")
+          .select("name")
+          .eq("user_id", artistUserId || "")
+          .maybeSingle();
+        const offerBuyerEmail = session.customer_email || session.metadata.offer_buyer_email || "";
+
+        try {
+          await sendOrderConfirmations(db, {
+            orderId: paidOrderId,
+            paymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : null,
+            buyerEmail: offerBuyerEmail || null,
+            // No name is collected anywhere in the offer flow, so the module's
+            // per-use fallbacks apply ("there" to the buyer, "your buyer" to
+            // the artist).
+            buyerName: "",
+            items: [{
+              title: offerTitle,
+              artistName: (offerArtist?.name as string | undefined)
+                || session.metadata.offer_artist_slug
+                || "Artist",
+              quantity: 1,
+              image: `${SITE}/placeholder-work.jpg`,
+              lineTotal: { amount: session.amount_total || 0, currency: "GBP" },
+            }],
+            subtotal: totalGbp,
+            shippingCost: 0,
+            total: totalGbp,
+            address: { line1: "", city: "", postcode: "", country: "GB" },
+            artistUserId,
+            artistRevenue: netPence / 100,
+            firstItemTitle: offerTitle,
+            stripeSessionId: session.id,
+            // An offer is between buyer and artist. No placement, so no venue
+            // share to notify about.
+            venue: null,
+          });
+        } catch (confirmErr) {
+          // The money is taken and the order exists. A failed email must not
+          // turn that into a Stripe retry that redoes the payout path.
+          console.error("[offer] confirmations failed", { paidOrderId, confirmErr });
+        }
       }
       return NextResponse.json({ received: true });
     }
   }
+
+  // ─── Paid-loan monthly: subscription checkout completed (E7a) ───
+  //
+  // Owns the session created by api/placements/[id]/payment/setup. Nothing
+  // consumed it, so a venue could complete the Stripe subscription flow and be
+  // billed monthly while placements.stripe_subscription_id stayed null: the setup
+  // route's "already set up" guard never fired, so a second subscription could be
+  // minted for the same placement, and cancelPaidLoanBilling could never find the
+  // subscription to stop it. placement_recurring_billings has 0 rows in prod,
+  // which is what "written by nothing" looks like.
+  if (
+    (event.type === "checkout.session.completed" ||
+      event.type === "checkout.session.async_payment_succeeded") &&
+    (event.data.object as Stripe.Checkout.Session).metadata?.kind === "paid_loan_monthly"
+  ) {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const placementId = session.metadata?.placement_id;
+    const subscriptionId =
+      typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+
+    if (!placementId || !subscriptionId) {
+      console.error("[webhook] paid_loan_monthly session missing ids", {
+        sessionId: session.id,
+        placementId,
+        subscriptionId,
+      });
+      return NextResponse.json({ error: "Malformed paid-loan session" }, { status: 400 });
+    }
+
+    const { data: placement, error: plErr } = await db
+      .from("placements")
+      .select("id, venue_user_id, artist_user_id, monthly_fee_gbp")
+      .eq("id", placementId)
+      .maybeSingle();
+    if (plErr || !placement) {
+      console.error("[webhook] paid_loan_monthly unknown placement", { placementId, plErr });
+      return NextResponse.json({ error: "Unknown placement" }, { status: 500 });
+    }
+
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const { cpStart, cpEnd } = periodFromSubscription(subscription);
+    const customerId =
+      typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id;
+
+    const recorded = await recordPaidLoanSubscription(
+      {
+        placementId,
+        subscriptionId,
+        customerId: customerId || "",
+        payerUserId: placement.venue_user_id,
+        payeeUserId: placement.artist_user_id,
+        monthlyAmountPence: Math.round(Number(placement.monthly_fee_gbp) * 100),
+        cpStart,
+        cpEnd,
+      },
+      db,
+    );
+    if (!recorded.ok) {
+      // Permanent failures are reported as received: retrying cannot change a
+      // missing monthly amount, and cannot resolve a placement that already has a
+      // live billing row for another subscription (23505 on migration 083's partial
+      // unique index). Both are logged with the ids a human needs. Anything else is
+      // transient and worth Stripe's retry.
+      const permanent = ["monthly_amount_missing", "duplicate_live_billing"];
+      if (recorded.error && permanent.includes(recorded.error)) {
+        return NextResponse.json({ received: true, ignored: recorded.error });
+      }
+      return NextResponse.json({ error: "Billing record write failed" }, { status: 500 });
+    }
+
+    // Only on the first link. Stripe redelivers, and both
+    // checkout.session.completed and checkout.session.async_payment_succeeded
+    // reach this branch for the same session, so notifying unconditionally would
+    // tell the artist their payments had started two or three times.
+    if (recorded.newlyLinked) {
+      await createNotification({
+        userId: placement.artist_user_id,
+        kind: "paid_loan_started",
+        title: `Monthly loan payments started, £${Number(placement.monthly_fee_gbp).toFixed(2)}/mo`,
+        body: "The venue's card is set up. Your first payout follows the first paid invoice.",
+        link: "/artist-portal/placements",
+      }).catch(() => {});
+    }
+
+    return NextResponse.json({ received: true });
+  }
+
+  // K2: there was a `setup_intent.succeeded` branch here (E7d) whose entire job
+  // was to re-invoke startPaidLoanBilling once a venue attached a card. That
+  // creator is deleted, and nothing mints a paid-loan SetupIntent any more:
+  // the surviving path is Stripe Checkout in subscription mode, which collects
+  // the card as part of the session and lands on checkout.session.completed
+  // below. A stray setup_intent event now falls through to the default
+  // acknowledgement, which is correct — there is nothing to do with it.
 
   // ─── Art purchase checkout ───
   if (event.type === "checkout.session.completed") {
@@ -182,7 +597,7 @@ export async function POST(request: Request) {
         const cartItems = saved.cart as Array<{ price?: number; qty?: number; quantity?: number }>;
         const subtotal = cartItems.reduce((sum: number, i) => sum + (i.price || 0) * (Number(i.qty ?? i.quantity ?? 1)), 0) || total;
         const shippingCost = Math.max(0, total - subtotal);
-        const orderId = `WS-${session.id.slice(-8)}`;
+        const orderId = orderIdFromSession("WS", session.id);
         const source = saved.source || session.metadata?.source || "direct";
         const venueSlug = saved.venueSlug || session.metadata?.venue_slug || "";
         const artistSlugs = (saved.artistSlugs || []).join(",") || session.metadata?.artist_slugs || "";
@@ -198,13 +613,31 @@ export async function POST(request: Request) {
         let placementId: string | null = null;
         let artistUserId: string | null = null;
 
-        // Look up artist profile for subscription plan (fee rate)
+        // The first artist is still recorded on the order row, which has a single
+        // artist_slug / artist_user_id column, but it no longer decides the fee
+        // rate or who gets paid. That is what the legs below are for (E9).
         if (firstArtistSlug) {
-          const { data: ap } = await db.from("artist_profiles").select("user_id, subscription_plan, free_until").eq("slug", firstArtistSlug).single();
-          if (ap) {
-            artistUserId = ap.user_id;
-            platformFeePct = platformFeePercentForArtist(ap);
+          // D4: .single() errors on 0 rows AND on >1 row, and the old code
+          // discarded that error, so artist_user_id was silently left null and the
+          // order booked with no attribution. .maybeSingle() plus an explicit check
+          // refuses to book an order we cannot attribute; the 500 makes Stripe retry
+          // (idempotent via D1's event dedup and D3's payment-intent check). The
+          // select is user_id only: the fee and payouts come from the legs now (E9),
+          // so this is purely the order row's attribution.
+          const { data: ap, error: apErr } = await db
+            .from("artist_profiles")
+            .select("user_id")
+            .eq("slug", firstArtistSlug)
+            .maybeSingle();
+          if (apErr) {
+            console.error("[webhook] artist profile lookup failed", { firstArtistSlug, apErr });
+            return NextResponse.json({ error: "Artist lookup failed" }, { status: 500 });
           }
+          if (!ap) {
+            console.error("[webhook] no artist_profiles row for slug", firstArtistSlug);
+            return NextResponse.json({ error: "Unknown artist" }, { status: 500 });
+          }
+          artistUserId = ap.user_id;
         }
 
         // Per-line venue revenue share. Multi-artist carts can mix
@@ -218,16 +651,38 @@ export async function POST(request: Request) {
         const uniqueLineSlugs = Array.from(new Set(lineArtistSlugs));
         const placementByArtistSlug = new Map<string, { id: string; revenue_share_percent: number }>();
         if (venueSlug && uniqueLineSlugs.length > 0) {
+          // D9: a venue+artist can have several active placements (prod has real
+          // duplicates, and the unique index that would prevent them is blocked on
+          // that data). Without an explicit order the DB returns them arbitrarily
+          // and whichever landed last in the map won, so the venue's share could
+          // differ between two replays of the same event. Order by created_at and
+          // keep the FIRST, so the rate is stable across redeliveries.
           const { data: rows } = await db.from("placements")
-            .select("id, artist_slug, revenue_share_percent")
+            .select("id, artist_slug, revenue_share_percent, created_at")
             .in("artist_slug", uniqueLineSlugs)
             .eq("venue_slug", venueSlug)
-            .eq("status", "active");
+            .eq("status", "active")
+            .order("created_at", { ascending: true });
           for (const row of (rows || []) as Array<{ id: string; artist_slug: string; revenue_share_percent: number | null }>) {
+            if (placementByArtistSlug.has(row.artist_slug)) continue; // first-wins
             placementByArtistSlug.set(row.artist_slug, {
               id: row.id,
               revenue_share_percent: row.revenue_share_percent || 0,
             });
+          }
+          // D11: the sale is attributed to a venue (venueSlug set), but this
+          // artist has no ACTIVE placement there, so the venue's cut silently
+          // computes to 0 (pct defaults to 0 below). A placement in pending,
+          // paused or completed lands here. Log it so a venue seeing a sale with
+          // no revenue can be told why, instead of it being invisible.
+          for (const slug of uniqueLineSlugs) {
+            if (!placementByArtistSlug.has(slug)) {
+              console.warn("[webhook] QR sale with no active placement", {
+                orderId,
+                venueSlug,
+                artistSlug: slug,
+              });
+            }
           }
           // Schema still records a single placement_id per order. Pick the
           // first cart line whose artist has a placement so the choice is
@@ -242,15 +697,28 @@ export async function POST(request: Request) {
           }
         }
 
-        // Sum the per-line venue cut. Lines whose artist has no placement
-        // at the venue contribute 0.
-        venueRevenue = (cartItems as Array<{ artistSlug?: string; price?: number; qty?: number; quantity?: number }>).reduce((sum, item) => {
-          const slug = item.artistSlug || "";
-          const pct = placementByArtistSlug.get(slug)?.revenue_share_percent ?? 0;
-          const lineValue = (item.price || 0) * Number(item.qty ?? item.quantity ?? 1);
-          return sum + lineValue * (pct / 100);
-        }, 0);
-        venueRevenue = Math.round(venueRevenue * 100) / 100;
+        // E9: one payout leg per artist. Each leg carries that artist's own plan
+        // fee rate, their own venue cut, and the postage for the parcel they will
+        // actually post. Previously the fee came from the first artist's plan,
+        // every artist's money was pooled into one `artistRevenue`, and one
+        // transfer sent the whole pool to the first artist.
+        //
+        // Aggregated per artist, not per line: stripe_transfers is UNIQUE on
+        // (order_id, recipient_user_id), so two legs for one artist would silently
+        // become one and underpay them.
+        const totalPence = Math.round(total * 100);
+        const subtotalPence = Math.round(subtotal * 100);
+        const legs = await buildArtistLegs(db, {
+          cartItems: cartItems as CartLine[],
+          placementByArtistSlug,
+          artistShippingPence: saved.artistShippingPence || {},
+          shippingTotalPence: totalPence - subtotalPence,
+        });
+
+        // Every figure on the order row is now the sum of the legs, so what is
+        // reported and what is transferred cannot disagree.
+        const venuePence = legs.reduce((s, l) => s + l.venueCutPence, 0);
+        venueRevenue = penceToGbp(venuePence);
         // Blended effective rate against the subtotal, stored on the
         // order for dashboard / receipt display. Equals the single-rate
         // value when every line shares the same placement.
@@ -258,13 +726,23 @@ export async function POST(request: Request) {
           ? Math.round((venueRevenue / subtotal) * 100 * 100) / 100
           : 0;
 
-        // Platform fee stays at a single rate against subtotal (the
-        // first-artist plan). Multi-artist fee splitting is a separate
-        // concern from the venue split. Shipping is not subject to the
-        // cut and flows straight through to the artist, who pays the
-        // courier out of pocket.
-        platformFee = Math.round(subtotal * (platformFeePct / 100) * 100) / 100;
-        artistRevenue = Math.round((subtotal - venueRevenue - platformFee + shippingCost) * 100) / 100;
+        // Shipping is not fee-bearing: it flows through to the artist, who pays
+        // the courier out of pocket.
+        const platformFeePence = reconcilePlatformFee({
+          totalPence,
+          venuePence,
+          legs,
+          intendedFeePence: legs.reduce((s, l) => s + l.platformFeePence, 0),
+          orderId,
+        });
+        assertLegsReconcile({ totalPence, venuePence, platformFeePence, legs });
+        platformFee = penceToGbp(platformFeePence);
+        artistRevenue = penceToGbp(legs.reduce((s, l) => s + l.netPence, 0));
+        // Blended rate, for the order row's single column. The per-leg rates are
+        // what each artist is actually charged.
+        platformFeePct = subtotal > 0
+          ? Math.round((platformFee / subtotal) * 100 * 100) / 100
+          : DEFAULT_PLAN_FEE_PERCENT;
 
         const paymentIntentId = typeof session.payment_intent === "string"
           ? session.payment_intent
@@ -275,7 +753,12 @@ export async function POST(request: Request) {
         // lifecycle to track. Mark the order delivered straight away
         // and pin delivered_at so refund-window logic still works.
         const fulfilmentMethod = (savedShipping as { fulfilmentMethod?: string })?.fulfilmentMethod || session.metadata?.fulfilment_method || "ship";
-        const isCollection = fulfilmentMethod === "collection";
+        // T9 (8.5): collect-from-venue behaves like collect-from-artist for
+        // status and payout timing — the artwork is handed over at (or just
+        // after) purchase, there is no shipping lifecycle, and the artist's
+        // payout releases immediately rather than waiting the 14-day hold.
+        const isVenueCollection = fulfilmentMethod === "collect_venue";
+        const isCollection = fulfilmentMethod === "collection" || isVenueCollection;
         const initialStatus: "confirmed" | "delivered" = isCollection ? "delivered" : "confirmed";
         const nowIso = new Date().toISOString();
 
@@ -321,6 +804,11 @@ export async function POST(request: Request) {
           placement_id: placementId,
           fulfilment_method: fulfilmentMethod,
           collection_notes: (savedShipping as { collectionNotes?: string })?.collectionNotes || null,
+          // T9: the venue's collection point, resolved server-side at checkout
+          // from the placement row and carried through the cart session.
+          collection_address: isVenueCollection
+            ? (savedShipping as { collectionAddress?: string })?.collectionAddress || null
+            : null,
           delivered_at: isCollection ? nowIso : null,
           created_at: nowIso,
         };
@@ -334,6 +822,11 @@ export async function POST(request: Request) {
             .maybeSingle();
           if (existingOrder) {
             console.log("Webhook duplicate suppressed for payment_intent:", paymentIntentId);
+            // D52.3: a redelivery of an order that already exists still re-attempts
+            // the payout legs, so any leg the first pass missed (a ledger insert
+            // that threw, a 500 after the order landed) gets scheduled now.
+            // Idempotent via scheduleTransfer's (order_id, recipient_user_id) 23505.
+            await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
             return NextResponse.json({ received: true, duplicate: true });
           }
         }
@@ -347,32 +840,66 @@ export async function POST(request: Request) {
         // back to them. Pattern matches the placements POST retry.
         let { error } = await db.from("orders").insert(orderRow);
         if (error) {
-          // Unique-constraint violation = another concurrent delivery won the race.
-          // Treat as success so Stripe doesn't keep retrying.
+          // 23505 on orders.id. D3: distinguish a genuine redelivery (same payment
+          // intent) from an id collision between two different payments. The old
+          // code returned duplicate unconditionally, which dropped the second
+          // buyer's paid order on a collision. A collision now 500s so Stripe
+          // retries loudly rather than us losing the order.
           if ((error as { code?: string }).code === "23505") {
-            console.log("Order already exists (unique violation), treating webhook as processed");
-            return NextResponse.json({ received: true, duplicate: true });
+            if ((await classifyOrderIdConflict(db, orderId, paymentIntentId || null)) === "duplicate") {
+              console.log("Order already exists (same payment intent), treating webhook as processed");
+              // D52.3: re-attempt the payout legs on a redelivery (idempotent).
+              await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
+              return NextResponse.json({ received: true, duplicate: true });
+            }
+            console.error("[webhook] order id collision", { orderId, paymentIntentId });
+            return NextResponse.json({ error: "Order id collision" }, { status: 500 });
           }
-          // Iterative strip-and-retry. Each loop drops only the columns
-          // the error specifically called out, keeping attribution intact
-          // for any column the DB does know about.
-          const optionalCols = [
+          // D6: the strip list used to include the money columns and
+          // stripe_payment_intent_id. On schema drift the loop stripped them, the
+          // order saved with the split silently missing, and the code then
+          // scheduled transfers from in-memory values that were never persisted, so
+          // reconciliation was impossible. Split the list: attribution columns may
+          // be dropped to keep an order bookable, but money columns and the payment
+          // intent may not.
+          const strippableCols = [
             "source",
             "artist_slug",
             "artist_user_id",
             "venue_slug",
+            "placement_id",
+            "fulfilment_method",
+            "collection_notes",
+            // `delivered_at` was here, and it was the only entry on this list
+            // that did not exist. So the ladder stripped it from EVERY insert,
+            // and a collection order — handed over at the point of purchase, and
+            // marked delivered immediately for exactly that reason — lost the
+            // timestamp its refund window is measured from. Migration 110 adds
+            // the column; keeping it strippable would put it straight back.
+            "status_history",
+          ];
+          const REQUIRED_MONEY_COLS = [
             "venue_revenue_share_percent",
             "venue_revenue",
             "artist_revenue",
             "platform_fee_percent",
             "platform_fee",
-            "placement_id",
-            "fulfilment_method",
-            "collection_notes",
-            "delivered_at",
-            "status_history",
             "stripe_payment_intent_id",
-          ];
+          ] as const;
+          // If the DB does not know a money column, this is a schema emergency and
+          // we must not book the order with the split missing. Fail loud; Stripe
+          // retries (idempotent via D1 + D3).
+          // `error` is non-null in this block, but the await in the 23505 branch
+          // above resets TS's narrowing on a `let`, so capture it.
+          const insertError = error;
+          if (
+            REQUIRED_MONEY_COLS.some((c) =>
+              new RegExp(`\\b${c}\\b`).test(String(insertError.message).toLowerCase()),
+            )
+          ) {
+            console.error("[webhook] schema is missing a money column, refusing to book", insertError);
+            return NextResponse.json({ error: "Schema drift on money columns" }, { status: 500 });
+          }
           const stripped = new Set<string>();
           const safeRow: Record<string, unknown> = { ...orderRow };
           // PostgrestError | null, the loop nulls it on success to break out.
@@ -381,7 +908,7 @@ export async function POST(request: Request) {
           let lastError: typeof error | null = error;
           while (lastError) {
             const msg = String(lastError.message || "").toLowerCase();
-            const newStrip = optionalCols.filter(
+            const newStrip = strippableCols.filter(
               (c) => !stripped.has(c) && new RegExp(`\\b${c}\\b`).test(msg),
             );
             if (newStrip.length === 0) break;
@@ -399,7 +926,22 @@ export async function POST(request: Request) {
               break;
             }
             if ((retry.error as { code?: string }).code === "23505") {
-              return NextResponse.json({ received: true, duplicate: true });
+              // Same collision check as the first insert (D3).
+              if ((await classifyOrderIdConflict(db, orderId, paymentIntentId || null)) === "duplicate") {
+                return NextResponse.json({ received: true, duplicate: true });
+              }
+              console.error("[webhook] order id collision (on retry)", { orderId, paymentIntentId });
+              return NextResponse.json({ error: "Order id collision" }, { status: 500 });
+            }
+            // D6: a retry that now surfaces a money column is the same schema
+            // emergency as the first insert. Never strip it; fail loud.
+            if (
+              REQUIRED_MONEY_COLS.some((c) =>
+                new RegExp(`\\b${c}\\b`).test(String(retry.error.message).toLowerCase()),
+              )
+            ) {
+              console.error("[webhook] schema is missing a money column on retry, refusing to book", retry.error);
+              return NextResponse.json({ error: "Schema drift on money columns" }, { status: 500 });
             }
             lastError = retry.error;
           }
@@ -411,56 +953,33 @@ export async function POST(request: Request) {
           console.error("Supabase order save error:", error);
           return NextResponse.json({ error: "DB save failed" }, { status: 500 });
         } else {
-          // J1 (Phase 2.3): log the initial order.placed event +
-          // dispatch the matching Phase 2.0c emails. Best-effort,
-          // legacy templates below continue to fire for backwards
-          // compatibility.
-          try {
-            const buyerEmail = orderRow.buyer_email as string | undefined;
-            const artistUserId = orderRow.artist_user_id as string | undefined;
-            let artistEmail: string | null = null;
-            if (artistUserId) {
-              const { data: artistAuth } = await db.auth.admin.getUserById(artistUserId);
-              artistEmail = artistAuth.user?.email ?? null;
-            }
-            await recordOrderEvent({
-              orderId: String(orderRow.id),
-              newStatus: "confirmed",
-              buyerEmail: buyerEmail ?? null,
-              artistEmail,
-              data: {
-                firstName: buyerEmail ? buyerEmail.split("@")[0] : "there",
-                orderNumber: String(orderRow.id),
-                orderUrl: `${SITE}/customer-portal/orders`,
-              },
-              metadata: { stripe_session_id: session.id },
+          // Decrement per-work quantity (D5). The old code was read-then-write:
+          // SELECT quantity_available, compute max(0, current - qty), UPDATE. Two
+          // concurrent orders for the last piece both read 1 and both wrote 0, so
+          // both buyers got it. decrement_work_stock does it in one UPDATE, which
+          // Postgres serialises, so the race is closed.
+          //
+          // Still best-effort, and deliberately NOT fatal, contra the plan. This
+          // runs AFTER the order insert, and the buyer's receipt is sent a few
+          // lines below. A 500 here would skip the receipt on the first delivery,
+          // and Stripe's retry would then hit the order's 23505, be classified a
+          // duplicate (D3), and return early, so the decrement AND the emails would
+          // be lost for good. True fatality needs the decrement inside the same
+          // transaction as the order insert, which is a larger change than D5. A
+          // failed decrement here oversells by at most the failed line, and the
+          // race, which is the actual finding, is now closed.
+          type CartItem = { workId?: string; id?: string; qty?: number; quantity?: number };
+          for (const item of cartItems as CartItem[]) {
+            const workId = item.workId || item.id;
+            const qty = Number(item.qty ?? item.quantity ?? 1);
+            if (!workId || !Number.isFinite(qty) || qty <= 0) continue;
+            const { error: stockErr } = await db.rpc("decrement_work_stock", {
+              p_work_id: workId,
+              p_qty: qty,
             });
-          } catch (lifecycleErr) {
-            console.error("[webhook checkout] lifecycle hook:", lifecycleErr);
-          }
-          // Decrement per-work quantity (F10). Best-effort: swallow any errors
-          // so a DB hiccup here doesn't abort the rest of the order flow.
-          try {
-            type CartItem = { workId?: string; id?: string; qty?: number; quantity?: number };
-            for (const item of cartItems as CartItem[]) {
-              const workId = item.workId || item.id;
-              const qty = Number(item.qty ?? item.quantity ?? 1);
-              if (!workId || !Number.isFinite(qty) || qty <= 0) continue;
-
-              const { data: work } = await db.from("artist_works")
-                .select("quantity_available")
-                .eq("id", workId)
-                .single();
-              const current = work?.quantity_available;
-              if (typeof current === "number") {
-                const next = Math.max(0, current - qty);
-                const updates: Record<string, unknown> = { quantity_available: next };
-                if (next === 0) updates.available = false;
-                await db.from("artist_works").update(updates).eq("id", workId);
-              }
+            if (stockErr) {
+              console.error("[webhook] stock decrement failed", { workId, qty, stockErr });
             }
-          } catch (err) {
-            console.warn("Quantity decrement skipped:", err);
           }
 
           // Notification payload comes from the saved cart row; images
@@ -476,14 +995,16 @@ export async function POST(request: Request) {
             (cartItemsForNotify as Array<{ artistSlug?: string }>).map((i) => i.artistSlug),
           );
 
-          // Customer order receipt (legally required under CCR 2013).
-          // Keyed by payment_intent so Stripe retries don't double-send.
+          // Build the display-ready lines, then hand everything to the shared
+          // confirmations module. The mapping and the write-back stay here:
+          // they need the cart row and the slug map, and on an offer order
+          // items carries the offer_id linkage that must not be overwritten.
           const buyerEmail = session.customer_email || savedShipping?.email;
+          let orderItems: OrderEmailItem[] = [];
           if (buyerEmail) {
-            const buyerName = savedShipping?.fullName || "there";
             // Adapt the cart items shape to the OrderSummary component.
-            const orderItems = (cartItemsForNotify as Array<{
-              title?: string; artistName?: string; artistSlug?: string; qty?: number; quantity?: number; size?: string; image?: string; price?: number;
+            orderItems = (cartItemsForNotify as Array<{
+              title?: string; artistName?: string; artistSlug?: string; qty?: number; quantity?: number; size?: string; image?: string; price?: number; workId?: string; id?: string;
             }>).map((item) => {
               const slug = item.artistSlug || firstArtistSlug || "";
               const resolved = slugMap.get(slug);
@@ -498,6 +1019,10 @@ export async function POST(request: Request) {
                   amount: Math.round((item.price ?? 0) * Number(item.qty ?? item.quantity ?? 1) * 100),
                   currency: "GBP" as const,
                 },
+                // Carry the work id onto the persisted order so a full refund can
+                // restock it (D17). The enriched update below overwrites the raw
+                // cart items (which had it), so without this the id is lost.
+                workId: item.workId || item.id,
               };
             });
 
@@ -511,188 +1036,89 @@ export async function POST(request: Request) {
             } catch (persistErr) {
               console.warn("[webhook] persisting enriched items failed:", persistErr);
             }
-            // Mint a signed tracking token bound to {orderId, email} so
-            // /orders/track can authenticate the lookup without trusting
-            // bare email match. Best-effort: if the secret isn't
-            // configured the email still sends, just without the token.
-            let trackingToken: string | undefined;
-            try {
-              trackingToken = await signOrderToken({ orderId, email: buyerEmail });
-            } catch (err) {
-              console.warn("[webhook] signOrderToken failed:", err);
-            }
-            await sendEmail({
-              idempotencyKey: `order_receipt:${paymentIntentId || orderId}`,
-              template: "customer_order_receipt",
-              category: "orders_and_payouts",
-              to: buyerEmail,
-              subject: `Your Wallplace order ${orderId}`,
-              react: CustomerOrderReceipt({
-                firstName: buyerName.split(" ")[0] || "there",
-                orderNumber: orderId,
-                orderUrl: `${SITE}/orders/${orderId}`,
-                orderDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
-                trackingToken,
-                items: orderItems,
-                subtotal: { amount: Math.round(subtotal * 100), currency: "GBP" },
-                shipping: { amount: Math.round(shippingCost * 100), currency: "GBP" },
-                total: { amount: Math.round(total * 100), currency: "GBP" },
-                billingAddress: {
-                  name: buyerName,
-                  line1: savedShipping?.addressLine1 || "",
-                  line2: savedShipping?.addressLine2 || undefined,
-                  city: savedShipping?.city || "",
-                  postcode: savedShipping?.postcode || "",
-                  country: savedShipping?.country || "GB",
-                },
-                shippingAddress: {
-                  name: buyerName,
-                  line1: savedShipping?.addressLine1 || "",
-                  line2: savedShipping?.addressLine2 || undefined,
-                  city: savedShipping?.city || "",
-                  postcode: savedShipping?.postcode || "",
-                  country: savedShipping?.country || "GB",
-                },
-                supportUrl: `${SITE}/support`,
-              }),
-              metadata: { orderId, paymentIntentId },
-            });
           }
 
-          // Notify artist, email + in-app bell notification.
-          if (artistUserId) {
-            const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistUserId);
-            const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", artistUserId).single();
-            if (artistUser?.email && artistProfile) {
-              // Two emails to the artist: the celebration ("you made a sale")
-              // and the operational receipt (order confirmation). They serve
-              // different purposes, the first is emotional, the second
-              // itemised and record-worthy. Idempotency keys are distinct.
-              await sendEmail({
-                idempotencyKey: `artist_work_sold:${paymentIntentId || orderId}`,
-                template: "artist_work_sold",
-                category: "orders_and_payouts",
-                to: artistUser.email,
-                subject: `You made a sale, ${firstItemTitle}`,
-                userId: artistUserId,
-                react: ArtistWorkSold({
-                  firstName: (artistProfile.name || "there").split(" ")[0],
-                  workTitle: firstItemTitle,
-                  orderNumber: orderId,
-                  saleAmount: { amount: Math.round(artistRevenue * 100), currency: "GBP" },
-                  nextSteps: [
-                    "Pack the piece securely (packing guidelines in the portal)",
-                    "Print the shipping label we've generated",
-                    "Drop off or arrange collection within 3 business days",
-                  ],
-                  orderUrl: `${SITE}/artist-portal/orders/${orderId}`,
-                  shippingInstructionsUrl: `${SITE}/artist-portal/orders/${orderId}/ship`,
-                }),
-                metadata: { orderId, paymentIntentId },
-              });
-              await sendEmail({
-                idempotencyKey: `artist_order_confirmation:${paymentIntentId || orderId}`,
-                template: "artist_order_confirmation",
-                category: "orders_and_payouts",
-                to: artistUser.email,
-                subject: `Order ${orderId}, ${firstItemTitle}`,
-                userId: artistUserId,
-                react: ArtistOrderConfirmation({
-                  firstName: (artistProfile.name || "there").split(" ")[0],
-                  orderNumber: orderId,
-                  workTitle: firstItemTitle,
-                  buyerFirstName: (savedShipping?.fullName || "your buyer").split(" ")[0],
-                  orderUrl: `${SITE}/artist-portal/orders/${orderId}`,
-                  nextSteps: [
-                    "Ship within 3 business days",
-                    "Mark as shipped in the portal",
-                    "Payout lands 2 business days after delivery",
-                  ],
-                }),
-                metadata: { orderId, paymentIntentId },
-              });
-              // Legacy helper is a no-op now, the new pipeline covers it.
-              void notifyArtistNewOrder;
-            }
-            // In-app sale notification, deep-linked to the artist orders
-            // page so they can acknowledge the sale and start fulfilment.
-            createNotification({
-              userId: artistUserId,
-              kind: "sale",
-              title: "Your artwork sold",
-              body: `${firstItemTitle}, £${artistRevenue.toFixed(2)} to you (${orderId})`,
-              link: "/artist-portal/orders",
-            }).catch(() => {});
-          }
-          // Notify venue if revenue share exists, email + in-app bell.
-          if (venueSlug && venueRevenue > 0) {
-            const { data: vp } = await db.from("venue_profiles").select("user_id, name").eq("slug", venueSlug).single();
-            if (vp?.user_id) {
-              const { data: { user: venueUser } } = await db.auth.admin.getUserById(vp.user_id);
-              const { data: ap } = await db.from("artist_profiles").select("name").eq("slug", firstArtistSlug).single();
-              if (venueUser?.email) {
-                await notifyVenueOrderFromPlacement({ email: venueUser.email, venueName: vp.name, artistName: ap?.name || firstArtistSlug, itemTitle: firstItemTitle, total, venueRevenue }).catch((err) => { if (err) console.error("notifyVenueOrderFromPlacement error:", err); });
+          await sendOrderConfirmations(db, {
+            orderId,
+            paymentIntentId,
+            buyerEmail: buyerEmail || null,
+            buyerName: savedShipping?.fullName || "",
+            items: orderItems,
+            subtotal,
+            shippingCost,
+            total,
+            address: {
+              line1: savedShipping?.addressLine1 || "",
+              line2: savedShipping?.addressLine2 || undefined,
+              city: savedShipping?.city || "",
+              postcode: savedShipping?.postcode || "",
+              country: savedShipping?.country || "GB",
+            },
+            artistUserId: artistUserId || null,
+            artistRevenue,
+            firstItemTitle,
+            stripeSessionId: session.id,
+            venue: venueSlug && venueRevenue > 0
+              ? { slug: venueSlug, revenue: venueRevenue, artistSlug: firstArtistSlug }
+              : null,
+          });
+
+          // ─── T9 (8.6): tell the venue someone is coming ───
+          // A collect-from-venue sale makes the venue a physical party: a
+          // stranger will present an order number at the counter. A sale they
+          // are not told about is a confrontation waiting there. Email keyed on
+          // the order so a Stripe redelivery cannot double it, plus a bell.
+          if (isVenueCollection && venueSlug) {
+            try {
+              const { data: venueRow } = await db
+                .from("venue_profiles")
+                .select("user_id, name")
+                .eq("slug", venueSlug)
+                .maybeSingle<{ user_id: string | null; name: string | null }>();
+              if (venueRow?.user_id) {
+                const { data: { user: venueUser } } = await db.auth.admin.getUserById(venueRow.user_id);
+                const firstWork = cartItemsForNotify[0]?.title || "Artwork";
+                const artistDisplay =
+                  slugMap.get(firstArtistSlug) || firstArtistSlug || "the artist";
+                createNotification({
+                  userId: venueRow.user_id,
+                  kind: "collection_pending",
+                  title: `Sold off your wall: ${firstWork}`,
+                  body: `${savedShipping?.fullName || "The buyer"} will collect it with order ${orderId}`,
+                  link: "/venue-portal/placements",
+                }).catch((err) => console.warn("[webhook] collection bell failed:", err));
+                if (venueUser?.email) {
+                  await sendEmail({
+                    idempotencyKey: `venue_collection_pending:${orderId}`,
+                    template: "venue_collection_pending",
+                    category: "orders_and_payouts",
+                    to: venueUser.email,
+                    userId: venueRow.user_id,
+                    subject: `${firstWork} has sold and will be collected from you`,
+                    react: VenueCollectionPending({
+                      venueName: venueRow.name || "there",
+                      workTitle: firstWork,
+                      artistName: artistDisplay,
+                      orderNumber: orderId,
+                      buyerName: (savedShipping?.fullName || "The buyer").split(" ")[0],
+                      placementsUrl: `${SITE}/venue-portal/placements`,
+                      supportUrl: `${SITE}/support`,
+                    }),
+                    metadata: { orderId, venueSlug },
+                  });
+                }
               }
-              createNotification({
-                userId: vp.user_id,
-                kind: "sale",
-                title: "Placement sale",
-                body: `${firstItemTitle} sold, £${venueRevenue.toFixed(2)} to your venue (${orderId})`,
-                link: "/venue-portal/orders",
-              }).catch(() => {});
+            } catch (err) {
+              console.error("[webhook] venue collection notice failed:", err);
             }
           }
 
           // ─── Stripe Connect transfers ───
-          // Collection orders are paid out immediately, the work is
-          // handed over at the venue counter so there's no shipping
-          // risk to insure against. Shipped orders keep the 14-day
-          // hold (released early on delivery confirmation).
-          // Transfer venue revenue share
-          if (venueSlug && venueRevenue > 0) {
-            try {
-              const { data: venueConnect } = await db
-                .from("venue_profiles")
-                .select("user_id, stripe_connect_account_id, stripe_connect_onboarding_complete")
-                .eq("slug", venueSlug)
-                .single();
-              if (venueConnect?.stripe_connect_account_id && venueConnect.stripe_connect_onboarding_complete) {
-                await scheduleTransfer({
-                  orderId,
-                  recipientType: "venue",
-                  recipientUserId: venueConnect.user_id,
-                  connectAccountId: venueConnect.stripe_connect_account_id,
-                  amountCents: Math.round(venueRevenue * 100),
-                  immediate: isCollection,
-                });
-              }
-            } catch (transferErr) {
-              console.error("Venue transfer error:", transferErr);
-            }
-          }
-
-          // Transfer artist revenue
-          if (artistUserId && artistRevenue > 0) {
-            try {
-              const { data: artistConnect } = await db
-                .from("artist_profiles")
-                .select("stripe_connect_account_id, stripe_connect_onboarding_complete")
-                .eq("user_id", artistUserId)
-                .single();
-              if (artistConnect?.stripe_connect_account_id && artistConnect.stripe_connect_onboarding_complete) {
-                await scheduleTransfer({
-                  orderId,
-                  recipientType: "artist",
-                  recipientUserId: artistUserId,
-                  connectAccountId: artistConnect.stripe_connect_account_id,
-                  amountCents: Math.round(artistRevenue * 100),
-                  immediate: isCollection,
-                });
-              }
-            } catch (transferErr) {
-              console.error("Artist transfer error:", transferErr);
-            }
-          }
+          // Extracted into scheduleOrderLegs so the D3 duplicate-redelivery paths
+          // can re-run it and schedule any legs the first pass missed (C4/D52.3);
+          // scheduleTransfer's (order_id, recipient_user_id) 23505 idempotency
+          // makes already-scheduled legs no-ops, so a redelivery only fills gaps.
+          await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
         }
       } catch (err) {
         console.error("Order processing error:", err);
@@ -703,15 +1129,62 @@ export async function POST(request: Request) {
   // ─── Subscription events ───
   if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
     const subscription = event.data.object as Stripe.Subscription;
+
+    // D15: this branch writes artist_profiles by stripe_customer_id, so it must
+    // only handle the platform SaaS subscription. A paid-loan or managed-curation
+    // subscription is owned by its own handler; today it is a near-miss (those
+    // flows create fresh customers rather than reusing an artist's customer id),
+    // but it is one refactor away from stamping a plan onto the wrong profile.
+    // Scope it explicitly. (D12's unknown-price guard also catches paid-loan's
+    // dynamic price, but a curation tier priced via a STRIPE_PRICE_* would slip
+    // past that; the kind check does not depend on the price.)
+    const subKind = subscription.metadata?.kind || subscription.metadata?.source || "";
+    if (
+      subKind === "paid_loan_monthly" ||
+      subKind === "wallplace_paid_loan_billing" ||
+      subKind === "curation_request"
+    ) {
+      return NextResponse.json({ received: true, ignored: "not_saas_subscription" });
+    }
+
     const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
     const priceId = subscription.items.data[0]?.price?.id || "";
 
-    // Map price ID to plan name (monthly + annual variants both normalise to
-    // the same plan name; billing cycle is reflected in Stripe itself).
-    let plan = "core";
-    if (priceId === process.env.STRIPE_PRICE_PREMIUM || priceId === process.env.STRIPE_PRICE_PREMIUM_ANNUAL) plan = "premium";
-    else if (priceId === process.env.STRIPE_PRICE_PRO || priceId === process.env.STRIPE_PRICE_PRO_ANNUAL) plan = "pro";
-    else if (priceId === process.env.STRIPE_PRICE_CORE || priceId === process.env.STRIPE_PRICE_CORE_ANNUAL) plan = "core";
+    // D12: map the price id to a plan, and NEVER guess. The old code defaulted to
+    // "core" and only bumped to premium/pro on a match, so an unset or mistyped
+    // STRIPE_PRICE_PRO wrote every Pro artist as core, and
+    // platformFeePercentForArtist then charged them 15% instead of 5% on every
+    // sale, silently and forever. An unrecognised price now stamps nothing.
+    //
+    // Built per-request (not module scope) so a test can set the envs before
+    // importing. Monthly and annual variants normalise to the same plan.
+    const PRICE_TO_PLAN: Record<string, "core" | "premium" | "pro"> = Object.fromEntries(
+      (
+        [
+          [process.env.STRIPE_PRICE_CORE, "core"],
+          [process.env.STRIPE_PRICE_CORE_ANNUAL, "core"],
+          [process.env.STRIPE_PRICE_PREMIUM, "premium"],
+          [process.env.STRIPE_PRICE_PREMIUM_ANNUAL, "premium"],
+          [process.env.STRIPE_PRICE_PRO, "pro"],
+          [process.env.STRIPE_PRICE_PRO_ANNUAL, "pro"],
+        ] as const
+      ).filter(([id]) => !!id) as Array<[string, "core" | "premium" | "pro"]>,
+    );
+    const plan = PRICE_TO_PLAN[priceId];
+    if (!plan) {
+      // Not a recognised SaaS price: a paid-loan or curation subscription (whose
+      // price is a dynamic price_data, handled by their own branches), or a
+      // misconfigured env. Either way we must not stamp a plan we did not
+      // recognise onto an artist profile.
+      console.error("[webhook] unrecognised subscription price id", {
+        priceId,
+        subscriptionId: subscription.id,
+        // D12: if any price env is unset, that is the likely cause of an
+        // otherwise-valid SaaS price not resolving.
+        missingPriceEnvs: missingStripePriceEnvs(),
+      });
+      return NextResponse.json({ received: true, ignored: "unknown_price" });
+    }
 
     const { error } = await db
       .from("artist_profiles")
@@ -719,7 +1192,10 @@ export async function POST(request: Request) {
         stripe_subscription_id: subscription.id,
         subscription_status: subscription.status === "trialing" ? "trialing" : subscription.status,
         subscription_plan: plan,
-        subscription_period_end: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toISOString(),
+        // E11b: `?? 0` stamped 1970-01-01 whenever Stripe omitted the period,
+        // and the billing page then showed a subscription that expired 56 years
+        // ago. null is the honest value for "we do not know yet".
+        subscription_period_end: epochToIso(periodFromSubscription(subscription).cpEnd),
         trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
       })
       .eq("stripe_customer_id", customerId);
@@ -737,6 +1213,64 @@ export async function POST(request: Request) {
     }
 
     if (error) console.error("Subscription update error:", error);
+
+    // ─── Started email (09 §D.5, item 3.3) ───
+    // The first paid moment produced no email at all. Six `subscription_*`
+    // templates were registered and five were wired; there was no "started", so
+    // an artist began paying and got nothing in writing. The comment on the
+    // invoice.paid branch below claimed the signup invoice was "covered by
+    // subscription_created or the checkout receipt". Neither existed. That
+    // comment is accurate as of this branch.
+    if (event.type === "customer.subscription.created") {
+      try {
+        const { data: profile } = await db
+          .from("artist_profiles")
+          .select("user_id, name")
+          .eq("stripe_customer_id", customerId)
+          .maybeSingle();
+        if (profile?.user_id) {
+          const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+          const item = subscription.items.data[0];
+          if (user?.email) {
+            const { cpStart, cpEnd } = periodFromSubscription(subscription);
+            const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
+            await sendEmail({
+              // Keyed on the subscription, so Stripe redelivering
+              // customer.subscription.created cannot send a second copy.
+              idempotencyKey: `subscription_started:${subscription.id}`,
+              template: "subscription_started",
+              category: "orders_and_payouts",
+              to: user.email,
+              userId: profile.user_id,
+              subject: `You're on Wallplace ${planName}`,
+              react: SubscriptionStarted({
+                firstName: (profile.name || "there").split(" ")[0] || "there",
+                planName,
+                amount: {
+                  amount: item?.price?.unit_amount ?? 0,
+                  currency: (item?.price?.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR",
+                },
+                billingInterval: item?.price?.recurring?.interval === "year" ? "year" : "month",
+                // On a trial the first charge is when the trial ends, not when
+                // the period started, or the email tells someone they were
+                // billed today on a plan they have not paid for yet.
+                firstBillingDate: epochToUkDate(subscription.trial_end ?? cpStart),
+                nextBillingDate: epochToUkDate(cpEnd),
+                trialEndsAt: subscription.trial_end
+                  ? epochToUkDate(subscription.trial_end)
+                  : undefined,
+                manageUrl: `${SITE}/artist-portal/billing`,
+              }),
+              metadata: { subscriptionId: subscription.id, plan },
+            });
+          }
+        }
+      } catch (err) {
+        // Non-fatal. The subscription is recorded; a mail failure must not make
+        // Stripe retry a webhook that already did its real work.
+        console.error("Started email error:", err);
+      }
+    }
 
     // ─── Upgraded email (plan changed) ───
     // Stripe's `customer.subscription.updated` fires for a lot of reasons
@@ -763,7 +1297,9 @@ export async function POST(request: Request) {
                 firstName: (profile.name || "there").split(" ")[0],
                 oldPlan: (profile.subscription_plan as string).charAt(0).toUpperCase() + (profile.subscription_plan as string).slice(1),
                 newPlan: plan.charAt(0).toUpperCase() + plan.slice(1),
-                billingDate: new Date((subscription.items.data[0]?.current_period_end ?? 0) * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+                // E11b: the same epoch bug in customer-facing copy. The upgrade
+                // email quoted "1 January 1970" as the next billing date.
+                billingDate: epochToUkDate(periodFromSubscription(subscription).cpEnd),
                 accountUrl: `${SITE}/artist-portal/billing`,
               }),
               metadata: { subscriptionId: subscription.id, oldPlan: profile.subscription_plan, newPlan: plan },
@@ -777,36 +1313,45 @@ export async function POST(request: Request) {
 
     // ─── Referral credit (item 25) ───
     // First time this referred artist enters a paid status, extend the
-    // referrer's free_until by 30 days. referral_credited_at guards against
-    // double-credits if Stripe replays the event.
+    // referrer's fee-free window by 30 days.
+    //
+    // BOTH halves of this were broken until 2026-08-28, and each fix is its own
+    // migration: 109 made `referred_by_code` recordable at all (a
+    // strip-and-retry destroyed it on every application), and 115 (owner
+    // decision 10) created `free_until` — the column this credit writes — which
+    // had never existed, so the select was rejected whole and the credit was
+    // skipped for as long as the programme has been live.
+    //
+    // The credit itself is `extend_free_until` now (04 item 5.3 / D14): the old
+    // read-modify-write across two rows meant a Stripe redelivery could double
+    // a 30-day credit or stamp the guard without crediting. The RPC claims
+    // `referral_credited_at` first (the idempotency guard), extends from
+    // GREATEST(now, free_until) so stacked credits chain, and refuses with an
+    // exception on a dangling code rather than burning the one credit.
     const isPaidStatus = subscription.status === "active" || subscription.status === "trialing";
     if (isPaidStatus && event.type === "customer.subscription.created") {
       try {
         const { data: referred } = await db
           .from("artist_profiles")
-          .select("id, referred_by_code, referral_credited_at")
+          .select("id")
           .eq("stripe_customer_id", customerId)
-          .maybeSingle();
-        if (referred && referred.referred_by_code && !referred.referral_credited_at) {
-          const { data: referrer } = await db
-            .from("artist_profiles")
-            .select("id, free_until")
-            .eq("referral_code", referred.referred_by_code)
-            .maybeSingle();
-          if (referrer) {
-            const now = new Date();
-            const base = referrer.free_until && new Date(referrer.free_until) > now
-              ? new Date(referrer.free_until)
-              : now;
-            const newFreeUntil = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
-            await db
-              .from("artist_profiles")
-              .update({ free_until: newFreeUntil.toISOString() })
-              .eq("id", referrer.id);
-            await db
-              .from("artist_profiles")
-              .update({ referral_credited_at: now.toISOString() })
-              .eq("id", referred.id);
+          .maybeSingle<{ id: string }>();
+        if (referred) {
+          const { data: credit, error: creditErr } = await db.rpc("extend_free_until", {
+            p_referred_id: referred.id,
+            p_days: 30,
+          });
+          if (creditErr) {
+            console.error("Referral credit error:", creditErr.message);
+          } else {
+            const row = Array.isArray(credit) ? credit[0] : credit;
+            if (row?.credited) {
+              console.log("[webhook] referral credited", {
+                referredId: referred.id,
+                referrerId: row.referrer_id,
+                freeUntil: row.new_free_until,
+              });
+            }
           }
         }
       } catch (referralErr) {
@@ -895,14 +1440,14 @@ export async function POST(request: Request) {
       }>();
 
     const isStale = profile && profile.stripe_subscription_id && profile.stripe_subscription_id !== subscription.id;
-    if (isStale) {
-      // Old subscription being cancelled as part of an upgrade. The
-      // newer subscription has already been recorded against the
-      // profile; do nothing here. Skip the cancellation email too —
-      // the artist isn't really being cancelled.
-      return NextResponse.json({ received: true });
-    }
-
+    // D13: this used to `return` on isStale, which exited the WHOLE handler and so
+    // skipped the paid-loan `customer.subscription.deleted` block further down. An
+    // artist upgrading their plan (a stale SaaS deletion) could therefore leave a
+    // paid-loan billing row stuck `active` after Stripe cancelled it. Guard only the
+    // SaaS-specific work; execution falls through to the paid-loan block. isStale
+    // means the old subscription is being cancelled as part of an upgrade, the newer
+    // one is already recorded, so we touch neither the profile nor the email.
+    if (!isStale) {
     const { error } = await db
       .from("artist_profiles")
       .update({ subscription_status: "canceled" })
@@ -940,6 +1485,7 @@ export async function POST(request: Request) {
     } catch (err) {
       console.error("Cancelled email error:", err);
     }
+    } // end if (!isStale) — D13
   }
 
   if (event.type === "invoice.payment_failed") {
@@ -1026,6 +1572,35 @@ export async function POST(request: Request) {
     }
   }
 
+  // ─── D21: managed-curation subscription reconcile ───
+  // Mirrors the paid-loan block above. Each helper returns false when the
+  // subscription is not a curation one, so the SaaS receipt path below still
+  // runs for artist subscriptions.
+  if (event.type === "invoice.paid") {
+    const invoice = event.data.object as Stripe.Invoice;
+    try {
+      await handleCurationInvoicePaid(invoice);
+    } catch (err) {
+      console.error("[stripe webhook] curation invoice.paid:", err);
+    }
+  }
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as Stripe.Invoice;
+    try {
+      await handleCurationInvoiceFailed(invoice);
+    } catch (err) {
+      console.error("[stripe webhook] curation invoice.payment_failed:", err);
+    }
+  }
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object as Stripe.Subscription;
+    try {
+      await handleCurationSubscriptionDeleted(subscription);
+    } catch (err) {
+      console.error("[stripe webhook] curation subscription.deleted:", err);
+    }
+  }
+
   // ─── Invoice paid, renewal receipt + past_due recovery ───
   if (event.type === "invoice.paid") {
     const invoice = event.data.object as Stripe.Invoice;
@@ -1047,9 +1622,12 @@ export async function POST(request: Request) {
         if (error) console.error("Invoice paid recovery error:", error);
       }
 
-      // Renewal receipt, only for recurring charges, not the initial
-      // signup invoice (which is covered by subscription_created or the
-      // checkout receipt). `billing_reason` is the source of truth.
+      // Renewal receipt, only for recurring charges, not the initial signup
+      // invoice, which is covered by the subscription_started email on
+      // customer.subscription.created above. That claim was FALSE until 09 item
+      // 3.3 built that branch: neither a "started" email nor a checkout receipt
+      // existed, so the first paid moment produced nothing and this comment was
+      // the reason nobody noticed. `billing_reason` is the source of truth.
       // Skip trial-ending invoices with zero amount.
       const isRenewal = invoice.billing_reason === "subscription_cycle";
       if (isRenewal && invoice.amount_paid > 0 && profile?.user_id) {
@@ -1194,15 +1772,24 @@ export async function POST(request: Request) {
     const account = event.data.object as Stripe.Account;
     const isComplete = account.charges_enabled && account.details_submitted;
 
-    // Update whichever profile has this account ID
+    // Update whichever profile has this account ID, and warm the
+    // payout-capability cache (C1) so canReceivePayout can serve the fresh
+    // charges/payouts state without a synchronous Stripe round-trip at checkout.
+    const patch = {
+      stripe_connect_onboarding_complete: isComplete,
+      stripe_charges_enabled: account.charges_enabled ?? false,
+      stripe_payouts_enabled: account.payouts_enabled ?? false,
+      stripe_charges_checked_at: new Date().toISOString(),
+    };
+
     await db
       .from("venue_profiles")
-      .update({ stripe_connect_onboarding_complete: isComplete })
+      .update(patch)
       .eq("stripe_connect_account_id", account.id);
 
     await db
       .from("artist_profiles")
-      .update({ stripe_connect_onboarding_complete: isComplete })
+      .update(patch)
       .eq("stripe_connect_account_id", account.id);
 
     // KYC-needed email: Stripe populates `requirements.currently_due` when
@@ -1249,4 +1836,102 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ received: true });
+}
+
+/**
+ * Schedule the payout legs for a cart order: the venue revenue share and each
+ * artist's own net (E9), each gated on canReceivePayout (D52), with a blocked
+ * ledger row recorded when a recipient is not payout-ready.
+ *
+ * Extracted from the main handler so it can run on BOTH the first delivery and a
+ * D3 duplicate redelivery (C4/D52.3). scheduleTransfer treats a
+ * (order_id, recipient_user_id) 23505 as an idempotent replay (C3), so calling
+ * this again for an order that already has some legs only fills the gaps and
+ * never double-pays. Best-effort per leg: one failing recipient never stops the
+ * rest.
+ */
+async function scheduleOrderLegs(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  params: { orderId: string; legs: ArtistLeg[]; venueSlug: string; venueRevenue: number; isCollection: boolean },
+): Promise<void> {
+  const { orderId, legs, venueSlug, venueRevenue, isCollection } = params;
+
+  // Transfer venue revenue share.
+  if (venueSlug && venueRevenue > 0) {
+    try {
+      // D52: gate on canReceivePayout, not the stale onboarding boolean.
+      const cap = await canReceivePayout(db, { kind: "venue", slug: venueSlug });
+      // canReceivePayout returns the account id + capability but not the venue's
+      // user_id, which the ledger row needs; resolve it here.
+      const { data: venueRow } = await db
+        .from("venue_profiles")
+        .select("user_id")
+        .eq("slug", venueSlug)
+        .maybeSingle<{ user_id: string | null }>();
+      const venueUserId = venueRow?.user_id ?? null;
+      const venuePence = Math.round(venueRevenue * 100);
+      if (cap.ok && cap.accountId && venueUserId) {
+        await scheduleTransfer({
+          orderId,
+          recipientType: "venue",
+          recipientUserId: venueUserId,
+          connectAccountId: cap.accountId,
+          amountCents: venuePence,
+          immediate: isCollection,
+        });
+      } else if (venueUserId) {
+        console.error("[cart] venue cannot be paid out, transfer skipped", {
+          orderId,
+          venueSlug,
+          reason: cap.reason,
+        });
+        await recordBlockedLeg(db, {
+          orderId,
+          recipientType: "venue",
+          recipientUserId: venueUserId,
+          amountCents: venuePence,
+          reason: cap.reason ?? "unknown",
+        });
+      }
+    } catch (transferErr) {
+      console.error("Venue transfer error:", transferErr);
+    }
+  }
+
+  // Transfer each artist their own leg (E9). One leg fails independently of the
+  // others: a lapsed Connect account on one artist must not stop the rest.
+  for (const leg of legs) {
+    if (leg.netPence <= 0) continue;
+    try {
+      // D52: gate on canReceivePayout (payouts_enabled), not the stale
+      // stripe_connect_onboarding_complete boolean C1 replaced.
+      const cap = await canReceivePayout(db, { kind: "artist", userId: leg.artistUserId });
+      if (cap.ok && cap.accountId) {
+        await scheduleTransfer({
+          orderId,
+          recipientType: "artist",
+          recipientUserId: leg.artistUserId,
+          connectAccountId: cap.accountId,
+          amountCents: leg.netPence,
+          immediate: isCollection,
+        });
+      } else {
+        console.error("[cart] artist cannot be paid out, transfer skipped", {
+          orderId,
+          artistSlug: leg.artistSlug,
+          artistUserId: leg.artistUserId,
+          netPence: leg.netPence,
+          reason: cap.reason,
+        });
+        await recordBlockedLeg(db, {
+          orderId,
+          recipientUserId: leg.artistUserId,
+          amountCents: leg.netPence,
+          reason: cap.reason ?? "unknown",
+        });
+      }
+    } catch (transferErr) {
+      console.error("Artist transfer error:", { slug: leg.artistSlug, transferErr });
+    }
+  }
 }

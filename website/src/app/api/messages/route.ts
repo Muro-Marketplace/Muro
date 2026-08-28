@@ -1,49 +1,27 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { isAdminRequest } from "@/lib/admin-auth";
 import { messageSchema } from "@/lib/validations";
 import { checkArtistOutreachCap } from "@/lib/outreach-cap";
 import { orFilter } from "@/lib/db/safe-filter";
+import { assertPlacementParty, handleAuthzError } from "@/lib/authz";
+import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { moderateMessage } from "@/lib/moderation";
 import { isFlagOn } from "@/lib/feature-flags";
-import { notifyPlacementRequest, notifyPlacementResponse } from "@/lib/email";
 import { sendEmail } from "@/lib/email/send";
-import { MessageUnreadNotification } from "@/emails/templates/messages/MessageUnreadNotification";
+import { ArtistNewPlacementInvitation } from "@/emails/templates/placements/ArtistNewPlacementInvitation";
+import { VenueNewPlacementRequest } from "@/emails/templates/placements/VenueNewPlacementRequest";
+import { ArtistPlacementAccepted } from "@/emails/templates/placements/ArtistPlacementAccepted";
+import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPlacementDeclined";
+import { placementTermsSummary } from "@/lib/placements/terms-summary";
 import { artists as staticArtists } from "@/data/artists";
 import { venues as staticVenues } from "@/data/venues";
+import { sendMessageUnreadEmail } from "@/lib/email/notifications";
+import { parsePayload } from "@/lib/moderation/types";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
-
-// Helper: send a message_unread notification via the new pipeline. Fires
-// immediately for MVP, once Inngest is wired, this becomes a delayed
-// event that cancels if the recipient reads the message in-app first.
-async function sendMessageUnreadEmail(args: {
-  recipientEmail: string;
-  recipientUserId: string | null;
-  recipientFirstName: string;
-  senderName: string;
-  messagePreview: string;
-  conversationId: string;
-  messageId: string | number;
-}) {
-  const conversationUrl = `${SITE}/artist-portal/messages?c=${encodeURIComponent(args.conversationId)}`;
-  await sendEmail({
-    idempotencyKey: `message_unread:${args.messageId}`,
-    template: "message_unread_notification",
-    category: "messages",
-    to: args.recipientEmail,
-    subject: `${args.senderName} sent you a message`,
-    userId: args.recipientUserId ?? undefined,
-    react: MessageUnreadNotification({
-      firstName: args.recipientFirstName,
-      senderName: args.senderName,
-      messagePreview: args.messagePreview.length > 200 ? args.messagePreview.slice(0, 197) + "…" : args.messagePreview,
-      conversationUrl,
-      muteMessagesUrl: `${SITE}/account/email`,
-    }),
-  });
-}
 
 // Slug → Human Readable (last-resort fallback used when we have no
 // artist/venue profile match, turns "fin-coles" into "Fin Coles").
@@ -176,9 +154,22 @@ export async function GET(request: Request) {
       }
     });
 
-    const sorted = Object.values(conversationsMap).sort(
-      (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
-    );
+    // Owner decision 16: honour the viewer's blocks. `user_blocks` was recorded
+    // (migration 111) and read by nothing, so a block changed nothing anywhere.
+    // Slug-keyed, matching what the block endpoint stores. Fail-open on a read
+    // error: an inbox that vanishes because the blocks table hiccuped is worse
+    // than one unfiltered load.
+    const { data: viewerBlocks } = await db
+      .from("user_blocks")
+      .select("blocked_slug")
+      .eq("blocker_user_id", auth.user!.id);
+    const blockedSlugs = new Set((viewerBlocks || []).map((b) => b.blocked_slug));
+
+    const sorted = Object.values(conversationsMap)
+      .filter((c) => !blockedSlugs.has(c.otherParty))
+      .sort(
+        (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+      );
 
     // Enrich with profile data: display names, images, placement status
     const otherPartySlugs = [...new Set(sorted.map((c) => c.otherParty))];
@@ -248,7 +239,15 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ conversations: enriched });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[messages] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -257,6 +256,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: the demo guard existed but had ZERO call sites, while two doc comments
+  // claimed it was wired. This handler reaches real people (real emails, real
+  // money, or content on a public page), so it takes the STRICT 403 variant.
+  const demoBlocked = assertNotDemoStrict(auth.user!.id);
+  if (demoBlocked) return demoBlocked;
 
   try {
     const body = await request.json();
@@ -348,6 +352,27 @@ export async function POST(request: Request) {
       );
     }
 
+    // Owner decision 16: the recipient's block stops the message BEFORE any
+    // insert. The check keys on (recipient user id, sender slug), which is
+    // exactly what the block endpoint stores. The refusal is deliberately
+    // neutral — it does not say "blocked" — because telling a harasser they
+    // have been blocked invites the workaround account; it just fails, the same
+    // way it would for someone who cannot be messaged at all.
+    if (recipientUserId) {
+      const { data: block } = await db
+        .from("user_blocks")
+        .select("blocked_slug")
+        .eq("blocker_user_id", recipientUserId)
+        .eq("blocked_slug", resolvedSenderSlug)
+        .maybeSingle();
+      if (block) {
+        return NextResponse.json(
+          { error: "This person isn't accepting messages from you." },
+          { status: 403 },
+        );
+      }
+    }
+
     // If the client didn't pass a conversationId, try to find an existing
     // thread between these two slugs first, then fall back to the
     // deterministic id so both sides land on the same row.
@@ -393,8 +418,28 @@ export async function POST(request: Request) {
       }
     }
 
-    // Try insert with new columns first, fall back to base columns if they don't exist yet
-    const baseRow = {
+    // ONE insert, no strip-and-retry. Row 22's class, found in a second file.
+    //
+    // This used to build an `extendedRow` and fall back to a `baseRow` "if the
+    // columns don't exist yet", and the fallback was reachable for a specific
+    // and damaging reason: `flagged` and `flagged_reason` DO NOT EXIST on
+    // `messages` (verified against production and against
+    // tests/integration/schema-columns.json), while `message_type`, `metadata`
+    // and `attachments` all do.
+    //
+    // So a message that tripped the moderation filter carried two phantom
+    // columns, PostgREST rejected the whole insert, and the retry silently wrote
+    // the base row instead — dropping `message_type`, `metadata` AND
+    // `attachments`. A flagged PLACEMENT REQUEST was stored as a plain text
+    // message with no type and none of its negotiated terms, and nothing
+    // errored.
+    //
+    // The flag now travels in `metadata`, which is a real jsonb column, so the
+    // signal survives on the row and is queryable. It still reaches no admin
+    // queue: `moderation_queue` (058) has a typed payload union covering blogs,
+    // feature requests and feedback, with no `message` member. Building one is a
+    // feature, not this fix, and it is recorded as an owner decision.
+    const row = {
       conversation_id: cid,
       sender_id: auth.user!.id,
       sender_name: resolvedSenderSlug,
@@ -404,32 +449,59 @@ export async function POST(request: Request) {
       content,
       is_read: false,
       created_at: new Date().toISOString(),
-    };
-
-    // If moderation flagged the message, tag it for admin review
-    const extendedRow = {
-      ...baseRow,
       message_type: messageType || "text",
-      metadata: metadata || {},
+      metadata: {
+        ...(metadata || {}),
+        ...(moderation.flagged
+          ? { moderation_flagged: true, moderation_reason: moderation.reason ?? null }
+          : {}),
+      },
       attachments: attachments || [],
-      ...(moderation.flagged ? { flagged: true, flagged_reason: moderation.reason } : {}),
     };
 
-    let { error } = await db.from("messages").insert(extendedRow);
+    // `.select("id")` so the notification below can key on the message rather
+    // than on Date.now(), which is not an idempotency key at all.
+    const { data: inserted, error } = await db
+      .from("messages")
+      .insert(row)
+      .select("id")
+      .maybeSingle<{ id: string }>();
 
-    // If insert failed (likely missing columns), retry with base columns only
-    if (error) {
-      console.warn("Message insert failed with new columns, retrying base-only:", error.message);
-      const retry = await db.from("messages").insert(baseRow);
-      error = retry.error;
-    }
-
-    if (error) {
+    if (error || !inserted) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
     }
 
     if (moderation.flagged) {
+      // Owner decision 11: a flagged message now lands in the ADMIN QUEUE, not
+      // just in its own metadata and a log line nobody reads. Best-effort after
+      // the message insert: moderation visibility must not block delivery, and
+      // the flag already survives on the row either way (09 item 2.2).
+      const queuePayload = parsePayload("message", {
+        message_id: inserted.id,
+        conversation_id: cid || "",
+        sender_slug: resolvedSenderSlug,
+        recipient_slug: recipientSlug,
+        flag_reason: moderation.reason || "flagged",
+        excerpt: content.slice(0, 200),
+      });
+      if (queuePayload) {
+        const { error: queueErr } = await db.from("moderation_queue").insert({
+          entity_type: "message",
+          entity_id: inserted.id,
+          submitted_by_user_id: auth.user!.id,
+          submitted_by_email: auth.user!.email ?? null,
+          status: "pending",
+          payload: queuePayload,
+        });
+        if (queueErr) {
+          console.error("[moderation] flagged message could not join the queue:", queueErr.message);
+        }
+      } else {
+        console.error("[moderation] flagged-message payload failed its own parser", {
+          messageId: inserted.id,
+        });
+      }
       console.warn(`[moderation] Message flagged: sender=${resolvedSenderSlug} reason="${moderation.reason}"`);
     }
 
@@ -463,7 +535,14 @@ export async function POST(request: Request) {
           revenue_share_percent: (m.revenueSharePercent as number) || null,
           status: "pending",
           message: content,
-          requester_user_id: auth.user!.id,
+          // N3, write side. `requester_user_id` exists in NO migration and not in
+          // the live table; the real column is `proposed_by_user_id`. The N3 fix
+          // corrected the SELECT that read it and left the three INSERTS that
+          // write it, so PostgREST rejected every one of these statements whole
+          // and the placement was never created. It is 2 of 86 live rows that
+          // carry a proposer, which is what "written by almost nothing" looks
+          // like.
+          proposed_by_user_id: auth.user!.id,
           created_at: new Date().toISOString(),
         });
         if (placementError) console.error("Placement insert error:", placementError);
@@ -485,16 +564,71 @@ export async function POST(request: Request) {
         if (recipientProfile?.user_id) {
           const { data: { user: recipientUser } } = await db.auth.admin.getUserById(recipientProfile.user_id);
           if (recipientUser?.email) {
-            const senderProfile = senderIsArtist ? artistProfile : venueProfileData;
-            await notifyPlacementRequest({
-              email: recipientUser.email,
-              venueName: venueProfileData.name,
-              artistName: artistProfile.name,
-              workTitles: [(m.workTitle as string) || "Artwork"],
-              arrangementType: (m.arrangementType as string) || "free_loan",
-              revenueSharePercent: m.revenueSharePercent as number | undefined,
-              message: content,
-            }).catch((err) => { if (err) console.error("notifyPlacementRequest error:", err); });
+            // K1: was notifyPlacementRequest, which sent the same hand-written
+            // HTML to either party. Through the pipeline each side gets the
+            // template written for it, plus suppression, preferences and a row
+            // in email_events saying it was attempted.
+            const workTitle = (m.workTitle as string) || "Artwork";
+            const terms = placementTermsSummary(
+              (m.arrangementType as string) || "free_loan",
+              m.revenueSharePercent as number | undefined,
+            );
+            const placementUrl = `${SITE}/placements/${encodeURIComponent(placementId)}`;
+            if (recipientIsArtist) {
+              await sendEmail({
+                idempotencyKey: `placement_request:${placementId}:to_artist`,
+                template: "artist_new_placement_invitation",
+                category: "placements",
+                to: recipientUser.email,
+                subject: `${venueProfileData.name} would like to display your work`,
+                userId: recipientProfile.user_id,
+                react: ArtistNewPlacementInvitation({
+                  firstName: (artistProfile.name || "there").split(" ")[0],
+                  venue: {
+                    id: venueProfileData.user_id || "",
+                    name: venueProfileData.name,
+                    slug: venueProfileData.slug,
+                    image: "",
+                    location: "",
+                    type: "",
+                    url: `${SITE}/venues/${venueProfileData.slug}`,
+                  },
+                  placementUrl,
+                  requestedWorks: [workTitle],
+                  proposedTerms: terms,
+                  message: content,
+                }),
+                metadata: { placementId },
+              });
+            } else {
+              await sendEmail({
+                idempotencyKey: `placement_request:${placementId}:to_venue`,
+                template: "venue_new_placement_request",
+                category: "placements",
+                to: recipientUser.email,
+                subject: `New placement request from ${artistProfile.name}`,
+                userId: recipientProfile.user_id,
+                react: VenueNewPlacementRequest({
+                  firstName: (venueProfileData.name || "there").split(" ")[0],
+                  venueName: venueProfileData.name,
+                  artist: {
+                    id: artistProfile.user_id || "",
+                    name: artistProfile.name,
+                    slug: artistProfile.slug,
+                    avatar: "",
+                    location: "",
+                    primaryMedium: "",
+                    url: `${SITE}/browse/${artistProfile.slug}`,
+                  },
+                  artistProfileUrl: `${SITE}/browse/${artistProfile.slug}`,
+                  placementUrl,
+                  requestedWorks: [workTitle],
+                  proposedTerms: terms,
+                  message: content,
+                }),
+                metadata: { placementId },
+              });
+            }
           }
         }
       }
@@ -507,23 +641,121 @@ export async function POST(request: Request) {
       const responseStatus = m.status as string;
 
       if (placementId && (responseStatus === "active" || responseStatus === "declined")) {
-        await db.from("placements").update({
-          status: responseStatus,
-          responded_at: new Date().toISOString(),
-        }).eq("id", placementId);
+        // E33. placementId and status came straight off client-supplied
+        // metadata and were written with the service-role client, so RLS never
+        // intervened. Any account with a profile could accept or decline ANY
+        // placement by guessing an id, and the notification email then told the
+        // artist their venue had accepted. This was a second, unguarded door to
+        // the state change that PATCH /api/placements protects.
+        //
+        // assertPlacementParty is the boundary: it re-reads the row filtered to
+        // artist_user_id or venue_user_id = the caller, so a non-party gets
+        // placement_not_found rather than a write.
+        const placement = await assertPlacementParty(auth.user!, placementId, db);
 
-        // Notify the other party
-        const { data: placement } = await db.from("placements").select("artist_user_id, venue, artist_slug").eq("id", placementId).single();
-        if (placement?.artist_user_id) {
+        // A known proposer may not answer their own request. Applied only when
+        // proposed_by_user_id is populated: prod has it on 2 of 86 rows, so
+        // treating "unknown proposer" as a refusal (which is what canRespond
+        // does) would block legitimate responses on the other 84. Widening that
+        // is 01 Phase D item 10's effective-requester work, and duplicating its
+        // fallback here would make a third copy of the rule.
+        if (placement.proposed_by_user_id && placement.proposed_by_user_id === auth.user!.id) {
+          return NextResponse.json(
+            { error: "You can't respond to your own placement request." },
+            { status: 403 },
+          );
+        }
+
+        const transition = canPlacementTransition(placement.status, responseStatus);
+        if (!transition.ok) {
+          return NextResponse.json({ error: transition.reason }, { status: 422 });
+        }
+
+        // Compare-and-set on pending, so two concurrent responses cannot both
+        // land and the second cannot overwrite the first.
+        // T9 (8.1): stamp the venue's collection point at accept, same as the
+        // placements PATCH, so an accept through the inbox is not the path
+        // that leaves the collect flow without an address. Hoisted above the
+        // update rather than inlined into its payload, so the two queries read
+        // as two queries.
+        let acceptExtras: Record<string, string> = {};
+        if (responseStatus === "active") {
+          const { data: vp } = await db
+            .from("venue_profiles")
+            .select("name, address_line1, address_line2, city, postcode")
+            .eq("slug", placement.venue_slug ?? "")
+            .maybeSingle<{ name: string | null; address_line1: string | null; address_line2: string | null; city: string | null; postcode: string | null }>();
+          const parts = [vp?.name, vp?.address_line1, vp?.address_line2, vp?.city, vp?.postcode]
+            .map((x) => (x ?? "").trim())
+            .filter(Boolean);
+          if (parts.length > 0) acceptExtras = { collection_address: parts.join(", ") };
+        }
+
+        const { data: updated, error: updErr } = await db
+          .from("placements")
+          .update({
+            status: responseStatus,
+            responded_at: new Date().toISOString(),
+            ...acceptExtras,
+          })
+          .eq("id", placementId)
+          .eq("status", "pending")
+          .select("id");
+        if (updErr) {
+          console.error("[messages] placement response update failed", updErr);
+          return NextResponse.json({ error: "Could not update placement" }, { status: 500 });
+        }
+        if (!updated || updated.length === 0) {
+          return NextResponse.json(
+            { error: "This placement has already been answered." },
+            { status: 409 },
+          );
+        }
+
+        // Notify the other party. The row assertPlacementParty already fetched
+        // carries artist_user_id, venue and artist_slug, so the second SELECT
+        // that used to sit here is gone rather than left beside it.
+        if (placement.artist_user_id) {
           const { data: artistProfile } = await db.from("artist_profiles").select("name").eq("user_id", placement.artist_user_id).single();
           const { data: { user: artistUser } } = await db.auth.admin.getUserById(placement.artist_user_id);
           if (artistUser?.email && artistProfile) {
-            await notifyPlacementResponse({
-              email: artistUser.email,
-              artistName: artistProfile.name,
-              venueName: placement.venue || "Venue",
-              accepted: responseStatus === "active",
-            }).catch((err) => { if (err) console.error("notifyPlacementResponse error:", err); });
+            // K1: was notifyPlacementResponse. The accepted/declined split now
+            // uses the two templates already written for it, which
+            // placements/route.ts was already using for the same event.
+            const venueName = placement.venue || "Venue";
+            const accepted = responseStatus === "active";
+            const firstName = (artistProfile.name || "there").split(" ")[0];
+            const placementUrl = `${SITE}/placements/${encodeURIComponent(placementId)}`;
+            await sendEmail({
+              idempotencyKey: `placement_response:${placementId}:${accepted ? "accepted" : "declined"}`,
+              template: accepted ? "artist_placement_accepted" : "artist_placement_declined",
+              category: "placements",
+              to: artistUser.email,
+              subject: `${venueName} ${accepted ? "accepted" : "declined"} your placement request`,
+              userId: placement.artist_user_id,
+              react: accepted
+                ? ArtistPlacementAccepted({
+                    firstName,
+                    venueName,
+                    placementUrl,
+                    // Same three next steps placements/route.ts uses for this
+                    // event, so the artist reads the same instructions whichever
+                    // surface the response came through.
+                    nextSteps: [
+                      `Confirm install date with ${venueName}`,
+                      "Print QR labels for each piece",
+                      "Finalise the consignment record",
+                    ],
+                    qrLabelsUrl: `${SITE}/artist-portal/labels`,
+                    consignmentRecordUrl: `${placementUrl}?record=open`,
+                  })
+                : ArtistPlacementDeclined({
+                    firstName,
+                    venueName,
+                    discoverMoreVenuesUrl: `${SITE}/spaces`,
+                  }),
+              metadata: { placementId },
+            });
           }
         }
       }
@@ -542,15 +774,13 @@ export async function POST(request: Request) {
           const { data: { user: recipientUser } } = await db.auth.admin.getUserById(recipientArtist.user_id);
           if (recipientUser?.email) {
             await sendMessageUnreadEmail({
+              messageId: inserted.id,
               recipientEmail: recipientUser.email,
               recipientUserId: recipientArtist.user_id,
-              recipientFirstName: recipientArtist.name.split(" ")[0] || "there",
+              recipientName: recipientArtist.name,
               senderName: resolvedSenderSlug,
               messagePreview: content,
               conversationId: cid || "",
-              // Sending immediately for MVP, once Inngest is wired, queue
-              // with a 10-minute delay and cancel-if-read.
-              messageId: Date.now(),
             });
           }
         }
@@ -565,13 +795,13 @@ export async function POST(request: Request) {
           const { data: { user: recipientUser } } = await db.auth.admin.getUserById(vp.user_id);
           if (recipientUser?.email) {
             await sendMessageUnreadEmail({
+              messageId: inserted.id,
               recipientEmail: recipientUser.email,
               recipientUserId: vp.user_id,
-              recipientFirstName: vp.name.split(" ")[0] || "there",
+              recipientName: vp.name,
               senderName: resolvedSenderSlug,
               messagePreview: content,
               conversationId: cid || "",
-              messageId: Date.now(),
             });
           }
         }
@@ -579,7 +809,15 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, conversationId: cid });
-  } catch {
+  } catch (err) {
+    // Without this, the bare catch below swallowed AuthzError and reported a
+    // 400 for what is a 404 or 403, which would have made E33's new guard
+    // indistinguishable from a malformed body (01 §1.3).
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    // Logged, not swallowed: a real fault here used to be
+    // indistinguishable from a malformed body (Phase E item 14).
+    console.error("[messages] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }

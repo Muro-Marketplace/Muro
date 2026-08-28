@@ -95,6 +95,19 @@ export async function GET(
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
   const redirectParams = new URLSearchParams({ ref: "qr" });
   if (venueSlug) redirectParams.set("venue", venueSlug);
+  // D10: mint a signed claim binding this venue to the scanned artist (`slug`),
+  // so checkout can verify the attribution instead of trusting the raw `venue`
+  // slug the client could otherwise forge. Best-effort: a missing secret must not
+  // break the redirect, it just falls back to the bare slug (still accepted until
+  // QR_ATTRIBUTION_ENFORCE is turned on).
+  if (venueSlug) {
+    try {
+      const { signQrAttribution } = await import("@/lib/qr-attribution-token");
+      redirectParams.set("va", await signQrAttribution({ venueSlug, artistSlug: slug }));
+    } catch (err) {
+      console.warn("[qr] could not sign venue attribution", { err: String(err) });
+    }
+  }
   // Display name resolved from venue_profiles above (line 58) takes
   // precedence over the raw `v=` value baked into the printed label,
   // so a venue that renamed itself doesn't have to reprint.

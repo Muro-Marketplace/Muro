@@ -1,31 +1,25 @@
 import { NextResponse } from "next/server";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { z } from "zod";
+import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { notifyAdminCurationRequest, notifyCurationCustomerEnquiry } from "@/lib/email";
-
-// Keep pricing server-side so a client can't submit a lower tier amount.
-// Bespoke is a quote-first enquiry, no upfront charge, the admin follows up
-// with a tailored quote and manual Stripe link.
-// Managed tiers are recurring subscriptions charged through Stripe.
-type OneOffTier = { kind: "one_off"; label: string; priceGbp: number; payFirst: boolean };
-type ManagedTier = { kind: "managed"; label: string; priceGbp: number; interval: "month" | "quarter"; priceEnvVar: string };
-
-const TIERS: Record<string, OneOffTier | ManagedTier> = {
-  single_wall: { kind: "one_off", label: "Single wall", priceGbp: 49, payFirst: true },
-  full_space: { kind: "one_off", label: "Full space", priceGbp: 149, payFirst: true },
-  bespoke: { kind: "one_off", label: "Bespoke project", priceGbp: 299, payFirst: false },
-  managed_monthly: { kind: "managed", label: "Managed, monthly rotation", priceGbp: 79.99, interval: "month", priceEnvVar: "STRIPE_PRICE_CURATION_MONTHLY" },
-  managed_quarterly: { kind: "managed", label: "Managed, quarterly refresh", priceGbp: 199.99, interval: "quarter", priceEnvVar: "STRIPE_PRICE_CURATION_QUARTERLY" },
-};
-
-type TierKey = keyof typeof TIERS;
+import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { sendEmail } from "@/lib/email/send";
+import { CurationEnquiryReceived } from "@/emails/templates/venue-lifecycle/CurationEnquiryReceived";
+import {
+  CURATION_TIERS as TIERS,
+  CURATION_TIER_KEYS,
+  type CurationTierKey as TierKey,
+  type ManagedTier,
+} from "@/lib/curation-tiers";
 
 const safe = (n: number) => z.string().trim().max(n);
 const optional = (n: number) => z.string().trim().max(n).optional().default("");
 
 const curationSchema = z.object({
-  tier: z.enum(["single_wall", "full_space", "bespoke", "managed_monthly", "managed_quarterly"]),
+  // Derived from CURATION_TIERS so the validator cannot drift from the table.
+  tier: z.enum(CURATION_TIER_KEYS),
   venueName: safe(200).min(1),
   contactName: safe(120).min(1),
   contactEmail: z.string().trim().email().max(320),
@@ -50,9 +44,42 @@ const curationSchema = z.object({
 
 const METHOD_LABEL: Record<string, string> = {
   qr_loan: "QR-enabled loan",
-  paid_loan: "Paid loan",
-  direct_purchase: "Direct purchase",
+  paid_loan: ARRANGEMENT_LABEL.paid_loan,
+  direct_purchase: ARRANGEMENT_LABEL.purchase,
 };
+
+// D22: the managed-tier Stripe prices live in the dashboard behind the
+// STRIPE_PRICE_CURATION_* envs, and nothing checked that a price actually bills
+// the cadence and amount we advertise. A quarterly env pointing at a monthly
+// price would charge £199.99 every month while the page promises every quarter.
+// We validate the price against the tier at checkout, cached 5 minutes in module
+// scope so it is not a Stripe round trip on every submission.
+const CURATION_PRICE_CACHE_MS = 5 * 60 * 1000;
+const curationPriceCache = new Map<string, { price: Stripe.Price; expiresAt: number }>();
+
+async function retrieveCurationPrice(priceId: string): Promise<Stripe.Price> {
+  const cached = curationPriceCache.get(priceId);
+  if (cached && cached.expiresAt > Date.now()) return cached.price;
+  const price = await stripe.prices.retrieve(priceId);
+  curationPriceCache.set(priceId, { price, expiresAt: Date.now() + CURATION_PRICE_CACHE_MS });
+  return price;
+}
+
+/**
+ * Whether a Stripe price bills exactly what a managed tier advertises: the right
+ * cadence (Stripe models "quarterly" as monthly with interval_count 3), the right
+ * amount in pence, and GBP. This is what makes the tier's `interval` field
+ * authoritative instead of decorative.
+ */
+function curationPriceMatchesTier(price: Stripe.Price, tier: ManagedTier): boolean {
+  const expectedIntervalCount = tier.interval === "quarter" ? 3 : 1;
+  return (
+    price.recurring?.interval === "month" &&
+    (price.recurring?.interval_count ?? 1) === expectedIntervalCount &&
+    price.unit_amount === Math.round(tier.priceGbp * 100) &&
+    price.currency === "gbp"
+  );
+}
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -119,30 +146,59 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError || !row) {
+    // 23514 = check_violation. A tier or status the schema does not know about is a
+    // deploy error (code and DB constraint out of sync), not a user error. Log it
+    // loudly and distinctly so it pages instead of hiding inside a generic 500 —
+    // this is exactly how the managed tiers were unsellable for months (D25).
+    if ((insertError as { code?: string } | null)?.code === "23514") {
+      console.error("[curation] tier/status rejected by a CHECK constraint — schema drift, not user input", {
+        tier: d.tier,
+        insertError,
+      });
+    }
     console.error("curation insert error:", insertError);
     return NextResponse.json({ error: "Could not create request" }, { status: 500 });
   }
 
   // Notify admin (awaited so it runs on serverless; .catch keeps mail failure non-fatal)
-  await notifyAdminCurationRequest({
-    requestId: row.id,
-    tier: tier.label,
-    payFirst: isPayFirst || isManaged,
-    priceGbp: tier.priceGbp,
-    venueName: d.venueName,
-    contactName: d.contactName,
-    contactEmail: d.contactEmail,
-    location: d.location,
-  }).catch((err) => { if (err) console.error("notifyAdminCurationRequest error:", err); });
+  // K1: was notifyAdminCurationRequest in the legacy module. Keyed on the
+  // request id, so a retried submit cannot double-alert.
+  await sendAdminAlert({
+    idempotencyKey: `admin_curation_request:${row.id}`,
+    subject: `Curation request: ${d.venueName} (${tier.label})`,
+    summary: `${d.venueName} requested curation.`,
+    fields: [
+      { label: "Contact", value: `${d.contactName} <${d.contactEmail}>` },
+      { label: "Tier", value: tier.label },
+      ...(d.location ? [{ label: "Location", value: d.location }] : []),
+      {
+        label: "Flow",
+        value: (isPayFirst || isManaged)
+          ? `Pay-first checkout (£${tier.priceGbp}), awaiting completion`
+          : `Bespoke enquiry (from £${tier.priceGbp}), please send a quote`,
+      },
+    ],
+    actionPath: "/admin/curation",
+    actionLabel: "View in admin",
+  });
 
   // Bespoke tier: no upfront payment.
   if (tier.kind === "one_off" && !tier.payFirst) {
-    await notifyCurationCustomerEnquiry({
-      email: d.contactEmail,
-      contactName: d.contactName,
-      venueName: d.venueName,
-      tierLabel: tier.label,
-    }).catch((err) => { if (err) console.error("notifyCurationCustomerEnquiry error:", err); });
+    // K1: was notifyCurationCustomerEnquiry in the legacy module.
+    await sendEmail({
+      idempotencyKey: `curation_enquiry_received:${row.id}`,
+      template: "curation_enquiry_received",
+      category: "orders_and_payouts",
+      to: d.contactEmail,
+      subject: "Your Wallplace curation enquiry",
+      react: CurationEnquiryReceived({
+        contactFirstName: (d.contactName || "there").split(" ")[0],
+        venueName: d.venueName,
+        tierLabel: tier.label,
+        responseDays: 2,
+      }),
+      metadata: { curationRequestId: row.id, tier: tier.label },
+    });
     return NextResponse.json({ mode: "enquiry", id: row.id });
   }
 
@@ -157,8 +213,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Managed curation is not yet available, please try a one-off tier." }, { status: 503 });
     }
 
+    // D22: the configured price must actually bill the cadence and amount this
+    // tier advertises, or a dashboard misconfiguration silently overcharges the
+    // venue. Validate before creating any session — deleting the row here is safe
+    // because nothing is payable yet (D19).
+    let curationPrice: Stripe.Price;
     try {
-      const session = await stripe.checkout.sessions.create({
+      curationPrice = await retrieveCurationPrice(priceId);
+    } catch (err) {
+      console.error("curation managed price retrieve failed", { priceId, tier: d.tier, err });
+      await db.from("curation_requests").delete().eq("id", row.id);
+      return NextResponse.json({ error: "Managed curation is temporarily unavailable. Please try a one-off tier." }, { status: 503 });
+    }
+    if (!curationPriceMatchesTier(curationPrice, tier)) {
+      console.error("curation managed price mismatch", {
+        priceId,
+        tier: d.tier,
+        expectedPence: Math.round(tier.priceGbp * 100),
+        expectedIntervalCount: tier.interval === "quarter" ? 3 : 1,
+        actual: {
+          unit_amount: curationPrice.unit_amount,
+          currency: curationPrice.currency,
+          recurring: curationPrice.recurring,
+        },
+      });
+      await db.from("curation_requests").delete().eq("id", row.id);
+      return NextResponse.json({ error: "Managed curation is temporarily unavailable. Please try a one-off tier." }, { status: 503 });
+    }
+
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create({
         mode: "subscription",
         payment_method_types: ["card"],
         customer_email: d.contactEmail,
@@ -178,23 +263,45 @@ export async function POST(request: Request) {
         success_url: `${siteUrl}/curated/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${siteUrl}/curated?cancelled=1`,
       });
-
-      await db
-        .from("curation_requests")
-        .update({ stripe_checkout_session_id: session.id })
-        .eq("id", row.id);
-
-      return NextResponse.json({ mode: "checkout", url: session.url, id: row.id });
     } catch (err) {
+      // D19: no Stripe session exists yet, so nothing can be paid. Removing the
+      // row here is safe and keeps the table clean on a create failure.
       console.error("curation managed stripe session error:", err);
       await db.from("curation_requests").delete().eq("id", row.id);
       return NextResponse.json({ error: "Could not start checkout" }, { status: 500 });
     }
+
+    // D19: a payable session now exists. The row MUST survive from here — the
+    // webhook attributes the payment by metadata.curation_request_id (the row
+    // id), so a missing row means money taken with no record, email or refund
+    // trail. Log a link failure and keep the row rather than deleting it.
+    try {
+      const { error: linkErr } = await db
+        .from("curation_requests")
+        .update({ stripe_checkout_session_id: session.id })
+        .eq("id", row.id);
+      if (linkErr) {
+        console.error("curation managed session link failed, row retained", {
+          requestId: row.id,
+          sessionId: session.id,
+          linkErr,
+        });
+      }
+    } catch (linkErr) {
+      console.error("curation managed session link threw, row retained", {
+        requestId: row.id,
+        sessionId: session.id,
+        linkErr,
+      });
+    }
+
+    return NextResponse.json({ mode: "checkout", url: session.url, id: row.id });
   }
 
   // Pay-first one-off tiers: Stripe Checkout (one-time)
+  let session: Stripe.Checkout.Session;
   try {
-    const session = await stripe.checkout.sessions.create({
+    session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
       customer_email: d.contactEmail,
@@ -219,16 +326,37 @@ export async function POST(request: Request) {
       success_url: `${siteUrl}/curated/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/curated?cancelled=1`,
     });
-
-    await db
-      .from("curation_requests")
-      .update({ stripe_checkout_session_id: session.id })
-      .eq("id", row.id);
-
-    return NextResponse.json({ mode: "checkout", url: session.url, id: row.id });
   } catch (err) {
+    // D19: no Stripe session exists yet, so nothing can be paid. Removing the
+    // row here is safe and keeps the table clean on a create failure.
     console.error("curation stripe session error:", err);
     await db.from("curation_requests").delete().eq("id", row.id);
     return NextResponse.json({ error: "Could not start checkout" }, { status: 500 });
   }
+
+  // D19: a payable session now exists. The row MUST survive from here — the
+  // webhook attributes the payment by metadata.curation_request_id (the row
+  // id), so a missing row means money taken with no record, email or refund
+  // trail. Log a link failure and keep the row rather than deleting it.
+  try {
+    const { error: linkErr } = await db
+      .from("curation_requests")
+      .update({ stripe_checkout_session_id: session.id })
+      .eq("id", row.id);
+    if (linkErr) {
+      console.error("curation session link failed, row retained", {
+        requestId: row.id,
+        sessionId: session.id,
+        linkErr,
+      });
+    }
+  } catch (linkErr) {
+    console.error("curation session link threw, row retained", {
+      requestId: row.id,
+      sessionId: session.id,
+      linkErr,
+    });
+  }
+
+  return NextResponse.json({ mode: "checkout", url: session.url, id: row.id });
 }

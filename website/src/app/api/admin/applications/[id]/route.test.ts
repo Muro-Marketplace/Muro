@@ -18,11 +18,29 @@ const {
   profilesUpdateMock: vi.fn(),
 }));
 
+// E30a: the route now goes through `withAdmin`, which owns the audit write so a
+// handler cannot forget it. Stood in faithfully here (resolve an admin, run the
+// handler, record what `audit()` was called with) so these tests stay about the
+// route's behaviour. The wrapper's own contract is tested in admin-auth.test.ts.
+const { auditMock } = vi.hoisted(() => ({ auditMock: vi.fn() }));
+
+const ADMIN = { id: "u-admin", email: "admin@x.com", user_metadata: { user_type: "admin" } };
+
 vi.mock("@/lib/admin-auth", () => ({
-  getAdminUser: vi.fn(async () => ({
-    user: { id: "u-admin", email: "admin@x.com", user_metadata: { user_type: "admin" } },
-    error: null,
-  })),
+  getAdminUser: vi.fn(async () => ({ user: ADMIN, error: null })),
+  withAdmin: async (
+    _request: Request,
+    action: string,
+    handler: (ctx: {
+      user: typeof ADMIN;
+      audit: (context?: Record<string, unknown>, actionOverride?: string) => void;
+    }) => Promise<Response>,
+  ) =>
+    handler({
+      user: ADMIN,
+      audit: (context, actionOverride) =>
+        auditMock({ action: actionOverride ?? action, context }),
+    }),
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
@@ -283,16 +301,19 @@ describe("PUT /api/admin/applications/[id] sets review_status='approved' on acce
   });
 });
 
-describe("PUT /api/admin/applications/[id] missing reviewed_at column fallback", () => {
-  // Regression: migration 052 added reviewed_at + reviewed_by to
-  // artist_applications. Production envs that haven't run it yet would
-  // silently fail the .update() with a "column does not exist" PostgREST
-  // error and leave status='pending', so the admin list still showed the
-  // application as awaiting review even after Accept was clicked. The
-  // updateApplicationStatus helper now retries with the bare {status}
-  // payload when the failure mentions reviewed_at/reviewed_by, so the
-  // status flip survives a missing-migration deployment.
-  it("retries with status-only payload when reviewed_at column is missing on accept", async () => {
+describe("PUT /api/admin/applications/[id] surfaces a failed status flip", () => {
+  // The original update had no error check, so a failure left status='pending'
+  // and the admin list kept showing the applicant as awaiting review after
+  // Accept was clicked. That check is what matters and it is still here.
+  //
+  // The strip-and-retry that WAS here is deleted, and this test is inverted with
+  // it. It dropped `reviewed_at` and `reviewed_by` "for a legacy schema"; both
+  // columns exist in production (migration 052, confirmed against the live
+  // schema), so the branch could never fire for the reason it claimed. If it
+  // ever had, it would have discarded the audit trail on an admin decision and
+  // reported success — the same class as migration 109's, which destroyed a
+  // referral code on every application.
+  it("does NOT retry without the audit columns, and reports the failure instead", async () => {
     const calls: Record<string, unknown>[] = [];
     fromMock.mockImplementation((table: string) => {
       if (table === "artist_applications") {
@@ -350,14 +371,17 @@ describe("PUT /api/admin/applications/[id] missing reviewed_at column fallback",
     const res = await PUT(req({ action: "accept" }), {
       params: Promise.resolve({ id: "123" }),
     });
-    expect(res.status).toBe(200);
 
-    // First call carried the metadata, the retry stripped it down to
-    // {status: "accepted"} so the status flip lands even on the legacy
-    // schema.
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    // A rejected update is a failure, not something to work around. Reporting
+    // 200 with a half-written row is how an admin comes to believe a decision
+    // was recorded when it was not.
+    expect(res.status).toBe(500);
+
+    // ONE attempt, carrying the audit columns. A second, leaner one would mean
+    // the accept was recorded without who did it or when.
+    expect(calls).toHaveLength(1);
     expect(calls[0]).toHaveProperty("reviewed_at");
-    expect(calls[calls.length - 1]).toEqual({ status: "accepted" });
+    expect(calls[0]).toHaveProperty("reviewed_by");
   });
 
   it("returns 500 with a meaningful error when the application update fails for non-column reasons", async () => {
@@ -511,5 +535,106 @@ describe("PUT /api/admin/applications/[id] reject also flips artist_profiles.rev
       params: Promise.resolve({ id: "123" }),
     });
     expect(res.status).toBe(200);
+  });
+});
+
+
+// E30a / G1 — the admission gate left no audit trail at all. It creates or
+// invites an auth user, rewrites that user's user_metadata, inserts an
+// approved artist_profiles row and flips the application status.
+describe("PUT /api/admin/applications/[id] writes an audit row (E30a)", () => {
+  const APP = {
+    id: "123",
+    status: "pending",
+    name: "Finlay Coles",
+    email: "finlay@example.com",
+    location: "London",
+    artist_statement: "a long statement that must not reach the audit context",
+    portfolio_link: "https://example.com/portfolio",
+  };
+
+  function mockApplication(app: Record<string, unknown>) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_applications") {
+        return {
+          select: () => ({ eq: () => ({ single: async () => ({ data: app, error: null }) }) }),
+          update: (payload: Record<string, unknown>) => {
+            applicationsUpdateMock(payload);
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+          insert: async (payload: Record<string, unknown>) => {
+            profilesInsertMock(payload);
+            return { error: null };
+          },
+          update: (payload: Record<string, unknown>) => {
+            profilesUpdateMock(payload);
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      return {};
+    });
+  }
+
+  beforeEach(() => {
+    auditMock.mockReset();
+    mockApplication(APP);
+    listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
+    inviteMock.mockResolvedValue({ data: { user: { id: "new-user-id" } }, error: null });
+    updateUserMock.mockResolvedValue({ data: null, error: null });
+  });
+
+  const put = (body: unknown) =>
+    PUT(req(body), { params: Promise.resolve({ id: "123" }) });
+
+  it("records an application_accepted decision naming the target, not the row", async () => {
+    const res = await put({ action: "accept" });
+    expect(res.status).toBe(200);
+
+    expect(auditMock).toHaveBeenCalledTimes(1);
+    const { action, context } = auditMock.mock.calls[0][0];
+    expect(action).toBe("application_accepted");
+    expect(context).toMatchObject({
+      applicationId: "123",
+      applicantEmail: "finlay@example.com",
+      decision: "accepted",
+    });
+    // Keep the JSONB column from accumulating PII: the decision and the
+    // target, never the application body.
+    expect(context).not.toHaveProperty("artist_statement");
+    expect(context).not.toHaveProperty("portfolio_link");
+  });
+
+  it("records an application_rejected decision", async () => {
+    const res = await put({ action: "reject", feedback: "not a fit" });
+    expect(res.status).toBe(200);
+
+    expect(auditMock).toHaveBeenCalledTimes(1);
+    const { action, context } = auditMock.mock.calls[0][0];
+    expect(action).toBe("application_rejected");
+    expect(context).toMatchObject({
+      applicationId: "123",
+      applicantEmail: "finlay@example.com",
+      decision: "rejected",
+    });
+  });
+
+  it("records nothing when the application is not pending", async () => {
+    // A refused request changed nothing, so there is nothing to account for.
+    mockApplication({ ...APP, status: "accepted" });
+    const res = await put({ action: "accept" });
+    expect(res.status).toBe(409);
+    expect(auditMock).not.toHaveBeenCalled();
+  });
+
+  it("records nothing for an invalid action", async () => {
+    const res = await put({ action: "delete-everything" });
+    expect(res.status).toBe(400);
+    expect(auditMock).not.toHaveBeenCalled();
   });
 });

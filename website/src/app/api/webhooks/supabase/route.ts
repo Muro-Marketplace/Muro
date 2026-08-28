@@ -109,7 +109,11 @@ async function handleSuspiciousLogin(payload: SuspiciousLoginPayload) {
 
   await sendEmail({
     idempotencyKey: `suspicious:${sus.userId}:${sus.loginTime}`,
-    template: "suspicious_login",
+        // Owner decision 7 (2026-08-28): this label was "suspicious_login", which is not a
+    // registry id, so the audit could not connect the send to the template it
+    // renders. The 22 live email_events rows carrying the five old labels were
+    // UPDATEd to the new ones in the same change, so history did not split.
+    template: "account_suspicious_login",
     category: "security",
     to: user.email,
     subject: "New sign-in to your Wallplace account",

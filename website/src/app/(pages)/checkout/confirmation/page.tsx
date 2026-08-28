@@ -6,7 +6,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { labelForCountry } from "@/lib/iso-countries";
 import { clearQrContext } from "@/lib/qr-context";
 
 // Soft abstract painting underlay for the celebration moment. Sits at
@@ -29,25 +28,13 @@ function ConfirmationBackdrop() {
   );
 }
 
-interface SavedShipping {
-  fullName?: string;
-  email?: string;
-  addressLine1?: string;
-  addressLine2?: string;
-  city?: string;
-  postcode?: string;
-  country?: string;
-  notes?: string;
-}
-
+// Mirrors GET /api/checkout/session exactly. customerEmail, metadata, cart and
+// shipping were removed from that response for E39: it is unauthenticated, so
+// anyone holding a session id could read the buyer's name, address and email.
 interface StripeOrder {
   id: string;
   status: string;
   amountTotal: number;
-  customerEmail: string;
-  metadata: Record<string, string>;
-  cart: unknown[];
-  shipping: SavedShipping | null;
   lineItems: { name: string; quantity: number; amount: number }[];
 }
 
@@ -119,7 +106,7 @@ function ConfirmationContent() {
           <p className="text-sm text-muted mb-6">It looks like you haven&apos;t placed an order yet.</p>
           <Link
             href="/browse"
-            className="inline-flex items-center justify-center px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 bg-accent-text text-white text-sm font-medium rounded-sm hover:bg-accent-text-hover transition-colors"
           >
             Discover Art
           </Link>
@@ -199,19 +186,10 @@ function ConfirmationContent() {
         </div>
       )}
 
-      {/* Delivery details — pulled from cart_sessions (Plan B Task 6) */}
-      {order?.shipping && (
-        <div className="bg-surface border border-border rounded-sm p-5 mb-6 text-left">
-          <h2 className="text-sm font-medium mb-3">Delivery Address</h2>
-          <p className="text-sm text-muted">
-            {order.shipping.fullName}<br />
-            {order.shipping.addressLine1}<br />
-            {order.shipping.addressLine2 && <>{order.shipping.addressLine2}<br /></>}
-            {order.shipping.city}, {order.shipping.postcode}<br />
-            {labelForCountry(order.shipping.country || "")}
-          </p>
-        </div>
-      )}
+      {/* The delivery address is deliberately not shown here. It used to come
+          from the unauthenticated /api/checkout/session response, which meant
+          anyone with the session id could read it (E39). The buyer has the
+          address in their confirmation email. */}
 
       {/* Artist fulfilment */}
       <div className="bg-accent/5 border border-accent/20 rounded-sm p-4 mb-8 text-left flex gap-3">
@@ -223,7 +201,7 @@ function ConfirmationContent() {
         </svg>
         <p className="text-sm text-foreground/70">
           Your order will be packed and shipped directly by the artist. Dispatch within 5 to 7 working days.
-          {order?.customerEmail && <> You&apos;ll receive updates at <strong>{order.customerEmail}</strong>.</>}
+          You&apos;ll receive updates by email.
         </p>
       </div>
 
@@ -252,7 +230,7 @@ function ConfirmationContent() {
         {user && (
           <Link
             href={ordersHref}
-            className="inline-flex items-center justify-center px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 bg-accent-text text-white text-sm font-medium rounded-sm hover:bg-accent-text-hover transition-colors"
           >
             View My Orders
           </Link>

@@ -7,8 +7,15 @@
  * to detect lints introduced since the baseline was seeded.
  *
  * Requires env var SUPABASE_ACCESS_TOKEN (personal access token from
- * https://supabase.com/dashboard/account/tokens). Already exported in the
- * developer's ~/.zshrc for this project; in CI it comes from GitHub Secrets.
+ * https://supabase.com/dashboard/account/tokens). It is NOT set up for you:
+ * export it in your shell, or let CI supply it from the repo secret of the same
+ * name. Without it this script exits 2 ("SUPABASE_ACCESS_TOKEN not set"), and so
+ * does `npm run audit:advisors`.
+ *
+ * In CI this runs only in .github/workflows/advisors-nightly.yml. It is not a PR
+ * gate: see EXECUTION-DECISIONS D12 ruling 3. A clean advisor run is not evidence
+ * of RLS health, because the linter skips permissive SELECT policies and so
+ * misses this project's list-leak class entirely.
  */
 
 import fs from "node:fs/promises";

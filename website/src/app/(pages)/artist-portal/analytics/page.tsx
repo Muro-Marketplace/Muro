@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { authFetch } from "@/lib/api-client";
-import { arrangementLabel } from "@/lib/placements/status";
+import { labelForArrangement } from "@/lib/arrangement-labels";
+import { artistPayoutPounds } from "@/lib/finance/order-money";
 
 const dateRanges = ["Last 7 days", "Last 30 days", "Last 3 months", "Last 12 months", "All time"];
 
@@ -31,15 +32,10 @@ interface Placement {
   revenue: string | null;
 }
 
-/** Per-order artist payout. Mirrors the dashboard's calculation
- *  (/api/dashboard/route.ts → totalRevenue) so Analytics and Dashboard
- *  show the same number. Falls back to the buyer-side `total` only for
- *  legacy rows that pre-date the `artist_revenue` column. */
-function orderPayout(o: { total?: number; artist_revenue?: number | null }): number {
-  if (typeof o.artist_revenue === "number" && Number.isFinite(o.artist_revenue)) return o.artist_revenue;
-  if (typeof o.total === "number" && Number.isFinite(o.total)) return o.total;
-  return 0;
-}
+// K6: this was a hand-copied "mirror" of the dashboard's calculation, and the
+// comment saying so was the tell. Four copies of one rule is four chances to
+// drift, and they had. One owner now: lib/finance/order-money.
+const orderPayout = artistPayoutPounds;
 
 interface AnalyticsData {
   totals: {
@@ -76,11 +72,10 @@ export default function AnalyticsPage() {
             workTitle: p.work_title || "Untitled",
             workImage: (p.work_image as string) || "",
             venue: p.venue || "",
-            type: arrangementLabel({
-              arrangement_type: p.arrangement_type as string | null,
-              monthly_fee_gbp: p.monthly_fee_gbp as number | null,
-              qr_enabled: p.qr_enabled as boolean | null,
-              message: p.message as string | null,
+            type: labelForArrangement({
+              arrangementType: p.arrangement_type as string | null,
+              monthlyFeeGbp: p.monthly_fee_gbp as number | null,
+              qrEnabled: p.qr_enabled as boolean | null,
             }),
             revenueSharePercent: p.revenue_share_percent as number | undefined,
             status: (p.status || "active"),

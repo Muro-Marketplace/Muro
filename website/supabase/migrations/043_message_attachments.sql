@@ -1,4 +1,4 @@
--- 040_message_attachments.sql
+-- 043_message_attachments.sql
 -- F2 — message file attachments.
 -- attachments JSONB shape: [{ url, filename, mimeType, sizeBytes, thumbnailUrl?, width?, height? }]
 

@@ -7,10 +7,14 @@ import Button from "@/components/Button";
 import { type ArtistWork, type SizePricing } from "@/data/artists";
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
+import { useSaveAction } from "@/hooks/useSaveAction";
+import { buildFramePayload, type FramePayloadInput } from "./frame-payload";
+import { mergeBulkPricing, copySizesPricing } from "./bulk-pricing";
+import { worksToPost } from "./changed-works";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import Combobox from "@/components/Combobox";
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
@@ -317,12 +321,63 @@ export default function PortfolioPage() {
   // each time it opens, then compare on every change. The beforeunload
   // guard only fires when the form is open AND currently dirty.
   const initialFormJson = useRef<string>("");
+  // E41-c: last set of works we know is persisted, so a save POSTs only the works
+  // that actually changed instead of re-POSTing the whole portfolio. Seeded from the
+  // loaded artist below and advanced after each successful postWorks().
+  const persistedWorks = useRef<ArtistWork[]>([]);
   const formDirty = showForm && JSON.stringify(form) !== initialFormJson.current;
   useUnsavedWarning(formDirty);
+
+  // E41-a: the add/edit save now goes through the shared save control, so a failed
+  // POST (post_limit_reached, subscription_required, any 4xx/5xx) keeps the form
+  // open, rolls `works` back, and shows the real error, instead of the old
+  // fire-and-forget path that closed the form and toasted "Artwork added" first.
+  const saveWork = useSaveAction<[ArtistWork[]], void>({
+    optimistic: (updated) => {
+      const snapshot = works;
+      setWorks(updated);
+      return () => setWorks(snapshot);
+    },
+    run: (updated) => postWorks(updated),
+    onSuccess: () => {
+      setShowForm(false);
+      setEditingIndex(null);
+    },
+    clearDirty: () => {
+      initialFormJson.current = JSON.stringify(form);
+    },
+    successMessage: editingIndex !== null ? "Artwork updated" : "Artwork added",
+  });
+
+  // E41-b: deletes were fire-and-forget (authFetch DELETE, no await/res.ok), so the
+  // card left the grid whether or not the DELETE succeeded — a failed delete left the
+  // work live on /browse while the artist thought it was gone. Now the removal is
+  // optimistic and rolls back if the DELETE fails, with the real error surfaced.
+  const deleteWorksSave = useSaveAction<[string[]], void>({
+    optimistic: (ids) => {
+      const snapshot = works;
+      setWorks((prev) => prev.filter((w) => !ids.includes(w.id)));
+      return () => setWorks(snapshot);
+    },
+    run: async (ids) => {
+      const results = await Promise.allSettled(
+        ids.map((id) => mutate(`/api/artist-works?id=${encodeURIComponent(id)}`, { method: "DELETE" })),
+      );
+      const failed = results.find((r) => r.status === "rejected");
+      if (failed) throw (failed as PromiseRejectedResult).reason;
+    },
+    onSuccess: (_res, ids) => {
+      // E41-c: keep the persisted baseline in step with the delete so a later edit
+      // doesn't re-POST works whose index merely shifted.
+      persistedWorks.current = persistedWorks.current.filter((w) => !ids.includes(w.id));
+    },
+    errorMessage: "Could not delete. Please try again.",
+  });
 
   useEffect(() => {
     if (!artist || initialised) return;
     setWorks([...artist.works]);
+    persistedWorks.current = [...artist.works];
     setInitialised(true);
     // Fetch default shipping price
     authFetch("/api/artist-profile")
@@ -401,48 +456,49 @@ export default function PortfolioPage() {
     );
   }
 
-  function saveWorks(updated: ArtistWork[]) {
-    setWorks(updated);
-
-    // Sync each work to Supabase. After the response lands, reconcile the
-    // work's description/images against what the DB actually returned so
-    // the UI reflects persisted state (not just the in-memory form).
+  // Awaitable core: POST each work via mutate(), reconcile the saved row back into
+  // local state, and surface any warnings. Throws the first failure (ApiError /
+  // NetworkError) so a caller that awaits it can keep the form open and roll back,
+  // instead of the old fire-and-forget path that reported success on a 402/403/500.
+  async function postWorks(updated: ArtistWork[]): Promise<void> {
     const shownWarnings = new Set<string>();
-    updated.forEach((work, index) => {
-      // priceUplift must be numeric for the API's Zod-like validator to
-      // accept the frame; previously we stringified, which caused frames
-      // to be silently sanitized away.
-      const frames = ((work as ArtistWork & { frameOptions?: { label: string; priceUplift: number; imageUrl?: string }[] }).frameOptions ?? [])
-        .map((f) => ({
-          label: f.label,
-          priceUplift: typeof f.priceUplift === "number" ? f.priceUplift : Number(f.priceUplift) || 0,
-          imageUrl: f.imageUrl,
-        }));
+    // E41-c: POST only the works that changed since the last persisted snapshot
+    // (new, moved, or field-changed), not the whole portfolio on every save.
+    const changed = worksToPost(updated, persistedWorks.current);
+    const results = await Promise.allSettled(
+      changed.map(({ work, index }) => {
+        // E41-d: buildFramePayload coerces priceUplift to a number AND carries
+        // pricesBySize through — the inline map here used to drop it, wiping the
+        // artist's per-size frame pricing on every save.
+        const frames = buildFramePayload(
+          (work as ArtistWork & { frameOptions?: FramePayloadInput[] }).frameOptions,
+        );
 
-      authFetch("/api/artist-works", {
-        method: "POST",
-        body: JSON.stringify({
-          id: work.id,
-          title: work.title,
-          medium: work.medium,
-          dimensions: work.dimensions,
-          priceBand: work.priceBand,
-          pricing: work.pricing,
-          available: work.available,
-          color: work.color || "#C17C5A",
-          image: work.image,
-          orientation: work.orientation || "landscape",
-          sortOrder: index,
-          shippingPrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).shippingPrice ?? null,
-          inStorePrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).inStorePrice ?? null,
-          quantityAvailable: (work as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable ?? null,
-          frameOptions: frames,
-          description: work.description || "",
-          images: work.images || [],
-        }),
-      })
-        .then((r) => r.json())
-        .then((res: { warnings?: string[]; savedRow?: { id?: string; description?: string; images?: string[] } }) => {
+        return mutate<{ warnings?: string[]; savedRow?: { id?: string; description?: string; images?: string[] } }>(
+          "/api/artist-works",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              id: work.id,
+              title: work.title,
+              medium: work.medium,
+              dimensions: work.dimensions,
+              priceBand: work.priceBand,
+              pricing: work.pricing,
+              available: work.available,
+              color: work.color || "#C17C5A",
+              image: work.image,
+              orientation: work.orientation || "landscape",
+              sortOrder: index,
+              shippingPrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).shippingPrice ?? null,
+              inStorePrice: (work as ArtistWork & { shippingPrice?: number; inStorePrice?: number }).inStorePrice ?? null,
+              quantityAvailable: (work as ArtistWork & { quantityAvailable?: number | null }).quantityAvailable ?? null,
+              frameOptions: frames,
+              description: work.description || "",
+              images: work.images || [],
+            }),
+          },
+        ).then((res) => {
           // Reconcile DB state back into local works so subsequent edits
           // see what actually persisted.
           if (res.savedRow && res.savedRow.id) {
@@ -463,17 +519,30 @@ export default function PortfolioPage() {
               }
             });
           }
-        })
-        .catch((err) => console.error("Work sync error:", err));
-    });
+        });
+      }),
+    );
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) throw (failed as PromiseRejectedResult).reason;
+    // Every changed work saved; this set is the new persisted baseline.
+    persistedWorks.current = updated;
+  }
+
+  // Legacy fire-and-forget wrapper, still used by the delete / bulk-edit callers
+  // (E41-b, E41-e migrate them next). handleSubmit no longer uses this — it awaits
+  // postWorks through useSaveAction so a failed add/edit can no longer report success.
+  function saveWorks(updated: ArtistWork[]) {
+    setWorks(updated);
+    void postWorks(updated).catch((err) => console.error("Work sync error:", err));
   }
 
   function handleDeleteWork(index: number) {
     const work = works[index];
-    // Delete from Supabase
-    authFetch(`/api/artist-works?id=${work.id}`, { method: "DELETE" })
-      .catch((err) => console.error("Work delete error:", err));
-    saveWorks(works.filter((_, i) => i !== index));
+    if (!work) return;
+    // E41-b: optimistically remove the card and await the DELETE through the shared
+    // save control. On failure the card comes back and the real error is shown,
+    // instead of the old fire-and-forget path that removed it regardless.
+    void deleteWorksSave.save([work.id]);
   }
 
   /**
@@ -540,16 +609,15 @@ export default function PortfolioPage() {
     });
     if (!ok) return;
 
-    // Best-effort: fire the API delete for each. saveWorks(filtered)
-    // also POSTs the remaining works which is harmless.
-    Array.from(selectedIds).forEach((id) => {
-      authFetch(`/api/artist-works?id=${id}`, { method: "DELETE" }).catch(
-        (err) => console.error("Bulk delete error:", err),
-      );
-    });
-    saveWorks(works.filter((w) => !selectedIds.has(w.id)));
-    showToast(`Deleted ${count} work${count === 1 ? "" : "s"}`);
-    exitSelectMode();
+    // E41-b: await all the DELETEs through the shared save control. The toast and
+    // exit only fire on a confirmed success; a failure rolls the removed cards back
+    // and surfaces the error, instead of the old unconditional "Deleted N works".
+    const ids = Array.from(selectedIds);
+    const deleted = await deleteWorksSave.save(ids);
+    if (deleted) {
+      showToast(`Deleted ${count} work${count === 1 ? "" : "s"}`);
+      exitSelectMode();
+    }
   }
 
   /**
@@ -1057,12 +1125,9 @@ export default function PortfolioPage() {
     const next = works.map((w) => {
       if (!byWork.has(w.id)) return w;
       const rowsForWork = byWork.get(w.id)!;
-      const newPricing = rowsForWork
-        .filter((r) => r.label.trim() && r.price > 0)
-        .map((r) => ({
-          label: r.label.trim(),
-          price: Math.round(r.price * 100) / 100,
-        }));
+      // E41-e: merge onto the existing rows so per-size shippingPrice / inStorePrice
+      // / quantityAvailable survive a price tweak, instead of rebuilding {label,price}.
+      const newPricing = mergeBulkPricing(w.pricing ?? [], rowsForWork);
       if (newPricing.length === 0) {
         // Don't accidentally wipe a work's only sizes if the artist
         // emptied them all, leave the original pricing intact.
@@ -1232,16 +1297,9 @@ export default function PortfolioPage() {
     const next = works.map((w) => {
       if (!bulkEditTargetIds.has(w.id)) return w;
       if (kind === "sizes") {
-        const nextPricing: SizePricing[] = source.pricing.map((s) => {
-          const existing = w.pricing.find(
-            (x) => x.label.toLowerCase() === s.label.toLowerCase(),
-          );
-          return {
-            label: s.label,
-            price: existing?.price ?? 0,
-            quantityAvailable: existing?.quantityAvailable ?? null,
-          };
-        });
+        // E41-e: preserve the target's per-size shippingPrice / inStorePrice for
+        // matching labels (the old rebuild kept only price + quantityAvailable).
+        const nextPricing: SizePricing[] = copySizesPricing(source.pricing, w.pricing);
         const prices = nextPricing.map((p) => p.price).filter((n) => n > 0);
         const lowest = prices.length > 0 ? Math.min(...prices) : 0;
         return {
@@ -1802,12 +1860,11 @@ export default function PortfolioPage() {
       updated = [...works, newWork];
     }
 
-    saveWorks(updated);
-    // Clear dirty snapshot so the beforeunload guard drops after save
-    initialFormJson.current = JSON.stringify(form);
-    setShowForm(false);
-    showToast(editingIndex !== null ? "Artwork updated" : "Artwork added");
-    setEditingIndex(null);
+    // E41-a: await the write through useSaveAction. The optimistic setWorks, the
+    // dirty-snapshot reset, the form close and the success toast all live in the
+    // hook now and only run on a confirmed 2xx; a failure keeps the form open,
+    // rolls `works` back and surfaces the real error.
+    void saveWork.save(updated);
   }
 
   function deleteWork(index: number) {
@@ -1939,15 +1996,28 @@ export default function PortfolioPage() {
                   onClick={async () => {
                     if (hasError) return;
                     setSavingDefault(true);
-                    await authFetch("/api/artist-profile", {
-                      method: "PUT",
-                      body: JSON.stringify({
-                        default_shipping_price: ukVal,
-                        ships_internationally: shipsInternationally,
-                        international_shipping_price: intlVal,
-                      }),
-                    }).catch(() => {});
-                    setSavingDefault(false);
+                    // E43-d: the old `authFetch(...).catch(() => {})` swallowed every
+                    // failure and gave no feedback, so a rejected shipping save looked
+                    // successful. mutate() throws on a non-2xx, so success and failure
+                    // are now distinct and each shows a toast.
+                    try {
+                      await mutate("/api/artist-profile", {
+                        method: "PUT",
+                        body: JSON.stringify({
+                          default_shipping_price: ukVal,
+                          ships_internationally: shipsInternationally,
+                          international_shipping_price: intlVal,
+                        }),
+                      });
+                      showToast("Shipping settings saved");
+                    } catch (err) {
+                      showToast(
+                        err instanceof ApiError ? err.message : "Could not save shipping settings. Please try again.",
+                        { variant: "error" },
+                      );
+                    } finally {
+                      setSavingDefault(false);
+                    }
                   }}
                   disabled={savingDefault || hasError}
                   className="px-4 py-2 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

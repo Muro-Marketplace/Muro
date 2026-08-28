@@ -59,4 +59,27 @@ describe("wallplace/no-inline-admin-check", () => {
     );
     expect(messages).toHaveLength(0);
   });
+
+  it("no longer exempts src/lib/email.ts, which K1 deleted", () => {
+    // 09 §2.9. The exemption outlived the file it excused. A dead exemption is
+    // not harmless: it silently covers whatever is created at that path next,
+    // and the path is an obvious one for someone to recreate.
+    const messages = lint("const x = process.env.ADMIN_EMAILS", "src/lib/email.ts");
+    expect(messages).toHaveLength(1);
+  });
+
+  it("exempts NOTHING but admin-auth.ts", () => {
+    // §2.9 says to repoint the exemption at the replacement helper. It does not
+    // need one: src/lib/email/admin-alert.ts imports adminEmails() from
+    // admin-auth rather than reading the env, so the ops inbox is the same list
+    // this rule protects, by construction. Naming both files here means moving
+    // that read back inline fails a test.
+    for (const file of [
+      "src/lib/email/admin.ts",
+      "src/lib/email/admin-alert.ts",
+      "src/lib/email/send.ts",
+    ]) {
+      expect(lint("const x = process.env.ADMIN_EMAILS", file), file).toHaveLength(1);
+    }
+  });
 });

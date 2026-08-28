@@ -7,6 +7,7 @@
 import { EmailShell, H1, P, Button, Small, Divider } from "@/emails/_components";
 import { Img } from "@react-email/components";
 import type { TemplateEntry } from "@/emails/registry-types";
+import { formatMoney, type Money } from "@/emails/types/emailTypes";
 import { SUPPORT_EMAIL } from "@/lib/email/constants";
 
 export interface ArtistOrderReceivedProps {
@@ -17,6 +18,20 @@ export interface ArtistOrderReceivedProps {
   orderUrl: string;
   workImage?: string;
   nextSteps?: string[];
+  /**
+   * 09 item 1.2. Optional, rendered in the opening paragraph when present, so
+   * artist_order_received carries the figure the retired artist_work_sold used
+   * to lead on.
+   */
+  saleAmount?: Money;
+  /**
+   * 09 item 1.3. One `data` object feeds both order-placed templates, and BOTH
+   * declare `firstName` — the spec does not address that collision. `firstName`
+   * carries the buyer's name (customer_order_placed needs it), so the artist's
+   * own name travels under this key and wins here when present. Without it the
+   * artist would be greeted by the buyer's first name.
+   */
+  artistFirstName?: string;
 }
 
 export function ArtistOrderReceived({
@@ -27,7 +42,10 @@ export function ArtistOrderReceived({
   orderUrl,
   workImage,
   nextSteps,
+  saleAmount,
+  artistFirstName,
 }: ArtistOrderReceivedProps) {
+  const greetName = artistFirstName || firstName;
   const steps = nextSteps ?? [
     "Pack the piece securely",
     "Mark the order as shipped in the portal",
@@ -36,7 +54,10 @@ export function ArtistOrderReceived({
   return (
     <EmailShell stream="tx" persona="artist" preview={`New order ${orderNumber}, ${workTitle}`}>
       <H1>New order: {orderNumber}</H1>
-      <P>Hi {firstName}, {buyerFirstName} just bought <strong>{workTitle}</strong>.</P>
+      <P>
+        Hi {greetName}, {buyerFirstName} just bought <strong>{workTitle}</strong>
+        {saleAmount ? <> for <strong>{formatMoney(saleAmount)}</strong></> : null}.
+      </P>
       {workImage && (
         <div style={{ margin: "16px 0" }}>
           <Img src={workImage} alt={workTitle} width={120} height={120} style={{ display: "block", borderRadius: 4, objectFit: "cover" as const }} />

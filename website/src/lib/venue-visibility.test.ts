@@ -75,3 +75,48 @@ describe("redactVenueDetail", () => {
     expect(r.postcode).toBe("E8 1AA");
   });
 });
+
+// Bug 5 / G-B. redactDemandVenue blanked name, description and images but left the
+// exact coordinates on the row, so a paywalled venue's precise location was still
+// published to anonymous callers. DB venues carry coordinates: null, but the static
+// venues in src/data/venues.ts carry 4dp fixes (~11m).
+describe("redactDemandVenue coordinate precision (Bug 5)", () => {
+  const venue = {
+    slug: "the-copper-kettle",
+    name: "The Copper Kettle",
+    type: "Cafe",
+    location: "Hampton",
+    coordinates: { lat: 51.4732, lng: -0.0693 },
+    interestedInFreeLoan: true,
+  };
+
+  it("coarsens the coordinates for an unentitled viewer", () => {
+    const out = redactDemandVenue(venue, false);
+    expect(out.coordinates).toEqual({ lat: 51.47, lng: -0.07 });
+    expect(JSON.stringify(out)).not.toContain("51.4732");
+    expect(JSON.stringify(out)).not.toContain("0.0693");
+  });
+
+  it("leaves the exact coordinates for an entitled viewer", () => {
+    expect(redactDemandVenue(venue, true).coordinates).toEqual({ lat: 51.4732, lng: -0.0693 });
+  });
+
+  it("keeps a null coordinate null", () => {
+    expect(redactDemandVenue({ ...venue, coordinates: null }, false).coordinates).toBeNull();
+  });
+
+  it("keeps the demand signal intact, so the public tracker still works", () => {
+    const out = redactDemandVenue(venue, false);
+    expect(out).toMatchObject({
+      type: "Cafe",
+      location: "Hampton",
+      interestedInFreeLoan: true,
+    });
+  });
+
+  it("still blanks the identity fields it always blanked", () => {
+    const out = redactDemandVenue(venue, false);
+    expect(out.name).toBe("");
+    expect(JSON.stringify(out)).not.toContain("Copper Kettle");
+  });
+});

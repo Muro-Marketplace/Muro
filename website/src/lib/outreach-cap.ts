@@ -71,10 +71,16 @@ export async function checkArtistOutreachCap(
 
   // Sum across the three surfaces.
   const [placements, conversations, responses] = await Promise.all([
+    // N3, filter side. `placements` has no `requester_user_id`; the column is
+    // `proposed_by_user_id`. PostgREST rejected the whole query, so this leg of
+    // the cap counted null, which reads as zero: placement requests were FREE.
+    // An artist on Core, limited to 2 first contacts a day, could send as many
+    // placement requests as they liked, and only the messages and
+    // artwork-response legs were ever enforced.
     db
       .from("placements")
       .select("id", { count: "exact", head: true })
-      .eq("requester_user_id", artistUserId)
+      .eq("proposed_by_user_id", artistUserId)
       .gte("created_at", since),
     db
       .from("messages")

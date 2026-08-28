@@ -98,7 +98,7 @@ export default function CookiesPage() {
                       <div className="flex items-center gap-2 mb-2">
                         <h3 className="text-base font-medium">{title}</h3>
                         {required && (
-                          <span className="text-xs px-2 py-0.5 bg-accent/10 text-accent rounded-sm">
+                          <span className="text-xs px-2 py-0.5 bg-accent/10 text-accent-text rounded-sm">
                             Required
                           </span>
                         )}
@@ -216,14 +216,14 @@ export default function CookiesPage() {
                       relate to your device, email{" "}
                       <a
                         href="mailto:privacy@wallplace.co.uk"
-                        className="text-accent hover:underline"
+                        className="text-accent-text underline"
                       >
                         privacy@wallplace.co.uk
                       </a>{" "}
                       and we will investigate and respond in line with our{" "}
                       <a
                         href="/privacy"
-                        className="text-accent hover:underline"
+                        className="text-accent-text underline"
                       >
                         Privacy Policy
                       </a>
@@ -253,13 +253,13 @@ export default function CookiesPage() {
                   Policy, please contact us at{" "}
                   <a
                     href="mailto:privacy@wallplace.co.uk"
-                    className="text-accent hover:underline"
+                    className="text-accent-text underline"
                   >
                     privacy@wallplace.co.uk
                   </a>
                   . For more information about how we handle your personal data,
                   please read our{" "}
-                  <a href="/privacy" className="text-accent hover:underline">
+                  <a href="/privacy" className="text-accent-text underline">
                     Privacy Policy
                   </a>
                   .

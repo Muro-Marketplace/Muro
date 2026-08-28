@@ -13,7 +13,11 @@ export type EmailCategory =
   | "recommendations"     // artist/venue matches, new works from followed
   | "tips"                // educational, product updates
   | "newsletter"          // editorial, double opt-in
-  | "promotions";         // offers, sales, explicit opt-in
+  | "promotions"          // offers, sales, explicit opt-in
+  // K1: internal operational alerts to the Wallplace team. The recipient is us,
+  // not a user, so no preference toggle governs it and no suppression applies —
+  // an operator muting their own alerts by unsubscribing would be a foot-gun.
+  | "platform_admin";
 
 export interface CategoryRules {
   stream: "tx" | "notify" | "news";
@@ -38,6 +42,7 @@ export const CATEGORY_RULES: Record<EmailCategory, CategoryRules> = {
   tips:                { stream: "news",   criticalAlwaysSend: false, throttleCount: 2,  throttleHours: 168 },
   newsletter:          { stream: "news",   criticalAlwaysSend: false, throttleCount: 4,  throttleHours: 720 }, // ~1/week
   promotions:          { stream: "news",   criticalAlwaysSend: false, throttleCount: 2,  throttleHours: 720 },
+  platform_admin:      { stream: "tx",     criticalAlwaysSend: true,  throttleCount: 0, throttleHours: 0 },
 };
 
 /** Which preference flag governs this category. null = unsuppressible. */

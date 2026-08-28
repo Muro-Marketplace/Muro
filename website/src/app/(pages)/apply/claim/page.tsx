@@ -61,7 +61,13 @@ function ClaimForm() {
       const { error: authError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { user_type: "artist", display_name: name, artist_slug: slug } },
+        options: {
+          data: { user_type: "artist", display_name: name, artist_slug: slug },
+          // 09 item 3.2: this and AuthContext were the two signup paths with no
+          // emailRedirectTo, so their confirmation link landed on Supabase's
+          // default redirect rather than back on the site.
+          emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent("/artist-portal")}`,
+        },
       });
       if (authError) {
         // "User already registered" → fall through to sign-in

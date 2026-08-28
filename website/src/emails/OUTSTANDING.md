@@ -1,10 +1,46 @@
 # Email system, outstanding work
 
-Library status: **113 templates built · 50 wired · 63 outstanding.**
+## Library status: run the audit, do not read a number here
 
-Every outstanding item is blocked on something that isn't a pure email-library
-task, Supabase Auth config, missing product features, editorial content
-pipelines, or operational infra. Grouped here so priorities are clear.
+```bash
+npm run email:audit
+```
+
+That prints, from the registry and the actual send sites: how many templates
+exist, which have a send path, which do not, and which sends name a label the
+registry does not carry.
+
+**This line used to read "113 templates built · 50 wired · 63 outstanding" and
+all three numbers were wrong.** As of 2026-08-28 the real figures are **131
+built, 65 wired, 66 with no send path**, and they will be wrong again shortly,
+which is the point: a hand-maintained count in a file nobody regenerates is how
+this document came to disagree with the codebase. 09 §E.1 calls the audit "the
+honest replacement for OUTSTANDING.md:3", and this is that replacement.
+
+`npm run email:render` (part of `npm run check`, and now a CI step) proves every
+one of them still renders, in HTML and plaintext.
+
+### What "no send path" means here
+
+The registry is a library built ahead of the product, so most of the
+unwired templates are **not** bugs: nothing is meant to send them yet. The
+sections below are the plan for wiring them. The audit's *other* direction, a
+send whose `email_events` label is not a registry id, is settled: owner decision
+7 (2026-08-28) renamed the five mismatched labels to their registry ids and
+updated the 22 live `email_events` rows in the same change, so `email:audit`
+exits 1 on any new mismatch and runs in `npm run check` and CI.
+
+---
+
+Every outstanding item below is blocked on something that isn't a pure
+email-library task: Supabase Auth config, missing product features, editorial
+content pipelines, or operational infra. Grouped so priorities are clear.
+
+> **On §1 and §2 below:** these are DNS, Vercel environment and Supabase
+> dashboard steps. Nothing in the repository can tell you whether they have been
+> done, so they are left in place rather than ticked off. 09 §4.5 says to delete
+> §1.1, §1.2 and §2.1 as complete; that would be asserting infrastructure state
+> this file cannot see. Confirm them in Resend, Vercel and Supabase, then delete.
 
 ---
 

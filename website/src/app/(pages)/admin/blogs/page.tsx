@@ -6,7 +6,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import type { ModerationPayload } from "@/lib/moderation/types";
 
 interface QueueRow {
@@ -50,17 +50,22 @@ export default function AdminBlogsPage() {
       reason = prompt("Reason (visible to the author):") ?? undefined;
       if (!reason) return;
     }
-    const res = await authFetch(`/api/admin/blogs/${blogId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(action === "reject" ? { action, reason } : { action }),
-    });
-    if (res.ok) {
+    try {
+      // mutate throws on a non-2xx (ApiError) or a dropped request. The old code had
+      // no catch at all, so a network failure rejected unhandled and left the admin
+      // with no message; both failure modes now land in one place.
+      await mutate(`/api/admin/blogs/${blogId}`, {
+        method: "PATCH",
+        body: JSON.stringify(action === "reject" ? { action, reason } : { action }),
+      });
       setActionMsg(action === "approve" ? "Approved." : "Rejected.");
       load();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setActionMsg(data?.error || "Could not apply that action.");
+    } catch (err) {
+      setActionMsg(
+        err instanceof ApiError
+          ? err.code || "Could not apply that action."
+          : "Network error. Please try again.",
+      );
     }
   }
 

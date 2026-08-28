@@ -1,14 +1,34 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { notifyBuyerStatusUpdate } from "@/lib/email";
+import { assertNotDemo } from "@/lib/demo-guard";
 // Phase 2.3 J1 audit: legacy customer-side shipped/delivered emails
 // removed in favour of the dispatcher path (recordOrderEvent). The
 // templates themselves stay in the registry for the email-preview
 // route and any future legacy webhook fallback.
 import { executeTransfer } from "@/lib/stripe-connect";
 import { canTransition, type OrderStatus, ORDER_STATUSES } from "@/lib/order-state-machine";
+import { assertOrderParty, handleAuthzError } from "@/lib/authz";
+
+// E21. Who may set what. `delivered` is deliberately absent from the seller's
+// set: it releases escrow, so the party who gets paid cannot self-attest it.
+// `cancelled` is on both because either side may call off an order that has not
+// shipped; canTransition still decides whether the move is legal from the
+// current status, and both gates must pass.
+const SELLER_STATUSES = new Set<string>([
+  "artist_notified",
+  "awaiting_dispatch",
+  "processing",
+  "shipped",
+  "cancelled",
+]);
+const BUYER_STATUSES = new Set<string>(["delivered", "disputed", "cancelled"]);
 import { recordOrderEvent } from "@/lib/orders/lifecycle";
+import { sendEmail } from "@/lib/email/send";
+import {
+  CustomerOrderStatusUpdate,
+  orderStatusText,
+} from "@/emails/templates/orders/CustomerOrderStatusUpdate";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -106,7 +126,15 @@ export async function GET(request: Request) {
       artistSlug: artistProfile?.slug || null,
       venueSlug: venueProfile?.slug || null,
     });
-  } catch {
+  } catch (err) {
+    // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
+    // everything: an AuthzError that means 403 or 404, a schema failure, and a
+    // genuine server fault were indistinguishable to the caller AND to us. The
+    // authz status is preserved first, then the fault is logged, so a real bug
+    // stops looking like a malformed body.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    console.error("[orders] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
@@ -115,6 +143,11 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
+  // unwinding optimistic state. The helper had zero call sites while two doc
+  // comments claimed it was enforced.
+  const demoResp = assertNotDemo(auth.user!.id);
+  if (demoResp) return demoResp;
 
   try {
     const body = await request.json();
@@ -130,32 +163,44 @@ export async function PATCH(request: Request) {
 
     const db = getSupabaseAdmin();
 
-    // Verify the artist owns this order. Legacy orders (pre-migration)
-    // may have artist_user_id = NULL but artist_slug populated; fall back
-    // to matching the caller's artist_profiles.slug so those orders
-    // aren't locked out of the status transitions.
-    const { data: order } = await db
-      .from("orders")
-      .select("artist_user_id, artist_slug, buyer_email, status, status_history, placement_id, venue_revenue, shipping, items")
-      .eq("id", orderId)
-      .single();
-    if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    // E21. Both parties are resolved here, not just the artist. The buyer used
+    // to be unauthorised for every status, which left `delivered` self-attested
+    // by the party who gets paid by it.
+    //
+    // assertOrderParty matches the seller on artist_user_id OR artist_slug
+    // (legacy rows), and the buyer on buyer_user_id OR buyer_email against the
+    // caller's own email. The email arm matters: every one of the 12 live orders
+    // has buyer_email and NONE has buyer_user_id, because guest checkout is
+    // allowed, so a user-id-only match would have made the buyer role
+    // unreachable and stranded orders in `shipped`.
+    const order = await assertOrderParty(auth.user!, orderId, { as: "any" }, db);
 
-    let authorised = order.artist_user_id === auth.user!.id;
-    if (!authorised && order.artist_slug) {
-      const { data: myArtistProfile } = await db
-        .from("artist_profiles")
-        .select("slug, user_id")
-        .eq("user_id", auth.user!.id)
-        .single();
-      if (myArtistProfile?.slug === order.artist_slug) {
-        authorised = true;
-        // Back-fill the missing column so subsequent updates hit the
-        // fast path.
-        db.from("orders").update({ artist_user_id: auth.user!.id }).eq("id", orderId).then(() => {}, () => {});
-      }
+    // Back-fill the column the legacy slug match papers over, so later updates
+    // take the fast path. Only meaningful for a seller on a legacy row.
+    if (order.role === "seller" && order.artist_user_id === null) {
+      db.from("orders")
+        .update({ artist_user_id: auth.user!.id })
+        .eq("id", orderId)
+        .then(() => {}, () => {});
     }
-    if (!authorised) return NextResponse.json({ error: "Not authorised" }, { status: 403 });
+
+    // The seller may drive dispatch; only the buyer may confirm the parcel
+    // arrived. `delivered` releases every pending stripe_transfers row for the
+    // order (see the executeTransfer block below), which is the platform's only
+    // chargeback buffer. canTransition blocks confirmed → delivered, but
+    // shipped → delivered is a legal edge and shipping is self-attested too, so
+    // before this the seller could walk confirmed → processing → shipped →
+    // delivered in three requests and be paid on day zero.
+    //
+    // Support overrides ("the carrier confirmed but the buyer never clicked")
+    // go through /api/admin/orders, which is the intended escape hatch.
+    const allowed = order.role === "seller" ? SELLER_STATUSES : BUYER_STATUSES;
+    if (!allowed.has(status)) {
+      return NextResponse.json(
+        { error: `A ${order.role} cannot move an order to ${status}.` },
+        { status: 403 },
+      );
+    }
 
     const transition = canTransition(order.status as OrderStatus, status as OrderStatus);
     if (!transition.ok) {
@@ -176,6 +221,18 @@ export async function PATCH(request: Request) {
 
     const updates: Record<string, unknown> = { status, status_history: parsedHistory };
     if (trackingNumber) updates.tracking_number = trackingNumber;
+    // Migration 110. `isRefundEligible` measures the 14-day Consumer Contracts
+    // Regulations 2013 window from this timestamp, and nothing ever wrote it on
+    // this path: the column did not exist, and the only code that set it at all
+    // was the collection branch of the webhook insert, where the D6 ladder
+    // stripped it. So `status === "delivered" && delivered_at` was false for
+    // every delivered order and the refund affordance never appeared.
+    //
+    // Only on the transition INTO delivered, and only when it is not already
+    // stamped, so a re-PATCH cannot silently restart someone's window.
+    if (status === "delivered" && !order.delivered_at) {
+      updates.delivered_at = new Date().toISOString();
+    }
 
     const { error } = await db.from("orders").update(updates).eq("id", orderId);
 
@@ -221,6 +278,9 @@ export async function PATCH(request: Request) {
           firstName: firstName0,
           orderNumber: orderId,
           orderUrl: `${SITE}/customer-portal/orders`,
+          // 09 item 1.5: the cancellation template needs the verb phrase, and
+          // the dispatcher spreads `data` straight into the component.
+          statusText: orderStatusText(status),
         },
         metadata: { tracking_number: trackingNumber ?? null },
       });
@@ -233,21 +293,44 @@ export async function PATCH(request: Request) {
     // the Phase 2.0c templates. The old inline sendEmail calls used
     // a different idempotency key shape, so both paths fired and the
     // customer received duplicate messages for the same lifecycle
-    // event. We keep the legacy `notifyBuyerStatusUpdate` only for
-    // statuses the dispatcher doesn't cover (cancelled / disputed /
-    // refunded), so cancellation notes still go out today.
+    // event. This send covers only the statuses the dispatcher doesn't
+    // (disputed / refunded), so those notes still go out.
+    //
+    // K1: that used to be the legacy `notifyBuyerStatusUpdate`, hand-written
+    // HTML from an unverified domain with no audit trail. Same scope, one
+    // pipeline.
     //
     // Finding 7.3: await the email so it completes before the function
     // returns (Vercel serverless can freeze/kill unawaited promises).
     // A failure is logged but does NOT fail the request — the status
     // change already committed successfully above.
-    if (order.buyer_email && status !== "shipped" && status !== "delivered" && status !== "processing") {
+    // `cancelled` is absent from this list on purpose: the dispatcher above owns
+    // it since 09 item 1.5. Leaving it here would send two emails for one
+    // cancellation, which is the defect K1 removed from refunds/process.
+    if (
+      order.buyer_email &&
+      status !== "shipped" &&
+      status !== "delivered" &&
+      status !== "processing" &&
+      status !== "cancelled"
+    ) {
       try {
-        await notifyBuyerStatusUpdate({
-          email: order.buyer_email,
-          orderId,
-          status,
-          trackingNumber,
+        const shippingBlob = (order.shipping ?? {}) as { fullName?: string };
+        await sendEmail({
+          idempotencyKey: `order_status_update:${orderId}:${status}`,
+          template: "customer_order_status_update",
+          category: "orders_and_payouts",
+          to: order.buyer_email,
+          subject: `Update on order ${orderId}`,
+          react: CustomerOrderStatusUpdate({
+            firstName: (shippingBlob.fullName || order.buyer_email.split("@")[0] || "there").split(" ")[0],
+            orderNumber: orderId,
+            statusText: orderStatusText(status),
+            trackingNumber: trackingNumber || undefined,
+            orderUrl: `${SITE}/customer-portal/orders`,
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { orderId, status },
         });
       } catch (err) {
         console.error("[orders PATCH] status email failed", { orderId, status, err });
@@ -321,39 +404,14 @@ export async function PATCH(request: Request) {
     const responseBody: { success: true; payoutFailures?: number } = { success: true };
     if (payoutFailures > 0) responseBody.payoutFailures = payoutFailures;
     return NextResponse.json(responseBody);
-  } catch {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { id, items, shipping, subtotal, shippingCost, total, buyerEmail } = body;
-
-    if (!id || !items || !shipping || subtotal == null || total == null || !buyerEmail) {
-      return NextResponse.json({ error: "Missing order data" }, { status: 400 });
-    }
-
-    const { error } = await getSupabaseAdmin().from("orders").insert({
-      id,
-      buyer_email: buyerEmail,
-      items,
-      shipping,
-      subtotal,
-      shipping_cost: shippingCost,
-      total,
-      status: "confirmed",
-      created_at: new Date().toISOString(),
-    });
-
-    if (error) {
-      console.error("Supabase error:", error);
-      return NextResponse.json({ error: "Failed to save order" }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    // E21 routes denials through AuthzError; without this the bare catch would
+    // flatten a 404 order_not_found into whatever this handler returns.
+    const denied = handleAuthzError(err);
+    if (denied) return denied;
+    // Logged, not swallowed: a real fault here used to be
+    // indistinguishable from a malformed body (Phase E item 14).
+    console.error("[orders] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }

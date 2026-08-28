@@ -8,15 +8,18 @@ import VenuePortalLayout from "@/components/VenuePortalLayout";
 import PlacementStepper, { type PlacementStepperData } from "@/components/PlacementStepper";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import PlacementActionItems from "@/components/PlacementActionItems";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import { canRespond, isRequester } from "@/lib/placement-permissions";
-import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, arrangementLabel } from "@/lib/placements/status";
+import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
+import { labelForArrangement } from "@/lib/arrangement-labels";
+import { updatePlacementStatus } from "@/lib/placements/status-update";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 function formatSlug(slug: string): string {
   if (!slug) return "";
@@ -27,7 +30,11 @@ type FilterTab = "Current" | "Pending" | "Active" | "Completed" | "Archived";
 // Open-ended so combined labels ("Paid loan + QR") can come through the
 // shared arrangementLabel helper.
 type ArrangementType = string;
-type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed" | "Sold" | "Cancelled";
+// Decision 8a: the shared DisplayStatus, not a local mirror. The local copy
+// plus the `as` cast at normaliseStatus meant a widening of the shared union
+// (Paused, and 8b's Unknown) compiled clean here while every tab tally and
+// badge silently mishandled the new value.
+type PlacementStatus = DisplayStatus;
 
 interface PlacementRequest {
   id: string;
@@ -87,7 +94,7 @@ const statusBadge = (status: string) => statusBadgeClass(sharedNormaliseStatus(s
 // right now" and matches what the tab actually shows.
 const tabs: FilterTab[] = ["Current", "Pending", "Active", "Completed", "Archived"];
 
-const normaliseStatus = (raw: string): PlacementStatus => sharedNormaliseStatus(raw) as PlacementStatus;
+const normaliseStatus = (raw: string): PlacementStatus => sharedNormaliseStatus(raw);
 
 /**
  * Derive a "what happens next" message from placement status + lifecycle
@@ -138,11 +145,13 @@ function normaliseType(
   rawType: string,
   extras?: { monthly_fee_gbp?: number | null; qr_enabled?: boolean | null; message?: string | null },
 ): ArrangementType {
-  return arrangementLabel({
-    arrangement_type: rawType,
-    monthly_fee_gbp: extras?.monthly_fee_gbp,
-    qr_enabled: extras?.qr_enabled,
-    message: extras?.message,
+  return labelForArrangement({
+    arrangementType: rawType,
+    monthlyFeeGbp: extras?.monthly_fee_gbp,
+    qrEnabled: extras?.qr_enabled,
+    // K3: `message` is gone. status.ts regexed the free-text body for
+    // "£X/month" to infer a fee when the column was null; inferring money from
+    // prose a user typed is a bug generator, so the canonical labeller does not.
   });
 }
 
@@ -645,7 +654,9 @@ export default function VenuePlacementsPage() {
     }];
 
     try {
-      const res = await authFetch("/api/placements", {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the
+      // optimistic insert below only runs on a confirmed 2xx.
+      await mutate("/api/placements", {
         method: "POST",
         body: JSON.stringify({
           placements: newPlacements.map((p) => ({
@@ -656,14 +667,6 @@ export default function VenuePlacementsPage() {
           artistSlug,
         }),
       });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const msg: string = body?.error || `Could not send request (HTTP ${res.status})`;
-        setSubmitError(msg);
-        setSubmitting(false);
-        return;
-      }
 
       const mapped: PlacementRequest[] = newPlacements.map((p) => ({
         id: p.id,
@@ -693,8 +696,12 @@ export default function VenuePlacementsPage() {
       setMessage("");
       setRevenuePercent(0);
     } catch (err) {
-      console.error("Placement request error:", err);
-      setSubmitError("Network error, please try again.");
+      if (err instanceof ApiError) {
+        setSubmitError(err.message || "Could not send request. Please try again.");
+      } else {
+        console.error("Placement request error:", err);
+        setSubmitError("Network error, please try again.");
+      }
     }
     setSubmitting(false);
   }
@@ -703,52 +710,38 @@ export default function VenuePlacementsPage() {
     setResponding(id);
     setRespondError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so the
+      // optimistic write and the cross-portal event only run on a confirmed 2xx.
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id, status: accept ? "active" : "declined" }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setPlacements((prev) =>
-          prev.map((p) =>
-            p.id === id
-              ? { ...p, status: accept ? "Active" : "Declined", respondedAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }
-              : p
-          )
-        );
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: id, action: accept ? "accept" : "decline" } }));
-        }
-      } else {
-        setRespondError(data.error || "Could not update placement. Please try again.");
+      setPlacements((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, status: accept ? "Active" : "Declined", respondedAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }
+            : p
+        )
+      );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: id, action: accept ? "accept" : "decline" } }));
       }
     } catch (err) {
-      console.error("Response error:", err);
-      setRespondError("Network error. Please try again.");
+      if (err instanceof ApiError) {
+        setRespondError(err.message || "Could not update placement. Please try again.");
+      } else {
+        console.error("Response error:", err);
+        setRespondError("Network error. Please try again.");
+      }
     } finally {
       setResponding(null);
     }
   }
 
-  function updateStatus(id: string, newStatus: PlacementStatus) {
-    const statusMap: Record<string, string> = {
-      Active: "active", Pending: "pending", Declined: "declined",
-      Completed: "completed", Sold: "completed",
-    };
-    const apiStatus = statusMap[newStatus] || "active";
-    setPlacements(placements.map((p) => (p.id === id ? { ...p, status: newStatus } : p)));
-    authFetch("/api/placements", {
-      method: "PATCH",
-      body: JSON.stringify({ id, status: apiStatus }),
-    })
-      .then(() => {
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("wallplace:placement-changed", {
-            detail: { placementId: id, action: apiStatus === "declined" ? "decline" : apiStatus === "active" ? "accept" : "status" },
-          }));
-        }
-      })
-      .catch((err) => console.error("Status update error:", err));
+  // E43-a: the status logic lives in one shared helper both portals call, so a
+  // rejected change rolls back and only a confirmed one fires the cross-portal event.
+  async function updateStatus(id: string, newStatus: PlacementStatus) {
+    await updatePlacementStatus({ id, newStatus, placements, setPlacements, showToast });
   }
 
   // Bulk archive, fires one DELETE per selected id, then reloads.
@@ -772,9 +765,13 @@ export default function VenuePlacementsPage() {
     for (const id of ids) {
       try {
         const url = `/api/placements?id=${encodeURIComponent(id)}${showArchived ? "&unarchive=1" : ""}`;
-        const res = await authFetch(url, { method: "DELETE" });
-        if (!res.ok && res.status !== 404) failed++;
-      } catch { failed++; }
+        await mutate(url, { method: "DELETE" });
+      } catch (err) {
+        // A 404 means the row is already gone, so it counts as done, not a
+        // failure (mirrors the old `!res.ok && res.status !== 404` guard).
+        if (err instanceof ApiError && err.status === 404) continue;
+        failed++;
+      }
     }
     setSelectedIds(new Set());
     setBulkBusy(false);
@@ -804,22 +801,23 @@ export default function VenuePlacementsPage() {
     setPlacements(placements.filter((p) => p.id !== id));
     try {
       const url = `/api/placements?id=${encodeURIComponent(id)}${unarchive ? "&unarchive=1" : ""}`;
-      const res = await authFetch(url, { method: "DELETE" });
-      if (res.status === 404) return;
-      if (!res.ok) {
-        setPlacements(snapshot);
-        const body = await res.json().catch(() => ({}));
-        showToast(body?.error || `Could not ${unarchive ? "unarchive" : "archive"} placement (HTTP ${res.status})`, { variant: "error" });
-        return;
-      }
+      await mutate(url, { method: "DELETE" });
       // Reload so the current tab (main / archived) picks up the
       // change, and refresh the archived-count badge on the tab row.
       loadPlacements();
       loadArchivedCount();
     } catch (err) {
+      // A 404 means the row is already gone, so the optimistic removal above
+      // is already correct: leave it, don't roll back (old res.status === 404
+      // early return).
+      if (err instanceof ApiError && err.status === 404) return;
       setPlacements(snapshot);
-      console.error("Placement archive error:", err);
-      showToast("Network error, placement not archived. Please try again.", { variant: "error" });
+      if (err instanceof ApiError) {
+        showToast(err.message || `Could not ${unarchive ? "unarchive" : "archive"} placement.`, { variant: "error" });
+      } else {
+        console.error("Placement archive error:", err);
+        showToast("Network error, placement not archived. Please try again.", { variant: "error" });
+      }
     }
   }
 
@@ -831,24 +829,22 @@ export default function VenuePlacementsPage() {
     const snapshot = placements;
     setPlacements((prev) => prev.map((p) => p.id === id ? { ...p, status: "Cancelled" } : p));
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id, status: "cancelled" }),
       });
-      if (!res.ok) {
-        setPlacements(snapshot);
-        const body = await res.json().catch(() => ({}));
-        showToast(body?.error || `Could not cancel placement (HTTP ${res.status})`, { variant: "error" });
-        return;
-      }
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: id, action: "cancel" } }));
       }
       loadPlacements();
     } catch (err) {
       setPlacements(snapshot);
-      console.error("Placement cancel error:", err);
-      showToast("Network error, placement not cancelled. Please try again.", { variant: "error" });
+      if (err instanceof ApiError) {
+        showToast(err.message || "Could not cancel placement.", { variant: "error" });
+      } else {
+        console.error("Placement cancel error:", err);
+        showToast("Network error, placement not cancelled. Please try again.", { variant: "error" });
+      }
     }
   }
 
@@ -1533,7 +1529,7 @@ export default function VenuePlacementsPage() {
                             </div>
                             {typeof p.revenueSharePercent === "number" && p.revenueSharePercent > 0 && (
                               <div>
-                                <p className="text-muted mb-0.5">Revenue share</p>
+                                <p className="text-muted mb-0.5">{ARRANGEMENT_LABEL.revenue_share}</p>
                                 <p className="text-foreground font-medium">{p.revenueSharePercent}% to artist</p>
                               </div>
                             )}

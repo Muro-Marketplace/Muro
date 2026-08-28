@@ -23,13 +23,27 @@ let insertAttempts: Record<string, unknown>[] = [];
 // Mimics PostgREST telling us a column doesn't exist on an unmigrated DB.
 let firstInsertError: { message: string; code?: string } | null = null;
 // What the artist_profiles lookup returns. Default is a real artist.
-let artistRow: { user_id: string; slug: string } | null = { user_id: "u-artist", slug: "the-artist" };
+let artistRow:
+  | { user_id: string; slug: string; review_status?: string }
+  | null = { user_id: "u-artist", slug: "the-artist", review_status: "approved" };
 // What the artwork_requests lookup returns. Default is an open request.
-let artworkRequestRow: { id: string; venue_user_id: string; status: string; title: string } | null = {
+type RequestRow = {
+  id: string;
+  venue_user_id: string;
+  status: string;
+  title: string;
+  visibility?: string;
+  invited_artist_slugs?: string[];
+};
+// Default is the shape prod actually holds: all 6 live requests are semi_public
+// with no invite list.
+let artworkRequestRow: RequestRow | null = {
   id: "arq_1",
   venue_user_id: "u-venue",
   status: "open",
   title: "Coffee shop wall",
+  visibility: "semi_public",
+  invited_artist_slugs: [],
 };
 
 vi.mock("@/lib/api-auth", () => ({
@@ -58,12 +72,41 @@ vi.mock("@/lib/supabase-admin", () => {
   //   db.from("artwork_request_responses").insert({...}).select("id").single()
   function makeChainable(table: string) {
     const chain: Record<string, unknown> = {};
+    // E46d. The filters are RECORDED and honoured for artwork_requests.
+    //
+    // This stub used to be `chain.eq = () => chain`, ignoring every filter, so
+    // assertCanViewArtworkRequest's first query (.eq("venue_user_id", actor.id))
+    // matched and every artist was classified as the OWNER. The six pre-existing
+    // tests passed because the fixture was permissive, not because the visibility
+    // rule worked, and the rule itself was therefore completely unproven on this
+    // route.
+    const filters: Record<string, unknown> = {};
+    const contains: Record<string, unknown[]> = {};
     chain.select = () => chain;
-    chain.eq = () => chain;
+    chain.eq = (col: string, val: unknown) => {
+      filters[col] = val;
+      return chain;
+    };
+    chain.contains = (col: string, vals: unknown[]) => {
+      contains[col] = vals;
+      return chain;
+    };
     chain.order = () => chain;
     chain.maybeSingle = async () => {
       if (table === "artist_profiles") return { data: artistRow, error: null };
-      if (table === "artwork_requests") return { data: artworkRequestRow, error: null };
+      if (table === "artwork_requests") {
+        const row = artworkRequestRow;
+        if (!row) return { data: null, error: null };
+        // Every filter the caller applied must actually hold.
+        for (const [col, want] of Object.entries(filters)) {
+          if ((row as Record<string, unknown>)[col] !== want) return { data: null, error: null };
+        }
+        for (const [col, wanted] of Object.entries(contains)) {
+          const actual = ((row as Record<string, unknown>)[col] as unknown[]) ?? [];
+          if (!wanted.every((w) => actual.includes(w))) return { data: null, error: null };
+        }
+        return { data: row, error: null };
+      }
       return { data: null, error: null };
     };
     chain.insert = (row: Record<string, unknown>) => {
@@ -92,17 +135,22 @@ vi.mock("@/lib/supabase-admin", () => {
   };
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.resetModules();
+  // The outreach-cap spy is asserted on (a refused attempt must not consult it),
+  // so it has to start each test clean.
+  vi.mocked((await import("@/lib/outreach-cap")).checkArtistOutreachCap).mockClear();
   lastInsert = null;
   insertAttempts = [];
   firstInsertError = null;
-  artistRow = { user_id: "u-artist", slug: "the-artist" };
+  artistRow = { user_id: "u-artist", slug: "the-artist", review_status: "approved" };
   artworkRequestRow = {
     id: "arq_1",
     venue_user_id: "u-venue",
     status: "open",
     title: "Coffee shop wall",
+    visibility: "semi_public",
+    invited_artist_slugs: [],
   };
 });
 
@@ -270,5 +318,111 @@ describe("POST /api/artwork-requests/[id]/responses", () => {
     } finally {
       (supabaseAdmin as { getSupabaseAdmin: typeof original }).getSupabaseAdmin = original;
     }
+  });
+});
+
+// ── E46d: visibility and invite enforcement on POST (06 B3) ──────────────────
+//
+// The POST's only gates used to be: valid token, has an artist profile, under the
+// daily cap, request is open. Membership of the invite list was never consulted,
+// while the sibling LIST route did enforce it. So any signed-in artist could bid
+// on a private brief they were never invited to, and, chained with the then
+// unauthenticated GETs, could read every rival bid first.
+//
+// The enforcement itself arrived with 01's E17/E18 work (assertCanViewArtworkRequest
+// is called before anything else). What was missing was any test of it: the fixture
+// ignored filters, so every artist matched the owner query and the rule was never
+// exercised. These are that missing coverage.
+describe("POST responses visibility enforcement (E46d)", () => {
+  it("refuses an uninvited artist on a private brief, and does not burn their quota", async () => {
+    artworkRequestRow = {
+      id: "arq_1",
+      venue_user_id: "u-venue",
+      status: "open",
+      title: "Private commission",
+      visibility: "private",
+      invited_artist_slugs: ["someone-else"],
+    };
+    const { POST } = await import("./route");
+    const { checkArtistOutreachCap } = await import("@/lib/outreach-cap");
+    const res = await POST(buildRequest({ responseType: "message", message: "hi" }), ctx);
+
+    // 404 not 403: a 403 would confirm the private brief exists.
+    expect(res.status).toBe(404);
+    expect(lastInsert, "an uninvited artist wrote a response").toBeNull();
+    expect(
+      vi.mocked(checkArtistOutreachCap),
+      "a rejected attempt burned the artist's daily quota",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("allows an artist who IS on the invite list", async () => {
+    artworkRequestRow = {
+      id: "arq_1",
+      venue_user_id: "u-venue",
+      status: "open",
+      title: "Private commission",
+      visibility: "private",
+      invited_artist_slugs: ["the-artist"],
+    };
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "hi" }), ctx);
+    expect(res.status).toBe(200);
+    expect(lastInsert).not.toBeNull();
+  });
+
+  it("allows any approved artist on a semi_public brief, which is all 6 live rows", async () => {
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "hi" }), ctx);
+    expect(res.status).toBe(200);
+  });
+
+  it("refuses an artist whose profile is not approved yet", async () => {
+    // assertCanViewArtworkRequest only accepts review_status "approved", so a
+    // pending applicant cannot bid.
+    artistRow = { user_id: "u-artist", slug: "the-artist", review_status: "pending" };
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "hi" }), ctx);
+    expect(res.status).toBe(404);
+    expect(lastInsert).toBeNull();
+  });
+
+  it("still lets the owning venue through, so the owner branch is not broken", async () => {
+    // The fixture is filter-aware now, so this exercises the real owner query.
+    artworkRequestRow = {
+      id: "arq_1",
+      venue_user_id: "u-artist", // caller IS the venue on this row
+      status: "open",
+      title: "Own brief",
+      visibility: "private",
+      invited_artist_slugs: [],
+    };
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "hi" }), ctx);
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("POST responses does not burn quota on a rejected attempt (E46d ordering)", () => {
+  it("checks the request is open BEFORE consulting the outreach cap", async () => {
+    // The state check used to sit after the cap, so responding to a closed brief
+    // cost the artist one of their two-to-ten daily sends for nothing.
+    artworkRequestRow = {
+      id: "arq_1",
+      venue_user_id: "u-venue",
+      status: "closed",
+      title: "Closed brief",
+      visibility: "semi_public",
+      invited_artist_slugs: [],
+    };
+    const { POST } = await import("./route");
+    const { checkArtistOutreachCap } = await import("@/lib/outreach-cap");
+    const res = await POST(buildRequest({ responseType: "message", message: "hi" }), ctx);
+    expect(res.status).toBe(409);
+    expect(
+      vi.mocked(checkArtistOutreachCap),
+      "a closed-brief attempt burned the artist's quota",
+    ).not.toHaveBeenCalled();
+    expect(lastInsert).toBeNull();
   });
 });

@@ -5,7 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { useToast } from "@/context/ToastContext";
 import { slugify } from "@/lib/slugify";
 import { useUrlState } from "@/lib/use-url-state";
 
@@ -70,6 +71,7 @@ function CustomerSavedContent() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useUrlState<ItemType>("tab", "work");
   const [removing, setRemoving] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const workMap = useMemo(() => {
     const map = new Map<string, { title: string; image: string; artistSlug: string; artistName: string; artistImage: string }>();
@@ -101,13 +103,17 @@ function CustomerSavedContent() {
   async function handleRemove(item: SavedItemRow) {
     setRemoving(item.id);
     try {
-      await authFetch("/api/saved", {
+      // E43-g: mutate() throws on a non-2xx, so the item is dropped from the list
+      // ONLY on a confirmed delete. The old authFetch resolved on a 403/500, so a
+      // rejected removal still vanished from the UI and reappeared on reload; the
+      // catch swallowed network errors with no feedback.
+      await mutate("/api/saved", {
         method: "DELETE",
         body: JSON.stringify({ itemType: item.item_type, itemId: item.item_id }),
       });
       setItems((prev) => prev.filter((i) => i.id !== item.id));
-    } catch {
-      /* ignore */
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Could not remove this item. Please try again.", { variant: "error" });
     } finally {
       setRemoving(null);
     }

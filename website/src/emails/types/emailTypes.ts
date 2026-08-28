@@ -6,21 +6,15 @@
 // show (e.g. a WorkCard needs title + image + artist, not the full pricing[]
 // or placement history).
 
-export type EmailStream = "tx" | "notify" | "news";
+// K1g (07 §1.4 step 7). EmailStream and EmailCategory were each declared twice,
+// here and in lib/email/{streams,categories}.ts, with no cross-import. The
+// copies in lib/email carry the BEHAVIOUR (STREAMS, CATEGORY_RULES), so they
+// own the type; adding a category used to mean editing both files, and missing
+// one meant a template silently could not declare it.
+export type { EmailStream } from "@/lib/email/streams";
+export type { EmailCategory } from "@/lib/email/categories";
 
 export type EmailPersona = "artist" | "venue" | "customer" | "multi" | "system";
-
-export type EmailCategory =
-  | "security"
-  | "legal"
-  | "orders_and_payouts"
-  | "placements"
-  | "messages"
-  | "digests"
-  | "recommendations"
-  | "tips"
-  | "newsletter"
-  | "promotions";
 
 /** A currency amount in minor units plus the ISO code, so receipts don't fudge. */
 export interface Money {

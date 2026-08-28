@@ -150,9 +150,86 @@ export const placementSchema = z.object({
   requestedDimensions: optionalString(100),
 });
 
+/**
+ * E46b. POST /api/terms/accept previously took four free-text fields with no
+ * caps and no validation, on an unauthenticated insert, which is a
+ * storage-exhaustion vector as well as a forgery one. `userEmail` is accepted
+ * here but the route IGNORES it whenever the caller is authenticated: an
+ * authenticated acceptance takes the email from the token, never the body.
+ */
+/**
+ * E46a (06 B5). POST /api/artist-works destructured the body and passed it
+ * straight to the write with no numeric validation: `pricing` had no array cap
+ * and no per-entry price check, `quantity_available` had no lower bound (and
+ * checkout treats <= 0 as sold, so a negative value reads as permanently sold),
+ * and `shipping_price` was stored unbounded even though the checkout schema caps
+ * what a cart may claim.
+ *
+ * `pricing` is the one that reaches money: checkout recomputes unit_amount from
+ * the stored tier, so a bad tier price feeds Stripe. It is defended there too
+ * (a non-positive tier falls back to the client price), which makes this a
+ * correctness and trust problem rather than direct theft. Fixed at the write
+ * boundary regardless.
+ *
+ * `inStorePrice` joined 2026-08-28 (owner decision 14 / migration 118): the
+ * column exists now, so the value the portfolio always collected can persist.
+ */
+const money = (max: number) => z.number().finite().min(0).max(max);
+
+export const sizePricingSchema = z.object({
+  label: safeString(100),
+  price: money(100_000),
+});
+
+export const artistWorkInputSchema = z.object({
+  id: safeString(200),
+  title: safeString(200),
+  image: safeString(2000),
+  medium: optionalString(100),
+  dimensions: optionalString(200),
+  priceBand: optionalString(100),
+  // Capped so one work cannot carry hundreds of tiers, and floored at 0 so
+  // checkout can never recompute from a negative tier.
+  pricing: z.array(sizePricingSchema).max(30).optional(),
+  available: z.boolean().optional(),
+  color: optionalString(20),
+  orientation: z.enum(["portrait", "landscape", "square"]).optional(),
+  sortOrder: z.number().int().min(0).max(10_000).optional(),
+  shippingPrice: money(1000).nullable().optional(),
+  // Same cap as a per-size price: this IS a price, not a shipping fee.
+  inStorePrice: money(100_000).nullable().optional(),
+  quantityAvailable: z.number().int().min(0).max(10_000).nullable().optional(),
+  description: optionalString(2000),
+  images: z.array(z.string().max(2000)).max(10).optional(),
+  // Replaces the 45-line hand-rolled sanitiser this route used to carry. The
+  // .max(20) preserves its .slice(0, 20) semantics.
+  frameOptions: z
+    .array(
+      z.object({
+        label: safeString(80),
+        priceUplift: money(10_000),
+        imageUrl: optionalString(1000),
+        pricesBySize: z.record(z.string().min(1).max(100), money(10_000)).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
+});
+
+export const termsAcceptSchema = z.object({
+  userEmail: z.string().trim().toLowerCase().email().max(320),
+  userType: z.enum(["artist", "venue", "customer"]),
+  termsVersion: safeString(50),
+  termsType: safeString(50),
+});
+
 export const placementUpdateSchema = z.object({
   id: safeString(100),
-  status: z.enum(["pending", "active", "declined", "completed", "paused", "cancelled"]).optional(),
+  // "completed" is deliberately absent (E23b). It is reachable only through
+  // stage:"collected", which also stamps collected_at and triggers the
+  // inventory restore. Accepting it here made a second path to the same status
+  // that skipped both, silently burning the artist's stock. No client sends it.
+  status: z.enum(["pending", "active", "declined", "paused", "cancelled"]).optional(),
   stage: z.enum(["scheduled", "installed", "live", "collected"]).optional(),
   // Optional explicit stage timestamp in ISO 8601. Lets the user pick
   // a future install date instead of being forced to "now". Used by the
@@ -190,6 +267,10 @@ const checkoutItemSchema = z.object({
   internationalShippingPrice: z.number().min(0).max(1000).optional(),
   dimensions: optionalString(200),
   framed: z.boolean().optional(),
+  // E46c (06 B6). Frame identity on the cart line, so checkout can resolve the
+  // uplift from the work's own frame_options instead of trusting the client's
+  // total. Optional: legacy carts fall back to splitting `size` on " + ".
+  frameLabel: z.string().trim().max(80).optional(),
   // Cart line identity — `workId` for individual artworks, `collectionId`
   // for bundles. Both optional because legacy localStorage carts may
   // pre-date the field, but G2-15 cart re-validation needs at least
@@ -197,6 +278,13 @@ const checkoutItemSchema = z.object({
   type: z.enum(["work", "collection"]).optional(),
   workId: optionalString(200),
   collectionId: optionalString(200),
+  // T9 (N2a). Per-line fulfilment: absent means "follow the order-level
+  // choice". `collect_venue` lines name the placement they collect against;
+  // the server re-validates BOTH against the live placements table
+  // (api/checkout), so these are claims to check, never facts to trust.
+  lineFulfilment: z.enum(["ship", "collect_venue"]).optional(),
+  collectVenueSlug: optionalString(100),
+  collectPlacementId: optionalString(200),
 });
 
 // Shipping subset for "Collect from artist" — buyer picks up in person,
@@ -239,6 +327,11 @@ const checkoutMetaShape = {
   // malicious source string DoSing the metadata column.
   source: optionalString(100),
   venueSlug: optionalString(100),
+  // D10: server-signed venue attribution from the QR redirect. When present it is
+  // verified and takes precedence over the bare venueSlug above, which is only a
+  // backward-compat fallback for QR codes printed before the token existed. Capped
+  // generously; a real token is ~200 chars.
+  venueAttributionToken: optionalString(600),
   // Client-computed shipping figure for divergence logging. Capped at
   // £10k as a sanity bound; real orders top out an order of magnitude
   // below that. Cleared on undefined so old callers still work.
@@ -264,6 +357,18 @@ const collectionCheckoutSchema = z.object({
   ...checkoutMetaShape,
 });
 
+// T9 (N2b). Collect-from-VENUE: the buyer pays online and picks the work up
+// from the venue wall it is hanging on. Same reduced shipping shape as
+// collect-from-artist (name, email, phone; no address needed to post to), and
+// every line must carry its placement claim, which api/checkout verifies
+// against the live placements table.
+const venueCollectionCheckoutSchema = z.object({
+  fulfilmentMethod: z.literal("collect_venue"),
+  items: z.array(checkoutItemSchema).min(1).max(50),
+  shipping: collectionShippingSchema,
+  ...checkoutMetaShape,
+});
+
 export const checkoutSchema = z.preprocess(
   // Normalise an absent fulfilmentMethod to 'ship' so legacy clients that
   // didn't send the field keep working. Anything non-object falls through
@@ -274,7 +379,11 @@ export const checkoutSchema = z.preprocess(
     }
     return input;
   },
-  z.discriminatedUnion("fulfilmentMethod", [shipCheckoutSchema, collectionCheckoutSchema])
+  z.discriminatedUnion("fulfilmentMethod", [
+    shipCheckoutSchema,
+    collectionCheckoutSchema,
+    venueCollectionCheckoutSchema,
+  ])
     // Country-aware postcode format check — only meaningful on the ship
     // branch. Collection mode treats postcode as optional and may have
     // it blank, so we skip the format check there. Lives at the union

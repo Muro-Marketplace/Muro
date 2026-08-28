@@ -9,19 +9,32 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { _resetInMemoryStore, checkRateLimit, getIP, withRateLimit } from "./rate-limit";
 
+// E36c: the key header changed from x-forwarded-for (client-supplied, so the
+// limiter was resettable at will) to the platform header. These tests are about
+// the limiter's counting, not its keying, so they just use a trusted header.
+// The keying itself is pinned in client-ip.test.ts.
 function request(url: string, ip = "1.2.3.4"): Request {
-  return new Request(url, { headers: { "x-forwarded-for": ip } });
+  return new Request(url, { headers: { "x-vercel-forwarded-for": ip } });
 }
 
 describe("getIP()", () => {
-  it("prefers x-forwarded-for (first entry)", () => {
-    const r = new Request("http://x.com", { headers: { "x-forwarded-for": "1.1.1.1, 2.2.2.2" } });
+  it("reads the platform header", () => {
+    const r = new Request("http://x.com", { headers: { "x-vercel-forwarded-for": "1.1.1.1" } });
     expect(getIP(r)).toBe("1.1.1.1");
   });
 
   it("falls back to x-real-ip", () => {
     const r = new Request("http://x.com", { headers: { "x-real-ip": "9.9.9.9" } });
     expect(getIP(r)).toBe("9.9.9.9");
+  });
+
+  it("no longer trusts x-forwarded-for", () => {
+    // REVERSAL of "prefers x-forwarded-for (first entry)", which expected
+    // "1.1.1.1" here. That assertion pinned the vulnerability as intended
+    // behaviour: proxies append to XFF rather than overwrite it, so the
+    // left-most entry is supplied by the caller.
+    const r = new Request("http://x.com", { headers: { "x-forwarded-for": "1.1.1.1, 2.2.2.2" } });
+    expect(getIP(r)).toBe("unknown");
   });
 
   it("returns 'unknown' when no headers present", () => {

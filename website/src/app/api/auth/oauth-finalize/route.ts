@@ -21,9 +21,14 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { triggerWelcomeIfNeeded } from "@/lib/email/welcome";
 import { verifyOAuthState } from "@/lib/oauth-state";
+import { isSignupRole, type SignupRole } from "@/lib/auth-roles";
 
-const ALLOWED_ROLES = ["artist", "customer", "venue"] as const;
-type Role = (typeof ALLOWED_ROLES)[number];
+// E35d: there was a local `ALLOWED_ROLES = ["artist","customer","venue"]` here,
+// referenced only to derive this type and never used as a check. The author's
+// intent to exclude admin was written down and never wired up, while the value
+// it guarded reached user_metadata through a bare cast. The shared
+// SIGNUP_ROLES is the real list and `isSignupRole` is the real check.
+type Role = SignupRole;
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -44,7 +49,16 @@ export async function POST(request: Request) {
   let verified: { role: Role; next: string };
   try {
     const v = await verifyOAuthState(body.state);
-    verified = { role: v.role as Role, next: v.next };
+    // E35d: this was `v.role as Role`, a cast rather than a check.
+    // `verifyOAuthState` validates against the WIDE role list, so "admin"
+    // passed here and was written straight into user_metadata below. Checking
+    // again at the consumer means a state token minted before the sign-state
+    // fix, or by any future minting path, still cannot carry admin through.
+    if (!isSignupRole(v.role)) {
+      console.warn("[oauth-finalize] state carried a non-signup role:", v.role);
+      return NextResponse.json({ error: "Invalid role in state" }, { status: 400 });
+    }
+    verified = { role: v.role, next: v.next };
   } catch (err) {
     console.warn("[oauth-finalize] state verify failed:", err);
     return NextResponse.json({ error: "Invalid or expired state" }, { status: 400 });

@@ -56,7 +56,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   // Friendly names for the UI
   const [{ data: artistProfile }, { data: venueProfile }] = await Promise.all([
     placement.artist_user_id
-      ? db.from("artist_profiles").select("name, slug, image").eq("user_id", placement.artist_user_id).single()
+      ? db.from("artist_profiles").select("name, slug, image:profile_image").eq("user_id", placement.artist_user_id).single()
       : Promise.resolve({ data: null }),
     placement.venue_user_id
       ? db.from("venue_profiles").select("name, slug, image, location, city").eq("user_id", placement.venue_user_id).single()

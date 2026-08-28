@@ -4,6 +4,7 @@ import { venues as staticVenues } from "@/data/venues";
 import { getOptionalUser } from "@/lib/api-auth";
 import { resolveSubscription } from "@/lib/subscriptions";
 import { canSeeVenueIdentity } from "@/lib/venue-visibility";
+import { isFlagOn } from "@/lib/feature-flags";
 
 // Gated data source for the public venue profile page. Venue identity (name,
 // description, photos, display needs, walls, open requests) is paywalled the
@@ -208,8 +209,19 @@ export async function GET(req: Request, ctx: { params: Promise<{ slug: string }>
     });
   }
 
+  // 08 §7.1 / D6 item 3: the wall kill-switch did not work.
+  //
+  // WALL_VISUALIZER_V1 gates the visualizer everywhere else, but this route read
+  // and served `walls` unconditionally. So flipping the flag off to disable the
+  // feature (which is what a kill-switch is for, including in an incident) left
+  // this endpoint still publishing every venue's public wall list, complete with
+  // storage paths for uploaded wall photos.
+  //
+  // A kill-switch with a hole in it is worse than no kill-switch: it is one
+  // someone will reach for under pressure and believe.
+  const wallsEnabled = isFlagOn("WALL_VISUALIZER_V1");
   const [walls, openRequests] = await Promise.all([
-    userId ? loadWalls(db, userId) : Promise.resolve([]),
+    userId && wallsEnabled ? loadWalls(db, userId) : Promise.resolve([]),
     userId ? loadRequests(db, userId) : Promise.resolve([]),
   ]);
 

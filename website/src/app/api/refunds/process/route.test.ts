@@ -3,10 +3,11 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { isAdminMock, authMock, fromMock, stripeMock, claimPendingMock, releaseClaimMock } = vi.hoisted(() => ({
+const { isAdminMock, authMock, fromMock, rpcMock, stripeMock, claimPendingMock, releaseClaimMock } = vi.hoisted(() => ({
   isAdminMock: vi.fn(),
   authMock: vi.fn(),
   fromMock: vi.fn(),
+  rpcMock: vi.fn(async (..._args: unknown[]) => ({ error: null })),
   stripeMock: {
     refunds: { create: vi.fn(async () => ({ id: "re_test" })) },
     transfers: { createReversal: vi.fn(async () => ({})) },
@@ -20,13 +21,13 @@ vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
     from: fromMock,
+    rpc: rpcMock,
     auth: { admin: { getUserById: vi.fn(async () => ({ data: { user: null } })) } },
   }),
 }));
 vi.mock("@/lib/stripe", () => ({ stripe: stripeMock }));
-vi.mock("@/lib/email", () => ({
-  notifyRefundDecision: vi.fn(async () => {}),
-}));
+// K1: the legacy @/lib/email is deleted. Both refund outcomes go through
+// sendEmail, which is already mocked below.
 vi.mock("@/lib/email/send", () => ({
   sendEmail: vi.fn(async () => ({ ok: true })),
 }));
@@ -102,10 +103,12 @@ function setupDb({
   refundRow,
   order,
   claimResult,
+  transfers = [],
 }: {
   refundRow: Record<string, unknown> | null;
   order: Record<string, unknown>;
   claimResult: Record<string, unknown> | null;
+  transfers?: Array<Record<string, unknown>>;
 }) {
   claimPendingMock.mockResolvedValue(claimResult);
 
@@ -139,8 +142,11 @@ function setupDb({
       return {
         select: () => ({
           eq: () => ({
-            in: async () => ({ data: [], error: null }),
+            in: async () => ({ data: transfers, error: null }),
           }),
+        }),
+        update: () => ({
+          eq: () => Promise.resolve({ error: null }),
         }),
       };
     }
@@ -161,6 +167,8 @@ beforeEach(() => {
   isAdminMock.mockReset();
   authMock.mockReset();
   fromMock.mockReset();
+  rpcMock.mockReset();
+  rpcMock.mockResolvedValue({ error: null });
   claimPendingMock.mockReset();
   releaseClaimMock.mockReset();
   stripeMock.refunds.create.mockReset();
@@ -420,5 +428,171 @@ describe("POST /api/refunds/process — authorisation (1.5, 4.1)", () => {
     // Must bail before reaching the claim or Stripe.
     expect(claimPendingMock).not.toHaveBeenCalled();
     expect(stripeMock.refunds.create).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D16 — partial reversal denominator (04 §B8)
+//
+// The artist keeps 100% of shipping (the webhook adds shippingCost straight to
+// artistRevenue), so a partial transfer reversal must be pro-rated against the
+// SUBTOTAL, not order.total. Reversing against total claws back a slice of the
+// shipping the artist already paid a courier.
+//
+// stripe_transfers is empty in prod today (Stripe Connect is not live), so this
+// path is dormant — but the split must be right to the penny before it ships.
+// ---------------------------------------------------------------------------
+
+describe("POST /api/refunds/process — partial reversal denominator (D16)", () => {
+  const paidArtistLeg = {
+    id: "st-1",
+    status: "paid",
+    stripe_transfer_id: "tr_1",
+    recipient_type: "artist",
+    amount_cents: 13150,
+  };
+
+  it("pro-rates a partial reversal against subtotal, not total (D16 regression)", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    // subtotal £180, shipping £14.50, total £194.50; partial refund of £90.
+    const order = {
+      ...baseOrder,
+      subtotal: 180,
+      shipping_cost: 14.5,
+      total: 194.5,
+      stripe_payment_intent_id: "pi_test",
+    };
+    setupDb({
+      refundRow: { ...baseRefundRow, type: "partial", amount: 90 },
+      order,
+      claimResult: { ...baseClaimedReq, type: "partial", amount: 90 },
+      transfers: [paidArtistLeg],
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    expect(res.status).toBe(200);
+
+    // round(13150 × 9000/18000) = 6575, NOT the old round(13150 × 9000/19450) = 6086.
+    expect(stripeMock.transfers.createReversal).toHaveBeenCalledTimes(1);
+    const [transferId, params] = stripeMock.transfers.createReversal.mock
+      .calls[0] as unknown as [string, { amount: number }];
+    expect(transferId).toBe("tr_1");
+    expect(params.amount).toBe(6575);
+  });
+
+  it("400s a partial refund that exceeds order.total (D16 guard), never touching Stripe", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    // £60 refund on a £50 order.
+    const order = {
+      ...baseOrder,
+      subtotal: 45,
+      shipping_cost: 5,
+      total: 50,
+      stripe_payment_intent_id: "pi_test",
+    };
+    setupDb({
+      refundRow: { ...baseRefundRow, type: "partial", amount: 60 },
+      order,
+      claimResult: { ...baseClaimedReq, type: "partial", amount: 60 },
+      transfers: [paidArtistLeg],
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/exceeds the order total/i);
+    expect(stripeMock.transfers.createReversal).not.toHaveBeenCalled();
+    expect(stripeMock.refunds.create).not.toHaveBeenCalled();
+    // Claim released back to 'pending', not stranded in 'processing'.
+    expect(releaseClaimMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "refund_requests",
+      "rr-1",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D17 — full refunds restock the work(s) (04 §B8)
+//
+// A refunded piece must go back on sale. Full refunds only: a partial refund is
+// a price adjustment, the buyer keeps the artwork. Two prod item shapes: cart
+// orders carry workId per line (persisted since D17); offer orders carry a
+// work_ids array on one synthetic item. Restock is best-effort (money already
+// moved), so a failing rpc is logged, not fatal.
+// ---------------------------------------------------------------------------
+
+describe("POST /api/refunds/process — restock on full refund (D17)", () => {
+  const restockCalls = () =>
+    rpcMock.mock.calls.filter(([fn]) => fn === "restock_work");
+
+  it("restocks each cart-line work once on a full refund (D17)", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    setupDb({
+      refundRow: baseRefundRow, // type "full"
+      order: {
+        ...baseOrder,
+        stripe_payment_intent_id: "pi_test",
+        items: [
+          { workId: "w1", quantity: 1 },
+          { workId: "w2", quantity: 2 },
+        ],
+      },
+      claimResult: baseClaimedReq, // type "full"
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    expect(res.status).toBe(200);
+
+    const calls = restockCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls).toContainEqual(["restock_work", { p_work_id: "w1", p_qty: 1 }]);
+    expect(calls).toContainEqual(["restock_work", { p_work_id: "w2", p_qty: 2 }]);
+  });
+
+  it("restocks each id in an offer order's work_ids array on a full refund (D17)", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    setupDb({
+      refundRow: baseRefundRow,
+      order: {
+        ...baseOrder,
+        stripe_payment_intent_id: "pi_test",
+        items: [{ offer_id: "off_1", work_ids: ["w1", "w2"] }],
+      },
+      claimResult: baseClaimedReq,
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    expect(res.status).toBe(200);
+
+    const calls = restockCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls).toContainEqual(["restock_work", { p_work_id: "w1", p_qty: 1 }]);
+    expect(calls).toContainEqual(["restock_work", { p_work_id: "w2", p_qty: 1 }]);
+  });
+
+  it("does NOT restock on a partial refund (D17)", async () => {
+    isAdminMock.mockResolvedValue(true);
+    authMock.mockResolvedValue({ user: { id: "u-admin", email: "admin@x.com" }, error: null });
+    setupDb({
+      refundRow: { ...baseRefundRow, type: "partial", amount: 20 },
+      order: {
+        ...baseOrder,
+        subtotal: 45,
+        shipping_cost: 5,
+        total: 50,
+        stripe_payment_intent_id: "pi_test",
+        items: [{ workId: "w1", quantity: 1 }],
+      },
+      claimResult: { ...baseClaimedReq, type: "partial", amount: 20 },
+    });
+
+    const res = await POST(req({ refundRequestId: "rr-1", action: "approve" }));
+    expect(res.status).toBe(200);
+    expect(restockCalls()).toHaveLength(0);
   });
 });

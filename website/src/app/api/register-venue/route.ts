@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { registerVenueSchema } from "@/lib/validations";
-import { notifyAdminNewVenue } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { slugify } from "@/lib/slugify";
+import { afterResponse } from "@/lib/after-response";
 import { sendEmail } from "@/lib/email/send";
 import { VenueRegistrationConfirmation } from "@/emails/templates/venue-lifecycle/VenueRegistrationConfirmation";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
 
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, 5, 60000);
@@ -42,13 +41,14 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     });
 
-    if (error) {
-      if (error.code === "23505") {
-        return NextResponse.json(
-          { error: "A registration with this email already exists" },
-          { status: 409 }
-        );
-      }
+    // E36d. A duplicate used to answer 409 "A registration with this email
+    // already exists", turning a public unauthenticated form into an
+    // account-existence oracle. Byte-identical output to a fresh registration
+    // now; the signal moves to a server log line, which is where it belonged.
+    const alreadyRegistered = error?.code === "23505";
+    if (alreadyRegistered) {
+      console.warn("[register-venue] duplicate registration for an existing email");
+    } else if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json(
         { error: "Something went wrong. Please try again." },
@@ -56,55 +56,52 @@ export async function POST(request: Request) {
       );
     }
 
-    await notifyAdminNewVenue({
-      name: d.venueName,
-      contactName: d.contactName,
-      email: d.email,
-      type: d.venueType,
-      location: `${d.city}, ${d.postcode}`,
-    }).catch((err) => { if (err) console.error("notifyAdminNewVenue error:", err); });
+    // E34. This used to seed an ownerless venue_profiles row here, on a slug
+    // taken from the RAW body (`body.venueSlug`, absent from registerVenueSchema,
+    // so unvalidated and never slugified) — letting an anonymous caller squat any
+    // slug and manufacture the orphan that venue-profile's adopt-by-slug branch
+    // would then hand to whoever claimed it.
+    //
+    // The seed could never work in any case: venue_profiles.user_id is NOT NULL
+    // and the insert omitted it, so every registration hit a 23502 that was
+    // logged and swallowed. Prod confirms it — 9 venues, 0 ownerless rows.
+    //
+    // The profile is now created on the venue's first verified login by
+    // ensureVenueProfile, hydrated from this venue_registrations row via the
+    // confirmed email. Registration details still reach the profile; ownership
+    // comes from a verified fact instead of a string a stranger chose.
 
-    // Seed venue_profiles so the portal is ready on verified login.
-    // user_id stays NULL until VenuePortalLayout's adoptIfOrphan effect
-    // back-fills it on the first verified visit.
-    const venueSlug = (typeof body.venueSlug === "string" && body.venueSlug)
-      ? body.venueSlug
-      : slugify(d.venueName);
-    const db = getSupabaseAdmin();
-    const { data: existing } = await db
-      .from("venue_profiles")
-      .select("id")
-      .eq("slug", venueSlug)
-      .maybeSingle();
-    if (!existing) {
-      const { error: profileErr } = await db.from("venue_profiles").insert({
-        slug: venueSlug,
-        name: d.venueName,
-        type: d.venueType === "Other" && body.customVenueType ? body.customVenueType : d.venueType,
-        location: d.city,
-        contact_name: d.contactName,
-        email: d.email,
-        phone: d.phone || "",
-        wall_space: d.wallSpace || "",
-        // user_id intentionally omitted — stays NULL until back-filled
+    // E36d. Both sends move off the response path. Awaiting them here made the
+    // fresh branch measurably slower than the duplicate one, so identical
+    // status codes would still have leaked through latency.
+    if (!alreadyRegistered) {
+      afterResponse(async () => {
+        // K1: was notifyAdminNewVenue in the legacy module.
+        await sendAdminAlert({
+          idempotencyKey: `admin_new_venue:${d.email.toLowerCase()}`,
+          subject: `New venue registration: ${d.venueName}`,
+          summary: `${d.venueName} registered through the public form.`,
+          fields: [
+            { label: "Contact", value: `${d.contactName} <${d.email}>` },
+            { label: "Type", value: d.venueType },
+            { label: "Location", value: `${d.city}, ${d.postcode}` },
+          ],
+        });
+
+        await sendEmail({
+          idempotencyKey: `venue_registration_confirmation:${d.email.toLowerCase()}`,
+          template: "venue_registration_confirmation",
+          category: "security",
+          to: d.email,
+          subject: "We've received your Wallplace application",
+          react: VenueRegistrationConfirmation({
+            contactFirstName: (d.contactName || "there").split(" ")[0],
+            venueName: d.venueName,
+          }),
+          metadata: { venueType: d.venueType, location: `${d.city}, ${d.postcode}` },
+        });
       });
-      if (profileErr) {
-        console.error("[register-venue] venue_profiles insert failed:", profileErr);
-      }
     }
-
-    await sendEmail({
-      idempotencyKey: `venue_registration_confirmation:${d.email.toLowerCase()}`,
-      template: "venue_registration_confirmation",
-      category: "security",
-      to: d.email,
-      subject: "We've received your Wallplace application",
-      react: VenueRegistrationConfirmation({
-        contactFirstName: (d.contactName || "there").split(" ")[0],
-        venueName: d.venueName,
-      }),
-      metadata: { venueType: d.venueType, location: `${d.city}, ${d.postcode}` },
-    });
 
     return NextResponse.json({ success: true });
   } catch {

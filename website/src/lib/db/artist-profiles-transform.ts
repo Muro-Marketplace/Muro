@@ -45,10 +45,6 @@ export interface DbArtistProfile {
   postcode?: string;
   lat?: number | null;
   lng?: number | null;
-  total_views?: number;
-  total_placements?: number;
-  total_sales?: number;
-  total_enquiries?: number;
   message_notifications_enabled?: boolean;
   subscription_plan?: string;
   /** Phase 2.5 B4: surface the subscription_status so the merged
@@ -92,6 +88,16 @@ export interface DbArtistWork {
   /** Migration 038: denormalised venue display name and active placement
    *  pointer. Kept in sync by the placements PATCH handler. */
   placed_at_venue?: string | null;
+  /** T9 / N1: the LIVE placement behind the collect-from-venue CTA, joined in
+   *  getArtistProfileBySlug. Null when the work is not on a wall. */
+  current_placement?: {
+    id: string;
+    venueSlug: string | null;
+    venueName: string | null;
+    status: string | null;
+    collectionAddress: string | null;
+    placedSizeLabel: string | null;
+  } | null;
   current_placement_id?: string | null;
 }
 
@@ -138,10 +144,9 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
         : null,
     image: profile.profile_image || `https://picsum.photos/seed/${profile.slug}/400/400`,
     bannerImage: profile.banner_image || undefined,
-    totalViews: profile.total_views || 0,
-    totalPlacements: profile.total_placements || 0,
-    totalSales: profile.total_sales || 0,
-    totalEnquiries: profile.total_enquiries || 0,
+    // K5's cached counters are GONE (migration 114, owner decision 5). The
+    // columns were written by nothing, wrong when live, and their transform
+    // fields had no reader. Live counts come from lib/analytics/artist-totals.
     subscriptionPlan: profile.subscription_plan || undefined,
     subscriptionStatus: profile.subscription_status || undefined,
     shipsInternationally: profile.ships_internationally || false,
@@ -178,6 +183,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
       frameOptions: Array.isArray(w.frame_options) ? w.frame_options : [],
       createdAt: w.created_at ?? undefined,
       placed_at_venue: w.placed_at_venue ?? null,
+      currentPlacement: w.current_placement ?? null,
       current_placement_id: w.current_placement_id ?? null,
     })),
   };

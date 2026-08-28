@@ -9,7 +9,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { displayPhysicalDimensions } from "@/lib/dimensions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/context/ToastContext";
@@ -24,7 +24,7 @@ interface EnrichedWork {
 
 interface EnrichedCollection {
   id: string;
-  title: string;
+  name: string;
   work_ids: string[] | null;
 }
 
@@ -166,38 +166,48 @@ export default function OffersList({ viewerUserId, filter }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, offers]);
 
-  async function act(id: string, action: "accept" | "decline" | "withdraw") {
+  // E43-a/E43-b: returns true only when the server confirmed the change. The
+  // withdraw caller used to fire a success toast right after `await act(...)`
+  // regardless of the outcome, so a 403/500 or network error showed "Offer
+  // withdrawn." while the offer stayed put. authFetch resolves for non-2xx, so
+  // the success side-effects must be gated on this boolean, not on the promise
+  // merely resolving.
+  async function act(id: string, action: "accept" | "decline" | "withdraw"): Promise<boolean> {
     setBusyId(id);
     setError(null);
     try {
-      const res = await authFetch(`/api/offers/${id}`, {
+      // mutate throws on a non-2xx (ApiError) or a dropped request, so this
+      // returns true only when the server confirmed the status change (the
+      // caller gates its success toast on that boolean, E43-a/E43-b).
+      await mutate(`/api/offers/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ action }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Could not update offer.");
-      } else {
-        // When a venue (buyer) accepts an artist's counter, jump
-        // straight to Stripe rather than making them click a separate
-        // "Complete payment" button. Lookup the offer locally first
-        // so we know whether the actor was the buyer.
-        if (action === "accept") {
-          const accepted = offers.find((o) => o.id === id);
-          if (accepted && accepted.buyer_user_id === viewerUserId) {
-            await pay(id);
-            return;
-          }
+      // When a venue (buyer) accepts an artist's counter, jump
+      // straight to Stripe rather than making them click a separate
+      // "Complete payment" button. Lookup the offer locally first
+      // so we know whether the actor was the buyer.
+      if (action === "accept") {
+        const accepted = offers.find((o) => o.id === id);
+        if (accepted && accepted.buyer_user_id === viewerUserId) {
+          await pay(id);
+          return true;
         }
-        await load();
       }
-    } catch {
-      setError("Network error. Please try again.");
+      await load();
+      return true;
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not update offer." : "Network error. Please try again.");
+      return false;
     } finally {
       setBusyId(null);
     }
   }
 
+  // OWNER-GATED (money boundary, 05): this POSTs to the offer CHECKOUT endpoint,
+  // which starts a Stripe payment. Deliberately NOT migrated to mutate() until the
+  // owner signs off on the transport swap, exactly like the orders refund handlers.
+  // It stays flagged/grandfathered in the no-authfetch-mutation ratchet on purpose.
   async function pay(id: string) {
     setBusyId(id);
     try {
@@ -231,7 +241,10 @@ export default function OffersList({ viewerUserId, filter }: Props) {
     setBusyId(counterFor.id);
     setError(null);
     try {
-      const res = await authFetch("/api/offers", {
+      // Counter is a negotiation/status action (creates a child offer row), not a
+      // payment, so this is a plain transport swap. mutate throws on a non-2xx, so
+      // the dialog only closes + reloads on a confirmed 2xx.
+      await mutate("/api/offers", {
         method: "POST",
         body: JSON.stringify({
           artistSlug: counterFor.artist_slug,
@@ -242,15 +255,10 @@ export default function OffersList({ viewerUserId, filter }: Props) {
           parentOfferId: counterFor.id,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.message || data.error || "Could not send counter.");
-      } else {
-        setCounterFor(null);
-        await load();
-      }
-    } catch {
-      setError("Network error. Please try again.");
+      setCounterFor(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not send counter." : "Network error. Please try again.");
     } finally {
       setBusyId(null);
     }
@@ -283,8 +291,8 @@ export default function OffersList({ viewerUserId, filter }: Props) {
         const formatted = `£${(o.amount_pence / 100).toFixed(2)}`;
         const works = o.works || [];
         const primaryWork = works[0];
-        const targetTitle = o.collection?.title
-          ? `Collection: ${o.collection.title}`
+        const targetTitle = o.collection?.name
+          ? `Collection: ${o.collection.name}`
           : works.length === 1
             ? primaryWork?.title || "Artwork"
             : works.length > 1
@@ -563,8 +571,15 @@ export default function OffersList({ viewerUserId, filter }: Props) {
           if (!withdrawFor) return;
           const target = withdrawFor;
           setWithdrawFor(null);
-          await act(target.id, "withdraw");
-          showToast("Offer withdrawn.");
+          // E43-b: only claim success when the server confirmed it. act() also
+          // sets the inline error banner on failure; the toast is the louder
+          // signal for this dialog-driven action.
+          const ok = await act(target.id, "withdraw");
+          if (ok) {
+            showToast("Offer withdrawn.");
+          } else {
+            showToast("Could not withdraw the offer. Please try again.", { variant: "error" });
+          }
         }}
         onClose={() => setWithdrawFor(null)}
       />

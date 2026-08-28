@@ -2,7 +2,7 @@
 // Kept dependency-free (no React) so it can run on the server and the client.
 
 export type RawStatus = "pending" | "active" | "declined" | "completed" | "sold" | "paused" | "cancelled";
-export type DisplayStatus = "Pending" | "Active" | "Declined" | "Completed" | "Sold" | "Cancelled";
+export type DisplayStatus = "Pending" | "Active" | "Declined" | "Completed" | "Sold" | "Cancelled" | "Paused" | "Unknown";
 export type Stage = "accepted" | "scheduled" | "installed" | "live" | "collected";
 
 export const STAGE_ORDER: Stage[] = ["accepted", "scheduled", "installed", "live", "collected"];
@@ -23,8 +23,22 @@ export function normaliseStatus(raw: string | null | undefined): DisplayStatus {
     case "declined": return "Declined";
     case "cancelled": return "Cancelled";
     case "sold": return "Sold";
-    case "completed": case "paused": return "Completed";
-    default: return "Active";
+    case "completed": return "Completed";
+    // Owner decision 8a (07 §4.2 item 1, approved 2026-08-28). `paused` used to
+    // fold into "Completed", which is a lie about a paused placement: completed
+    // means the work came off the wall and the arrangement ended, paused means
+    // it is expected back. Zero live rows carry `paused` today, so this changes
+    // what a FUTURE pause reads as, not any current screen.
+    case "paused": return "Paused";
+    // Owner decision 8b (07 §4.2 item 2, approved 2026-08-28). The default was
+    // "Active", so a row with a status nobody recognises wore the live badge
+    // and, worse, matched every `displayStatus === "Active"` gate: the context
+    // panel's stage-advance and undo controls, whose collected transition
+    // cancels paid-loan billing and repoints inventory. Defaulting a
+    // money-adjacent surface to its most permissive label is the wrong
+    // direction. "Unknown" matches no gate, so an unrecognised row shows its
+    // badge and offers nothing until someone looks at it.
+    default: return "Unknown";
   }
 }
 
@@ -38,6 +52,12 @@ export function statusBadgeClass(status: DisplayStatus): string {
     case "Cancelled": return "bg-red-50 text-red-700 border border-red-200";
     case "Sold":      return "bg-blue-50 text-blue-700 border border-blue-200";
     case "Completed": return "bg-neutral-100 text-neutral-700 border border-neutral-200";
+    // Softer than Completed's neutral, and not green: paused is neither live
+    // nor over.
+    case "Paused":    return "bg-sky-50 text-sky-700 border border-sky-200";
+    // Louder than Pending's amber on purpose: this state is a data problem, and
+    // the badge is the only place it will ever be seen.
+    case "Unknown":   return "bg-orange-50 text-orange-700 border border-orange-300";
   }
 }
 
@@ -51,30 +71,11 @@ export interface PlacementLifecycle {
   requesterUserId?: string | null;
 }
 
-/**
- * Combined arrangement label. Derives from actual data, monthly fee,
- * qr_enabled, rather than trusting arrangement_type alone. Used by the
- * placements list, messages placement card, and the placement panel so
- * "Paid loan + QR" shows consistently everywhere.
- */
-export function arrangementLabel(input: {
-  arrangement_type?: string | null;
-  monthly_fee_gbp?: number | null;
-  qr_enabled?: boolean | null;
-  /** Optional message to scan for "£X/month" when the fee column is
-      missing (legacy rows). */
-  message?: string | null;
-}): string {
-  const msg = input.message || "";
-  const match = msg.match(/(?:£|GBP)\s?(\d{2,5})\s?(?:\/?\s?m|per\s*m|\/\s*mo|a\s*m)/i);
-  const msgFee = match ? parseFloat(match[1]) : 0;
-  const hasFee = (typeof input.monthly_fee_gbp === "number" && input.monthly_fee_gbp > 0) || msgFee > 0;
-
-  if (hasFee) return input.qr_enabled ? "Paid loan + QR" : "Paid loan";
-  if (input.arrangement_type === "purchase") return "Direct purchase";
-  if (input.qr_enabled || input.arrangement_type === "revenue_share") return "Revenue share";
-  return "Free display";
-}
+// K3: `arrangementLabel` lived here, a SECOND implementation with a different
+// vocabulary from src/lib/arrangement-labels.ts, which calls itself the single
+// source of truth. Two functions of the same name were in scope depending on
+// which module you imported, because arrangement-type.ts also re-exported the
+// other one under this name. Deleted; callers use labelForArrangement.
 
 export function currentStage(p: PlacementLifecycle): Stage | null {
   if (p.collectedAt) return "collected";

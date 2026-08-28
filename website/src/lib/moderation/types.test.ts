@@ -96,3 +96,33 @@ describe("parsePayload()", () => {
     expect(out).toEqual({ type: "feedback", message: "has whitespace" });
   });
 });
+
+
+// Owner decision 11: the message member, added so a flagged message has
+// somewhere an admin actually looks.
+describe("parsePayload: message", () => {
+  const GOOD = {
+    message_id: "msg-1",
+    conversation_id: "conv-1",
+    sender_slug: "maya-chen",
+    recipient_slug: "the-copper-kettle",
+    flag_reason: "spammy link",
+    excerpt: "Buy cheap prints at...",
+  };
+
+  it("accepts a complete payload", () => {
+    expect(parsePayload("message", GOOD)).toEqual({ type: "message", ...GOOD });
+  });
+
+  it("rejects a payload missing any required field", () => {
+    for (const key of Object.keys(GOOD)) {
+      const partial: Record<string, unknown> = { ...GOOD };
+      delete partial[key];
+      expect(parsePayload("message", partial), key).toBeNull();
+    }
+  });
+
+  it("rejects non-string fields rather than coercing", () => {
+    expect(parsePayload("message", { ...GOOD, message_id: 42 })).toBeNull();
+  });
+});

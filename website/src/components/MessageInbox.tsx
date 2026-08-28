@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { labelForArrangement } from "@/lib/arrangement-labels";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { submitFlagAction } from "@/lib/messages/flag-action";
 import { uploadMessageAttachment, type MessageAttachment } from "@/lib/upload";
 import type { ArtistWork } from "@/data/artists";
 import PlacementContextPanel from "@/components/PlacementContextPanel";
@@ -332,12 +334,15 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
         // content after switching between threads with equal counts.
         setMessages(data.messages);
       }
-      await authFetch(`/api/messages/${convId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ readerSlug: slugRef.current }),
-      });
-      setConversations((prev) => prev.map((c) => c.conversationId === convId ? { ...c, unreadCount: 0 } : c));
+      // No body: the server marks read against the signed-in caller's own slugs.
+      // It used to take a readerSlug from here, which let a caller mark somebody
+      // else's messages as read (E31). Best-effort and isolated: a failed
+      // mark-read must not report the (successful) thread load as failed, and
+      // must not clear the unread badge (mutate throws on a non-2xx).
+      try {
+        await mutate(`/api/messages/${convId}`, { method: "PATCH" });
+        setConversations((prev) => prev.map((c) => c.conversationId === convId ? { ...c, unreadCount: 0 } : c));
+      } catch { /* leave the unread badge if the mark-read did not land */ }
     } catch (err) {
       if (!silent) console.error("Failed to load thread:", err);
     }
@@ -465,7 +470,10 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     setSending(true);
     setSendError(null);
     try {
-      const res = await authFetch("/api/messages", {
+      // mutate throws on a non-2xx, so the optimistic append only runs on a
+      // confirmed send (the old authFetch resolved on a 4xx/5xx and this used a
+      // manual res.ok check).
+      await mutate("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -477,12 +485,6 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
           attachments: pendingAttachments,
         }),
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        setSendError(errData.error || "Failed to send message");
-        setSending(false);
-        return;
-      }
       setMessages((prev) => [...prev, {
         id: Date.now(),
         conversation_id: selectedConv,
@@ -505,6 +507,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       setPendingAttachments([]);
     } catch (err) {
       console.error("Failed to send:", err);
+      setSendError(err instanceof Error ? err.message : "Failed to send message");
     }
     setSending(false);
   }
@@ -514,7 +517,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     setSending(true);
     setSendError(null);
     try {
-      const res = await authFetch("/api/messages", {
+      const data = await mutate<{ conversationId?: string }>("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -524,10 +527,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
           content: composeMessage.trim(),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setSendError(data.error || "Failed to send message");
-      } else if (data.conversationId) {
+      if (data.conversationId) {
         await loadConversations();
         setSelectedConv(data.conversationId);
         setComposing(false);
@@ -535,26 +535,27 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
       }
     } catch (err) {
       console.error("Failed to send:", err);
+      setSendError(err instanceof Error ? err.message : "Failed to send message");
     }
     setSending(false);
   }
 
   async function handleDeleteConversation(convId: string) {
     try {
-      const res = await authFetch(`/api/messages/${convId}`, { method: "DELETE" });
-      if (res.ok) {
-        setConversations((prev) => prev.filter((c) => c.conversationId !== convId));
-        if (selectedConv === convId) {
-          setSelectedConv(null);
-          setMessages([]);
-        }
-      } else {
-        const data = await res.json().catch(() => ({}));
-        showToast(data.error || "Could not delete conversation. Please try again.", { variant: "error" });
+      await mutate(`/api/messages/${convId}`, { method: "DELETE" });
+      setConversations((prev) => prev.filter((c) => c.conversationId !== convId));
+      if (selectedConv === convId) {
+        setSelectedConv(null);
+        setMessages([]);
       }
     } catch (err) {
       console.error("Delete failed:", err);
-      showToast("Network error while deleting. Please try again.", { variant: "error" });
+      showToast(
+        err instanceof ApiError
+          ? err.message || "Could not delete conversation. Please try again."
+          : "Network error while deleting. Please try again.",
+        { variant: "error" },
+      );
     }
   }
 
@@ -564,18 +565,14 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     const willPin = !msg.pinned_at;
     setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, pinned_at: willPin ? new Date().toISOString() : null } : m));
     try {
-      const res = await authFetch(`/api/messages/item/${msg.id}`, {
+      await mutate(`/api/messages/item/${msg.id}`, {
         method: "PATCH",
         body: JSON.stringify({ action: willPin ? "pin" : "unpin" }),
       });
-      if (!res.ok) {
-        // Revert on failure so the UI doesn't lie about server state.
-        setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, pinned_at: msg.pinned_at || null } : m));
-        const data = await res.json().catch(() => ({}));
-        showToast(data.error || "Could not pin message.", { variant: "error" });
-      }
-    } catch {
+    } catch (err) {
+      // Revert on failure so the UI doesn't lie about server state.
       setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, pinned_at: msg.pinned_at || null } : m));
+      showToast(err instanceof ApiError ? err.message || "Could not pin message." : "Could not pin message.", { variant: "error" });
     }
   }
 
@@ -592,14 +589,10 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     const snapshot = msg;
     setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, deleted_at: new Date().toISOString(), content: "" } : m));
     try {
-      const res = await authFetch(`/api/messages/item/${msg.id}`, { method: "DELETE" });
-      if (!res.ok) {
-        setMessages((prev) => prev.map((m) => m.id === snapshot.id ? snapshot : m));
-        const data = await res.json().catch(() => ({}));
-        showToast(data.error || "Could not delete message.", { variant: "error" });
-      }
-    } catch {
+      await mutate(`/api/messages/item/${msg.id}`, { method: "DELETE" });
+    } catch (err) {
       setMessages((prev) => prev.map((m) => m.id === snapshot.id ? snapshot : m));
+      showToast(err instanceof ApiError ? err.message || "Could not delete message." : "Could not delete message.", { variant: "error" });
     }
   }
 
@@ -617,33 +610,30 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     const offerId = meta.offerId as string | undefined;
     if (!offerId) return;
     try {
-      const res = await authFetch(`/api/offers/${offerId}`, {
+      await mutate(`/api/offers/${offerId}`, {
         method: "PATCH",
         body: JSON.stringify({ action }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        showToast(data.error || "Could not update offer.", { variant: "error" });
-        return;
-      }
-      // If the actor is the venue (buyer) and they accepted, fire
-      // checkout immediately. The recipient flag here is the message
-      // recipient — i.e. whoever the offer was addressed to.
-      const recipientUserId = meta.recipientUserId as string | undefined;
-      if (action === "accept" && recipientUserId === user?.id) {
-        try {
-          const co = await authFetch(`/api/offers/${offerId}/checkout`, { method: "POST" });
-          const cd = await co.json().catch(() => ({}));
-          if (cd.url) {
-            window.location.href = cd.url;
-            return;
-          }
-        } catch { /* fall through to refresh */ }
-      }
     } catch (err) {
       console.error("Offer PATCH failed:", err);
-      showToast("Network error. Please try again.", { variant: "error" });
+      showToast(
+        err instanceof ApiError ? err.message || "Could not update offer." : "Network error. Please try again.",
+        { variant: "error" },
+      );
       return;
+    }
+    // If the actor is the venue (buyer) and they accepted, fire
+    // checkout immediately. The recipient flag here is the message
+    // recipient — i.e. whoever the offer was addressed to.
+    const recipientUserId = meta.recipientUserId as string | undefined;
+    if (action === "accept" && recipientUserId === user?.id) {
+      try {
+        const cd = await mutate<{ url?: string }>(`/api/offers/${offerId}/checkout`, { method: "POST" });
+        if (cd.url) {
+          window.location.href = cd.url;
+          return;
+        }
+      } catch { /* fall through to refresh */ }
     }
     if (selectedConv) loadThread(selectedConv, true);
     loadConversations(true);
@@ -658,18 +648,18 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
     // confusing "accepted" message without the underlying state change.
     if (placementId) {
       try {
-        const res = await authFetch("/api/placements", {
+        await mutate("/api/placements", {
           method: "PATCH",
           body: JSON.stringify({ id: placementId, status: accept ? "active" : "declined" }),
         });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          showToast(data.error || "Could not update placement. Please try again.", { variant: "error" });
-          return;
-        }
       } catch (err) {
         console.error("Placement PATCH failed:", err);
-        showToast("Network error. Please try again.", { variant: "error" });
+        showToast(
+          err instanceof ApiError
+            ? err.message || "Could not update placement. Please try again."
+            : "Network error. Please try again.",
+          { variant: "error" },
+        );
         return;
       }
     }
@@ -1242,22 +1232,23 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                           {!isCounter && <p className="text-sm font-medium text-foreground">{meta.workTitle as string || "Artwork"}</p>}
                           <p className="text-xs text-muted">
                             {(() => {
-                              // Combined label: "Paid loan + QR" / "Revenue
-                              // Share" / "Direct purchase". Mirrors the
-                              // placements list and the status panel so the
-                              // thread, the list, and the panel all agree.
+                              // K3 / 07 §3.2. This was a FIFTH copy of the
+                              // whole ladder, inline in JSX, and it disagreed
+                              // with the canonical one: a paid_loan row whose
+                              // fee column is null read "Free display" here and
+                              // "Paid loan" in the placements list, for the same
+                              // placement, in two panes of the same app.
                               const type = meta.arrangementType as string | undefined;
                               const fee = meta.monthlyFeeGbp as number | undefined;
                               const qr = meta.qrEnabled as boolean | undefined;
                               const rev = meta.revenueSharePercent as number | undefined;
                               const hasFee = typeof fee === "number" && fee > 0;
-                              const label = hasFee
-                                ? (qr ? "Paid loan + QR" : "Paid loan")
-                                : type === "purchase"
-                                  ? "Direct purchase"
-                                  : qr || type === "revenue_share"
-                                    ? "Revenue share"
-                                    : "Free display";
+                              const label = labelForArrangement({
+                                arrangementType: type,
+                                monthlyFeeGbp: fee,
+                                qrEnabled: qr,
+                                revenueSharePercent: rev,
+                              });
                               const parts: string[] = [label];
                               if (hasFee) parts.push(`£${fee}/mo`);
                               if ((qr || type === "revenue_share") && typeof rev === "number" && rev > 0) parts.push(`${rev}% on QR sales`);
@@ -1684,19 +1675,22 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     onClick={async () => {
                       const reason = prompt(`What's the issue with ${selectedConvData?.otherPartyDisplayName || "this user"}?`);
                       if (!reason) return;
-                      setFlagSubmitting(true);
-                      try {
-                        await authFetch("/api/messages/report", {
-                          method: "POST",
-                          body: JSON.stringify({
-                            otherParty: selectedConvData?.otherParty,
-                            conversationId: selectedConvData?.conversationId,
-                            reason,
-                          }),
-                        });
-                      } catch { /* swallow, UX still confirms */ }
-                      setFlagSubmitted("reported");
-                      setFlagSubmitting(false);
+                      // E43-e: submitFlagAction sets the confirmation ONLY after the
+                      // server accepts it (mutate throws on a non-2xx / network failure).
+                      await submitFlagAction({
+                        url: "/api/messages/report",
+                        method: "POST",
+                        body: {
+                          otherParty: selectedConvData?.otherParty,
+                          conversationId: selectedConvData?.conversationId,
+                          reason,
+                        },
+                        outcome: "reported",
+                        errorMessage: "Could not submit the report. Please try again.",
+                        setSubmitting: setFlagSubmitting,
+                        setSubmitted: setFlagSubmitted,
+                        showToast,
+                      });
                     }}
                     className="w-full text-left block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors disabled:opacity-50"
                   >
@@ -1715,15 +1709,17 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                         confirmLabel: "Archive",
                       });
                       if (!ok) return;
-                      setFlagSubmitting(true);
-                      try {
-                        await authFetch("/api/messages", {
-                          method: "DELETE",
-                          body: JSON.stringify({ conversationId: selectedConvData?.conversationId }),
-                        });
-                      } catch { /* fall through to confirmation UX */ }
-                      setFlagSubmitted("deleted");
-                      setFlagSubmitting(false);
+                      // E43-e: only confirm the archive once the server accepted it.
+                      await submitFlagAction({
+                        url: "/api/messages",
+                        method: "DELETE",
+                        body: { conversationId: selectedConvData?.conversationId },
+                        outcome: "deleted",
+                        errorMessage: "Could not archive the conversation. Please try again.",
+                        setSubmitting: setFlagSubmitting,
+                        setSubmitted: setFlagSubmitted,
+                        showToast,
+                      });
                     }}
                     className="w-full text-left block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors disabled:opacity-50"
                   >
@@ -1743,15 +1739,20 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                         destructive: true,
                       });
                       if (!ok) return;
-                      setFlagSubmitting(true);
-                      try {
-                        await authFetch("/api/messages/block", {
-                          method: "POST",
-                          body: JSON.stringify({ otherParty: selectedConvData?.otherParty }),
-                        });
-                      } catch { /* fall through */ }
-                      setFlagSubmitted("blocked");
-                      setFlagSubmitting(false);
+                      // E43-e: the most serious of the trio. The old code confirmed
+                      // "User blocked" even on a 403/500/network failure, so someone
+                      // could believe a harasser was blocked when the block never
+                      // persisted. submitFlagAction sets "blocked" ONLY on success.
+                      await submitFlagAction({
+                        url: "/api/messages/block",
+                        method: "POST",
+                        body: { otherParty: selectedConvData?.otherParty },
+                        outcome: "blocked",
+                        errorMessage: "Could not block this user. Please try again.",
+                        setSubmitting: setFlagSubmitting,
+                        setSubmitted: setFlagSubmitted,
+                        showToast,
+                      });
                     }}
                     className="w-full text-left block px-5 py-3 text-sm text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50"
                   >

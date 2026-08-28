@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { useConfirm } from "@/context/ConfirmContext";
 import type { ArtistWork } from "@/data/artists";
 import {
@@ -11,7 +11,6 @@ import {
   statusBadgeClass,
   nextAction,
   viewerRole,
-  arrangementLabel as sharedArrangementLabel,
   type DisplayStatus,
   type PlacementLifecycle,
 } from "@/lib/placements/status";
@@ -19,6 +18,8 @@ import { canRespond } from "@/lib/placement-permissions";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
 import Toggle from "@/components/Toggle";
 import { useSearchParams } from "next/navigation";
+import { labelForArrangement } from "@/lib/arrangement-labels";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 interface PanelProps {
   otherPartySlug: string | null;
@@ -248,13 +249,13 @@ export default function PlacementContextPanel({
     setBusyAction("accept");
     setError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: (current as RemotePlacement).id, status: "active" }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not accept");
-      else await loadPlacements();
+      await loadPlacements();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not accept" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -271,13 +272,13 @@ export default function PlacementContextPanel({
     setBusyAction("decline");
     setError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: (current as RemotePlacement).id, status: "declined" }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not decline");
-      else await loadPlacements();
+      await loadPlacements();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not decline" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -294,18 +295,18 @@ export default function PlacementContextPanel({
     setBusyAction(`undo-${stage}`);
     setError(null);
     try {
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify({ id: (current as RemotePlacement).id, unsetStage: stage }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not undo stage");
-      else {
-        await loadPlacements();
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: (current as RemotePlacement).id, action: "undo", stage } }));
-        }
+      await loadPlacements();
+      if (typeof window !== "undefined") {
+        // Success-only: mutate throws on a non-2xx, so a rejected undo no longer
+        // fans the cross-portal event out (E43-a class).
+        window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: (current as RemotePlacement).id, action: "undo", stage } }));
       }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not undo stage" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -321,16 +322,14 @@ export default function PlacementContextPanel({
         stage,
       };
       if (explicitDate) body.stageDate = explicitDate;
-      const res = await authFetch("/api/placements", {
+      await mutate("/api/placements", {
         method: "PATCH",
         body: JSON.stringify(body),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not update stage");
-      else {
-        await loadPlacements();
-        setSchedulePickerOpen(false);
-      }
+      await loadPlacements();
+      setSchedulePickerOpen(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not update stage" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -394,14 +393,12 @@ export default function PlacementContextPanel({
           message: counterNote.trim() || undefined,
         },
       };
-      const res = await authFetch("/api/placements", { method: "PATCH", body: JSON.stringify(body) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not send counter");
-      else {
-        setCounterOpen(false);
-        setCounterNote("");
-        await loadPlacements();
-      }
+      await mutate("/api/placements", { method: "PATCH", body: JSON.stringify(body) });
+      setCounterOpen(false);
+      setCounterNote("");
+      await loadPlacements();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not send counter" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -434,15 +431,13 @@ export default function PlacementContextPanel({
           message: reqNote.trim() || undefined,
         })),
       };
-      const res = await authFetch("/api/placements", { method: "POST", body: JSON.stringify(body) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || "Could not send request");
-      else {
-        setReqSelected(new Set());
-        setReqNote("");
-        await loadPlacements();
-        onRequestSent?.();
-      }
+      await mutate("/api/placements", { method: "POST", body: JSON.stringify(body) });
+      setReqSelected(new Set());
+      setReqNote("");
+      await loadPlacements();
+      onRequestSent?.();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message || "Could not send request" : "Network error. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -527,14 +522,14 @@ export default function PlacementContextPanel({
           <div>
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted mb-2">Type</p>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setReqQr(true)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${reqQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>Revenue share</button>
-              <button type="button" onClick={() => setReqQr(false)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${!reqQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>Paid loan</button>
+              <button type="button" onClick={() => setReqQr(true)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${reqQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>{ARRANGEMENT_LABEL.revenue_share}</button>
+              <button type="button" onClick={() => setReqQr(false)} className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${!reqQr ? "bg-accent/10 border-accent text-accent" : "border-border text-muted hover:text-foreground"}`}>{ARRANGEMENT_LABEL.paid_loan}</button>
             </div>
           </div>
 
           {reqQr ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted flex-1">Revenue share</span>
+              <span className="text-xs text-muted flex-1">{ARRANGEMENT_LABEL.revenue_share}</span>
               <input type="number" min={0} max={50} value={reqRevShare} onChange={(e) => setReqRevShare(Number(e.target.value) || 0)} className="w-16 px-2 py-1.5 bg-surface border border-border rounded-lg text-xs text-center focus:outline-none focus:border-accent/50" />
               <span className="text-xs text-muted">%</span>
             </div>
@@ -579,27 +574,25 @@ export default function PlacementContextPanel({
   // Has placement \u2014 show progress panel.
   const p = current as RemotePlacement;
   // Derive the headline arrangement label from actual data rather than
-  // trusting the raw arrangement_type. For legacy rows where the fee was
-  // dropped by an earlier insert retry, fall back to parsing £X/month out
-  // of the request message so a paid loan isn't mislabelled.
-  // G1 (Phase 2.2): single source of truth via the shared
-  // arrangementLabel(), so this panel agrees with the
-  // /placements/[id] header and the placement-list rows. Still falls
-  // back to scanning the request message for "\u00a3X/month" via the
-  // helper, so legacy rows without a populated fee column don't
-  // mis-label as "Free display".
-  const arrangementLabel = sharedArrangementLabel({
-    arrangement_type: p.arrangement_type,
-    monthly_fee_gbp: p.monthly_fee_gbp,
-    qr_enabled: p.qr_enabled,
-    message: p.message,
+  // trusting the raw arrangement_type, so this panel agrees with the
+  // /placements/[id] header and the placement-list rows.
+  //
+  // K3: was `sharedArrangementLabel` from placements/status.ts, a second
+  // implementation with a different vocabulary from the module that calls
+  // itself the single source of truth. One owner now.
+  //
+  // The message-body regex is gone with it. It scanned the request message for
+  // "£X/month" so a legacy row with a dropped fee column would not mis-label as
+  // "Free display" — but inferring a monetary amount from prose a user typed is
+  // a bug generator, and it silently disagreed with every other surface that
+  // did not do it. A legacy row with no fee reads as what the column says; the
+  // fix for a dropped fee is to backfill the column.
+  const arrangementLabel = labelForArrangement({
+    arrangementType: p.arrangement_type,
+    monthlyFeeGbp: p.monthly_fee_gbp,
+    qrEnabled: p.qr_enabled,
   });
-  // Same fee-derivation as the helper, but exposed locally for the
-  // conditional Monthly-fee + QR-code rows below.
-  const msg = p.message || "";
-  const msgFeeMatch = msg.match(/(?:\u00a3|gbp)\s?(\d{2,5})\s?(?:\/?\s?m|per\s*m|\/\s*mo|a\s*m)/i);
-  const msgFee = msgFeeMatch ? parseFloat(msgFeeMatch[1]) : 0;
-  const hasFee = (typeof p.monthly_fee_gbp === "number" && p.monthly_fee_gbp > 0) || msgFee > 0;
+  const hasFee = typeof p.monthly_fee_gbp === "number" && p.monthly_fee_gbp > 0;
 
   return (
     <aside className="w-full h-full bg-[#FAF8F5] border-l border-border flex flex-col overflow-y-auto">
@@ -821,10 +814,10 @@ export default function PlacementContextPanel({
             {/* Paid loan toggle, checkbox because you can combine with QR. */}
             <label className="flex items-center justify-between gap-2 cursor-pointer">
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-foreground">Paid loan</p>
+                <p className="text-xs text-foreground">{ARRANGEMENT_LABEL.paid_loan}</p>
                 <p className="text-[10px] text-muted leading-snug">Venue pays the artist monthly to display the work.</p>
               </div>
-              <Toggle checked={counterPaidLoan} onChange={setCounterPaidLoan} ariaLabel="Paid loan" size="compact" />
+              <Toggle checked={counterPaidLoan} onChange={setCounterPaidLoan} ariaLabel={ARRANGEMENT_LABEL.paid_loan} size="compact" />
             </label>
             {counterPaidLoan && (
               <div className="flex items-center gap-2 pl-0">
@@ -845,7 +838,7 @@ export default function PlacementContextPanel({
             </label>
             {counterQr && (
               <div className="flex items-center gap-2 pl-0">
-                <span className="text-xs text-muted flex-1">{counterPaidLoan ? "Share on QR sales" : "Revenue share"}</span>
+                <span className="text-xs text-muted flex-1">{counterPaidLoan ? "Share on QR sales" : ARRANGEMENT_LABEL.revenue_share}</span>
                 <input type="number" min={0} max={50} value={counterRevShare} onChange={(e) => setCounterRevShare(Number(e.target.value) || 0)} className="w-16 px-2 py-1.5 bg-surface border border-border rounded-lg text-xs text-center focus:outline-none focus:border-accent/50" />
                 <span className="text-xs text-muted">%</span>
               </div>
@@ -890,7 +883,7 @@ export default function PlacementContextPanel({
           )}
           {p.qr_enabled && p.revenue_share_percent != null && p.revenue_share_percent > 0 && (
             <div className="flex gap-3 py-0.5">
-              <span className="text-muted w-24 shrink-0">Revenue share</span>
+              <span className="text-muted w-24 shrink-0">{ARRANGEMENT_LABEL.revenue_share}</span>
               <span className="text-foreground font-medium">{p.revenue_share_percent}% on QR sales</span>
             </div>
           )}

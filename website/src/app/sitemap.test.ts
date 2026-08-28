@@ -10,15 +10,12 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-// Mock the Supabase admin client used inside sitemap.ts.
+// Mock the Supabase admin client used inside sitemap.ts. Routed through a mutable
+// fromMock so individual tests can supply table-specific data (row 19 #9).
+const { fromMock } = vi.hoisted(() => ({ fromMock: vi.fn() }));
+
 vi.mock("@/lib/supabase-admin", () => ({
-  getSupabaseAdmin: () => ({
-    from: () => ({
-      select: () => ({
-        eq: () => Promise.resolve({ data: [], error: null }),
-      }),
-    }),
-  }),
+  getSupabaseAdmin: () => ({ from: fromMock }),
 }));
 
 // Mock the static artist seed data so the test doesn't depend on the full
@@ -27,7 +24,8 @@ vi.mock("@/data/artists", () => ({
   artists: [],
 }));
 
-// Mock slugify — not exercised by these assertions but imported by sitemap.ts.
+// Mock slugify with the same lowercase/hyphen behaviour the real one applies to
+// these fixtures (exercised by the row 19 #9 lastmod test).
 vi.mock("@/lib/slugify", () => ({
   slugify: (s: string) => s.toLowerCase().replace(/\s+/g, "-"),
 }));
@@ -36,10 +34,18 @@ import sitemap from "./sitemap";
 
 const SITE_URL = "https://wallplace.co.uk";
 
+// Default table handler: every query resolves empty, matching an unavailable or
+// empty DB (this is what the fix 6.2 tests below assume).
+function emptyDb() {
+  return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+}
+
 describe("sitemap (fix 6.2)", () => {
   beforeEach(() => {
     // Ensure NEXT_PUBLIC_SITE_URL is unset so the default kicks in.
     delete process.env.NEXT_PUBLIC_SITE_URL;
+    fromMock.mockReset();
+    fromMock.mockImplementation(() => emptyDb());
   });
 
   it("does NOT include /galleries (redirect-only route)", async () => {
@@ -61,5 +67,47 @@ describe("sitemap (fix 6.2)", () => {
     const home = entries.find((e) => e.url === `${SITE_URL}/`);
     expect(home).toBeDefined();
     expect(home?.priority).toBe(1);
+  });
+
+  // row 19 #9. artist_works has created_at, not updated_at. The old select named
+  // updated_at, so PostgREST rejected the whole query and no artwork URL got a DB
+  // lastmod. The mock models that rejection faithfully (a naive mock would mask it),
+  // so this fails before the fix (the URL is absent) and passes after.
+  it("uses artist_works.created_at for the artwork lastmod, not the phantom updated_at (row 19 #9)", async () => {
+    // Real columns of artist_works (schema-columns.json); excludes updated_at.
+    const ARTIST_WORKS_COLUMNS = new Set(["id", "artist_id", "title", "created_at", "image", "available"]);
+    const phantomIn = (cols: string): string | null => {
+      for (const raw of cols.split(",")) {
+        const t = raw.trim();
+        if (!/^[a-z_][a-z0-9_]*$/.test(t)) continue; // skip embeds / aliases
+        if (!ARTIST_WORKS_COLUMNS.has(t)) return t;
+      }
+      return null;
+    };
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_works") {
+        return {
+          // No .eq() follows this select; the route awaits it directly.
+          select: (cols: string) => {
+            const phantom = phantomIn(cols);
+            if (phantom) {
+              return Promise.resolve({ data: null, error: { message: `column artist_works.${phantom} does not exist` } });
+            }
+            return Promise.resolve({
+              data: [{ title: "Sunset", created_at: "2026-01-01T00:00:00.000Z", artist_profiles: { slug: "alice" } }],
+              error: null,
+            });
+          },
+        };
+      }
+      return emptyDb();
+    });
+
+    const entries = await sitemap();
+    const work = entries.find((e) => e.url === `${SITE_URL}/browse/alice/sunset`);
+    // Fail-before: the old select named artist_works.updated_at, so the whole query
+    // was rejected and this artwork URL never made it into the sitemap.
+    expect(work).toBeDefined();
+    expect(work?.lastModified).toEqual(new Date("2026-01-01T00:00:00.000Z"));
   });
 });

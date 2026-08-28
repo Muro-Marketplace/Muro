@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 
 interface Dispute {
   id: string;
@@ -49,17 +49,22 @@ export default function AdminDisputesPage() {
       const note = prompt("Escalation note (optional):") ?? "";
       body = { action, note };
     }
-    const res = await authFetch(`/api/admin/disputes/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
+    try {
+      // Status + audit-log write only (no refund/payout on this route). mutate throws
+      // on a non-2xx or a dropped request; the old code had no catch, so a network
+      // failure rejected unhandled with no message.
+      await mutate(`/api/admin/disputes/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
       setActionMsg(`Dispute ${action}d.`);
       load();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setActionMsg(data?.error || "Could not apply action.");
+    } catch (err) {
+      setActionMsg(
+        err instanceof ApiError
+          ? err.code || "Could not apply action."
+          : "Network error. Please try again.",
+      );
     }
   }
 

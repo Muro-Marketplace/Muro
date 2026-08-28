@@ -19,7 +19,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { authFetch } from "@/lib/api-client";
+import { mutate } from "@/lib/api-client";
 import { safeRedirect } from "@/lib/safe-redirect";
 
 export default function AuthCallbackPage() {
@@ -58,12 +58,15 @@ export default function AuthCallbackPage() {
       let nextHref = fallbackNext;
       if (state) {
         try {
-          const res = await authFetch("/api/auth/oauth-finalize", {
+          // Best-effort: a failure here just leaves nextHref at the fallback, which
+          // is why the catch only logs. mutate throws on a non-2xx (previously a
+          // non-2xx body was read anyway and simply had no `next`), so both land
+          // in the same place.
+          const data = await mutate<{ next?: string }>("/api/auth/oauth-finalize", {
             method: "POST",
             body: JSON.stringify({ state }),
           });
-          const data = await res.json().catch(() => ({}));
-          if (data.next) nextHref = data.next;
+          if (data?.next) nextHref = data.next;
         } catch (err) {
           console.error("[auth/callback] oauth-finalize failed:", err);
         }

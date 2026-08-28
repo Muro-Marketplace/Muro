@@ -19,6 +19,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // 09 item 3.2: an unconfirmed account could not get past this form, and there
+  // was no resend path anywhere, so the only recovery was to give up. Supabase
+  // answers "Email not confirmed" for exactly this case.
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
   const toastFired = useRef(false);
 
   // Read ?email=… on mount so the portal-switcher flow (which signs the
@@ -75,6 +80,8 @@ export default function LoginPage() {
     const { error: authError } = await signIn(email, password);
 
     if (authError) {
+      const unconfirmed = /email not confirmed|not confirmed/i.test(authError.message || "");
+      setNeedsVerification(unconfirmed);
       setError(authError.message === "Invalid login credentials"
         ? "Invalid email or password"
         : authError.message
@@ -84,6 +91,23 @@ export default function LoginPage() {
     }
 
     // Redirect happens via the useEffect above when user state updates
+  }
+
+  async function handleResendVerification() {
+    setResendState("sending");
+    try {
+      await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      /* The endpoint answers the same either way; a network blip is not worth
+         a second error message on top of the one already showing. */
+    }
+    // "sent" regardless, matching the endpoint: it does not say whether the
+    // address has an account, and neither does this.
+    setResendState("sent");
   }
 
   // Don't render form while checking auth
@@ -162,6 +186,31 @@ export default function LoginPage() {
 
             {error && (
               <p className="text-red-500 text-sm text-center">{error}</p>
+            )}
+
+            {needsVerification && (
+              <div className="rounded-sm bg-background border border-border p-3 text-center">
+                {resendState === "sent" ? (
+                  <p className="text-xs text-muted">
+                    If that address needs confirming, we have sent a new link. Check your
+                    inbox and your spam folder.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted mb-2">
+                      You need to confirm your email address before signing in.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resendState === "sending" || !email}
+                      className="text-xs font-medium text-accent hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {resendState === "sending" ? "Sending..." : "Send me a new link"}
+                    </button>
+                  </>
+                )}
+              </div>
             )}
 
             <button

@@ -6,8 +6,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { authFetch } from "@/lib/api-client";
+import { isFlagOn } from "@/lib/feature-flags";
 
 interface BlogRow {
   id: string;
@@ -37,6 +39,10 @@ function statusBadge(status: string): string {
 }
 
 export default function ArtistBlogsPage() {
+  // bug-12: gate the whole surface on BLOGS_V1, which is off in prod. notFound()
+  // works from a client component too (it throws the not-found signal the route
+  // boundary catches); isFlagOn is client-safe via the CLIENT_ENV snapshot.
+  if (!isFlagOn("BLOGS_V1")) notFound();
   const [rows, setRows] = useState<BlogRow[]>([]);
   const [loading, setLoading] = useState(true);
 

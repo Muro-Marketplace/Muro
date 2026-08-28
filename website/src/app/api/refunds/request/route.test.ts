@@ -25,8 +25,13 @@ vi.mock("@/lib/api-auth", () => ({
   }),
 }));
 
-vi.mock("@/lib/email", () => ({
-  notifyRefundRequested: vi.fn(async () => undefined),
+// K1: notifyRefundRequested mailed the admin AND the artist from one function.
+// Split by audience now: an operational alert and the artist's own notice.
+vi.mock("@/lib/email/admin-alert", () => ({
+  sendAdminAlert: vi.fn(async () => ({ ok: true, skipped: false, messageId: "m" })),
+}));
+vi.mock("@/lib/email/send", () => ({
+  sendEmail: vi.fn(async () => ({ ok: true, skipped: false, messageId: "m" })),
 }));
 
 import { POST } from "./route";

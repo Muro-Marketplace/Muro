@@ -41,6 +41,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -616,9 +617,9 @@ export default function SpacesPlacementRequestForm({
               <div className="grid grid-cols-3 gap-1.5">
                 {(
                   [
-                    { id: "revenue_share", label: "Revenue Share" },
-                    { id: "free_loan", label: "Paid Loan" },
-                    { id: "purchase", label: "Direct Purchase" },
+                    { id: "revenue_share", label: ARRANGEMENT_LABEL.revenue_share },
+                    { id: "free_loan", label: ARRANGEMENT_LABEL.paid_loan },
+                    { id: "purchase", label: ARRANGEMENT_LABEL.purchase },
                   ] as const
                 ).map((opt) => {
                   const enabled = supported.includes(opt.id);

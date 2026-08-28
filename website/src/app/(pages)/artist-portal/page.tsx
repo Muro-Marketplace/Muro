@@ -7,6 +7,7 @@ import Button from "@/components/Button";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { artistPayoutPounds } from "@/lib/finance/order-money";
 
 interface ActivityItem {
   id: string;
@@ -209,12 +210,8 @@ export default function ArtistPortalPage() {
         const time = o.paid_at || o.created_at;
         if (!time) continue;
         const firstTitle = o.items?.[0]?.title || "Artwork";
-        const payout =
-          typeof o.artist_revenue === "number" && Number.isFinite(o.artist_revenue)
-            ? o.artist_revenue
-            : typeof o.total === "number" && Number.isFinite(o.total)
-              ? o.total
-              : 0;
+        // K6: fourth copy of the payout rule, now one owner.
+        const payout = artistPayoutPounds(o);
         activityItems.push({
           id: "o-" + (o.id || time),
           text: `Sale: ${firstTitle}, £${payout.toFixed(2)} to you${o.id ? ` (${o.id})` : ""}`,

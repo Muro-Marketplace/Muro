@@ -1,7 +1,21 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { loadCartSession } from "@/lib/cart-sessions";
 
+// E39. This endpoint is unauthenticated: the only thing it checks is that the
+// caller supplied a Stripe session id. It used to answer with customerEmail, the
+// raw Stripe metadata, the cart and the full delivery address, so anyone holding
+// a session id could read another customer's name, address and email. Session
+// ids are high entropy, but they travel in URLs, browser history, referrers and
+// logs, so "hard to guess" is not an access control.
+//
+// The response is now limited to what the confirmation page needs to render a
+// receipt for a payment that has just completed: the id, the payment status, the
+// total, and the line-item names and amounts. Nothing that identifies the buyer.
+//
+// Restoring the address and email for a signed-in buyer who owns the session is
+// possible later, but it needs owner matching first, and the webhook does not
+// populate buyer_user_id on the main path today (see E21), so a guest checkout,
+// which is the common case here, could not benefit from it yet.
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -15,19 +29,10 @@ export async function GET(request: Request) {
       expand: ["line_items"],
     });
 
-    // Cart + shipping live in cart_sessions (Plan B Task 6); Stripe
-    // metadata is intentionally slim. Fall back gracefully if the row
-    // is missing — older sessions still use legacy metadata.
-    const saved = await loadCartSession(sessionId);
-
     return NextResponse.json({
       id: session.id,
       status: session.payment_status,
       amountTotal: (session.amount_total || 0) / 100,
-      customerEmail: session.customer_email,
-      metadata: session.metadata,
-      cart: saved?.cart ?? [],
-      shipping: saved?.shipping ?? null,
       lineItems: session.line_items?.data.map((item) => ({
         name: item.description,
         quantity: item.quantity,

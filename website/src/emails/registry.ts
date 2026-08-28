@@ -20,6 +20,7 @@ import AccountTwoFactorEnabled from "./templates/account/AccountTwoFactorEnabled
 import AccountTwoFactorDisabled from "./templates/account/AccountTwoFactorDisabled";
 import AccountTeamInvite from "./templates/account/AccountTeamInvite";
 import AccountTeamInviteAccepted from "./templates/account/AccountTeamInviteAccepted";
+import SupportRequestReceived from "./templates/account/SupportRequestReceived";
 
 // ── Onboarding ────────────────────────────────────────────────────────────
 import ArtistWelcomeChecklist from "./templates/onboarding/artist/ArtistWelcomeChecklist";
@@ -40,6 +41,9 @@ import CustomerFollowArtistNudge from "./templates/onboarding/customer/CustomerF
 
 // ── Placements ────────────────────────────────────────────────────────────
 import VenueNewPlacementRequest from "./templates/placements/VenueNewPlacementRequest";
+// K1: the mirror of the above, for venue-initiated requests. Its absence is why
+// a legacy hand-written fallback survived on that half of the flow.
+import ArtistNewPlacementInvitation from "./templates/placements/ArtistNewPlacementInvitation";
 import ArtistPlacementRequestSent from "./templates/placements/ArtistPlacementRequestSent";
 import ArtistPlacementAccepted from "./templates/placements/ArtistPlacementAccepted";
 import VenuePlacementAcceptedConfirmation from "./templates/placements/VenuePlacementAcceptedConfirmation";
@@ -57,6 +61,11 @@ import PlacementConsignmentRecordCreated from "./templates/placements/PlacementC
 import PlacementContractCountersigned from "./templates/placements/PlacementContractCountersigned";
 
 // ── Messages ──────────────────────────────────────────────────────────────
+// ── Admin (internal) ──────────────────────────────────────────────────────
+// K1: one template for every operational alert to the Wallplace team, replacing
+// eight near-identical hand-written HTML notifiers in the deleted lib/email.ts.
+import AdminAlert from "./templates/admin/AdminAlert";
+
 import MessageUnreadNotification from "./templates/messages/MessageUnreadNotification";
 import MessageHourlyDigest from "./templates/messages/MessageHourlyDigest";
 import ReviewPostedNotification from "./templates/messages/ReviewPostedNotification";
@@ -65,6 +74,10 @@ import OfferReceivedNotification from "./templates/messages/OfferReceivedNotific
 // ── Performance (artist) ──────────────────────────────────────────────────
 import ArtistFirstQrScan from "./templates/performance/ArtistFirstQrScan";
 import ArtistQrScanMilestone from "./templates/performance/ArtistQrScanMilestone";
+// 09 item 1.6: this template existed with a full TemplateEntry but was never
+// imported here, so it was invisible to the registry, the preview library and
+// every audit that walks EMAIL_REGISTRY.
+import ArtistQrScanDigest from "./templates/performance/ArtistQrScanDigest";
 import ArtistWeeklyPortfolioDigest from "./templates/performance/ArtistWeeklyPortfolioDigest";
 import ArtistNewVenueMatch from "./templates/performance/ArtistNewVenueMatch";
 import ArtistLowEngagementTips from "./templates/performance/ArtistLowEngagementTips";
@@ -76,6 +89,15 @@ import VenueRotationReminder from "./templates/venue-lifecycle/VenueRotationRemi
 import VenuePlacementAnniversary from "./templates/venue-lifecycle/VenuePlacementAnniversary";
 import VenueManagedCurationPitch from "./templates/venue-lifecycle/VenueManagedCurationPitch";
 import VenueRegistrationConfirmation from "./templates/venue-lifecycle/VenueRegistrationConfirmation";
+// K1: the two curation customer emails, replacing hand-written HTML in the
+// deleted lib/email.ts.
+import CurationEnquiryReceived from "./templates/venue-lifecycle/CurationEnquiryReceived";
+import CurationPaymentReceived from "./templates/venue-lifecycle/CurationPaymentReceived";
+import VenueCollectionPending from "./templates/venue-lifecycle/VenueCollectionPending";
+// D18: the counterpart to CurationPaymentReceived, sent by the admin refund endpoint.
+import CurationRefundIssued from "./templates/venue-lifecycle/CurationRefundIssued";
+// K1: the per-sale venue notice, distinct from the periodic revenue-share statement.
+import VenueSaleFromPlacement from "./templates/venue-lifecycle/VenueSaleFromPlacement";
 
 // ── Orders ────────────────────────────────────────────────────────────────
 import CustomerOrderReceipt from "./templates/orders/CustomerOrderReceipt";
@@ -86,7 +108,15 @@ import CustomerDeliveryConfirmation from "./templates/orders/CustomerDeliveryCon
 import CustomerPostPurchaseCare from "./templates/orders/CustomerPostPurchaseCare";
 import CustomerPurchaseReviewRequest from "./templates/orders/CustomerPurchaseReviewRequest";
 import CustomerRefundConfirmation from "./templates/orders/CustomerRefundConfirmation";
+// K1: the decline counterpart. Its absence is why the legacy notifyRefundDecision
+// survived after the approve half had already moved to the pipeline.
+import CustomerRefundRejected from "./templates/orders/CustomerRefundRejected";
+// K1: the statuses the purpose-built lifecycle templates do not cover.
+import CustomerOrderStatusUpdate from "./templates/orders/CustomerOrderStatusUpdate";
 import ArtistRefundNotification from "./templates/orders/ArtistRefundNotification";
+// K1: distinct from the above. That one says a refund HAS been issued; this one
+// says one has been asked for and nothing has moved yet.
+import ArtistRefundRequested from "./templates/orders/ArtistRefundRequested";
 import OrderDisputeOpened from "./templates/orders/OrderDisputeOpened";
 import OrderDisputeResolved from "./templates/orders/OrderDisputeResolved";
 
@@ -108,6 +138,7 @@ import SubscriptionUpgraded from "./templates/payments/SubscriptionUpgraded";
 import SubscriptionCancelled from "./templates/payments/SubscriptionCancelled";
 import VenueRevenueShareStatement from "./templates/payments/VenueRevenueShareStatement";
 import VenuePaidLoanInvoice from "./templates/payments/VenuePaidLoanInvoice";
+import SubscriptionStarted from "./templates/payments/SubscriptionStarted";
 import SubscriptionRenewalReceipt from "./templates/payments/SubscriptionRenewalReceipt";
 import SubscriptionCardExpiring from "./templates/payments/SubscriptionCardExpiring";
 
@@ -146,6 +177,7 @@ import UserRepermissionCampaign from "./templates/re-engagement/UserRepermission
 
 // ── Newsletter ────────────────────────────────────────────────────────────
 import NewsletterMonthlyGallery from "./templates/newsletter/NewsletterMonthlyGallery";
+import NewsletterSubscribeConfirm from "./templates/newsletter/NewsletterSubscribeConfirm";
 import NewsletterArtistSpotlight from "./templates/newsletter/NewsletterArtistSpotlight";
 import NewsletterVenueSpotlight from "./templates/newsletter/NewsletterVenueSpotlight";
 import NewsletterCuratorsPicks from "./templates/newsletter/NewsletterCuratorsPicks";
@@ -162,6 +194,16 @@ import OperationalAccountRestored from "./templates/legal/OperationalAccountRest
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
+  AdminAlert,
+  VenueSaleFromPlacement,
+  CustomerOrderStatusUpdate,
+  CustomerRefundRejected,
+  ArtistRefundRequested,
+  ArtistNewPlacementInvitation,
+  CurationEnquiryReceived,
+  CurationPaymentReceived,
+  VenueCollectionPending,
+  CurationRefundIssued,
   // Account
   AccountEmailVerification,
   AccountPasswordReset,
@@ -175,6 +217,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   AccountTwoFactorDisabled,
   AccountTeamInvite,
   AccountTeamInviteAccepted,
+  SupportRequestReceived,
 
   // Onboarding
   ArtistWelcomeChecklist,
@@ -220,6 +263,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   // Performance
   ArtistFirstQrScan,
   ArtistQrScanMilestone,
+  ArtistQrScanDigest,
   ArtistWeeklyPortfolioDigest,
   ArtistNewVenueMatch,
   ArtistLowEngagementTips,
@@ -262,6 +306,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   SubscriptionCancelled,
   VenueRevenueShareStatement,
   VenuePaidLoanInvoice,
+  SubscriptionStarted,
   SubscriptionRenewalReceipt,
   SubscriptionCardExpiring,
 
@@ -300,6 +345,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
 
   // Newsletter
   NewsletterMonthlyGallery,
+  NewsletterSubscribeConfirm,
   NewsletterArtistSpotlight,
   NewsletterVenueSpotlight,
   NewsletterCuratorsPicks,

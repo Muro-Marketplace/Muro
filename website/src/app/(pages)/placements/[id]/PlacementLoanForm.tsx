@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { authFetch } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { uploadContract } from "@/lib/upload";
 import type { PlacementRecord, RecordVersion } from "./PlacementDetailClient";
 import DatePicker from "@/components/DatePicker";
@@ -274,20 +274,13 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
         ...(viewerRole === "venue" ? { venueApproved: form.venueApproved } : {}),
         ...(viewerRole === "artist" ? { artistApproved: form.artistApproved } : {}),
       };
-      const res = await authFetch(`/api/placements/${encodeURIComponent(placementId)}/record`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || "Could not save");
-        if (body.fieldErrors && typeof body.fieldErrors === "object") {
-          setFieldErrors(body.fieldErrors as Record<string, string>);
-        }
-        setSaving(false);
-        return;
-      }
-      const saveResult = await res.json().catch(() => ({})) as { approvalsReset?: boolean; changedFields?: string[] };
+      // mutate throws ApiError on a non-2xx (carrying the parsed body, incl. the
+      // fieldErrors, on .payload), so the manual res.ok/res.json plumbing collapses
+      // into the catch below.
+      const saveResult = await mutate<{ approvalsReset?: boolean; changedFields?: string[] }>(
+        `/api/placements/${encodeURIComponent(placementId)}/record`,
+        { method: "PUT", body: JSON.stringify(payload) },
+      );
       // If real content changed, the server clears both approval ticks so
       // the other party has to re-approve. Mirror that locally so the UI
       // doesn't briefly show stale "approved" state before the load.
@@ -331,8 +324,18 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
       }, { approvalsReset: resetApprovals });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
-    } catch {
-      setError("Network error");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        // err.code mirrors the old body.error; err.payload is the parsed body,
+        // which is where the per-field validation errors live.
+        setError(err.code || "Could not save");
+        const fe = (err.payload as { fieldErrors?: unknown } | null)?.fieldErrors;
+        if (fe && typeof fe === "object") {
+          setFieldErrors(fe as Record<string, string>);
+        }
+      } else {
+        setError("Network error");
+      }
     } finally {
       setSaving(false);
     }
@@ -577,18 +580,24 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
                 return;
               }
               try {
-                const res = await authFetch("/api/contracts/sign", {
+                // Mints a short-lived signed URL to view the contract file (access,
+                // not a payment). mutate throws on a non-2xx; a 2xx without a signedUrl
+                // is still treated as a failure.
+                const data = await mutate<{ signedUrl?: string }>("/api/contracts/sign", {
                   method: "POST",
                   body: JSON.stringify({ placementId, ref }),
                 });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok || !data.signedUrl) {
-                  setContractUploadError(data.error || "Could not open contract.");
+                if (!data.signedUrl) {
+                  setContractUploadError("Could not open contract.");
                   return;
                 }
                 window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-              } catch {
-                setContractUploadError("Network error opening contract.");
+              } catch (err) {
+                setContractUploadError(
+                  err instanceof ApiError
+                    ? err.code || "Could not open contract."
+                    : "Network error opening contract.",
+                );
               }
             }}
             className="mt-2 inline-flex items-center gap-1.5 text-xs text-accent hover:underline"
