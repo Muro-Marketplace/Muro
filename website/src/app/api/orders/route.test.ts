@@ -152,7 +152,7 @@ describe("PATCH /api/orders payout + email side-effects", () => {
   // order_events.upsert (lifecycle, best-effort), stripe_transfers.select
   // (pending list), then optionally orders.select again for placement.
   // We keep it simple by table name.
-  function makeDeliveredFromMock(transferIds: string[]) {
+  function makeDeliveredFromMock(transferIds: string[], rowOverride: Record<string, unknown> = {}) {
     let orderSelectCalled = false;
     return vi.fn((table: string) => {
       if (table === "stripe_transfers") {
@@ -181,6 +181,7 @@ describe("PATCH /api/orders payout + email side-effects", () => {
             venue_revenue: null,
             shipping: {},
             items: [],
+            ...rowOverride,
           };
           return {
             select: () => ({
@@ -230,6 +231,50 @@ describe("PATCH /api/orders payout + email side-effects", () => {
     vi.mocked(executeTransfer).mockReset();
     vi.mocked(sendEmail).mockReset();
     fromMock.mockReset();
+  });
+
+  it("WS2.7: delivered releases only THIS artist's legs and the venue's, never a co-artist's", async () => {
+    const executed: string[] = [];
+    vi.mocked(executeTransfer).mockImplementation(async (id: string) => { executed.push(id); });
+    const base = makeDeliveredFromMock([]);
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_transfers") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => Promise.resolve({
+                data: [
+                  { id: "t-mine", recipient_type: "artist", recipient_user_id: "u-artist" },
+                  { id: "t-other", recipient_type: "artist", recipient_user_id: "u-second-artist" },
+                  { id: "t-venue", recipient_type: "venue", recipient_user_id: "u-venue" },
+                ],
+              }),
+            }),
+          }),
+          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }), in: () => Promise.resolve({ error: null }) }) }),
+        };
+      }
+      return base(table);
+    });
+    const res = await PATCH(req({ orderId: "o1", status: "delivered" }));
+    expect(res.status).toBe(200);
+    expect(executed.sort()).toEqual(["t-mine", "t-venue"]);
+  });
+
+  it("WS3.4: buyer confirms pickup - a collection order goes confirmed straight to delivered", async () => {
+    fromMock.mockImplementation(
+      makeDeliveredFromMock(["t1"], { status: "confirmed", fulfilment_method: "collect_venue" }),
+    );
+    const res = await PATCH(req({ orderId: "o1", status: "delivered" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("WS3.4: a shipped-fulfilment order still cannot skip confirmed to delivered", async () => {
+    fromMock.mockImplementation(
+      makeDeliveredFromMock(["t1"], { status: "confirmed", fulfilment_method: "ship" }),
+    );
+    const res = await PATCH(req({ orderId: "o1", status: "delivered" }));
+    expect(res.status).toBe(422);
   });
 
   it("delivered PATCH with one failing executeTransfer returns 200 with payoutFailures >= 1", async () => {

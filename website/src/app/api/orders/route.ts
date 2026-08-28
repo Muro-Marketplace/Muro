@@ -202,7 +202,13 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const transition = canTransition(order.status as OrderStatus, status as OrderStatus);
+    // WS3.4: a collection order's delivery IS the handover; the buyer
+    // confirming pickup is the only completion it will ever have.
+    const fulfilment = (order as { fulfilment_method?: string | null }).fulfilment_method || "";
+    const isCollectionOrder = fulfilment === "collection" || fulfilment === "collect_venue";
+    const transition = canTransition(order.status as OrderStatus, status as OrderStatus, {
+      collection: isCollectionOrder,
+    });
     if (!transition.ok) {
       return NextResponse.json({ error: transition.reason }, { status: 422 });
     }
@@ -346,11 +352,27 @@ export async function PATCH(request: Request) {
     // can read it regardless of whether status === "delivered".
     let payoutFailures = 0;
     if (status === "delivered") {
-      const { data: pendingTransfers } = await db
+      // WS2.7 (audit R7 row 11): the buyer's click confirms ONE parcel's
+      // arrival, but a multi-artist order holds legs for every artist in the
+      // cart. Releasing them all paid artists whose parcels were still in
+      // the post. The click now releases only the confirmed artist's legs
+      // and the venue's share (not parcel-dependent); other artists' legs
+      // keep their payout_after date and the daily sweep pays them then -
+      // delayed, never lost, and the hold is exactly what the 14-day buffer
+      // is for. Single-artist orders (almost all) release everything, same
+      // as before.
+      const { data: pendingAll } = await db
         .from("stripe_transfers")
-        .select("id")
+        .select("id, recipient_type, recipient_user_id")
         .eq("order_id", orderId)
         .eq("status", "pending");
+      const pendingTransfers = (pendingAll || []).filter(
+        (t: { recipient_type?: string | null; recipient_user_id?: string | null }) =>
+          t.recipient_type === "venue" ||
+          !order.artist_user_id ||
+          !t.recipient_user_id ||
+          t.recipient_user_id === order.artist_user_id,
+      );
 
       // Await each transfer individually so Vercel serverless cannot
       // freeze/kill the payouts before they complete. Per-transfer
