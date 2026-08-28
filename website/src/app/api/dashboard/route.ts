@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { orFilter } from "@/lib/db/safe-filter";
 import { artistPayoutPounds, type OrderMoneyRow } from "@/lib/finance/order-money";
+import { artistTotals } from "@/lib/analytics/artist-totals";
 
 /**
  * GET /api/dashboard
@@ -94,6 +95,20 @@ export async function GET(request: Request) {
         0,
       );
 
+      // K5 / Bug 13: these read `artist_profiles.total_enquiries` and
+      // `total_views`, cached columns whose only writer was a manual admin POST
+      // that no cron ever hit. Measured against prod: 2,295 profile_view events
+      // across 54 artists, and 1 of 14 profile rows with a non-zero total_views.
+      // So an artist's dashboard said 0 views while their own analytics page
+      // said 9, on the same account on the same day.
+      //
+      // Counted live now, from the same predicates the cache used, so the two
+      // surfaces are structurally incapable of disagreeing.
+      const totals = await artistTotals(db, {
+        slug: artistProfile.slug,
+        userId: artistProfile.user_id,
+      });
+
       return NextResponse.json({
         userType: "artist",
         profile: artistProfile,
@@ -105,8 +120,8 @@ export async function GET(request: Request) {
         stats: {
           activePlacements: visiblePlacements.filter((p) => p.status === "active").length,
           totalRevenue,
-          enquiries: artistProfile.total_enquiries || 0,
-          views: artistProfile.total_views || 0,
+          enquiries: totals.enquiries,
+          views: totals.views,
         },
       });
     }

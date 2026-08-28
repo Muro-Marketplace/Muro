@@ -107,7 +107,11 @@ export const ARTIST_PROFILE_SERVER_OWNED = Object.freeze([
   "stripe_connect_onboarding_complete",
   "stripe_charges_enabled",
   "stripe_charges_checked_at",
-  // Counters, maintained by lib/stats-cache.ts
+  // K5: these were "maintained by lib/stats-cache.ts", which is deleted. They
+  // are now written by nothing, and the two surfaces that displayed them count
+  // live from analytics_events instead. They stay DENIED here regardless: a
+  // client must never be able to write its own view or sale count, whether or
+  // not anything else does.
   "total_views",
   "total_placements",
   "total_sales",

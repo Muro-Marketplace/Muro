@@ -17,6 +17,7 @@ import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import { isLoan, isPurchase } from "@/lib/arrangement-type";
 import { labelForArrangement } from "@/lib/arrangement-labels";
+import { normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
 
 interface PlacementRow {
   id: string;
@@ -540,14 +541,22 @@ export default function PlacementDetailClient({ placementId }: Props) {
             {venue?.location && <><span className="text-muted">&middot;</span><span className="text-muted">{venue.location}</span></>}
           </div>
           <div className="mt-3 flex items-center gap-3 flex-wrap">
-            <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${
-              placement.status === "active" ? "bg-green-100 text-green-700" :
-              placement.status === "pending" ? "bg-amber-100 text-amber-700" :
-              placement.status === "declined" ? "bg-red-100 text-red-600" :
-              placement.status === "cancelled" ? "bg-red-100 text-red-600" :
-              "bg-gray-100 text-gray-600"
-            }`}>
-              {placement.status.charAt(0).toUpperCase() + placement.status.slice(1)}
+            {/* K4: this was a hand-rolled colour switch and a raw
+                `charAt(0).toUpperCase()`, in a file that did not import from
+                @/lib/placements/status at all. Same row, same moment, two
+                answers: a `paused` placement read "Paused" with a grey badge
+                here and "Completed" with a bordered neutral badge in both
+                portals, and `sold` was grey here and blue there. Finding E14.
+
+                This is a deliberate VISUAL change: -50 fills with borders
+                instead of -100 fills without, and `paused` now reads
+                "Completed" everywhere. Whether "Completed" is the right word
+                for a paused placement is a real question, and 07 §4.2 is
+                explicit that changing it is a behaviour change needing its own
+                commit and the owner's sign-off rather than being smuggled into
+                a collapse. Recorded as an open item. */}
+            <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${statusBadgeClass(normaliseStatus(placement.status))}`}>
+              {normaliseStatus(placement.status)}
             </span>
             {/* QR label, deep-link into the Labels page with this
                 placement's work (and venue, on the artist side) already

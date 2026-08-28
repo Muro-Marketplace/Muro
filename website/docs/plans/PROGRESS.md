@@ -10181,3 +10181,89 @@ than fix. Listed as an open item rather than half-swept.
 
 `npm run check` green: 0 lint errors, 223 files, 2188 tests, 0 dependency
 violations, exit 0.
+
+### 07 K4 — two placement-status renderers — DONE
+
+`PlacementDetailClient` had its own colour switch and its own
+`charAt(0).toUpperCase()`, in a file that did not import from
+`@/lib/placements/status` at all. Same row, same moment, two answers: a `paused`
+placement read "Paused" with a grey badge there and "Completed" with a bordered
+neutral badge in both portals; `sold` was grey there and blue here. Finding E14.
+
+Nine lines, replaced with `statusBadgeClass(normaliseStatus(...))`.
+
+**This is a deliberate VISUAL change** and it is worth saying plainly: `-50` fills
+with borders instead of `-100` fills without, and `paused` now reads "Completed"
+on the detail page as it already did in both portals.
+
+**Two questions the collapse forces, both deferred with the owner, per §4.2 which
+is explicit that changing either is a behaviour change needing its own commit:**
+1. Is `paused` to "Completed" right? It is a lie about a paused placement.
+2. `normaliseStatus`'s `default: return "Active"` turns an unknown status into the
+   most permissive-looking label, which is the wrong direction on a money-adjacent
+   surface.
+
+Both are in the open items. The collapse itself is behaviour-preserving relative to
+the portals, which were already the majority reading.
+
+`OffersList.formatStatus` is left alone: §4.1 calls it the same anti-pattern in a
+different domain, but it is one named function with one call site and viewer-aware
+logic, so collapsing it into a shared module would be over-engineering for one
+caller.
+
+**Guards.** Three assertions added to `one-label-source.test.ts`: no hand-rolled
+status capitalisation in any placement surface, and no Tailwind status palette
+keyed on `.status` in a placement surface outside the canonical module. Scoped to
+placement surfaces deliberately, because orders, applications and disputes each
+have their own status vocabulary and palette; sweeping those in would make the
+guard noise. Proved to bite by restoring the hand-rolled block: 2 of 8 failed.
+
+The doc also asks for a component test that a `paused` placement renders the same
+text as `normaliseStatus("paused")`. Not written: the code now literally calls
+`normaliseStatus(placement.status)`, so such a test would assert that a function
+equals itself. The grep guard is what actually catches a regression here.
+
+### 07 K5 — artist stats: two sources — DONE (bar the owner-gated column drop)
+
+**The brief's hypothesis was wrong and §5.2 is right: the columns are not dead.**
+`stats-cache.ts` wrote them, with predicates identical to the live aggregation. The
+defect is *when*: its only caller was `POST /api/admin/refresh-stats`, admin-gated
+and manual, and `vercel.json`'s nine cron entries do not include it.
+
+**Measured against prod, and it is not an edge case: 2,295 `profile_view` events
+across 54 artists, against 1 of 14 `artist_profiles` rows with a non-zero
+`total_views`.** So 13 of 14 artists saw "0 views" on their dashboard while their
+own analytics page counted real events. That is Bug 13.
+
+**Design (a) taken, as §5.3 recommends.** New `src/lib/analytics/artist-totals.ts`
+is the single aggregation, lifting the cache's predicates verbatim so the numbers
+do not change, only their freshness. Repointed: the artist dashboard, and the
+public artist profile page (an async server component, so four `head: true` counts
+for one artist is nothing).
+
+**Deleted:** `src/lib/stats-cache.ts` and the whole `api/admin/refresh-stats` route
+plus its test. Grepped for a UI trigger first: none.
+
+**NOT done, and it is destructive so it is owner-gated:** the migration dropping
+`total_views`, `total_placements`, `total_sales`, `total_enquiries` from
+`artist_profiles`, and removing the four fields from
+`artist-profiles-transform.ts`. The transform feeds LIST endpoints where counting
+per artist is an N+1, so it still maps the columns; they are now written by nothing
+and read by no display, which is inert rather than wrong. Both the transform and
+`writable-fields.ts` carry a comment saying so. The columns stay DENIED in
+`writable-fields.ts` regardless: a client must never write its own view count,
+whether or not anything else does.
+
+**§5.7's invariant is now in `website/AGENTS.md`** under a new "Data invariants"
+heading, so it lands in every agent's context: a column mirroring a computed value
+must be written by a trigger or by a job in `vercel.json`, and one written only by
+a manual admin endpoint is banned.
+
+**Tests.** `one-stats-source.test.ts` (6). The sweep is scoped to member access
+(`profile.total_views`) rather than the bare identifier, because `api/stats/public`
+reports a SITE-wide `total_placements` counted live under a colliding JSON key, and
+`writable-fields.ts` names the columns as string literals in a denylist. Neither is
+a read of the artist column, and a guard that flagged them would be wrong.
+
+`npm run check` green: 0 lint errors, 223 files, 2193 tests, 0 dependency
+violations, exit 0.

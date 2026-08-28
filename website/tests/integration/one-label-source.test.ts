@@ -109,3 +109,49 @@ describe("one arrangement-label source (K3)", () => {
     expect((await sourceFiles(SRC)).length).toBeGreaterThan(200);
   });
 });
+
+// K4 (07 §4.5). One placement-status renderer.
+//
+// PlacementDetailClient had its own colour switch and its own
+// `charAt(0).toUpperCase()`, in a file that did not import from
+// @/lib/placements/status at all. Same row, same moment, two answers: a
+// `paused` placement read "Paused" with a grey badge there and "Completed" with
+// a bordered neutral badge in both portals; `sold` was grey there and blue here.
+// That is finding E14.
+describe("one placement-status renderer (K4)", () => {
+  it("has no hand-rolled status capitalisation in any placement surface", async () => {
+    const files = await sourceFiles(SRC);
+    const offenders = files.filter((f) => {
+      if (!/placement/i.test(f)) return false;
+      const src = code(f);
+      // The slug title-casers elsewhere in the app split on "-" first; this is
+      // the single-value form applied straight to a status.
+      return /\bstatus\b[^\n]{0,40}\.charAt\(0\)\.toUpperCase\(\)/.test(src);
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("has no Tailwind status palette in a placement surface outside the canonical module", async () => {
+    // Heuristic, and 07 §4.5 says so, but a heuristic that fires on the pattern
+    // is worth more than nothing: a colour ladder keyed on `.status` is a second
+    // renderer by definition.
+    //
+    // Scoped to placement surfaces, which is what K4 is about. Orders,
+    // applications and disputes each have their own status vocabulary and their
+    // own palette; those are separate domains, not copies of this one, and
+    // sweeping them in would make the guard noise rather than signal.
+    const files = await sourceFiles(SRC);
+    const CANONICAL_STATUS = path.join("src", "lib", "placements", "status.ts");
+    const offenders = files.filter((f) => {
+      if (f === CANONICAL_STATUS || !/placement/i.test(f)) return false;
+      const src = code(f);
+      return /\.status\s*===[\s\S]{0,80}?bg-(?:green|amber|red|blue|gray|neutral)-\d{2,3}\s+text-/.test(src);
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("finds placement surfaces at all, so the sweep is not vacuous", async () => {
+    const files = await sourceFiles(SRC);
+    expect(files.filter((f) => /placement/i.test(f)).length).toBeGreaterThan(5);
+  });
+});

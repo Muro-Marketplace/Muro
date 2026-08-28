@@ -17,6 +17,8 @@ import ArtistProfileClient from "./ArtistProfileClient";
 import { getArtistBySlug } from "@/lib/db/merged-data";
 import { trackEvent, extractTrackingContext, generateVisitorId } from "@/lib/analytics";
 import type { Metadata } from "next";
+import { artistTotals } from "@/lib/analytics/artist-totals";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 // Static params for seed artists, database artists use dynamic fallback
 export async function generateStaticParams() {
@@ -194,10 +196,22 @@ export default async function ArtistProfilePage({
     { label: "Direct purchase", yes: artist.openToOutrightPurchase },
   ].filter((t) => t.yes);
 
+  // K5 / Bug 13: these read `artist.totalPlacements/totalSales/totalViews`,
+  // which the transform maps from cached `artist_profiles.total_*` columns whose
+  // only writer was a manual admin POST no cron ever hit. Measured against prod:
+  // 1 of 14 artists had a non-zero cached value, against 2,295 real profile_view
+  // events across 54 artists — so this whole block was hidden for almost
+  // everyone, and stale for the one it showed.
+  //
+  // This is an async server component and one artist, so four counts is cheap.
+  // The list endpoints still read the transform, which is why the fields stay on
+  // the shape rather than being ripped out here.
+  const liveTotals = await artistTotals(getSupabaseAdmin(), {
+    slug: artist.slug,
+    userId: (artist as { userId?: string | null }).userId ?? null,
+  });
   const hasStats =
-    (artist.totalPlacements ?? 0) > 0 ||
-    (artist.totalSales ?? 0) > 0 ||
-    (artist.totalViews ?? 0) > 0;
+    liveTotals.placements > 0 || liveTotals.sales > 0 || liveTotals.views > 0;
 
   return (
     <div className="bg-background">
@@ -347,21 +361,21 @@ export default async function ArtistProfilePage({
 
             {hasStats && (
               <div className="flex items-center gap-5 pt-4 mt-4 border-t border-border">
-                {(artist.totalPlacements ?? 0) > 0 && (
+                {liveTotals.placements > 0 && (
                   <div>
-                    <p className="text-base font-serif font-semibold text-foreground leading-none">{artist.totalPlacements}</p>
-                    <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Venue{artist.totalPlacements !== 1 ? "s" : ""}</p>
+                    <p className="text-base font-serif font-semibold text-foreground leading-none">{liveTotals.placements}</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Venue{liveTotals.placements !== 1 ? "s" : ""}</p>
                   </div>
                 )}
-                {(artist.totalSales ?? 0) > 0 && (
+                {liveTotals.sales > 0 && (
                   <div>
-                    <p className="text-base font-serif font-semibold text-foreground leading-none">{artist.totalSales}</p>
+                    <p className="text-base font-serif font-semibold text-foreground leading-none">{liveTotals.sales}</p>
                     <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Sold</p>
                   </div>
                 )}
-                {(artist.totalViews ?? 0) > 0 && (
+                {liveTotals.views > 0 && (
                   <div>
-                    <p className="text-base font-serif font-semibold text-foreground leading-none">{artist.totalViews}</p>
+                    <p className="text-base font-serif font-semibold text-foreground leading-none">{liveTotals.views}</p>
                     <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Views</p>
                   </div>
                 )}
@@ -523,21 +537,21 @@ export default async function ArtistProfilePage({
 
               {hasStats && (
                 <div className="flex items-center gap-5 pt-4 border-t border-border">
-                  {(artist.totalPlacements ?? 0) > 0 && (
+                  {liveTotals.placements > 0 && (
                     <div>
-                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{artist.totalPlacements}</p>
-                      <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Venue{artist.totalPlacements !== 1 ? "s" : ""}</p>
+                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{liveTotals.placements}</p>
+                      <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Venue{liveTotals.placements !== 1 ? "s" : ""}</p>
                     </div>
                   )}
-                  {(artist.totalSales ?? 0) > 0 && (
+                  {liveTotals.sales > 0 && (
                     <div>
-                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{artist.totalSales}</p>
+                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{liveTotals.sales}</p>
                       <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Sold</p>
                     </div>
                   )}
-                  {(artist.totalViews ?? 0) > 0 && (
+                  {liveTotals.views > 0 && (
                     <div>
-                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{artist.totalViews}</p>
+                      <p className="text-lg font-serif font-semibold text-foreground leading-none">{liveTotals.views}</p>
                       <p className="text-[10px] text-muted uppercase tracking-wider mt-1">Views</p>
                     </div>
                   )}
