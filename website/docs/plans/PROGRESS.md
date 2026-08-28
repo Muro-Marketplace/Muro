@@ -12422,3 +12422,22 @@ Three test blocks inverted with their history recorded — the route's
 omit-the-phantom pair, and the writable-fields exclusion, which now documents
 the same excluded-while-phantom → admitted-when-real lifecycle its neighbour
 shipping columns went through.
+
+### D16 and D17 — already done, checklist corrected — CLOSED
+
+Went to implement both refund fixes under the blanket approval and found both
+already shipped, tested, and unticked:
+
+- **D16** (partial reversal denominator): the process route pro-rates against
+  the SUBTOTAL with the shipping portion reversed against the artist leg only,
+  exactly the spec's fix, plus the process-time re-assert that the refund
+  cannot exceed the order total (releasing the claim so the row is not
+  stranded).
+- **D17** (restock): full refunds restock each cart line via `restock_work`,
+  partial refunds deliberately do not, failure is logged never fatal, with a
+  test block.
+
+Doc 04's 5.3/5.4/5.5 are ticked (5.3 by decision 10's migration 115). 5.6 was
+briefly ticked here and reverted in the same edit: it names `tests/transactions/`
+harness files that were never built, and the coverage living in co-located tests
+does not make the item as written true.

@@ -2937,8 +2937,9 @@ not verified, and three are recorded as verified-NOT-done:
 
 - **0.5** is NOT done. Three separate `customer.subscription.deleted` branches
   remain (`:1329`, `:1480`, `:1509`) where the item asks for one.
-- **5.3** is NOT done. There is no `extend_free_until` migration and the referral
-  credit at `webhooks/stripe:1217` is still read-modify-write (D14).
+- **5.3** DONE 2026-08-28 (owner decision 10): migration 115 created
+  `extend_free_until` and the webhook credit now calls it; the read-modify-write
+  is gone.
 - **Phase 8 (T9)** is not started, deliberately. It is a new checkout mode, and
   building one unattended is what the money boundary exists to prevent. Surfaced
   as owner decision 13 in PROGRESS.md.
@@ -3025,11 +3026,11 @@ Items ticked by artefact rather than by reading the whole handler: 2.5, 3.2, 3.3
 - [x] **5.1** `PRICE_TO_PLAN` map; refuse unknown price ids; add the env
       assertion to `src/env.ts` (D12).
 - [x] **5.2** Scope the subscription handler by `metadata.kind` (D15).
-- [ ] **5.3** Migration `079_extend_free_until.sql`; make the referral credit
+- [x] **5.3** Migration `079_extend_free_until.sql`; make the referral credit
       atomic (D14).
-- [ ] **5.4** Fix the partial-reversal denominator (D16).
-- [ ] **5.5** Restock on full refund (D17).
-- [ ] **5.6** `t7-subscription.test.ts` and `t8-refunds.test.ts` green.
+- [x] **5.4** Fix the partial-reversal denominator (D16).
+- [x] **5.5** Restock on full refund (D17).
+- [ ] **5.6** `t7-subscription.test.ts` and `t8-refunds.test.ts` green. (The behavioural coverage exists in co-located tests — `refunds/process/route.test.ts`, `stripe-subscription-started.test.ts` — but the `tests/transactions/` harness these items name was never built, so the item as WRITTEN stays open with the rest of 0.6.)
 
 ### Phase 6: T4, T5 placements and QR
 
