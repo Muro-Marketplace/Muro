@@ -30,9 +30,11 @@ describe("normaliseStatus", () => {
       cancelled: "Cancelled",
       sold: "Sold",
       completed: "Completed",
-      // `paused` is deliberately folded into Completed: there is no Paused
-      // display status, and leaving it unmapped would fall to the default.
-      paused: "Completed",
+      // Owner decision 8a (07 §4.2 item 1). This mapped to "Completed", which is
+      // a lie about a paused placement: completed means the arrangement ended,
+      // paused means the work is expected back. Zero live rows carry `paused`,
+      // so the change is about what a future pause reads as.
+      paused: "Paused",
     };
     for (const [raw, expected] of Object.entries(cases)) {
       expect(normaliseStatus(raw), raw).toBe(expected);
@@ -58,7 +60,7 @@ describe("normaliseStatus", () => {
 describe("statusBadgeClass", () => {
   it("returns a class string for every display status", () => {
     const statuses: DisplayStatus[] = [
-      "Active", "Pending", "Declined", "Cancelled", "Sold", "Completed",
+      "Active", "Pending", "Declined", "Cancelled", "Sold", "Completed", "Paused",
     ];
     for (const status of statuses) {
       expect(statusBadgeClass(status), status).toMatch(/\S/);
@@ -67,6 +69,13 @@ describe("statusBadgeClass", () => {
 
   it("gives the two negative outcomes the same treatment", () => {
     expect(statusBadgeClass("Cancelled")).toBe(statusBadgeClass("Declined"));
+  });
+
+  it("does not dress Paused as Completed or as Active", () => {
+    // The whole point of 8a: the old fold meant a paused placement wore the
+    // ended-arrangement badge.
+    expect(statusBadgeClass("Paused")).not.toBe(statusBadgeClass("Completed"));
+    expect(statusBadgeClass("Paused")).not.toBe(statusBadgeClass("Active"));
   });
 });
 

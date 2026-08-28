@@ -12104,3 +12104,25 @@ the other party before payout" caveat. The `one-label-source` guard's
 fee-from-prose sweep now includes the file — it was previously named as the
 honest false positive — so all three surfaces that ever inferred money from
 prose are locked. Verified by restoring the regex: the guard names the file.
+
+### Decision 7 — the five label mismatches, settled, and the audit is a gate — DONE
+
+Each of the five sites already renders exactly the registry template its label
+should have named, so this was renames, not rewiring: `offer_received` →
+`offer_received_notification`, `suspicious_login` → `account_suspicious_login`,
+`welcome_artist` → `artist_welcome_checklist`, `welcome_customer` →
+`customer_welcome`, `welcome_venue` → `venue_welcome_checklist`.
+
+**The 22 live `email_events` rows carrying the old labels were UPDATEd to the new
+ones in the same change** (12 + 5 + 3 + 2; `suspicious_login` had zero rows), so
+history did not split: an operator grepping by the registry id finds the old
+sends, and the per-category throttle counts them under one name.
+
+`email:audit` now exits 0, and per §E.1's "becomes an error once clean" it is
+wired into `npm run check` and CI (the ci-gates derived lock forces the pair).
+The unwired-template half stays a report, as designed. `OUTSTANDING.md`'s
+paragraph describing the five as current is rewritten to say they are settled.
+
+One thing deliberately untouched: `kind: "offer_received"` at
+`offers/route.ts:407` is an in-app **notification** kind, not an email label,
+and renaming it would orphan existing notification rows for zero gain.

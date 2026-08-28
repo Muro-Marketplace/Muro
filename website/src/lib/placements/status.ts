@@ -2,7 +2,7 @@
 // Kept dependency-free (no React) so it can run on the server and the client.
 
 export type RawStatus = "pending" | "active" | "declined" | "completed" | "sold" | "paused" | "cancelled";
-export type DisplayStatus = "Pending" | "Active" | "Declined" | "Completed" | "Sold" | "Cancelled";
+export type DisplayStatus = "Pending" | "Active" | "Declined" | "Completed" | "Sold" | "Cancelled" | "Paused";
 export type Stage = "accepted" | "scheduled" | "installed" | "live" | "collected";
 
 export const STAGE_ORDER: Stage[] = ["accepted", "scheduled", "installed", "live", "collected"];
@@ -23,7 +23,13 @@ export function normaliseStatus(raw: string | null | undefined): DisplayStatus {
     case "declined": return "Declined";
     case "cancelled": return "Cancelled";
     case "sold": return "Sold";
-    case "completed": case "paused": return "Completed";
+    case "completed": return "Completed";
+    // Owner decision 8a (07 §4.2 item 1, approved 2026-08-28). `paused` used to
+    // fold into "Completed", which is a lie about a paused placement: completed
+    // means the work came off the wall and the arrangement ended, paused means
+    // it is expected back. Zero live rows carry `paused` today, so this changes
+    // what a FUTURE pause reads as, not any current screen.
+    case "paused": return "Paused";
     default: return "Active";
   }
 }
@@ -38,6 +44,9 @@ export function statusBadgeClass(status: DisplayStatus): string {
     case "Cancelled": return "bg-red-50 text-red-700 border border-red-200";
     case "Sold":      return "bg-blue-50 text-blue-700 border border-blue-200";
     case "Completed": return "bg-neutral-100 text-neutral-700 border border-neutral-200";
+    // Softer than Completed's neutral, and not green: paused is neither live
+    // nor over.
+    case "Paused":    return "bg-sky-50 text-sky-700 border border-sky-200";
   }
 }
 

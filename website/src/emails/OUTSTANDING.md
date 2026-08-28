@@ -22,13 +22,13 @@ one of them still renders, in HTML and plaintext.
 
 ### What "no send path" means here
 
-The registry is a library built ahead of the product, so most of the 66 are
-**not** bugs: nothing is meant to send them yet. The sections below are the plan
-for wiring them. The audit's *other* direction is the one that matters, and it
-currently reports five sends whose `email_events` label is not a registry id
-(`offer_received`, `suspicious_login`, `welcome_artist`, `welcome_customer`,
-`welcome_venue`). Those are not broken sends, but the per-category throttle keys
-on that label, so one template with two labels throttles as two.
+The registry is a library built ahead of the product, so most of the
+unwired templates are **not** bugs: nothing is meant to send them yet. The
+sections below are the plan for wiring them. The audit's *other* direction, a
+send whose `email_events` label is not a registry id, is settled: owner decision
+7 (2026-08-28) renamed the five mismatched labels to their registry ids and
+updated the 22 live `email_events` rows in the same change, so `email:audit`
+exits 1 on any new mismatch and runs in `npm run check` and CI.
 
 ---
 

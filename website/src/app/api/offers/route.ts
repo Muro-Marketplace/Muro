@@ -521,7 +521,11 @@ export async function POST(request: Request) {
           const emailOffersUrl = `${SITE}${link}?focus=${encodeURIComponent(id)}`;
           await sendEmail({
             idempotencyKey: `offer:${id}:${recipient}`,
-            template: "offer_received",
+                        // Owner decision 7 (2026-08-28): this label was "offer_received", which is not a
+            // registry id, so the audit could not connect the send to the template it
+            // renders. The 22 live email_events rows carrying the five old labels were
+            // UPDATEd to the new ones in the same change, so history did not split.
+            template: "offer_received_notification",
             category: "placements",
             to: target.email,
             subject: subjectLine,

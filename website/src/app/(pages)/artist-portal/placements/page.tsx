@@ -11,7 +11,7 @@ import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
-import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass } from "@/lib/placements/status";
+import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { updatePlacementStatus } from "@/lib/placements/status-update";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
@@ -25,7 +25,11 @@ type FilterTab = "All" | "Pending" | "Active" | "Completed" | "Archived";
 // Display-only strings, arrangementLabel() can return combined values
 // like "Paid loan + QR" so this is deliberately open.
 type ArrangementType = string;
-type PlacementStatus = "Active" | "Pending" | "Declined" | "Completed" | "Sold" | "Cancelled";
+// Decision 8a: the shared DisplayStatus, not a local mirror. The local copy
+// plus the `as` cast at normaliseStatus meant a widening of the shared union
+// (Paused, and 8b's Unknown) compiled clean here while every tab tally and
+// badge silently mishandled the new value.
+type PlacementStatus = DisplayStatus;
 
 interface Placement {
   id: string;
@@ -116,7 +120,7 @@ function MiniStatusBar({ p }: { p: Placement }) {
 
 const tabs: FilterTab[] = ["All", "Pending", "Active", "Completed", "Archived"];
 
-const normaliseStatus = (raw: string): PlacementStatus => sharedNormaliseStatus(raw) as PlacementStatus;
+const normaliseStatus = (raw: string): PlacementStatus => sharedNormaliseStatus(raw);
 
 function normaliseType(
   rawType: string,

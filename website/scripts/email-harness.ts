@@ -11,7 +11,8 @@
  * `{{token}}` never gets substituted, which is how a literal "{{orderNumber}}"
  * reaches an inbox.
  *
- * `render` is in `npm run check`. `audit` is a report, not a gate: the registry
+ * Both `render` and `audit` are in `npm run check`. The unwired-template half of
+ * `audit` stays a report: the registry
  * is a library built ahead of the product, so "no trigger" is expected for many
  * ids and failing on it would be noise. The reverse direction is a real bug
  * class and is called out separately in the output.
