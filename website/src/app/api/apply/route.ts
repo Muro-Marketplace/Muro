@@ -276,7 +276,6 @@ export async function POST(request: Request) {
           subject: "We've received your Wallplace application",
           react: ArtistApplicationSubmitted({
             firstName: (d.name || "there").split(" ")[0],
-            reviewTimelineDays: 3,
             portfolioUrl: `${SITE}/artist-portal/portfolio`,
           }),
           metadata: { email: d.email, location: d.location },

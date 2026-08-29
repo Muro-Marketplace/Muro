@@ -177,6 +177,8 @@ interface DbOpts {
   recentWorks?: Array<Record<string, unknown>>;
   /** analytics_events head counts, by event_type. */
   eventCounts?: Record<string, number>;
+  /** admin_users rows, i.e. table-only admins with no ADMIN_EMAILS entry. */
+  adminUsers?: Array<{ user_id: string }>;
 }
 
 function setupProfiles(opts: DbOpts = {}) {
@@ -186,6 +188,7 @@ function setupProfiles(opts: DbOpts = {}) {
     recentArtists = [APPROVED_ARTIST_ROW],
     recentWorks = [AVAILABLE_WORK_ROW],
     eventCounts = { profile_view: 0, qr_scan: 0 },
+    adminUsers = [],
   } = opts;
 
   fromMock.mockImplementation((table: string) =>
@@ -203,6 +206,9 @@ function setupProfiles(opts: DbOpts = {}) {
         return { count: eventCounts[String(ctx.eq.event_type)] ?? 0, error: null };
       }
       if (table === "email_events") return { data: [] };
+      // H26: admin-auth's batch predicate reads admin_users so a table-only
+      // admin is excluded from the sweep, not just an ADMIN_EMAILS one.
+      if (table === "admin_users") return { data: adminUsers, error: null };
       throw new Error(`unexpected table ${table}`);
     }),
   );
@@ -305,6 +311,23 @@ describe("GET /api/cron/inactive-users staff exclusion (H26)", () => {
     const res = await GET(req());
     // Fail-before: an admin has no artist and no venue profile, so it fell
     // through to the customer branch and got "New pieces worth seeing".
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(await res.json()).toMatchObject({ adminsSkipped: 1 });
+  });
+
+  it("does not mail a TABLE-ONLY admin either (H26 residual)", async () => {
+    // The half the allowlist cannot see: admin-auth's predicate is
+    // ADMIN_EMAILS OR a row in admin_users, and an admin who was granted
+    // access through the table alone still looks exactly like a customer
+    // (no artist profile, no venue profile) to this sweep.
+    process.env.ADMIN_EMAILS = "";
+    listUsersMock.mockResolvedValueOnce({
+      data: { users: [inactiveUser("u-table-admin", "ops2@wallplace.co.uk", 30)] },
+      error: null,
+    });
+    setupProfiles({ adminUsers: [{ user_id: "u-table-admin" }] });
+
+    const res = await GET(req());
     expect(sendEmailMock).not.toHaveBeenCalled();
     expect(await res.json()).toMatchObject({ adminsSkipped: 1 });
   });

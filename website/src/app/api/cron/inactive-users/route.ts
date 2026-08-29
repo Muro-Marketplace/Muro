@@ -20,13 +20,13 @@
 // "user with no artist and no venue profile", which is exactly what an admin
 // account looks like, so admins got "Still enjoy the gallery?". Admins are now
 // excluded from the whole sweep, off the ADMIN_EMAILS allowlist that
-// lib/admin-auth owns, never off user metadata. See `adminUserIds` below for
-// the half of admin-auth's predicate this cannot reach yet.
+// lib/admin-auth owns, never off user metadata. Both halves of that predicate
+// are covered: the allowlist AND an admin_users row, via adminUserIdsAmong.
 
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email/send";
-import { adminEmails } from "@/lib/admin-auth";
+import { adminUserIdsAmong } from "@/lib/admin-auth";
 import { slugify } from "@/lib/slugify";
 import type { Artist, Work } from "@/emails/types/emailTypes";
 import { ArtistInactive14d } from "@/emails/templates/re-engagement/ArtistInactive14d";
@@ -95,31 +95,6 @@ async function eventCount(
     return 0;
   }
   return count ?? 0;
-}
-
-/**
- * The user ids on this page that belong to staff.
- *
- * Server-side facts only: the ADMIN_EMAILS allowlist, via admin-auth's own
- * exported reader, and deliberately NOT `user_metadata.user_type`, which the
- * user it belongs to can write.
- *
- * The other half of admin-auth's predicate, a row in `admin_users`, is NOT
- * checked here, and cannot be: `wallplace/no-inline-admin-check` makes
- * `src/lib/admin-auth.ts` the only legal home for an `admin_users` read, and it
- * exports no batch form (its two exported predicates both take a Request, which
- * a cron walking a user list does not have). So a table-only admin who is not
- * also in ADMIN_EMAILS is still reachable by this job. Closing that needs a
- * `adminUserIdsAmong(users)` export added to admin-auth; see the handover.
- */
-function adminUserIds(users: Array<{ id: string; email?: string | null }>): Set<string> {
-  const admins = new Set<string>();
-  const allowlist = adminEmails();
-  for (const u of users) {
-    const email = u.email?.toLowerCase();
-    if (email && allowlist.includes(email)) admins.add(u.id);
-  }
-  return admins;
 }
 
 /**
@@ -283,7 +258,7 @@ export async function GET(request: Request) {
       db.from("artist_profiles").select("user_id, name, slug").in("user_id", userIds),
       db.from("venue_profiles").select("user_id, name, slug").in("user_id", userIds),
     ]);
-    const admins = adminUserIds(users);
+    const admins = await adminUserIdsAmong(users);
 
     const artistByUid = new Map((artists || []).map((a) => [a.user_id, a]));
     const venueByUid = new Map((venues || []).map((v) => [v.user_id, v]));
