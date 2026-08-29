@@ -60,6 +60,12 @@ import PlacementReviewRequest from "./templates/placements/PlacementReviewReques
 import PlacementConsignmentRecordCreated from "./templates/placements/PlacementConsignmentRecordCreated";
 import PlacementContractCountersigned from "./templates/placements/PlacementContractCountersigned";
 
+// ── Artwork requests ──────────────────────────────────────────────────────
+// F48: accept / decline of an artist's response to a venue brief was bell-only,
+// while every neighbouring flow emails the other party as well.
+import ArtistArtworkResponseAccepted from "./templates/artwork-requests/ArtistArtworkResponseAccepted";
+import ArtistArtworkResponseDeclined from "./templates/artwork-requests/ArtistArtworkResponseDeclined";
+
 // ── Messages ──────────────────────────────────────────────────────────────
 // ── Admin (internal) ──────────────────────────────────────────────────────
 // K1: one template for every operational alert to the Wallplace team, replacing
@@ -157,6 +163,9 @@ import ArtistApplicationSubmitted from "./templates/artist-additions/ArtistAppli
 import ArtistApplicationUnderReview from "./templates/artist-additions/ArtistApplicationUnderReview";
 import ArtistApplicationApproved from "./templates/artist-additions/ArtistApplicationApproved";
 import ArtistApplicationRejected from "./templates/artist-additions/ArtistApplicationRejected";
+// G14/G15: the blog moderation decision finally reaches the author.
+import ArtistBlogPublished from "./templates/artist-additions/ArtistBlogPublished";
+import ArtistBlogRejected from "./templates/artist-additions/ArtistBlogRejected";
 import ArtistYearInReview from "./templates/artist-additions/ArtistYearInReview";
 
 // ── Premium ───────────────────────────────────────────────────────────────
@@ -200,6 +209,8 @@ import OperationalPlatformIncident from "./templates/legal/OperationalPlatformIn
 import OperationalPolicyViolationWarning from "./templates/legal/OperationalPolicyViolationWarning";
 import OperationalAccountRestricted from "./templates/legal/OperationalAccountRestricted";
 import OperationalAccountRestored from "./templates/legal/OperationalAccountRestored";
+// G19: disputes with no order_id notified nobody until this existed.
+import OperationalDisputeResolved from "./templates/legal/OperationalDisputeResolved";
 
 // ── Dead-template decision pass (WS5.6, txn audit 4 finding R4.11) ────────
 //
@@ -330,6 +341,8 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   PlacementEnded,
   PlacementReviewRequest,
   PlacementConsignmentRecordCreated,
+  ArtistArtworkResponseAccepted,
+  ArtistArtworkResponseDeclined,
   PlacementContractCountersigned,
 
   // Messages
@@ -400,6 +413,8 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   ArtistApplicationUnderReview,
   ArtistApplicationApproved,
   ArtistApplicationRejected,
+  ArtistBlogPublished,
+  ArtistBlogRejected,
   ArtistYearInReview,
 
   // Premium
@@ -443,6 +458,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   OperationalPolicyViolationWarning,
   OperationalAccountRestricted,
   OperationalAccountRestored,
+  OperationalDisputeResolved,
 ];
 
 export function findTemplate(id: string): TemplateEntry | undefined {

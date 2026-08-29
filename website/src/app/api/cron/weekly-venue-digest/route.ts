@@ -60,10 +60,13 @@ export async function GET(request: Request) {
         weekStart: weekStartLabel,
         weekEnd: weekEndLabel,
         profileViews: viewCount ?? 0,
-        artistMatches: 0,
         placementRequests: requestCount ?? 0,
         activePlacements: activeCount ?? 0,
-        suggestedArtists: [],
+        // H24: `artistMatches: 0` and `suggestedArtists: []` used to be passed
+        // on every send. Neither had a source: artist-to-venue matching does
+        // not exist. The stat is gone from the template and the suggestion
+        // block only renders when a list is supplied, so nothing here fabricates
+        // a zero. Populate `suggestedArtists` here the day matching lands.
         dashboardUrl: `${SITE}/venue-portal`,
       }),
       metadata: { week: weekStartLabel },

@@ -30,9 +30,15 @@ export function ArtistWeeklyPortfolioDigest({ firstName, weekStart, weekEnd, pro
       <H1>Your week on Wallplace</H1>
       <P>Hi {firstName}, here&rsquo;s how your work performed from {weekStart} to {weekEnd}.</P>
       <StatBlock stats={stats} />
-      <Divider />
-      <H1>Top works this week</H1>
-      {topWorks.slice(0, 3).map((w) => <WorkCard key={w.id} work={w} />)}
+      {/* H23: this heading used to render unconditionally above an empty list,
+          because the cron always passed topWorks: []. No works, no section. */}
+      {topWorks.length > 0 && (
+        <>
+          <Divider />
+          <H1>Top works this week</H1>
+          {topWorks.slice(0, 3).map((w) => <WorkCard key={w.id} work={w} />)}
+        </>
+      )}
       {recommendedActions.length > 0 && (
         <>
           <Divider />
