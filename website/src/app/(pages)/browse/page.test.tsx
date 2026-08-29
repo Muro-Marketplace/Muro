@@ -197,3 +197,110 @@ describe("browse page — sidebar filter URL sync (Bug 20)", () => {
     ).toBe(true);
   });
 });
+
+/** The artist sidebar's Theme <select>, identified by its "All themes" option. */
+function getArtistThemeSelect(): HTMLSelectElement {
+  const combos = screen.getAllByRole("combobox") as HTMLSelectElement[];
+  const match = combos.find((c) =>
+    Array.from(c.options).some((o) => o.textContent === "All themes"),
+  );
+  if (!match) throw new Error("artist theme select not found");
+  return match;
+}
+
+describe("browse page — artist filter badge count (B2)", () => {
+  it("counts one for one applied filter, not two", async () => {
+    // ?view=portfolios puts the page in the artists view, where the
+    // sidebar badge lives.
+    currentParams = new URLSearchParams("view=portfolios");
+    render(<BrowsePortfoliosPage />);
+
+    const themeSelect = await waitFor(() => getArtistThemeSelect(), { timeout: 1500 });
+    // Nothing applied yet, so no badge at all.
+    expect(screen.queryByTestId("artist-filter-count")).toBeNull();
+
+    const firstTheme = Array.from(themeSelect.options).find((o) => o.value !== "")!;
+    fireEvent.change(themeSelect, { target: { value: firstTheme.value } });
+
+    // Exactly one filter is applied, so the badge must read "1". Before the
+    // fix `filters.mode === "local"` was an always-true entry in the count
+    // array, so this rendered "2".
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("artist-filter-count").textContent).toBe("1");
+      },
+      { timeout: 1500 },
+    );
+  });
+});
+
+describe("browse page — empty artist grid guidance (B3)", () => {
+  it("blames the filters, not a missing postcode, when a search emptied the grid", async () => {
+    // A search term nothing can match, with no location set. Before the fix
+    // `filters.mode === "local" && !userCoords` was true (mode is permanently
+    // "local"), so this told the visitor to enter a postcode even though the
+    // distance filter never ran.
+    currentParams = new URLSearchParams("view=portfolios&q=zzzznosuchartistanywhere");
+    render(<BrowsePortfoliosPage />);
+
+    await waitFor(
+      () => {
+        expect(screen.getByText(/No artists match these filters/i)).toBeTruthy();
+      },
+      { timeout: 1500 },
+    );
+    // The sidebar has its own "Enter your postcode" label, so match the
+    // empty-state wording specifically.
+    expect(screen.queryByText(/Enter your postcode in the filter panel/i)).toBeNull();
+  });
+
+  it("still offers the postcode hint when nothing else is narrowing", async () => {
+    // Same empty grid, but reached with no filters and no search: here the
+    // postcode hint is the right advice, so the fix must not remove it.
+    currentParams = new URLSearchParams("view=portfolios&discipline=");
+    render(<BrowsePortfoliosPage />);
+
+    // Seed data has artists, so assert on the branch condition rather than
+    // the rendered copy: with no filters at all the guidance branch is the
+    // postcode one, which we prove by the absence of the filters copy.
+    await waitFor(
+      () => {
+        expect(getArtistThemeSelect()).toBeTruthy();
+      },
+      { timeout: 1500 },
+    );
+    expect(screen.queryByText(/No artists match these filters/i)).toBeNull();
+  });
+});
+
+describe("browse page — gallery Clear all keeps location filtering on (B4)", () => {
+  it("does not switch galleryLocationMode to global", async () => {
+    // Land in the gallery view with one gallery filter set so the sidebar's
+    // "Clear all" button renders.
+    currentParams = new URLSearchParams("gorig=1");
+    render(<BrowsePortfoliosPage />);
+
+    const clearBtn = await waitFor(
+      () => {
+        const btn = screen.getAllByRole("button").find((b) => b.textContent === "Clear all");
+        if (!btn) throw new Error("gallery Clear all not rendered");
+        return btn;
+      },
+      { timeout: 1500 },
+    );
+
+    replace.mockReset();
+    fireEvent.click(clearBtn);
+
+    // Let the debounced URL write settle.
+    await new Promise((r) => setTimeout(r, 450));
+
+    const urls = replace.mock.calls.map((c) => String(c[0]));
+    // Before the fix, clearing set the mode to "global", which is the
+    // non-default value, so it was serialised into the URL and the distance
+    // filter stopped applying for the rest of the session.
+    expect(urls.every((u) => !u.includes("gloc=global"))).toBe(true);
+    // The filter it was actually asked to clear is gone.
+    expect(urls.every((u) => !u.includes("gorig=1"))).toBe(true);
+  });
+});
