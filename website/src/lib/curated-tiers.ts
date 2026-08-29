@@ -4,7 +4,16 @@
  * Used by both `/curated` (CuratedClient.tsx, the landing/plan picker)
  * and `/curated/[tier]` (deep-dive page) so the tier set, prices, and
  * CTAs can never drift between the two surfaces.
+ *
+ * Task 9: this file is the source of truth for the tier *copy* only. Every
+ * price figure it prints, in priceLabel, cta, or FAQ prose, is derived from
+ * CURATION_TIERS in curation-tiers.ts (the billing truth, validated against
+ * Stripe) via gbp(). Nothing here should ever hold a literal "£<number>";
+ * tests/integration/one-curated-price-source.test.ts fails the build if it
+ * does.
  */
+
+import { CURATION_TIERS, gbp } from "./curation-tiers";
 
 export type CuratedTierKey =
   | "single_wall"
@@ -43,8 +52,8 @@ export const CURATED_TIERS: CuratedTier[] = [
   {
     key: "single_wall",
     label: "Single wall",
-    priceLabel: "£49",
-    cta: "Book for £49",
+    priceLabel: gbp(CURATION_TIERS.single_wall.priceGbp),
+    cta: `Book for ${gbp(CURATION_TIERS.single_wall.priceGbp)}`,
     group: "one_off",
     summary: {
       strapline: "One feature wall, hand-picked.",
@@ -88,12 +97,12 @@ export const CURATED_TIERS: CuratedTier[] = [
           a: "One free round of revisions is included. In the rare case nothing fits, we'll refund in full.",
         },
         {
-          q: "Do I pay for the art on top of the £49?",
+          q: `Do I pay for the art on top of the ${gbp(CURATION_TIERS.single_wall.priceGbp)}?`,
           a: "Arrangements vary by work. Many shortlists include free QR-loan options (zero ongoing cost, you share QR sales with the artist) and revenue-share arrangements. Paid-loan and outright purchase options are also shown, you pick what works for the space.",
         },
         {
           q: "When should I upgrade to Full space?",
-          a: "When you have two or more walls and want them to feel coherent together. Full space (£149) considers grouping, palette, and flow across the whole venue, not just one wall.",
+          a: `When you have two or more walls and want them to feel coherent together. Full space (${gbp(CURATION_TIERS.full_space.priceGbp)}) considers grouping, palette, and flow across the whole venue, not just one wall.`,
         },
       ],
     },
@@ -101,8 +110,8 @@ export const CURATED_TIERS: CuratedTier[] = [
   {
     key: "full_space",
     label: "Full space",
-    priceLabel: "£149",
-    cta: "Book for £149",
+    priceLabel: gbp(CURATION_TIERS.full_space.priceGbp),
+    cta: `Book for ${gbp(CURATION_TIERS.full_space.priceGbp)}`,
     group: "one_off",
     popular: true,
     summary: {
@@ -145,7 +154,7 @@ export const CURATED_TIERS: CuratedTier[] = [
       faq: [
         {
           q: "Can I split the budget across walls?",
-          a: "Yes, the £149 covers the curation. Each wall can independently use free QR-loan, paid loan, or purchase, depending on what suits the work and the room.",
+          a: `Yes, the ${gbp(CURATION_TIERS.full_space.priceGbp)} covers the curation. Each wall can independently use free QR-loan, paid loan, or purchase, depending on what suits the work and the room.`,
         },
         {
           q: "How is this different from buying Single wall × N?",
@@ -161,7 +170,7 @@ export const CURATED_TIERS: CuratedTier[] = [
   {
     key: "bespoke",
     label: "Bespoke project",
-    priceLabel: "From £299",
+    priceLabel: `From ${gbp(CURATION_TIERS.bespoke.priceGbp)}`,
     cta: "Request a quote",
     group: "one_off",
     summary: {
@@ -216,8 +225,8 @@ export const CURATED_TIERS: CuratedTier[] = [
   {
     key: "managed_monthly",
     label: "Monthly rotation",
-    priceLabel: "£79.99 / month",
-    cta: "Start monthly, £79.99/mo",
+    priceLabel: `${gbp(CURATION_TIERS.managed_monthly.priceGbp)} / month`,
+    cta: `Start monthly, ${gbp(CURATION_TIERS.managed_monthly.priceGbp)}/mo`,
     group: "managed",
     summary: {
       strapline: "New shortlist every month, walls kept fresh.",
@@ -253,8 +262,8 @@ export const CURATED_TIERS: CuratedTier[] = [
       ],
       faq: [
         {
-          q: "Do I pay for the art on top of £79.99?",
-          a: "Curation is £79.99. The art itself follows whichever arrangement you pick, free QR-loan, paid loan, or outright purchase.",
+          q: `Do I pay for the art on top of ${gbp(CURATION_TIERS.managed_monthly.priceGbp)}?`,
+          a: `Curation is ${gbp(CURATION_TIERS.managed_monthly.priceGbp)}. The art itself follows whichever arrangement you pick, free QR-loan, paid loan, or outright purchase.`,
         },
         {
           q: "What happens if I cancel?",
@@ -266,8 +275,8 @@ export const CURATED_TIERS: CuratedTier[] = [
   {
     key: "managed_quarterly",
     label: "Quarterly refresh",
-    priceLabel: "£199.99 / quarter",
-    cta: "Start quarterly, £199.99/qtr",
+    priceLabel: `${gbp(CURATION_TIERS.managed_quarterly.priceGbp)} / quarter`,
+    cta: `Start quarterly, ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)}/qtr`,
     group: "managed",
     summary: {
       strapline: "Seasonal refresh, less admin.",
@@ -308,7 +317,7 @@ export const CURATED_TIERS: CuratedTier[] = [
         },
         {
           q: "Do quarterly works cost extra?",
-          a: "Curation is the £199.99. The art itself follows whichever arrangement you pick.",
+          a: `Curation is the ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)}. The art itself follows whichever arrangement you pick.`,
         },
       ],
     },
