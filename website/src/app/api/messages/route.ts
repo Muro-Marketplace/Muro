@@ -34,6 +34,10 @@ function formatSlugToName(slug: string): string {
     .join(" ");
 }
 
+/** The system thread with the Wallplace team. No artist or venue profile owns
+ *  this slug, so it can be read but never replied to (F50). */
+const SUPPORT_SLUG = "wallplace-support";
+
 // GET: fetch conversations for the authenticated user, enriched with profile data
 export async function GET(request: Request) {
   const auth = await getAuthenticatedUser(request);
@@ -226,7 +230,7 @@ export async function GET(request: Request) {
       const profile = profileMap.get(conv.otherParty);
       // Special-case the Wallplace Support system thread so it never
       // renders as the raw slug "wallplace-support".
-      const isSupport = conv.otherParty === "wallplace-support";
+      const isSupport = conv.otherParty === SUPPORT_SLUG;
       return {
         ...conv,
         otherPartyDisplayName: isSupport
@@ -294,6 +298,26 @@ export async function POST(request: Request) {
     function deterministicCid(slugA: string, slugB: string): string {
       const [a, b] = [slugA, slugB].sort();
       return `dm-${a}__${b}`;
+    }
+
+    // F50. "wallplace-support" is a system slug. The GET handler special-cases
+    // it so the thread renders as "Wallplace Support", but nothing in src/,
+    // supabase/ or scripts/ ever creates a profile row that owns it, and the
+    // recipient resolution below only looks at artist_profiles and
+    // venue_profiles. So every reply on a support thread came back 404 with
+    // "They may not have an account yet. If you want us to invite them, reply
+    // with their email" — advice that makes no sense for the Wallplace team.
+    // Refuse plainly and point at the route that actually reaches us. The inbox
+    // hides the reply box on these threads for the same reason; this is the
+    // server half, for anything that reaches the endpoint directly.
+    if (recipientSlug === SUPPORT_SLUG) {
+      return NextResponse.json(
+        {
+          error: "Replies aren't sent from this thread. Use the contact form at /contact and the team will pick it up.",
+          code: "support_thread_readonly",
+        },
+        { status: 400 },
+      );
     }
 
     const db = getSupabaseAdmin();

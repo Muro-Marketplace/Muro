@@ -69,7 +69,7 @@ vi.mock("@/emails/templates/placements/PlacementScheduled", () => ({ PlacementSc
 vi.mock("@/emails/templates/placements/PlacementArtworkInstalled", () => ({ PlacementArtworkInstalled: () => null }));
 vi.mock("@/emails/templates/placements/PlacementEnded", () => ({ PlacementEnded: () => null }));
 
-import { PATCH } from "./route";
+import { PATCH, POST } from "./route";
 // Mocked above; imported so the R4.14 tests can assert on the calls.
 import { sendEmail } from "@/lib/email/send";
 
@@ -748,5 +748,126 @@ describe("PATCH /api/placements counter-offer email idempotency key (R4.14)", ()
       (c) => (c[0] as { idempotencyKey: string }).idempotencyKey,
     );
     expect(keys[0]).not.toBe(keys[1]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E21. The venue and artist placement forms both mint the row id client-side
+// (`p-${Date.now()}-…`) and then link the optimistic row at /placements/<id>.
+// That is only safe because the id travels in the POST body and the route
+// persists it verbatim; if the route ever minted its own the links would 404
+// until a refresh. This pins the invariant those links depend on.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Rows the POST asked the DB to insert into `placements`. */
+let placementInserts: Record<string, unknown>[][] = [];
+
+function setupPostDb() {
+  placementInserts = [];
+  fromMock.mockImplementation((table: string) => {
+    if (table === "artist_profiles") {
+      return {
+        select: () => ({
+          eq: (col: string, val: string) => ({
+            single: async () =>
+              // getUserRole asks by user_id (the caller is a venue, so: no row);
+              // the fromVenue branch asks by slug for the target artist.
+              col === "slug"
+                ? { data: { user_id: "u-artist", slug: val, name: "Maya Chen" }, error: null }
+                : { data: null, error: { code: "PGRST116" } },
+          }),
+        }),
+      };
+    }
+    if (table === "venue_profiles") {
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({
+              data: { user_id: VENUE, slug: "copper-kettle", name: "The Copper Kettle" },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    if (table === "placements") {
+      return {
+        insert: async (rows: Record<string, unknown>[]) => {
+          placementInserts.push(rows);
+          return { error: null };
+        },
+      };
+    }
+    if (table === "messages") {
+      return {
+        select: () => ({
+          or: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }) }),
+        }),
+        insert: async () => ({ error: null }),
+      };
+    }
+    return {
+      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
+      insert: async () => ({ error: null }),
+    };
+  });
+}
+
+function post(body: unknown) {
+  return POST(
+    new Request("http://localhost/api/placements", {
+      method: "POST",
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+const CLIENT_ID = "p-1756000000000-ab12";
+
+describe("POST /api/placements persists the caller's row id (E21)", () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: VENUE, email: "v@example.com" }, error: null });
+    setupPostDb();
+  });
+
+  it("stores the id the client generated, so /placements/<id> resolves", async () => {
+    const res = await post({
+      fromVenue: true,
+      artistSlug: "maya-chen",
+      placements: [{
+        id: CLIENT_ID,
+        workTitle: "Last Light",
+        venueSlug: "self",
+        type: "revenue_share",
+        qrEnabled: true,
+        revenueSharePercent: 20,
+      }],
+    });
+
+    expect(res.status).toBe(200);
+    expect(placementInserts).toHaveLength(1);
+    // The optimistic row in the portal renders Open / QR-label links at
+    // /placements/<this id>. If the route minted its own id instead, every one
+    // of those links would 404 until the next full list refresh.
+    expect(placementInserts[0][0].id).toBe(CLIENT_ID);
+  });
+
+  it("keeps every id in a multi-row submit", async () => {
+    const ids = [`${CLIENT_ID}-a`, `${CLIENT_ID}-b`];
+    await post({
+      fromVenue: true,
+      artistSlug: "maya-chen",
+      placements: ids.map((id) => ({
+        id,
+        workTitle: `Work ${id}`,
+        venueSlug: "self",
+        type: "revenue_share",
+        qrEnabled: true,
+      })),
+    });
+
+    expect(placementInserts[0].map((r) => r.id)).toEqual(ids);
   });
 });

@@ -15,6 +15,7 @@ import type { ArtistWork } from "@/data/artists";
 import PlacementContextPanel from "@/components/PlacementContextPanel";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import CounterOfferDialog from "@/components/CounterOfferDialog";
+import { formatOfferDeadline, isPastExpiry } from "@/lib/offers/expiry";
 
 interface Conversation {
   conversationId: string;
@@ -78,6 +79,10 @@ interface MessageInboxProps {
  * Keep this on the display side so historical rows still read clean
  * after the form started writing metadata instead of the prefix.
  */
+/** The system thread with the Wallplace team. No artist or venue profile owns
+ *  this slug, so it can be read but not replied to from the inbox (F50). */
+const SUPPORT_SLUG = "wallplace-support";
+
 function stripInternalTags(raw: string | null | undefined): string {
   if (!raw) return "";
   return raw.replace(/^\s*\[[a-z][a-z0-9_]*\]\s*/i, "");
@@ -118,6 +123,10 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(true);
+  // F18: a hard failure loading the conversation list. Held separately from
+  // `loading` so the list pane can tell "nothing to show" apart from "we could
+  // not find out".
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const convPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -151,6 +160,9 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const [flagOpen, setFlagOpen] = useState(false);
   const [flagSubmitting, setFlagSubmitting] = useState(false);
   const [flagSubmitted, setFlagSubmitted] = useState<null | "reported" | "deleted" | "blocked">(null);
+  // F12: the report reason is collected in-modal now, not via window.prompt.
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
 
   // Resizable conversations sidebar. Persists between sessions so a
   // user who shrinks it for more thread space doesn't have to re-do
@@ -266,10 +278,37 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const slugRef = useRef(userSlug);
   slugRef.current = userSlug;
 
+  // F4: the reply and compose fields are textareas so Shift+Enter can insert a
+  // newline. They grow with their content up to MAX_COMPOSER_HEIGHT_PX (which
+  // matches the `max-h-40` class), then scroll internally. Resizing runs off the
+  // value rather than a DOM listener so a programmatic clear (send success)
+  // collapses the box back to one line too.
+  const MAX_COMPOSER_HEIGHT_PX = 160;
+  const replyRef = useRef<HTMLTextAreaElement | null>(null);
+  const composeRef = useRef<HTMLTextAreaElement | null>(null);
+  function resizeComposer(el: HTMLTextAreaElement | null) {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_COMPOSER_HEIGHT_PX)}px`;
+  }
+  useEffect(() => { resizeComposer(replyRef.current); }, [reply]);
+  useEffect(() => { resizeComposer(composeRef.current); }, [composeMessage]);
+
   // Load conversations
+  //
+  // F18: this used to look only at `data.conversations`. authFetch resolves on a
+  // non-2xx, so a 403 or a 500 left the list empty and the component rendered
+  // the friendly "No conversations yet" empty state — a hard error presented as
+  // "you have no messages". We now check res.ok explicitly and hold an error
+  // that the list pane renders with a retry, and a silent poll failure never
+  // clobbers conversations we already have on screen.
   const loadConversations = useCallback(async (silent = false) => {
     try {
       const res = await authFetch(`/api/messages?slug=${slugRef.current}`);
+      if (!res.ok) {
+        if (!silent) setLoadError("We couldn't load your conversations.");
+        return;
+      }
       const data = await res.json();
       if (data.conversations) {
         const convs = data.conversations as Conversation[];
@@ -277,11 +316,25 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
           if (JSON.stringify(prev) !== JSON.stringify(convs)) return convs;
           return prev;
         });
+        setLoadError(null);
+      } else if (!silent) {
+        setLoadError("We couldn't load your conversations.");
       }
     } catch (err) {
-      if (!silent) console.error("Failed to load conversations:", err);
+      if (!silent) {
+        console.error("Failed to load conversations:", err);
+        setLoadError("We couldn't load your conversations.");
+      }
     }
   }, []);
+
+  // Retry after a failed load. Clears the error first so the pane shows the
+  // skeleton again rather than the stale failure while the request is in flight.
+  const retryLoadConversations = useCallback(() => {
+    setLoadError(null);
+    setLoading(true);
+    loadConversations().then(() => setLoading(false));
+  }, [loadConversations]);
 
   useEffect(() => {
     loadConversations().then(() => setLoading(false));
@@ -420,7 +473,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   // Load works for the placement panel whenever the selected conversation changes.
   useEffect(() => {
     const other = conversations.find((c) => c.conversationId === selectedConv)?.otherParty;
-    if (!other || other === "wallplace-support") { setOtherPartyWorks([]); return; }
+    if (!other || other === SUPPORT_SLUG) { setOtherPartyWorks([]); return; }
     loadOtherPartyWorks(other);
   }, [selectedConv, conversations, loadOtherPartyWorks]);
 
@@ -831,6 +884,9 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
   const showPanel = !!selectedConv && !composing;
   const selectedOtherParty = selectedConvData?.otherParty || "";
   const selectedOtherPartyType = selectedConvData?.otherPartyType || "artist";
+  // F50: the Wallplace Support thread is a system thread. No profile row owns
+  // the slug, so the messages POST cannot resolve a recipient for it.
+  const isSupportThread = selectedConvData?.otherParty === SUPPORT_SLUG;
 
   return (
     <div className="flex h-[calc(100vh-13rem)] border border-border rounded-2xl overflow-hidden bg-surface shadow-sm">
@@ -871,7 +927,26 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-        {conversations.length === 0 && !composing ? (
+        {loadError ? (
+          /* F18: a real failure gets its own state with a retry, instead of
+             being disguised as the friendly "no conversations" empty state. */
+          <div className="flex flex-col items-center justify-center py-16 px-6">
+            <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mb-4">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            </div>
+            <p className="text-sm font-medium text-foreground mb-1">{loadError}</p>
+            <p className="text-xs text-muted text-center max-w-[220px] mb-4">
+              Something went wrong at our end. Your messages are safe.
+            </p>
+            <button
+              type="button"
+              onClick={retryLoadConversations}
+              className="px-4 py-2 bg-accent text-white text-xs font-medium rounded-full hover:bg-accent-hover transition-colors"
+            >
+              Try again
+            </button>
+          </div>
+        ) : conversations.length === 0 && !composing ? (
           <div className="flex flex-col items-center justify-center py-16 px-6">
             <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center mb-4">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
@@ -880,6 +955,18 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
             <p className="text-xs text-muted text-center max-w-[200px]">
               {portalType === "artist" ? "Messages from venues and buyers will appear here." : "Start by messaging an artist you're interested in."}
             </p>
+            {/* F1: the venue copy told people to message an artist, and the
+                inbox has no compose control at all, so the instruction could
+                not be followed from here. Send them where the conversation
+                actually starts. */}
+            {portalType !== "artist" && (
+              <Link
+                href="/browse"
+                className="mt-4 px-4 py-2 bg-accent text-white text-xs font-medium rounded-full hover:bg-accent-hover transition-colors"
+              >
+                Browse artists
+              </Link>
+            )}
           </div>
         ) : placedConvs.length === 0 && otherConvs.length === 0 && searchQuery ? (
           <div className="px-6 py-10 text-center">
@@ -936,7 +1023,20 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 </div>
               )}
               <div className="flex gap-2">
-                <input type="text" value={composeMessage} onChange={(e) => { setComposeMessage(e.target.value); if (sendError) setSendError(null); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendNewMessage(); } }} maxLength={5000} placeholder="Type your first message..." className="flex-1 px-3 py-2.5 bg-background border border-border rounded-full text-sm focus:outline-none focus:border-accent/50" autoFocus />
+                {/* F4: a textarea, not a single-line input. Enter still sends;
+                    Shift+Enter now genuinely inserts a newline, which is what
+                    the keyboard behaviour has always claimed. */}
+                <textarea
+                  ref={composeRef}
+                  rows={1}
+                  value={composeMessage}
+                  onChange={(e) => { setComposeMessage(e.target.value); if (sendError) setSendError(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendNewMessage(); } }}
+                  maxLength={5000}
+                  placeholder="Type your first message..."
+                  className="flex-1 px-3 py-2.5 bg-background border border-border rounded-2xl text-sm focus:outline-none focus:border-accent/50 resize-none max-h-40 overflow-y-auto leading-relaxed"
+                  autoFocus
+                />
                 <button onClick={handleSendNewMessage} disabled={!composeMessage.trim() || sending || composeMessage.length > 5000} className="px-4 py-2.5 bg-accent text-white text-sm font-medium rounded-full hover:bg-accent-hover transition-colors disabled:opacity-40">
                   {sending ? "..." : "Send"}
                 </button>
@@ -991,7 +1091,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 {/* Flag/options button (#20), opens a proper popup
                     instead of the old confirm+alert. */}
                 <button
-                  onClick={() => { setFlagOpen(true); setFlagSubmitted(null); }}
+                  onClick={() => { setFlagOpen(true); setFlagSubmitted(null); setReportOpen(false); setReportReason(""); }}
                   className="p-1.5 text-muted hover:text-red-500 transition-colors shrink-0"
                   title="Conversation options"
                   aria-label="Conversation options"
@@ -1002,7 +1102,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 </button>
               </div>
               {/* Row 2: action buttons (hidden for support conversations) */}
-              {selectedConvData?.otherParty !== "wallplace-support" && (
+              {!isSupportThread && (
                 <div className="flex items-center gap-3 mt-2 pl-0 sm:pl-[52px]">
                   {selectedConvData?.otherPartyType === "artist" && (
                     <Link href={`/browse/${selectedConvData.otherParty}`} className="text-xs text-accent hover:text-accent-hover transition-colors">View Portfolio</Link>
@@ -1090,6 +1190,13 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                   const sizeLabel = meta.sizeLabel as string | null | undefined;
                   const note = meta.note as string | null | undefined;
                   const workCount = Array.isArray(meta.workIds) ? (meta.workIds as unknown[]).length : 0;
+                  // F41: the offer's response deadline. Stored on the row since
+                  // the create route accepted it, shown on no surface and read
+                  // by no handler until now. `expired` uses the same predicate
+                  // the PATCH enforces, so the inline Accept / Counter / Decline
+                  // vanish exactly when the server would refuse them.
+                  const offerDeadline = formatOfferDeadline({ expires_at: (meta.expiresAt as string | null | undefined) ?? null });
+                  const offerExpired = isPastExpiry({ expires_at: (meta.expiresAt as string | null | undefined) ?? null });
 
                   // Has a later status message superseded this offer?
                   // We look forward in the thread for any
@@ -1111,7 +1218,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                   // so users can't act on a no-longer-valid state. The
                   // counter creates its own new offer card further down
                   // the thread that owns the live actions.
-                  const open = !finalStatus || finalStatus === "pending";
+                  const open = (!finalStatus || finalStatus === "pending") && !offerExpired;
 
                   return (
                     <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
@@ -1145,6 +1252,11 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                             </p>
                           )}
                           {note && <p className="text-xs text-muted whitespace-pre-wrap">&ldquo;{note}&rdquo;</p>}
+                          {offerDeadline && (
+                            <p className={`text-[11px] ${offerExpired ? "text-red-600" : "text-muted"}`}>
+                              {offerExpired ? `Expired ${offerDeadline}` : `Expires ${offerDeadline}`}
+                            </p>
+                          )}
                         </div>
                         {open && iAmRecipient && (
                           <div className="px-3.5 py-2 border-t border-border flex gap-2 flex-wrap">
@@ -1194,6 +1306,11 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                             <p className="text-xs font-medium capitalize">
                               {finalStatus === "paid" ? "Paid" : finalStatus}
                             </p>
+                          </div>
+                        )}
+                        {!open && !finalStatus && offerExpired && (
+                          <div className="px-3.5 py-2 border-t bg-foreground/5 border-border text-muted">
+                            <p className="text-xs font-medium">Expired</p>
                           </div>
                         )}
                       </div>
@@ -1505,7 +1622,26 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Reply input */}
+            {/* Reply input.
+                F50: "wallplace-support" is a system slug with no artist or venue
+                profile behind it, and POST /api/messages resolves the recipient
+                only through those two tables, so every reply on a support thread
+                came back 404 with the reply box still sitting there inviting
+                another go. Support threads are read-only here and point at the
+                contact form, which is the route that actually reaches the team. */}
+            {isSupportThread ? (
+              <div className="px-4 py-4 border-t border-border shadow-[0_-1px_3px_rgba(0,0,0,0.03)] text-center">
+                <p className="text-xs text-muted mb-3">
+                  Replies aren&rsquo;t sent from here. Use the contact form and the team will pick it up.
+                </p>
+                <Link
+                  href="/contact"
+                  className="inline-block px-4 py-2 bg-accent text-white text-xs font-medium rounded-full hover:bg-accent-hover transition-colors"
+                >
+                  Contact the team
+                </Link>
+              </div>
+            ) : (
             <div className="px-4 py-3 border-t border-border shadow-[0_-1px_3px_rgba(0,0,0,0.03)]">
               {sendError && (
                 <div className="mb-2 flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
@@ -1541,7 +1677,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                   ))}
                 </div>
               )}
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-end">
                 <input
                   ref={attachmentInputRef}
                   type="file"
@@ -1563,7 +1699,19 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
                   )}
                 </button>
-                <input type="text" value={reply} onChange={(e) => { setReply(e.target.value); if (sendError) setSendError(null); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }} maxLength={5000} placeholder="Type a message..." className="flex-1 px-3 py-2.5 bg-background border border-border rounded-full text-sm focus:outline-none focus:border-accent/50" />
+                {/* F4: see the compose field above. Enter sends, Shift+Enter
+                    inserts a newline, and the box grows with the message
+                    instead of scrolling a one-line input sideways. */}
+                <textarea
+                  ref={replyRef}
+                  rows={1}
+                  value={reply}
+                  onChange={(e) => { setReply(e.target.value); if (sendError) setSendError(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
+                  maxLength={5000}
+                  placeholder="Type a message..."
+                  className="flex-1 px-3 py-2.5 bg-background border border-border rounded-2xl text-sm focus:outline-none focus:border-accent/50 resize-none max-h-40 overflow-y-auto leading-relaxed"
+                />
                 <button onClick={handleSendReply} disabled={(!reply.trim() && pendingAttachments.length === 0) || sending || reply.length > 5000} className="px-4 py-2.5 bg-accent text-white text-sm font-medium rounded-full hover:bg-accent-hover transition-colors disabled:opacity-40">
                   {sending ? "..." : "Send"}
                 </button>
@@ -1574,6 +1722,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                 </p>
               )}
             </div>
+            )}
           </>
         )}
       </div>
@@ -1686,8 +1835,12 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
             ) : (
               <ul className="py-1.5">
                 <li>
+                  {/* F11: the copy promised a new tab but there was no target,
+                      so following it navigated away and lost the thread. */}
                   <Link
                     href="/faqs"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     onClick={() => setFlagOpen(false)}
                     className="block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors"
                   >
@@ -1696,34 +1849,76 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                   </Link>
                 </li>
                 <li>
-                  <button
-                    type="button"
-                    disabled={flagSubmitting}
-                    onClick={async () => {
-                      const reason = prompt(`What's the issue with ${selectedConvData?.otherPartyDisplayName || "this user"}?`);
-                      if (!reason) return;
-                      // E43-e: submitFlagAction sets the confirmation ONLY after the
-                      // server accepts it (mutate throws on a non-2xx / network failure).
-                      await submitFlagAction({
-                        url: "/api/messages/report",
-                        method: "POST",
-                        body: {
-                          otherParty: selectedConvData?.otherParty,
-                          conversationId: selectedConvData?.conversationId,
-                          reason,
-                        },
-                        outcome: "reported",
-                        errorMessage: "Could not submit the report. Please try again.",
-                        setSubmitting: setFlagSubmitting,
-                        setSubmitted: setFlagSubmitted,
-                        showToast,
-                      });
-                    }}
-                    className="w-full text-left block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors disabled:opacity-50"
-                  >
-                    <span className="font-medium">Report</span>
-                    <span className="block text-xs text-muted mt-0.5">Flag inappropriate behaviour to the Wallplace team.</span>
-                  </button>
+                  {/* F12: this used window.prompt() for the reason. In-app
+                      browsers (Instagram, Facebook, some webviews) suppress
+                      prompt(), which returns null, and the handler bailed on a
+                      null reason, so Report silently did nothing. The reason is
+                      now collected in the modal itself. */}
+                  {reportOpen ? (
+                    <div className="px-5 py-3 space-y-2">
+                      <p className="text-sm font-medium text-foreground">Report {selectedConvData?.otherPartyDisplayName || "this user"}</p>
+                      <label htmlFor="report-reason" className="block text-xs text-muted">
+                        Tell us what happened. Our team reads every report.
+                      </label>
+                      <textarea
+                        id="report-reason"
+                        value={reportReason}
+                        onChange={(e) => setReportReason(e.target.value)}
+                        rows={4}
+                        maxLength={1000}
+                        placeholder="What happened?"
+                        className="w-full px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50 resize-y"
+                        autoFocus
+                      />
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => { setReportOpen(false); setReportReason(""); }}
+                          className="px-3 py-2 text-xs font-medium text-muted hover:text-foreground"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={flagSubmitting || !reportReason.trim()}
+                          onClick={async () => {
+                            const reason = reportReason.trim();
+                            if (!reason) return;
+                            // E43-e: submitFlagAction sets the confirmation ONLY after the
+                            // server accepts it (mutate throws on a non-2xx / network failure).
+                            const accepted = await submitFlagAction({
+                              url: "/api/messages/report",
+                              method: "POST",
+                              body: {
+                                otherParty: selectedConvData?.otherParty,
+                                conversationId: selectedConvData?.conversationId,
+                                reason,
+                              },
+                              outcome: "reported",
+                              errorMessage: "Could not submit the report. Please try again.",
+                              setSubmitting: setFlagSubmitting,
+                              setSubmitted: setFlagSubmitted,
+                              showToast,
+                            });
+                            if (accepted) { setReportOpen(false); setReportReason(""); }
+                          }}
+                          className="px-3 py-2 bg-accent text-white text-xs font-medium rounded-full hover:bg-accent-hover transition-colors disabled:opacity-40"
+                        >
+                          Submit report
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={flagSubmitting}
+                      onClick={() => setReportOpen(true)}
+                      className="w-full text-left block px-5 py-3 text-sm text-foreground hover:bg-[#FAF8F5] transition-colors disabled:opacity-50"
+                    >
+                      <span className="font-medium">Report</span>
+                      <span className="block text-xs text-muted mt-0.5">Flag inappropriate behaviour to the Wallplace team.</span>
+                    </button>
+                  )}
                 </li>
                 <li>
                   <button

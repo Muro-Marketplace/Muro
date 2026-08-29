@@ -55,6 +55,28 @@ const createSchema = z.object({
   proposedMonthlyFeePence: z.number().int().min(0).max(10_000_00).optional(),
   proposedQrEnabled: z.boolean().optional(),
   proposedRevenueSharePercent: z.number().int().min(0).max(50).optional(),
+}).superRefine((data, ctx) => {
+  // F44. The artist respond form labels the QR toggle "Required for revenue
+  // share" and nothing enforced it on either side. A placement response with a
+  // share above zero and QR off saved fine, and the accept handler then derived
+  // arrangement_type "revenue_share" while writing qr_enabled false, because its
+  // `resp.proposed_qr_enabled ?? (arrangementType === "revenue_share")` default
+  // only covers null — an explicit false went straight through. The result is a
+  // placement whose own terms contradict each other: the venue is owed a cut of
+  // QR sales on a wall with no QR code, so the cut can never be earned.
+  //
+  // Scoped to placement responses because the route nulls these columns for
+  // every other type, so there is no contradiction to guard against there.
+  if (data.responseType !== "placement") return;
+  const share = data.proposedRevenueSharePercent ?? 0;
+  if (share > 0 && data.proposedQrEnabled !== true) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["proposedQrEnabled"],
+      message:
+        "a revenue share needs the QR code switched on, that is how sales from the wall are attributed",
+    });
+  }
 });
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -166,6 +188,43 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     .maybeSingle();
   if (!req) return NextResponse.json({ error: "Request not found" }, { status: 404 });
   if (req.status !== "open") return NextResponse.json({ error: "Request is closed" }, { status: 409 });
+
+  // F45. There was no per-artist uniqueness anywhere: not a constraint, not a
+  // check here, and no prior-response display on the respond page. So an artist
+  // who resubmitted (a double-tap, a back-button, or simply not remembering)
+  // filed a second bid on the same brief, the venue saw duplicates in their
+  // response list, and every duplicate reached checkArtistOutreachCap below and
+  // burned another of the artist's three-to-fifteen weekly sends.
+  //
+  // A DECLINE does not block a fresh attempt: "not these terms" is not "never
+  // again", and the artist coming back with a revised proposal is a path worth
+  // keeping. Anything still live or already actioned in the artist's favour
+  // (sent / accepted / fulfilled) is refused.
+  //
+  // Sits BEFORE the cap for the same reason the closed-brief check does (E46d
+  // ordering): a refused attempt must not cost the artist a send.
+  const { data: prior } = await db
+    .from("artwork_request_responses")
+    .select("id, status")
+    .eq("request_id", id)
+    .eq("artist_user_id", auth.user!.id)
+    .in("status", ["sent", "accepted", "fulfilled"])
+    .limit(1)
+    .maybeSingle<{ id: string; status: string }>();
+  if (prior) {
+    return NextResponse.json(
+      {
+        error: "already_responded",
+        message:
+          prior.status === "sent"
+            ? "You've already responded to this brief. The venue hasn't answered yet."
+            : "You've already responded to this brief and the venue has answered.",
+        responseId: prior.id,
+        responseStatus: prior.status,
+      },
+      { status: 409 },
+    );
+  }
 
   // Rolling-week cap — shared bucket with placement requests + first-contact
   // messages. Core 3 / Premium 6 / Pro 15 across all three, per 7 days.

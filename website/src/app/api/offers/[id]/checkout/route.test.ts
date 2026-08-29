@@ -373,3 +373,80 @@ describe("POST /api/offers/[id]/checkout cancel_url (B31/F42)", () => {
     expect(calls[0][0].cancel_url).not.toContain("/customer-portal/");
   });
 });
+
+describe("POST /api/offers/[id]/checkout refuses lapsed offers (F41)", () => {
+  const PAST = "2026-01-01T00:00:00.000Z";
+
+  it("refuses to charge for an offer that ran past its deadline unaccepted", async () => {
+    setupDb({ ...OFFER, expires_at: PAST, accepted_at: null });
+
+    const res = await post();
+
+    // Fail-before: the route checked only status === "accepted", so an offer
+    // whose window had closed still reached Stripe.
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ code: "offer_expired" });
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses an offer accepted after its deadline (the legacy rows)", async () => {
+    setupDb({ ...OFFER, expires_at: PAST, accepted_at: "2026-03-01T00:00:00.000Z" });
+
+    const res = await post();
+
+    expect(res.status).toBe(409);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("closes the lapsed row with a compare-and-set on accepted", async () => {
+    setupDb({ ...OFFER, expires_at: PAST, accepted_at: null });
+
+    await post();
+
+    const closed = offerUpdates.find((u) => u.payload.status === "expired");
+    expect(closed).toBeTruthy();
+    expect(closed!.filters).toContainEqual(["status", "accepted"]);
+  });
+
+  it("still takes payment for a deal accepted while the offer was live", async () => {
+    setupDb({ ...OFFER, expires_at: PAST, accepted_at: "2025-12-25T00:00:00.000Z" });
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(sessionsCreateMock).toHaveBeenCalled();
+  });
+
+  it("leaves open-ended offers alone", async () => {
+    setupDb({ ...OFFER, expires_at: null });
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("POST /api/offers/[id]/checkout refuses a non-positive amount (F49)", () => {
+  it("never builds a Stripe line for a £0.00 offer", async () => {
+    // The legacy existing_works fulfil branch could mint an accepted offer at
+    // amount_pence 0. The fulfil route now refuses that, but rows minted before
+    // the fix still exist, and this route built the line straight from
+    // offer.amount_pence with no guard at all.
+    setupDb({ ...OFFER, amount_pence: 0 });
+
+    const res = await post();
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({ code: "offer_not_priced" });
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a negative amount as firmly", async () => {
+    setupDb({ ...OFFER, amount_pence: -100 });
+
+    const res = await post();
+
+    expect(res.status).toBe(422);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+});

@@ -304,7 +304,19 @@ export default function PlacementDetailClient({ placementId }: Props) {
       if (stage === "live" && viewerRole === "artist" && placement.in_store_price == null) {
         setOfferPromptOpen(true);
       }
-    } catch { /* ignore; next load will reconcile */ }
+    } catch (err) {
+      // F28: this was `catch { /* ignore; next load will reconcile */ }`. Nothing
+      // reconciles a rejected PATCH — a 422 from the state machine (for example
+      // advancing a placement that is not active, or a backdated install date)
+      // left the button looking like it had simply done nothing. The undo path
+      // next door already toasts; the advance path now matches it.
+      showToast(
+        err instanceof ApiError
+          ? err.message || "Could not update the placement stage."
+          : "Network error. Please try again.",
+        { variant: "error" },
+      );
+    }
     finally {
       setAdvanceBusy(null);
     }

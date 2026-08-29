@@ -13,6 +13,7 @@ import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { displayPhysicalDimensions } from "@/lib/dimensions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/context/ToastContext";
+import { formatOfferDeadline, isOfferLapsed } from "@/lib/offers/expiry";
 
 interface EnrichedWork {
   id: string;
@@ -314,6 +315,13 @@ export default function OffersList({ viewerUserId, filter }: Props) {
           : iAmArtist && o.venue?.slug
             ? `/venues/${o.venue.slug}`
             : undefined;
+        // F41: the response deadline. Stored on every offer since the create
+        // route accepted it, and read by nothing until now — no surface showed
+        // it and no handler enforced it. `lapsed` is the same predicate the
+        // PATCH uses, so the buttons disappear exactly when the server would
+        // refuse them rather than a moment either side.
+        const deadline = formatOfferDeadline(o);
+        const lapsed = isOfferLapsed(o);
 
         return (
           <article
@@ -360,9 +368,19 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                       {iAmArtist && o.venue?.location ? ` · ${o.venue.location}` : ""}
                     </p>
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-sm border ${STATUS_BADGE[o.status] || STATUS_BADGE.pending}`}>
-                    {formatStatus(o.status, iAmSender)}
-                  </span>
+                  <div className="text-right shrink-0">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-sm border ${STATUS_BADGE[lapsed ? "expired" : o.status] || STATUS_BADGE.pending}`}>
+                      {lapsed ? "Expired" : formatStatus(o.status, iAmSender)}
+                    </span>
+                    {/* F41: the deadline was stored on every offer and shown on
+                        none of them, so neither side could see the clock they
+                        were being held to. */}
+                    {deadline && (
+                      <p className={`text-[10px] mt-1 ${lapsed ? "text-red-600" : "text-muted"}`}>
+                        {lapsed ? `Expired ${deadline}` : `Expires ${deadline}`}
+                      </p>
+                    )}
+                  </div>
                 </header>
 
                 {works.length > 0 && (
@@ -416,7 +434,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                       counter that had already been replied to. The
                       live child carries the actionable state; the
                       parent is history. */}
-                  {iAmRecipient && o.status === "pending" && (
+                  {iAmRecipient && o.status === "pending" && !lapsed && (
                     <>
                       <button
                         type="button"
@@ -448,7 +466,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
                       pending rows; a "countered" row has already been
                       responded to and the sender's pull-back path is
                       now to withdraw the live counter row instead. */}
-                  {iAmSender && o.status === "pending" && (
+                  {iAmSender && o.status === "pending" && !lapsed && (
                     <button
                       type="button"
                       onClick={() => setWithdrawFor(o)}

@@ -191,6 +191,30 @@ export async function POST(
       // action === "order". Create a pre-accepted purchase_offer so the
       // venue can pay against it — same shape the accept handler uses
       // for 'offer'.
+      //
+      // F49. This priced the offer as
+      //   proposed_offer_amount_pence ?? proposed_commission_amount_pence ?? 0
+      // so an existing_works response that named no price at all minted an
+      // ACCEPTED, payable offer at £0.00. Nothing downstream caught it: the
+      // offer checkout builds its Stripe line straight from
+      // offer.amount_pence with no positive-amount guard, and even when
+      // Stripe refuses the zero-value session the bad row persists and the
+      // venue portal lists it as owed. The sibling accept handler already
+      // gates on a truthy `proposed_offer_amount_pence`; this branch never
+      // did. Refuse instead, before any write, so the brief stays open and
+      // the venue can chase a price or pick the placement action.
+      const amountPence =
+        resp.proposed_offer_amount_pence ?? resp.proposed_commission_amount_pence ?? null;
+      if (typeof amountPence !== "number" || !Number.isFinite(amountPence) || amountPence <= 0) {
+        return NextResponse.json(
+          {
+            error: "no_price_on_response",
+            message:
+              "This response doesn't name a price, so there's nothing to charge. Ask the artist for an amount, or place the work instead.",
+          },
+          { status: 422 },
+        );
+      }
       const offerId = `off_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       await db.from("purchase_offers").insert({
         id: offerId,
@@ -200,10 +224,7 @@ export async function POST(
         artist_user_id: resp.artist_user_id,
         artist_slug: resp.artist_slug,
         work_ids: resp.work_ids || [],
-        amount_pence:
-          resp.proposed_offer_amount_pence ??
-          resp.proposed_commission_amount_pence ??
-          0,
+        amount_pence: amountPence,
         currency: "GBP",
         message: `Existing-works purchase from artwork request "${req.title}"`,
         status: "accepted",

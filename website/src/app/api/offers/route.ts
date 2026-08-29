@@ -488,6 +488,10 @@ export async function POST(request: Request) {
               collectionId: collectionId || null,
               collectionTitle,
               note: message || null,
+              // F41: carry the deadline onto the thread card so the recipient
+              // can see the clock they are being held to. Previously the column
+              // was stored and shown nowhere at all.
+              expiresAt: expiresAt || null,
             },
           });
         }

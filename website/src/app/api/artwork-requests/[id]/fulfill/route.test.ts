@@ -249,3 +249,80 @@ describe("POST fulfill ownership (E22 regression guard)", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("POST fulfill refuses a zero-priced order (F49)", () => {
+  it("does not mint a payable offer when the response carries no amount", async () => {
+    // The legacy existing_works "order" branch priced the offer as
+    //   proposed_offer_amount_pence ?? proposed_commission_amount_pence ?? 0
+    // and the offer checkout builds its Stripe line straight from
+    // offer.amount_pence with no positive-amount guard. Stripe would very
+    // likely reject the £0.00 session, but the accepted, payable offer row
+    // persists either way and the venue portal shows it as owed.
+    setupDb(
+      PENDING_REQ,
+      baseResp({ proposed_offer_amount_pence: null, proposed_commission_amount_pence: null }),
+    );
+
+    const res = await post({ response_id: RESPONSE_ID, action: "order" });
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({ error: "no_price_on_response" });
+    expect(offerInserts(), "a £0.00 offer was minted").toEqual([]);
+  });
+
+  it("refuses a zero amount as firmly as a missing one", async () => {
+    setupDb(PENDING_REQ, baseResp({ proposed_offer_amount_pence: 0 }));
+
+    const res = await post({ response_id: RESPONSE_ID, action: "order" });
+
+    expect(res.status).toBe(422);
+    expect(offerInserts()).toEqual([]);
+  });
+
+  it("leaves the request open when it refuses, so the venue can still act", async () => {
+    setupDb(
+      PENDING_REQ,
+      baseResp({ proposed_offer_amount_pence: null, proposed_commission_amount_pence: null }),
+    );
+
+    await post({ response_id: RESPONSE_ID, action: "order" });
+
+    expect(
+      updates.filter((u) => u.table === "artwork_requests"),
+      "the brief was closed on a refused fulfilment",
+    ).toEqual([]);
+  });
+
+  it("still fulfils an order that has a real price", async () => {
+    setupDb(PENDING_REQ, baseResp({ proposed_offer_amount_pence: 12_500 }));
+
+    const res = await post({ response_id: RESPONSE_ID, action: "order" });
+
+    expect(res.status).toBe(200);
+    expect(offerInserts()[0].row.amount_pence).toBe(12_500);
+  });
+
+  it("falls back to the commission amount when that is the only price", async () => {
+    setupDb(
+      PENDING_REQ,
+      baseResp({ proposed_offer_amount_pence: null, proposed_commission_amount_pence: 9_900 }),
+    );
+
+    const res = await post({ response_id: RESPONSE_ID, action: "order" });
+
+    expect(res.status).toBe(200);
+    expect(offerInserts()[0].row.amount_pence).toBe(9_900);
+  });
+
+  it("does not gate the placement branch, which has no price at all", async () => {
+    setupDb(
+      PENDING_REQ,
+      baseResp({ proposed_offer_amount_pence: null, proposed_commission_amount_pence: null }),
+    );
+
+    const res = await post({ response_id: RESPONSE_ID, action: "placement" });
+
+    expect(res.status).toBe(200);
+    expect(placementInserts()).toHaveLength(1);
+  });
+});
