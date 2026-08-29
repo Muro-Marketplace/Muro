@@ -65,6 +65,10 @@ const DEMO_EXEMPT_ROUTES = {
   // to work against demo data when reproducing a report.
   "src/app/api/admin/applications/[id]/route.ts":
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
+  // Task 8. Founding-cohort toggle (PATCH is_founding_artist), same shape as
+  // the other admin surfaces below.
+  "src/app/api/admin/artists/route.ts":
+    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
   "src/app/api/admin/blogs/[id]/route.ts":
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
   "src/app/api/admin/curation/route.ts":
