@@ -62,17 +62,48 @@ export default function SettingsPage() {
     setTimeout(() => setAccountSaved(false), 3000);
   }
 
+  // D28: the "Current password" field was collected and then thrown away.
+  // Validation only looked at newPassword/confirmPassword, so anyone holding
+  // the session (an unlocked laptop, a lifted access token) could rotate the
+  // password without knowing the old one, while the field itself read as a
+  // security control that did nothing.
+  //
+  // Supabase exposes no "verify this password" primitive to a browser client,
+  // so we re-authenticate with signInWithPassword first. A wrong password
+  // fails there and leaves the existing session untouched; a correct one just
+  // refreshes the session for the same user before updateUser runs.
   async function handlePasswordChange(e: React.FormEvent) {
     e.preventDefault();
     setPasswordError("");
     setPasswordSaved(false);
 
+    if (!currentPassword) {
+      setPasswordError("Enter your current password");
+      return;
+    }
     if (newPassword.length < 8) {
       setPasswordError("Password must be at least 8 characters");
       return;
     }
     if (newPassword !== confirmPassword) {
       setPasswordError("Passwords do not match");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError("Your new password must be different from your current one");
+      return;
+    }
+    if (!user?.email) {
+      setPasswordError("We could not confirm your account. Please sign in again.");
+      return;
+    }
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    });
+    if (verifyError) {
+      setPasswordError("Current password is incorrect");
       return;
     }
 

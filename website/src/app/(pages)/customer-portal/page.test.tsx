@@ -369,3 +369,75 @@ describe("CustomerPortalPage — refund request form (C5/C6)", () => {
     expect(screen.queryByText("Submit Refund Request")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// C2 — a failed /api/orders fetch must not read as "you have never ordered"
+// ---------------------------------------------------------------------------
+
+describe("CustomerPortalPage — failed orders fetch (C2)", () => {
+  const ERROR_COPY = "We could not load your orders. Please try again.";
+
+  it("renders an error with a retry instead of the empty state when the fetch throws", async () => {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/orders") return Promise.reject(new Error("offline"));
+      if (url === "/api/refunds") return Promise.resolve(jsonResponse({ refundRequests: [] }));
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    render(<CustomerPortalPage />);
+
+    // Fail-before: the empty catch let loading finish with an empty list, so
+    // a customer with a full order history was told they had never ordered.
+    expect(await screen.findByText(ERROR_COPY)).toBeTruthy();
+    expect(screen.queryByTestId("empty-state")).toBeNull();
+    expect(screen.getByText("Try again")).toBeTruthy();
+  });
+
+  it("renders the error when the server answers a non-2xx", async () => {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/orders") return Promise.resolve(jsonResponse({ error: "boom" }, false));
+      if (url === "/api/refunds") return Promise.resolve(jsonResponse({ refundRequests: [] }));
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    render(<CustomerPortalPage />);
+
+    expect(await screen.findByText(ERROR_COPY)).toBeTruthy();
+    expect(screen.queryByTestId("empty-state")).toBeNull();
+  });
+
+  it("recovers when the retry succeeds", async () => {
+    let attempt = 0;
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/orders") {
+        attempt += 1;
+        return attempt === 1
+          ? Promise.reject(new Error("offline"))
+          : Promise.resolve(jsonResponse({ orders: [mockOrder] }));
+      }
+      if (url === "/api/refunds") return Promise.resolve(jsonResponse({ refundRequests: [] }));
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    render(<CustomerPortalPage />);
+    fireEvent.click(await screen.findByText("Try again"));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("WP-001").length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText(ERROR_COPY)).toBeNull();
+  });
+
+  it("still shows the empty state on a genuine empty success", async () => {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/orders") return Promise.resolve(jsonResponse({ orders: [] }));
+      if (url === "/api/refunds") return Promise.resolve(jsonResponse({ refundRequests: [] }));
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    render(<CustomerPortalPage />);
+
+    expect(await screen.findByTestId("empty-state")).toBeTruthy();
+    expect(screen.queryByText(ERROR_COPY)).toBeNull();
+  });
+});
