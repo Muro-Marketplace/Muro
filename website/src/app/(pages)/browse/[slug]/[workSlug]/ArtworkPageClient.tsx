@@ -563,6 +563,7 @@ export default function ArtworkPageClient({
                     shippingPrice: 0,
                     lineFulfilment: "collect_venue",
                     collectVenueSlug: offer.venueSlug ?? undefined,
+                    collectVenueName: offer.venueName ?? undefined,
                     collectPlacementId: offer.id,
                   });
                   router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
@@ -631,6 +632,7 @@ export default function ArtworkPageClient({
                   // live placements table before any money is taken.
                   lineFulfilment: "collect_venue",
                   collectVenueSlug: work.currentPlacement?.venueSlug ?? undefined,
+                  collectVenueName: work.currentPlacement?.venueName ?? undefined,
                   collectPlacementId: work.currentPlacement?.id,
                 });
                 router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);

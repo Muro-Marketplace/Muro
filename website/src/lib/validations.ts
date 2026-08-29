@@ -304,6 +304,8 @@ const checkoutItemSchema = z.object({
   // (api/checkout), so these are claims to check, never facts to trust.
   lineFulfilment: z.enum(["ship", "collect_venue"]).optional(),
   collectVenueSlug: optionalString(100),
+  // B18: carried for display; never trusted for money (the slug is).
+  collectVenueName: optionalString(200),
   collectPlacementId: optionalString(200),
 });
 

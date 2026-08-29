@@ -76,8 +76,11 @@ export default function CheckoutPage() {
   // so the initial render is already right.
   const allVenueCollect =
     items.length > 0 && items.every((i) => i.lineFulfilment === "collect_venue");
+  // B18: the tile used to print the raw slug ("the-copper-kettle"). Prefer the
+  // display name the line now carries, and fall back to the slug only for
+  // carts built before that field existed.
   const collectVenueName = allVenueCollect
-    ? items[0]?.collectVenueSlug ?? null
+    ? items[0]?.collectVenueName ?? items[0]?.collectVenueSlug ?? null
     : null;
   const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection" | "collect_venue">(
     allVenueCollect ? "collect_venue" : "ship",
