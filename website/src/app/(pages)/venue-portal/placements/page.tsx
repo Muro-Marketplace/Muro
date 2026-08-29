@@ -1009,7 +1009,7 @@ export default function VenuePlacementsPage() {
                     />
                     <span className="text-sm text-muted">per month</span>
                   </div>
-                  <p className="text-xs text-muted mt-2">Billing is handled manually for now, use this to record the agreed amount.</p>
+                  <p className="text-xs text-muted mt-2">The venue sets up the monthly payment by card once the placement is agreed, and Wallplace collects it automatically from then on.</p>
                 </div>
               )}
             </div>

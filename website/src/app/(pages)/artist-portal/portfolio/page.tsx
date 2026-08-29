@@ -536,12 +536,31 @@ export default function PortfolioPage() {
     persistedWorks.current = updated;
   }
 
-  // Legacy fire-and-forget wrapper, still used by the delete / bulk-edit callers
-  // (E41-b, E41-e migrate them next). handleSubmit no longer uses this — it awaits
-  // postWorks through useSaveAction so a failed add/edit can no longer report success.
-  function saveWorks(updated: ArtistWork[]) {
-    setWorks(updated);
-    void postWorks(updated).catch((err) => console.error("Work sync error:", err));
+  // D23 (finishes E41-e): the last fire-and-forget path is gone. This used to
+  // setWorks, fire postWorks and swallow the rejection into console.error,
+  // while every caller toasted success on the next line. A reorder, a bulk
+  // availability flip, a bulk add, a bulk price change or a copy-from that the
+  // server rejected all reported "done" and then reverted on the next reload.
+  //
+  // Now the grid updates optimistically, the POST is awaited, and a failure
+  // rolls the grid back and shows the server's real message. The success toast
+  // is the caller's own wording, returned through `run` so one control can
+  // serve all five.
+  const bulkWorksSave = useSaveAction<[ArtistWork[], string], string>({
+    optimistic: (updated) => {
+      const snapshot = works;
+      setWorks(updated);
+      return () => setWorks(snapshot);
+    },
+    run: async (updated, message) => {
+      await postWorks(updated);
+      return message;
+    },
+    successMessage: (message) => message,
+  });
+
+  function saveWorks(updated: ArtistWork[], message: string) {
+    void bulkWorksSave.save(updated, message);
   }
 
   function handleDeleteWork(index: number) {
@@ -564,7 +583,7 @@ export default function PortfolioPage() {
     const next = works.slice();
     const [moved] = next.splice(fromIndex, 1);
     next.splice(toIndex, 0, moved);
-    saveWorks(next);
+    saveWorks(next, "Order updated");
   }
 
   // ── Bulk edit actions ──────────────────────────────────────────────
@@ -599,8 +618,8 @@ export default function PortfolioPage() {
     const next = works.map((w) =>
       selectedIds.has(w.id) ? { ...w, available } : w,
     );
-    saveWorks(next);
-    showToast(
+    saveWorks(
+      next,
       `Marked ${selectedIds.size} work${selectedIds.size === 1 ? "" : "s"} as ${available ? "available" : "sold"}`,
     );
   }
@@ -1042,8 +1061,8 @@ export default function PortfolioPage() {
 
     // Append to the existing works array; saveWorks handles the API
     // sync and the UI update.
-    saveWorks([...works, ...newWorks]);
-    showToast(
+    saveWorks(
+      [...works, ...newWorks],
       `Added ${newWorks.length} work${newWorks.length === 1 ? "" : "s"}`,
     );
     setBulkAddSaving(false);
@@ -1163,8 +1182,8 @@ export default function PortfolioPage() {
         priceBand: `From £${lowest}`,
       };
     });
-    saveWorks(next);
-    showToast(
+    saveWorks(
+      next,
       `Updated prices for ${byWork.size} work${byWork.size === 1 ? "" : "s"}`,
     );
     setBulkPricesOpen(false);
@@ -1390,8 +1409,8 @@ export default function PortfolioPage() {
       }
       return result;
     });
-    saveWorks(next);
-    showToast(
+    saveWorks(
+      next,
       `Applied ${kind} from "${source.title}" to ${bulkEditTargetIds.size} work${
         bulkEditTargetIds.size === 1 ? "" : "s"
       }`,
