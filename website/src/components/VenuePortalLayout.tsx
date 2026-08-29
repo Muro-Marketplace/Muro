@@ -5,24 +5,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { mutate } from "@/lib/api-client";
+import { venuePortalNav } from "@/lib/portal-nav";
 
-// Nav order: Dashboard → Profile → Messages → Placements → rest (plan #8).
-const navItems = [
-  { label: "Dashboard", href: "/venue-portal" },
-  { label: "Venue Profile", href: "/venue-portal/profile" },
-  { label: "Messages", href: "/venue-portal/messages" },
-  { label: "Placements", href: "/venue-portal/placements" },
-  { label: "My Offers", href: "/venue-portal/offers" },
-  { label: "My Walls", href: "/venue-portal/walls" },
-  { label: "Saved", href: "/venue-portal/saved" },
-  { label: "QR Labels", href: "/venue-portal/labels" },
-  { label: "Analytics", href: "/venue-portal/analytics" },
-  { label: "My Orders", href: "/venue-portal/orders" },
-];
-
-const bottomItems = [
-  { label: "Settings", href: "/venue-portal/settings" },
-];
+// H6: nav lists moved to src/lib/portal-nav.ts so the header's portal dropdown
+// and this sidebar cannot drift apart again (the dropdown had lost My Offers).
+const { primary: navItems, secondary: bottomItems } = venuePortalNav();
 
 /**
  * Per-route document title. Every portal page previously inherited the

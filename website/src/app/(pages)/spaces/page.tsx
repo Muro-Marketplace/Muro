@@ -210,6 +210,15 @@ function SpacesPageContent() {
   // button from un-subscribed artists and was reported as a broken
   // CTA.) Customers and venues never see it.
   const canRequestPlacement = userType === "artist";
+  // A15: canMessageVenues admits customers, but the destination ternary below
+  // it was artist-or-venue only, so a customer pressing Message was pushed
+  // into /venue-portal/messages, which their own portal guard turns them away
+  // from. There is nowhere honest to send them instead: the messages API
+  // rejects any account with no artist or venue profile, and
+  // /customer-portal/messages is an explainer rather than an inbox (F15/H8).
+  // So the control is artist-only. Customers keep the card link and "View full
+  // profile", which is how they reach a venue today.
+  const canOpenVenueThread = canMessageVenues && userType === "artist";
 
   async function handlePostcodeSearch() {
     if (!postcode.trim()) return;
@@ -649,16 +658,17 @@ function SpacesPageContent() {
                                   </svg>
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const portalBase = userType === "artist" ? "/artist-portal" : "/venue-portal";
-                                  router.push(`${portalBase}/messages?artist=${venue.slug}&artistName=${encodeURIComponent(venue.name)}`);
-                                }}
-                                className="text-xs font-medium text-muted hover:text-foreground transition-colors"
-                              >
-                                Message
-                              </button>
+                              {canOpenVenueThread && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    router.push(`/artist-portal/messages?artist=${encodeURIComponent(venue.slug)}&artistName=${encodeURIComponent(venue.name)}`);
+                                  }}
+                                  className="text-xs font-medium text-muted hover:text-foreground transition-colors"
+                                >
+                                  Message
+                                </button>
+                              )}
                             </div>
                             <Link href={`/venues/${venue.slug}`} className="text-xs text-muted hover:text-foreground transition-colors">
                               View full profile
