@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { geocodePostcode } from "@/lib/geocode";
+import { matchesVenueType } from "@/lib/venue-type-match";
 import { useAuth } from "@/context/AuthContext";
 import {
   persistLocation,
@@ -237,7 +238,10 @@ function SpacesPageContent() {
 
   const filtered = useMemo(() => {
     let list = venues;
-    if (filterType !== "All") list = list.filter((v) => v.type === filterType);
+    // Bug 3: was `v.type === filterType`, an exact match against free text a
+    // venue writes itself, so "Café / Coffee Shop" was unreachable from the
+    // "Café" chip and 7 of 29 venues could not be filtered to at all.
+    if (filterType !== "All") list = list.filter((v) => matchesVenueType(v.type, filterType));
     if (filterArrangement === "display") list = list.filter((v) => v.interestedInFreeLoan || v.interestedInRevenueShare);
     if (filterArrangement === "revenue") list = list.filter((v) => v.interestedInRevenueShare);
     if (filterArrangement === "purchase") list = list.filter((v) => v.interestedInDirectPurchase);
@@ -254,7 +258,14 @@ function SpacesPageContent() {
         .map((v) => ({ ...v, distance: calcDistance(userCoords.lat, userCoords.lng, v.coordinates!.lat, v.coordinates!.lng) }))
         .filter((v) => v.distance <= maxDistance)
         .sort((a, b) => a.distance - b.distance);
-      const unlocated = list.filter((v) => !v.coordinates);
+      // QA 2026-08-30 bug 30: keeping these is right (see above), but they were
+      // mixed in silently, so a "within 10 miles" search listed a venue 330
+      // miles away with nothing to say why. They are flagged here and labelled
+      // on the card, so the list stops implying they passed a distance check
+      // that never ran on them.
+      const unlocated = list
+        .filter((v) => !v.coordinates)
+        .map((v) => ({ ...v, distanceUnknown: true as const }));
       list = [...located, ...unlocated];
     }
 
@@ -500,6 +511,14 @@ function SpacesPageContent() {
                       </div>
                       {"distance" in venue && (
                         <span className="text-xs text-accent font-medium shrink-0">{(venue as DemandVenue & { distance: number }).distance.toFixed(1)} mi</span>
+                      )}
+                      {"distanceUnknown" in venue && (
+                        <span
+                          className="text-[11px] text-muted shrink-0"
+                          title="This venue has not told us exactly where it is, so it is not filtered by distance."
+                        >
+                          Distance unknown
+                        </span>
                       )}
                     </div>
 
