@@ -131,7 +131,10 @@ export async function POST(request: Request) {
     const { senderName, senderEmail, artistSlug, workTitle, enquiryType, message } = parsed.data;
 
     const { error } = await supabase.from("enquiries").insert({
-      sender_name: senderName,
+      // NOT the sender's display name: messages.sender_name is an identity
+      // column matched against slugs elsewhere, so a human name would be the
+      // wrong shape. The real name is carried in the message body below.
+      sender_name: senderEmail.split("@")[0],
       sender_email: senderEmail,
       artist_slug: artistSlug,
       work_title: workTitle || null,
@@ -146,14 +149,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
     }
 
+    // Owner-reported 2026-08-30: the alert read "New enquiry for fin-coles".
+    // The slug is the lookup key, not a person's name, and it should never be
+    // what a human reads. Resolve the artist's real name, de-slugging only as
+    // a fallback for a profile with no name set.
+    const { data: enquiryArtist } = await supabase
+      .from("artist_profiles")
+      .select("name")
+      .eq("slug", artistSlug)
+      .maybeSingle<{ name: string | null }>();
+    const artistDisplayName =
+      enquiryArtist?.name?.trim() ||
+      artistSlug
+        .split("-")
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ") ||
+      "an artist";
+
     // K1: was notifyAdminNewEnquiry in the legacy module.
     await sendAdminAlert({
       idempotencyKey: `admin_new_enquiry:${senderEmail.toLowerCase()}:${artistSlug}:${message.slice(0, 64)}`,
-      subject: `New enquiry for ${artistSlug}`,
+      subject: `New enquiry for ${artistDisplayName}`,
       summary: `${senderName} sent an enquiry through the public artist page.`,
       fields: [
         { label: "From", value: `${senderName} <${senderEmail}>` },
-        { label: "Artist", value: artistSlug },
+        { label: "Artist", value: `${artistDisplayName} (${artistSlug})` },
         { label: "Type", value: enquiryType },
         { label: "Message", value: message },
       ],
@@ -165,7 +186,7 @@ export async function POST(request: Request) {
     const { data: insertedMessage } = await db.from("messages").insert({
       conversation_id: cid,
       sender_id: null,
-      sender_name: senderEmail.split("@")[0],
+      sender_name: senderName,
       sender_type: "anonymous",
       recipient_slug: artistSlug,
       content: `${workTitle ? `Re: ${workTitle}\n\n` : ""}${message}\n\nFrom ${senderName} (${senderEmail})`,

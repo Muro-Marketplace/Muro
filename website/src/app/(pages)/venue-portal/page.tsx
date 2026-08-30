@@ -7,6 +7,7 @@ import PlacementActionItems from "@/components/PlacementActionItems";
 import { useAuth } from "@/context/AuthContext";
 import { useSaved } from "@/context/SavedContext";
 import { authFetch } from "@/lib/api-client";
+import { venueRevenueEarned } from "@/lib/finance/venue-earnings";
 import { formatPounds } from "@/lib/format-currency";
 
 interface OnboardingItem {
@@ -128,9 +129,17 @@ export default function VenueDashboardPage() {
         0,
       );
       const placements = placementsData.placements || [];
-      const revenueEarned = placements.reduce(
-        (sum: number, p: { revenue?: number }) => sum + (p.revenue || 0), 0
-      );
+      // QA 2026-08-30 bug 24: this summed `placements.revenue`, a cached column
+      // the order pipeline only writes back when an order reaches `delivered`.
+      // QR sales never do, so it is NULL on every row and the venue's landing
+      // screen read "Revenue Share Earned £0.00" while its own Orders page,
+      // one click away, read £10.00 from the orders themselves.
+      //
+      // Reading the orders directly makes the two screens agree by
+      // construction, and matches the repo rule that a mirrored column must be
+      // written by a trigger or a cron, never trusted when it is neither.
+      const revenueEarned = venueRevenueEarned(orders, venueEmail);
+
       const qrScans = (analyticsData?.totals?.qr_scans as number | undefined) ?? 0;
 
       setStats([
