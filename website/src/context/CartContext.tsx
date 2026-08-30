@@ -42,7 +42,9 @@ function readCart(key: string): CartItem[] {
   }
 }
 
-// Union two carts, deduping by artistSlug+title+size and summing quantities.
+// Union two carts, deduping by artistSlug+title+size+price and summing
+// quantities. Price is part of the identity for the same reason as in addItem:
+// a line that costs a different amount is a different product (bug 8).
 // When a line carries a numeric quantityAvailable, the merged quantity is
 // clamped to it so a merge can't push past live stock. Used only for the
 // guest -> login transition (preserves guest-checkout-then-signup).
@@ -53,7 +55,8 @@ function mergeCarts(base: CartItem[], incoming: CartItem[]): CartItem[] {
       (r) =>
         r.artistSlug === i.artistSlug &&
         r.title === i.title &&
-        normaliseSize(r.size) === normaliseSize(i.size),
+        normaliseSize(r.size) === normaliseSize(i.size) &&
+        r.price === i.price,
     );
   for (const inc of incoming) {
     const at = indexOf(inc);
@@ -161,8 +164,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     let result: { ok: true } | { ok: false; reason: "exceeds-stock"; available: number } = { ok: true };
 
     setItems((prev) => {
+      // Two lines are the same product only if the PRICE matches too.
+      //
+      // QA 2026-08-30 bug 8: a work whose pricing tiers carry `size` instead of
+      // `label` yields an undefined size on every tier, so all three tiers
+      // collapsed to one key. Selecting the A3 (£180) then the 60x90cm (£580)
+      // produced one line of quantity 2 at £180: the buyer was charged £400
+      // less than the page quoted one click earlier, and would have been sent
+      // two copies of the wrong size. The label is fixed separately, but the
+      // price belongs in the identity regardless. Nothing that costs a
+      // different amount is the same product, whatever its label says, so a
+      // label defect can never again silently reprice a cart.
       const existing = prev.find(
-        (i) => i.artistSlug === item.artistSlug && i.title === item.title && i.size === item.size
+        (i) =>
+          i.artistSlug === item.artistSlug &&
+          i.title === item.title &&
+          i.size === item.size &&
+          i.price === item.price
       );
       const alreadyInCart = existing?.quantity || 0;
       const totalRequested = alreadyInCart + want;
