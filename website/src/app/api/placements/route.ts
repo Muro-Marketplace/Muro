@@ -1208,16 +1208,27 @@ export async function PATCH(request: Request) {
 
     // Tier capacity (launch pricing, owner decision 2026-08-28): a placement
     // going live occupies one of the artist's concurrent-placement slots
-    // (Core 2, Premium 5, Pro unlimited). Enforced on the pending -> active
-    // transition regardless of which party clicks accept, because the wall
-    // time is the artist's either way. The count is computed live from
-    // placements; no cached counter column (AGENTS.md data invariant).
+    // (Core 2, Premium 5, Pro unlimited). Enforced on ANY transition into
+    // active, not just pending -> active: paused -> active (resuming a
+    // paused placement) is equally a legal transition per the state machine
+    // and equally occupies a wall slot. Task 3's own notes-for-final-review
+    // flagged this directly: "paused->active would bypass the cap gate but
+    // no code path resumes paused today" (it does now). Regardless of which
+    // party clicks accept/resume, because the wall time is the artist's
+    // either way. The count is computed live from placements; no cached
+    // counter column (AGENTS.md data invariant).
     //
     // Placed after the F39 authz block above (self-placement / requester /
     // not-authorised) rather than immediately after the pending-review gate,
     // so an unauthorised caller gets the correct 400/403 instead of a 402
     // that leaks the artist's capacity state.
-    if (status === "active" && existing.status === "pending" && existing.artist_user_id) {
+    //
+    // `existing.status === "active"` is excluded (rather than scoping to a
+    // specific prior status) so this is defence in depth against any future
+    // path that reaches here with status already active: the "Already
+    // accepted" no-op check above already returns first in the one case that
+    // matters today.
+    if (status === "active" && existing.status !== "active" && existing.artist_user_id) {
       const { data: capProfile } = await db
         .from("artist_profiles")
         .select("subscription_plan, subscription_status")
@@ -1345,6 +1356,47 @@ export async function PATCH(request: Request) {
       if (unsetStage === "installed") updates.installed_at = null;
       if (unsetStage === "live") updates.live_from = null;
       if (unsetStage === "collected") {
+        // Finding 1 (final whole-branch review): this undo drops the
+        // placement straight back to active by writing updates.status
+        // directly, a server-chosen write that bypasses both
+        // canPlacementTransition (completed has no outgoing transition,
+        // see the comment by the E20 gate) and the caller-supplied `status`
+        // capacity gate above, which never sees this field. It occupies a
+        // wall slot exactly like any other move into active, so it needs
+        // its own copy of the same check, run before the status write
+        // below so a capacity-blocked undo 402s rather than writing.
+        if (existing.status !== "active" && existing.artist_user_id) {
+          const { data: capProfile } = await db
+            .from("artist_profiles")
+            .select("subscription_plan, subscription_status")
+            .eq("user_id", existing.artist_user_id)
+            .maybeSingle();
+          const { count: activeCount } = await db
+            .from("placements")
+            .select("id", { count: "exact", head: true })
+            .eq("artist_user_id", existing.artist_user_id)
+            .eq("status", "active");
+          const decision = placementCapDecision({
+            profile: capProfile ?? null,
+            activeCount: activeCount ?? 0,
+          });
+          if (!decision.allowed) {
+            const isOwnCap = existing.artist_user_id === auth.user!.id;
+            return NextResponse.json(
+              isOwnCap
+                ? {
+                    error: "placement_limit_reached",
+                    message: `Your plan includes ${decision.cap} active placements at a time. Upgrade to take on more walls.`,
+                    upgrade_url: "/artist-portal/billing",
+                  }
+                : {
+                    error: "placement_limit_reached",
+                    message: "This artist is at their plan's active placement limit right now. They can free a slot or upgrade, then you can accept.",
+                  },
+              { status: 402 },
+            );
+          }
+        }
         updates.collected_at = null;
         // Undoing the final stage drops the placement back to active.
         updates.status = "active";

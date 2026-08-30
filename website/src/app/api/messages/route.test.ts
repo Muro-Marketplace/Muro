@@ -274,19 +274,44 @@ describe("POST /api/messages placement_response authz (E33)", () => {
    * `visible` is what assertPlacementParty's party-filtered read returns: pass
    * null to model "the caller is not a party", which is the exploit.
    */
-  function setupPlacementDb(visible: PlacementRow | null, updateReturns: { id: string }[] = [{ id: "pl-1" }]) {
+  function setupPlacementDb(
+    visible: PlacementRow | null,
+    updateReturns: { id: string }[] = [{ id: "pl-1" }],
+    capOpts: { profile?: Record<string, unknown> | null; activeCount?: number } = {},
+  ) {
     updates.length = 0;
+    // Finding 1 (final whole-branch review): defaults an artist safely under
+    // any real cap (core/active, count 0), so every existing test in this
+    // describe block, none of which is exercising the cap gate itself, sees
+    // the gate allow through exactly as before it existed. Cap-specific
+    // tests below override both via capOpts.
+    const {
+      profile = { slug: "alice", user_id: "u-art-a", name: "Alice", subscription_plan: "core", subscription_status: "active" },
+      activeCount = 0,
+    } = capOpts;
     fromMock.mockImplementation((table: string) => {
       if (table === "placements") {
         return {
-          // assertPlacementParty: .select().eq("id").or(...).maybeSingle()
-          select: () => ({
-            eq: () => ({
-              or: () => ({ maybeSingle: async () => ({ data: visible, error: null }) }),
-              maybeSingle: async () => ({ data: visible, error: null }),
-              single: async () => ({ data: visible, error: null }),
-            }),
-          }),
+          // assertPlacementParty's row fetch and the cap gate's head:true
+          // count query are two shapes off the same .select(); branch on
+          // selectOpts.head so both live side by side.
+          select: (_columns?: unknown, selectOpts?: { head?: boolean }) => {
+            if (selectOpts?.head) {
+              const chain = {
+                eq: () => chain,
+                then: (resolve: (v: unknown) => unknown) =>
+                  Promise.resolve({ data: null, count: activeCount, error: null }).then(resolve),
+              };
+              return chain;
+            }
+            return {
+              eq: () => ({
+                or: () => ({ maybeSingle: async () => ({ data: visible, error: null }) }),
+                maybeSingle: async () => ({ data: visible, error: null }),
+                single: async () => ({ data: visible, error: null }),
+              }),
+            };
+          },
           update: (payload: Record<string, unknown>) => {
             const filters: Record<string, string> = {};
             const chain = {
@@ -307,7 +332,10 @@ describe("POST /api/messages placement_response authz (E33)", () => {
           },
         };
       }
-      if (table === "artist_profiles" || table === "venue_profiles") {
+      if (table === "artist_profiles") {
+        return chainSelectMaybe(profile);
+      }
+      if (table === "venue_profiles") {
         return chainSelectMaybe({ slug: "alice", user_id: "u-art-a", name: "Alice" });
       }
       return {
@@ -418,6 +446,47 @@ describe("POST /api/messages placement_response authz (E33)", () => {
     setupPlacementDb(null);
     const res = await POST(responseReq("declined"));
     expect(res.status).not.toBe(400);
+  });
+
+  // ─── Finding 1 (final whole-branch review): this branch is a second,
+  // unguarded door into pending → active, the whole point of E33 above, and
+  // it inherited the same gap the placements PATCH cap gate had: no
+  // capacity check. Same decision helper, same 402 payload shape as
+  // PATCH /api/placements (placement-cap.ts).
+  // Full fixture (not just the cap-relevant columns): "artist_profiles" is
+  // also queried earlier in POST to resolve the sender's own slug (line
+  // ~307), before this branch is ever reached, and every query against the
+  // table in this mock shares the one fixture. Dropping slug/user_id/name
+  // here would 403 as "account not set up to send messages" before the cap
+  // gate gets a chance to run.
+  const CORE_ARTIST_PROFILE = {
+    slug: "alice", user_id: "u-art-a", name: "Alice",
+    subscription_plan: "core", subscription_status: "active",
+  };
+
+  it("blocks a placement_response accept with 402 when the artist is at their Core cap", async () => {
+    setupPlacementDb(
+      { ...PENDING, proposed_by_user_id: "u-venue-b" },
+      [{ id: "pl-1" }],
+      { profile: CORE_ARTIST_PROFILE, activeCount: 2 },
+    );
+    const res = await POST(responseReq("active"));
+    expect(res.status).toBe(402);
+    const body = await res.json();
+    expect(body.error).toBe("placement_limit_reached");
+    expect(updates, "a capacity-blocked accept must not write").toEqual([]);
+  });
+
+  it("allows a placement_response accept when the artist is under their Core cap", async () => {
+    setupPlacementDb(
+      { ...PENDING, proposed_by_user_id: "u-venue-b" },
+      [{ id: "pl-1" }],
+      { profile: CORE_ARTIST_PROFILE, activeCount: 1 },
+    );
+    const res = await POST(responseReq("active"));
+    expect(res.status).toBeLessThan(400);
+    expect(updates).toHaveLength(1);
+    expect(updates[0].payload).toMatchObject({ status: "active" });
   });
 });
 

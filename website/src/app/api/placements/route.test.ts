@@ -85,13 +85,28 @@ function setupDb(row: Row | null, trail: TrailMsg[] = []) {
   fromMock.mockImplementation((table: string) => {
     if (table === "placements") {
       return {
-        select: () => ({
-          eq: () => ({
-            single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
-            maybeSingle: async () => ({ data: row, error: null }),
-            order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
-          }),
-        }),
+        // The second shape (selectOpts.head) is the Finding 1 collected-undo
+        // capacity gate's head:true count query. Fixed at count: 0, so every
+        // test using this generic setupDb (none of which are exercising the
+        // cap gate itself, that's setupCapDb below) sees an artist safely
+        // under any real cap rather than a broken query chain.
+        select: (_columns?: unknown, selectOpts?: { head?: boolean }) => {
+          if (selectOpts?.head) {
+            const chain = {
+              eq: () => chain,
+              then: (resolve: (v: unknown) => unknown) =>
+                Promise.resolve({ data: null, count: 0, error: null }).then(resolve),
+            };
+            return chain;
+          }
+          return {
+            eq: () => ({
+              single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
+              maybeSingle: async () => ({ data: row, error: null }),
+              order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+            }),
+          };
+        },
         update: (payload: Record<string, unknown>) => {
           updates.push(payload);
           return { eq: async () => ({ error: null }) };
@@ -408,13 +423,27 @@ describe("PATCH /api/placements surfaces write failures (row 22)", () => {
     fromMock.mockImplementation((table: string) => {
       if (table === "placements") {
         return {
-          select: () => ({
-            eq: () => ({
-              single: async () => ({ data: row, error: null }),
-              maybeSingle: async () => ({ data: row, error: null }),
-              order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
-            }),
-          }),
+          // Same head:true count-query shape as setupDb above, needed now
+          // the collected-undo capacity gate runs before this update and
+          // would otherwise throw on the second .eq() rather than reach the
+          // write failure this test is actually pinning.
+          select: (_columns?: unknown, selectOpts?: { head?: boolean }) => {
+            if (selectOpts?.head) {
+              const chain = {
+                eq: () => chain,
+                then: (resolve: (v: unknown) => unknown) =>
+                  Promise.resolve({ data: null, count: 0, error: null }).then(resolve),
+              };
+              return chain;
+            }
+            return {
+              eq: () => ({
+                single: async () => ({ data: row, error: null }),
+                maybeSingle: async () => ({ data: row, error: null }),
+                order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+              }),
+            };
+          },
           update: (payload: Record<string, unknown>) => {
             updates.push(payload);
             // Deliberately NOT a "column does not exist" message: this is the
@@ -667,5 +696,70 @@ describe("PATCH /api/placements concurrent placement cap (Task 3)", () => {
     const body = await res.json();
     expect(body.error).toMatch(/yourself/i);
     expect(updates).toEqual([]);
+  });
+
+  // ─── Finding 1 (final whole-branch review): the gate above only fired on
+  // pending → active. Task 3's own notes-for-final-review flagged the first
+  // gap directly: "paused->active would bypass the cap gate but no code path
+  // resumes paused today" — a resume is now live. The unsetStage:"collected"
+  // undo is the second door: it sets updates.status = "active" directly
+  // (completed → active is server-chosen, bypassing canPlacementTransition,
+  // see the comment by the E20 gate), so the caller-supplied `status` gate
+  // above never sees it either. Both must clear the same capacity check,
+  // same decision helper, same 402 payloads, same setupCapDb harness.
+  describe("extended to paused → active and the collected-stage undo (Finding 1)", () => {
+    const PAUSED_ARTIST_ACCEPTS: Row = { ...PENDING_ARTIST_ACCEPTS, status: "paused" };
+    const COMPLETED_ARTIST_UNDO: Row = { ...PENDING_ARTIST_ACCEPTS, status: "completed" };
+
+    it("blocks resuming a paused placement with 402 when the artist is at their Core cap", async () => {
+      setupCapDb(PAUSED_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 2 });
+      const res = await patch({ id: "pl-1", status: "active" });
+      expect(res.status).toBe(402);
+      const body = await res.json();
+      expect(body.error).toBe("placement_limit_reached");
+      expect(body.message).toMatch(/2 active placements/);
+      expect(body.upgrade_url).toBe("/artist-portal/billing");
+      expect(updates, "a capacity-blocked resume must not write").toEqual([]);
+    });
+
+    it("allows resuming a paused placement when the artist is under their Core cap", async () => {
+      setupCapDb(PAUSED_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 1 });
+      const res = await patch({ id: "pl-1", status: "active" });
+      expect(res.status).toBeLessThan(400);
+      expect(updates.length).toBeGreaterThan(0);
+      expect(updates[0]).toMatchObject({ status: "active" });
+      expect(headQueryCalls).toHaveLength(1);
+      expect(headQueryCalls[0].opts).toMatchObject({ count: "exact", head: true });
+    });
+
+    it("never blocks a Pro artist resuming from paused, however high the active count", async () => {
+      setupCapDb(PAUSED_ARTIST_ACCEPTS, { profile: PRO_PROFILE, activeCount: 40 });
+      const res = await patch({ id: "pl-1", status: "active" });
+      expect(res.status).toBeLessThan(400);
+      expect(updates[0]).toMatchObject({ status: "active" });
+    });
+
+    it("blocks the collected-stage undo (completed -> active) with 402 when the artist is at cap", async () => {
+      setupCapDb(COMPLETED_ARTIST_UNDO, { profile: CORE_PROFILE, activeCount: 2 });
+      const res = await patch({ id: "pl-1", unsetStage: "collected" });
+      expect(res.status).toBe(402);
+      const body = await res.json();
+      expect(body.error).toBe("placement_limit_reached");
+      expect(updates, "a capacity-blocked undo must not write").toEqual([]);
+    });
+
+    it("still allows the collected-stage undo when the artist is under cap, stamping the same fields as before", async () => {
+      setupCapDb(COMPLETED_ARTIST_UNDO, { profile: CORE_PROFILE, activeCount: 0 });
+      const res = await patch({ id: "pl-1", unsetStage: "collected" });
+      expect(res.status).toBeLessThan(400);
+      expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
+    });
+
+    it("never blocks a Pro artist's collected-stage undo, however high the active count", async () => {
+      setupCapDb(COMPLETED_ARTIST_UNDO, { profile: PRO_PROFILE, activeCount: 40 });
+      const res = await patch({ id: "pl-1", unsetStage: "collected" });
+      expect(res.status).toBeLessThan(400);
+      expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
+    });
   });
 });

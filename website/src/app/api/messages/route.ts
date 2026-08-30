@@ -8,6 +8,7 @@ import { checkArtistOutreachCap } from "@/lib/outreach-cap";
 import { orFilter } from "@/lib/db/safe-filter";
 import { assertPlacementParty, handleAuthzError } from "@/lib/authz";
 import { canPlacementTransition } from "@/lib/placements/state-machine";
+import { placementCapDecision } from "@/app/api/placements/placement-cap";
 import { moderateMessage } from "@/lib/moderation";
 import { isFlagOn } from "@/lib/feature-flags";
 import { sendEmail } from "@/lib/email/send";
@@ -669,6 +670,45 @@ export async function POST(request: Request) {
         const transition = canPlacementTransition(placement.status, responseStatus);
         if (!transition.ok) {
           return NextResponse.json({ error: transition.reason }, { status: 422 });
+        }
+
+        // Finding 1 (final whole-branch review): this branch is a second,
+        // unguarded door into pending → active, the whole point of E33
+        // above, so it must clear the same concurrent-placement cap as
+        // PATCH /api/placements (placement-cap.ts). Same decision helper,
+        // same 402 payload shapes, keyed on the placement's artist
+        // regardless of which party is accepting here.
+        if (responseStatus === "active" && placement.artist_user_id) {
+          const { data: capProfile } = await db
+            .from("artist_profiles")
+            .select("subscription_plan, subscription_status")
+            .eq("user_id", placement.artist_user_id)
+            .maybeSingle();
+          const { count: activeCount } = await db
+            .from("placements")
+            .select("id", { count: "exact", head: true })
+            .eq("artist_user_id", placement.artist_user_id)
+            .eq("status", "active");
+          const decision = placementCapDecision({
+            profile: capProfile ?? null,
+            activeCount: activeCount ?? 0,
+          });
+          if (!decision.allowed) {
+            const isOwnCap = placement.artist_user_id === auth.user!.id;
+            return NextResponse.json(
+              isOwnCap
+                ? {
+                    error: "placement_limit_reached",
+                    message: `Your plan includes ${decision.cap} active placements at a time. Upgrade to take on more walls.`,
+                    upgrade_url: "/artist-portal/billing",
+                  }
+                : {
+                    error: "placement_limit_reached",
+                    message: "This artist is at their plan's active placement limit right now. They can free a slot or upgrade, then you can accept.",
+                  },
+              { status: 402 },
+            );
+          }
         }
 
         // Compare-and-set on pending, so two concurrent responses cannot both
