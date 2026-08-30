@@ -1,0 +1,99 @@
+- generic [active] [ref=f112e1]:
+  - generic [ref=f112e2]:
+    - link "Skip to content" [ref=f112e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f112e4]:
+      - generic [ref=f112e6]:
+        - link "Wallplace" [ref=f112e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f112e8]:
+          - link "Marketplace" [ref=f112e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f112e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f112e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f112e13] [cursor=pointer]
+        - generic [ref=f112e16]:
+          - link "Saved" [ref=f112e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f112e21] [cursor=pointer]
+          - button "Notifications" [ref=f112e26] [cursor=pointer]
+          - generic [ref=f112e30]:
+            - link "Venue Portal" [ref=f112e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f112e32] [cursor=pointer]
+          - button "Logout" [ref=f112e35] [cursor=pointer]
+    - main [ref=f112e36]:
+      - generic [ref=f112e37]:
+        - complementary [ref=f112e38]:
+          - navigation [ref=f112e39]:
+            - paragraph [ref=f112e41]: Venue Portal
+            - generic [ref=f112e42]:
+              - list [ref=f112e43]:
+                - listitem [ref=f112e44]:
+                  - link "Dashboard" [ref=f112e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f112e46]:
+                  - link "Venue Profile" [ref=f112e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f112e48]:
+                  - link "Messages" [ref=f112e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f112e50]:
+                  - link "Placements" [ref=f112e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f112e52]:
+                  - link "My Offers" [ref=f112e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f112e54]:
+                  - link "My Walls" [ref=f112e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f112e56]:
+                  - link "Saved" [ref=f112e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f112e58]:
+                  - link "QR Labels" [ref=f112e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f112e60]:
+                  - link "Analytics" [ref=f112e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f112e62]:
+                  - link "My Orders" [ref=f112e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f112e65]:
+                - listitem [ref=f112e66]:
+                  - link "Settings" [ref=f112e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f112e68]:
+                  - button "Logout" [ref=f112e69] [cursor=pointer]
+        - generic [ref=f112e71]:
+          - generic [ref=f112e72]:
+            - heading "Settings" [level=1] [ref=f112e73]
+            - paragraph [ref=f112e74]: Manage your account details and notification preferences.
+          - generic [ref=f112e75]:
+            - generic [ref=f112e76]:
+              - heading "Account Details" [level=2] [ref=f112e78]
+              - paragraph [ref=f112e81]: Loading account details…
+            - generic [ref=f112e82]:
+              - heading "Notification Preferences" [level=2] [ref=f112e84]
+              - generic [ref=f112e85]:
+                - generic [ref=f112e86]:
+                  - generic [ref=f112e91] [cursor=pointer]:
+                    - paragraph [ref=f112e92]: Message notifications
+                    - paragraph [ref=f112e93]: Email when you receive a new message
+                  - generic [ref=f112e98] [cursor=pointer]:
+                    - paragraph [ref=f112e99]: Wallplace news & digest
+                    - paragraph [ref=f112e100]: Platform announcements and feature launches
+                - paragraph [ref=f112e101]: Changes save automatically.
+            - generic [ref=f112e102]:
+              - heading "Payouts" [level=2] [ref=f112e104]
+              - paragraph [ref=f112e106]: Loading payout status...
+            - generic [ref=f112e107]:
+              - heading "Delete account" [level=2] [ref=f112e108]
+              - paragraph [ref=f112e109]: This permanently deletes your profile, messages, saved items, and any orders attached to your account. This cannot be undone.
+              - textbox "Type DELETE MY ACCOUNT to confirm account deletion" [ref=f112e110]:
+                - /placeholder: Type DELETE MY ACCOUNT to confirm
+              - button "Permanently delete my account" [disabled] [ref=f112e111] [cursor=pointer]
+    - button "Feedback and feature requests" [ref=f112e112] [cursor=pointer]: Feedback
+  - alert [ref=f112e115]

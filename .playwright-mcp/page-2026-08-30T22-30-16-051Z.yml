@@ -1,0 +1,92 @@
+- generic [active] [ref=f118e1]:
+  - generic [ref=f118e2]:
+    - link "Skip to content" [ref=f118e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f118e4]:
+      - generic [ref=f118e6]:
+        - link "Wallplace" [ref=f118e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f118e8]:
+          - link "Marketplace" [ref=f118e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f118e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f118e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f118e13] [cursor=pointer]
+        - generic [ref=f118e16]:
+          - link "Saved" [ref=f118e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f118e21] [cursor=pointer]
+          - button "Notifications" [ref=f118e26] [cursor=pointer]
+          - generic [ref=f118e30]:
+            - link "Venue Portal" [ref=f118e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f118e32] [cursor=pointer]
+          - button "Logout" [ref=f118e35] [cursor=pointer]
+    - main [ref=f118e36]:
+      - generic [ref=f118e37]:
+        - complementary [ref=f118e38]:
+          - navigation [ref=f118e39]:
+            - paragraph [ref=f118e41]: Venue Portal
+            - generic [ref=f118e42]:
+              - list [ref=f118e43]:
+                - listitem [ref=f118e44]:
+                  - link "Dashboard" [ref=f118e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f118e46]:
+                  - link "Venue Profile" [ref=f118e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f118e48]:
+                  - link "Messages" [ref=f118e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f118e50]:
+                  - link "Placements" [ref=f118e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f118e52]:
+                  - link "My Offers" [ref=f118e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f118e54]:
+                  - link "My Walls" [ref=f118e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f118e56]:
+                  - link "Saved" [ref=f118e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f118e58]:
+                  - link "QR Labels" [ref=f118e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f118e60]:
+                  - link "Analytics" [ref=f118e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f118e62]:
+                  - link "My Orders" [ref=f118e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f118e65]:
+                - listitem [ref=f118e66]:
+                  - link "Settings" [ref=f118e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f118e68]:
+                  - button "Logout" [ref=f118e69] [cursor=pointer]
+        - generic [ref=f118e71]:
+          - generic [ref=f118e72]:
+            - heading "Orders" [level=1] [ref=f118e73]
+            - paragraph [ref=f118e74]: Sales from your venue and your purchases
+          - generic [ref=f118e75]:
+            - generic [ref=f118e76]:
+              - paragraph [ref=f118e77]: Placement sales
+              - paragraph [ref=f118e78]: "0"
+            - generic [ref=f118e79]:
+              - paragraph [ref=f118e80]: Revenue earned
+              - paragraph [ref=f118e81]: £0.00
+            - generic [ref=f118e82]:
+              - paragraph [ref=f118e83]: Your purchases
+              - paragraph [ref=f118e84]: "0"
+            - generic [ref=f118e85]:
+              - paragraph [ref=f118e86]: Spent on art
+              - paragraph [ref=f118e87]: £0.00
+          - generic [ref=f118e88]:
+            - button "Placement sales (0)" [ref=f118e89] [cursor=pointer]
+            - button "My orders (0)" [ref=f118e90] [cursor=pointer]
+          - paragraph [ref=f118e91]: Loading orders...
+    - button "Feedback and feature requests" [ref=f118e92] [cursor=pointer]: Feedback
+  - alert [ref=f118e95]

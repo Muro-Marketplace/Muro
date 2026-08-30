@@ -1,0 +1,29 @@
+- generic [active] [ref=f121e1]:
+  - generic [ref=f121e2]:
+    - link "Skip to content" [ref=f121e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f121e4]:
+      - generic [ref=f121e6]:
+        - link "Wallplace" [ref=f121e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f121e8]:
+          - link "Marketplace" [ref=f121e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f121e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f121e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f121e13] [cursor=pointer]
+        - generic [ref=f121e16]:
+          - link "Saved" [ref=f121e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f121e21] [cursor=pointer]
+          - button "Notifications" [ref=f121e26] [cursor=pointer]
+          - generic [ref=f121e30]:
+            - link "Venue Portal" [ref=f121e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f121e32] [cursor=pointer]
+          - button "Logout" [ref=f121e35] [cursor=pointer]
+    - main [ref=f121e36]
+    - button "Feedback and feature requests" [ref=f121e37] [cursor=pointer]: Feedback
+  - alert [ref=f121e40]

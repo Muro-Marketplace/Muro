@@ -1,0 +1,21 @@
+- generic [active] [ref=f113e1]:
+  - generic [ref=f113e2]:
+    - link "Skip to content" [ref=f113e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f113e4]:
+      - generic [ref=f113e6]:
+        - link "Wallplace" [ref=f113e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f113e8]:
+          - link "Marketplace" [ref=f113e9] [cursor=pointer]:
+            - /url: /browse
+          - link "How It Works" [ref=f113e10] [cursor=pointer]:
+            - /url: /how-it-works
+          - link "Blog" [ref=f113e11] [cursor=pointer]:
+            - /url: /blog
+          - link "Spaces" [ref=f113e12] [cursor=pointer]:
+            - /url: /spaces
+    - main [ref=f113e13]:
+      - paragraph [ref=f113e15]: Loading...
+    - button "Feedback and feature requests" [ref=f113e16] [cursor=pointer]: Feedback
+  - alert [ref=f113e19]
