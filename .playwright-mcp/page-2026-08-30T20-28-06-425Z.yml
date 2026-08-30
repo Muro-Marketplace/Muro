@@ -1,0 +1,243 @@
+- generic [ref=f13e1]:
+  - generic [ref=f13e2]:
+    - link "Skip to content" [ref=f13e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f13e4]:
+      - generic [ref=f13e6]:
+        - link "Wallplace" [ref=f13e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f13e8]:
+          - link "Marketplace" [ref=f13e9] [cursor=pointer]:
+            - /url: /browse
+          - link "How It Works" [ref=f13e10] [cursor=pointer]:
+            - /url: /how-it-works
+          - link "Blog" [ref=f13e11] [cursor=pointer]:
+            - /url: /blog
+          - link "Spaces" [ref=f13e12] [cursor=pointer]:
+            - /url: /spaces
+        - generic [ref=f13e221]:
+          - link "Login" [ref=f13e222] [cursor=pointer]:
+            - /url: /login
+          - link "Sign Up" [ref=f13e223] [cursor=pointer]:
+            - /url: /signup
+    - main [ref=f13e13]:
+      - generic [ref=f13e14]:
+        - generic [ref=f13e17]:
+          - paragraph [ref=f13e18]: For Venues
+          - heading "Register Your Venue" [level=1] [ref=f13e19]
+          - paragraph [ref=f13e20]: Tell us about your space and we’ll match you with artists whose work fits your environment. Completely free, no contracts, no commitments.
+          - paragraph [ref=f13e21]:
+            - text: Want us to do the curation for you?
+            - link "Wallplace Curated" [ref=f13e22] [cursor=pointer]:
+              - /url: /curated
+            - text: ", paid shortlists from £49."
+        - generic [ref=f13e25]:
+          - generic [ref=f13e26]:
+            - heading "What happens next" [level=2] [ref=f13e27]
+            - generic [ref=f13e28]:
+              - generic [ref=f13e29]:
+                - generic [ref=f13e30]: "01"
+                - generic [ref=f13e31]:
+                  - paragraph [ref=f13e32]: Create your account
+                  - paragraph [ref=f13e33]: Register and start browsing immediately. No waiting.
+              - generic [ref=f13e34]:
+                - generic [ref=f13e35]: "02"
+                - generic [ref=f13e36]:
+                  - paragraph [ref=f13e37]: Browse & connect
+                  - paragraph [ref=f13e38]: Explore artist portfolios and enquire about work you love.
+              - generic [ref=f13e39]:
+                - generic [ref=f13e40]: "03"
+                - generic [ref=f13e41]:
+                  - paragraph [ref=f13e42]: Agree & display
+                  - paragraph [ref=f13e43]: Arrange terms directly with the artist and start displaying.
+            - generic [ref=f13e44]:
+              - paragraph [ref=f13e45]: It’s free
+              - paragraph [ref=f13e46]: No cost to display artwork. No contracts. 30 days’ notice to end at any time.
+          - generic [ref=f13e47]:
+            - generic [ref=f13e48]:
+              - heading "Your Venue" [level=3] [ref=f13e49]
+              - generic [ref=f13e50]:
+                - generic [ref=f13e51]:
+                  - generic [ref=f13e52]: Venue Name *
+                  - textbox "e.g. The Copper Kettle" [ref=f13e53]
+                - generic [ref=f13e54]:
+                  - generic [ref=f13e55]: Venue Type *
+                  - combobox "Venue type" [active] [ref=f13e57] [cursor=pointer]:
+                    - generic [ref=f13e58]: Other
+                  - textbox "Please describe your venue type" [ref=f13e249]
+            - generic [ref=f13e61]:
+              - heading "Contact Details" [level=3] [ref=f13e62]
+              - generic [ref=f13e63]:
+                - generic [ref=f13e64]:
+                  - generic [ref=f13e65]: Your Name *
+                  - textbox "Full name" [ref=f13e66]
+                - generic [ref=f13e67]:
+                  - generic [ref=f13e68]: Email *
+                  - textbox "you@venue.com" [ref=f13e69]
+                - generic [ref=f13e70]:
+                  - generic [ref=f13e71]: Phone
+                  - textbox "Optional" [ref=f13e72]
+                - generic [ref=f13e73]:
+                  - generic [ref=f13e74]: Password *
+                  - textbox "At least 8 characters" [ref=f13e75]
+                - generic [ref=f13e76]:
+                  - generic [ref=f13e77]: Confirm Password *
+                  - textbox "Confirm your password" [ref=f13e78]
+            - generic [ref=f13e79]:
+              - heading "Venue Address" [level=3] [ref=f13e80]
+              - generic [ref=f13e81]:
+                - textbox "Address line 1 *" [ref=f13e82]
+                - textbox "Address line 2" [ref=f13e83]
+                - generic [ref=f13e84]:
+                  - textbox "City *" [ref=f13e85]
+                  - textbox "Postcode *" [ref=f13e86]
+            - generic [ref=f13e87]:
+              - heading "Your Space" [level=3] [ref=f13e88]
+              - generic [ref=f13e89]:
+                - generic [ref=f13e90]:
+                  - generic [ref=f13e91]: Approximate wall space *
+                  - combobox "Approximate wall space" [ref=f13e93] [cursor=pointer]:
+                    - generic [ref=f13e94]: Select
+                - generic [ref=f13e97]:
+                  - paragraph [ref=f13e98]: What kind of art interests you?
+                  - generic [ref=f13e99]:
+                    - button "Photography" [ref=f13e100] [cursor=pointer]
+                    - button "Paintings" [ref=f13e101] [cursor=pointer]
+                    - button "Prints & Illustrations" [ref=f13e102] [cursor=pointer]
+                    - button "Mixed Media" [ref=f13e103] [cursor=pointer]
+                    - button "Abstract & Contemporary" [ref=f13e104] [cursor=pointer]
+                    - button "Landscapes & Nature" [ref=f13e105] [cursor=pointer]
+                    - button "Black & White" [ref=f13e106] [cursor=pointer]
+                    - button "Bold & Colourful" [ref=f13e107] [cursor=pointer]
+                - generic [ref=f13e108]:
+                  - generic [ref=f13e109]: Anything else you’d like us to know?
+                  - textbox "Tell us about your space, your style, or what you're looking for..." [ref=f13e110]
+            - generic [ref=f13e111]:
+              - generic [ref=f13e112]: How did you hear about Wallplace?
+              - combobox "How did you hear about Wallplace" [ref=f13e114] [cursor=pointer]:
+                - generic [ref=f13e115]: Select
+            - generic [ref=f13e118]:
+              - generic [ref=f13e119] [cursor=pointer]:
+                - checkbox "I agree to the Terms of Service and Privacy Policy" [ref=f13e120]
+                - generic [ref=f13e121]:
+                  - text: I agree to the
+                  - link "Terms of Service" [ref=f13e122]:
+                    - /url: /terms
+                  - text: and
+                  - link "Privacy Policy" [ref=f13e123]:
+                    - /url: /privacy
+              - generic [ref=f13e124] [cursor=pointer]:
+                - checkbox "I agree to the Venue Partnership Agreement" [ref=f13e125]
+                - generic [ref=f13e126]:
+                  - text: I agree to the
+                  - link "Venue Partnership Agreement" [ref=f13e127]:
+                    - /url: /venue-agreement
+              - generic [ref=f13e128] [cursor=pointer]:
+                - checkbox "I confirm that my venue holds appropriate public liability insurance and I understand that the venue is liable for damage to artwork caused by negligence." [ref=f13e129]
+                - generic [ref=f13e130]: I confirm that my venue holds appropriate public liability insurance and I understand that the venue is liable for damage to artwork caused by negligence.
+            - button "Register Your Venue" [disabled] [ref=f13e133] [cursor=pointer]
+    - contentinfo "Site footer" [ref=f13e134]:
+      - generic [ref=f13e135]:
+        - generic [ref=f13e136]:
+          - generic [ref=f13e137]:
+            - link "Wallplace" [ref=f13e138] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f13e139]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f13e140]:
+              - paragraph [ref=f13e141]: Be first to see new works
+              - paragraph [ref=f13e142]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f13e144]:
+                - textbox "your@email.com" [ref=f13e145]
+                - button "Subscribe" [ref=f13e146] [cursor=pointer]
+            - link "Instagram" [ref=f13e147] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f13e152]:
+            - heading "For Artists" [level=4] [ref=f13e153]
+            - list [ref=f13e154]:
+              - listitem [ref=f13e155]:
+                - link "Apply to Join" [ref=f13e156] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f13e157]:
+                - link "Pricing" [ref=f13e158] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f13e159]:
+                - link "Browse Venues" [ref=f13e160] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f13e161]:
+                - link "FAQs" [ref=f13e162] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f13e163]:
+            - heading "For Venues" [level=4] [ref=f13e164]
+            - list [ref=f13e165]:
+              - listitem [ref=f13e166]:
+                - link "Discover Art" [ref=f13e167] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f13e168]:
+                - link "Register Your Venue" [ref=f13e169] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f13e170]:
+                - link "Wallplace Curated" [ref=f13e171] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f13e172]:
+                - link "How It Works" [ref=f13e173] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f13e174]:
+                - link "FAQs" [ref=f13e175] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f13e176]:
+            - heading "Company" [level=4] [ref=f13e177]
+            - list [ref=f13e178]:
+              - listitem [ref=f13e179]:
+                - link "About" [ref=f13e180] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f13e181]:
+                - link "Blog" [ref=f13e182] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f13e183]:
+                - link "How It Works" [ref=f13e184] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f13e185]:
+                - link "Sustainability" [ref=f13e186] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f13e187]:
+                - link "Partner with us" [ref=f13e188] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f13e189]:
+                - link "Contact" [ref=f13e190] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f13e191]:
+                - link "Complaints" [ref=f13e192] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f13e193]:
+                - link "Terms" [ref=f13e194] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f13e195]:
+                - link "Artist Agreement" [ref=f13e196] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f13e197]:
+                - link "Venue Agreement" [ref=f13e198] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f13e199]:
+                - link "Privacy" [ref=f13e200] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f13e201]:
+                - link "Cookies" [ref=f13e202] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f13e203]:
+                - link "Returns & Refunds" [ref=f13e204] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f13e205]:
+                - link "IP Policy" [ref=f13e206] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f13e208]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f13e209] [cursor=pointer]: Feedback
+  - generic [ref=f13e214]:
+    - paragraph [ref=f13e215]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f13e216] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f13e217]:
+      - button "Decline" [ref=f13e218] [cursor=pointer]
+      - button "Accept" [ref=f13e219] [cursor=pointer]
+  - alert [ref=f13e220]

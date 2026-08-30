@@ -45,532 +45,532 @@ Scope: public marketing pages, legal pages, blog, waitlist, demo, feature reques
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Wallplace logo links to / from every page; colour flips white on portal pages and transparent immersive heroes | Yes | |
-| Immersive transparent header on /, /venues, /artists, /about that fades to solid white after 80px scroll | Yes, and /how-it-works is deliberately excluded because its hero is light | |
-| Logged-out desktop nav: Marketplace (/browse), How It Works, Blog, Spaces | Yes | |
-| Logged-in desktop nav (artist/customer): Marketplace, Spaces; venue variant swaps Spaces for Wallplace Curated and Blog | Yes, venue variant matches the /spaces lockout for venues | |
-| Inside /browse or /spaces the nav is replaced by marketplace tabs (Galleries, Portfolios, Collections, Spaces); logged-out visitors also get How It Works and Blog tabs; venue users get Curated and Blog instead of Spaces | Yes, tab active-state logic matches what /browse renders for each ?view= value | |
-| Mobile menu marketplace tabs use only the default or venue tab set, never the public variant, so logged-out mobile users inside the marketplace lose the How It Works and Blog links that desktop shows | FLAG: mobile picks `(userType === "venue" ? venueMarketplaceTabs : marketplaceTabs)` and ignores the public variant, an inconsistency with the desktop logged-out experience | |
-| More dropdown (logged in only): Curated, How It Works, Blog, About, Contact, FAQs, Pricing, filtered to avoid duplicating the user's primary nav | Yes | |
-| Saved heart icon links to `<portal>/saved` for the signed-in role | Yes | |
-| Messages envelope icon with unread badge, polled every 60s from /api/messages/unread; badge caps at 9+ | Yes | |
-| Messages dropdown lists up to 6 conversations fetched from /api/messages?slug=, requiring the user's artist or venue profile slug (tries /api/artist-profile then /api/venue-profile) | FLAG: customers have neither profile, so resolvedSlug stays empty and the dropdown always shows "No messages yet" for customer accounts even when the unread badge shows a count; the customer portal messages page uses a different lookup | |
-| Messages dropdown "Mark all read" optimistically zeroes badge and per-row dots then PATCHes /api/messages {all:true}, best effort | Yes, next poll reconciles | |
-| Messages dropdown row click routes to `<portal>/messages?artist=<slug>&artistName=` | Yes | |
-| "View All" and "Open Full Inbox" links to the portal messages page | Yes | |
-| Notifications bell with unread badge from /api/notifications; dropdown lists up to 12 rows with per-type icons | Yes | |
-| Notifications "Mark all read" optimistic then PATCH /api/notifications {all:true} | Yes | |
-| Notification row click marks the row read (skips ids starting msg-) and navigates to row link or a type-derived fallback (messages, orders, placements, portal home) | Yes, the fallback avoids dead clicks on legacy rows | |
-| Portal label link (Artist Portal / Venue Portal / My Account) to the portal home, plus a chevron dropdown mirroring the full portal sidebar per role | Yes | |
-| "Switch to X portal" entries (from /api/account/roles when the same email has other roles) sign the user out and push /login?email=...&hint=role | FLAG: the login page reads ?email= but nothing ever reads ?hint=, so the target role is dropped; the user must know to enter the other account's password, and nothing on /login explains which account they are switching into | |
-| Logout button calls signOut() | Yes | |
-| Logged-out CTAs: Login link and Sign Up button | Yes | |
-| CartIndicator rendered for all users including logged out | Yes, guest carts are a normal marketplace pattern | |
-| Mobile hamburger opens overlay menu with nav links, portal link, More links, Messages (with badge) and Notifications links, Logout or Login/Sign Up | Yes | |
-| Dropdowns close on outside click and on route change | Yes | |
+| Wallplace logo links to / from every page; colour flips white on portal pages and transparent immersive heroes | Yes | WORKS (public pages). Logo anchors to / in the header and footer on every page checked; on the immersive hero the logo computes rgb(255,255,255) at scroll 0 and rgb(26,26,26) after scrolling. Portal colour flip covered in C/D/E. |
+| Immersive transparent header on /, /venues, /artists, /about that fades to solid white after 80px scroll | Yes, and /how-it-works is deliberately excluded because its hero is light | WORKS. On / the header computes background rgba(0,0,0,0) at scroll 0 and rgb(255,255,255) after scrollTo(0,300); class list is bg-transparent border-b border-transparent at rest. |
+| Logged-out desktop nav: Marketplace (/browse), How It Works, Blog, Spaces | Yes | WORKS. Accessibility tree on / shows navigation "Main navigation" with Marketplace /browse, How It Works, Blog, Spaces, plus Login and Sign Up. |
+| Logged-in desktop nav (artist/customer): Marketplace, Spaces; venue variant swaps Spaces for Wallplace Curated and Blog | Yes, venue variant matches the /spaces lockout for venues | WORKS. Signed in as an artist the desktop nav is Marketplace (/browse) and Spaces; signed in as a customer it is the same pair. The venue variant is checked in area E. |
+| Inside /browse or /spaces the nav is replaced by marketplace tabs (Galleries, Portfolios, Collections, Spaces); logged-out visitors also get How It Works and Blog tabs; venue users get Curated and Blog instead of Spaces | Yes, tab active-state logic matches what /browse renders for each ?view= value | WORKS (logged out). On /browse the desktop nav is Galleries, Portfolios (?view=portfolios), Collections (?view=collections), Spaces, plus How It Works and Blog. |
+| Mobile menu marketplace tabs use only the default or venue tab set, never the public variant, so logged-out mobile users inside the marketplace lose the How It Works and Blog links that desktop shows | FLAG: mobile picks `(userType === "venue" ? venueMarketplaceTabs : marketplaceTabs)` and ignores the public variant, an inconsistency with the desktop logged-out experience | FLAG STANDS. At 390x844 on /browse logged out, the visible mobile overlay lists only Galleries, Portfolios, Collections, Spaces, Login, Sign Up; How It Works and Blog are present only in the hidden desktop nav. |
+| More dropdown (logged in only): Curated, How It Works, Blog, About, Contact, FAQs, Pricing, filtered to avoid duplicating the user's primary nav | Yes | WORKS. The More dropdown (artist) lists Curated, How It Works, Blog, About, Contact, FAQs and Pricing, none of which duplicate the artist's primary nav. |
+| Saved heart icon links to `<portal>/saved` for the signed-in role | Yes | WORKS. Artist header links /artist-portal/saved (aria-label "Saved"); customer header links /customer-portal/saved. |
+| Messages envelope icon with unread badge, polled every 60s from /api/messages/unread; badge caps at 9+ | Yes | WORKS. As the artist the envelope showed badge "1" and GET /api/messages/unread returned {"count":1}; the notifications badge rendered "9+" against 30 rows, so the cap holds. DIFFERS for customers, see the next row. |
+| Messages dropdown lists up to 6 conversations fetched from /api/messages?slug=, requiring the user's artist or venue profile slug (tries /api/artist-profile then /api/venue-profile) | FLAG: customers have neither profile, so resolvedSlug stays empty and the dropdown always shows "No messages yet" for customer accounts even when the unread badge shows a count; the customer portal messages page uses a different lookup | DIFFERS, and the flagged symptom is gone by removal. For the artist the dropdown does populate: GET /api/messages?slug=fin-coles returns 16 conversations and the panel lists 6. For the QA-TEST customer account the header renders NO messages envelope at all, so there is no badge-without-list mismatch. Worth noting: the panel shows "No messages yet" for the ~1s before the fetch resolves, so a slow network shows a false empty state. |
+| Messages dropdown "Mark all read" optimistically zeroes badge and per-row dots then PATCHes /api/messages {all:true}, best effort | Yes, next poll reconciles | BLOCKED, deliberately. Marking the artist's inbox read would destroy the unread-message evidence area F depends on; the identical PATCH pattern is proven on the notifications bell in the row below. |
+| Messages dropdown row click routes to `<portal>/messages?artist=<slug>&artistName=` | Yes | WORKS. Clicking a venue row from the marketplace routes to /artist-portal/messages?artist=the-copper-kettle-demo&artistName=The%20Copper%20Kettle. |
+| "View All" and "Open Full Inbox" links to the portal messages page | Yes | WORKS. Both "View All" and "Open Full Inbox" render in the artist messages dropdown. |
+| Notifications bell with unread badge from /api/notifications; dropdown lists up to 12 rows with per-type icons | Yes | WORKS. Bell badge showed 9+ and the dropdown listed rows with distinct titles and dates (QR scan digest, paid loan started, live on wall, install date set, counter offer, artwork sold). |
+| Notifications "Mark all read" optimistic then PATCH /api/notifications {all:true} | Yes | WORKS, and it persists. Clicking Mark all read fired PATCH /api/notifications {"all":true} -> 200 {"success":true}, the 9+ badge cleared immediately, and after a full page reload the badge was still empty. No silent no-op. |
+| Notification row click marks the row read (skips ids starting msg-) and navigates to row link or a type-derived fallback (messages, orders, placements, portal home) | Yes, the fallback avoids dead clicks on legacy rows | WORKS. Row links are type-correct: qr_scan_digest -> /artist-portal/analytics, paid_loan_started -> /artist-portal/placements, placement_* -> /placements/p-1787927775352-gbjb, offer rows -> /artist-portal/offers, sale rows -> /artist-portal/orders. |
+| Portal label link (Artist Portal / Venue Portal / My Account) to the portal home, plus a chevron dropdown mirroring the full portal sidebar per role | Yes | WORKS. "Artist Portal" links /artist-portal and the chevron (aria-label "Portal menu") opens the full sidebar: profile, portfolio, messages, enquiries, placements, offers, collections, saved, orders, labels, posts, blogs, analytics, billing, settings. Customer shows "My Account" -> /customer-portal. |
+| "Switch to X portal" entries (from /api/account/roles when the same email has other roles) sign the user out and push /login?email=...&hint=role | FLAG: the login page reads ?email= but nothing ever reads ?hint=, so the target role is dropped; the user must know to enter the other account's password, and nothing on /login explains which account they are switching into | BLOCKED. GET /api/account/roles returns {"roles":["artist"]} for the artist and {"roles":["customer"]} for the QA-TEST customer, so no switch entries render on any account available. The ?hint= half of the flag is separately FIXED, see the /login row. |
+| Logout button calls signOut() | Yes | WORKS. Logout clears localStorage['sb-uwkuhygwvasdzwsusiym-auth-token'] and lands on /login; reloading /artist-portal afterwards redirects back to /login. |
+| Logged-out CTAs: Login link and Sign Up button | Yes | WORKS. / renders link "Login" to /login and link "Sign Up" to /signup for anonymous visitors. |
+| CartIndicator rendered for all users including logged out | Yes, guest carts are a normal marketplace pattern | DIFFERS. No cart control renders in the header for a logged-out visitor, an artist, or a customer while the cart is empty (no cart link, no cart aria-label anywhere in <header>). Whether it appears once the cart is non-empty is checked in area B. |
+| Mobile hamburger opens overlay menu with nav links, portal link, More links, Messages (with badge) and Notifications links, Logout or Login/Sign Up | Yes | WORKS. At 390x844 signed in as the artist, the overlay shows Marketplace, Spaces, Artist Portal, the More links (Curated, How It Works, Blog, About, Contact, FAQs, Pricing), Messages with its badge, Notifications with its badge, and Logout. Notifications being reachable on mobile is the wave-4 fix holding. |
+| Dropdowns close on outside click and on route change | Yes | WORKS. Opening the notifications dropdown then clicking the page body closes it; opening it and navigating to /spaces also closes it. |
 
 ## Global chrome: Footer (site-wide) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Brand column with logo link to / and one-line description | Yes | |
-| Mailing list block "Be first to see new works" with NewsletterForm (source "footer") | Yes | |
-| Instagram link to https://instagram.com/thewallplace, new tab with rel noopener | Yes | |
-| For Artists column: Apply to Join (/apply), Pricing, Artwork Requests (/artwork-requests), Browse Venues (/spaces), FAQs | Yes, all routes exist | |
-| For Venues column: Discover Art (/browse), Register Your Venue (/signup/venue), Wallplace Curated (/curated), How It Works, FAQs | Yes | |
-| Company column: About, Blog, How It Works, Sustainability, Partner with us, Contact, Complaints, Terms, Artist Agreement, Venue Agreement, Privacy, Cookies, Returns and Refunds, IP Policy | Yes, complete legal set, all routes exist | |
-| Copyright line with current year | Yes | |
+| Brand column with logo link to / and one-line description | Yes | WORKS. Footer brand column links / and carries "The curated art marketplace connecting artists with commercial spaces." |
+| Mailing list block "Be first to see new works" with NewsletterForm (source "footer") | Yes | WORKS. Submitting the footer form posted {"email":"...","source":"footer"} to /api/newsletter -> 200 {"ok":true} and the inline success "Thanks, you're on the list." replaced the field. |
+| Instagram link to https://instagram.com/thewallplace, new tab with rel noopener | Yes | WORKS. Anchor is target="_blank" rel="noopener noreferrer" to https://instagram.com/thewallplace. |
+| For Artists column: Apply to Join (/apply), Pricing, Artwork Requests (/artwork-requests), Browse Venues (/spaces), FAQs | Yes, all routes exist | DIFFERS. Column now reads Apply to Join, Pricing, Browse Venues, FAQs. The Artwork Requests link is gone and /artwork-requests 307s to /spaces (the parked state). |
+| For Venues column: Discover Art (/browse), Register Your Venue (/signup/venue), Wallplace Curated (/curated), How It Works, FAQs | Yes | WORKS. Discover Art /browse, Register Your Venue /signup/venue, Wallplace Curated /curated, How It Works, FAQs all present and resolving. |
+| Company column: About, Blog, How It Works, Sustainability, Partner with us, Contact, Complaints, Terms, Artist Agreement, Venue Agreement, Privacy, Cookies, Returns and Refunds, IP Policy | Yes, complete legal set, all routes exist | WORKS. All 14 links present; each resolves 200 (checked About, Blog, How It Works, Sustainability, Partners, Contact, Complaints, Terms, Artist Agreement, Venue Agreement, Privacy, Cookies, Returns, IP Policy). |
+| Copyright line with current year | Yes | WORKS. Footer renders "© 2026 Wallplace. All rights reserved." |
 
 ## Global chrome: Cookie banner (site-wide) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Banner appears after 300ms when no stored choice; copy says "We use essential cookies to make this site work" with a link to /cookies | Yes on the copy, essential-only is what the cookie policy claims | |
-| Accept button stores "true" in localStorage key `wallplace-cookie-consent` and hides banner | Yes | |
-| Decline button stores "false" and hides banner | FLAG: nothing anywhere reads the stored consent value except the banner itself, and the site sets no non-essential cookies to decline, so Accept and Decline are functionally identical; for an essential-only site a single "OK" dismiss would be honest, and offering a Decline that changes nothing is mildly misleading | |
-| Choice persists across visits (localStorage) | Yes, though the cookie policy describes it as a 12-month cookie named `wallplace_cookie_consent`, which does not match (see Cookies page section) | |
+| Banner appears after 300ms when no stored choice; copy says "We use essential cookies to make this site work" with a link to /cookies | Yes on the copy, essential-only is what the cookie policy claims | WORKS. Banner renders with "We use essential cookies to make this site work. See our cookie policy." linking /cookies. |
+| Accept button stores "true" in localStorage key `wallplace-cookie-consent` and hides banner | Yes | WORKS. Clicking Accept writes localStorage['wallplace-cookie-consent']='true' and hides the banner; document.cookie stays empty. |
+| Decline button stores "false" and hides banner | FLAG: nothing anywhere reads the stored consent value except the banner itself, and the site sets no non-essential cookies to decline, so Accept and Decline are functionally identical; for an essential-only site a single "OK" dismiss would be honest, and offering a Decline that changes nothing is mildly misleading | FLAG STANDS. Decline writes localStorage['wallplace-cookie-consent']='false' and hides the banner; document.cookie is empty before and after either choice, so nothing behaves differently between Accept and Decline. |
+| Choice persists across visits (localStorage) | Yes, though the cookie policy describes it as a 12-month cookie named `wallplace_cookie_consent`, which does not match (see Cookies page section) | WORKS as behaviour, and confirms the mismatch. The value survives reload; clearing the key brings the banner back. It is a localStorage entry named wallplace-cookie-consent with no expiry, not a 12-month cookie named wallplace_cookie_consent. |
 
 ## Global chrome: Demo banner (portal pages) [Demo user]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Sticky banner renders only when the signed-in user id matches NEXT_PUBLIC_DEMO_ARTIST_USER_ID or NEXT_PUBLIC_DEMO_VENUE_USER_ID; never renders when unset | Yes, safe default | |
-| Copy: "You're touring a demo account, changes aren't saved. Sign up to make it real." | Yes, matches the assertNotDemo write guard on the APIs | |
-| Sign up button links /signup?next=<current path> | Yes | |
-| Exit demo signs out and hard-redirects to / | Yes | |
-| Dismiss (multiplication-sign button) hides for the session, returns on reload | Yes | |
+| Sticky banner renders only when the signed-in user id matches NEXT_PUBLIC_DEMO_ARTIST_USER_ID or NEXT_PUBLIC_DEMO_VENUE_USER_ID; never renders when unset | Yes, safe default | BLOCKED. No demo session can be established in production: the demo cards link public profiles, /api/demo/login 405s on GET, and neither the artist, customer nor venue account matches a demo user id, so the banner never renders. |
+| Copy: "You're touring a demo account, changes aren't saved. Sign up to make it real." | Yes, matches the assertNotDemo write guard on the APIs | BLOCKED. Same reason, the banner never renders. |
+| Sign up button links /signup?next=<current path> | Yes | BLOCKED. Same reason. |
+| Exit demo signs out and hard-redirects to / | Yes | BLOCKED. Same reason. |
+| Dismiss (multiplication-sign button) hides for the session, returns on reload | Yes | BLOCKED. Same reason. |
 
 ## Global chrome: page shell and metadata [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| (pages) layout: skip-to-content link, Header, DemoBanner, main with top padding, Footer (hidden on portal and admin routes), FeedbackBubble | Yes | |
-| Homepage (src/app/page.tsx) sits outside the (pages) group and renders its own Header and Footer, so it has no skip link, no DemoBanner and no FeedbackBubble | FLAG: the skip-to-content accessibility link is missing on the single highest-traffic page; a demo user landing on / also loses the demo banner context | |
-| Root metadata: title template, description, OpenGraph and Twitter cards pointing at /og-image.png | FLAG: public/ contains no og-image.png (only the Next starter SVGs), so every social share requests a 404 image; the code comment admits this TODO but it is a launch-visible gap | |
-| Root robots: index true | Yes | |
-| FeedbackBubble on all public pages except legal routes; Feature request tab posts {entity_type feature_request, title, description, contact_email} and Feedback tab posts {message, rating, contact_email, source_url} to /api/moderation (anonymous allowed), toast "Thanks, we'll have a look." | Yes, though feature requests from the bubble land in moderation_queue while /feature-requests board submissions land in feature_requests, two disjoint pipelines an admin must remember to check separately; worth a note rather than a defect | |
-| CookieBanner mounted from the root layout so it also covers /waitlist and /email-preview | Yes | |
+| (pages) layout: skip-to-content link, Header, DemoBanner, main with top padding, Footer (hidden on portal and admin routes), FeedbackBubble | Yes | WORKS. Skip-to-content link, Header, main and Footer render on every (pages) route checked; FeedbackBubble present on /, /about, /pricing but see the legal-route row. |
+| Homepage (src/app/page.tsx) sits outside the (pages) group and renders its own Header and Footer, so it has no skip link, no DemoBanner and no FeedbackBubble | FLAG: the skip-to-content accessibility link is missing on the single highest-traffic page; a demo user landing on / also loses the demo banner context | FIXED. / now renders the skip-to-content link, the shared Header/Footer, the FeedbackBubble and the CookieBanner, so it is on the shared shell. |
+| Root metadata: title template, description, OpenGraph and Twitter cards pointing at /og-image.png | FLAG: public/ contains no og-image.png (only the Next starter SVGs), so every social share requests a 404 image; the code comment admits this TODO but it is a launch-visible gap | FLAG STANDS, partly narrowed. The homepage og:image now points at a working generated /opengraph-image (200, image/png, 55KB), but its twitter:image and the og:image on every other page (/browse, /pricing, /about checked) still point at https://wallplace.co.uk/og-image.png, which 404s. |
+| Root robots: index true | Yes | WORKS. /robots.txt returns 200 and allows /, disallowing only /api/, /admin/, the portals, /checkout/, /email-preview/, /dev/, /demo/, /auth/ and /check-your-inbox/. |
+| FeedbackBubble on all public pages except legal routes; Feature request tab posts {entity_type feature_request, title, description, contact_email} and Feedback tab posts {message, rating, contact_email, source_url} to /api/moderation (anonymous allowed), toast "Thanks, we'll have a look." | Yes, though feature requests from the bubble land in moderation_queue while /feature-requests board submissions land in feature_requests, two disjoint pipelines an admin must remember to check separately; worth a note rather than a defect | WORKS, and the two-pipeline note is confirmed. Feature-request tab POSTed {entity_type:'feature_request',title,description,contact_email} to /api/moderation anonymously -> 200 {"status":"ok","id":"e9609e8b-..."} and the row landed in moderation_queue as status pending, not in feature_requests. DIFFERS on placement: the bubble also renders on /returns and /complaints, which the other legal routes exclude. |
+| CookieBanner mounted from the root layout so it also covers /waitlist and /email-preview | Yes | WORKS. CookieBanner renders on /waitlist. /email-preview is 404 in production so it cannot be observed there. |
 
 ## Homepage (/) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Full-screen hero with background image, WALLPLACE title, strapline | Yes | |
-| Hero CTA "Discover Art" links /browse | Yes | |
-| Hero CTA shows "Sign Up" linking /signup when logged out, or the role's portal label linking the portal when logged in | Yes, good state awareness | |
-| Demo funnel line "Just looking? Browse a demo artist or venue account" links /demo, hidden when logged in | Yes | |
-| "Scroll to see more" button smooth-scrolls to the content sections | Yes | |
-| Trust bar (desktop only): "40+ Curated Artists, 90+ Original Artworks, 20+ Active Venues" style counts computed by bucketing the static seed files artists.ts and venues.ts | FLAG: counts come from the static seed, not the live database, and /api/stats/public (built for exactly this) has zero callers; DB-only artists never show up in these numbers, so the trust bar can drift from reality in either direction | |
-| Trust bar tagline "No AI art. Every artist reviewed." | Yes, consistent with the application flow | |
-| For Venues section: three arrangement cards (Revenue Share, Paid Loan "Pay the artist a monthly fee", Direct Purchase) | Yes, matches the canonical paid-loan semantics from the arrangement-labels remediation | |
-| For Venues CTAs: "Discover Art" (/browse) and "REGISTER YOUR VENUE" (/signup/venue) | Yes | |
-| "Professional curation services also available" link to /curated | Yes, route exists | |
-| For Artists section: grid of 6 seed artists linking /browse/<slug>, bullets including "5 to 15% platform fee" | Yes, fee range matches pricing | |
-| For Artists CTAs: "Apply to Join" (/apply) and "LEARN MORE" (/artists) | Yes | |
-| How Wallplace works section: 3 steps per side plus Register Your Venue and Apply to Join CTAs | Yes, venue step 03 "Display art for free with optional revenue share, or purchase outright" omits paid loan but the section above covers it | |
-| Testimonials section: three named quotes (Eloise Bramley of The Copper Kettle, Tomi Okafor, David Chen of Roots and Vine) with roles and Venue/Artist badges | FLAG: the source comment says these names and roles are placeholders to be replaced "as real quotes land", i.e. they are invented people and venues presented as genuine customer testimonials; on a pre-launch marketplace this is materially misleading (The Copper Kettle is also the seeded demo venue name) and should be removed or clearly marked illustrative before launch | |
-| Venue demand section: "See Venue Demand" (/spaces) and "Apply to Join" (/apply) over a photo | Yes | |
-| Final CTA: three cards (Venues to /signup/venue, Artists to /apply with "First month free. From £9.99/month.", Customers to /signup/customer) | Yes, pricing claims match /pricing | |
-| Curated banner image strip "Curated, not crowded." | Yes | |
-| Unused sub-components NavCard, DealCard, ValueBlock defined at the bottom of the file with zero usages | FLAG: dead code, harmless but should be culled | |
+| Full-screen hero with background image, WALLPLACE title, strapline | Yes | WORKS. Hero renders img "Gallery interior", h1 WALLPLACE and the strapline "The curated art marketplace for commercial spaces." |
+| Hero CTA "Discover Art" links /browse | Yes | WORKS. link "Discover Art" -> /browse in the hero. |
+| Hero CTA shows "Sign Up" linking /signup when logged out, or the role's portal label linking the portal when logged in | Yes, good state awareness | WORKS logged out: link "Sign Up" -> /signup renders beside Discover Art. Logged-in variant covered in H. |
+| Demo funnel line "Just looking? Browse a demo artist or venue account" links /demo, hidden when logged in | Yes | WORKS. "Just looking? Browse a demo artist or venue account" with the anchor on /demo renders for anonymous visitors. |
+| "Scroll to see more" button smooth-scrolls to the content sections | Yes | WORKS. button "Scroll to see more" is present and focusable in the accessibility tree below the hero. |
+| Trust bar (desktop only): "40+ Curated Artists, 90+ Original Artworks, 20+ Active Venues" style counts computed by bucketing the static seed files artists.ts and venues.ts | FLAG: counts come from the static seed, not the live database, and /api/stats/public (built for exactly this) has zero callers; DB-only artists never show up in these numbers, so the trust bar can drift from reality in either direction | FLAG STANDS. Live trust bar reads 30+ / 230+ / 20+ while /api/stats/public returns 14 artists, 35 artworks, 9 venues, and no request to /api/stats/public appears in the homepage network log. Overstates by roughly 2x, 6.5x and 2x. |
+| Trust bar tagline "No AI art. Every artist reviewed." | Yes, consistent with the application flow | WORKS. Renders "No AI art" and "Every artist reviewed". |
+| For Venues section: three arrangement cards (Revenue Share, Paid Loan "Pay the artist a monthly fee", Direct Purchase) | Yes, matches the canonical paid-loan semantics from the arrangement-labels remediation | WORKS. Three cards render: Revenue Share, Paid Loan "Pay the artist a monthly fee to display the work on your wall.", Direct Purchase. |
+| For Venues CTAs: "Discover Art" (/browse) and "REGISTER YOUR VENUE" (/signup/venue) | Yes | WORKS. Both links present with the stated hrefs. |
+| "Professional curation services also available" link to /curated | Yes, route exists | WORKS. "Professional curation services also available →" -> /curated, which returns 200. |
+| For Artists section: grid of 6 seed artists linking /browse/<slug>, bullets including "5 to 15% platform fee" | Yes, fee range matches pricing | WORKS. Six artist tiles link /browse/james-okafor, priya-sharma, tom-hadley, sofia-ruiz, kai-williams, elise-moreau; bullet reads "5 to 15% platform fee. No gallery taking 50%." |
+| For Artists CTAs: "Apply to Join" (/apply) and "LEARN MORE" (/artists) | Yes | WORKS. Apply to Join -> /apply, LEARN MORE -> /artists. |
+| How Wallplace works section: 3 steps per side plus Register Your Venue and Apply to Join CTAs | Yes, venue step 03 "Display art for free with optional revenue share, or purchase outright" omits paid loan but the section above covers it | WORKS as described, and the venue step 03 omission is real: "Display art for free with optional revenue share, or purchase outright", no paid loan. |
+| Testimonials section: three named quotes (Eloise Bramley of The Copper Kettle, Tomi Okafor, David Chen of Roots and Vine) with roles and Venue/Artist badges | FLAG: the source comment says these names and roles are placeholders to be replaced "as real quotes land", i.e. they are invented people and venues presented as genuine customer testimonials; on a pre-launch marketplace this is materially misleading (The Copper Kettle is also the seeded demo venue name) and should be removed or clearly marked illustrative before launch | FIXED. The testimonials section is gone from the rendered homepage. Greps for Eloise Bramley, Tomi Okafor, David Chen, "Copper Kettle" and "Roots and Vine" all return nothing. |
+| Venue demand section: "See Venue Demand" (/spaces) and "Apply to Join" (/apply) over a photo | Yes | WORKS. "See Venue Demand" -> /spaces and "Apply to Join" -> /apply under heading "Venues are looking for art right now". |
+| Final CTA: three cards (Venues to /signup/venue, Artists to /apply with "First month free. From £9.99/month.", Customers to /signup/customer) | Yes, pricing claims match /pricing | WORKS. Three cards render with /signup/venue, /apply ("First month free. From £9.99/month.") and /signup/customer. |
+| Curated banner image strip "Curated, not crowded." | Yes | WORKS. Strip renders "Curated, not crowded." and "Every artist personally reviewed. No AI art." |
+| Unused sub-components NavCard, DealCard, ValueBlock defined at the bottom of the file with zero usages | FLAG: dead code, harmless but should be culled | BLOCKED. Dead code in the source is not observable from production; nothing on the rendered page corresponds to it. |
 
 ## About (/about) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Hero, story, curation process (Application, Review, Onboarding), values, Original Work Only (no AI art) sections, all static | Yes | |
-| For Artists CTA "Apply to Join" (/apply) | Yes | |
-| For Venues CTA "Get Art for Your Space" (/venues) | Yes, route exists | |
-| Onboarding copy "We handle everything from there" versus the same page's earlier "Delivery and installation are arranged directly between the artist and the venue" | FLAG: mildly contradictory within one page; the rest of the site is consistent that logistics are the artist's job, so "we handle everything" oversells | |
+| Hero, story, curation process (Application, Review, Onboarding), values, Original Work Only (no AI art) sections, all static | Yes | WORKS. All sections render: hero, story, Application/Review/Onboarding, What We Believe, Original Work Only. |
+| For Artists CTA "Apply to Join" (/apply) | Yes | WORKS. Apply to Join -> /apply. |
+| For Venues CTA "Get Art for Your Space" (/venues) | Yes, route exists | WORKS. "Get Art for Your Space" -> /venues, which returns 200. |
+| Onboarding copy "We handle everything from there" versus the same page's earlier "Delivery and installation are arranged directly between the artist and the venue" | FLAG: mildly contradictory within one page; the rest of the site is consistent that logistics are the artist's job, so "we handle everything" oversells | FIXED. The Onboarding step now reads "Accepted artists work with us to photograph their portfolio, set pricing, and get matched with suitable venues. From there you and the venue arrange the details together." The "we handle everything" claim is gone and the page is internally consistent. |
 
 ## For Artists (/artists) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| VenueArtistToggle pill (For Venues to /venues, For Artists to /artists) floating over the hero | Yes, active state also treats /how-it-works as the venue side which matches that page's default tab | |
-| Immersive hero with "APPLY TO JOIN" (/apply) and "Applications reviewed within 5 business days." | Yes on the CTA; see the /api/apply section for the 3-day email contradiction | |
-| Banner strip: "1 month free trial, Cancel anytime, From £9.99/mo" | Yes | |
-| ScrollButton "See what you get" scrolls to the guide | Yes | |
-| ArtistGuide value blocks (venue demand, curation, storefront, visibility, "5 to 15%" fees, QR checkout) | Yes | |
-| The Process pipeline (Apply, Get Accepted, Choose Plan, Get Discovered, Get Placed and Sold) | Yes | |
-| ArtistPricingCards with Monthly/Annual toggle; annual shows floored per-month equivalent, "billed annually" line and Save 17% chip; all card CTAs go to /apply | Yes, the floor-rounding keeps the equivalent honest and 99.99 vs 119.88 is 16.6 percent, fairly rounded to 17 | |
-| Value anchoring table (gallery hire, art fair, Instagram promo versus Wallplace Core £9.99) | Yes | |
-| Comparison table (fees, display, logistics, cost, audience, curation) | Yes | |
-| FAQ accordion: "We provide feedback on every application. You're welcome to reapply after three months. Many successful artists are accepted on their second application." | FLAG: "many successful artists are accepted on their second application" is a fabricated track-record claim on a pre-launch product; the feedback-on-every-application promise also needs the admin flow to actually send feedback | |
-| FAQ: "most of our artists use Parcelforce, DHL, or specialist art couriers" | FLAG: invented usage statistics about a user base that does not exist yet; rephrase as recommendations | |
-| FAQ: payment "within 14 days via bank transfer" | FLAG: /faqs says funds are held until delivery is confirmed or 14 days pass without dispute, then transferred; the two descriptions overlap but read differently, pick one wording | |
-| FAQ: image protection claims (reduced resolution, right-click disabled, no drag or select) | Yes, ArtworkImageViewer and ArtworkThumb do implement contextmenu/drag blocking | |
-| Venue demand banner with two CTAs "SEE VENUE DEMAND" and "SEARCH BY POSTCODE" | FLAG: both buttons link to the same /spaces URL; two differently-labelled CTAs to one destination is confusing, either point the second at the postcode input anchor or drop it | |
-| Final CTA "APPLY TO JOIN" with "First month free. Membership from £9.99/month." | Yes | |
+| VenueArtistToggle pill (For Venues to /venues, For Artists to /artists) floating over the hero | Yes, active state also treats /how-it-works as the venue side which matches that page's default tab | WORKS. The pill renders over the hero with For Venues -> /venues and For Artists -> /artists. |
+| Immersive hero with "APPLY TO JOIN" (/apply) and "Applications reviewed within 5 business days." | Yes on the CTA; see the /api/apply section for the 3-day email contradiction | WORKS. Hero renders APPLY TO JOIN -> /apply with "Applications reviewed within 5 business days." |
+| Banner strip: "1 month free trial, Cancel anytime, From £9.99/mo" | Yes | WORKS. Banner strip renders the three claims. |
+| ScrollButton "See what you get" scrolls to the guide | Yes | WORKS. Clicking "See what you get" scrolled the window from 0 to 900px, landing on the guide. |
+| ArtistGuide value blocks (venue demand, curation, storefront, visibility, "5 to 15%" fees, QR checkout) | Yes | WORKS. All six blocks render: venue demand, curation, storefront, visibility, the 5 to 15% fee line and QR checkout. |
+| The Process pipeline (Apply, Get Accepted, Choose Plan, Get Discovered, Get Placed and Sold) | Yes | WORKS. The pipeline renders as Apply, Get Accepted, Choose Plan, Get Discovered, Get Placed & Sold. |
+| ArtistPricingCards with Monthly/Annual toggle; annual shows floored per-month equivalent, "billed annually" line and Save 17% chip; all card CTAs go to /apply | Yes, the floor-rounding keeps the equivalent honest and 99.99 vs 119.88 is 16.6 percent, fairly rounded to 17 | WORKS. Toggling Annual switches Core £9.99 -> £8.33/mo with "£99.99 billed annually", Premium £24.99 -> £20.83 (£249.99), Pro £49.99 -> £41.66 (£499.99); SAVE 17% chip shown. All per-month figures are floored, so none overstates the saving. |
+| Value anchoring table (gallery hire, art fair, Instagram promo versus Wallplace Core £9.99) | Yes | WORKS. The anchoring table renders gallery hire, art fair and Instagram promo against Wallplace Core £9.99. |
+| Comparison table (fees, display, logistics, cost, audience, curation) | Yes | WORKS. Rows present for Platform fee, Display, Logistics, Cost, Audience and Curation. |
+| FAQ accordion: "We provide feedback on every application. You're welcome to reapply after three months. Many successful artists are accepted on their second application." | FLAG: "many successful artists are accepted on their second application" is a fabricated track-record claim on a pre-launch product; the feedback-on-every-application promise also needs the admin flow to actually send feedback | FIXED. The FAQ now reads "We give feedback where we can, and you're welcome to reapply after three months." The fabricated second-application claim is gone and the feedback promise is hedged. |
+| FAQ: "most of our artists use Parcelforce, DHL, or specialist art couriers" | FLAG: invented usage statistics about a user base that does not exist yet; rephrase as recommendations | FIXED. No mention of Parcelforce, DHL or any courier usage statistic remains on /artists. |
+| FAQ: payment "within 14 days via bank transfer" | FLAG: /faqs says funds are held until delivery is confirmed or 14 days pass without dispute, then transferred; the two descriptions overlap but read differently, pick one wording | FIXED. /artists now uses the same mechanics as /faqs: "funds are held until the artwork is confirmed delivered (or 14 days pass without a buyer dispute, whichever comes first)". |
+| FAQ: image protection claims (reduced resolution, right-click disabled, no drag or select) | Yes, ArtworkImageViewer and ArtworkThumb do implement contextmenu/drag blocking | WORKS. On /browse/fin-coles/mt-fitz-roy the image is served through the Next optimiser at w=750&q=75 (natural 700x466, so downscaled), carries draggable="false", computes user-select: none and pointer-events: none, and a dispatched contextmenu event is preventDefault'd. |
+| Venue demand banner with two CTAs "SEE VENUE DEMAND" and "SEARCH BY POSTCODE" | FLAG: both buttons link to the same /spaces URL; two differently-labelled CTAs to one destination is confusing, either point the second at the postcode input anchor or drop it | FLAG STANDS. Both CTAs still resolve to href="/spaces": "SEE VENUE DEMAND" and "SEARCH BY POSTCODE". |
+| Final CTA "APPLY TO JOIN" with "First month free. Membership from £9.99/month." | Yes | WORKS. Final CTA renders as described. |
 
 ## Galleries redirect (/galleries) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Server redirect to /browse?view=gallery | Yes, /browse treats view=gallery the same as the default Galleries view | |
+| Server redirect to /browse?view=gallery | Yes, /browse treats view=gallery the same as the default Galleries view | WORKS. GET /galleries -> 307 to /browse?view=gallery. |
 
 ## Spaces (/spaces) [Visitor, Artist, Venue, Customer]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Hero with postcode search: input uppercases as you type, Enter or Search geocodes via geocodePostcode, error "Postcode not found, try again" on failure | Yes | |
-| Location persists to the shared localStorage keys used by /browse so a postcode carries across both pages; "clear" resets coords, input, distance and storage | Yes | |
-| Distance filter pills (5, 10, 25, 50 miles, All) shown once a postcode resolves; venues sorted by distance with per-card mileage badge | Yes | |
-| Walls / Open requests tabs driven by ?view=requests; requests tab renders ArtworkRequestsList | Yes | |
-| Venue demand fetched from /api/venues/demand with the auth token so subscribers get the unredacted payload; anonymous callers get the redacted one the blurred cards expect; refetches when the session token resolves | Yes, thoughtful handling of the token-not-ready-at-mount case | |
-| Stats strip (Venues, Open to Display, Revenue share, Looking to Buy) computed from the filtered list, using the shared ARRANGEMENT_LABEL | Yes, the K3/E13 label unification is applied | |
-| Venue-type filter pills and arrangement filter pills (All, Display, Revenue share, Purchase) | Yes | |
-| Venue users are blocked from the grid and shown "Spaces is for artists" with Preview my venue page (/venues/<own slug>) and Edit my profile (/venue-portal/profile) | Yes, sensible marketplace hygiene | |
-| Empty state "No venues match these filters" with Clear filters button | Yes | |
-| Subscribe teaser banner for non-subscribed viewers: "Subscribe to see full venue details... Plans from £9.99/month" with View Plans (/pricing) | Yes | |
-| Venue card: blurred hero image and "Café in Hackney"-style anonymised title for non-subscribers; full name, gallery, photo count, thumbnails, description and display details (wall, lighting, install, rotation) for subscribers and customers | Yes | |
-| Whole-card stretched link to /venues/<slug> for everyone except venue users | Yes, kills the dead-click problem the comment describes | |
-| Arrangement badges from ARRANGEMENT_LABEL (Paid loan for the legacy interested_in_free_loan flag, Revenue share, Direct purchase) | Yes, deliberately mapped per the free_loan-means-paid-loan legacy documented in arrangement-labels.ts | |
-| Artist-only "Request a placement" button expands the inline SpacesPlacementRequestForm (work picker plus arrangement) posting to /api/placements; not gated on subscription client-side, the API enforces tier rules | Yes, matches the recorded fix for the silently-hidden CTA | |
-| Success state after sending: "Request sent to <venue>", link "View placement" to /placements/<id>, and "Send another" resets the card | Yes | |
-| "Message" button routes to `${userType === "artist" ? "/artist-portal" : "/venue-portal"}/messages?artist=<venue slug>` | FLAG: customers (who pass the canMessageVenues gate) are routed to /venue-portal/messages, a portal they cannot access; the ternary needs a customer branch to /customer-portal | |
-| "Upgrade to Premium to message venues" row (canSeeDetails and not canMessageVenues) | FLAG: dead branch, canSeeDetails and canMessageVenues are the identical expression so this state is unreachable; either remove it or, if messaging is meant to be Premium-gated for Core artists, the gate is wrong | |
-| Non-subscriber card footer "Subscribe to see venue name and connect" linking /pricing | Yes | |
-| Bottom CTA "Apply to Join Wallplace" (/apply) for non-venue viewers | Yes | |
+| Hero with postcode search: input uppercases as you type, Enter or Search geocodes via geocodePostcode, error "Postcode not found, try again" on failure | Yes | WORKS. Typing "tw12 2th" uppercases the input to "TW12 2TH"; Search geocodes via api.postcodes.io and the header becomes "Showing venues near TW12 2TH". |
+| Location persists to the shared localStorage keys used by /browse so a postcode carries across both pages; "clear" resets coords, input, distance and storage | Yes | WORKS. After search, localStorage holds wallplace-postcode="TW12 2TH" and wallplace-coords={"lat":51.417389,"lng":-0.363,...}; "clear" empties both keys, blanks the input, removes the distance pills and restores the full 29-venue list. |
+| Distance filter pills (5, 10, 25, 50 miles, All) shown once a postcode resolves; venues sorted by distance with per-card mileage badge | Yes | WORKS. Pills 5/10/25/50/All appear once a postcode resolves; cards carry mileage badges (9.5 mi, 9.7 mi) and 5 mi narrows 29 venues to 9. |
+| Walls / Open requests tabs driven by ?view=requests; requests tab renders ArtworkRequestsList | Yes | DIFFERS. There are no Walls / Open requests tabs in production; /spaces?view=requests renders the identical walls grid. Artwork requests are parked and /artwork-requests 307s to /spaces. |
+| Venue demand fetched from /api/venues/demand with the auth token so subscribers get the unredacted payload; anonymous callers get the redacted one the blurred cards expect; refetches when the session token resolves | Yes, thoughtful handling of the token-not-ready-at-mount case | WORKS for the anonymous half. GET /api/venues/demand unauthenticated returns 29 venues with name, location, description, image, images, wallSpace, footfall and coordinates all blanked, keeping slug and the three arrangement flags, which is exactly what the blurred cards render. Note /api/outreach/allowance 401s for guests and logs a console error, though the badge correctly renders nothing. |
+| Stats strip (Venues, Open to Display, Revenue share, Looking to Buy) computed from the filtered list, using the shared ARRANGEMENT_LABEL | Yes, the K3/E13 label unification is applied | WORKS. Strip renders 29 Venues, 24 Open to Display, 22 Revenue share, 15 Looking to Buy, and the badges use Paid loan / Revenue share / Direct purchase. |
+| Venue-type filter pills and arrangement filter pills (All, Display, Revenue share, Purchase) | Yes | WORKS. Type pills All, Café, Restaurant, Hotel, Office, Salon, Gallery, Coworking, Wine Bar; arrangement pills All Arrangements, Display, Revenue share, Purchase. |
+| Venue users are blocked from the grid and shown "Spaces is for artists" with Preview my venue page (/venues/<own slug>) and Edit my profile (/venue-portal/profile) | Yes, sensible marketplace hygiene | BLOCKED here, covered in area E with the venue login. |
+| Empty state "No venues match these filters" with Clear filters button | Yes | BLOCKED. With 29 venues live and no filter combination reaching zero in the guest view, the empty state was not produced. |
+| Subscribe teaser banner for non-subscribed viewers: "Subscribe to see full venue details... Plans from £9.99/month" with View Plans (/pricing) | Yes | WORKS. "Subscribe to see full venue details / Get venue names, contact details, and connect directly. Plans from £9.99/month." with View Plans -> /pricing. |
+| Venue card: blurred hero image and "Café in Hackney"-style anonymised title for non-subscribers; full name, gallery, photo count, thumbnails, description and display details (wall, lighting, install, rotation) for subscribers and customers | Yes | WORKS for the non-subscriber half: cards read "Café in Peckham", "Wine Bar in Hackney" etc with no venue name. Subscriber half covered in area E. |
+| Whole-card stretched link to /venues/<slug> for everyone except venue users | Yes, kills the dead-click problem the comment describes | DIFFERS. The card link is present for guests but points at the real slug, e.g. /venues/the-copper-kettle-demo and /venues/cork-and-vine, so the venue slug is exposed to unentitled viewers. That is the accepted G-B decision, not a new defect. |
+| Arrangement badges from ARRANGEMENT_LABEL (Paid loan for the legacy interested_in_free_loan flag, Revenue share, Direct purchase) | Yes, deliberately mapped per the free_loan-means-paid-loan legacy documented in arrangement-labels.ts | WORKS. Badges render as Paid loan, Revenue share and Direct purchase across the grid. |
+| Artist-only "Request a placement" button expands the inline SpacesPlacementRequestForm (work picker plus arrangement) posting to /api/placements; not gated on subscription client-side, the API enforces tier rules | Yes, matches the recorded fix for the silently-hidden CTA | WORKS. As the artist each card shows "Request a placement" and the outreach badge above the grid reads "14 of 15 venue approaches left this week on Pro. Placement requests, first messages and artwork request responses all draw on the same allowance." The expanded form itself is exercised in area F. |
+| Success state after sending: "Request sent to <venue>", link "View placement" to /placements/<id>, and "Send another" resets the card | Yes | BLOCKED here. Sending a real placement request is an area F action against a real venue; deferred rather than fired from this page. |
+| "Message" button routes to `${userType === "artist" ? "/artist-portal" : "/venue-portal"}/messages?artist=<venue slug>` | FLAG: customers (who pass the canMessageVenues gate) are routed to /venue-portal/messages, a portal they cannot access; the ternary needs a customer branch to /customer-portal | FIXED, by removal. For the QA-TEST customer account /spaces renders full venue details but no "Message" button at all (only "View full profile"), so no customer can be routed at /venue-portal/messages. The artist branch works: it routes to /artist-portal/messages?artist=<venue slug>&artistName=<name>. |
+| "Upgrade to Premium to message venues" row (canSeeDetails and not canMessageVenues) | FLAG: dead branch, canSeeDetails and canMessageVenues are the identical expression so this state is unreachable; either remove it or, if messaging is meant to be Premium-gated for Core artists, the gate is wrong | FLAG STANDS as unreachable. The "Upgrade to Premium to message venues" row appears for none of the accounts tested: not the Pro artist, not the customer, not a guest. Nothing observed contradicts the reading that the branch is dead. |
+| Non-subscriber card footer "Subscribe to see venue name and connect" linking /pricing | Yes | WORKS. Every non-subscriber card footer reads "Subscribe to see venue name & connect" and links /pricing. |
+| Bottom CTA "Apply to Join Wallplace" (/apply) for non-venue viewers | Yes | WORKS. Bottom CTA "Apply to Join Wallplace" -> /apply renders for a guest. |
 
 ## Partners (/partners) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static pitch to multi-site operators: four profile cards, offer bullets, four-step engagement outline | Yes | |
-| Primary CTA is a mailto to partners@wallplace.co.uk with a prefilled subject | Yes for a pre-launch B2B funnel, the comment records the deliberate mailto-for-now decision; confirm the mailbox exists before launch | |
-| Secondary "Use the contact form" link to /contact | Yes | |
-| "We'll come back with a tailored shortlist within five working days" | Yes, plausible commitment, keep it aligned with the contact form's reply promise | |
+| Static pitch to multi-site operators: four profile cards, offer bullets, four-step engagement outline | Yes | WORKS. /partners renders the operator pitch, profile cards, offer bullets and the four-step outline. |
+| Primary CTA is a mailto to partners@wallplace.co.uk with a prefilled subject | Yes for a pre-launch B2B funnel, the comment records the deliberate mailto-for-now decision; confirm the mailbox exists before launch | WORKS. Primary CTA is mailto:partners@wallplace.co.uk?subject=Wallplace%20Partnership%20Enquiry. Whether the mailbox is monitored is an owner check, not testable from here. |
+| Secondary "Use the contact form" link to /contact | Yes | WORKS. Secondary link to /contact present. |
+| "We'll come back with a tailored shortlist within five working days" | Yes, plausible commitment, keep it aligned with the contact form's reply promise | WORKS. Copy reads "Tell us about your portfolio of sites. We'll come back with a tailored shortlist within five working days." Note /contact and /faqs both now promise 2 working days, so this page is the outlier at five. |
 
 ## Pricing (/pricing) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Hero plus venue aside: browsing free, links to /venues and /curated "managed selection from £49" | Yes, matches the how-it-works venue tab claim | |
-| Free-trial banner with CTA "Apply to join, first month free if accepted" (/apply) and "Applications reviewed within 5 business days." | Yes | |
-| ArtistPricingCards (shared component, monthly/annual toggle) | Yes | |
-| Feature comparison table (works caps, profile tier, visibility, messaging, matching, fees 15/8/5 percent, analytics, support, first month free) | Yes, consistent with the cards and the application form's plan options | |
-| Value anchoring list | Yes | |
-| "The Pro case" worked example: on a £500 sale Core costs £75, Premium £40, Pro £25 keeping £475 | Yes, arithmetic checks out | |
-| "Apply for Pro" button links plain /apply | FLAG: the application form defaults selectedPlan to core and nothing carries the Pro intent through, so a user who clicked "Apply for Pro" lands on a form with Core preselected; pass a plan query param and preselect it | |
-| Pricing FAQ "What happens when I cancel?": membership active to end of paid period, "We will arrange the return of any artwork currently on display with venues", no cancellation fees | FLAG: contradicts the Artist Agreement and /faqs (30 days written notice, the artist collects their own work within 30 days) and /artists FAQ (artist responsible for collecting); three different cancellation stories across the site, and "we will arrange the return" promises an ops service nothing else supports | |
-| Final CTA "Apply to join, first month free if accepted" | Yes | |
+| Hero plus venue aside: browsing free, links to /venues and /curated "managed selection from £49" | Yes, matches the how-it-works venue tab claim | WORKS. Venue aside renders with the /venues link and "managed selection from £49" to /curated, which returns 200. |
+| Free-trial banner with CTA "Apply to join, first month free if accepted" (/apply) and "Applications reviewed within 5 business days." | Yes | WORKS. Banner and CTA render as described. |
+| ArtistPricingCards (shared component, monthly/annual toggle) | Yes | WORKS. Same shared component as /artists: Monthly/Annual toggle switches £9.99/£24.99/£49.99 to £8.33/£20.83/£41.66 with the annual totals and the SAVE 17% chip. |
+| Feature comparison table (works caps, profile tier, visibility, messaging, matching, fees 15/8/5 percent, analytics, support, first month free) | Yes, consistent with the cards and the application form's plan options | WORKS. Table rows present with 15/8/5 percent fees, 8/20/50 work caps, tiered profile, analytics and support; the messaging row is now the outreach allowance (3/6/15 approaches a week). |
+| Value anchoring list | Yes | WORKS. Value anchoring list renders against Wallplace Core £9.99. |
+| "The Pro case" worked example: on a £500 sale Core costs £75, Premium £40, Pro £25 keeping £475 | Yes, arithmetic checks out | WORKS. Copy reads "On a £500 sale, Core would cost you £75 in platform fees, Premium £40. Pro costs just £25, keeping £475." 15/8/5 percent of £500 is exactly 75/40/25. |
+| "Apply for Pro" button links plain /apply | FLAG: the application form defaults selectedPlan to core and nothing carries the Pro intent through, so a user who clicked "Apply for Pro" lands on a form with Core preselected; pass a plan query param and preselect it | FIXED on the link half. The button now points at /apply?plan=pro rather than plain /apply. Whether the form actually preselects Pro needs a signed-in artist and is carried to area D. |
+| Pricing FAQ "What happens when I cancel?": membership active to end of paid period, "We will arrange the return of any artwork currently on display with venues", no cancellation fees | FLAG: contradicts the Artist Agreement and /faqs (30 days written notice, the artist collects their own work within 30 days) and /artists FAQ (artist responsible for collecting); three different cancellation stories across the site, and "we will arrange the return" promises an ops service nothing else supports | FIXED. The FAQ now reads "You can cancel with 30 days' written notice... You collect any artwork on display with venues within 30 days of cancelling... No cancellation fees." That matches /faqs and the Artist Agreement; the "we will arrange the return" promise is gone. |
+| Final CTA "Apply to join, first month free if accepted" | Yes | WORKS. Final CTA renders and links /apply. |
 
 ## How it works (/how-it-works) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Tabbed hero (For venues, For artists, For customers) with proper tablist/tabpanel ARIA; selected tab drives both the 3-step summary and which deep guide renders below | Yes, nice pattern | |
-| Venue tab CTA "Register your venue" (/signup/venue) plus secondary "Or explore Curated, a managed selection from £49" (/curated) | Yes | |
-| Artist tab lede "We accept around half." | FLAG: invented acceptance-rate statistic for a platform with no application history; same claim appears on /apply ("We accept roughly half"), soften or ground it | |
-| Artist tab CTA "Apply to join, first month free if accepted" (/apply), secondary "See pricing" (/pricing) | Yes | |
-| Customer tab lede "browse hundreds of storefronts online" | FLAG: the seed catalogue is roughly 40 artists and the live DB smaller; "hundreds" is an order-of-magnitude overclaim repeated on /customer ("hundreds of independent artists") | |
-| Customer tab step "Every piece comes with a certificate of authenticity from the artist" | FLAG: no certificate-of-authenticity feature exists anywhere in the codebase (no generation, no order attachment, no artist obligation in the Artist Agreement); this is a concrete buyer promise the product cannot currently keep, also made in CustomerGuide ("Every sale ships with a signed certificate") | |
-| Customer tab CTA "Browse artwork" (/browse), secondary "Learn more for customers" (/customer) | Yes | |
-| Venue tab step 03 "Display work for free with an optional revenue share on sales, or purchase pieces outright" | FLAG: omits the paid loan arrangement that the homepage, /spaces and the application form treat as a first-class option; venues reading only this page get an incomplete picture | |
-| Scroll affordance anchor to #hiw-detail, then VenueGuide / ArtistGuide / CustomerGuide render per selected tab | Yes | |
+| Tabbed hero (For venues, For artists, For customers) with proper tablist/tabpanel ARIA; selected tab drives both the 3-step summary and which deep guide renders below | Yes, nice pattern | WORKS. Three elements with role=tab, aria-selected and aria-controls to hiw-panel-venue / hiw-panel-artist / hiw-panel-customer; clicking each swaps both the 3-step summary and the CTA block. |
+| Venue tab CTA "Register your venue" (/signup/venue) plus secondary "Or explore Curated, a managed selection from £49" (/curated) | Yes | WORKS. "REGISTER YOUR VENUE" plus "Or explore Curated, a managed selection from £49". |
+| Artist tab lede "We accept around half." | FLAG: invented acceptance-rate statistic for a platform with no application history; same claim appears on /apply ("We accept roughly half"), soften or ground it | FIXED. The artist lede is now "Apply to join Wallplace's curated roster. Every application is reviewed personally. Accepted artists get their first month free, then choose any tier." No acceptance-rate claim remains. |
+| Artist tab CTA "Apply to join, first month free if accepted" (/apply), secondary "See pricing" (/pricing) | Yes | WORKS. "APPLY TO JOIN, FIRST MONTH FREE IF ACCEPTED" and "See pricing". |
+| Customer tab lede "browse hundreds of storefronts online" | FLAG: the seed catalogue is roughly 40 artists and the live DB smaller; "hundreds" is an order-of-magnitude overclaim repeated on /customer ("hundreds of independent artists") | FIXED. Customer lede now reads "browse a growing roster of artist storefronts online"; the word "hundreds" appears nowhere on the site. |
+| Customer tab step "Every piece comes with a certificate of authenticity from the artist" | FLAG: no certificate-of-authenticity feature exists anywhere in the codebase (no generation, no order attachment, no artist obligation in the Artist Agreement); this is a concrete buyer promise the product cannot currently keep, also made in CustomerGuide ("Every sale ships with a signed certificate") | FIXED. The customer steps are Discover / Buy / Receive with no certificate claim; /customer now says "Want a signed certificate of authenticity? Ask the artist before you buy.", which is an accurate description of an artist-to-buyer arrangement. |
+| Customer tab CTA "Browse artwork" (/browse), secondary "Learn more for customers" (/customer) | Yes | WORKS. "BROWSE ARTWORK" and "Learn more for customers". |
+| Venue tab step 03 "Display work for free with an optional revenue share on sales, or purchase pieces outright" | FLAG: omits the paid loan arrangement that the homepage, /spaces and the application form treat as a first-class option; venues reading only this page get an incomplete picture | FLAG STANDS. Venue step 03 still reads "Display work for free with an optional revenue share on sales, or purchase pieces outright for your permanent collection." Paid loan is still missing from this page. |
+| Scroll affordance anchor to #hiw-detail, then VenueGuide / ArtistGuide / CustomerGuide render per selected tab | Yes | WORKS. The scroll affordance is present and the guide below the fold changes with the selected tab. |
 
 ## FAQs (/faqs) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Audience filter tabs (All, For artists, For venues, For buyers) with ARIA roles; General section only on All | Yes | |
-| Accordion component: one panel open at a time, plus-to-cross icon, max-height raised so long answers with CTAs are not clipped | Yes | |
-| General FAQs (what is Wallplace, how it makes money with fee figures, is it a gallery) | Yes, figures match /pricing | |
-| Artist FAQ links into /pricing, /apply, /how-it-works, /artist-agreement, /artist-portal/billing, /venue-agreement, /complaints | Yes, all resolve | |
-| Artist FAQ "What happens after my application is accepted": onboarding email within 1 working day, 30-minute onboarding call within the next week, "most artists see their first venue interest in the first 2 to 3 weeks" | FLAG: the onboarding-call promise and the first-interest statistic are unverifiable pre-launch commitments; the call promise in particular creates an ops obligation nobody may own | |
-| Artist FAQ payout mechanics (Stripe Connect, funds held until delivery confirmed or 14 days, fee plus venue share deducted, email receipt plus daily digest) | Yes, detailed and consistent with the checkout architecture, but keep in sync with the /artists FAQ wording (see that section's flag) | |
-| Artist FAQ cancellation: any time with 30 days notice, collect artwork within 30 days | Yes, matches the Artist Agreement; /pricing FAQ is the outlier | |
-| Venue FAQs (cost nothing, enquiry flow with "most artists reply within 48 hours", 2 to 3 week install timeline, install responsibilities, contract link, damage, choosing art, QR sales, rotation, buying) | Yes overall; "most artists reply within 48 hours" and the placement status ladder "Requested to Accepted to Scheduled to Installed to Live" are asserted as fact, verify the status names match the real placement pipeline before launch | |
-| Buyer FAQs: buying overview linking /terms, /returns, /complaints; guest order tracking linking /orders/track; support mailto hello@wallplace.co.uk | Yes, /orders/track exists | |
-| Bottom CTA "Still have questions... we will get back to you within 24 hours" with Contact Us button | FLAG: same 24-hour promise as /contact while the automated acknowledgement email quotes 2 days (see Contact section) | |
+| Audience filter tabs (All, For artists, For venues, For buyers) with ARIA roles; General section only on All | Yes | WORKS. Four role=tab controls (All, For artists, For venues, For buyers). All shows 28 questions including the General block; For artists 11, For venues 11, For buyers 3, and the General heading disappears on every non-All tab. |
+| Accordion component: one panel open at a time, plus-to-cross icon, max-height raised so long answers with CTAs are not clipped | Yes | WORKS. 28 accordion buttons carry aria-expanded; after clicking one and then another, exactly one is expanded each time. |
+| General FAQs (what is Wallplace, how it makes money with fee figures, is it a gallery) | Yes, figures match /pricing | WORKS. What is Wallplace / How does Wallplace make money (Core 15%, Premium 8%, Pro 5%) / Is Wallplace a gallery all present and matching /pricing. |
+| Artist FAQ links into /pricing, /apply, /how-it-works, /artist-agreement, /artist-portal/billing, /venue-agreement, /complaints | Yes, all resolve | MOSTLY WORKS. Links resolve to /pricing, /apply, /artist-agreement, /artist-portal/billing, /venue-agreement, /complaints, /terms, /returns, /orders/track and /venue-portal/placements. /how-it-works is not linked from the artist FAQ block in production. |
+| Artist FAQ "What happens after my application is accepted": onboarding email within 1 working day, 30-minute onboarding call within the next week, "most artists see their first venue interest in the first 2 to 3 weeks" | FLAG: the onboarding-call promise and the first-interest statistic are unverifiable pre-launch commitments; the call promise in particular creates an ops obligation nobody may own | FIXED. The answer is now "Within 1 working day of acceptance you'll get an onboarding email with a link to set your password, upload your portfolio, and configure pricing + delivery preferences. If you'd like a hand getting set up, reply to that email and we'll help." The 30-minute call promise and the first-interest statistic are both gone. |
+| Artist FAQ payout mechanics (Stripe Connect, funds held until delivery confirmed or 14 days, fee plus venue share deducted, email receipt plus daily digest) | Yes, detailed and consistent with the checkout architecture, but keep in sync with the /artists FAQ wording (see that section's flag) | WORKS. The payout answer describes Stripe Connect, funds held until delivery is confirmed or 14 days pass without a dispute, fee plus venue share deducted; /artists now uses the same wording, so the two are in sync. |
+| Artist FAQ cancellation: any time with 30 days notice, collect artwork within 30 days | Yes, matches the Artist Agreement; /pricing FAQ is the outlier | WORKS. 30 days notice, artist collects within 30 days, consistent with the Artist Agreement and now with /pricing too. |
+| Venue FAQs (cost nothing, enquiry flow with "most artists reply within 48 hours", 2 to 3 week install timeline, install responsibilities, contract link, damage, choosing art, QR sales, rotation, buying) | Yes overall; "most artists reply within 48 hours" and the placement status ladder "Requested to Accepted to Scheduled to Installed to Live" are asserted as fact, verify the status names match the real placement pipeline before launch | WORKS as copy. The status ladder shown is "Requested → Accepted → Scheduled → Installed → Live"; pinned here and checked against the real pipeline in area F. |
+| Buyer FAQs: buying overview linking /terms, /returns, /complaints; guest order tracking linking /orders/track; support mailto hello@wallplace.co.uk | Yes, /orders/track exists | WORKS. Buyer answers link /terms, /returns, /complaints and /orders/track (200), with support at hello@wallplace.co.uk. |
+| Bottom CTA "Still have questions... we will get back to you within 24 hours" with Contact Us button | FLAG: same 24-hour promise as /contact while the automated acknowledgement email quotes 2 days (see Contact section) | FIXED. Bottom CTA now reads "We are happy to help. Get in touch and we will get back to you within 2 working days.", matching /contact. |
 
 ## Sustainability (/sustainability) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static circular-economy pitch: three cards, narrative sections, what-we-don't-do list | Yes | |
-| "Where we're going" paragraph contains a stray line break and space before a comma: "the lifetime journey of a work , first studio, first wall" | FLAG: visible copy typo (space before comma) in the rendered page | |
-| CTAs "Apply as an artist" (/apply) and "Register your venue" (/signup/venue) | Yes | |
+| Static circular-economy pitch: three cards, narrative sections, what-we-don't-do list | Yes | WORKS. All three cards, the narrative sections and the what-we-don't-do list render. |
+| "Where we're going" paragraph contains a stray line break and space before a comma: "the lifetime journey of a work , first studio, first wall" | FLAG: visible copy typo (space before comma) in the rendered page | FLAG STANDS. The rendered paragraph still reads "the lifetime journey of a work , first studio, first wall, first buyer, future loans" with a space before the comma. |
+| CTAs "Apply as an artist" (/apply) and "Register your venue" (/signup/venue) | Yes | WORKS. Both CTAs present with the stated hrefs. |
 
 ## Complaints (/complaints) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static policy: routes to complain (complaints@wallplace.co.uk mailto, dashboard Disputes / Request Refund, post) | Yes, confirm the complaints@ mailbox exists | |
-| Response commitments (acknowledge 2 business days, investigate 10, resolution, 6-year records) | Yes | |
-| Escalation list: senior review, Citizens Advice, CEDR with the honest "not currently a member" caveat, ICO, Trading Standards, courts | Yes, unusually well-drafted | |
-| Cross-links to /ip-policy and /privacy | Yes | |
-| IP complaints "acknowledge within 1 business day and act on verified claims within 24 hours" | Yes as policy, but it is an ops commitment with no tooling behind it; make sure someone owns the mailbox SLA | |
+| Static policy: routes to complain (complaints@wallplace.co.uk mailto, dashboard Disputes / Request Refund, post) | Yes, confirm the complaints@ mailbox exists | WORKS. mailto:complaints@wallplace.co.uk present alongside the dashboard and postal routes. |
+| Response commitments (acknowledge 2 business days, investigate 10, resolution, 6-year records) | Yes | WORKS. Acknowledge 2 business days, investigate 10, resolution and 6-year records all present. |
+| Escalation list: senior review, Citizens Advice, CEDR with the honest "not currently a member" caveat, ICO, Trading Standards, courts | Yes, unusually well-drafted | WORKS. Senior review, Citizens Advice, CEDR with the explicit "Wallplace is not currently a member of CEDR" caveat citing the ADR Regulations 2015, ICO, Trading Standards and the courts. |
+| Cross-links to /ip-policy and /privacy | Yes | WORKS. Both cross-links present. |
+| IP complaints "acknowledge within 1 business day and act on verified claims within 24 hours" | Yes as policy, but it is an ops commitment with no tooling behind it; make sure someone owns the mailbox SLA | WORKS as published policy. Enforcement is an owner/ops commitment, not observable from the site. |
 
 ## Contact (/contact) [Visitor] plus /api/contact and /api/enquiry
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Contact form (Suspense-wrapped): Name, Email, "I am a..." select (artist, venue, buyer, commercial, other), Message, all required | Yes | |
-| Inline validation message if the type select is empty ("Please pick an option from I am a...") instead of relying on the native tooltip | Yes | |
-| Send button posts to /api/contact; API validates via contactSchema, rate limits 5/min/IP, inserts contact_submissions with a generated WP-XXXXXXXX reference | Yes | |
-| API sends an admin alert email with the submission fields and reference | Yes | |
-| API sends the sender an acknowledgement email ("We've got your message") with the reference, capped per recipient via unverifiedRecipientAllowed to stop reflected-mail abuse, and quoting an expected reply time of 2 days | Yes on the mechanics | |
-| Success screen copy "Thanks for reaching out. We respond within 24 hours." and the sidebar "Response Time: We respond within 24 hours." | FLAG: the page promises 24 hours while the acknowledgement email the same submission triggers promises 2 days (EXPECTED_REPLY_DAYS = 2); pick one number, they arrive seconds apart | |
-| Reference number is generated and emailed but never returned to or shown in the page UI | FLAG: a sender who mistyped their email gets no reference at all; returning the reference in the API response and showing it on the success screen would cost nothing | |
-| ?artist=<slug> mode: banner "Messaging: <name>" (name looked up from the full /api/browse-artists list), type select hidden, submit labelled "Send Message to <name>" | Yes, though fetching the entire artist list to resolve one name is heavy | |
-| Artist mode double-posts: first to /api/enquiry (creates enquiry row, admin alert, message in the artist's inbox, artist notification email), then to /api/contact | FLAG: the /api/enquiry response is never checked; if the enquiry insert fails but the contact insert succeeds, the sender is told "Your message has been sent to <artist>. They'll be notified by email." when it was not; also the same message lands in both contact_submissions and enquiries by design, which support should know | |
-| /api/enquiry itself: validates enquirySchema, 5/min rate limit, inserts enquiry, admin alert, writes an anonymous message row into the artist's conversation and sends the unified unread-message email keyed on message id | Yes, the K1/09-2.2 dedupe and truncation fixes are in place | |
-| Sidebar contact details: hello@wallplace.co.uk mailto twice, London UK, Instagram link | Yes | |
+| Contact form (Suspense-wrapped): Name, Email, "I am a..." select (artist, venue, buyer, commercial, other), Message, all required | Yes | WORKS. Form renders name (text, required), email (email, required), select name=type with options artist/venue/buyer/commercial/other (required), textarea message (required), submit "Send Message". |
+| Inline validation message if the type select is empty ("Please pick an option from I am a...") instead of relying on the native tooltip | Yes | DIFFERS. There is no custom inline message. The form is not novalidate, so submitting with the select empty is blocked by the browser and select.validationMessage is the default "Please select an item in the list." No error node appears anywhere in the DOM. |
+| Send button posts to /api/contact; API validates via contactSchema, rate limits 5/min/IP, inserts contact_submissions with a generated WP-XXXXXXXX reference | Yes | WORKS. POST /api/contact -> 200 {"success":true} and the row appears in contact_submissions within seconds with a generated reference (WP-62828CC9, WP-BEDB37AF, WP-FA5E9D2D across three submissions). |
+| API sends an admin alert email with the submission fields and reference | Yes | BLOCKED for the mailbox side, but the send path is exercised: the API returned 200 and wrote the row. Whether the admin alert arrived cannot be checked without the hello@ inbox. |
+| API sends the sender an acknowledgement email ("We've got your message") with the reference, capped per recipient via unverifiedRecipientAllowed to stop reflected-mail abuse, and quoting an expected reply time of 2 days | Yes on the mechanics | BLOCKED for delivery. The API completes and the flagged 24-hour/2-day mismatch is gone from the page side; the email body itself was not read. |
+| Success screen copy "Thanks for reaching out. We respond within 24 hours." and the sidebar "Response Time: We respond within 24 hours." | FLAG: the page promises 24 hours while the acknowledgement email the same submission triggers promises 2 days (EXPECTED_REPLY_DAYS = 2); pick one number, they arrive seconds apart | FIXED. Sidebar, form and success screen all read "We respond within 2 working days", which matches EXPECTED_REPLY_DAYS = 2. |
+| Reference number is generated and emailed but never returned to or shown in the page UI | FLAG: a sender who mistyped their email gets no reference at all; returning the reference in the API response and showing it on the success screen would cost nothing | FLAG STANDS. POST /api/contact returns exactly {"success":true} and the success screen shows no reference, while contact_submissions.reference is populated for every row. |
+| ?artist=<slug> mode: banner "Messaging: <name>" (name looked up from the full /api/browse-artists list), type select hidden, submit labelled "Send Message to <name>" | Yes, though fetching the entire artist list to resolve one name is heavy | WORKS. /contact?artist=fin-coles renders "Messaging: Fin Coles", removes the type select from the DOM, labels the button "Send Message to Fin Coles" and sets the textarea placeholder to "Write your message to Fin Coles...". The only /api/ request on the page is GET /api/browse-artists, so the whole-list fetch is still how the name is resolved. |
+| Artist mode double-posts: first to /api/enquiry (creates enquiry row, admin alert, message in the artist's inbox, artist notification email), then to /api/contact | FLAG: the /api/enquiry response is never checked; if the enquiry insert fails but the contact insert succeeds, the sender is told "Your message has been sent to <artist>. They'll be notified by email." when it was not; also the same message lands in both contact_submissions and enquiries by design, which support should know | FIXED. Instrumenting fetch shows POST /api/enquiry then POST /api/contact, both 200, and both rows land in production. Forcing /api/enquiry to 500 changes the success screen to "We have your message for Fin Coles, but we could not notify them automatically. Our team will pass it on...", so the response is checked now. |
+| /api/enquiry itself: validates enquirySchema, 5/min rate limit, inserts enquiry, admin alert, writes an anonymous message row into the artist's conversation and sends the unified unread-message email keyed on message id | Yes, the K1/09-2.2 dedupe and truncation fixes are in place | WORKS, with one cosmetic difference. The enquiry row landed (enquiries id 12) and an inbox row was written to messages (sender_type=anonymous, recipient_slug=fin-coles, is_read=false). DIFFERS on naming: messages.sender_name stored as "fcoles2598", the email local part, not the sender's typed name. |
+| Sidebar contact details: hello@wallplace.co.uk mailto twice, London UK, Instagram link | Yes | WORKS. Two mailto:hello@wallplace.co.uk links, "London, UK", and the Instagram link. |
 
 ## Cookies (/cookies) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static policy, last updated April 2026, category cards claiming essential-only cookies, no analytics/marketing/functional cookies, server-side hashed analytics | Yes in intent | |
-| Cookie table lists sb-access-token (1 hour) and sb-refresh-token (30 days) cookies | FLAG: the app uses plain supabase-js createClient, which stores the session in localStorage; no sb-access-token or sb-refresh-token cookies are ever set by the auth flow (the only sb-* cookie writer is /api/demo/login, and nothing reads it). The policy documents cookies that do not exist while omitting the localStorage session storage that does | |
-| Cookie table lists wallplace_cookie_consent as a 12-month cookie | FLAG: consent is actually a localStorage key named wallplace-cookie-consent (hyphens) with no expiry; wrong name, wrong storage mechanism, wrong duration in a legal document | |
-| How-to-control section: browser settings guidance and the honest "server-side analytics have nothing to opt out of" card with privacy@wallplace.co.uk contact | Yes | |
-| Links to /privacy | Yes | |
+| Static policy, last updated April 2026, category cards claiming essential-only cookies, no analytics/marketing/functional cookies, server-side hashed analytics | Yes in intent | DIFFERS, in the site's favour. The page has been rewritten, "Last updated: August 2026", and now states "Wallplace currently sets no cookies of its own. Instead we use your browser's local storage". document.cookie is empty on every public page, so the essential-only, no-analytics, no-marketing claims all hold. |
+| Cookie table lists sb-access-token (1 hour) and sb-refresh-token (30 days) cookies | FLAG: the app uses plain supabase-js createClient, which stores the session in localStorage; no sb-access-token or sb-refresh-token cookies are ever set by the auth flow (the only sb-* cookie writer is /api/demo/login, and nothing reads it). The policy documents cookies that do not exist while omitting the localStorage session storage that does | FIXED. The table no longer lists sb-access-token or sb-refresh-token cookies. It lists "sb-...-auth-token (local storage)" with the duration "Until you sign out or clear your browser data", which matches the supabase-js localStorage session. |
+| Cookie table lists wallplace_cookie_consent as a 12-month cookie | FLAG: consent is actually a localStorage key named wallplace-cookie-consent (hyphens) with no expiry; wrong name, wrong storage mechanism, wrong duration in a legal document | FIXED. The table now lists "wallplace-cookie-consent (local storage)", duration "Until you clear your browser data", citing PECR regulation 6(4). Name, mechanism and duration all match what the banner actually writes. |
+| How-to-control section: browser settings guidance and the honest "server-side analytics have nothing to opt out of" card with privacy@wallplace.co.uk contact | Yes | WORKS. The control section and the server-side-analytics explanation are present, with privacy@wallplace.co.uk. |
+| Links to /privacy | Yes | WORKS. Link to /privacy present. |
 
 ## Privacy (/privacy) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static policy, last updated March 2026: data collected, uses, sharing, rights, contact privacy@wallplace.co.uk, ICO link, /cookies link | Yes, standard and internally consistent | |
-| Mailto links to privacy@wallplace.co.uk | Yes, confirm the mailbox exists alongside hello@, legal@, complaints@, partners@, applications@ (six distinct addresses are now promised across the site) | |
+| Static policy, last updated March 2026: data collected, uses, sharing, rights, contact privacy@wallplace.co.uk, ICO link, /cookies link | Yes, standard and internally consistent | WORKS. Renders as described, "Last updated: March 2026", with the ICO link and /cookies cross-link. |
+| Mailto links to privacy@wallplace.co.uk | Yes, confirm the mailbox exists alongside hello@, legal@, complaints@, partners@, applications@ (six distinct addresses are now promised across the site) | WORKS as links. Five distinct mailboxes are promised site-wide: hello@, legal@, complaints@, partners@, privacy@ (applications@ appears only on the authed /apply success screen). Whether each exists is an owner check. |
 
 ## Terms (/terms) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static terms, last updated April 2026, cross-linking Privacy, Cookies, Artist Agreement, Venue Agreement, Pricing, Complaints | Yes | |
-| Buyer protections: item-not-received dispute flow via dashboard, refund-and-recover-from-artist mechanics, ADR wording mirroring /complaints | Yes | |
-| legal@wallplace.co.uk contact | Yes | |
-| Anchor #cancellation is linked from the application form's cooling-off checkbox ("as set out in the Platform Terms") | Yes, verify the anchor id exists in the rendered terms body so the deep link lands on the right section | |
+| Static terms, last updated April 2026, cross-linking Privacy, Cookies, Artist Agreement, Venue Agreement, Pricing, Complaints | Yes | WORKS. "Last updated: April 2026", cross-links present. |
+| Buyer protections: item-not-received dispute flow via dashboard, refund-and-recover-from-artist mechanics, ADR wording mirroring /complaints | Yes | WORKS as published text. The dispute flow, refund-and-recover mechanics and ADR wording are all present; the behaviour behind them is covered in areas C and G. |
+| legal@wallplace.co.uk contact | Yes | WORKS. mailto:legal@wallplace.co.uk present. |
+| Anchor #cancellation is linked from the application form's cooling-off checkbox ("as set out in the Platform Terms") | Yes, verify the anchor id exists in the rendered terms body so the deep link lands on the right section | BROKEN. /terms carries no id="cancellation"; the only ids on the page are main-content and a React-generated _R_. The cooling-off text is there (section on the Consumer Contracts Regulations 2013) but a /terms#cancellation link lands at the top of the page instead of on it. |
 
 ## IP policy (/ip-policy) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static takedown policy with legal@wallplace.co.uk route and required-information list | Yes | |
+| Static takedown policy with legal@wallplace.co.uk route and required-information list | Yes | WORKS. Takedown policy renders with the legal@wallplace.co.uk route and the required-information list. |
 
 ## Returns (/returns) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static policy: 14-day cooling off (Consumer Contracts Regulations 2013), bespoke-commission exemption, Consumer Rights Act 2015 faulty-goods rights, dashboard Request Refund flow, refund timelines (reviewed within 5 business days, Stripe refund 5 to 10), CEDR ADR caveat, hello@wallplace.co.uk | Yes, coherent and consistent with /terms and /complaints | |
+| Static policy: 14-day cooling off (Consumer Contracts Regulations 2013), bespoke-commission exemption, Consumer Rights Act 2015 faulty-goods rights, dashboard Request Refund flow, refund timelines (reviewed within 5 business days, Stripe refund 5 to 10), CEDR ADR caveat, hello@wallplace.co.uk | Yes, coherent and consistent with /terms and /complaints | WORKS. 14-day cooling off under the Consumer Contracts Regulations 2013, the bespoke-commission exemption, the Consumer Rights Act 2015 section and the CEDR non-membership caveat are all present. |
 
 ## Artist agreement (/artist-agreement) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static agreement supplementing /terms: moral rights, refund-on-behalf and payout set-off, 30-day cancellation by email or account settings, hello@wallplace.co.uk | Yes, this is the canonical cancellation wording the /pricing FAQ contradicts | |
+| Static agreement supplementing /terms: moral rights, refund-on-behalf and payout set-off, 30-day cancellation by email or account settings, hello@wallplace.co.uk | Yes, this is the canonical cancellation wording the /pricing FAQ contradicts | WORKS. Artist Agreement renders, "Last updated: April 2026", with the moral-rights, set-off and 30-day cancellation clauses. |
 
 ## Venue agreement (/venue-agreement) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static agreement supplementing /terms: care of artwork, liability pointer to terms section 12, legal@wallplace.co.uk | Yes | |
+| Static agreement supplementing /terms: care of artwork, liability pointer to terms section 12, legal@wallplace.co.uk | Yes | WORKS. Venue Agreement renders, "Last updated: April 2026", with the care-of-artwork clause and the legal@ route. |
 
 ## Blog (/blog) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Force-dynamic index merging curated static posts (data/blog-posts.ts, authored "Wallplace Team") with published DB blogs (status published, newest first, capped 50) plus author resolution from artist_profiles | Yes | |
-| Static post cards: first post spans full width, category badge, date, read time, excerpt, link to /blog/<slug> | Yes | |
-| DB post cards: optional cover image, date, author name, title, excerpt built from body_markdown.slice(0, 240) | FLAG: the excerpt is raw markdown, so a post starting with "# Heading" or an image reference shows literal markdown syntax on the index | |
+| Force-dynamic index merging curated static posts (data/blog-posts.ts, authored "Wallplace Team") with published DB blogs (status published, newest first, capped 50) plus author resolution from artist_profiles | Yes | WORKS. The index merges 5 static posts (8 April, 3 April, 28 March, 20 March, 14 March 2026) with 2 published DB posts ("QA test blog 2026-08-30 (delete me)" and "teest", both authored Fin Coles). |
+| Static post cards: first post spans full width, category badge, date, read time, excerpt, link to /blog/<slug> | Yes | WORKS. First static card spans full width and each carries a category badge (For Venues / For Artists / Industry), date, read time, excerpt and a /blog/<slug> link. |
+| DB post cards: optional cover image, date, author name, title, excerpt built from body_markdown.slice(0, 240) | FLAG: the excerpt is raw markdown, so a post starting with "# Heading" or an image reference shows literal markdown syntax on the index | FLAG STANDS. The two DB cards render date, author name, title and excerpt but no category badge and no read time, so they are visibly a different shape from the static cards in the same grid. |
 
 ## Blog post (/blog/[slug]) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static posts render hero image, category, author, date, read time, paragraphs, CTA block (Browse Marketplace, Apply to Join), and two related posts | Yes | |
-| Unknown slugs fall through to the DB lookup (published only), then notFound() | Yes | |
-| DB post body rendered by splitting body_markdown on blank lines into plain <p> tags with whitespace-pre-wrap | FLAG: markdown is never parsed, so artist-authored headings, bold, links and images render as literal syntax on the public page; either render markdown properly or rename the field and constrain the editor to plain text | |
-| DB post author name links to /browse/<author slug> when resolvable | Yes | |
-| Featured works section: reads blog_featured_artworks in position order, drops deleted works, links each to /browse/<artist>/<work-slug>, shows an Unavailable badge on sold works | Yes, this closes the recorded selection-dropped gap | |
-| generateMetadata supplies title/description for both static and DB posts | Yes | |
+| Static posts render hero image, category, author, date, read time, paragraphs, CTA block (Browse Marketplace, Apply to Join), and two related posts | Yes | WORKS. /blog/why-art-in-commercial-spaces-matters and the other four static posts render hero image, category, author, date, read time and body, with the CTA block at the foot. |
+| Unknown slugs fall through to the DB lookup (published only), then notFound() | Yes | WORKS. /blog/qa-test-blog-2026-08-30-delete-me-ngj7rw resolves from the DB and renders; only published rows appear (the index lists exactly the two published DB posts). |
+| DB post body rendered by splitting body_markdown on blank lines into plain <p> tags with whitespace-pre-wrap | FLAG: markdown is never parsed, so artist-authored headings, bold, links and images render as literal syntax on the public page; either render markdown properly or rename the field and constrain the editor to plain text | BLOCKED. Neither published DB post contains any markdown syntax (checked body_markdown in the blogs table), so the rendering path cannot be exercised from existing data. The article HTML no longer uses whitespace-pre-wrap, which suggests the renderer changed; re-tested from the artist blog editor in area D. |
+| DB post author name links to /browse/<author slug> when resolvable | Yes | WORKS. The DB post renders the author name "Fin Coles". |
+| Featured works section: reads blog_featured_artworks in position order, drops deleted works, links each to /browse/<artist>/<work-slug>, shows an Unavailable badge on sold works | Yes, this closes the recorded selection-dropped gap | WORKS. The QA test post renders a "Featured works" block listing Mt. Fitz Roy and Streets of St. Tropez in order. Both currently render with an "Unavailable" state. |
+| generateMetadata supplies title/description for both static and DB posts | Yes | WORKS. The DB post's <title> is "QA test blog 2026-08-30 (delete me) | Wallplace", so generateMetadata covers DB posts as well as static ones. |
 
 ## Profile design previews (/profile-designs, /dev/profile-designs/[slug]) [Developer]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Both routes render four artist-profile hero design variants from seed or merged data for design comparison | Yes as a dev tool | |
-| Both routes call notFound() when NODE_ENV is production | Yes, correctly unreachable in production; consider deleting before launch anyway since they ship in the bundle list | |
+| Both routes render four artist-profile hero design variants from seed or merged data for design comparison | Yes as a dev tool | BLOCKED. /profile-designs returns 404 in production, so the variants cannot be viewed. |
+| Both routes call notFound() when NODE_ENV is production | Yes, correctly unreachable in production; consider deleting before launch anyway since they ship in the bundle list | WORKS. /profile-designs returns 404 from production, confirming the notFound() gate. |
 
 ## Waitlist (/waitlist) [Visitor] plus /api/waitlist
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Standalone page (own layout, robots noindex/nofollow), unsurfaced from nav, kept for warm prospects with the link | Yes, matches the recorded decision | |
-| Artist/Venue toggle; venue choice reveals optional Venue Name and Town or City fields; Name and Email required; Phone optional; submit disabled until name, email and type present | Yes as a form | |
-| Submit posts name, email, phone, userType, venueName, venueLocation to /api/waitlist | FLAG: waitlistSchema accepts only name, email and userType; phone, venueName and venueLocation are silently stripped and never stored anywhere, so three of the six fields the page collects are thrown away. Either persist them or remove the fields | |
-| API: 5/min rate limit, insert waitlist_signups, duplicate emails return byte-identical success (no membership oracle), confirmation email "You're on the Wallplace waitlist" sent off the response path for fresh signups only | Yes, the E36d anti-enumeration work is done properly here | |
-| Success state "You're on the list. We'll be in touch before launch." | Yes | |
-| "Already have access? Sign in" link to /login | Yes | |
-| Scroll section: how-it-works copy ending "Wallplace is in private beta. Join the waitlist and we'll notify you when we open the doors." with a Join the Waitlist button that scrolls back to the form | FLAG: the private-beta framing contradicts the rest of the site, where /signup, /apply and /signup/venue are all open; a warm prospect who reads this page may wait for an invitation that will never come instead of just signing up. Add a line pointing at the open signup | |
-| Waitlist artist steps say "Submit your portfolio for review... No AI art" and venue steps mirror the main site | Yes | |
+| Standalone page (own layout, robots noindex/nofollow), unsurfaced from nav, kept for warm prospects with the link | Yes, matches the recorded decision | WORKS. /waitlist renders its own layout with no site header or footer, and carries <meta name="robots" content="noindex, nofollow">. It is not linked from any nav. |
+| Artist/Venue toggle; venue choice reveals optional Venue Name and Town or City fields; Name and Email required; Phone optional; submit disabled until name, email and type present | Yes as a form | WORKS. Artist/Venue toggle present; choosing Venue reveals two optional inputs ("e.g. The Corner Café", "e.g. Shoreditch, London"). Name and Email required, Phone optional, and "Join the Waitlist" starts disabled. |
+| Submit posts name, email, phone, userType, venueName, venueLocation to /api/waitlist | FLAG: waitlistSchema accepts only name, email and userType; phone, venueName and venueLocation are silently stripped and never stored anywhere, so three of the six fields the page collects are thrown away. Either persist them or remove the fields | FLAG STANDS, proven at schema level. waitlist_signups columns are exactly id, name, email, user_type, created_at. There is no column for phone, venueName or venueLocation, and my venue submission stored only name/email/user_type. |
+| API: 5/min rate limit, insert waitlist_signups, duplicate emails return byte-identical success (no membership oracle), confirmation email "You're on the Wallplace waitlist" sent off the response path for fresh signups only | Yes, the E36d anti-enumeration work is done properly here | WORKS. Fresh and duplicate POSTs both return 200 {"success":true} byte-identically and only one row exists for the two calls; a payload missing name/userType returns 400 "Name, email, and user type are required". |
+| Success state "You're on the list. We'll be in touch before launch." | Yes | WORKS (API path verified; the browser submit was not repeated to avoid a second row). The success copy renders from the same state the API drives. |
+| "Already have access? Sign in" link to /login | Yes | WORKS. "Already have access? Sign in" links /login. |
+| Scroll section: how-it-works copy ending "Wallplace is in private beta. Join the waitlist and we'll notify you when we open the doors." with a Join the Waitlist button that scrolls back to the form | FLAG: the private-beta framing contradicts the rest of the site, where /signup, /apply and /signup/venue are all open; a warm prospect who reads this page may wait for an invitation that will never come instead of just signing up. Add a line pointing at the open signup | FIXED. The closing block now reads "Be part of it from day one. Join the waitlist for launch updates. Or don't wait: artist applications and venue registration are already open." The private-beta framing and the wait-for-an-invitation risk are gone. |
+| Waitlist artist steps say "Submit your portfolio for review... No AI art" and venue steps mirror the main site | Yes | WORKS. Artist steps read "Submit your portfolio for review. We respond within 5 business days. No AI art." and the venue steps mirror the main site. |
 
 ## Newsletter (footer form, /api/newsletter, /api/newsletter/confirm, /newsletter/confirmed) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| NewsletterForm: email input plus Subscribe button, loading state, inline success "Thanks, you're on the list." and inline error display | Yes, the single message for fresh and duplicate subscribes is the deliberate anti-oracle behaviour | |
-| /api/newsletter: validates email, 5/min limit, inserts newsletter_subscribers with a UUID confirm token, duplicate returns identical output, sends double-opt-in confirmation email (link /api/newsletter/confirm?t=..., 7-day expiry stated) capped per recipient | Yes, well built | |
-| /api/newsletter/confirm: GET with 20/min limit, UUID-validates token, unknown or used tokens land on invalid, enforces the 7-day expiry it advertises, on success sets confirmed_at, clears the token, clears unsubscribed_at, and upserts email_preferences.newsletter_enabled for matching accounts | Yes, expiry claims and enforcement match | |
-| /newsletter/confirmed landing: three states (ok, expired, invalid) driven by ?status=, unknown values treated as invalid, robots noindex, Browse the work CTA | Yes | |
-| Footer copy "Monthly email with new artists, collections, and venues. No spam." | Yes, aligned with the confirm flow | |
+| NewsletterForm: email input plus Subscribe button, loading state, inline success "Thanks, you're on the list." and inline error display | Yes, the single message for fresh and duplicate subscribes is the deliberate anti-oracle behaviour | WORKS. Footer form renders an email input and Subscribe button on every page; the API contract behind it is verified below. |
+| /api/newsletter: validates email, 5/min limit, inserts newsletter_subscribers with a UUID confirm token, duplicate returns identical output, sends double-opt-in confirmation email (link /api/newsletter/confirm?t=..., 7-day expiry stated) capped per recipient | Yes, well built | WORKS. Fresh POST -> 200 {"ok":true}; identical duplicate -> 200 {"ok":true}; invalid address -> 400. DB row created with a UUID confirm_token and confirmed_at NULL. |
+| /api/newsletter/confirm: GET with 20/min limit, UUID-validates token, unknown or used tokens land on invalid, enforces the 7-day expiry it advertises, on success sets confirmed_at, clears the token, clears unsubscribed_at, and upserts email_preferences.newsletter_enabled for matching accounts | Yes, expiry claims and enforcement match | WORKS. Confirming with the real token 303s to /newsletter/confirmed?status=ok and the row shows confirmed_at set, confirm_token NULL, unsubscribed_at NULL. Replaying the token, an unknown UUID and a non-UUID all 303 to status=invalid. Note the redirect targets the apex, adding a 307 hop to www. |
+| /newsletter/confirmed landing: three states (ok, expired, invalid) driven by ?status=, unknown values treated as invalid, robots noindex, Browse the work CTA | Yes | WORKS. ok / expired / invalid each render distinct copy; ?status=bogus and a missing status both fall through to invalid. robots noindex, nofollow present, and the "Browse the work" CTA renders in all three states. |
+| Footer copy "Monthly email with new artists, collections, and venues. No spam." | Yes, aligned with the confirm flow | WORKS. Footer copy matches the double-opt-in behaviour. |
 
 ## Feature requests (/feature-requests) [Visitor and logged in] plus APIs
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Board lists requests from GET /api/feature-requests?status= filtered by tab (Open, Planned, Shipped, Closed), sorted by upvotes then recency, capped 100 | Yes | |
-| Submit idea toggle reveals form: title (3 to 160), description (10 to 4000), optional category, optional email shown only when logged out; success flash then auto-close and reload | Yes | |
-| POST /api/feature-requests: 10/min limit, optional auth links user id and email, demo accounts soft-blocked, anonymous allowed | Yes | |
-| The API accepts an optional role field the form never sends | Yes, harmless but the role badge on rows will always be empty for board submissions | |
-| Upvote button: logged-out click redirects to /login?next=/feature-requests; logged-in click optimistically increments then reconciles from the API's returned count; failures reload the list | Yes | |
-| POST /api/feature-requests/[id]/upvote: auth required, demo soft-blocked with 200 {demo:true}, toggle insert/delete with recount written back to feature_requests.upvotes | Yes; note a demo user's optimistic +1 is not unwound because the demo response carries no upvotes field, accepted per the E23a comment | |
-| Upvote as a toggle: a second click removes the vote, but the UI button gives no pressed state or label change, so un-voting looks like the count mysteriously dropping | FLAG: expose upvoted state per row (the API returns it) so the toggle is legible | |
-| No page metadata (client component without a layout title) | FLAG: minor, the tab shows the root default title | |
+| Board lists requests from GET /api/feature-requests?status= filtered by tab (Open, Planned, Shipped, Closed), sorted by upvotes then recency, capped 100 | Yes | BLOCKED for row behaviour. GET /api/feature-requests?status=open returns 200 {"requests":[]}, so the board is empty in production and there is nothing to sort, filter or cap. |
+| Submit idea toggle reveals form: title (3 to 160), description (10 to 4000), optional category, optional email shown only when logged out; success flash then auto-close and reload | Yes | WORKS partially: the Submit-idea form is reachable and the logged-out variant shows the optional email field. Length validation and the success-flash-then-reload path were not driven, to avoid seeding the empty production board. |
+| POST /api/feature-requests: 10/min limit, optional auth links user id and email, demo accounts soft-blocked, anonymous allowed | Yes | BLOCKED. Not exercised, for the same reason. |
+| The API accepts an optional role field the form never sends | Yes, harmless but the role badge on rows will always be empty for board submissions | BLOCKED. No rows exist on the board to carry a role badge. |
+| Upvote button: logged-out click redirects to /login?next=/feature-requests; logged-in click optimistically increments then reconciles from the API's returned count; failures reload the list | Yes | BLOCKED. No rows to upvote. |
+| POST /api/feature-requests/[id]/upvote: auth required, demo soft-blocked with 200 {demo:true}, toggle insert/delete with recount written back to feature_requests.upvotes | Yes; note a demo user's optimistic +1 is not unwound because the demo response carries no upvotes field, accepted per the E23a comment | BLOCKED. No rows to upvote. |
+| Upvote as a toggle: a second click removes the vote, but the UI button gives no pressed state or label change, so un-voting looks like the count mysteriously dropping | FLAG: expose upvoted state per row (the API returns it) so the toggle is legible | BLOCKED. No rows to upvote. |
+| No page metadata (client component without a layout title) | FLAG: minor, the tab shows the root default title | FLAG STANDS. /feature-requests renders with the root default title "Wallplace | Curated Art for Commercial Spaces", not a page-specific one. |
 
 ## Demo (/demo) [Visitor] plus /api/demo/login
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Landing explains the two demo accounts; artist resolved from DB via DEMO_ARTIST_SLUG with loud dev failure and visible prod fallback, venue from the static pool | Yes, the K8 loud-failure semantics are preserved | |
-| When DEMO_ARTIST_EMAIL and DEMO_VENUE_EMAIL are set, both tour cards link /api/demo/login?role=...; otherwise they fall back to the public profile pages /browse/<slug> and /venues/<slug> | Yes as routing logic | |
-| /api/demo/login: role-validated, next validated through safeRedirect (the E36b protocol-relative fix), 503 JSON when creds unset, signs in with the demo password server-side, 303 redirects to the portal and sets an httpOnly sb-<ref>-auth-token cookie in @supabase/ssr format | FLAG: the app has no @supabase/ssr, no middleware and no server-readable session; the client is plain supabase-js reading localStorage, and nothing in the codebase ever reads the cookie this route sets. The visitor lands on /artist-portal or /venue-portal with no client session and the portal will treat them as logged out. The Phase 2 portal tour cannot work as coded; either adopt the ssr client or return the session to the browser in a form supabase-js can ingest | |
-| Sign-in failure returns raw JSON 500 to the browser (the card is a plain link, no fetch wrapper) | FLAG: a misconfigured demo password shows the visitor a bare JSON error page instead of a friendly fallback; the 503 path has the same shape when creds are half-set | |
-| "What you'll see" bullet lists for both tours | Yes | |
-| Final CTAs Apply as Artist (/apply), Register Your Venue (/signup/venue), Sign in (/login) | Yes | |
+| Landing explains the two demo accounts; artist resolved from DB via DEMO_ARTIST_SLUG with loud dev failure and visible prod fallback, venue from the static pool | Yes, the K8 loud-failure semantics are preserved | WORKS. The landing resolves the demo artist from the DB (Maya Chen, London, UK) and the venue from the static pool (The Copper Kettle, Peckham); both cards render with their descriptions. |
+| When DEMO_ARTIST_EMAIL and DEMO_VENUE_EMAIL are set, both tour cards link /api/demo/login?role=...; otherwise they fall back to the public profile pages /browse/<slug> and /venues/<slug> | Yes as routing logic | WORKS, on the fallback branch. In production both cards link the public profiles, /browse/maya-chen and /venues/the-copper-kettle (both 200), which means DEMO_ARTIST_EMAIL and DEMO_VENUE_EMAIL are unset. DIFFERS in effect: the page sells a portal tour ("SEE IT FROM THE INSIDE", "Tour the artist account") but delivers a public profile page. |
+| /api/demo/login: role-validated, next validated through safeRedirect (the E36b protocol-relative fix), 503 JSON when creds unset, signs in with the demo password server-side, 303 redirects to the portal and sets an httpOnly sb-<ref>-auth-token cookie in @supabase/ssr format | FLAG: the app has no @supabase/ssr, no middleware and no server-readable session; the client is plain supabase-js reading localStorage, and nothing in the codebase ever reads the cookie this route sets. The visitor lands on /artist-portal or /venue-portal with no client session and the portal will treat them as logged out. The Phase 2 portal tour cannot work as coded; either adopt the ssr client or return the session to the browser in a form supabase-js can ingest | BLOCKED. The route is unreachable from production: nothing links to it, and GET /api/demo/login?role=artist returns 405 with an empty body. The session/cookie defect the flag describes cannot be observed while the demo tour never routes there. |
+| Sign-in failure returns raw JSON 500 to the browser (the card is a plain link, no fetch wrapper) | FLAG: a misconfigured demo password shows the visitor a bare JSON error page instead of a friendly fallback; the 503 path has the same shape when creds are half-set | BLOCKED. Same reason: the failure path is only reachable if the cards linked to the route, which in production they do not. |
+| "What you'll see" bullet lists for both tours | Yes | WORKS. "INSIDE THE ARTIST TOUR" and "INSIDE THE VENUE TOUR" bullet lists both render. |
+| Final CTAs Apply as Artist (/apply), Register Your Venue (/signup/venue), Sign in (/login) | Yes | WORKS. APPLY AS ARTIST -> /apply, REGISTER YOUR VENUE -> /signup/venue, "Already a member? Sign in" -> /login. |
 
 ## Customer landing (/customer) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Immersive hero: BROWSE ARTWORK (/browse) and CREATE AN ACCOUNT (/signup/customer) CTAs | Yes | |
-| "Or skip the wall and browse hundreds of independent artists online." | FLAG: same order-of-magnitude overclaim as /how-it-works; the catalogue is tens, not hundreds | |
-| Guest order tracking line linking /orders/track "no account needed" | Yes, route exists | |
-| ScrollButton to CustomerGuide, which repeats the certificate-of-authenticity promise ("Every sale ships with a signed certificate from the artist") | FLAG: see the /how-it-works flag; there is no certificate feature in the product | |
+| Immersive hero: BROWSE ARTWORK (/browse) and CREATE AN ACCOUNT (/signup/customer) CTAs | Yes | WORKS. Both CTAs render with the stated destinations. |
+| "Or skip the wall and browse hundreds of independent artists online." | FLAG: same order-of-magnitude overclaim as /how-it-works; the catalogue is tens, not hundreds | FIXED. The line now reads "Or skip the wall and browse a growing community of independent artists online." No "hundreds" claim remains anywhere on the site. |
+| Guest order tracking line linking /orders/track "no account needed" | Yes, route exists | WORKS. The guest-tracking line links /orders/track, which returns 200. |
+| ScrollButton to CustomerGuide, which repeats the certificate-of-authenticity promise ("Every sale ships with a signed certificate from the artist") | FLAG: see the /how-it-works flag; there is no certificate feature in the product | FIXED. The certificate promise is gone. /customer now says "Want a signed certificate of authenticity? Ask the artist before you buy.", which describes an artist arrangement rather than a platform guarantee. |
 
 ## Check your inbox (/check-your-inbox) [New signup]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Static explanation that a confirmation link was sent, robots noindex, Go to sign in CTA | Yes | |
-| "Wrong email? Sign up again... the unverified one expires on its own after 7 days." | Yes as UX copy, but it asserts a Supabase retention setting the codebase cannot enforce; confirm the project actually purges unconfirmed users at 7 days or soften the claim | |
-| No resend-verification action on this page | FLAG: the resend endpoint and UI exist only on /login behind a failed sign-in; surfacing a resend link here would save the most common recovery a step | |
+| Static explanation that a confirmation link was sent, robots noindex, Go to sign in CTA | Yes | DIFFERS. The page renders correctly, but it is unreachable from a real signup: production creates accounts already confirmed and signs them in, so nobody is sent here. It is disallowed in robots.txt rather than carrying a robots meta tag. |
+| "Wrong email? Sign up again... the unverified one expires on its own after 7 days." | Yes as UX copy, but it asserts a Supabase retention setting the codebase cannot enforce; confirm the project actually purges unconfirmed users at 7 days or soften the claim | NOT VERIFIABLE as written, and moot in production. No unverified account can exist: email_confirmed_at is stamped at creation, so there is nothing for a 7-day purge to collect. |
+| No resend-verification action on this page | FLAG: the resend endpoint and UI exist only on /login behind a failed sign-in; surfacing a resend link here would save the most common recovery a step | FLAG STANDS but is moot. There is no resend action on the page, and with confirmation disabled no account can be in the unconfirmed state the resend endpoint serves. |
 
 ## Email preview (/email-preview, /email-preview/[id]) [Developer]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Server-side allowlist gate: 404 in production (VERCEL_ENV production, or any non-local unrecognised environment), open in preview/dev and localhost; fails closed | Yes, and the B4 rationale for not attempting a client-side admin gate is correct | |
-| Index: registry listing with stream/persona/category filters, search, counts, per-template links | Yes | |
-| Detail: renders the template with mock props to sandboxed iframe HTML plus plain-text fallback, subject, preview text, metadata rows | Yes | |
+| Server-side allowlist gate: 404 in production (VERCEL_ENV production, or any non-local unrecognised environment), open in preview/dev and localhost; fails closed | Yes, and the B4 rationale for not attempting a client-side admin gate is correct | WORKS. /email-preview returns 404 in production, so the allowlist gate holds. |
+| Index: registry listing with stream/persona/category filters, search, counts, per-template links | Yes | BLOCKED. 404 in production by design. |
+| Detail: renders the template with mock props to sandboxed iframe HTML plus plain-text fallback, subject, preview text, metadata rows | Yes | BLOCKED. 404 in production by design. |
 
 ## Signup hub (/signup) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| RedirectIfLoggedIn wrapper sends signed-in users to ?next= or their portal | Yes | |
-| Three role cards (Artist to /signup/artist, Venue to /signup/venue, Customer to /signup/customer), each forwarding a validated ?next= suffix | Yes | |
-| Venue card copy "Free to display, optional revenue share. Browse and connect instantly." | Yes, though "instantly" glosses over the email-verification step every account must pass | |
-| "Already have an account? Sign in" forwarding ?next= to /login | Yes | |
+| RedirectIfLoggedIn wrapper sends signed-in users to ?next= or their portal | Yes | BLOCKED for the logged-in case as a guest; re-tested with a session in area H. |
+| Three role cards (Artist to /signup/artist, Venue to /signup/venue, Customer to /signup/customer), each forwarding a validated ?next= suffix | Yes | WORKS. The three cards link /signup/artist, /signup/venue and /signup/customer, and ?next=%2Fbrowse is forwarded to all three. Validation holds: next=https://evil.example.com and next=//evil.example.com are both dropped, while next=%2Fcheckout is forwarded. |
+| Venue card copy "Free to display, optional revenue share. Browse and connect instantly." | Yes, though "instantly" glosses over the email-verification step every account must pass | WORKS, and the caveat no longer applies. "Browse and connect instantly" is accurate: production signs a new account in immediately with no verification step. |
+| "Already have an account? Sign in" forwarding ?next= to /login | Yes | WORKS. "Sign in" links /login?next=%2Fbrowse. |
 
 ## Artist signup (/signup/artist) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Step 1 of the artist funnel: name, email, password (min 8 client-checked), platform ToS checkbox, Turnstile challenge; submit disabled until ToS and token present | Yes | |
-| Turnstile token verified server-side via /api/auth/verify-turnstile before signUp | Yes | |
-| supabase.auth.signUp with user_type artist and emailRedirectTo /login?next=<validated next, default /apply> | Yes | |
-| Fire-and-forget POST /api/terms/accept recording platform_tos by email | Yes, though fire-and-forget means a failed record is silently lost; acceptable given the server also has the checkbox-gated submit, but note it | |
-| On success router.push("/check-your-inbox") | Yes as behaviour | |
-| Button and helper copy: heading "we'll take you straight to the application" and footer "You'll go straight to the application form after this." with the button labelled "Continue to Application" | FLAG: the flow actually lands on /check-your-inbox and the user must verify email and sign in before seeing /apply; the file's own comment block still describes an immediate signInWithPassword that the code no longer does. Both the copy and the doc comment promise a straight-through hop that does not happen | |
-| OAuth Google/Apple buttons behind NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE, minting signed state with role artist; disabled state shows "Google and Apple sign-in coming soon." | Yes | |
-| Links: Sign in (/login?next=/apply), Other account types (/signup) | Yes | |
+| Step 1 of the artist funnel: name, email, password (min 8 client-checked), platform ToS checkbox, Turnstile challenge; submit disabled until ToS and token present | Yes | DIFFERS on two counts. Name, email, password (minLength 8) and the ToS checkbox render, but there is no Turnstile challenge in production: zero iframes, zero [data-sitekey] nodes, no Cloudflare script. Ticking the ToS box alone enables Create Account, and the customer form's submit posted the literal sentinel {"token":"dev-bypass"} to /api/auth/verify-turnstile. |
+| Turnstile token verified server-side via /api/auth/verify-turnstile before signUp | Yes | DIFFERS, and this is the launch-relevant part. The client sends {"token":"dev-bypass"} and /api/auth/verify-turnstile answers 200 {"ok":true,"bypass":true}; an arbitrary made-up token gets the same answer. TURNSTILE_SECRET_KEY is unset in production, so verification passes anything. |
+| supabase.auth.signUp with user_type artist and emailRedirectTo /login?next=<validated next, default /apply> | Yes | DIFFERS. The same Supabase project setting applies to every signup form: confirmation is disabled, so the emailRedirectTo value is never exercised and no verification link is sent (confirmation_sent_at is NULL on the account created this pass). |
+| Fire-and-forget POST /api/terms/accept recording platform_tos by email | Yes, though fire-and-forget means a failed record is silently lost; acceptable given the server also has the checkbox-gated submit, but note it | WORKS. The customer form's equivalent call, POST /api/terms/accept, returned 200 {"success":true} and was fired after signUp as designed. |
+| On success router.push("/check-your-inbox") | Yes as behaviour | BROKEN. Production routes a completed signup to the portal, not /check-your-inbox. |
+| Button and helper copy: heading "we'll take you straight to the application" and footer "You'll go straight to the application form after this." with the button labelled "Continue to Application" | FLAG: the flow actually lands on /check-your-inbox and the user must verify email and sign in before seeing /apply; the file's own comment block still describes an immediate signInWithPassword that the code no longer does. Both the copy and the doc comment promise a straight-through hop that does not happen | FIXED on the wording, but production now undershoots it in the other direction. The copy is honest about intent ("We'll email you a verification link. Verify, sign in, and you'll land on the application form"), yet no verification link is sent at all because confirmation is disabled, so the promised step does not exist. |
+| OAuth Google/Apple buttons behind NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE, minting signed state with role artist; disabled state shows "Google and Apple sign-in coming soon." | Yes | WORKS. No OAuth buttons render and the page shows "Email + password only for now. Google and Apple sign-in coming soon." |
+| Links: Sign in (/login?next=/apply), Other account types (/signup) | Yes | WORKS. "Sign in" and "Other account types" both present. |
 
 ## Customer signup (/signup/customer) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Name, email, password form with the same Turnstile-then-signUp pipeline, user_type customer, emailRedirectTo /login?next=<validated, default /browse> | Yes | |
-| Terms acceptance fire-and-forget (platform_tos) | Yes | |
-| On success routes to /check-your-inbox | Yes | |
-| OAuth pair behind the same flag with role customer | Yes | |
-| Links to /login and /signup | Yes | |
+| Name, email, password form with the same Turnstile-then-signUp pipeline, user_type customer, emailRedirectTo /login?next=<validated, default /browse> | Yes | DIFFERS, materially. Ran the real signup (QA-TEST Customer, fcoles2598+qatestcustomer@gmail.com). The pipeline fires as described, but production Supabase has email confirmation DISABLED: signUp returned an access_token straight away, auth.users shows email_confirmed_at set at creation and confirmation_sent_at NULL, and the browser landed on /customer-portal already signed in. The emailRedirectTo it sends (/login?next=%2Fbrowse) is never used. |
+| Terms acceptance fire-and-forget (platform_tos) | Yes | WORKS. POST /api/terms/accept fired with {userEmail, userType:"customer", termsVersion:"v1.0-2026-04", termsType:"platform_tos"} and returned 200 {"success":true}. |
+| On success routes to /check-your-inbox | Yes | BROKEN as described. The signup does NOT route to /check-your-inbox: it lands on /customer-portal, signed in, because Supabase email confirmation is off in production. /check-your-inbox is unreachable from a real signup. |
+| OAuth pair behind the same flag with role customer | Yes | WORKS. Same "coming soon" line, no OAuth buttons. |
+| Links to /login and /signup | Yes | WORKS. Both cross-links present. |
 
 ## Venue signup (/signup/venue) [Visitor] plus /api/register-venue and /register-venue
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| /register-venue is a server redirect to /signup/venue | Yes, keeps old links alive | |
-| Long registration form: venue name and type (with free-text "Other" describe field), contact name, email, optional phone, password and confirm, address lines, city, postcode, wall-space dropdown, art-interest toggle pills, free-text message, hear-about dropdown | Yes | |
-| Password rules: min 8 and match check client-side | Yes | |
-| Three required checkboxes: platform ToS, venue agreement, public-liability-insurance acknowledgement; plus Turnstile; submit disabled until all present | Yes | |
-| "Other" venue type free-text (customVenueType) | FLAG: registerVenueSchema has no customVenueType field, so the description the venue types is stripped by validation and never stored; the record just says "Other" | |
-| Submit order: registration record POSTed to /api/register-venue first, then supabase.auth.signUp | Yes broadly; a failed signUp after a successful registration insert leaves an orphan registration row, but the profile is only hydrated on first verified login so the orphan is inert | |
-| /api/register-venue: validates, 5/min limit, inserts venue_registrations status pending, duplicates return byte-identical success (anti-oracle), admin alert plus confirmation email off the response path, and the E34 slug-squatting seed removed | Yes, well remediated | |
-| Confirmation email subject "We've received your Wallplace application" | FLAG: venues are not reviewed; the page promises "start browsing immediately, no waiting" while the email frames it as an application under consideration. Reword the email to a welcome/confirm-your-email framing | |
-| Terms acceptance fire-and-forget for both platform_tos and venue_agreement | Yes | |
-| On success routes to /check-your-inbox | Yes as behaviour, but the sidebar step 01 says "Register and start browsing immediately. No waiting." which skips the mandatory email verification hop | |
-| Unused submitted-state success screen ("You're In... Your venue is set up and ready to go" with Browse Art and Go to Your Portal CTAs) | FLAG: dead code, setSubmitted is never called; delete or rewire | |
-| Hero aside "Wallplace Curated , paid shortlists from £49." | FLAG: stray space before the comma in rendered copy (the link and comma are split across JSX lines) | |
-| RedirectIfLoggedIn wrapper | Yes | |
+| /register-venue is a server redirect to /signup/venue | Yes, keeps old links alive | WORKS. GET /register-venue -> 307 /signup/venue. |
+| Long registration form: venue name and type (with free-text "Other" describe field), contact name, email, optional phone, password and confirm, address lines, city, postcode, wall-space dropdown, art-interest toggle pills, free-text message, hear-about dropdown | Yes | WORKS. Every field renders: venue name, venue type combobox (8 options, Other reveals "Please describe your venue type"), contact name, email, optional phone, password + confirm, address lines 1 and 2, city, postcode, wall-space combobox, eight art-interest pills, free-text message and a hear-about combobox. |
+| Password rules: min 8 and match check client-side | Yes | WORKS. The password input carries minLength 8; the confirm field relies on the client-side match check. |
+| Three required checkboxes: platform ToS, venue agreement, public-liability-insurance acknowledgement; plus Turnstile; submit disabled until all present | Yes | DIFFERS. All three required checkboxes render, but there is no Turnstile challenge in production (zero iframes), so the submit gate is the three checkboxes alone and the token step is the dev-bypass sentinel. |
+| "Other" venue type free-text (customVenueType) | FLAG: registerVenueSchema has no customVenueType field, so the description the venue types is stripped by validation and never stored; the record just says "Other" | FLAG STANDS, both halves proven. Choosing "Other" reveals a text input placeholder "Please describe your venue type", and venue_registrations has no column for it (columns are id, venue_name, venue_type, contact_name, email, phone, address_line1, address_line2, city, postcode, wall_space, art_interests, message, hear_about, status, created_at). |
+| Submit order: registration record POSTed to /api/register-venue first, then supabase.auth.signUp | Yes broadly; a failed signUp after a successful registration insert leaves an orphan registration row, but the profile is only hydrated on first verified login so the orphan is inert | BLOCKED. Not exercised; completing it would create a real auth account and a venue registration row. |
+| /api/register-venue: validates, 5/min limit, inserts venue_registrations status pending, duplicates return byte-identical success (anti-oracle), admin alert plus confirmation email off the response path, and the E34 slug-squatting seed removed | Yes, well remediated | BLOCKED. Not exercised for the same reason. |
+| Confirmation email subject "We've received your Wallplace application" | FLAG: venues are not reviewed; the page promises "start browsing immediately, no waiting" while the email frames it as an application under consideration. Reword the email to a welcome/confirm-your-email framing | BLOCKED for the email body, and the page-side contradiction has flipped. Step 01's "Register and start browsing immediately. No waiting." is now ACCURATE, because production creates accounts already confirmed and signs them in. It is the verification copy elsewhere that no longer matches. |
+| Terms acceptance fire-and-forget for both platform_tos and venue_agreement | Yes | BLOCKED. Requires a completed signup. |
+| On success routes to /check-your-inbox | Yes as behaviour, but the sidebar step 01 says "Register and start browsing immediately. No waiting." which skips the mandatory email verification hop | FIXED in effect, not by edit. The copy still says "Register and start browsing immediately. No waiting.", and that is now what production does: confirmation is disabled, so there is no email-verification hop to skip. |
+| Unused submitted-state success screen ("You're In... Your venue is set up and ready to go" with Browse Art and Go to Your Portal CTAs) | FLAG: dead code, setSubmitted is never called; delete or rewire | BLOCKED. Dead state, not reachable from production without completing a registration. |
+| Hero aside "Wallplace Curated , paid shortlists from £49." | FLAG: stray space before the comma in rendered copy (the link and comma are split across JSX lines) | FLAG STANDS. Rendered innerText reads "Want us to do the curation for you? Wallplace Curated , paid shortlists from £49." — the space before the comma is visible on the page, not just in the source. |
+| RedirectIfLoggedIn wrapper | Yes | BLOCKED for the logged-in case as a guest; covered in area H. |
 
 ## Login (/login) [Visitor] plus /api/auth/precheck and /api/auth/resend-verification
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Email and password form; password minLength 6 here versus 8 everywhere else | FLAG: harmless for existing passwords but inconsistent; the signup forms enforce 8 | |
-| Pre-submit POST /api/auth/precheck {kind login}: in-app IP rate limit (8/min), 429 mapped to "Too many attempts" message; network failure falls through to Supabase | Yes, sensible layered defence | |
-| signIn errors: "Invalid login credentials" mapped to "Invalid email or password", others shown raw | Yes | |
-| Unconfirmed-email detection reveals a resend panel; "Send me a new link" POSTs /api/auth/resend-verification and always lands on the neutral sent state | Yes, matches the endpoint's enumeration-safe contract | |
-| /api/auth/resend-verification: 3 per 5 min IP limit, single byte-identical acknowledgement regardless of account state, redirect built server-side through safeRedirect | Yes, textbook | |
-| Already-signed-in visitors get a toast "You're already signed in. Redirecting..." and are sent to ?next= (or legacy ?redirect=) via safeRedirect, else their portal | Yes | |
-| ?email= prefill for the portal-switch flow | Yes, but see the Header flag: the accompanying ?hint= role is never used | |
-| Forgot password link (/forgot-password) | Yes | |
-| OAuth Google/Apple behind the flag, minting state with role customer and a "coming soon" line when off; oauth-finalize never demotes an existing role so returning artists keep theirs | Yes | |
-| Sign up cross-link forwards a validated ?next= | Yes | |
+| Email and password form; password minLength 6 here versus 8 everywhere else | FLAG: harmless for existing passwords but inconsistent; the signup forms enforce 8 | FLAG STANDS. /login's password input reports minLength 6 while /signup/artist and /signup/venue both report 8. |
+| Pre-submit POST /api/auth/precheck {kind login}: in-app IP rate limit (8/min), 429 mapped to "Too many attempts" message; network failure falls through to Supabase | Yes, sensible layered defence | WORKS for the happy path: POST /api/auth/precheck {"kind":"login"} returns 200 {"ok":true} before the sign-in attempt. The 429 mapping was not driven, to avoid locking the IP out of the logins this pass depends on. |
+| signIn errors: "Invalid login credentials" mapped to "Invalid email or password", others shown raw | Yes | WORKS. Signing in with a non-existent address and a wrong password renders the inline message "Invalid email or password". |
+| Unconfirmed-email detection reveals a resend panel; "Send me a new link" POSTs /api/auth/resend-verification and always lands on the neutral sent state | Yes, matches the endpoint's enumeration-safe contract | BLOCKED, and unreachable in production. No account can be unconfirmed (email_confirmed_at is stamped at creation), so the unconfirmed-email branch and its resend panel cannot be triggered. |
+| /api/auth/resend-verification: 3 per 5 min IP limit, single byte-identical acknowledgement regardless of account state, redirect built server-side through safeRedirect | Yes, textbook | WORKS. POST /api/auth/resend-verification for an address that does not exist returns 200 with the single neutral body "If that address needs confirming, we've sent a new link. Check your inbox and spam folder." |
+| Already-signed-in visitors get a toast "You're already signed in. Redirecting..." and are sent to ?next= (or legacy ?redirect=) via safeRedirect, else their portal | Yes | WORKS. Visiting /login?next=%2Fbrowse while signed in as the artist redirected straight to /browse without leaving the form up. |
+| ?email= prefill for the portal-switch flow | Yes, but see the Header flag: the accompanying ?hint= role is never used | FIXED. /login?email=test%40testingvenue.com&hint=venue prefills the email AND renders "Sign in to your venue account" plus "You have more than one Wallplace account on this email address... use the ones you set up for your venue account." ?hint= is read now. |
+| Forgot password link (/forgot-password) | Yes | WORKS. "Forgot password?" links /forgot-password. |
+| OAuth Google/Apple behind the flag, minting state with role customer and a "coming soon" line when off; oauth-finalize never demotes an existing role so returning artists keep theirs | Yes | WORKS for the dark state: no OAuth buttons render and the "coming soon" line is shown. The finalize/never-demote behaviour is unreachable while the flag is off. |
+| Sign up cross-link forwards a validated ?next= | Yes | WORKS. The Sign up link forwards the validated ?next=. |
 
 ## Apply (/apply) [Artist applicant] plus ApplicationGate, ApplicationForm and /api/apply
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Hero copy "We review every application personally. We accept roughly half." | FLAG: invented acceptance rate, same family as the how-it-works claim | |
-| Founding Artist banner (first month free) and what-we-look-for sidebar with "respond within 5 business days" | Yes | |
-| ApplicationGate: loading state, anonymous visitors replace-redirected to /signup/artist?next=/apply, signed-in artists (or roleless legacy accounts) get the form | Yes | |
-| Gate's wrong-role notice for venue/customer accounts: "Sign out and create an artist account" with a "Create artist account" button linking /signup/artist?next=/apply | FLAG: the button does not sign the user out, and /signup/artist is wrapped in RedirectIfLoggedIn, which bounces any signed-in user straight back to /apply, where the same notice renders again; the CTA is an infinite loop. It must sign out first (as the copy says) or deep-link a sign-out-and-redirect | |
-| Form prefills name and email from the auth context once resolved, without clobbering typed drafts | Yes | |
-| About You: name, email, location required; Instagram, portfolio link, three sample-work URL slots, trader status select (consumer or business) with conditional business name and VAT fields | Yes | |
-| Email field remains freely editable and /api/apply never checks it against the authenticated user | FLAG: the whole point of auth-gating the application (per the signup/artist doc comment, "reject impersonation, instead of trusting whatever email the form sent") is not enforced; an authed user can file an application, and trigger the acknowledgement email, for any address | |
-| Your Practice: discipline radio grid (required, prunes sub-styles on change), optional primary medium, sub-style toggle pills, optional artist statement with live word count | Yes | |
-| What You Offer: supply checkboxes (originals, prints, framed, commissions, at least one required), arrangement checkboxes using ARRANGEMENT_LABEL (revenue share, paid loan, purchase, at least one required) with an explainer paragraph matching the canonical semantics, delivery radius select required | Yes | |
-| Venue preferences checkbox grid (optional) and hear-about select | Yes | |
-| Referral code input (uppercased, max 10) with "they get a free month when you upgrade" | Yes, and /api/apply now persists referred_by_code after the migration-109 fix | |
-| Plan picker (Core, Premium, Pro cards, defaults Core) | Yes, but see the /pricing flag: "Apply for Pro" arrives with Core preselected | |
-| Consents: platform ToS, artist agreement, insurance acknowledgement all required; consumer trader status additionally reveals a required 14-day cooling-off acknowledgement box linking /terms#cancellation | Yes as UX | |
-| acknowledgedCoolingOff is posted to /api/apply but applySchema has no such field, so it is stripped and stored nowhere | FLAG: the consumer-rights acknowledgement, the one checkbox whose entire purpose is to be evidenced later, is never persisted; add it to the schema and the row | |
-| Client pre-validation mirrors the server, highlights fields, scrolls to the first error | Yes, though the synthetic keys "offers" and "openTo" match no element id or name so the scroll silently no-ops for those two | |
-| /api/apply: 5/min limit, optional auth, zod field-error map returned for inline display, single insert (strip-and-retry removed), duplicate emails return byte-identical success with a log line | Yes | |
-| Profile bridge: for authed fresh applications, creates a pending artist_profiles row with a collision-suffixed slug so the applicant can upload work pre-review; best effort with admin-accept fallback | Yes | |
-| Admin alert plus applicant receipt email sent off the response path, idempotent per email | Yes on mechanics | |
-| Receipt email passes reviewTimelineDays: 3 | FLAG: every page (apply, artists, pricing, waitlist, success screen) says 5 business days; the email the applicant receives minutes later says 3 days. Align on one number | |
-| Success screen: "Application received... respond within 5 business days", claim-profile CTA block, "I'll do this later" link home, applications@wallplace.co.uk mailto | Yes on layout; but see the claim-page flag below, the CTA points at a broken flow | |
+| Hero copy "We review every application personally. We accept roughly half." | FLAG: invented acceptance rate, same family as the how-it-works claim | FIXED. The hero now reads "We review every application personally. Being accepted means your work has been judged ready for commercial spaces." No acceptance rate is claimed. |
+| Founding Artist banner (first month free) and what-we-look-for sidebar with "respond within 5 business days" | Yes | WORKS. The Founding Artist Offer block and "We aim to respond within 5 business days of receiving your application." both render. |
+| ApplicationGate: loading state, anonymous visitors replace-redirected to /signup/artist?next=/apply, signed-in artists (or roleless legacy accounts) get the form | Yes | WORKS for the anonymous branch: /apply replace-redirects to /signup/artist?next=%2Fapply. Signed-in branches covered in D and E. |
+| Gate's wrong-role notice for venue/customer accounts: "Sign out and create an artist account" with a "Create artist account" button linking /signup/artist?next=/apply | FLAG: the button does not sign the user out, and /signup/artist is wrapped in RedirectIfLoggedIn, which bounces any signed-in user straight back to /apply, where the same notice renders again; the CTA is an infinite loop. It must sign out first (as the copy says) or deep-link a sign-out-and-redirect | FIXED. Signed in as the QA-TEST customer, /apply shows "You're signed in as a customer. The artist application is for individual artists. Sign out and create an artist account to continue." with a BUTTON (not a link) labelled "Sign out and create artist account". Clicking it clears the session and lands on /signup/artist?next=%2Fapply, which stays put. The loop is gone. |
+| Form prefills name and email from the auth context once resolved, without clobbering typed drafts | Yes | WORKS. Signed in as Fin Coles the form opened with name "Fin Coles" and email "finbin1@hotmail.co.uk" prefilled; typing over them was not clobbered by a later hydration. |
+| About You: name, email, location required; Instagram, portfolio link, three sample-work URL slots, trader status select (consumer or business) with conditional business name and VAT fields | Yes | WORKS as rendered, with one silent-drop finding. Name, email and location are required; Instagram, portfolio link and three sample-work slots render; trader status "business" reveals a business-name field ("e.g. Jane Doe Studio Ltd") and a VAT field ("GB123456789"). DIFFERS: sampleWorkUrls IS posted but artist_applications has no column for it, so the three sample links are discarded exactly like acknowledgedCoolingOff. |
+| Email field remains freely editable and /api/apply never checks it against the authenticated user | FLAG: the whole point of auth-gating the application (per the signup/artist doc comment, "reject impersonation, instead of trusting whatever email the form sent") is not enforced; an authed user can file an application, and trigger the acknowledgement email, for any address | FIXED. Posting the form authenticated as finbin1@hotmail.co.uk with email fcoles2598+qaimpersonate@gmail.com returns 403 "Please apply with the email on your account (finbin1@hotmail.co.uk). To use a different address, sign out first." Impersonation is now refused. |
+| Your Practice: discipline radio grid (required, prunes sub-styles on change), optional primary medium, sub-style toggle pills, optional artist statement with live word count | Yes | WORKS. The discipline radio grid renders six required options (photography, painting, drawing, sketching, sculpture, mixed); primary medium is an optional 19-option select; the artist statement is optional with a live word count. |
+| What You Offer: supply checkboxes (originals, prints, framed, commissions, at least one required), arrangement checkboxes using ARRANGEMENT_LABEL (revenue share, paid loan, purchase, at least one required) with an explainer paragraph matching the canonical semantics, delivery radius select required | Yes | WORKS. Four supply checkboxes (Original works, Prints & reproductions, Framed works, Commissions) and three arrangement checkboxes labelled Revenue share, Paid loan and Direct purchase, plus the required delivery-radius select (8 options). |
+| Venue preferences checkbox grid (optional) and hear-about select | Yes | WORKS. Ten venue-type checkboxes plus "Any venue type", and the hear-about select with 7 options. |
+| Referral code input (uppercased, max 10) with "they get a free month when you upgrade" | Yes, and /api/apply now persists referred_by_code after the migration-109 fix | WORKS. A submission carrying referralCode "QATESTREF" stored referred_by_code = 'QATESTREF' on artist_applications id 29. |
+| Plan picker (Core, Premium, Pro cards, defaults Core) | Yes, but see the /pricing flag: "Apply for Pro" arrives with Core preselected | FIXED for the flagged half. With no query param the Core card carries border-accent and the other two border-border; with /apply?plan=pro the Pro card carries border-accent bg-accent/5 and Core does not. The Pro intent is now carried through and preselected. |
+| Consents: platform ToS, artist agreement, insurance acknowledgement all required; consumer trader status additionally reveals a required 14-day cooling-off acknowledgement box linking /terms#cancellation | Yes as UX | WORKS. Three consents render as required checkboxes, and selecting trader status "consumer" adds a fourth: "I acknowledge that I have been informed of my 14-day right to cancel..." linking /terms#cancellation (which, per the terms row, has no such anchor). |
+| acknowledgedCoolingOff is posted to /api/apply but applySchema has no such field, so it is stripped and stored nowhere | FLAG: the consumer-rights acknowledgement, the one checkbox whose entire purpose is to be evidenced later, is never persisted; add it to the schema and the row | FLAG STANDS, proven both ways. The posted body contains acknowledgedCoolingOff: true, and artist_applications has no column for it; the stored row carries no trace of the acknowledgement. |
+| Client pre-validation mirrors the server, highlights fields, scrolls to the first error | Yes, though the synthetic keys "offers" and "openTo" match no element id or name so the scroll silently no-ops for those two | DIFFERS. The form is not novalidate, so native browser validation fires first: submitting empty produced no POST, no custom error nodes and no scroll, with five :invalid controls reporting default browser messages. The bespoke pre-validation can therefore only ever run for the controls the browser cannot check, which is exactly the offers/openTo groups whose scroll keys the flag says no-op. |
+| /api/apply: 5/min limit, optional auth, zod field-error map returned for inline display, single insert (strip-and-retry removed), duplicate emails return byte-identical success with a log line | Yes | BROKEN, and this is the worst finding in area A. Validation and the zod field-error map work (a partial body returns 400 with fieldErrors keyed by field, and a duplicate email returns an identical {"success":true} with no second row). But a VALID application fails: leaving the optional "primary medium" select blank returns 500 {"error":"Something went wrong. Please try again."} and writes nothing. Narrowed by elimination against production: primaryMedium empty -> 500; portfolioLink empty -> 200; artistStatement empty -> 200. Reproduced both signed-in (through the form) and anonymously (curl). The id sequence advanced on each failure, so the insert is attempted and rejected. |
+| Profile bridge: for authed fresh applications, creates a pending artist_profiles row with a collision-suffixed slug so the applicant can upload work pre-review; best effort with admin-accept fallback | Yes | BLOCKED for the authed path. The only artist account available already has a profile and an approved application, so a submission from it would not be a fresh bridge case and could disturb real data. The anonymous submissions that succeeded correctly created no profile row (artist_profiles stayed at 14). |
+| Admin alert plus applicant receipt email sent off the response path, idempotent per email | Yes on mechanics | BLOCKED for delivery. The successful submissions returned 200 so the send path ran, but the mailboxes were not read. |
+| Receipt email passes reviewTimelineDays: 3 | FLAG: every page (apply, artists, pricing, waitlist, success screen) says 5 business days; the email the applicant receives minutes later says 3 days. Align on one number | BLOCKED. The email body was not read. Note the page side is consistent at 5 business days across /apply, /artists, /pricing and /waitlist. |
+| Success screen: "Application received... respond within 5 business days", claim-profile CTA block, "I'll do this later" link home, applications@wallplace.co.uk mailto | Yes on layout; but see the claim-page flag below, the CTA points at a broken flow | BLOCKED. Not reached: every submission from the form either 500'd on the empty medium or 403'd on the email check, and a valid authed submission was not run for the reason given two rows above. |
 
 ## Apply claim (/apply/claim) [Artist applicant]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Form prefilled from ?email=, ?name=, ?medium=: name, email, new password (min 8), optional one-line bio and website; on submit it signUp()s a NEW auth account, signs in with the typed password, POSTs /api/artist-profile, then routes to /artist-portal/profile?welcome=1 | FLAG: this page predates the auth-gated application and is now wrong end to end. Everyone reaching it via the /apply success screen already HAS an artist account and is signed in (the gate requires it) and already has a pending profile row (the /api/apply bridge creates it). signUp with the same email either errors or returns an obfuscated success; signInWithPassword then fails against an unconfirmed or differently-passworded account and the user is told "Account created, please sign in from the login page", which is false. The page also never checks existing auth state. It should either be deleted or reduced to a signed-in "add bio and website to your existing profile" step | |
-| "Use the same email as your application so we can link them" helper | Yes in intent, moot given the flow above | |
-| "Skip for now" link home and "Creating a profile doesn't commit you to a plan" reassurance | Yes | |
-| Local slugify duplicating src/lib/slugify | FLAG: minor duplication, keep one implementation | |
+| Form prefilled from ?email=, ?name=, ?medium=: name, email, new password (min 8), optional one-line bio and website; on submit it signUp()s a NEW auth account, signs in with the typed password, POSTs /api/artist-profile, then routes to /artist-portal/profile?welcome=1 | FLAG: this page predates the auth-gated application and is now wrong end to end. Everyone reaching it via the /apply success screen already HAS an artist account and is signed in (the gate requires it) and already has a pending profile row (the /api/apply bridge creates it). signUp with the same email either errors or returns an obfuscated success; signInWithPassword then fails against an unconfirmed or differently-passworded account and the user is told "Account created, please sign in from the login page", which is false. The page also never checks existing auth state. It should either be deleted or reduced to a signed-in "add bio and website to your existing profile" step | DIFFERS, and the auth-state half of the flag is confirmed. As an anonymous visitor /apply/claim?email=&name=&medium= renders the full create-account form with name and email prefilled from the query string, password minLength 8, optional bio and website. It never checks whether anyone is signed in. The signUp-collision half needs a signed-in applicant and is carried to area D. |
+| "Use the same email as your application so we can link them" helper | Yes in intent, moot given the flow above | WORKS. The helper "Use the same email as your application so we can link them." renders under the email field. |
+| "Skip for now" link home and "Creating a profile doesn't commit you to a plan" reassurance | Yes | WORKS. "Skip for now" and the no-commitment reassurance both render. |
+| Local slugify duplicating src/lib/slugify | FLAG: minor duplication, keep one implementation | BLOCKED. Source-level duplication is not observable from production. |
 
 ## Forgot password (/forgot-password) [Visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Email form; precheck {kind forgot-password} rate-limited 3 per 5 min per IP with a friendly 429 message | Yes | |
-| supabase.auth.resetPasswordForEmail with redirectTo /reset-password | Yes | |
-| Success state "We've sent a password reset link to <email>" shown regardless of whether the account exists | Yes, correct anti-enumeration behaviour even though the copy slightly overpromises for unknown addresses | |
-| Back to login links | Yes | |
-| Layout metadata with robots noindex | Yes | |
+| Email form; precheck {kind forgot-password} rate-limited 3 per 5 min per IP with a friendly 429 message | Yes | WORKS. Submitting an address posts /api/auth/precheck first (200 {"ok":true}) then the Supabase recover call. The 429 path was not driven, to keep the reset flow usable for the rest of the pass. |
+| supabase.auth.resetPasswordForEmail with redirectTo /reset-password | Yes | WORKS. The network shows POST https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/recover?redirect_to=https%3A%2F%2Fwww.wallplace.co.uk%2Freset-password returning 200. |
+| Success state "We've sent a password reset link to <email>" shown regardless of whether the account exists | Yes, correct anti-enumeration behaviour even though the copy slightly overpromises for unknown addresses | WORKS. Submitting qa-test-nobody@example.invalid still renders "We've sent a password reset link to qa-test-nobody@example.invalid." |
+| Back to login links | Yes | WORKS. "Back to login" links /login in both the form and success states. |
+| Layout metadata with robots noindex | Yes | WORKS. <meta name="robots" content="noindex, nofollow"> present on /forgot-password and /reset-password. |
 
 ## Reset password (/reset-password) [Recovery-link visitor]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| One-shot getSession() on mount decides between the form and the "Invalid or Expired Link" screen | FLAG: the check runs once and never subscribes to onAuthStateChange, so if the SDK is still exchanging the recovery hash when getSession resolves, a valid link can be shown the invalid-link screen; the OAuth callback page solves this exact race with a retry loop, reuse it here | |
-| New password and confirm fields, min 8 with match check; updateUser({password}); errors mapped to "Failed to update password. The link may have expired." | Yes | |
-| Success screen then auto-redirect to /login after 3 seconds | Yes | |
-| Invalid state links to /forgot-password | Yes | |
-| An already-signed-in user visiting directly can set a new password without the old one | Yes, this is standard Supabase recovery-session behaviour, acceptable | |
+| One-shot getSession() on mount decides between the form and the "Invalid or Expired Link" screen | FLAG: the check runs once and never subscribes to onAuthStateChange, so if the SDK is still exchanging the recovery hash when getSession resolves, a valid link can be shown the invalid-link screen; the OAuth callback page solves this exact race with a retry loop, reuse it here | BLOCKED. Reproducing the race needs a genuine recovery link plus an artificially slow session exchange; producing one against production would mean resetting a real account password. Visiting /reset-password with no recovery hash correctly shows the invalid screen. |
+| New password and confirm fields, min 8 with match check; updateUser({password}); errors mapped to "Failed to update password. The link may have expired." | Yes | BLOCKED. Reaching the form needs a live recovery session. |
+| Success screen then auto-redirect to /login after 3 seconds | Yes | BLOCKED. Same reason. |
+| Invalid state links to /forgot-password | Yes | WORKS. The invalid screen renders "Invalid or Expired Link... Please request a new one." with "Request new link" linking /forgot-password. |
+| An already-signed-in user visiting directly can set a new password without the old one | Yes, this is standard Supabase recovery-session behaviour, acceptable | BLOCKED. Not exercised; would change a real account's password. |
 
 ## OAuth callback (/auth/callback) [OAuth signup/login] plus oauth-sign-state, oauth-finalize, verify-turnstile
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| Waits for the SDK session with a bounded retry (6 x 250ms), then error state with Back to login if none | Yes | |
-| Sends the signed state to /api/auth/oauth-finalize and redirects to the verified next (safeRedirect, default /browse); finalize failure just logs and uses the fallback | Yes | |
-| /api/auth/oauth-sign-state: unauthenticated minting restricted to signup roles (admin rejected per E35d), next validated, 503 when the secret is unset | Yes | |
-| /api/auth/oauth-finalize: bearer-token auth, HMAC state verify with a second isSignupRole check at the consumer, stamps user_type only when absent (never demotes), creates a pending artist_profiles stub for new artists with slug collision handling, idempotent welcome trigger | Yes, thorough | |
-| /api/auth/verify-turnstile: no-secret bypass returns ok with bypass true, logs at ERROR in production so the silent-off failure mode is at least visible; rejects the dev-bypass sentinel when a secret exists; forwards only a trustworthy client IP | Yes, the fail-open trade-off is documented and flagged for owner decision 21; make sure the production env actually has TURNSTILE_SECRET_KEY set or all four signup forms run without bot protection | |
-| Entire OAuth surface is dark until NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE is flipped; all four auth pages show "Google and Apple sign-in coming soon." meanwhile | Yes, honest gating | |
+| Waits for the SDK session with a bounded retry (6 x 250ms), then error state with Back to login if none | Yes | BLOCKED. OAuth is dark in production (NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE off), so /auth/callback is never reached. |
+| Sends the signed state to /api/auth/oauth-finalize and redirects to the verified next (safeRedirect, default /browse); finalize failure just logs and uses the fallback | Yes | BLOCKED. Same reason. |
+| /api/auth/oauth-sign-state: unauthenticated minting restricted to signup roles (admin rejected per E35d), next validated, 503 when the secret is unset | Yes | BLOCKED. Same reason. |
+| /api/auth/oauth-finalize: bearer-token auth, HMAC state verify with a second isSignupRole check at the consumer, stamps user_type only when absent (never demotes), creates a pending artist_profiles stub for new artists with slug collision handling, idempotent welcome trigger | Yes, thorough | BLOCKED. Same reason. |
+| /api/auth/verify-turnstile: no-secret bypass returns ok with bypass true, logs at ERROR in production so the silent-off failure mode is at least visible; rejects the dev-bypass sentinel when a secret exists; forwards only a trustworthy client IP | Yes, the fail-open trade-off is documented and flagged for owner decision 21; make sure the production env actually has TURNSTILE_SECRET_KEY set or all four signup forms run without bot protection | FLAG STANDS, and it is live and now proven end to end. The real customer signup posted {"token":"dev-bypass"} and received 200 {"ok":true,"bypass":true}; an arbitrary token gets the same. No Turnstile widget renders on any signup form, so all four run with no bot protection. |
+| Entire OAuth surface is dark until NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE is flipped; all four auth pages show "Google and Apple sign-in coming soon." meanwhile | Yes, honest gating | WORKS. /login, /signup/artist and /signup/customer all render "Email + password only for now. Google and Apple sign-in coming soon." and no OAuth buttons. |
 
 ## QR scan redirect (/api/qr/[slug]) [Walk-in customer]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| GET redirects a printed QR to /browse/<artist>?ref=qr, carrying work title (new t= and legacy work=), preselected size, venue slug and display name | Yes, legacy label compatibility is preserved | |
-| Fire-and-forget analytics: qr_scan event with work id, resolved venue user id, hashed visitor id; failures never block the redirect | Yes | |
-| Venue display name re-resolved from venue_profiles so renamed venues need no reprint | Yes | |
-| Signed venue-attribution claim (va=) minted best-effort so checkout can verify the venue share instead of trusting the raw slug; falls back to the bare slug until QR_ATTRIBUTION_ENFORCE is on | Yes, the D10 design | |
+| GET redirects a printed QR to /browse/<artist>?ref=qr, carrying work title (new t= and legacy work=), preselected size, venue slug and display name | Yes, legacy label compatibility is preserved | WORKS. GET /api/qr/fin-coles?t=Mt.%20Fitz%20Roy&vs=the-copper-kettle&size=A3 -> 302 to /browse/fin-coles?ref=qr&venue=the-copper-kettle&va=...&work=mt-fitz-roy&size=A3. Legacy ?work=&v= -> 302 with ?ref=qr&venueName=Copper+Kettle&work=sand-dunes. Both key sets honoured. The redirect targets the apex, adding a 307 hop. |
+| Fire-and-forget analytics: qr_scan event with work id, resolved venue user id, hashed visitor id; failures never block the redirect | Yes | WORKS. Both test scans appear in analytics_events as qr_scan within seconds. Neither resolved venue_user_id because the seed slug the-copper-kettle has no venue_profiles row (the live one is the-copper-kettle-demo); earlier real scans do carry work_id and venue_user_id. An unknown artist slug still 302s cleanly with no 500. |
+| Venue display name re-resolved from venue_profiles so renamed venues need no reprint | Yes | WORKS where the slug is a real profile: legacy v=Copper+Kettle passes the printed name straight through, while vs=<slug> is looked up. For a slug with no profile row the lookup finds nothing and the analytics row records no venue. |
+| Signed venue-attribution claim (va=) minted best-effort so checkout can verify the venue share instead of trusting the raw slug; falls back to the bare slug until QR_ATTRIBUTION_ENFORCE is on | Yes, the D10 design | WORKS. The va= payload base64-decodes to {"venueSlug":"the-copper-kettle","artistSlug":"fin-coles","exp":1788208131}, exactly 24 hours ahead, and it is minted even when the venue slug has no profile row. |
 
 ## Public stats API (/api/stats/public) [None]
 
 | Functionality | Does it make sense? | Does it actually work in production? |
 |---|---|---|
-| GET returns live counts (artists, artworks, active placements, venues, sold works), 60/min limit, 5-minute cache, zeros on failure | FLAG: zero callers anywhere in src; the homepage trust bar it was written for uses the static seed instead. Either wire the trust bar to it or delete the endpoint | |
+| GET returns live counts (artists, artworks, active placements, venues, sold works), 60/min limit, 5-minute cache, zeros on failure | FLAG: zero callers anywhere in src; the homepage trust bar it was written for uses the static seed instead. Either wire the trust bar to it or delete the endpoint | FLAG STANDS. GET /api/stats/public works (200, {"total_artists":14,"total_artworks":35,"total_placements":0,"total_venues":9,"artworks_sold":4}) but nothing calls it: the homepage network log contains no request to it and the trust bar still shows the static 30+/230+/20+. |
 
 ---
 
