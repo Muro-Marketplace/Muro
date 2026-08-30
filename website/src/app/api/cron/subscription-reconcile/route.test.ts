@@ -24,6 +24,8 @@ function req(): Request {
 }
 
 const updates: Array<{ table: string; row: Record<string, unknown> }> = [];
+/** Table whose UPDATE should report a DB error, for the mirror-failure test. */
+let failTable: string | null = null;
 
 function setupDb(data: {
   profiles?: Array<Record<string, unknown>>;
@@ -31,6 +33,7 @@ function setupDb(data: {
   curations?: Array<Record<string, unknown>>;
 }) {
   updates.length = 0;
+  failTable = null;
   fromMock.mockImplementation((table: string) => {
     const rows =
       table === "artist_profiles" ? data.profiles || []
@@ -47,7 +50,7 @@ function setupDb(data: {
       select: () => chain,
       update: (row: Record<string, unknown>) => {
         updates.push({ table, row });
-        return { eq: async () => ({ error: null }) };
+        return { eq: async () => ({ error: table === failTable ? { message: "violates check constraint" } : null }) };
       },
     };
   });
@@ -94,6 +97,35 @@ describe("GET /api/cron/subscription-reconcile", () => {
     expect(billingWrite?.row.status).toBe("cancelled");
     const mirror = updates.find((u) => u.table === "placements");
     expect(mirror?.row.subscription_status).toBe("canceled");
+  });
+
+  it("a PAUSED loan mirrors as past_due, because the mirror column forbids 'paused'", async () => {
+    // placements.subscription_status carries its own CHECK (migration 025:
+    // active | past_due | canceled | incomplete | trialing). Writing the
+    // ledger's vocabulary straight through would be rejected by Postgres.
+    setupDb({
+      billings: [{ id: "b-1", placement_id: "p-1", stripe_subscription_id: "sub_loan", status: "active" }],
+    });
+    subsRetrieve.mockResolvedValue({ status: "paused" });
+    await GET(req());
+
+    const ledger = updates.find((u) => u.table === "placement_recurring_billings");
+    expect(ledger?.row.status).toBe("paused");
+    const mirror = updates.find((u) => u.table === "placements");
+    expect(mirror?.row.subscription_status).toBe("past_due");
+  });
+
+  it("a rejected mirror write is counted as a failure, never swallowed", async () => {
+    // A silently rejected mirror leaves the stale green "Monthly payment
+    // active" chip that this cron exists to kill.
+    setupDb({
+      billings: [{ id: "b-1", placement_id: "p-1", stripe_subscription_id: "sub_loan", status: "active" }],
+    });
+    failTable = "placements";
+    subsRetrieve.mockResolvedValue({ status: "canceled" });
+    const res = await GET(req());
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ failed: 1 });
   });
 
   it("a subscription deleted in Stripe (resource missing) counts as canceled", async () => {

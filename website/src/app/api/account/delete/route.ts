@@ -203,6 +203,25 @@ export async function POST(request: Request) {
       await cancelStripeSub("stripe (curation)", row.stripe_subscription_id);
     }
   }
+
+  // Abort BEFORE the scrub, not after. The generic failure check at the end of
+  // this route refuses to delete the auth user, but by then the data is
+  // already gone, which would leave the worst of both: a scrubbed account that
+  // still exists and still cannot be deleted while Stripe stays unreachable.
+  // Stopping here costs the user a retry and loses nothing.
+  if (failures.length > 0) {
+    console.error("[account/delete] aborted before scrub, Stripe cancel failed:", failures);
+    return NextResponse.json(
+      {
+        error:
+          "We could not stop your active billing, so we have not deleted anything yet. " +
+          "Nothing has been removed and nothing has been charged. Please try again shortly, " +
+          "or contact support and we will finish it by hand.",
+      },
+      { status: 500 },
+    );
+  }
+
   const step = async (label: string, run: () => PromiseLike<{ error: unknown } | void>) => {
     try {
       const result = await run();
