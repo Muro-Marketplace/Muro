@@ -39,6 +39,19 @@ describe("curated pricing has one source of truth", () => {
     expect(client).not.toMatch(/&pound;\d/);
   });
 
+  // Task 10. The curated page's metadata description ("From £49") must derive
+  // from CURATION_TIERS, not a literal, so a reprice cannot leave a stale
+  // description in search results.
+  it("curated page metadata derives description from billing tiers, not literal £ strings", () => {
+    const page = readFileSync(
+      join(process.cwd(), "src/app/(pages)/curated/page.tsx"),
+      "utf8",
+    );
+    expect(page).toContain('from "@/lib/curation-tiers"');
+    expect(page).not.toMatch(/£\d+(\.\d{2})?/);
+    expect(page).not.toMatch(/&pound;\d/);
+  });
+
   it("renders exactly the prices venues see today, for every tier and every FAQ that quotes one", () => {
     const byKey = Object.fromEntries(CURATED_TIERS.map((t) => [t.key, t]));
 

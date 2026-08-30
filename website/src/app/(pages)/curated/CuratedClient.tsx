@@ -116,6 +116,11 @@ const FAQ_ITEMS = [
     answer:
       `Not on ${gbp(CURATION_TIERS.single_wall.priceGbp)} to ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)} plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.`,
   },
+  {
+    question: "Are prices inclusive of VAT?",
+    answer:
+      "Prices are exclusive of VAT. If Wallplace becomes VAT registered, VAT will be added at the prevailing rate.",
+  },
 ];
 
 export default function CuratedClient() {
