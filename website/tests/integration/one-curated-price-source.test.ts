@@ -23,6 +23,22 @@ describe("curated pricing has one source of truth", () => {
     expect(marketing).not.toMatch(/&pound;\d/);
   });
 
+  // Task 9b. The Task 9 review found the /curated page component itself
+  // (CuratedClient.tsx: hero copy, trust strip, page-level FAQ array, the
+  // "included in any plan" clarifier, and the checkout submit-button labels)
+  // still held its own hand-typed "£49"-style literals, unguarded by the
+  // test above because that test only reads curated-tiers.ts. Same drift
+  // risk, different file: this closes that gap the same way.
+  it("CuratedClient page component derives its prices from billing tiers, not literal £ strings", () => {
+    const client = readFileSync(
+      join(process.cwd(), "src/app/(pages)/curated/CuratedClient.tsx"),
+      "utf8",
+    );
+    expect(client).toContain('from "@/lib/curation-tiers"');
+    expect(client).not.toMatch(/£\d+(\.\d{2})?/);
+    expect(client).not.toMatch(/&pound;\d/);
+  });
+
   it("renders exactly the prices venues see today, for every tier and every FAQ that quotes one", () => {
     const byKey = Object.fromEntries(CURATED_TIERS.map((t) => [t.key, t]));
 

@@ -15,6 +15,7 @@ import {
   type CuratedTier,
   type CuratedTierKey,
 } from "@/lib/curated-tiers";
+import { CURATION_TIERS, gbp } from "@/lib/curation-tiers";
 
 const ONE_OFF_TIERS = CURATED_TIERS.filter((t) => t.group === "one_off");
 const MANAGED_TIERS = CURATED_TIERS.filter((t) => t.group === "managed");
@@ -98,7 +99,7 @@ const FAQ_ITEMS = [
   {
     question: "What if I don't love any of the shortlist?",
     answer:
-      "The £49 and £149 plans include one revision round. If nothing fits at all, we refund in full.",
+      `The ${gbp(CURATION_TIERS.single_wall.priceGbp)} and ${gbp(CURATION_TIERS.full_space.priceGbp)} plans include one revision round. If nothing fits at all, we refund in full.`,
   },
   {
     question: "How does the art actually get on the wall?",
@@ -113,7 +114,7 @@ const FAQ_ITEMS = [
   {
     question: "Do you visit in person?",
     answer:
-      "Not on £49 to £199.99 plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.",
+      `Not on ${gbp(CURATION_TIERS.single_wall.priceGbp)} to ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)} plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.`,
   },
 ];
 
@@ -304,7 +305,7 @@ export default function CuratedClient() {
               <p className="text-lg lg:text-xl text-white/65 leading-relaxed max-w-xl mb-10">
                 Tell us about your space, audience, and the feel you want.
                 Our curators hand-pick a shortlist of works from Wallplace
-                artists that fit. From £49.
+                artists that fit. From {gbp(CURATION_TIERS.single_wall.priceGbp)}.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Link
@@ -336,7 +337,7 @@ export default function CuratedClient() {
           </div>
           <div className="border-t border-white/10 bg-black/50 backdrop-blur-sm">
             <div className="max-w-[1200px] mx-auto px-6 py-3.5 flex items-center justify-center gap-3 text-xs text-white/40 tracking-wider uppercase flex-wrap">
-              <span>From £49</span>
+              <span>From {gbp(CURATION_TIERS.single_wall.priceGbp)}</span>
               <span className="w-1 h-1 rounded-full bg-white/30" />
               <span>Delivered in 5 business days</span>
               <span className="w-1 h-1 rounded-full bg-white/30" />
@@ -449,9 +450,7 @@ export default function CuratedClient() {
                     Included in any plan
                   </p>
                   <p className="text-sm text-foreground/85 leading-relaxed">
-                    A curator&rsquo;s time and judgement. A delivered
-                    shortlist with notes. One revision round on £49 and
-                    £149 plans. Refund in full if nothing fits.
+                    {`A curator’s time and judgement. A delivered shortlist with notes. One revision round on ${gbp(CURATION_TIERS.single_wall.priceGbp)} and ${gbp(CURATION_TIERS.full_space.priceGbp)} plans. Refund in full if nothing fits.`}
                   </p>
                 </div>
                 <div className="bg-background border border-border rounded-sm p-5">
@@ -808,9 +807,9 @@ export default function CuratedClient() {
                         : selectedTier === "bespoke"
                           ? "Request quote"
                           : selectedTier === "managed_monthly"
-                            ? "Subscribe, £79.99/mo"
+                            ? `Subscribe, ${gbp(CURATION_TIERS.managed_monthly.priceGbp)}/mo`
                             : selectedTier === "managed_quarterly"
-                              ? "Subscribe, £199.99/qtr"
+                              ? `Subscribe, ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)}/qtr`
                               : `Pay ${selectedTierData?.priceLabel}`}
                   </button>
                 </div>
@@ -837,7 +836,7 @@ export default function CuratedClient() {
               Hand-picked art for your space.
             </h2>
             <p className="text-white/60 max-w-lg mx-auto mb-10 leading-relaxed">
-              From £49 · 5 business days · No long-term commitment.
+              From {gbp(CURATION_TIERS.single_wall.priceGbp)} · 5 business days · No long-term commitment.
             </p>
             <Link
               href="#plans"
