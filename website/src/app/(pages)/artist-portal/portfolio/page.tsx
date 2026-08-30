@@ -456,6 +456,29 @@ export default function PortfolioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bulkPricesOpen, bulkPriceSelected, bulkPriceRows.length]);
 
+  // D23 (finishes E41-e): the last fire-and-forget path is gone. This used to
+  // setWorks, fire postWorks and swallow the rejection into console.error,
+  // while every caller toasted success on the next line. A reorder, a bulk
+  // availability flip, a bulk add, a bulk price change or a copy-from that the
+  // server rejected all reported "done" and then reverted on the next reload.
+  //
+  // Now the grid updates optimistically, the POST is awaited, and a failure
+  // rolls the grid back and shows the server's real message. The success toast
+  // is the caller's own wording, returned through `run` so one control can
+  // serve all five.
+  const bulkWorksSave = useSaveAction<[ArtistWork[], string], string>({
+    optimistic: (updated) => {
+      const snapshot = works;
+      setWorks(updated);
+      return () => setWorks(snapshot);
+    },
+    run: async (updated, message) => {
+      await postWorks(updated);
+      return message;
+    },
+    successMessage: (message) => message,
+  });
+
   if (artistLoading || !artist) {
     return (
       <ArtistPortalLayout activePath="/artist-portal/portfolio">
@@ -536,28 +559,6 @@ export default function PortfolioPage() {
     persistedWorks.current = updated;
   }
 
-  // D23 (finishes E41-e): the last fire-and-forget path is gone. This used to
-  // setWorks, fire postWorks and swallow the rejection into console.error,
-  // while every caller toasted success on the next line. A reorder, a bulk
-  // availability flip, a bulk add, a bulk price change or a copy-from that the
-  // server rejected all reported "done" and then reverted on the next reload.
-  //
-  // Now the grid updates optimistically, the POST is awaited, and a failure
-  // rolls the grid back and shows the server's real message. The success toast
-  // is the caller's own wording, returned through `run` so one control can
-  // serve all five.
-  const bulkWorksSave = useSaveAction<[ArtistWork[], string], string>({
-    optimistic: (updated) => {
-      const snapshot = works;
-      setWorks(updated);
-      return () => setWorks(snapshot);
-    },
-    run: async (updated, message) => {
-      await postWorks(updated);
-      return message;
-    },
-    successMessage: (message) => message,
-  });
 
   function saveWorks(updated: ArtistWork[], message: string) {
     void bulkWorksSave.save(updated, message);

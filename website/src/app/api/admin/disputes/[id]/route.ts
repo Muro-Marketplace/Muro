@@ -9,11 +9,35 @@ import { recordAdminAction } from "@/lib/admin-audit";
 import { sendEmail } from "@/lib/email/send";
 import { orderParties, type OrderPartySource } from "@/lib/orders/parties";
 import { OrderDisputeResolved } from "@/emails/templates/orders/OrderDisputeResolved";
+import { OperationalDisputeResolved } from "@/emails/templates/legal/OperationalDisputeResolved";
+import { markEscalated } from "../escalation";
 
 export const runtime = "nodejs";
 
 function siteOrigin(): string {
   return process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
+}
+
+/**
+ * The dispute opener's address and first name, or null when neither can be
+ * resolved. Best-effort: a decision that reached the database must not be
+ * reported as failed because the notice could not be addressed.
+ */
+async function disputeOpener(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  openerUserId: string,
+): Promise<{ email: string; firstName: string } | null> {
+  try {
+    const { data } = await db.auth.admin.getUserById(openerUserId);
+    const email = data?.user?.email;
+    if (!email) return null;
+    const meta = (data.user!.user_metadata ?? {}) as Record<string, unknown>;
+    const displayName = typeof meta.display_name === "string" ? meta.display_name : "";
+    return { email, firstName: (displayName || "there").split(" ")[0] };
+  } catch (err) {
+    console.error("[admin/disputes] could not resolve the opener:", err);
+    return null;
+  }
 }
 
 const patchSchema = z.discriminatedUnion("action", [
@@ -47,9 +71,13 @@ export async function PATCH(
   // told their dispute had been decided: the row that carried the decision did
   // not carry the people it was about. An admin resolved a case, the audit log
   // recorded it, and both parties were left refreshing a page.
+  //
+  // G20 adds `category` to the same select: escalate rewrites that column and
+  // used to do so without ever reading it, which is how the opener's own
+  // classification was destroyed by a button that meant to add a flag.
   const { data: dispute } = await db
     .from("disputes")
-    .select("id, status, order_id, placement_id, opener_user_id")
+    .select("id, status, order_id, placement_id, opener_user_id, category")
     .eq("id", id)
     .maybeSingle<{
       id: string;
@@ -57,6 +85,7 @@ export async function PATCH(
       order_id: string | null;
       placement_id: string | null;
       opener_user_id: string | null;
+      category: string | null;
     }>();
   if (!dispute) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -73,8 +102,11 @@ export async function PATCH(
   } else if (parsed.data.action === "close") {
     updates = { status: "closed", resolved_at: now, resolved_by_user_id: auth.user!.id };
   } else {
-    // escalate keeps status open but stamps a category-like flag.
-    updates = { category: "escalated" };
+    // escalate keeps the status open and adds a flag. G20: it used to REPLACE
+    // the category with the literal "escalated", so the classification the
+    // opener filed under was gone, from the list heading and from the list
+    // endpoint's category filter alike. markEscalated keeps the original.
+    updates = { category: markEscalated(dispute.category) };
   }
 
   const { error } = await db.from("disputes").update(updates).eq("id", id);
@@ -117,6 +149,41 @@ export async function PATCH(
       }
     } else {
       console.error("[admin/disputes PATCH] resolved dispute has no order:", dispute.order_id);
+    }
+  }
+
+  // G19. The block above is gated on `order_id`, and roughly half the disputes
+  // this panel handles have none: a placement dispute, or one raised straight
+  // out of a conversation. Those resolved in total silence, so the person who
+  // raised the case had to keep coming back to the page to find out what had
+  // been decided, which is the failure 09 §D.2 set out to end.
+  //
+  // Only the opener is notified here. Unlike an order, a placement or a
+  // conversation has no settled second party this route can resolve without
+  // guessing, and emailing the wrong person about someone else's complaint is
+  // worse than emailing one too few.
+  if (parsed.data.action === "resolve" && !dispute.order_id && dispute.opener_user_id) {
+    const opener = await disputeOpener(db, dispute.opener_user_id);
+    if (opener) {
+      await sendEmail({
+        idempotencyKey: `dispute_resolved:${id}:opener`,
+        template: "operational_dispute_resolved",
+        category: "legal",
+        to: opener.email,
+        userId: dispute.opener_user_id,
+        subject: "Your Wallplace dispute has been resolved",
+        react: OperationalDisputeResolved({
+          firstName: opener.firstName,
+          subjectLine: dispute.placement_id
+            ? `your placement ${dispute.placement_id}`
+            : undefined,
+          outcome: parsed.data.resolution,
+          supportUrl: `${siteOrigin()}/support`,
+        }),
+        metadata: { disputeId: id, placementId: dispute.placement_id },
+      });
+    } else {
+      console.error("[admin/disputes PATCH] could not reach the opener of dispute", id);
     }
   }
 
