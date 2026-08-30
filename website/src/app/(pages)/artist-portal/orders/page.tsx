@@ -716,6 +716,23 @@ function ArtistOrdersContent() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-foreground">{order.id}</p>
                     {order.source === "qr" && <span className="text-[9px] bg-accent/10 text-accent px-1.5 py-0.5 rounded-sm font-medium">QR</span>}
+                    {/* QA 2026-08-30 bug 29: a pending refund was only visible
+                        once the row was expanded, so an order with a full
+                        refund awaiting a decision looked like an ordinary
+                        completed sale, and its value still counted toward the
+                        artist's headline earnings. One production request had
+                        been pending for over four months, including one the
+                        artist raised themselves. */}
+                    {refundRequests.some(
+                      (r) => r.order_id === order.id && r.status === "pending",
+                    ) && (
+                      <span
+                        className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-sm font-medium"
+                        title="A refund has been requested for this order and is awaiting a decision. If it is approved, this sale's earnings will be reversed."
+                      >
+                        REFUND PENDING
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-muted mt-0.5">
                     {new Date(order.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}

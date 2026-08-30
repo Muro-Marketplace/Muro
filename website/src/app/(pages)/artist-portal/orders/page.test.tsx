@@ -104,6 +104,26 @@ function mockReads(refundRequests: unknown[]) {
   );
 }
 
+describe("a pending refund is visible without expanding the row (bug 29)", () => {
+  it("badges the row, so the sale does not look like an ordinary completed one", async () => {
+    // One production request had been pending over four months, including one
+    // the artist raised themselves, while the row showed nothing and its value
+    // still counted toward headline earnings.
+    mockReads([PENDING_REFUND]);
+    render(<ArtistOrdersPage />);
+
+    expect(await screen.findByText("REFUND PENDING")).toBeTruthy();
+  });
+
+  it("shows no badge when nothing is pending against the order", async () => {
+    mockReads([]);
+    render(<ArtistOrdersPage />);
+
+    await screen.findByText("o1");
+    expect(screen.queryByText("REFUND PENDING")).toBeNull();
+  });
+});
+
 describe("artist orders refund actions (D18: approve/reject feedback)", () => {
   it("surfaces the server error and keeps the request pending when approve fails", async () => {
     mockReads([PENDING_REFUND]);
