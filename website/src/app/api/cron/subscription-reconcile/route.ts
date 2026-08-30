@@ -113,10 +113,29 @@ export async function GET(request: Request) {
             .eq("id", row.id);
           if (error) throw new Error(error.message);
           // Keep the placements chip honest too (the R2.7 mirror).
-          await db
+          //
+          // The mirror column carries its own CHECK (migration 025:
+          // active | past_due | canceled | incomplete | trialing), which is
+          // NOT the ledger's vocabulary: the ledger's "paused" would be
+          // rejected outright. Map into the column's own terms, and CHECK THE
+          // ERROR: a silently rejected mirror write is precisely the stale
+          // green "Monthly payment active" chip this cron exists to kill.
+          const mirrored =
+            mapped === "cancelled" ? "canceled"
+            : mapped === "paused" ? "past_due"
+            : mapped;
+          const { error: mirrorErr } = await db
             .from("placements")
-            .update({ subscription_status: mapped === "cancelled" ? "canceled" : mapped })
+            .update({ subscription_status: mirrored })
             .eq("id", row.placement_id);
+          if (mirrorErr) {
+            console.error("[cron/subscription-reconcile] placements mirror failed:", {
+              placementId: row.placement_id,
+              mirrored,
+              message: mirrorErr.message,
+            });
+            throw new Error(`placements mirror: ${mirrorErr.message}`);
+          }
           corrections.push({
             table: "placement_recurring_billings",
             id: row.id,
