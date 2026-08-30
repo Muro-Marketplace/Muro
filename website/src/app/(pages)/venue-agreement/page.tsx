@@ -39,7 +39,7 @@ export default function VenueAgreementPage() {
                 <h2 className="text-2xl mb-4">2. No Charges</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>There are no registration fees, membership fees, commissions, or hidden costs for venues while you maintain an active account. Browsing artist portfolios, submitting enquiries, and displaying artwork are all free.</p>
-                  <p>Venues never pay a platform fee. Wallplace&rsquo;s revenue comes from sales commissions and optional artist tools.</p>
+                  <p>Venues never pay a platform fee. Wallplace&rsquo;s revenue comes from artist memberships, a platform fee on sales, and optional services venues can choose, such as Wallplace Curated.</p>
                   <p>Wallplace may introduce optional paid features for venues in the future. If so, advance notice of at least 90 days will be given. Existing free services will not be withdrawn without notice.</p>
                   <p>Optional paid services, such as Wallplace Curated, are priced exclusive of VAT. If Wallplace becomes VAT registered, VAT will be added at the prevailing rate.</p>
                 </div>
