@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { placementQrScanCounts, type PlacementScanSubject } from "@/lib/analytics/placement-qr-scans";
 import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { handleAuthzError } from "@/lib/authz";
@@ -208,36 +209,34 @@ export async function GET(request: Request) {
       }
     }
 
-    // QR scan counts (item "QR code scan should be live view count").
-    // analytics_events stores qr_scan rows with artist_slug, venue_name,
-    // work_id. We bucket by (artist_slug + venue_slug + work_title) and
-    // attach the count to each placement.
-    const qrByPlacement: Record<string, number> = {};
+    // QR scan counts, per placement.
+    //
+    // E17: this used to be computed inline here, and it compared the wrong
+    // pair of things twice over: the event's venue DISPLAY name against the
+    // placement's venue SLUG, and the event's work_id (a uuid) against the
+    // placement's work TITLE. Every scan from a modern QR label failed both
+    // tests, so an artist saw 0 against a live placement while their own
+    // analytics page showed the scans. The aggregation now lives in one
+    // tested module that attributes the way api/analytics/venue does.
+    let qrByPlacement: Record<string, number> = {};
     try {
-      const artistSlugs = Array.from(new Set(placements.map((p) => p.artist_slug).filter(Boolean))) as string[];
-      const venueSlugs = Array.from(new Set(placements.map((p) => p.venue_slug).filter(Boolean))) as string[];
-      if (artistSlugs.length > 0) {
-        const { data: events } = await db
-          .from("analytics_events")
-          .select("artist_slug, venue_name, work_id")
-          .eq("event_type", "qr_scan")
-          .in("artist_slug", artistSlugs);
-        for (const p of placements) {
-          if (!p.id || !p.artist_slug) continue;
-          const count = (events || []).filter((e: { artist_slug?: string; venue_name?: string; work_id?: string }) => {
-            if (e.artist_slug !== p.artist_slug) return false;
-            // Venue attribution is best-effort, some older events may
-            // not carry venue_name. We count anything matching the artist
-            // if venue_slug isn't set, otherwise require venue match.
-            if (p.venue_slug && venueSlugs.length > 0 && e.venue_name && e.venue_name !== p.venue_slug) return false;
-            // Work-level match when available
-            if (p.work_title && e.work_id && e.work_id.toLowerCase() !== String(p.work_title).toLowerCase()) return false;
-            return true;
-          }).length;
-          qrByPlacement[p.id as string] = count;
-        }
-      }
-    } catch { /* leave counts empty if analytics table missing */ }
+      // Named explicitly rather than passed through as a blind cast: the bug
+      // this replaced was a field-mapping mistake at exactly this call site
+      // (venue_slug where venue was meant), and a projection makes the next
+      // one a typecheck failure instead of a silent zero.
+      const subjects: PlacementScanSubject[] = placements.map((p) => ({
+        id: String(p.id),
+        artist_slug: p.artist_slug as string | null,
+        venue_user_id: p.venue_user_id as string | null,
+        venue: p.venue as string | null,
+        work_title: p.work_title as string | null,
+        extra_works: p.extra_works as Array<{ title?: string | null }> | null,
+      }));
+      qrByPlacement = await placementQrScanCounts(db, subjects);
+    } catch (qrErr) {
+      // Non-critical: a missing analytics table must not fail the list.
+      console.warn("[placements] qr scan counts failed:", qrErr);
+    }
 
     // Scan placement_request messages once and derive two things:
     //   1. inferredRequesters, the FIRST sender per placement, used
