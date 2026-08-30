@@ -12963,3 +12963,56 @@ clean-slate test-data reset decision), WS7 compliance decisions
 and the stale prod deploy. R4.15's register-venue/waitlist keys and the
 artist-agreement page's proration sentence are flagged for a later pass
 (the latter is a legal document needing owner sign-off).
+
+## 2026-08-29: P2/P3 wave 4 (the last sweep of the launch triage)
+
+Eleven commits (10e0cef..f4bfc05), 135 files, ~11,700 lines. Final gate:
+3,381 tests across 332 files, tsc clean, eslint zero errors. Seven slices ran
+in parallel (six agents plus a lead slice); every fix carries a regression
+test with fail-before verification.
+
+- **Public/lead slice**: blog markdown rendered as literal asterisks; the
+  homepage bypassed the shared shell; five bulk portfolio saves (reorder,
+  availability, add, price, copy-from) reported success on a rejected POST and
+  silently reverted on reload.
+- **Account**: failures surfaced instead of swallowed, orphan writes refused,
+  password change now verifies the old password. Migration 124 points
+  `email_preferences.user_id` at `auth.users` (verified live: one row, zero
+  orphans).
+- **Header/nav**: one source for portal nav (the header dropdown and the
+  sidebars had drifted under a comment claiming parity), honest role hints,
+  notifications reachable on mobile.
+- **Buy path**: the Buy Now bar added the LAST price tier rather than the
+  largest; the frame dropdown quoted a default uplift while the charge honoured
+  the artist's per-size override; the filter badge counted an always-true check;
+  "Clear all" silently disabled distance filtering. B18: the collect tile
+  printed the venue slug at the buyer.
+- **Messaging/placements**: offer expiry was stored and typed but never
+  displayed, enforced or expired (now one predicate set across accept, decline
+  and checkout); a zero-priced offer could be minted and paid; duplicate
+  responses burned a weekly outreach send; accepting a response skipped the
+  address stamp and the acceptance gates; support threads dead-ended at a 404.
+- **Emails/digests**: the inactive sweep shipped fabricated zeros and mailed
+  admins as customers; the artist digest had an always-empty top-works block and
+  mislabelled unread as total; the venue digest advertised a matching feature
+  that does not exist. E17: per-placement QR counts compared display name to
+  slug and uuid to title, so modern labels always counted zero.
+- **Admin**: flagged messages had been accumulating in moderation_queue since
+  migration 116 with no page querying them; blogs were approved on a
+  200-character excerpt with the rejection reason never reaching the author;
+  the dispute resolution prompt claimed the note was internal while the API
+  emailed it verbatim to both parties; resolving a dispute with no order
+  notified nobody.
+
+Also fixed here: a Rules-of-Hooks violation introduced in the lead slice (a
+bulk-save hook sat below a loading early-return, so hook order changed between
+renders), and admin-auth gained a batch predicate so the inactive sweep
+excludes table-only admins, not just the ADMIN_EMAILS allowlist.
+
+Deliberately not done, with reasons: the F45 and E26 UI halves target
+artwork-request pages that are parked redirects (server rules are in place and
+will refuse correctly if unparked); per-work theme tags for the portfolio
+filter need a migration; `OffersList.pay()` still uses authFetch for a POST,
+grandfathered by an in-code comment awaiting the owner's call. Remaining
+open triage items are P3s, mostly admin polish (G3, G4, G6, G7, G16, G21,
+G24, G29, G30).
