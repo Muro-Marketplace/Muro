@@ -62,19 +62,26 @@ export async function POST(request: Request) {
         .eq("id", profile.id);
     }
 
-    const hasActiveSubscription = profile.subscription_status === "active" || profile.subscription_status === "trialing";
+    // WS4.1 (audit R2.1 CRITICAL): past_due and incomplete are LIVE
+    // subscriptions at Stripe (dunning retries a past_due card and can
+    // recover it), so re-subscribing in those states without carrying
+    // cancel_previous minted a second concurrent subscription and the
+    // recovered first one billed alongside it. Anything Stripe still
+    // considers collectible counts as live here.
+    const LIVE_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due", "incomplete"];
+    const hasActiveSubscription = LIVE_SUBSCRIPTION_STATUSES.includes(profile.subscription_status || "");
 
     // If already subscribed, store existing subscription ID so we can cancel it AFTER checkout completes
     let existingSubscriptionId: string | null = null;
     if (hasActiveSubscription && customerId) {
       try {
-        const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: "active", limit: 1 });
-        let existing = subscriptions.data[0];
-        if (!existing) {
-          const trialingSubs = await stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 1 });
-          existing = trialingSubs.data[0];
+        for (const status of ["active", "trialing", "past_due", "incomplete"] as const) {
+          const subs = await stripe.subscriptions.list({ customer: customerId, status, limit: 1 });
+          if (subs.data[0]) {
+            existingSubscriptionId = subs.data[0].id;
+            break;
+          }
         }
-        if (existing) existingSubscriptionId = existing.id;
       } catch (err) {
         console.error("List subscriptions error:", err);
       }
@@ -98,7 +105,15 @@ export async function POST(request: Request) {
       cancel_url: `${siteUrl}/artist-portal/billing`,
       metadata: { plan, billing, artist_profile_id: profile.id, cancel_previous: existingSubscriptionId || "" },
     };
-    const session = await stripe.checkout.sessions.create(sessionParams as Parameters<typeof stripe.checkout.sessions.create>[0]);
+    // WS4.2 (audit R2.5): a double-submit used to mint two checkout sessions
+    // and could end in two subscriptions. One deterministic key per
+    // profile+plan+existing-sub combination per hour makes the second click
+    // return the FIRST session.
+    const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+    const session = await stripe.checkout.sessions.create(
+      sessionParams as Parameters<typeof stripe.checkout.sessions.create>[0],
+      { idempotencyKey: `subscribe:${profile.id}:${plan}:${billing}:${existingSubscriptionId || "none"}:${hourBucket}` },
+    );
 
     return NextResponse.json({ url: session.url });
   } catch (err) {

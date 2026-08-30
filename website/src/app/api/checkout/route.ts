@@ -274,6 +274,32 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+      // B28: the quantity is client-supplied and the stock decrement happens
+      // after payment, so a cart asking for 5 of a 2-piece run charged for 5
+      // and oversold. Finite stock caps the line here, before Stripe; a null
+      // quantity_available means unlimited (migration 120).
+      const qty = Number(line.quantity ?? 1);
+      if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
+        return NextResponse.json(
+          {
+            error: `Invalid quantity for "${row.title || line.title}".`,
+            code: "bad_quantity",
+            workId: line.workId,
+          },
+          { status: 400 },
+        );
+      }
+      if (row.quantity_available != null && qty > row.quantity_available) {
+        return NextResponse.json(
+          {
+            error: `Only ${row.quantity_available} of "${row.title || line.title}" ${row.quantity_available === 1 ? "is" : "are"} available.`,
+            code: "insufficient_stock",
+            workId: line.workId,
+            available: row.quantity_available,
+          },
+          { status: 409 },
+        );
+      }
     }
 
     // Collections were the last fully client-priced line (2026-08-28 audit):

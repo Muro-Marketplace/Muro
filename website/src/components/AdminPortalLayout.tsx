@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 
 const navItems = [
   { label: "Dashboard", href: "/admin" },
@@ -21,6 +22,9 @@ const navItems = [
   { label: "Moderation", href: "/admin/moderation" },
   // Phase 2.8 A2/A3: dispute panel + read-only financials dashboard.
   { label: "Disputes", href: "/admin/disputes" },
+  // G2/G28: the refund-request money path. Artist-initiated refunds can
+  // only be approved by an admin, so the queue needs a surface.
+  { label: "Refunds", href: "/admin/refunds" },
   { label: "Financials", href: "/admin/financials" },
 ];
 
@@ -38,21 +42,42 @@ export default function AdminPortalLayout({
   activePath,
 }: AdminPortalLayoutProps) {
   const router = useRouter();
-  const { user, loading, userType, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
   // NOT the gate. E30b moved the decision to the server: AdminGate wraps the
   // whole /admin route group and will not render this component at all unless
-  // /api/admin/whoami said yes. `userType` comes from user_metadata, which the
-  // user writes themselves at signup, so on its own it stopped nobody. Kept as
-  // a cheap second line and to route a signed-out visitor sensibly.
+  // /api/admin/whoami said yes. This second line used to compare
+  // user_metadata.user_type === "admin", which contradicted the server
+  // predicate (env allowlist + admin_users, ADR 0008): a table-only admin
+  // passed AdminGate and was then bounced to /login here (G1). Mirror
+  // AdminGate instead and ask the same server fact.
+  const [adminState, setAdminState] = useState<"checking" | "allowed" | "denied">("checking");
+
   useEffect(() => {
-    if (!loading && (!user || userType !== "admin")) {
+    let cancelled = false;
+    (async () => {
+      let next: "allowed" | "denied";
+      try {
+        const res = await authFetch("/api/admin/whoami");
+        next = res.ok ? "allowed" : "denied";
+      } catch {
+        // Network failure or an unreadable session. Fail closed.
+        next = "denied";
+      }
+      if (!cancelled) setAdminState(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if ((!loading && !user) || adminState === "denied") {
       router.replace("/login");
     }
-  }, [loading, user, userType, router]);
+  }, [loading, user, adminState, router]);
 
-  if (loading) {
+  if (loading || adminState === "checking") {
     // Plan F #14: match the animated bar that ArtistPortalLayout and
     // VenuePortalLayout already render so the three portals share the
     // same loading affordance. Plain "Loading..." text was the
@@ -74,7 +99,7 @@ export default function AdminPortalLayout({
     );
   }
 
-  if (!user || userType !== "admin") return null;
+  if (!user || adminState !== "allowed") return null;
 
   return (
     <div className="min-h-screen bg-background flex">

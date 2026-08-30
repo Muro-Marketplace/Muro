@@ -140,6 +140,7 @@ export async function sendOrderConfirmations(
       newStatus: "confirmed",
       buyerEmail: buyerEmail ?? null,
       artistEmail,
+      artistUserId: artistUserId || null,
       data: {
         // customer_order_placed
         firstName: receiptName.split(" ")[0] || "there",

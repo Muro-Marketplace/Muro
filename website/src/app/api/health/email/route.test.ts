@@ -17,6 +17,7 @@ const FULL_ENV = {
   EMAIL_FROM_NEWS: "c@tx.example",
   CRON_SECRET: "s3cret",
   SUPABASE_WEBHOOK_SECRET: "whsec",
+  RESEND_WEBHOOK_SECRET: "whsec_resend",
 };
 
 /** counts: status -> rows in the last 24h. Anything unlisted answers 0. */
@@ -81,6 +82,47 @@ describe("GET /api/health/email", () => {
     expect(res.status).toBe(503);
     expect(body.healthy).toBe(false);
     expect(body.last24h.skipped_no_api_key).toBe(3);
+  });
+
+  // WS5.4 (R4.8): the healthy verdict used to ignore failed / render_failed
+  // entirely and did not even count dry_run, so a day of 100 per cent provider
+  // failures, a broken template, or a leaked EMAIL_DRY_RUN all left this route
+  // returning 200 healthy through a total outage.
+  it("is 503 when any send failed at the provider in the last 24h", async () => {
+    setupCounts({ sent: 40, failed: 2 });
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(body.healthy).toBe(false);
+    expect(body.last24h.failed).toBe(2);
+  });
+
+  it("is 503 when any render failed in the last 24h", async () => {
+    setupCounts({ sent: 40, render_failed: 1 });
+    const res = await GET();
+
+    expect(res.status).toBe(503);
+    expect((await res.json()).healthy).toBe(false);
+  });
+
+  it("is 503 when any dry_run row exists, surfacing a leaked EMAIL_DRY_RUN", async () => {
+    setupCounts({ sent: 40, dry_run: 3 });
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(body.healthy).toBe(false);
+    expect(body.last24h.dry_run).toBe(3);
+  });
+
+  it("is 503 when RESEND_WEBHOOK_SECRET is missing (suppressions pipeline dead)", async () => {
+    delete process.env.RESEND_WEBHOOK_SECRET;
+    const res = await GET();
+    const body = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(body.env.RESEND_WEBHOOK_SECRET).toBe(false);
   });
 
   it("is 503, not a false all-clear, when the database cannot be reached", async () => {

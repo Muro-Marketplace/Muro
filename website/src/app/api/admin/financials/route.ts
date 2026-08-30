@@ -113,6 +113,31 @@ export async function GET(request: Request) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
 
+  // G23: the aggregations key on raw user ids, which the dashboard used to
+  // render verbatim, leaving the admin to look each UUID up by hand.
+  // Resolve display names server-side; a missing profile row falls back to
+  // null and the page shows the id.
+  const venueNamesById = new Map<string, string>();
+  if (topVenues.length > 0) {
+    const { data: venueProfiles } = await db
+      .from("venue_profiles")
+      .select("user_id, name")
+      .in("user_id", topVenues.map(([userId]) => userId));
+    for (const row of (venueProfiles ?? []) as Array<{ user_id: string; name: string | null }>) {
+      if (row.name) venueNamesById.set(row.user_id, row.name);
+    }
+  }
+  const artistNamesById = new Map<string, string>();
+  if (topArtists.length > 0) {
+    const { data: artistProfiles } = await db
+      .from("artist_profiles")
+      .select("user_id, name")
+      .in("user_id", topArtists.map(([userId]) => userId));
+    for (const row of (artistProfiles ?? []) as Array<{ user_id: string; name: string | null }>) {
+      if (row.name) artistNamesById.set(row.user_id, row.name);
+    }
+  }
+
   return NextResponse.json({
     subscriptions: {
       total:
@@ -133,7 +158,15 @@ export async function GET(request: Request) {
       thisMonthPence: revenueThisMonthPence,
       yearAgoPence: revenueYearAgoPence,
     },
-    topVenues: topVenues.map(([userId, totalPence]) => ({ userId, totalPence })),
-    topArtists: topArtists.map(([userId, totalPence]) => ({ userId, totalPence })),
+    topVenues: topVenues.map(([userId, totalPence]) => ({
+      userId,
+      name: venueNamesById.get(userId) ?? null,
+      totalPence,
+    })),
+    topArtists: topArtists.map(([userId, totalPence]) => ({
+      userId,
+      name: artistNamesById.get(userId) ?? null,
+      totalPence,
+    })),
   });
 }

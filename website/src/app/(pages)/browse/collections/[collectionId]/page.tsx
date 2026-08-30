@@ -14,6 +14,7 @@ import MakeOfferModal from "@/components/offers/MakeOfferModal";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 import { slugify } from "@/lib/slugify";
 import { SIZE_BANDS, bandsForWork, type SizeBandKey } from "@/components/browse/SizeBands";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 type CollectionWork = ArtistWork & {
   selectedSize?: string;
@@ -403,21 +404,29 @@ export default function CollectionDetailPage() {
               {/* Arrangement chips (#42), same shape as gallery cards
                   so the collection page reads the same way. Surfaces
                   what the underlying artist is open to. */}
+              {/* B15: these three chips were hardcoded strings, and the
+                  openToFreeLoan one said "Display", which reads as a free
+                  display for a flag that means a PAID loan. `free_loan` is
+                  the legacy alias for `paid_loan` (see arrangement-labels.ts,
+                  K3), and the same flag renders as ARRANGEMENT_LABEL.paid_loan
+                  on the browse artist cards, so a visitor moving between the
+                  two pages was told two different things about the same
+                  arrangement. All three now come from the shared map. */}
               {arrangements && (
                 <div className="flex flex-wrap gap-1.5 mb-6">
                   {arrangements.openToFreeLoan && (
                     <span className="text-[10px] px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-sm">
-                      Display
+                      {ARRANGEMENT_LABEL.paid_loan}
                     </span>
                   )}
                   {arrangements.openToRevenueShare && (
                     <span className="text-[10px] px-2 py-0.5 bg-accent/10 text-accent border border-accent/20 rounded-sm">
-                      Rev share{arrangements.revenueSharePercent ? ` · ${arrangements.revenueSharePercent}%` : ""}
+                      {ARRANGEMENT_LABEL.revenue_share}{arrangements.revenueSharePercent ? ` · ${arrangements.revenueSharePercent}%` : ""}
                     </span>
                   )}
                   {arrangements.openToOutrightPurchase && (
                     <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-sm">
-                      Purchase
+                      {ARRANGEMENT_LABEL.purchase}
                     </span>
                   )}
                 </div>

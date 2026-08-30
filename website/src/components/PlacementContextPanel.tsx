@@ -15,6 +15,7 @@ import {
   type PlacementLifecycle,
 } from "@/lib/placements/status";
 import { canRespond } from "@/lib/placement-permissions";
+import { deriveArrangementType } from "@/lib/placements/arrangement";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
 import Toggle from "@/components/Toggle";
 import { useSearchParams } from "next/navigation";
@@ -52,6 +53,9 @@ interface RemotePlacement extends PlacementLifecycle {
   artist_user_id: string | null;
   venue_user_id: string | null;
   requester_user_id: string | null;
+  /** What GET /api/placements actually emits: the resolved requester.
+      Normalised onto requester_user_id in loadPlacements (F24/F51). */
+  proposed_by_user_id?: string | null;
   accepted_at: string | null;
   scheduled_for: string | null;
   installed_at: string | null;
@@ -146,9 +150,19 @@ export default function PlacementContextPanel({
     try {
       const res = await authFetch("/api/placements");
       const data = await res.json();
-      const rows: RemotePlacement[] = (data.placements || []).filter((p: RemotePlacement) => {
-        return p.artist_slug === otherPartySlug || p.venue_slug === otherPartySlug;
-      });
+      const rows: RemotePlacement[] = (data.placements || [])
+        .filter((p: RemotePlacement) => {
+          return p.artist_slug === otherPartySlug || p.venue_slug === otherPartySlug;
+        })
+        // F24/F26 (F51): the list API emits the resolved requester as
+        // proposed_by_user_id, while everything in this panel (and the
+        // shared canRespond helper) reads requester_user_id. Alias it here
+        // so Accept/Counter/Decline, the direction tag and the declined
+        // copy all resolve instead of falling into the ambiguous-row path.
+        .map((p: RemotePlacement) => ({
+          ...p,
+          requester_user_id: p.requester_user_id ?? p.proposed_by_user_id ?? null,
+        }));
       // Sort most recent first \u2014 API already orders, but be defensive.
       rows.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
       setPlacements(rows);
@@ -375,21 +389,25 @@ export default function PlacementContextPanel({
     setBusyAction("counter");
     setError(null);
     try {
-      // Derive arrangement_type from the two toggles. free_loan is the DB
-      // value for "has a monthly fee" (the column name is legacy); pure
-      // revenue share has no fee.
-      const arrangementType = counterPaidLoan
-        ? "free_loan"
-        : counterQr
-          ? "revenue_share"
-          : "free_loan";
+      // F27: derive the canonical arrangement from the actual terms rather
+      // than hand-mapping the toggles. The old ladder sent the legacy
+      // "free_loan" for a paid loan, so the stored type lost the fee's
+      // meaning; paid loan + QR is canonically "mixed". The server
+      // re-derives anyway, this just keeps the client honest.
+      const counterMonthlyFee = counterPaidLoan && typeof counterFee === "number" ? counterFee : null;
+      const counterShare = counterQr && counterRevShare > 0 ? counterRevShare : null;
+      const arrangementType = deriveArrangementType({
+        monthly_fee_gbp: counterMonthlyFee,
+        qr_enabled: counterQr,
+        revenue_share_percent: counterShare,
+      });
       const body = {
         id: (current as RemotePlacement).id,
         counter: {
           arrangementType,
-          revenueSharePercent: counterQr && counterRevShare > 0 ? counterRevShare : undefined,
+          revenueSharePercent: counterShare ?? undefined,
           qrEnabled: counterQr,
-          monthlyFeeGbp: counterPaidLoan && typeof counterFee === "number" ? counterFee : undefined,
+          monthlyFeeGbp: counterMonthlyFee ?? undefined,
           message: counterNote.trim() || undefined,
         },
       };

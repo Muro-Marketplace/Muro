@@ -47,10 +47,13 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
       <h1 className="font-serif text-3xl sm:text-4xl text-foreground leading-tight mb-3">
         Pay {artistName} monthly for this placement
       </h1>
+      {/* F35: the Stripe subscription anchors on the setup date, not the
+          1st of the month, so the charge lands monthly on the signup
+          anniversary. Don't say "at the start of each month". */}
       <p className="text-muted leading-relaxed mb-8">
         You agreed a paid loan for <span className="text-foreground font-medium">{workTitle}</span>.
-        Your card is charged <span className="text-foreground font-semibold">&pound;{monthlyFeeGbp}</span> at
-        the start of each month. Cancel any time from your portal, you stay charged
+        Your card is charged <span className="text-foreground font-semibold">&pound;{monthlyFeeGbp}</span> each
+        month from your start date. Cancel any time from your portal, you stay charged
         for the current month only.
       </p>
 

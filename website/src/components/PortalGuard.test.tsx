@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -220,5 +220,56 @@ describe("<PortalGuard /> artist onboarding gating", () => {
       </PortalGuard>,
     );
     await waitFor(() => expect(screen.getByText("portal")).toBeTruthy());
+  });
+});
+
+describe("<PortalGuard /> verify-email recovery actions (C1)", () => {
+  // Fail-before: the unverified screen was a dead end — no resend button and
+  // no sign-out control, even though POST /api/auth/resend-verification
+  // existed. A stuck user had to know to log out and fail a login to reach
+  // the resend on the login page.
+  const signOut = vi.fn(async () => {});
+
+  function renderUnverified() {
+    useAuthMock.mockReturnValue({
+      user: { id: "u", email: "new@example.com", email_confirmed_at: null },
+      userType: "artist",
+      loading: false,
+      signOut,
+    });
+    return render(
+      <PortalGuard allowedType="artist">
+        <span>portal</span>
+      </PortalGuard>,
+    );
+  }
+
+  beforeEach(() => {
+    signOut.mockClear();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("resends the verification email to the signed-in address", async () => {
+    renderUnverified();
+    fireEvent.click(await screen.findByText("Resend verification email"));
+
+    await waitFor(() => expect(screen.getByText(/we have sent a new link/i)).toBeTruthy());
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/auth/resend-verification");
+    expect(JSON.parse(init.body as string).email).toBe("new@example.com");
+  });
+
+  it("offers a sign-out that ends the session and lands on /login", async () => {
+    renderUnverified();
+    fireEvent.click(await screen.findByText("Sign out"));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
   });
 });

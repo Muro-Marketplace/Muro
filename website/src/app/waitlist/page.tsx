@@ -446,11 +446,18 @@ function HowItWorks() {
           <section className="py-28 lg:py-36">
             <div className="max-w-[700px] mx-auto px-6 lg:px-10 text-center">
               <h2 className="font-serif text-[clamp(2rem,4vw,3rem)] leading-[1.1] tracking-[-0.02em] text-white mb-5">
-                Be first in when we launch.
+                Be part of it from day one.
               </h2>
               <p className="text-base text-white/40 leading-relaxed mb-10 max-w-md mx-auto">
-                Wallplace is in private beta. Join the waitlist and we&rsquo;ll
-                notify you when we open the doors.
+                Join the waitlist for launch updates. Or don&rsquo;t wait:{" "}
+                <Link href="/apply" className="text-white/70 underline underline-offset-2 hover:text-white">
+                  artist applications
+                </Link>{" "}
+                and{" "}
+                <Link href="/signup/venue" className="text-white/70 underline underline-offset-2 hover:text-white">
+                  venue registration
+                </Link>{" "}
+                are already open.
               </p>
               <button
                 onClick={() =>

@@ -12,13 +12,43 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [hasSession, setHasSession] = useState(false);
+  // A55 (QA 2026-08-28): three states, not two. The old one-shot getSession()
+  // on mount raced the SDK's recovery-hash exchange, so a perfectly valid
+  // link could paint the "Invalid or Expired Link" screen before the session
+  // landed. Same retry loop as /auth/callback: poll briefly, and only
+  // declare the link dead once the retries are exhausted.
+  const [sessionState, setSessionState] = useState<"checking" | "ready" | "missing">("checking");
 
   useEffect(() => {
-    // Check if user arrived via the reset link (Supabase sets session automatically)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setHasSession(true);
+    let cancelled = false;
+
+    // The SDK also fires SIGNED_IN / PASSWORD_RECOVERY the moment the
+    // recovery hash is exchanged, so subscribe as well as poll: whichever
+    // lands first flips the page to the form.
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!cancelled && session) setSessionState("ready");
     });
+
+    (async () => {
+      for (let i = 0; i < 6; i++) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (session) {
+          setSessionState("ready");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 250));
+        if (cancelled) return;
+      }
+      // Retries exhausted and no auth event arrived: the link really is
+      // dead (or was never a recovery link).
+      setSessionState((current) => (current === "ready" ? current : "missing"));
+    })();
+
+    return () => {
+      cancelled = true;
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,7 +77,15 @@ export default function ResetPasswordPage() {
     setTimeout(() => router.push("/login"), 3000);
   }
 
-  if (!hasSession) {
+  if (sessionState === "checking") {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center px-6">
+        <p className="text-sm text-muted">Checking your reset link…</p>
+      </div>
+    );
+  }
+
+  if (sessionState === "missing") {
     return (
       <div className="min-h-[70vh] flex items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">

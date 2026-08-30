@@ -44,9 +44,13 @@ const cartItem = {
   size: null,
 };
 
+// B18 needs a collect-from-venue basket, so the cart is mutable and reset to
+// the single shipped item before each test.
+let cartItems: Record<string, unknown>[] = [];
+
 vi.mock("@/context/CartContext", () => ({
   useCart: () => ({
-    items: [cartItem],
+    items: cartItems,
     removeItem: vi.fn(),
     updateQuantity: vi.fn(),
     subtotal: 450,
@@ -71,6 +75,9 @@ vi.mock("@/lib/api-client", () => ({
 
 import CheckoutPage from "./page";
 
+beforeEach(() => {
+  cartItems = [cartItem];
+});
 afterEach(() => cleanup());
 
 describe("Checkout submit button copy (fix 7.1)", () => {
@@ -177,5 +184,35 @@ describe("Checkout renderInput a11y (fix 3.9)", () => {
     const countrySelect = screen.getByLabelText(/country/i);
     expect(countrySelect, "Country select not found via getByLabelText").toBeTruthy();
     expect(countrySelect.id).toBe("checkout-country");
+  });
+});
+
+// B18. The collect tile printed `items[0].collectVenueSlug`, so the buyer read
+// "Show your order number at the-copper-kettle". The line now carries the
+// venue's display name for this copy; the slug remains the claim the checkout
+// API re-validates against the live placements table.
+describe("collect-from-venue tile names the venue (B18)", () => {
+  const collectLine = {
+    ...cartItem,
+    lineFulfilment: "collect_venue",
+    collectVenueSlug: "the-copper-kettle",
+    collectPlacementId: "p-1",
+  };
+
+  it("shows the venue's display name, not its slug", async () => {
+    cartItems = [{ ...collectLine, collectVenueName: "The Copper Kettle" }];
+    render(<CheckoutPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/Show your order number at The Copper Kettle/i)).toBeTruthy(),
+    );
+    expect(screen.queryByText(/the-copper-kettle/i)).toBeNull();
+  });
+
+  it("falls back to the slug for a basket built before the name existed", async () => {
+    cartItems = [collectLine];
+    render(<CheckoutPage />);
+    await waitFor(() =>
+      expect(screen.getByText(/Show your order number at the-copper-kettle/i)).toBeTruthy(),
+    );
   });
 });

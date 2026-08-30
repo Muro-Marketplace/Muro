@@ -9,7 +9,25 @@ import { useToast } from "@/context/ToastContext";
 import { supabase } from "@/lib/supabase";
 import { isFlagOn } from "@/lib/feature-flags";
 import { safeRedirect } from "@/lib/safe-redirect";
-import { portalPathForRole } from "@/lib/auth-roles";
+import { portalPathForRole, isSignupRole, SIGNUP_ROLES, type SignupRole } from "@/lib/auth-roles";
+
+// Human labels for the three roles a visitor may ask for. Used by the ?hint=
+// guidance (A3/H3) and the OAuth account-type choice (H1).
+const ROLE_LABEL: Record<SignupRole, string> = {
+  artist: "artist",
+  venue: "venue",
+  customer: "customer",
+};
+
+/**
+ * Reads ?hint= from a query string, returning it only if it names a real
+ * signup role. Anything else, including "admin" and anything a link might
+ * carry in, is discarded rather than echoed back onto the page.
+ */
+function readRoleHint(search: string): SignupRole | null {
+  const raw = new URLSearchParams(search).get("hint");
+  return isSignupRole(raw) ? raw : null;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,15 +43,32 @@ export default function LoginPage() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
   const toastFired = useRef(false);
+  // A3/H3: the header's "Switch to X portal" control signs the user out and
+  // sends them here as /login?email=…&hint=X. Nothing read `hint`, so the one
+  // thing the round trip was for (which of my accounts am I signing into?)
+  // was dropped the moment the page loaded. Held in state because it is read
+  // from window.location, which is not available during the server render.
+  const [roleHint, setRoleHint] = useState<SignupRole | null>(null);
+  // H1: which kind of account OAuth should create for someone who has never
+  // signed in before. Defaults to customer, the least privileged of the three.
+  const [oauthRole, setOauthRole] = useState<SignupRole>("customer");
 
   // Read ?email=… on mount so the portal-switcher flow (which signs the
   // user out and redirects here) can pre-fill the email of the account
-  // they're trying to switch into.
+  // they're trying to switch into. ?hint= comes off the same link.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const seed = new URLSearchParams(window.location.search).get("email");
+    const params = new URLSearchParams(window.location.search);
+    const seed = params.get("email");
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (seed) setEmail(seed);
+    const hint = readRoleHint(window.location.search);
+    if (hint) {
+      setRoleHint(hint);
+      // If they came here to reach their venue account, an OAuth sign-in
+      // should be offering to make a venue account, not a customer one.
+      setOauthRole(hint);
+    }
   }, []);
 
   // Redirect if already logged in. Honours ?next= so a deep link that
@@ -43,17 +78,30 @@ export default function LoginPage() {
   // portalPathForRole come from Plan A's auth-roles refactor.
   useEffect(() => {
     if (authLoading || !user) return;
+    const search = typeof window === "undefined" ? "" : window.location.search;
+    const params = new URLSearchParams(search);
+    const hint = readRoleHint(search);
+    // A3/H3: when the switcher asked for a specific account and the details
+    // opened a different one, say so. Accounts are per role, so signing in
+    // with the artist password lands in the artist portal however hard the
+    // link asked for the venue one, and being dumped back where you started
+    // with no explanation is what made this look broken.
+    const landedElsewhere = !!hint && !!userType && userType !== hint;
     if (!toastFired.current) {
       toastFired.current = true;
-      showToast("You're already signed in. Redirecting…", { durationMs: 2500 });
+      showToast(
+        landedElsewhere
+          ? `Those details signed you into your ${ROLE_LABEL[userType as SignupRole] ?? userType} account. To reach your ${ROLE_LABEL[hint!]} account, sign in with the details you set up for it.`
+          : "You're already signed in. Redirecting…",
+        { durationMs: landedElsewhere ? 7000 : 2500 },
+      );
     }
-    const params =
-      typeof window === "undefined"
-        ? new URLSearchParams()
-        : new URLSearchParams(window.location.search);
     // Canonical param is ?next=. Back-compat: legacy ?redirect= links
     // (e.g. old artwork-page message button) also honoured here.
     const next = params.get("next") ?? params.get("redirect");
+    // The hint never overrides the real role: portalPathForRole already sends
+    // a matching account to the hinted portal, and forcing a mismatched one
+    // there would only bounce off that portal's guard.
     router.replace(safeRedirect(next, portalPathForRole(userType)));
   }, [authLoading, user, userType, router, showToast]);
 
@@ -148,11 +196,28 @@ export default function LoginPage() {
         {/* Heading */}
         <div className="text-center mb-8">
           <h1 className="text-3xl lg:text-4xl mb-2 text-white">Welcome back</h1>
-          <p className="text-white/50 text-sm">Sign in to your Wallplace account</p>
+          {/* A3/H3: name the account when the portal switcher sent them here,
+              so the sign-out they just went through has a visible reason. */}
+          <p className="text-white/50 text-sm">
+            {roleHint
+              ? `Sign in to your ${ROLE_LABEL[roleHint]} account`
+              : "Sign in to your Wallplace account"}
+          </p>
         </div>
 
         {/* Login form */}
         <div className="bg-white/95 backdrop-blur-sm rounded-sm p-6 sm:p-8">
+          {/* A3/H3: each Wallplace account type is a separate account, so the
+              password that opens one will not open another. Saying this here
+              saves the "I typed the right password and ended up back where I
+              started" round trip. */}
+          {roleHint && (
+            <p className="mb-4 rounded-sm bg-background border border-border p-3 text-xs text-muted">
+              You have more than one Wallplace account on this email address.
+              Each one has its own sign-in details, so use the ones you set up
+              for your {ROLE_LABEL[roleHint]} account.
+            </p>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Email</label>
@@ -238,14 +303,55 @@ export default function LoginPage() {
                 <div className="flex-1 h-px bg-border" />
               </div>
 
+              {/* H1: this used to post role "customer" unconditionally. A
+                  visitor with no Wallplace account who pressed Google here
+                  became a customer without being asked and without being told
+                  an account was being created at all, and the only way back
+                  was to notice and go through /apply. The role is now theirs
+                  to pick, and the copy says what pressing the button does.
+                  oauth-finalize still never overwrites an existing user_type,
+                  so a returning artist is unaffected by whatever is selected
+                  here, and it records their terms acceptance server-side. */}
+              <fieldset className="mb-3">
+                <legend className="text-[11px] text-muted mb-2">
+                  New to Wallplace? If this email has no account yet, we will
+                  create one. Choose the type:
+                </legend>
+                <div className="flex gap-2">
+                  {SIGNUP_ROLES.map((role) => (
+                    <label
+                      key={role}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 border rounded-sm text-xs cursor-pointer transition-colors ${
+                        oauthRole === role
+                          ? "border-accent bg-accent/5 text-foreground font-medium"
+                          : "border-border text-muted hover:text-foreground"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="oauth-account-type"
+                        value={role}
+                        checked={oauthRole === role}
+                        onChange={() => setOauthRole(role)}
+                        className="sr-only"
+                      />
+                      {role.charAt(0).toUpperCase() + role.slice(1)}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted mt-2">
+                  Already have an account? Your existing account type is kept,
+                  whichever is selected here. By continuing you agree to our{" "}
+                  <Link href="/terms" className="text-accent hover:underline">Terms of Service</Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="text-accent hover:underline">Privacy Policy</Link>.
+                </p>
+              </fieldset>
+
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={async () => {
-                    // Login doesn't know the user's role yet; default to
-                    // "customer". oauth-finalize never overwrites an
-                    // existing user_type, so a returning artist still
-                    // lands in the artist portal.
                     const next = safeRedirect(
                       new URLSearchParams(window.location.search).get("next"),
                       "/browse",
@@ -255,7 +361,7 @@ export default function LoginPage() {
                       const r = await fetch("/api/auth/oauth-sign-state", {
                         method: "POST",
                         headers: { "content-type": "application/json" },
-                        body: JSON.stringify({ role: "customer", next }),
+                        body: JSON.stringify({ role: oauthRole, next }),
                       });
                       if (r.ok) state = (await r.json()).state || "";
                     } catch { /* fall through */ }
@@ -284,7 +390,7 @@ export default function LoginPage() {
                       const r = await fetch("/api/auth/oauth-sign-state", {
                         method: "POST",
                         headers: { "content-type": "application/json" },
-                        body: JSON.stringify({ role: "customer", next }),
+                        body: JSON.stringify({ role: oauthRole, next }),
                       });
                       if (r.ok) state = (await r.json()).state || "";
                     } catch { /* fall through */ }

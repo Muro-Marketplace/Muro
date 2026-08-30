@@ -89,7 +89,7 @@ async function submitForm() {
   fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: "artist@example.com" } });
   fireEvent.change(screen.getByPlaceholderText("At least 8 characters"), { target: { value: "password123" } });
   fireEvent.click(screen.getByTestId("terms"));
-  fireEvent.submit(screen.getByRole("button", { name: /continue to application/i }));
+  fireEvent.submit(screen.getByRole("button", { name: /create account/i }));
 }
 
 describe("ArtistSignUpPage — emailRedirectTo next param", () => {

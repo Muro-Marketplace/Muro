@@ -12897,3 +12897,122 @@ That picked up **pre-existing drift**: `in_store_price` and
 `in_store_frame_included` were in prod but missing from the snapshot, because
 migrations 120/121 were applied without regenerating it. Every other table
 matches live, checked by column count across all 57.
+
+### Owner ruling: the 24-hour QR attribution window
+
+Ruled 2026-08-28 evening: the venue earns a revenue share ONLY when the
+buyer's device scanned a QR, with a 24-hour window between scan and
+purchase. Verified this is ALREADY the shipped design end to end: the
+D10 attribution token is minted at scan time with a 24h TTL and expiry is
+enforced server-side at checkout, and the client-side QR context in
+localStorage self-evicts after the same 24h. The "that artwork they
+scanned" scoping holds through the work-level placement rates: a venue is
+only ever paid for lines whose work is placed with them.
+
+What the ruling exposed as actually missing (audit F3): a collect-from-
+venue purchase WITHOUT a scan legitimately pays the venue nothing, but it
+still sells the physical piece off their wall. The webhook gated the
+venue notice, the off-the-wall offer clear and the legacy flag clear on
+QR attribution being present. All three now run for every collect sale;
+the notice resolves the venue from the sold placement when attribution is
+absent, and the share stays zero. Fail-before probed.
+
+## 2026-08-29: transaction-hardening plan executed in full
+
+Every code item in docs/plans/2026-08-28-transaction-hardening-plan.md is
+implemented, tested and committed (12 thematic commits, 39b0ff2..3dcf757).
+Full gate at completion: 2,997 tests across 292 files, tsc clean, eslint
+zero errors. Six parallel agents delivered WS5 (email pipeline), WS6
+(bells/crons) and the three WS8 waves; WS1-WS4 plus the cross-cutting
+items landed directly. Highlights beyond the earlier entries:
+
+- WS3: cancellation refunds the buyer (reversal-before-refund through a
+  system refund_requests row); account deletion cancels SaaS, paid-loan
+  and curation subscriptions and ABORTS if a cancel fails; an off-wall
+  sale marks the placement sold, cancels its billing and clears the
+  portfolio stamps; collection orders reach delivered (buyer-confirmed
+  handover) so the statutory window starts; the referral window emails at
+  grant and 4 days before expiry (new referral-window cron).
+- WS2.7: a buyer's delivered click releases only that artist's legs plus
+  the venue share; co-artists keep their payout_after date.
+- WS1.1 second half: all six paid-loan/curation invoice wrapper catches
+  now 500 so Stripe redelivers; WS1.5 second half: async_payment_failed
+  tells the buyer nothing was charged (customer_payment_failed).
+- WS4.4 return half: past_due recovery sends subscription_recovered.
+- R2.17: new daily subscription-reconcile cron corrects SaaS/paid-loan/
+  curation state toward Stripe and alerts on drift; R2.13: an invoice for
+  a non-active placement trips an immediate admin alarm.
+- R4.10/R4.17: lifecycle emails identify the RECIPIENT (not the actor);
+  refund rejections greet and identify the requester. WS6.2: rejection
+  and payout-failed bells.
+- B28: checkout clamps quantity against remaining stock server-side.
+- safe-filter now allows colons in values (ISO timestamps) so timestamp
+  bounds can go through orFilter; injection charset unchanged.
+
+New crons wired in vercel.json: referral-window (10:30), subscription-
+reconcile (07:30). New templates: paid_loan_payment_failed,
+referral_credit_granted, referral_window_ending, subscription_recovered,
+customer_payment_failed (plus venue_paid_loan_invoice and
+subscription_card_expiring wired by WS4).
+
+Remaining and deliberately NOT code: WS0 owner actions (Stripe webhook
+enabled-events list, RESEND_WEBHOOK_SECRET + Resend webhook endpoint,
+leaked-password toggle, TURNSTILE_SECRET_KEY, branch protection,
+clean-slate test-data reset decision), WS7 compliance decisions
+(VAT/commission invoicing/HMRC platform reporting, owner + accountant),
+and the stale prod deploy. R4.15's register-venue/waitlist keys and the
+artist-agreement page's proration sentence are flagged for a later pass
+(the latter is a legal document needing owner sign-off).
+
+## 2026-08-29: P2/P3 wave 4 (the last sweep of the launch triage)
+
+Eleven commits (10e0cef..f4bfc05), 135 files, ~11,700 lines. Final gate:
+3,381 tests across 332 files, tsc clean, eslint zero errors. Seven slices ran
+in parallel (six agents plus a lead slice); every fix carries a regression
+test with fail-before verification.
+
+- **Public/lead slice**: blog markdown rendered as literal asterisks; the
+  homepage bypassed the shared shell; five bulk portfolio saves (reorder,
+  availability, add, price, copy-from) reported success on a rejected POST and
+  silently reverted on reload.
+- **Account**: failures surfaced instead of swallowed, orphan writes refused,
+  password change now verifies the old password. Migration 124 points
+  `email_preferences.user_id` at `auth.users` (verified live: one row, zero
+  orphans).
+- **Header/nav**: one source for portal nav (the header dropdown and the
+  sidebars had drifted under a comment claiming parity), honest role hints,
+  notifications reachable on mobile.
+- **Buy path**: the Buy Now bar added the LAST price tier rather than the
+  largest; the frame dropdown quoted a default uplift while the charge honoured
+  the artist's per-size override; the filter badge counted an always-true check;
+  "Clear all" silently disabled distance filtering. B18: the collect tile
+  printed the venue slug at the buyer.
+- **Messaging/placements**: offer expiry was stored and typed but never
+  displayed, enforced or expired (now one predicate set across accept, decline
+  and checkout); a zero-priced offer could be minted and paid; duplicate
+  responses burned a weekly outreach send; accepting a response skipped the
+  address stamp and the acceptance gates; support threads dead-ended at a 404.
+- **Emails/digests**: the inactive sweep shipped fabricated zeros and mailed
+  admins as customers; the artist digest had an always-empty top-works block and
+  mislabelled unread as total; the venue digest advertised a matching feature
+  that does not exist. E17: per-placement QR counts compared display name to
+  slug and uuid to title, so modern labels always counted zero.
+- **Admin**: flagged messages had been accumulating in moderation_queue since
+  migration 116 with no page querying them; blogs were approved on a
+  200-character excerpt with the rejection reason never reaching the author;
+  the dispute resolution prompt claimed the note was internal while the API
+  emailed it verbatim to both parties; resolving a dispute with no order
+  notified nobody.
+
+Also fixed here: a Rules-of-Hooks violation introduced in the lead slice (a
+bulk-save hook sat below a loading early-return, so hook order changed between
+renders), and admin-auth gained a batch predicate so the inactive sweep
+excludes table-only admins, not just the ADMIN_EMAILS allowlist.
+
+Deliberately not done, with reasons: the F45 and E26 UI halves target
+artwork-request pages that are parked redirects (server rules are in place and
+will refuse correctly if unparked); per-work theme tags for the portfolio
+filter need a migration; `OffersList.pay()` still uses authFetch for a POST,
+grandfathered by an in-code comment awaiting the owner's call. Remaining
+open triage items are P3s, mostly admin polish (G3, G4, G6, G7, G16, G21,
+G24, G29, G30).

@@ -9,7 +9,6 @@
 //   update the predicates below
 // - venue_profiles has a similar shape
 
-import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistProfileCompletionNudge } from "@/emails/templates/onboarding/artist/ArtistProfileCompletionNudge";
@@ -22,7 +21,7 @@ import { VenueSpaceDetailsNudge } from "@/emails/templates/onboarding/venue/Venu
 import { VenuePhotoUploadNudge } from "@/emails/templates/onboarding/venue/VenuePhotoUploadNudge";
 import { VenueArtPreferencesNudge } from "@/emails/templates/onboarding/venue/VenueArtPreferencesNudge";
 import { VenueFirstPlacementCta } from "@/emails/templates/onboarding/venue/VenueFirstPlacementCta";
-import { requireCronAuth, runBatch } from "../_auth";
+import { requireCronAuth, runBatch, finishCronRun } from "../_auth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +32,28 @@ function daysSince(iso?: string | null): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / (24 * 60 * 60 * 1000));
 }
 
-function inDayWindow(days: number, target: number): boolean {
-  // ±12h window so a single daily run catches the right cohort.
-  return days >= target && days <= target;
+// R6.F14: the old inDayWindow was exact equality (`days >= target && days <=
+// target`) despite its "±12h" comment, so one missed or failed daily run
+// permanently dropped that day's cohort. Each nudge now has a real window of
+// NUDGE_WINDOW_DAYS days starting at its target day; the once-ever per-template
+// idempotency keys absorb the overlap, so a caught-up cohort still gets each
+// nudge at most once.
+const NUDGE_WINDOW_DAYS = 3;
+
+/**
+ * Picks which nudge day `days` falls into. The HIGHEST covering target wins,
+ * so on-time cohorts are never swallowed by the previous nudge's catch-up
+ * window (day 4 must send the day-4 nudge, not re-enter the day-2 branch and
+ * no-op on its idempotency key). Returns null outside every window.
+ */
+function activeNudgeTarget(days: number, targets: number[]): number | null {
+  let best: number | null = null;
+  for (const target of targets) {
+    if (days >= target && days <= target + NUDGE_WINDOW_DAYS - 1 && (best === null || target > best)) {
+      best = target;
+    }
+  }
+  return best;
 }
 
 export async function GET(request: Request) {
@@ -44,8 +62,10 @@ export async function GET(request: Request) {
 
   const db = getSupabaseAdmin();
 
-  // Artists created in the last 15 days, anyone older is past the cohort.
-  const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+  // Artists created in the last 17 days, anyone older is past the cohort.
+  // 17 = the day-14 nudge target plus its 3-day catch-up window, so a
+  // missed-run cohort at day 16 is still fetched.
+  const cutoff = new Date(Date.now() - (14 + NUDGE_WINDOW_DAYS) * 24 * 60 * 60 * 1000).toISOString();
   const { data: artists } = await db
     .from("artist_profiles")
     .select("id, user_id, name, slug, created_at, short_bio, profile_image, primary_medium, stripe_connect_account_id, venue_types_suited_for, themes")
@@ -55,13 +75,15 @@ export async function GET(request: Request) {
   const artistResult = await runBatch(artists || [], async (artist) => {
     if (!artist.user_id) return;
     const days = daysSince(artist.created_at);
+    const target = activeNudgeTarget(days, [2, 4, 7, 10, 14]);
+    if (target === null) return;
     const { data: { user } } = await db.auth.admin.getUserById(artist.user_id);
     if (!user?.email) return;
 
     const firstName = (artist.name || "there").split(" ")[0];
 
     // Day 2, profile completion
-    if (inDayWindow(days, 2)) {
+    if (target === 2) {
       const missing: string[] = [];
       if (!artist.short_bio) missing.push("Artist statement");
       if (!artist.primary_medium) missing.push("Primary medium");
@@ -87,7 +109,7 @@ export async function GET(request: Request) {
     }
 
     // Day 4, first artwork upload
-    if (inDayWindow(days, 4)) {
+    if (target === 4) {
       // `artist_works` has NO `artist_user_id`. Its column is `artist_id`, and it
       // holds the artist_profiles PRIMARY KEY, not the auth user id. PostgREST
       // rejected the whole query, so `worksCount` was always null: the day-4
@@ -118,7 +140,7 @@ export async function GET(request: Request) {
     }
 
     // Day 7, Stripe Connect
-    if (inDayWindow(days, 7)) {
+    if (target === 7) {
       if (artist.stripe_connect_account_id) return;
       await sendEmail({
         idempotencyKey: `onboarding:artist_connect_stripe_nudge:${artist.user_id}`,
@@ -137,7 +159,7 @@ export async function GET(request: Request) {
     }
 
     // Day 10, placement preferences
-    if (inDayWindow(days, 10)) {
+    if (target === 10) {
       const hasPrefs = (artist.venue_types_suited_for?.length ?? 0) > 0 || (artist.themes?.length ?? 0) > 0;
       if (hasPrefs) return;
       await sendEmail({
@@ -157,7 +179,7 @@ export async function GET(request: Request) {
     }
 
     // Day 14, graduation vs recap
-    if (inDayWindow(days, 14)) {
+    if (target === 14) {
       // `artist_works` has NO `artist_user_id`. Its column is `artist_id`, and it
       // holds the artist_profiles PRIMARY KEY, not the auth user id. PostgREST
       // rejected the whole query, so `worksCount` was always null: the day-4
@@ -233,11 +255,13 @@ export async function GET(request: Request) {
   const venueResult = await runBatch(venues || [], async (venue) => {
     if (!venue.user_id) return;
     const days = daysSince(venue.created_at);
+    const target = activeNudgeTarget(days, [2, 4, 7, 10]);
+    if (target === null) return;
     const { data: { user } } = await db.auth.admin.getUserById(venue.user_id);
     if (!user?.email) return;
     const firstName = (venue.name || "there").split(" ")[0];
 
-    if (inDayWindow(days, 2)) {
+    if (target === 2) {
       const missing: string[] = [];
       if (!venue.description) missing.push("Description");
       if (!venue.approximate_footfall) missing.push("Approximate footfall");
@@ -259,7 +283,7 @@ export async function GET(request: Request) {
       return;
     }
 
-    if (inDayWindow(days, 4)) {
+    if (target === 4) {
       if ((venue.images?.length ?? 0) > 0) return;
       await sendEmail({
         idempotencyKey: `onboarding:venue_photo_upload_nudge:${venue.user_id}`,
@@ -282,7 +306,7 @@ export async function GET(request: Request) {
       return;
     }
 
-    if (inDayWindow(days, 7)) {
+    if (target === 7) {
       if ((venue.preferred_styles?.length ?? 0) > 0) return;
       await sendEmail({
         idempotencyKey: `onboarding:venue_art_preferences_nudge:${venue.user_id}`,
@@ -301,7 +325,7 @@ export async function GET(request: Request) {
       return;
     }
 
-    if (inDayWindow(days, 10)) {
+    if (target === 10) {
       // Only CTA if the venue has no placements yet.
       const { count } = await db
         .from("placements")
@@ -325,5 +349,14 @@ export async function GET(request: Request) {
     }
   });
 
-  return NextResponse.json({ ok: true, artist: artistResult, venue: venueResult });
+  // WS6.5: 500 + admin alert when every attempted nudge failed, so a broken
+  // job is visible on Vercel's cron dashboard instead of a green 200.
+  return finishCronRun(
+    "onboarding-nudges",
+    {
+      succeeded: artistResult.succeeded + venueResult.succeeded,
+      failed: artistResult.failed + venueResult.failed,
+    },
+    { artist: artistResult, venue: venueResult },
+  );
 }

@@ -5,14 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import PortalGuard from "@/components/PortalGuard";
+import { customerPortalNav } from "@/lib/portal-nav";
 
-const navItems = [
-  { label: "My Orders", href: "/customer-portal" },
-  { label: "Saved", href: "/customer-portal/saved" },
-  { label: "Addresses", href: "/customer-portal/addresses" },
-  { label: "Messages", href: "/customer-portal/messages" },
-  { label: "Settings", href: "/customer-portal/settings" },
-];
+// H6: nav list moved to src/lib/portal-nav.ts, shared with the header's portal
+// dropdown so the two cannot drift apart.
+const { primary: navItems } = customerPortalNav();
 
 export default function CustomerPortalLayout({ children }: { children: React.ReactNode }) {
   return (

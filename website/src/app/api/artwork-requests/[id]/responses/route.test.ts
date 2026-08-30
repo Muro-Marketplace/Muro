@@ -37,6 +37,9 @@ type RequestRow = {
 };
 // Default is the shape prod actually holds: all 6 live requests are semi_public
 // with no invite list.
+// F45: a prior response by the same artist on the same brief, when the test
+// wants one. Null (the default) means this is the artist's first response.
+let priorResponseRow: { id: string; status: string } | null = null;
 let artworkRequestRow: RequestRow | null = {
   id: "arq_1",
   venue_user_id: "u-venue",
@@ -107,7 +110,23 @@ vi.mock("@/lib/supabase-admin", () => {
         }
         return { data: row, error: null };
       }
+      // F45: the per-artist duplicate lookup. Default null = no prior response.
+      if (table === "artwork_request_responses") {
+        if (!priorResponseRow) return { data: null, error: null };
+        for (const [col, allowed] of Object.entries(inFilters)) {
+          if (!allowed.includes((priorResponseRow as Record<string, unknown>)[col])) {
+            return { data: null, error: null };
+          }
+        }
+        return { data: priorResponseRow, error: null };
+      }
       return { data: null, error: null };
+    };
+    chain.limit = () => chain;
+    const inFilters: Record<string, unknown[]> = {};
+    chain.in = (col: string, vals: unknown[]) => {
+      inFilters[col] = vals;
+      return chain;
     };
     chain.insert = (row: Record<string, unknown>) => {
       lastInsert = row;
@@ -143,6 +162,7 @@ beforeEach(async () => {
   lastInsert = null;
   insertAttempts = [];
   firstInsertError = null;
+  priorResponseRow = null;
   artistRow = { user_id: "u-artist", slug: "the-artist", review_status: "approved" };
   artworkRequestRow = {
     id: "arq_1",
@@ -293,6 +313,8 @@ describe("POST /api/artwork-requests/[id]/responses", () => {
         const chain: Record<string, unknown> = {};
         chain.select = () => chain;
         chain.eq = () => chain;
+        chain.in = () => chain;
+        chain.limit = () => chain;
         chain.maybeSingle = async () => {
           if (table === "artist_profiles") return { data: artistRow, error: null };
           if (table === "artwork_requests") return { data: artworkRequestRow, error: null };
@@ -424,5 +446,130 @@ describe("POST responses does not burn quota on a rejected attempt (E46d orderin
       "a closed-brief attempt burned the artist's quota",
     ).not.toHaveBeenCalled();
     expect(lastInsert).toBeNull();
+  });
+});
+
+describe("POST responses enforces the share-requires-QR pairing (F44)", () => {
+  it("rejects a revenue share above zero with QR switched off", async () => {
+    const { POST } = await import("./route");
+    const res = await POST(
+      buildRequest({
+        responseType: "placement",
+        message: "Terms attached.",
+        proposedRevenueSharePercent: 25,
+        proposedQrEnabled: false,
+      }),
+      ctx,
+    );
+
+    // Fail-before: this saved happily, and the accept handler then created a
+    // revenue_share placement with qr_enabled false, i.e. a venue cut of sales
+    // that the wall has no way to make. The `??` at the accept only covered
+    // null, so an explicit false went straight through.
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe("validation_failed");
+    expect(json.message).toContain("proposedQrEnabled");
+    expect(lastInsert, "a self-contradicting response was saved").toBeNull();
+  });
+
+  it("rejects a share with QR simply omitted", async () => {
+    const { POST } = await import("./route");
+    const res = await POST(
+      buildRequest({
+        responseType: "placement",
+        message: "Terms attached.",
+        proposedRevenueSharePercent: 25,
+      }),
+      ctx,
+    );
+
+    expect(res.status).toBe(400);
+    expect(lastInsert).toBeNull();
+  });
+
+  it("allows a zero share with QR off, which is not a contradiction", async () => {
+    const { POST } = await import("./route");
+    const res = await POST(
+      buildRequest({
+        responseType: "placement",
+        message: "Free display, no QR.",
+        proposedRevenueSharePercent: 0,
+        proposedQrEnabled: false,
+      }),
+      ctx,
+    );
+
+    expect(res.status).toBe(200);
+    expect(lastInsert!.proposed_qr_enabled).toBe(false);
+  });
+
+  it("leaves the pairing alone on non-placement responses", async () => {
+    const { POST } = await import("./route");
+    const res = await POST(
+      buildRequest({
+        responseType: "message",
+        message: "Just saying hello.",
+        proposedRevenueSharePercent: 25,
+        proposedQrEnabled: false,
+      }),
+      ctx,
+    );
+
+    // The route nulls the placement columns for these anyway, so there is no
+    // contradiction to guard against and no reason to reject the message.
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("POST responses guards against duplicates (F45)", () => {
+  it("refuses a second response while the first is still awaiting an answer", async () => {
+    priorResponseRow = { id: "resp-1", status: "sent" };
+    const { POST } = await import("./route");
+    const { checkArtistOutreachCap } = await import("@/lib/outreach-cap");
+
+    const res = await POST(buildRequest({ responseType: "message", message: "again" }), ctx);
+
+    // Fail-before: nothing stopped a resubmission, and each duplicate reached
+    // checkArtistOutreachCap, so re-sending burned another of the artist's
+    // three-to-fifteen weekly sends for a brief they had already answered.
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ error: "already_responded" });
+    expect(lastInsert).toBeNull();
+    expect(
+      vi.mocked(checkArtistOutreachCap),
+      "a duplicate attempt burned the artist's quota",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("refuses a second response once the venue has accepted the first", async () => {
+    priorResponseRow = { id: "resp-1", status: "accepted" };
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "again" }), ctx);
+    expect(res.status).toBe(409);
+    expect(lastInsert).toBeNull();
+  });
+
+  it("refuses once the response has been fulfilled", async () => {
+    priorResponseRow = { id: "resp-1", status: "fulfilled" };
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "again" }), ctx);
+    expect(res.status).toBe(409);
+  });
+
+  it("lets the artist come back with new terms after a decline", async () => {
+    // A decline is "not these terms", not "never again", so this stays open.
+    priorResponseRow = { id: "resp-1", status: "declined" };
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "revised" }), ctx);
+    expect(res.status).toBe(200);
+    expect(lastInsert).toBeTruthy();
+  });
+
+  it("lets a first response through untouched", async () => {
+    priorResponseRow = null;
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "first" }), ctx);
+    expect(res.status).toBe(200);
   });
 });

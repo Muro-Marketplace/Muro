@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { placementQrScanCounts, type PlacementScanSubject } from "@/lib/analytics/placement-qr-scans";
 import { canPlacementTransition } from "@/lib/placements/state-machine";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { handleAuthzError } from "@/lib/authz";
@@ -208,36 +209,34 @@ export async function GET(request: Request) {
       }
     }
 
-    // QR scan counts (item "QR code scan should be live view count").
-    // analytics_events stores qr_scan rows with artist_slug, venue_name,
-    // work_id. We bucket by (artist_slug + venue_slug + work_title) and
-    // attach the count to each placement.
-    const qrByPlacement: Record<string, number> = {};
+    // QR scan counts, per placement.
+    //
+    // E17: this used to be computed inline here, and it compared the wrong
+    // pair of things twice over: the event's venue DISPLAY name against the
+    // placement's venue SLUG, and the event's work_id (a uuid) against the
+    // placement's work TITLE. Every scan from a modern QR label failed both
+    // tests, so an artist saw 0 against a live placement while their own
+    // analytics page showed the scans. The aggregation now lives in one
+    // tested module that attributes the way api/analytics/venue does.
+    let qrByPlacement: Record<string, number> = {};
     try {
-      const artistSlugs = Array.from(new Set(placements.map((p) => p.artist_slug).filter(Boolean))) as string[];
-      const venueSlugs = Array.from(new Set(placements.map((p) => p.venue_slug).filter(Boolean))) as string[];
-      if (artistSlugs.length > 0) {
-        const { data: events } = await db
-          .from("analytics_events")
-          .select("artist_slug, venue_name, work_id")
-          .eq("event_type", "qr_scan")
-          .in("artist_slug", artistSlugs);
-        for (const p of placements) {
-          if (!p.id || !p.artist_slug) continue;
-          const count = (events || []).filter((e: { artist_slug?: string; venue_name?: string; work_id?: string }) => {
-            if (e.artist_slug !== p.artist_slug) return false;
-            // Venue attribution is best-effort, some older events may
-            // not carry venue_name. We count anything matching the artist
-            // if venue_slug isn't set, otherwise require venue match.
-            if (p.venue_slug && venueSlugs.length > 0 && e.venue_name && e.venue_name !== p.venue_slug) return false;
-            // Work-level match when available
-            if (p.work_title && e.work_id && e.work_id.toLowerCase() !== String(p.work_title).toLowerCase()) return false;
-            return true;
-          }).length;
-          qrByPlacement[p.id as string] = count;
-        }
-      }
-    } catch { /* leave counts empty if analytics table missing */ }
+      // Named explicitly rather than passed through as a blind cast: the bug
+      // this replaced was a field-mapping mistake at exactly this call site
+      // (venue_slug where venue was meant), and a projection makes the next
+      // one a typecheck failure instead of a silent zero.
+      const subjects: PlacementScanSubject[] = placements.map((p) => ({
+        id: String(p.id),
+        artist_slug: p.artist_slug as string | null,
+        venue_user_id: p.venue_user_id as string | null,
+        venue: p.venue as string | null,
+        work_title: p.work_title as string | null,
+        extra_works: p.extra_works as Array<{ title?: string | null }> | null,
+      }));
+      qrByPlacement = await placementQrScanCounts(db, subjects);
+    } catch (qrErr) {
+      // Non-critical: a missing analytics table must not fail the list.
+      console.warn("[placements] qr scan counts failed:", qrErr);
+    }
 
     // Scan placement_request messages once and derive two things:
     //   1. inferredRequesters, the FIRST sender per placement, used
@@ -1007,11 +1006,48 @@ export async function PATCH(request: Request) {
       // Build the terms-only update (no role flip yet). We apply it with
       // .select() so the response tells us whether a row was actually
       // updated, not just whether the statement errored.
+      //
+      // D26: the schema historically allowed a share up to 100 while every
+      // UI caps the venue's cut at 50. Clamp server-side so a hand-crafted
+      // payload cannot commit terms the product never offers.
+      const counterShare = counter.revenueSharePercent !== undefined
+        ? Math.min(50, Math.max(0, counter.revenueSharePercent))
+        : undefined;
       const termsUpdates: Record<string, unknown> = {};
-      if (counter.revenueSharePercent !== undefined) termsUpdates.revenue_share_percent = counter.revenueSharePercent;
+      if (counterShare !== undefined) termsUpdates.revenue_share_percent = counterShare;
       if (counter.qrEnabled !== undefined) termsUpdates.qr_enabled = counter.qrEnabled;
       if (counter.monthlyFeeGbp !== undefined) termsUpdates.monthly_fee_gbp = counter.monthlyFeeGbp;
-      if (counter.arrangementType !== undefined) termsUpdates.arrangement_type = counter.arrangementType;
+      // F32: never store the client's arrangementType verbatim. Merge the
+      // counter's terms over the row's current terms and derive the
+      // canonical arrangement_type exactly as POST does at create, so the
+      // stored label always agrees with the economics (paid loan + QR is
+      // "mixed", a fee-less "free_loan" claim with QR on is revenue share,
+      // and so on).
+      let derivedArrangement: string | undefined;
+      if (
+        counter.arrangementType !== undefined ||
+        counterShare !== undefined ||
+        counter.qrEnabled !== undefined ||
+        counter.monthlyFeeGbp !== undefined
+      ) {
+        const { data: currentTerms } = await db
+          .from("placements")
+          .select("monthly_fee_gbp, qr_enabled, revenue_share_percent")
+          .eq("id", id)
+          .maybeSingle<{ monthly_fee_gbp: number | null; qr_enabled: boolean | null; revenue_share_percent: number | null }>();
+        derivedArrangement = deriveArrangementType({
+          monthly_fee_gbp:
+            counter.monthlyFeeGbp !== undefined ? counter.monthlyFeeGbp : currentTerms?.monthly_fee_gbp ?? null,
+          qr_enabled:
+            counter.qrEnabled !== undefined ? counter.qrEnabled : currentTerms?.qr_enabled ?? true,
+          revenue_share_percent:
+            counterShare !== undefined ? counterShare : currentTerms?.revenue_share_percent ?? null,
+          // Mirrors the POST derivation: an explicit purchase counter is the
+          // only way a counter reaches "purchase".
+          purchase_amount_pence: counter.arrangementType === "purchase" ? 1 : null,
+        });
+        termsUpdates.arrangement_type = derivedArrangement;
+      }
       // If the row was previously declined, the counter re-opens it so
       // the negotiation continues. The role flip below will hand the
       // ball to the other party.
@@ -1096,18 +1132,20 @@ export async function PATCH(request: Request) {
           // ("Free loan arrangement", which no other surface says). The
           // canonical labeller names the arrangement; only the percentage,
           // which is genuinely local to a counter-offer, is composed here.
+          // F32: the message echoes the DERIVED type and the CLAMPED share,
+          // so what the thread says always matches what the row now holds.
           const terms: string[] = [];
-          if (counter.arrangementType || counter.revenueSharePercent !== undefined) {
-            const label = counter.arrangementType
+          if (derivedArrangement || counterShare !== undefined) {
+            const label = derivedArrangement
               ? labelForArrangement({
-                  arrangementType: counter.arrangementType,
+                  arrangementType: derivedArrangement,
                   monthlyFeeGbp: counter.monthlyFeeGbp,
                   qrEnabled: counter.qrEnabled,
                 })
               : ARRANGEMENT_LABEL.revenue_share;
             terms.push(
-              counter.revenueSharePercent !== undefined
-                ? `${label}: ${counter.revenueSharePercent}% to the venue`
+              counterShare !== undefined
+                ? `${label}: ${counterShare}% to the venue`
                 : label,
             );
           }
@@ -1134,8 +1172,9 @@ export async function PATCH(request: Request) {
             metadata: {
               placementId: id,
               counter: true,
-              arrangementType: counter.arrangementType,
-              revenueSharePercent: counter.revenueSharePercent ?? null,
+              // F32: the derived canonical type, never the client's claim.
+              arrangementType: derivedArrangement ?? counter.arrangementType,
+              revenueSharePercent: counterShare ?? null,
               qrEnabled: counter.qrEnabled ?? null,
               monthlyFeeGbp: counter.monthlyFeeGbp ?? null,
               // Counter flips roles, the counter-er now awaits response.
@@ -1153,18 +1192,30 @@ export async function PATCH(request: Request) {
             }).catch(() => {});
 
             // Email the counterparty (the new recipient of the request).
-            // Idempotency includes the updated_at so serial counters on
-            // the same row each send their own email.
+            // R4.14: this was keyed on Date.now(), which is not an idempotency
+            // key (a platform retry or double-submit double-sent), while the
+            // comment here claimed updated_at. The key is now derived from the
+            // recipient plus the countered terms: a retried identical request
+            // dedupes, and a genuine follow-up counter (different terms, or
+            // the other party countering back) gets its own key.
             try {
               const { data: { user: counterpartyUser } } = await db.auth.admin.getUserById(counterpartyUserId);
               if (counterpartyUser?.email) {
                 const changedTerms: string[] = [];
-                if (counter.arrangementType !== undefined) changedTerms.push(`Arrangement: ${counter.arrangementType.replace("_", " ")}`);
+                // F32: name the derived arrangement through the canonical
+                // labeller, and quote the clamped share the row now holds.
+                if (counter.arrangementType !== undefined) {
+                  changedTerms.push(`Arrangement: ${labelForArrangement({
+                    arrangementType: derivedArrangement ?? counter.arrangementType,
+                    monthlyFeeGbp: counter.monthlyFeeGbp,
+                    qrEnabled: counter.qrEnabled,
+                  })}`);
+                }
                 if (counter.monthlyFeeGbp !== undefined) changedTerms.push(`Monthly fee: £${counter.monthlyFeeGbp}`);
-                if (counter.revenueSharePercent !== undefined) changedTerms.push(`Revenue share: ${counter.revenueSharePercent}%`);
+                if (counterShare !== undefined) changedTerms.push(`Revenue share: ${counterShare}%`);
                 if (counter.qrEnabled !== undefined) changedTerms.push(counter.qrEnabled ? "QR enabled" : "QR disabled");
                 await sendEmail({
-                  idempotencyKey: `placement_counter:${id}:${Date.now()}`,
+                  idempotencyKey: `placement_counter:${id}:to:${counterpartyUserId}:${derivedArrangement ?? counter.arrangementType ?? "-"}:${counter.monthlyFeeGbp ?? "-"}:${counterShare ?? "-"}:${counter.qrEnabled ?? "-"}`,
                   template: "placement_counter_offer_received",
                   category: "placements",
                   to: counterpartyUser.email,
@@ -1611,7 +1662,9 @@ export async function PATCH(request: Request) {
       // / spam-foldered. Both parties get notified for stages that
       // genuinely matter to either side: scheduled, installed, live,
       // collected. Idempotency keyed by id+stage+user so re-PATCHing
-      // the same stage doesn't double-bell.
+      // the same stage doesn't double-bell. (R6.F6a: this comment used
+      // to be aspirational, the key is now actually passed and enforced
+      // by the unique index from migration 123.)
       try {
         const stageHeadlines: Record<string, string> = {
           scheduled: "Install date set",
@@ -1636,6 +1689,7 @@ export async function PATCH(request: Request) {
               title: headline,
               body: stageBodies[stage as string](venueLabel),
               link: `/placements/${encodeURIComponent(id)}`,
+              idempotencyKey: `placement_${stage}:${id}:${uid}`,
             }).catch((err) => console.warn("[placements] stage notification failed:", err));
           }
         }

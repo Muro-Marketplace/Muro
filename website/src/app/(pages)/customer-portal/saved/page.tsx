@@ -26,11 +26,14 @@ const tabs: { label: string; type: ItemType }[] = [
   { label: "Collections", type: "collection" },
 ];
 
-function linkForItem(type: ItemType, itemId: string): string {
+// C7: the old version of this took "work" too and claimed item_id was
+// "artist-slug/work-title". It never was. SaveButton stores work.id, a UUID,
+// which no /browse route accepts, so every unresolved work linked to a
+// guaranteed 404. Works are resolved through workMap and routed via their
+// artist's page instead, so this now handles only the two types whose
+// item_id genuinely is a slug.
+function linkForItem(type: Exclude<ItemType, "work">, itemId: string): string {
   switch (type) {
-    case "work":
-      // item_id format: artist-slug/work-title or just artist-slug
-      return `/browse/${itemId}`;
     case "artist":
       return `/browse/${itemId}`;
     case "collection":
@@ -69,6 +72,9 @@ function CustomerSavedContent() {
   const [items, setItems] = useState<SavedItemRow[]>([]);
   const [allArtists, setAllArtists] = useState<ArtistData[]>([]);
   const [loading, setLoading] = useState(true);
+  // C7: whether the artist catalogue actually arrived. Without this an empty
+  // or failed /api/browse-artists would make every saved work look deleted.
+  const [catalogueLoaded, setCatalogueLoaded] = useState(false);
   const [activeTab, setActiveTab] = useUrlState<ItemType>("tab", "work");
   const [removing, setRemoving] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -90,7 +96,10 @@ function CustomerSavedContent() {
     ])
       .then(([savedData, artistsData]) => {
         if (savedData.items) setItems(savedData.items);
-        if (artistsData.artists) setAllArtists(artistsData.artists);
+        if (artistsData.artists) {
+          setAllArtists(artistsData.artists);
+          setCatalogueLoaded(true);
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -199,14 +208,36 @@ function CustomerSavedContent() {
                 )}
                 <div className="min-w-0">
                   {(() => {
-                    const match = item.item_type === "work" ? workMap.get(item.item_id) : null;
-                    const href = match
-                      ? `/browse/${match.artistSlug}?work=${slugify(match.title)}`
-                      : linkForItem(item.item_type, item.item_id);
-                    const label = match ? match.title : formatName(item.item_id);
+                    // C7: a work that no longer resolves used to render its
+                    // UUID title-cased ("Bbbbbbbb 5555 4666 ...") linked to
+                    // /browse/<uuid>, a dead page. Say what actually happened
+                    // and drop the link.
+                    if (item.item_type === "work") {
+                      const match = workMap.get(item.item_id);
+                      if (!match) {
+                        return (
+                          <p className="text-sm font-medium text-muted truncate">
+                            {catalogueLoaded
+                              ? "This work is no longer available"
+                              : "Work details unavailable"}
+                          </p>
+                        );
+                      }
+                      return (
+                        <Link
+                          href={`/browse/${match.artistSlug}?work=${slugify(match.title)}`}
+                          className="text-sm font-medium text-foreground hover:text-accent transition-colors truncate block"
+                        >
+                          {match.title}
+                        </Link>
+                      );
+                    }
                     return (
-                      <Link href={href} className="text-sm font-medium text-foreground hover:text-accent transition-colors truncate block">
-                        {label}
+                      <Link
+                        href={linkForItem(item.item_type, item.item_id)}
+                        className="text-sm font-medium text-foreground hover:text-accent transition-colors truncate block"
+                      >
+                        {formatName(item.item_id)}
                       </Link>
                     );
                   })()}

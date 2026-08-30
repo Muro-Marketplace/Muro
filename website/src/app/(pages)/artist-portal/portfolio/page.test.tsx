@@ -329,3 +329,44 @@ describe("bulk add keeps incomplete drafts (D24)", () => {
     expect(showToastMock).not.toHaveBeenCalled();
   });
 });
+
+// D23. Five bulk paths (reorder, bulk availability, bulk add, bulk prices,
+// copy-from) all went through a fire-and-forget saveWorks that swallowed the
+// rejection into console.error while the caller toasted success on the next
+// line. They now share an awaited save control, so a rejected POST rolls the
+// grid back and shows the server's real message instead of "done".
+describe("bulk portfolio actions report the truth (D23)", () => {
+  async function enterSelectModeAndPick(title: string) {
+    fireEvent.click(await screen.findByText("Select multiple"));
+    fireEvent.click((await screen.findAllByText(title))[0]);
+  }
+
+  it("a rejected bulk availability change rolls back and shows the error", async () => {
+    mutateMock.mockRejectedValue(new ApiError(500, "Server error", "server_error", {}));
+    artistState.works = [{ ...WORK, available: true }];
+    render(<PortfolioPage />);
+    await screen.findAllByText("My Work");
+
+    await enterSelectModeAndPick("My Work");
+    fireEvent.click(await screen.findByText("Mark sold"));
+
+    await waitFor(() => expect(errorToastFired()).toBe(true));
+    // Never claims success on a write the server refused.
+    expect(showToastMock.mock.calls.some((c) => String(c[0]).startsWith("Marked 1 work"))).toBe(false);
+  });
+
+  it("a confirmed bulk availability change toasts success once", async () => {
+    mutateMock.mockResolvedValue({ ok: true });
+    artistState.works = [{ ...WORK, available: true }];
+    render(<PortfolioPage />);
+    await screen.findAllByText("My Work");
+
+    await enterSelectModeAndPick("My Work");
+    fireEvent.click(await screen.findByText("Mark sold"));
+
+    await waitFor(() =>
+      expect(showToastMock.mock.calls.some((c) => String(c[0]) === "Marked 1 work as sold")).toBe(true),
+    );
+    expect(errorToastFired()).toBe(false);
+  });
+});

@@ -32,12 +32,16 @@ function SectionCard({
 
 function Field({
   label,
-  defaultValue,
+  value,
+  onChange,
   type = "text",
+  placeholder,
 }: {
   label: string;
-  defaultValue: string;
+  value: string;
+  onChange: (v: string) => void;
   type?: string;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -46,19 +50,42 @@ function Field({
       </label>
       <input
         type={type}
-        defaultValue={defaultValue}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2 border border-border rounded-sm text-sm text-foreground bg-background focus:outline-none focus:border-accent/50 transition-colors"
       />
     </div>
   );
 }
 
+/** The contact-PII slice of the venue profile this page edits. All six
+ *  columns are on VENUE_PROFILE_WRITABLE; the venue-profile PUT allowlist
+ *  drops anything else. */
+interface ContactDetails {
+  contact_name: string;
+  phone: string;
+  address_line1: string;
+  address_line2: string;
+  city: string;
+  postcode: string;
+}
+
+const EMPTY_CONTACT: ContactDetails = {
+  contact_name: "",
+  phone: "",
+  address_line1: "",
+  address_line2: "",
+  city: "",
+  postcode: "",
+};
+
+// E14: no "Order updates" row here. venue_profiles has no
+// order_notifications_enabled column, so the toggle could never persist —
+// every click PATCHed a missing column, failed, and reverted with an error.
+// Rather than show a control that cannot work, venues simply do not get it
+// until the column exists.
 const NOTIF_ROWS: { id: NotificationPrefField; label: string; desc: string }[] = [
-  {
-    id: "order_notifications_enabled",
-    label: "Order updates",
-    desc: "Shipping and delivery notifications for your orders",
-  },
   {
     id: "message_notifications_enabled",
     label: "Message notifications",
@@ -86,6 +113,76 @@ export default function VenueSettingsPage() {
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [connectLoading, setConnectLoading] = useState(true);
   const [connectRedirecting, setConnectRedirecting] = useState(false);
+
+  // E10/E12 (QA 2026-08-28): the Account Details card used to be three
+  // uncontrolled inputs with no save path, so a venue could not correct
+  // their contact name, phone or address anywhere in the portal. The
+  // contact fields load from the raw venue profile (the useCurrentVenue
+  // transform deliberately strips contact PII, so we read data.profile
+  // directly) and save through the venue-profile PUT allowlist.
+  const [contact, setContact] = useState<ContactDetails>(EMPTY_CONTACT);
+  const [contactLoading, setContactLoading] = useState(true);
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactSaved, setContactSaved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    authFetch("/api/venue-profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.profile) return;
+        const p = data.profile as Partial<Record<keyof ContactDetails, string | null>>;
+        setContact({
+          contact_name: p.contact_name || "",
+          phone: p.phone || "",
+          address_line1: p.address_line1 || "",
+          address_line2: p.address_line2 || "",
+          city: p.city || "",
+          postcode: p.postcode || "",
+        });
+      })
+      .catch(() => {
+        /* fields start empty; a failed save will surface the real error */
+      })
+      .finally(() => {
+        if (!cancelled) setContactLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function setContactField(field: keyof ContactDetails, value: string) {
+    setContact((prev) => ({ ...prev, [field]: value }));
+    setContactSaved(false);
+  }
+
+  async function handleContactSave() {
+    setContactSaving(true);
+    try {
+      await mutate("/api/venue-profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          contact_name: contact.contact_name || null,
+          phone: contact.phone || null,
+          address_line1: contact.address_line1 || null,
+          address_line2: contact.address_line2 || null,
+          city: contact.city || null,
+          postcode: contact.postcode || null,
+        }),
+      });
+      setContactSaved(true);
+    } catch (err) {
+      showToast(
+        err instanceof ApiError
+          ? err.message || "Failed to save account details. Please try again."
+          : "Failed to save. Please check your connection.",
+        { variant: "error" },
+      );
+    } finally {
+      setContactSaving(false);
+    }
+  }
 
   // Fetch Stripe Connect status
   useEffect(() => {
@@ -152,27 +249,86 @@ export default function VenueSettingsPage() {
       </div>
 
       <div className="space-y-5 max-w-2xl">
-        {/* Account details. We gate the form render on the venue
-            fetch completing because `Field` is an uncontrolled input
-            using `defaultValue`, so it captures whatever venue?.name
-            resolved to on first render. Previously that was the
-            "Your Venue" fallback (venue still loading) and the field
-            never refreshed, even after the actual name arrived. Keys
-            on the section also force a remount in the rare case a
-            user re-fetches their profile while the page is open. */}
+        {/* Account details (E10/E12). Venue name is edited on the Venue
+            Profile page and the account email is the sign-in identity, so
+            both render read-only here; the contact fields below are the
+            real, saveable form. */}
         <SectionCard title="Account Details">
-          <div className="space-y-4" key={venue?.slug || "venue-loading"}>
-            {venueLoading ? (
+          <div className="space-y-4">
+            {venueLoading || contactLoading ? (
               <p className="text-sm text-muted">Loading account details…</p>
             ) : (
               <>
-                <Field label="Venue Name" defaultValue={venue?.name || "Your Venue"} />
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">
+                    Venue Name
+                  </label>
+                  <p className="text-sm text-foreground">{venue?.name || "Your Venue"}</p>
+                  <p className="text-[11px] text-muted mt-1">
+                    Change your venue name on the{" "}
+                    <a href="/venue-portal/profile" className="text-accent hover:underline">
+                      Venue Profile
+                    </a>{" "}
+                    page.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted mb-1">
+                    Email Address
+                  </label>
+                  <p className="text-sm text-foreground">{user?.email || "Not set"}</p>
+                  <p className="text-[11px] text-muted mt-1">
+                    This is the address you sign in with.
+                  </p>
+                </div>
                 <Field
-                  label="Email Address"
-                  defaultValue={user?.email || ""}
-                  type="email"
+                  label="Contact Name"
+                  value={contact.contact_name}
+                  onChange={(v) => setContactField("contact_name", v)}
+                  placeholder="Who should artists ask for?"
                 />
-                <Field label="Phone Number" defaultValue="" type="tel" />
+                <Field
+                  label="Phone Number"
+                  value={contact.phone}
+                  onChange={(v) => setContactField("phone", v)}
+                  type="tel"
+                  placeholder="e.g. 020 7123 4567"
+                />
+                <Field
+                  label="Address Line 1"
+                  value={contact.address_line1}
+                  onChange={(v) => setContactField("address_line1", v)}
+                  placeholder="Street address"
+                />
+                <Field
+                  label="Address Line 2"
+                  value={contact.address_line2}
+                  onChange={(v) => setContactField("address_line2", v)}
+                  placeholder="Optional"
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <Field
+                    label="City"
+                    value={contact.city}
+                    onChange={(v) => setContactField("city", v)}
+                  />
+                  <Field
+                    label="Postcode"
+                    value={contact.postcode}
+                    onChange={(v) => setContactField("postcode", v)}
+                  />
+                </div>
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleContactSave}
+                    disabled={contactSaving}
+                    className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-60"
+                  >
+                    {contactSaving ? "Saving..." : "Save Details"}
+                  </button>
+                  {contactSaved && <span className="text-sm text-green-600">Saved</span>}
+                </div>
                 <div className="pt-2">
                   <label className="block text-xs font-medium text-muted mb-1">
                     Password

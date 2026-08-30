@@ -64,7 +64,9 @@ function installDb() {
       select: (_cols: string, opts?: { count?: string; head?: boolean }) => {
         if (opts?.count) {
           const chain: Record<string, unknown> = {};
-          for (const m of ["eq", "in", "gte"]) chain[m] = () => chain;
+          // `contains` joined the chain when the throttle went per category
+          // (R4.16): it filters on the category stamped into metadata.
+          for (const m of ["eq", "contains", "in", "gte"]) chain[m] = () => chain;
           chain.then = (resolve: (v: unknown) => unknown) =>
             Promise.resolve({ count: state.throttleCount ?? 0, error: null }).then(resolve);
           return chain;

@@ -60,6 +60,12 @@ import PlacementReviewRequest from "./templates/placements/PlacementReviewReques
 import PlacementConsignmentRecordCreated from "./templates/placements/PlacementConsignmentRecordCreated";
 import PlacementContractCountersigned from "./templates/placements/PlacementContractCountersigned";
 
+// ── Artwork requests ──────────────────────────────────────────────────────
+// F48: accept / decline of an artist's response to a venue brief was bell-only,
+// while every neighbouring flow emails the other party as well.
+import ArtistArtworkResponseAccepted from "./templates/artwork-requests/ArtistArtworkResponseAccepted";
+import ArtistArtworkResponseDeclined from "./templates/artwork-requests/ArtistArtworkResponseDeclined";
+
 // ── Messages ──────────────────────────────────────────────────────────────
 // ── Admin (internal) ──────────────────────────────────────────────────────
 // K1: one template for every operational alert to the Wallplace team, replacing
@@ -108,6 +114,7 @@ import CustomerDeliveryConfirmation from "./templates/orders/CustomerDeliveryCon
 import CustomerPostPurchaseCare from "./templates/orders/CustomerPostPurchaseCare";
 import CustomerPurchaseReviewRequest from "./templates/orders/CustomerPurchaseReviewRequest";
 import CustomerRefundConfirmation from "./templates/orders/CustomerRefundConfirmation";
+import CustomerPaymentFailed from "./templates/orders/CustomerPaymentFailed";
 // K1: the decline counterpart. Its absence is why the legacy notifyRefundDecision
 // survived after the approve half had already moved to the pipeline.
 import CustomerRefundRejected from "./templates/orders/CustomerRefundRejected";
@@ -136,6 +143,11 @@ import SubscriptionPaymentFailed from "./templates/payments/SubscriptionPaymentF
 // Owner decision 2026-08-28: the venue is EMAILED to set up the paid-loan
 // payment, not just shown a chip.
 import PaidLoanSetUpPayment from "./templates/payments/PaidLoanSetUpPayment";
+// WS4.3: paid-loan dunning to the venue, wired from invoice.payment_failed.
+import PaidLoanPaymentFailed from "./templates/payments/PaidLoanPaymentFailed";
+import ReferralCreditGranted from "./templates/payments/ReferralCreditGranted";
+import SubscriptionRecovered from "./templates/payments/SubscriptionRecovered";
+import ReferralWindowEnding from "./templates/payments/ReferralWindowEnding";
 import SubscriptionTrialEnding from "./templates/payments/SubscriptionTrialEnding";
 import SubscriptionUpgraded from "./templates/payments/SubscriptionUpgraded";
 import SubscriptionCancelled from "./templates/payments/SubscriptionCancelled";
@@ -151,6 +163,9 @@ import ArtistApplicationSubmitted from "./templates/artist-additions/ArtistAppli
 import ArtistApplicationUnderReview from "./templates/artist-additions/ArtistApplicationUnderReview";
 import ArtistApplicationApproved from "./templates/artist-additions/ArtistApplicationApproved";
 import ArtistApplicationRejected from "./templates/artist-additions/ArtistApplicationRejected";
+// G14/G15: the blog moderation decision finally reaches the author.
+import ArtistBlogPublished from "./templates/artist-additions/ArtistBlogPublished";
+import ArtistBlogRejected from "./templates/artist-additions/ArtistBlogRejected";
 import ArtistYearInReview from "./templates/artist-additions/ArtistYearInReview";
 
 // ── Premium ───────────────────────────────────────────────────────────────
@@ -194,6 +209,77 @@ import OperationalPlatformIncident from "./templates/legal/OperationalPlatformIn
 import OperationalPolicyViolationWarning from "./templates/legal/OperationalPolicyViolationWarning";
 import OperationalAccountRestricted from "./templates/legal/OperationalAccountRestricted";
 import OperationalAccountRestored from "./templates/legal/OperationalAccountRestored";
+// G19: disputes with no order_id notified nobody until this existed.
+import OperationalDisputeResolved from "./templates/legal/OperationalDisputeResolved";
+
+// ── Dead-template decision pass (WS5.6, txn audit 4 finding R4.11) ────────
+//
+// The 2026-08-28 email audit found 59 registry templates with no live send
+// site. "Dead" must be a decision, not an accident, so every one of them is
+// classified below. None is deleted: the registry is a library built ahead
+// of the product, `npm run email:audit` reports the live count from the
+// code, and a registered-but-dormant template costs nothing while keeping
+// the preview library and the wiring plan honest.
+//
+// 1. WAS OWED A SENDER by the 2026-08-28 transaction-hardening plan and has
+//    since been wired (WS4 recurring-billing work, on the Stripe webhook and
+//    paid-loan billing paths), so these two are no longer dead:
+//      venue_paid_loan_invoice      (WS4.8: invoice.paid receipt to the
+//                                    paying venue)
+//      subscription_card_expiring   (WS4.5: customer.source.expiring, the
+//                                    pre-dunning warning)
+//
+// 2. SUPABASE GOTRUE OWNS THE FLOW today. These sends happen, but outside
+//    the pipeline: no email_events row, no idempotency, no health-check
+//    visibility. Kept as the documented replacement targets for when auth
+//    mail moves onto our own SMTP or a GoTrue hook:
+//      account_email_verification, account_password_reset,
+//      account_email_change_verify
+//
+// 3. RETIRED BY DESIGN (09 item 1.3 / Phase 2 dispatcher). Their content
+//    moved onto the purpose-built lifecycle templates; the entries stay so
+//    the preview library and historical email_events rows still resolve:
+//      customer_order_receipt, artist_work_sold, artist_order_confirmation,
+//      customer_shipping_confirmation, customer_delivery_confirmation
+//
+// 4. DELIBERATELY DORMANT, the triggering feature, campaign tool or cron
+//    does not exist yet. Wire when the feature ships, not before:
+//      account_two_factor_enabled / _disabled (no 2FA),
+//      account_team_invite / _accepted (no teams),
+//      account_data_export_ready (no export feature),
+//      customer_browse_nudge, customer_follow_artist_nudge (not in the
+//        nudge cron), placement_midway_checkin, message_hourly_digest,
+//      artist_first_qr_scan, artist_qr_scan_milestone (no trigger),
+//      artist_new_venue_match, venue_new_artist_matches (no matcher),
+//      venue_rotation_reminder, venue_placement_anniversary,
+//      artist_low_engagement_tips, artist_year_in_review,
+//      artist_tier_cap_hit (no cap enforcement),
+//      artist_premium_upgrade_educational, venue_analytics_upgrade,
+//      venue_managed_curation_upgrade, venue_managed_curation_pitch,
+//      customer_abandoned_checkout_1h / _24h (no abandonment tracking),
+//      customer_saved_work_back_in_stock, customer_saved_work_price_drop,
+//      customer_new_work_from_followed_artist, customer_saved_works_digest,
+//      customer_post_purchase_care, customer_purchase_review_request,
+//      artist_application_under_review (status exists, sender undecided),
+//      user_repermission_campaign, newsletter_monthly_gallery,
+//      newsletter_artist_spotlight, newsletter_venue_spotlight,
+//      newsletter_curators_picks, newsletter_local_art_near_you (no
+//        campaign sender exists)
+//
+// 5. DORMANT PENDING AN OWNER DECISION, flagged by R4.11 as money or legal
+//    surface gaps that need product work beyond an email call, and not yet
+//    scheduled in the hardening plan:
+//      account_password_changed (GoTrue sends nothing; needs a hook),
+//      account_deletion_requested, account_deletion_confirmed (deletion
+//        flow currently sends no mail),
+//      legal_terms_update, legal_privacy_update (no ToS-change mechanism),
+//      artist_tax_document_ready (no generator),
+//      operational_platform_incident, operational_policy_violation_warning,
+//      operational_account_restricted, operational_account_restored
+//        (moderation has no email surface),
+//      venue_revenue_share_statement (no statement generator or cron),
+//      placement_ending_soon (cron exists, deliberately gated off: no
+//        end-date column; D60)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
@@ -255,6 +341,8 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   PlacementEnded,
   PlacementReviewRequest,
   PlacementConsignmentRecordCreated,
+  ArtistArtworkResponseAccepted,
+  ArtistArtworkResponseDeclined,
   PlacementContractCountersigned,
 
   // Messages
@@ -288,6 +376,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   CustomerPostPurchaseCare,
   CustomerPurchaseReviewRequest,
   CustomerRefundConfirmation,
+  CustomerPaymentFailed,
   ArtistRefundNotification,
   OrderDisputeOpened,
   OrderDisputeResolved,
@@ -305,6 +394,10 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   ArtistPayoutFailed,
   SubscriptionPaymentFailed,
   PaidLoanSetUpPayment,
+  PaidLoanPaymentFailed,
+  ReferralCreditGranted,
+  SubscriptionRecovered,
+  ReferralWindowEnding,
   SubscriptionTrialEnding,
   SubscriptionUpgraded,
   SubscriptionCancelled,
@@ -320,6 +413,8 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   ArtistApplicationUnderReview,
   ArtistApplicationApproved,
   ArtistApplicationRejected,
+  ArtistBlogPublished,
+  ArtistBlogRejected,
   ArtistYearInReview,
 
   // Premium
@@ -363,6 +458,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   OperationalPolicyViolationWarning,
   OperationalAccountRestricted,
   OperationalAccountRestored,
+  OperationalDisputeResolved,
 ];
 
 export function findTemplate(id: string): TemplateEntry | undefined {

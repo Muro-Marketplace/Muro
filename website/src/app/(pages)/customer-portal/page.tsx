@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState, useEffect } from "react";
+import { Suspense, useCallback, useMemo, useState, useEffect } from "react";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
@@ -70,6 +70,11 @@ export default function CustomerPortalPage() {
 function CustomerPortalContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  // C2: a failed /api/orders fetch used to land in an empty catch, so loading
+  // ended with an empty list and the page told a customer with a full order
+  // history that they had never ordered anything. Track the failure so the
+  // list slot can say what actually happened and offer a retry.
+  const [ordersError, setOrdersError] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useUrlState<string>("order", "");
   const [statusFilter, setStatusFilter] = useUrlState<StatusFilter>("status", "all");
   const [fromDate, setFromDate] = useUrlState<string>("from", "");
@@ -88,13 +93,29 @@ function CustomerPortalContent() {
   const [confirmingDelivery, setConfirmingDelivery] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Nothing here sets state synchronously, so the mount effect below stays
+  // free of the cascading-render lint rule. The retry wrapper does the
+  // resetting, because that path is a user action rather than an effect.
+  const fetchOrders = useCallback(() => {
     authFetch("/api/orders")
-      .then((r) => r.json())
-      .then((data) => { if (data.orders) setOrders(data.orders); })
-      .catch(() => {})
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`orders fetch failed: ${r.status}`);
+        return r.json();
+      })
+      .then((data) => { setOrders(Array.isArray(data?.orders) ? data.orders : []); })
+      .catch(() => { setOrdersError(true); })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  function retryOrders() {
+    setLoading(true);
+    setOrdersError(false);
+    fetchOrders();
+  }
 
   useEffect(() => {
     authFetch("/api/refunds")
@@ -167,7 +188,12 @@ function CustomerPortalContent() {
     setRefundSubmitting(false);
   }
 
-  const totalSpent = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+  // C3: cancelled and refunded orders are money the customer did not end up
+  // spending, so they don't belong in the headline figure.
+  const totalSpent = orders.reduce(
+    (sum, o) => (o.status === "cancelled" || o.status === "refunded" ? sum : sum + (o.total || 0)),
+    0,
+  );
 
   const filteredOrders = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -456,6 +482,17 @@ function CustomerPortalContent() {
       {/* Order list */}
       {loading ? (
         <p className="text-muted text-sm py-12 text-center">Loading orders...</p>
+      ) : ordersError ? (
+        <div className="py-12 text-center">
+          <p className="text-sm text-foreground mb-1">We could not load your orders. Please try again.</p>
+          <p className="text-xs text-muted mb-4">Your order history is safe, we just could not reach it.</p>
+          <button
+            onClick={retryOrders}
+            className="px-4 py-2 min-h-11 text-sm font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
+          >
+            Try again
+          </button>
+        </div>
       ) : orders.length === 0 ? (
         <EmptyState
           title="No orders yet"

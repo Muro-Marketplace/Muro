@@ -136,6 +136,12 @@ export default function BillingPage() {
         subscription_period_end: data.profile.subscription_period_end || null,
         trial_end: data.profile.trial_end || null,
         is_founding_artist: data.profile.is_founding_artist || false,
+        // D9 (QA 2026-08-28): this field was never copied into state, so the
+        // referral panel below could not render for anyone. The code is
+        // auto-generated on the profile; redemption is real (the referred
+        // artist enters it on the application form, and the Stripe webhook
+        // credits the referrer 30 fee-free days on their first payment).
+        referral_code: data.profile.referral_code || null,
       };
       setSub(next);
       return next;
@@ -324,6 +330,43 @@ export default function BillingPage() {
           lookup is in flight, for a venue, or on an unlimited plan. */}
       <OutreachAllowanceBadge allowance={allowance} variant="card" className="mb-5" />
 
+      {/* Referral code (D9, QA 2026-08-28). Was dead: fetchSub never copied
+          referral_code into state, so `sub?.referral_code` was always
+          undefined and this panel could not render for anyone. It also lived
+          inside the no-subscription branch, hiding it from exactly the
+          artists most likely to refer; it now renders for any artist whose
+          profile carries a code. Redemption is wired end to end: the new
+          artist enters the code on /apply (referred_by_code, migration 109)
+          and the Stripe webhook credits the referrer 30 fee-free days on
+          the referred artist's first payment (migration 115). */}
+      {sub?.referral_code && (
+        <div className="bg-accent/5 border border-accent/20 rounded-sm px-4 py-4 mb-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-accent mb-1">Your referral code</p>
+              <p className="text-sm text-foreground">
+                Refer another artist and get <strong>30 days free</strong> when they upgrade to a paid plan.
+              </p>
+              <p className="text-xs text-muted mt-1">
+                They enter your code on the application form. Your free days are applied when they first pay.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <code className="px-3 py-1.5 bg-white border border-border rounded-sm text-sm font-mono tracking-wider text-foreground select-all">
+                {sub.referral_code}
+              </code>
+              <button
+                type="button"
+                onClick={() => { navigator.clipboard.writeText(sub.referral_code || ""); }}
+                className="px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-sm transition-colors cursor-pointer"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Current plan */}
       {hasSubscription ? (
         <div className="bg-surface border border-border rounded-sm p-6 mb-5">
@@ -391,32 +434,6 @@ export default function BillingPage() {
             </div>
           )}
 
-          {/* Referral code, item 25 */}
-          {sub?.referral_code && (
-            <div className="bg-accent/5 border border-accent/20 rounded-sm px-4 py-4 mb-5">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-widest text-accent mb-1">Your referral code</p>
-                  <p className="text-sm text-foreground">
-                    Refer another artist and get <strong>30 days free</strong> when they upgrade to a paid plan.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <code className="px-3 py-1.5 bg-white border border-border rounded-sm text-sm font-mono tracking-wider text-foreground select-all">
-                    {sub.referral_code}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => { navigator.clipboard.writeText(sub.referral_code || ""); }}
-                    className="px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-sm transition-colors cursor-pointer"
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
             <h2 className="text-lg font-medium">Choose a plan</h2>
             <BillingCycleToggle value={billingCycle} onChange={setBillingCycle} />
@@ -454,7 +471,13 @@ export default function BillingPage() {
             })}
           </div>
           <p className="text-xs text-muted mt-3 text-center">
-            All plans include a first month free. Annual plans save ~17%.
+            {/* D10: /api/subscribe grants a trial only to first-time
+                subscribers (status "none"); past_due / canceled /
+                incomplete profiles are charged from day one, so they
+                must not be promised a free month here. */}
+            {status === "none"
+              ? "All plans include a first month free. Annual plans save ~17%."
+              : "Billing starts as soon as you subscribe. Annual plans save ~17%."}
           </p>
         </div>
       )}
@@ -466,7 +489,10 @@ export default function BillingPage() {
             <h2 className="text-base font-medium">Change Plan</h2>
             <BillingCycleToggle value={billingCycle} onChange={setBillingCycle} />
           </div>
-          <p className="text-sm text-muted mb-5">Upgrade or downgrade anytime. Changes are prorated automatically.</p>
+          {/* D11: plan changes are replace-then-cancel (a fresh Checkout
+              subscription; the old one is cancelled once the webhook
+              lands), not a prorated swap, so say what actually happens. */}
+          <p className="text-sm text-muted mb-5">Upgrade or downgrade anytime. You check out for the new plan, it starts straight away, and your old plan is cancelled as soon as the new one is running.</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {(["core", "premium", "pro"] as const).map((p) => {
               const d = PLAN_DETAILS[p];
@@ -495,7 +521,7 @@ export default function BillingPage() {
                   <ul className="text-xs text-muted space-y-1 mb-4 flex-1">
                     {p === "core" && <><li>Up to 8 works</li><li>Standard profile</li><li>Basic analytics</li></>}
                     {p === "premium" && <><li>Up to 20 works</li><li>Featured profile + badge</li><li>Message venues directly</li><li>Full analytics</li></>}
-                    {p === "pro" && <><li>Unlimited works</li><li>Premium profile</li><li>Message venues directly</li><li>Dedicated support</li></>}
+                    {p === "pro" && <><li>Up to 50 works</li><li>Premium profile</li><li>Message venues directly</li><li>Dedicated support</li></>}
                   </ul>
                   {isCurrent ? (
                     <div className="w-full py-2.5 text-sm font-medium text-center text-accent border border-accent/30 rounded-sm">

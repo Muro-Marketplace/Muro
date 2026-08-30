@@ -34,10 +34,10 @@ export const mock: ArtistTierCapHitProps = {
   firstName: "Maya",
   currentPlan: "Core",
   capType: "artworks",
-  currentUsage: 3,
-  capLimit: 3,
+  currentUsage: 8,
+  capLimit: 8,
   upgradeUrl: "https://wallplace.co.uk/pricing",
-  benefits: ["Unlimited works", "Priority venue matching", "Advanced QR analytics"],
+  benefits: ["Up to 20 works", "Priority venue matching", "Advanced QR analytics"],
 };
 
 const entry: TemplateEntry<ArtistTierCapHitProps> = {

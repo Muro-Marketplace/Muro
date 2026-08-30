@@ -1,11 +1,16 @@
 "use client";
 
 // Phase 2.1 A6. Admin moderation panel for general feedback (read from
-// moderation_queue where entity_type='feedback'). Read-only v1.
+// moderation_queue where entity_type='feedback').
+//
+// G26: the same dead-tab defect as the feature-request inbox. Nothing wrote to
+// entity_type='feedback' queue rows, so Approved and Rejected were permanently
+// empty and there was no way to clear what had been read. These controls call
+// the shared PATCH on /api/admin/moderation.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import type { ModerationPayload } from "@/lib/moderation/types";
 
 interface QueueRow {
@@ -21,28 +26,56 @@ export default function FeedbackAdminPage() {
   const [rows, setRows] = useState<QueueRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected">("pending");
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      try {
-        const res = await authFetch(
-          `/api/admin/moderation?entity_type=feedback&status=${statusFilter}`,
-        );
-        if (!cancelled && res.ok) {
-          const data = await res.json();
-          setRows(data.rows || []);
-        }
-      } catch (err) {
-        console.error("[admin/feedback load]", err);
-      } finally {
-        if (!cancelled) setLoading(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await authFetch(
+        `/api/admin/moderation?entity_type=feedback&status=${statusFilter}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setRows(data.rows || []);
       }
+    } catch (err) {
+      console.error("[admin/feedback load]", err);
+    } finally {
+      setLoading(false);
     }
-    load();
-    return () => { cancelled = true; };
   }, [statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Triage only. "Approve" here means read and kept, "Reject" means read and
+  // dismissed; neither writes to the person who sent it.
+  async function decide(r: QueueRow, action: "approve" | "reject") {
+    let reason: string | undefined;
+    if (action === "reject") {
+      const input = prompt("Reason (kept on the queue row, optional):");
+      if (input === null) return;
+      reason = input.trim() || undefined;
+    }
+    setSavingId(r.id);
+    setActionMsg(null);
+    try {
+      await mutate("/api/admin/moderation", {
+        method: "PATCH",
+        body: JSON.stringify({ id: r.id, action, ...(reason ? { reason } : {}) }),
+      });
+      setActionMsg(action === "approve" ? "Approved." : "Rejected.");
+      await load();
+    } catch (err) {
+      setActionMsg(
+        err instanceof ApiError
+          ? err.code || "Could not apply that action."
+          : "Network error. Please try again.",
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   return (
     <AdminPortalLayout activePath="/admin/feedback">
@@ -71,6 +104,12 @@ export default function FeedbackAdminPage() {
             </button>
           ))}
         </div>
+
+        {actionMsg && (
+          <p className="text-sm text-foreground bg-accent/5 border border-accent/20 px-3 py-2 rounded-sm mb-4">
+            {actionMsg}
+          </p>
+        )}
 
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
@@ -125,6 +164,26 @@ export default function FeedbackAdminPage() {
                     )}
                     {p?.source_url && <span>on {p.source_url}</span>}
                   </div>
+                  {r.status === "pending" && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={savingId === r.id}
+                        onClick={() => decide(r, "approve")}
+                        className="px-3 py-1 text-xs rounded-sm bg-accent text-white hover:bg-accent-hover disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        disabled={savingId === r.id}
+                        onClick={() => decide(r, "reject")}
+                        className="px-3 py-1 text-xs rounded-sm border border-border hover:border-accent/40 disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
                 </li>
               );
             })}

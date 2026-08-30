@@ -202,7 +202,13 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const transition = canTransition(order.status as OrderStatus, status as OrderStatus);
+    // WS3.4: a collection order's delivery IS the handover; the buyer
+    // confirming pickup is the only completion it will ever have.
+    const fulfilment = (order as { fulfilment_method?: string | null }).fulfilment_method || "";
+    const isCollectionOrder = fulfilment === "collection" || fulfilment === "collect_venue";
+    const transition = canTransition(order.status as OrderStatus, status as OrderStatus, {
+      collection: isCollectionOrder,
+    });
     if (!transition.ok) {
       return NextResponse.json({ error: transition.reason }, { status: 422 });
     }
@@ -274,6 +280,10 @@ export async function PATCH(request: Request) {
         actorUserId: auth.user?.id ?? null,
         buyerEmail: order.buyer_email ?? null,
         artistEmail,
+        // R4.10: recipient identities, so the buyer's email resolves the
+        // BUYER's preferences, not whoever clicked the status button.
+        buyerUserId: (order as { buyer_user_id?: string | null }).buyer_user_id ?? null,
+        artistUserId: artistUserId || null,
         data: {
           firstName: firstName0,
           orderNumber: orderId,
@@ -346,11 +356,27 @@ export async function PATCH(request: Request) {
     // can read it regardless of whether status === "delivered".
     let payoutFailures = 0;
     if (status === "delivered") {
-      const { data: pendingTransfers } = await db
+      // WS2.7 (audit R7 row 11): the buyer's click confirms ONE parcel's
+      // arrival, but a multi-artist order holds legs for every artist in the
+      // cart. Releasing them all paid artists whose parcels were still in
+      // the post. The click now releases only the confirmed artist's legs
+      // and the venue's share (not parcel-dependent); other artists' legs
+      // keep their payout_after date and the daily sweep pays them then -
+      // delayed, never lost, and the hold is exactly what the 14-day buffer
+      // is for. Single-artist orders (almost all) release everything, same
+      // as before.
+      const { data: pendingAll } = await db
         .from("stripe_transfers")
-        .select("id")
+        .select("id, recipient_type, recipient_user_id")
         .eq("order_id", orderId)
         .eq("status", "pending");
+      const pendingTransfers = (pendingAll || []).filter(
+        (t: { recipient_type?: string | null; recipient_user_id?: string | null }) =>
+          t.recipient_type === "venue" ||
+          !order.artist_user_id ||
+          !t.recipient_user_id ||
+          t.recipient_user_id === order.artist_user_id,
+      );
 
       // Await each transfer individually so Vercel serverless cannot
       // freeze/kill the payouts before they complete. Per-transfer
@@ -393,7 +419,54 @@ export async function PATCH(request: Request) {
         .from("stripe_transfers")
         .update({ status: "cancelled" })
         .eq("order_id", orderId)
-        .eq("status", "pending");
+        .in("status", ["pending", "failed", "blocked"]);
+
+      // WS3.1 (missing-events gap 1, CRITICAL): cancelling a PAID order used
+      // to keep the buyer's money silently - the email said only "has been
+      // cancelled" and nothing refunded. A paid cancellation now auto-files
+      // an APPROVED full refund request and pushes it through the existing
+      // refund engine (reversal-before-refund, restock, buyer email), so the
+      // money follows the cancellation. Failure to refund does not undo the
+      // cancellation; it alerts the admin instead, because a cancelled order
+      // with a pending refund problem needs a human, not a resurrected order.
+      if (order.stripe_payment_intent_id && Number(order.total) > 0) {
+        try {
+          const { data: refundRow, error: rrErr } = await db
+            .from("refund_requests")
+            .insert({
+              order_id: orderId,
+              type: "full",
+              amount: null,
+              reason: "Order cancelled",
+              requester_type: "system",
+              requester_user_id: auth.user!.id,
+              requester_email: order.buyer_email ?? null,
+              status: "pending",
+            })
+            .select("id")
+            .single();
+          if (rrErr || !refundRow) throw new Error(rrErr?.message || "refund request insert failed");
+
+          const { processCancellationRefund } = await import("@/lib/refunds/cancellation");
+          await processCancellationRefund(db, { refundRequestId: refundRow.id, orderId });
+        } catch (refundErr) {
+          console.error("[orders] cancellation refund failed:", refundErr);
+          try {
+            const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+            await sendAdminAlert({
+              idempotencyKey: `cancel_refund_failed:${orderId}`,
+              subject: `Cancelled order ${orderId} still holds the buyer's money`,
+              summary: "The order was cancelled but the automatic refund could not be filed or executed. Refund the buyer via the admin refunds queue or the Stripe dashboard.",
+              fields: [{ label: "Order", value: orderId }],
+              actionPath: "/admin/refunds",
+              actionLabel: "Open refunds",
+            });
+          } catch (alertErr) {
+            // The alert is best-effort; the cancellation itself stands.
+            console.error("[orders] cancel-refund alert failed:", alertErr);
+          }
+        }
+      }
     }
 
     // Surface early-payout failures so callers and monitoring can see

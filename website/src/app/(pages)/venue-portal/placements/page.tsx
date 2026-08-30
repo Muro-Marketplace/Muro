@@ -506,7 +506,12 @@ export default function VenuePlacementsPage() {
         liveFrom: (p.live_from as string | null) ?? null,
         subscriptionStatus: (p.subscription_status as string | null) ?? null,
         collectedAt: (p.collected_at as string | null) ?? null,
-        requesterUserId: (p.requester_user_id as string | null) ?? null,
+        // F24/F51: the list API emits the resolved requester as
+        // proposed_by_user_id; requester_user_id is a phantom the rows never
+        // carry. Read both so Accept/Decline, "Awaiting response" chips and
+        // the Sent/Received tag resolve.
+        requesterUserId:
+          ((p.requester_user_id ?? p.proposed_by_user_id) as string | null) ?? null,
         monthlyFeeGbp: (p.monthly_fee_gbp as number | null) ?? null,
         qrEnabledOnPlacement: (p.qr_enabled as boolean | null) ?? null,
         proposedStage: (p.proposed_stage as "installed" | "collected" | null) ?? null,
@@ -1004,7 +1009,7 @@ export default function VenuePlacementsPage() {
                     />
                     <span className="text-sm text-muted">per month</span>
                   </div>
-                  <p className="text-xs text-muted mt-2">Billing is handled manually for now, use this to record the agreed amount.</p>
+                  <p className="text-xs text-muted mt-2">The venue sets up the monthly payment by card once the placement is agreed, and Wallplace collects it automatically from then on.</p>
                 </div>
               )}
             </div>

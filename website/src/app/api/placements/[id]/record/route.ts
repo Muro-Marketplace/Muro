@@ -284,6 +284,11 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       const venueName = venueP?.name || "The venue";
       const placementUrl = `${SITE}/placements/${encodeURIComponent(id)}`;
       const recordOpenUrl = `${placementUrl}?record=open`;
+      // Bells store the RELATIVE path (R6.F11): absolute links froze whatever
+      // NEXT_PUBLIC_SITE_URL was at insert time, so preview/staging bells
+      // hard-navigated to production. Emails keep the absolute recordOpenUrl,
+      // they leave the site by definition.
+      const recordOpenPath = `/placements/${encodeURIComponent(id)}?record=open`;
 
       if (wasNewRecord) {
         // Bell notifications, fire alongside the emails so users see
@@ -295,7 +300,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             kind: "placement_record_created",
             title: "Consignment record ready",
             body: `${artistName} × ${venueName}`,
-            link: `${placementUrl}?record=open`,
+            link: recordOpenPath,
           }).catch((err) => console.warn("[record] notification failed:", err));
         }
         for (const party of [
@@ -337,7 +342,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
             kind: "placement_record_countersigned",
             title: "Contract countersigned",
             body: `Both parties have signed, ${partyMeta.counter}`,
-            link: `${placementUrl}?record=open`,
+            link: recordOpenPath,
           }).catch((err) => console.warn("[record] countersigned notification failed:", err));
         }
         for (const party of [

@@ -32,6 +32,11 @@ export interface CartItem {
       so these are claims to check, never facts to trust. */
   lineFulfilment?: "ship" | "collect_venue";
   collectVenueSlug?: string;
+  /** B18: display only. The SLUG above is the claim the checkout API
+      re-validates against the live placements table; this is just the name to
+      show the buyer, because "Show your order number at the-copper-kettle"
+      is not a sentence anybody should read. */
+  collectVenueName?: string;
   collectPlacementId?: string;
 }
 

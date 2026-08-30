@@ -1,4 +1,9 @@
-// Stream: notify. Soft copy, no need to make the decline feel like a wall.
+// Stream: tx. Soft copy, no need to make the decline feel like a wall.
+//
+// R4.12 (WS5.5): was notify/placements. The decline of a proposed commercial
+// arrangement must reach the artist even through vacation mode or an opted-out
+// toggle, so it now rides orders_and_payouts (critical always-send);
+// sendEmail() enforces it via TEMPLATE_CATEGORY_OVERRIDES.
 
 import { EmailShell, H1, P, Button } from "@/emails/_components";
 import type { TemplateEntry } from "@/emails/registry-types";
@@ -12,7 +17,7 @@ export interface ArtistPlacementDeclinedProps {
 
 export function ArtistPlacementDeclined({ firstName, venueName, reason, discoverMoreVenuesUrl }: ArtistPlacementDeclinedProps) {
   return (
-    <EmailShell stream="notify" persona="artist" category="placements" preview={`${venueName} passed on the placement`}>
+    <EmailShell stream="tx" persona="artist" category="orders_and_payouts" preview={`${venueName} passed on the placement`}>
       <H1>{venueName} passed this time</H1>
       <P>Hi {firstName}, {venueName} isn&rsquo;t able to host the placement right now.{reason ? ` They said: "${reason}".` : ""}</P>
       <P>Declines are part of the rhythm, we&rsquo;ll keep matching your work to the right spaces.</P>
@@ -32,14 +37,14 @@ const entry: TemplateEntry<ArtistPlacementDeclinedProps> = {
   id: "artist_placement_declined",
   name: "Placement declined (to artist)",
   description: "Soft decline with a nudge to other venues.",
-  stream: "notify",
+  stream: "tx",
   persona: "artist",
-  category: "placements",
+  category: "orders_and_payouts",
   subject: "{{venueName}} passed on this placement",
   previewText: "A gentle note, plus a few other venues to consider.",
   component: ArtistPlacementDeclined,
   mock,
-  canUnsubscribe: true,
+  canUnsubscribe: false,
   hasInAppEquivalent: true,
   priority: 2,
 };

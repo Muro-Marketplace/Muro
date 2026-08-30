@@ -24,3 +24,16 @@ describe("orFilter", () => {
       .toBe("venue_user_id.eq.safe-id");
   });
 });
+
+describe("ISO timestamps in values", () => {
+  it("keeps a server-side timestamp bound (colon is not a PostgREST metachar)", () => {
+    expect(orFilter(["status.neq.queued", "created_at.lt.2026-08-29T10:00:00.000Z"]))
+      .toBe("status.neq.queued,created_at.lt.2026-08-29T10:00:00.000Z");
+  });
+
+  it("still rejects comma injection inside a timestamp-looking value", () => {
+    expect(orFilter(["status.neq.queued", "created_at.lt.2026-01-01,id.neq.0"]))
+      .toBe("status.neq.queued");
+  });
+});
+

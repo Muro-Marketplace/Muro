@@ -54,7 +54,18 @@ function pendingTransferRow(id: string) {
         }),
       }),
     }),
-    update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+    update: () => {
+      // WS2.4 gave executeTransfer a compare-and-set claim before the Stripe
+      // call: update().eq().eq()/.is() then .select("id"). The chain is
+      // self-referential, awaits to a success, and its select returns one row
+      // so the claim always wins in these unit tests.
+      const c: Record<string, unknown> = {};
+      c.eq = () => c;
+      c.is = () => c;
+      c.select = async () => ({ data: [{ id: "claimed" }], error: null });
+      c.then = (resolve: (v: unknown) => unknown) => resolve({ error: null });
+      return c;
+    },
   };
 }
 
@@ -191,6 +202,7 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
 
   function setupSweep(opts: {
     due: Array<Record<string, unknown>>;
+    openRefund?: boolean;
     order?: { status: string } | null;
     transfer: "success" | Error;
   }) {
@@ -204,6 +216,11 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
     fromMock.mockImplementation((table: string) => {
       if (table === "orders") {
         return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: opts.order ?? null }) }) }) };
+      }
+      if (table === "refund_requests") {
+        // WS2.6: an open refund request pauses the payout.
+        const rows = opts.openRefund ? [{ id: "rr-1" }] : [];
+        return { select: () => ({ eq: () => ({ eq: () => ({ limit: async () => ({ data: rows, error: null }) }) }) }) };
       }
       // stripe_transfers: one chainable stub serving the sweep select
       // (.in().lt().lte().or().order().limit()), the executeTransfer read
@@ -221,7 +238,12 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
         single: async () => ({ data: opts.due[0] ?? null }),
         update: (payload: Record<string, unknown>) => {
           capturedUpdates.push(payload);
-          return { eq: async () => ({ error: null }) };
+          const c: Record<string, unknown> = {};
+          c.eq = () => c;
+          c.is = () => c;
+          c.select = async () => ({ data: [{ id: "claimed" }], error: null });
+          c.then = (resolve: (v: unknown) => unknown) => resolve({ error: null });
+          return c;
         },
       });
       return chain;
@@ -235,7 +257,8 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
   });
 
   it("re-schedules a failed transfer with backoff instead of leaving it dead", async () => {
-    setupSweep({ due: [failedLeg(2)], order: { status: "confirmed" }, transfer: new Error("stripe rate limit") });
+    // WS2.6: shipped, so the shipping-progress gate passes and the retry runs.
+    setupSweep({ due: [failedLeg(2)], order: { status: "shipped" }, transfer: new Error("stripe rate limit") });
     const res = await processPendingTransfers();
     expect(res.retried).toBe(1);
     expect(res.exhausted).toBe(0);
@@ -246,8 +269,24 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
     expect(sendAdminAlertMock).not.toHaveBeenCalled();
   });
 
+  it("WS2.6: holds the leg and alerts when the order never shipped", async () => {
+    setupSweep({ due: [failedLeg(0)], order: { status: "confirmed" }, transfer: "success" });
+    const res = await processPendingTransfers();
+    expect(res.processed).toBe(0);
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    expect((sendAdminAlertMock.mock.calls[0][0] as { idempotencyKey: string }).idempotencyKey)
+      .toMatch(/^stale_unshipped_payout:/);
+  });
+
+  it("WS2.6: an open refund request pauses the payout silently", async () => {
+    setupSweep({ due: [failedLeg(0)], order: { status: "delivered" }, transfer: "success", openRefund: true });
+    const res = await processPendingTransfers();
+    expect(res.processed).toBe(0);
+    expect(sendAdminAlertMock).not.toHaveBeenCalled();
+  });
+
   it("exhausts at MAX_RETRIES and alerts an operator", async () => {
-    setupSweep({ due: [failedLeg(5)], order: { status: "confirmed" }, transfer: new Error("still failing") });
+    setupSweep({ due: [failedLeg(5)], order: { status: "shipped" }, transfer: new Error("still failing") });
     const res = await processPendingTransfers();
     expect(res.exhausted).toBe(1);
     expect(res.retried).toBe(0);

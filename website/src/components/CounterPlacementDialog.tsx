@@ -4,6 +4,7 @@ import { useState } from "react";
 import { mutate, ApiError } from "@/lib/api-client";
 import Toggle from "@/components/Toggle";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import { deriveArrangementType, type ArrangementType } from "@/lib/placements/arrangement";
 
 const NOTE_MAX = 600;
 
@@ -23,7 +24,8 @@ export interface CounterResult {
   monthlyFeeGbp: number | null;
   qrEnabled: boolean;
   revenueSharePercent: number | null;
-  arrangementType: "free_loan" | "paid_loan" | "revenue_share" | "purchase";
+  /** Canonical derived type, including "mixed" for paid loan + QR (F27). */
+  arrangementType: ArrangementType;
   /** Current user's id, lets the caller optimistically flip requester_user_id. */
   senderUserId: string | null;
 }
@@ -68,15 +70,18 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
     setBusy(true);
     setError(null);
     try {
-      // paidLoan toggle on -> paid_loan; QR-only (no monthly fee) -> revenue_share;
-      // neither toggle on -> free_loan (free display).
-      const arrangementType: "free_loan" | "paid_loan" | "revenue_share" = paidLoan
-        ? "paid_loan"
-        : qr
-          ? "revenue_share"
-          : "free_loan";
       const finalMonthlyFee = paidLoan && typeof fee === "number" ? fee : null;
       const finalRevShare = qr && typeof revShare === "number" && revShare > 0 ? revShare : null;
+      // F27: derive the canonical type from the actual terms instead of a
+      // hand-rolled ladder. Paid loan + QR is "mixed"; the old mapping sent
+      // "paid_loan" and dropped the revenue-share half of the arrangement.
+      // The server re-derives anyway, this keeps the optimistic result and
+      // any legacy server honest.
+      const arrangementType = deriveArrangementType({
+        monthly_fee_gbp: finalMonthlyFee,
+        qr_enabled: qr,
+        revenue_share_percent: finalRevShare,
+      });
       // mutate throws on a non-2xx, so the counter event below only fires on a
       // confirmed 2xx (same success-only gating as the other placement handlers).
       await mutate("/api/placements", {

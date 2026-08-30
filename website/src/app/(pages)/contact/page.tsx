@@ -47,7 +47,7 @@ export default function ContactPage() {
                       Response Time
                     </p>
                     <p className="text-sm text-muted">
-                      We respond within 24 hours.
+                      We respond within 2 working days.
                     </p>
                   </div>
 

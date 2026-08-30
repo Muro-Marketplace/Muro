@@ -54,7 +54,7 @@ const PLANS: Plan[] = [
     priceAnnual: 499.99,
     fee: "5% platform fee on sales",
     features: [
-      "Unlimited works in your portfolio",
+      "Up to 50 works in your portfolio",
       "Premium profile with enhanced presentation",
       "Maximum visibility across the platform",
       "Approach 15 new venues a week",

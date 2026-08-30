@@ -3,6 +3,15 @@
 // Phase 2.7 A4. Admin queue for pending blogs. Pulls
 // moderation_queue rows where entity_type='blog' and status='pending'.
 // Approve / reject actions PATCH /api/admin/blogs/[id].
+//
+// G13: approving publishes the post to the public journal, and the only thing
+// an admin could see before clicking was the queue row's 200-character
+// excerpt. Each row can now pull the full body from GET /api/admin/blogs/[id],
+// on demand rather than for every row on load.
+//
+// G14: the reject prompt used to say the reason was "visible to the author"
+// while writing it only to moderation_queue.reason, which nothing read back.
+// The decision route now emails it, so the prompt says what actually happens.
 
 import { useEffect, useState, useCallback } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
@@ -47,7 +56,7 @@ export default function AdminBlogsPage() {
   ) {
     let reason: string | undefined;
     if (action === "reject") {
-      reason = prompt("Reason (visible to the author):") ?? undefined;
+      reason = prompt("Reason (emailed to the author):") ?? undefined;
       if (!reason) return;
     }
     try {
@@ -126,7 +135,7 @@ export default function AdminBlogsPage() {
                   <p className="text-sm text-foreground/80 whitespace-pre-wrap mb-3">
                     {p?.excerpt || "(no excerpt)"}
                   </p>
-                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted">
+                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted mb-3">
                     {r.submitted_by_email && (
                       <span>
                         from{" "}
@@ -139,6 +148,7 @@ export default function AdminBlogsPage() {
                       </span>
                     )}
                   </div>
+                  <BlogBody blogId={r.entity_id} />
                   {statusFilter === "pending" && (
                     <div className="mt-3 flex gap-2">
                       <button
@@ -162,5 +172,63 @@ export default function AdminBlogsPage() {
         )}
       </div>
     </AdminPortalLayout>
+  );
+}
+
+// G13. One row's worth of "show me what I am about to publish". Fetches lazily:
+// a queue of thirty posts should not pull thirty bodies on load, and most rows
+// are decided on the excerpt plus a skim of one or two.
+function BlogBody({ blogId }: { blogId: string }) {
+  const [open, setOpen] = useState(false);
+  const [body, setBody] = useState<string | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+
+  async function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (body !== null || state === "loading") return;
+    setState("loading");
+    try {
+      const res = await authFetch(`/api/admin/blogs/${blogId}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setState("error");
+        return;
+      }
+      setBody((data.blog?.body_markdown as string) ?? "");
+      setState("idle");
+    } catch {
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={toggle}
+        className="text-xs text-accent hover:underline"
+      >
+        {open ? "Hide the full post" : "Read the full post"}
+      </button>
+      {open && (
+        <div className="mt-2 bg-white border border-border rounded-sm p-3 max-h-96 overflow-y-auto">
+          {state === "loading" && <p className="text-xs text-muted">Loading the post…</p>}
+          {state === "error" && (
+            <p className="text-xs text-red-600">
+              Could not load the post. Try again before deciding on it.
+            </p>
+          )}
+          {state === "idle" && (
+            <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">
+              {body ? body : "This post has no body text."}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

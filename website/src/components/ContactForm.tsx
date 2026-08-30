@@ -8,6 +8,7 @@ export default function ContactForm() {
   const artistSlug = searchParams.get("artist");
 
   const [submitted, setSubmitted] = useState(false);
+  const [artistNotified, setArtistNotified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [artistName, setArtistName] = useState("");
@@ -50,20 +51,33 @@ export default function ContactForm() {
       message: formData.get("message") as string,
     };
 
+    // A28: whether the artist actually got the message. The enquiry POST used
+    // to be awaited and then ignored, so a failed enquiry alongside a
+    // successful contact insert still told the sender "They'll be notified by
+    // email" when nothing had reached the artist at all. The contact
+    // submission is the durable record either way, so a failed enquiry
+    // changes the wording rather than failing the send.
+    let notified = false;
+
     try {
       // If messaging a specific artist, also create a message in the messaging system
       if (artistSlug) {
-        await fetch("/api/enquiry", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            senderName: data.name,
-            senderEmail: data.email,
-            artistSlug,
-            enquiryType: "general",
-            message: data.message,
-          }),
-        });
+        try {
+          const enquiryRes = await fetch("/api/enquiry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              senderName: data.name,
+              senderEmail: data.email,
+              artistSlug,
+              enquiryType: "general",
+              message: data.message,
+            }),
+          });
+          notified = enquiryRes.ok;
+        } catch {
+          notified = false;
+        }
       }
 
       // Always save to contact submissions too
@@ -80,6 +94,7 @@ export default function ContactForm() {
         return;
       }
 
+      setArtistNotified(notified);
       setSubmitted(true);
     } catch {
       setError("Network error. Please try again.");
@@ -98,8 +113,10 @@ export default function ContactForm() {
         <h3 className="text-xl mb-2">Message Sent</h3>
         <p className="text-sm text-muted">
           {artistSlug
-            ? `Your message has been sent to ${artistName || "the artist"}. They'll be notified by email.`
-            : "Thanks for reaching out. We respond within 24 hours."}
+            ? artistNotified
+              ? `Your message has been sent to ${artistName || "the artist"}. They'll be notified by email.`
+              : `We have your message for ${artistName || "the artist"}, but we could not notify them automatically. Our team will pass it on, and we respond within 2 working days.`
+            : "Thanks for reaching out. We respond within 2 working days."}
         </p>
       </div>
     );

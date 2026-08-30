@@ -326,7 +326,12 @@ export default function PlacementsPage() {
       .then((data) => {
         if (data.placements && data.placements.length > 0) {
           const mapped: Placement[] = data.placements.map((p: Record<string, unknown>) => {
-            const requesterId = (p.requester_user_id as string) || null;
+            // F24/F51: GET /api/placements emits the resolved requester as
+            // proposed_by_user_id; requester_user_id is a phantom the rows
+            // never carry. Read both so respond buttons and direction tags
+            // resolve.
+            const requesterId =
+              ((p.requester_user_id ?? p.proposed_by_user_id) as string | null) || null;
             // Strict: only the recipient of a request can respond. Requests
             // the viewer sent themselves show a "Sent" tag and no
             // Accept/Counter/Decline buttons.
@@ -933,7 +938,7 @@ export default function PlacementsPage() {
                     />
                     <span className="text-sm text-muted">per month</span>
                   </div>
-                  <p className="text-xs text-muted mt-2">Billing is handled manually for now, use this to record the agreed amount.</p>
+                  <p className="text-xs text-muted mt-2">The venue sets up the monthly payment by card once the placement is agreed, and Wallplace collects it automatically from then on.</p>
                 </div>
               )}
             </div>

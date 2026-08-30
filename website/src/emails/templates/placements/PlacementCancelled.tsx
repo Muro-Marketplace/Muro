@@ -1,7 +1,12 @@
-// Stream: notify. Sent to the OTHER party when someone cancels an
+// Stream: tx. Sent to the OTHER party when someone cancels an
 // in-flight placement (either side can cancel, status -> "cancelled").
 // Mirrors the decline template tone, soft, not punitive, with a nudge
 // back into the marketplace.
+//
+// R4.12 (WS5.5): was notify/placements. Cancellation ends a commercial
+// arrangement (for paid loans, a monthly liability), so it now rides
+// orders_and_payouts, the critical always-send category; sendEmail()
+// enforces it via TEMPLATE_CATEGORY_OVERRIDES.
 
 import { EmailShell, H1, P, Button, Badge } from "@/emails/_components";
 import type { EmailPersona } from "@/emails/types/emailTypes";
@@ -29,9 +34,9 @@ export function PlacementCancelled({
   const nextLabel = isArtist ? "Discover more venues" : "Browse artists";
   return (
     <EmailShell
-      stream="notify"
+      stream="tx"
       persona={recipientPersona}
-      category="placements"
+      category="orders_and_payouts"
       preview={`${cancelledByName} cancelled the placement`}
     >
       <H1>
@@ -70,14 +75,14 @@ const entry: TemplateEntry<PlacementCancelledProps> = {
   id: "placement_cancelled",
   name: "Placement cancelled (to other party)",
   description: "Fires when either side cancels an in-flight placement.",
-  stream: "notify",
+  stream: "tx",
   persona: "multi",
-  category: "placements",
+  category: "orders_and_payouts",
   subject: "{{cancelledByName}} cancelled the placement",
   previewText: "The placement was cancelled.",
   component: PlacementCancelled,
   mock,
-  canUnsubscribe: true,
+  canUnsubscribe: false,
   hasInAppEquivalent: true,
   priority: 2,
 };

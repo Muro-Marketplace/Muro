@@ -19,6 +19,7 @@ import {
   parseDimensions,
 } from "@/lib/visualizer/dimensions";
 import { resolveShippingCost, tierLabel, SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
+import { frameUpliftFor } from "./frame-uplift";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 interface ArtworkPageClientProps {
@@ -88,54 +89,15 @@ export default function ArtworkPageClient({
 
   const selectedPricing = work.pricing[selectedSizeIdx] || work.pricing[0];
 
-  // Frame uplift scales by size. The artist's `priceUplift` value is
-  // treated as the price for the SMALLEST listed size; for larger
-  // sizes we scale by perimeter (≈ frame moulding cost) which gives
-  // a much more realistic ramp than a flat number across an A4 print
-  // and a 100×80cm canvas. The smallest size is picked deterministically
-  // by ascending area so the baseline doesn't depend on which size
-  // the buyer has selected. Falls back to the flat uplift if the
-  // size labels can't be parsed.
-  const frameUplift = (() => {
-    if (!selectedFrame) return 0;
-    // Explicit per-size override wins. Set in the artist portfolio
-    // form; an artist who's said "A4 = £20, A2 = £45" gets exactly
-    // those values rather than the perimeter ramp.
-    const explicit = selectedPricing
-      ? (selectedFrame as { pricesBySize?: Record<string, number> }).pricesBySize?.[selectedPricing.label]
-      : undefined;
-    if (typeof explicit === "number" && Number.isFinite(explicit) && explicit >= 0) {
-      return Math.round(explicit * 100) / 100;
-    }
-
-    const baseUplift = selectedFrame.priceUplift || 0;
-    if (baseUplift <= 0) return 0;
-    if (!work.pricing || work.pricing.length === 0) return baseUplift;
-    const parsedSizes = work.pricing
-      .map((p) => ({ pricing: p, dims: parseDimensions(p.label) }))
-      .filter(
-        (x): x is { pricing: typeof work.pricing[0]; dims: { widthCm: number; heightCm: number } } =>
-          Boolean(x.dims),
-      );
-    if (parsedSizes.length === 0) return baseUplift;
-    let smallestArea = Infinity;
-    let baselinePerimeter = 0;
-    for (const s of parsedSizes) {
-      const a = s.dims.widthCm * s.dims.heightCm;
-      if (a < smallestArea) {
-        smallestArea = a;
-        baselinePerimeter = 2 * (s.dims.widthCm + s.dims.heightCm);
-      }
-    }
-    if (!baselinePerimeter) return baseUplift;
-    const selectedDims = selectedPricing
-      ? parseDimensions(selectedPricing.label)
-      : null;
-    if (!selectedDims) return baseUplift;
-    const selectedPerimeter =
-      2 * (selectedDims.widthCm + selectedDims.heightCm);
-    return Math.round(baseUplift * (selectedPerimeter / baselinePerimeter));
-  })();
+  // B10: the charged uplift and the "+£X" on each Frame dropdown row are
+  // now the same function, so an artist's explicit per-size frame prices
+  // can no longer be honoured by one and ignored by the other. See
+  // frame-uplift.ts for the ramp itself.
+  const frameUplift = frameUpliftFor(
+    selectedFrame,
+    selectedPricing?.label,
+    work.pricing,
+  );
 
   const displayPrice = selectedPricing
     ? Math.round((selectedPricing.price + frameUplift) * 100) / 100
@@ -365,46 +327,19 @@ export default function ArtworkPageClient({
             options={[
               { value: "-1", label: "No frame" },
               ...frameOptions.map((f, i) => {
-                // Show the per-size scaled uplift in the dropdown so
-                // the buyer sees the actual price they'll pay for the
-                // currently-selected size, not the artist's small-size
-                // baseline. Uses the same scaling logic as the live
-                // frameUplift used on the buy button.
-                const scaledForRow = (() => {
-                  const baseUplift = f.priceUplift || 0;
-                  if (baseUplift <= 0) return 0;
-                  const parsedSizes = work.pricing
-                    .map((p) => ({ pricing: p, dims: parseDimensions(p.label) }))
-                    .filter(
-                      (
-                        x,
-                      ): x is {
-                        pricing: typeof work.pricing[0];
-                        dims: { widthCm: number; heightCm: number };
-                      } => Boolean(x.dims),
-                    );
-                  if (parsedSizes.length === 0) return baseUplift;
-                  let smallestArea = Infinity;
-                  let baselinePerimeter = 0;
-                  for (const s of parsedSizes) {
-                    const a = s.dims.widthCm * s.dims.heightCm;
-                    if (a < smallestArea) {
-                      smallestArea = a;
-                      baselinePerimeter =
-                        2 * (s.dims.widthCm + s.dims.heightCm);
-                    }
-                  }
-                  if (!baselinePerimeter) return baseUplift;
-                  const selectedDims = selectedPricing
-                    ? parseDimensions(selectedPricing.label)
-                    : null;
-                  if (!selectedDims) return baseUplift;
-                  const selectedPerimeter =
-                    2 * (selectedDims.widthCm + selectedDims.heightCm);
-                  return Math.round(
-                    baseUplift * (selectedPerimeter / baselinePerimeter),
-                  );
-                })();
+                // Show the per-size uplift in the dropdown so the buyer
+                // sees the actual price they'll pay for the currently
+                // selected size, not the artist's small-size baseline.
+                //
+                // B10: this used to compute only the perimeter ramp, so
+                // it silently skipped the artist's explicit pricesBySize
+                // overrides that the charge below honours. Same function
+                // as the charge now.
+                const scaledForRow = frameUpliftFor(
+                  f,
+                  selectedPricing?.label,
+                  work.pricing,
+                );
                 return {
                   value: String(i),
                   label: f.label,
@@ -437,7 +372,11 @@ export default function ArtworkPageClient({
         const sizeLabelForCalc = selectedPricing?.label || work.dimensions;
         const totalPriceForCalc = (displayPrice ?? selectedPricing?.price) || 0;
         const uk = resolveShippingCost({
-          manualPrice: typeof work.shippingPrice === "number" ? work.shippingPrice : null,
+          // B11: this quoted the work-level shippingPrice while the cart
+          // lines carry effectiveShippingPrice, which prefers the selected
+          // size's own shippingPrice. So an artist with per-size delivery
+          // had one figure quoted here and a different one charged.
+          manualPrice: typeof effectiveShippingPrice === "number" ? effectiveShippingPrice : null,
           dimensions: sizeLabelForCalc,
           framed: !!selectedFrame,
           priceGbp: totalPriceForCalc,
@@ -624,6 +563,7 @@ export default function ArtworkPageClient({
                     shippingPrice: 0,
                     lineFulfilment: "collect_venue",
                     collectVenueSlug: offer.venueSlug ?? undefined,
+                    collectVenueName: offer.venueName ?? undefined,
                     collectPlacementId: offer.id,
                   });
                   router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
@@ -692,6 +632,7 @@ export default function ArtworkPageClient({
                   // live placements table before any money is taken.
                   lineFulfilment: "collect_venue",
                   collectVenueSlug: work.currentPlacement?.venueSlug ?? undefined,
+                  collectVenueName: work.currentPlacement?.venueName ?? undefined,
                   collectPlacementId: work.currentPlacement?.id,
                 });
                 router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);

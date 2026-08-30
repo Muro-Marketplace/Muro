@@ -51,7 +51,7 @@ const STEPS: StepDef[] = [
   { key: "order.placed", label: "Placed", hint: "We received your order." },
   { key: "order.processing", label: "Processing", hint: "The artist is preparing your piece." },
   { key: "order.out_for_delivery", label: "Out for delivery", hint: "On its way." },
-  { key: "order.delivered", label: "Delivered", hint: "Marked as arrived by the carrier." },
+  { key: "order.delivered", label: "Delivered", hint: "Marked as arrived by you, the buyer." },
   { key: "order.delivery_confirmed", label: "Confirmed", hint: "You confirmed receipt. Thank you." },
 ];
 
@@ -309,8 +309,8 @@ export default function OrderTrackingPage() {
                   Did everything arrive in good order?
                 </p>
                 <p className="text-xs text-muted mb-4">
-                  Confirming delivery releases payment to the artist. We&rsquo;ll auto-confirm
-                  after 7 days if we don&rsquo;t hear from you.
+                  Confirming records that the order arrived safely and closes it off.
+                  We&rsquo;ll auto-confirm after 7 days if we don&rsquo;t hear from you.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <button

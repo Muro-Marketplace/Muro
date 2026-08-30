@@ -21,7 +21,7 @@ const PORTAL_LABELS: Record<string, string> = {
 };
 
 export default function PortalGuard({ allowedType, children }: PortalGuardProps) {
-  const { user, loading, userType } = useAuth();
+  const { user, loading, userType, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { showToast } = useToast();
@@ -29,6 +29,36 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
   const [subscriptionOk, setSubscriptionOk] = useState(true);
   const [reviewStatus, setReviewStatus] = useState<"approved" | "pending" | "rejected" | null>(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  // C1: resend state for the verify-email screen below. Same idiom as the
+  // login page's resend block: "sent" regardless of outcome, because the
+  // endpoint deliberately answers the same either way.
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleResendVerification() {
+    if (!user?.email) return;
+    setResendState("sending");
+    try {
+      await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email, next: pathname || "/browse" }),
+      });
+    } catch {
+      /* The endpoint answers the same either way; a network blip is not
+         worth an error state on a screen whose whole job is recovery. */
+    }
+    setResendState("sent");
+  }
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      router.replace("/login");
+    }
+  }
 
   useEffect(() => {
     if (!loading && !user) {
@@ -117,6 +147,10 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
   if (!user) return null;
 
   if (user && !user.email_confirmed_at) {
+    // C1 (QA 2026-08-28): this screen used to be a dead end with no resend
+    // button and no sign-out control, even though the resend endpoint
+    // existed. A user stuck here had to know to log out and fail a login to
+    // reach the recovery on the login page.
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="max-w-md text-center px-6">
@@ -124,6 +158,32 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
           <p className="text-sm text-muted mb-6">
             We sent a confirmation link to <span className="font-medium">{user.email}</span>.
             Click it to finish setting up your account, then come back and sign in.
+          </p>
+          {resendState === "sent" ? (
+            <p className="text-xs text-muted mb-4">
+              If that address needs confirming, we have sent a new link. Check your
+              inbox and your spam folder.
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={resendState === "sending"}
+              className="inline-block mb-4 px-4 py-2 text-sm font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {resendState === "sending" ? "Sending..." : "Resend verification email"}
+            </button>
+          )}
+          <p className="text-xs text-muted">
+            Wrong account?{" "}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="text-accent hover:underline cursor-pointer disabled:opacity-50"
+            >
+              {signingOut ? "Signing out..." : "Sign out"}
+            </button>
           </p>
         </div>
       </div>
@@ -135,12 +195,15 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="max-w-md text-center px-6">
+          {/* D1: this gate only ever renders for past_due and canceled
+              subscribers, and /api/subscribe gives returning subscribers
+              zero trial days, so no free-trial promise belongs here. */}
           <h2 className="text-xl font-serif mb-3">Choose Your Plan</h2>
           <p className="text-sm text-muted mb-2">
-            Pick a plan to get started. All plans include a free trial, and you won&rsquo;t be charged until it ends.
+            Your subscription isn&rsquo;t active. Pick a plan to carry on where you left off.
           </p>
           <p className="text-xs text-muted mb-6">
-            All plans include a first month free.
+            Billing starts as soon as you subscribe.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button

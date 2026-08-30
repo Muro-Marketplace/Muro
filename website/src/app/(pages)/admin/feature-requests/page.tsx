@@ -1,13 +1,18 @@
 "use client";
 
 // Phase 2.1 A5. Admin moderation panel for feature requests (read from
-// moderation_queue where entity_type='feature_request'). Read-only v1
-// — Phase 2.7 (A4) extends this with approve/reject/edit actions for
-// blogs; feature requests stay an inbox for now.
+// moderation_queue where entity_type='feature_request').
+//
+// G25: this was read-only, and so was the API. With GET as the only verb on
+// /api/admin/moderation and the sole queue-row write scoped to blogs, a
+// feature_request row could never leave 'pending': the Approved and Rejected
+// tabs above were permanently empty and the inbox could not be cleared. The
+// endpoint now has a PATCH (G27), and these controls call it. Deliberately the
+// same endpoint the unified /admin/moderation queue uses, not a second one.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import type { ModerationPayload } from "@/lib/moderation/types";
 
 interface QueueRow {
@@ -23,28 +28,57 @@ export default function FeatureRequestsAdminPage() {
   const [rows, setRows] = useState<QueueRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected">("pending");
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      try {
-        const res = await authFetch(
-          `/api/admin/moderation?entity_type=feature_request&status=${statusFilter}`,
-        );
-        if (!cancelled && res.ok) {
-          const data = await res.json();
-          setRows(data.rows || []);
-        }
-      } catch (err) {
-        console.error("[admin/feature-requests load]", err);
-      } finally {
-        if (!cancelled) setLoading(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await authFetch(
+        `/api/admin/moderation?entity_type=feature_request&status=${statusFilter}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setRows(data.rows || []);
       }
+    } catch (err) {
+      console.error("[admin/feature-requests load]", err);
+    } finally {
+      setLoading(false);
     }
-    load();
-    return () => { cancelled = true; };
   }, [statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // The decision keys on moderation_queue.id, not on the feature request's own
+  // id. Nothing is emailed: this is triage, and the submitter never asked to be
+  // written to about it.
+  async function decide(r: QueueRow, action: "approve" | "reject") {
+    let reason: string | undefined;
+    if (action === "reject") {
+      const input = prompt("Reason (kept on the queue row, optional):");
+      if (input === null) return;
+      reason = input.trim() || undefined;
+    }
+    setSavingId(r.id);
+    setActionMsg(null);
+    try {
+      await mutate("/api/admin/moderation", {
+        method: "PATCH",
+        body: JSON.stringify({ id: r.id, action, ...(reason ? { reason } : {}) }),
+      });
+      setActionMsg(action === "approve" ? "Approved." : "Rejected.");
+      await load();
+    } catch (err) {
+      setActionMsg(
+        err instanceof ApiError
+          ? err.code || "Could not apply that action."
+          : "Network error. Please try again.",
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   return (
     <AdminPortalLayout activePath="/admin/feature-requests">
@@ -73,6 +107,12 @@ export default function FeatureRequestsAdminPage() {
             </button>
           ))}
         </div>
+
+        {actionMsg && (
+          <p className="text-sm text-foreground bg-accent/5 border border-accent/20 px-3 py-2 rounded-sm mb-4">
+            {actionMsg}
+          </p>
+        )}
 
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
@@ -111,6 +151,26 @@ export default function FeatureRequestsAdminPage() {
                     )}
                     {p?.user_agent && <span className="opacity-60">{p.user_agent}</span>}
                   </div>
+                  {r.status === "pending" && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={savingId === r.id}
+                        onClick={() => decide(r, "approve")}
+                        className="px-3 py-1 text-xs rounded-sm bg-accent text-white hover:bg-accent-hover disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        disabled={savingId === r.id}
+                        onClick={() => decide(r, "reject")}
+                        className="px-3 py-1 text-xs rounded-sm border border-border hover:border-accent/40 disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
                 </li>
               );
             })}

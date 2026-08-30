@@ -18,6 +18,9 @@ interface OrderItem {
 }
 interface OrderHistoryEntry {
   status?: string;
+  // B26: the writers (orders PATCH, Stripe webhook) store the date as
+  // `timestamp`; some older entries used `at`. Read both.
+  timestamp?: string;
   at?: string;
   by?: string;
   note?: string;
@@ -265,15 +268,21 @@ export default function OrderTrackPage() {
                 <div className="border-t border-border pt-4">
                   <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Updates</p>
                   <ol className="space-y-2.5">
-                    {order.history.map((h, i) => (
-                      <li key={i} className="text-sm">
-                        <p className="text-foreground">
-                          {labelForStatus(h.status || "")}
-                        </p>
-                        {h.at && <p className="text-xs text-muted">{fmtDate(h.at)}</p>}
-                        {h.note && <p className="text-xs text-muted/80 mt-0.5">{h.note}</p>}
-                      </li>
-                    ))}
+                    {order.history.map((h, i) => {
+                      // B26: writers store { status, timestamp }; `at` is a
+                      // legacy shape. Reading only `at` meant no date ever
+                      // rendered on the timeline.
+                      const when = h.timestamp || h.at;
+                      return (
+                        <li key={i} className="text-sm">
+                          <p className="text-foreground">
+                            {labelForStatus(h.status || "")}
+                          </p>
+                          {when && <p className="text-xs text-muted">{fmtDate(when)}</p>}
+                          {h.note && <p className="text-xs text-muted/80 mt-0.5">{h.note}</p>}
+                        </li>
+                      );
+                    })}
                   </ol>
                 </div>
               )}
