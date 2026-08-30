@@ -1,0 +1,4 @@
+[      61ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/customer-portal/addresses:0
+[   72654ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://www.wallplace.co.uk/api/customer-addresses:0
+[   72931ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://www.wallplace.co.uk/api/customer-addresses:0
+[   99637ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://www.wallplace.co.uk/api/customer-addresses/e198cfeb-cf77-4667-a504-bbdedb7a0d2f:0
