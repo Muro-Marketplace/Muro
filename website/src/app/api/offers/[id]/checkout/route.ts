@@ -153,7 +153,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   // active placement; a mixed-venue or unplaced offer pays no share, matching
   // prior behaviour. `workIds` is already fully resolved here (direct offer
   // or collection offer, both branches above land on the same variable).
-  let venueShare: { venueSlug: string; venueUserId: string; percent: number } | null = null;
+  let venueShare: { venueSlug: string; venueUserId: string; percent: number; placementId: string } | null = null;
   if (workIds.length > 0) {
     const { data: shareWorks } = await db
       .from("artist_works")
@@ -178,7 +178,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         }>();
       const percent = Math.max(0, Number(pl?.revenue_share_percent || 0));
       if (pl?.venue_slug && pl.venue_user_id && percent > 0) {
-        venueShare = { venueSlug: pl.venue_slug, venueUserId: pl.venue_user_id, percent };
+        venueShare = { venueSlug: pl.venue_slug, venueUserId: pl.venue_user_id, percent, placementId: placementIds[0] };
       }
     }
   }
@@ -240,6 +240,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       offer_venue_user_id: venueShare?.venueUserId || "",
       offer_venue_cut_pence: String(venueCutPence),
       offer_venue_share_percent: String(venueShare?.percent || 0),
+      // Finding 3 (final review): the single active placement id the share
+      // above was resolved from, so the webhook can stamp orders.placement_id
+      // and this offer's earnings show up on the venue's placement card,
+      // which sums by that column. Empty string, not omitted, when no share
+      // applies, matching the other offer_venue_* keys.
+      offer_placement_id: venueShare?.placementId || "",
       // orders.buyer_email is NOT NULL. The webhook used to fall back to
       // offer_buyer_user_id, which put a UUID in an email column.
       offer_buyer_email: offer.buyer_email || auth.user!.email || "",

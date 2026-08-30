@@ -282,6 +282,11 @@ async function handleWebhookEvent(
         const offerVenueUserId = session.metadata.offer_venue_user_id || null;
         const offerVenueCutPence = Number(session.metadata.offer_venue_cut_pence || 0);
         const offerVenueSharePct = Number(session.metadata.offer_venue_share_percent || 0);
+        // Finding 3 (final review): the placement id travelling alongside the
+        // share, so this order can be attributed to the venue's placement
+        // card. Empty string on the metadata (Stripe values must be
+        // strings) becomes a real null on the nullable orders column.
+        const offerPlacementId = session.metadata.offer_placement_id || null;
 
         // E6. The order row is written FIRST and the offer is flipped to paid
         // only once it lands. The old order was the other way round with the
@@ -323,6 +328,7 @@ async function handleWebhookEvent(
           artist_slug: session.metadata.offer_artist_slug || null,
           artist_user_id: artistUserId,
           venue_slug: offerVenueSlug,
+          placement_id: offerPlacementId,
           venue_revenue: offerVenueCutPence / 100,
           venue_revenue_share_percent: offerVenueSharePct,
           platform_fee: feePence / 100,

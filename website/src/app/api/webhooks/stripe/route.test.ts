@@ -687,6 +687,10 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     offer_venue_user_id: "u-venue-1",
     offer_venue_cut_pence: "3000",
     offer_venue_share_percent: "10",
+    // Finding 3 (final review): the single active placement id the checkout
+    // route resolved alongside the share, now travelling with it so the
+    // order row can be attributed back to the venue's placement card.
+    offer_placement_id: "plc-1",
   };
 
   function fireOffer(metadata: Record<string, string> = OFFER_META, amountTotal = 3300) {
@@ -737,6 +741,10 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     await fireOffer();
     expect(state.orderInsert.row?.venue_revenue).toBe(0);
     expect(state.orderInsert.row?.venue_revenue_share_percent).toBe(0);
+    // Finding 3 (final review): no venue share means no venue placement to
+    // credit, so placement_id must be null rather than an empty string
+    // (the DB column, unlike the Stripe metadata carrying it, is nullable).
+    expect(state.orderInsert.row?.placement_id).toBeNull();
   });
 
   it("puts an email in buyer_email, never the buyer's UUID", async () => {
@@ -971,6 +979,10 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     expect(row.platform_fee).toBe(45);
     expect(row.artist_revenue).toBe(225);
     expect(row.total).toBe(300);
+    // Finding 3 (final review): the order carries the placement id so the
+    // placements list can sum venue earnings by orders.placement_id and
+    // show this offer's cut on the right placement card.
+    expect(row.placement_id).toBe("plc-1");
     // total = artist_revenue + venue_revenue + platform_fee, in integer pence.
     expect(
       Math.round((row.artist_revenue as number) * 100) +

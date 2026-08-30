@@ -411,6 +411,10 @@ describe("POST /api/offers/[id]/checkout venue share (Task 5)", () => {
     expect(m.offer_platform_fee_pence).toBe("4500"); // 15% of 30000
     expect(m.offer_artist_net_pence).toBe("22500"); // 30000 - 4500 - 3000
     expect(m.offer_venue_share_percent).toBe("10");
+    // Finding 3 (final review): the resolved placement id travels with the
+    // share so the webhook can stamp orders.placement_id, which is how the
+    // placements list sums venue earnings onto the right placement card.
+    expect(m.offer_placement_id).toBe("plc-1");
   });
 
   it("pays no venue share when works span two placements or none", async () => {
@@ -424,6 +428,7 @@ describe("POST /api/offers/[id]/checkout venue share (Task 5)", () => {
     const m = metadata();
     expect(m.offer_venue_cut_pence).toBe("0");
     expect(m.offer_venue_slug).toBe("");
+    expect(m.offer_placement_id).toBe("");
   });
 
   it("pays no venue share when the offered work has no placement at all", async () => {
@@ -437,6 +442,7 @@ describe("POST /api/offers/[id]/checkout venue share (Task 5)", () => {
     expect(m.offer_venue_cut_pence).toBe("0");
     expect(m.offer_venue_slug).toBe("");
     expect(m.offer_venue_share_percent).toBe("0");
+    expect(m.offer_placement_id).toBe("");
   });
 
   it("pays no venue share when the single shared placement is not active", async () => {
@@ -452,6 +458,7 @@ describe("POST /api/offers/[id]/checkout venue share (Task 5)", () => {
     const m = metadata();
     expect(m.offer_venue_cut_pence).toBe("0");
     expect(m.offer_venue_slug).toBe("");
+    expect(m.offer_placement_id).toBe("");
   });
 
   it("pays no venue share when the placement's revenue share is zero", async () => {
@@ -471,6 +478,9 @@ describe("POST /api/offers/[id]/checkout venue share (Task 5)", () => {
     const m = metadata();
     expect(m.offer_venue_cut_pence).toBe("0");
     expect(m.offer_venue_slug).toBe("");
+    // No share (0%) means no venue earning, so no placement id either, even
+    // though every work still sits on one single active placement.
+    expect(m.offer_placement_id).toBe("");
   });
 
   it("takes the venue cut and the platform fee both from the artist's side, exactly", async () => {
