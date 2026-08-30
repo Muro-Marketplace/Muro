@@ -103,6 +103,40 @@ export interface DbArtistWork {
 }
 
 /** Convert a DB profile row + works to the Artist shape used everywhere in the app */
+/**
+ * Give every pricing tier a real `label`.
+ *
+ * QA 2026-08-30 bugs 8, 9 and 10 are one defect: some `artist_works.pricing`
+ * rows store the tier name under `size` rather than `label` (19 of 128 tiers
+ * live, across 8 works). `SizePricing.label` is typed non-optional, so nothing
+ * downstream defends against it, and every consumer read `undefined`:
+ *
+ *   - the size dropdown rendered three identically blank options (bug 10);
+ *   - checkout printed the literal string "undefined" as the size (bug 9);
+ *   - the cart keyed all three tiers alike, so picking the 60x90cm (GBP 580)
+ *     after the A3 (GBP 180) merged them into two A3s and charged GBP 180
+ *     each (bug 8).
+ *
+ * Normalising at this shared mapper fixes all of them at once, for the portal,
+ * the public artist page and the artwork page, rather than patching a dozen
+ * `.label` reads one at a time. Neither shape is "wrong" in the data, so this
+ * accepts both permanently instead of relying on a one-off backfill.
+ */
+export function normalisePricingTiers(raw: unknown): SizePricing[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((t, i) => {
+    const tier = (t ?? {}) as Partial<SizePricing> & { size?: unknown };
+    const fromLabel = typeof tier.label === "string" ? tier.label.trim() : "";
+    const fromSize = typeof tier.size === "string" ? tier.size.trim() : "";
+    return {
+      ...(tier as SizePricing),
+      // Last resort keeps tiers distinguishable rather than collapsing them:
+      // an unnamed tier is still its own product at its own price.
+      label: fromLabel || fromSize || `Option ${i + 1}`,
+    };
+  });
+}
+
 export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[]): Artist {
   return {
     slug: profile.slug,
@@ -171,7 +205,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
       // as a stripped-looking price. Normalise here so the public
       // surfaces always show the £ even when the source is missing it.
       priceBand: normalisePriceBand(w.price_band),
-      pricing: w.pricing || [],
+      pricing: normalisePricingTiers(w.pricing),
       available: w.available,
       color: w.color,
       image: w.image,
