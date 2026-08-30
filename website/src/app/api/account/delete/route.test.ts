@@ -465,6 +465,18 @@ describe("stripe subscriptions are cancelled on deletion (WS3.2)", () => {
     expect(mockDeleteUser).not.toHaveBeenCalled();
   });
 
+  it("and aborts BEFORE scrubbing, so a Stripe outage loses nothing", async () => {
+    // Aborting after the scrub would leave the worst of both worlds: the
+    // person's data gone, their account still alive, and still undeletable
+    // for as long as Stripe stays unreachable.
+    installSubs();
+    subsCancelMock.mockRejectedValue(new Error("stripe down"));
+    const res = await POST(req());
+    expect(res.status).toBe(500);
+    expect(writes).toHaveLength(0);
+    expect((await res.json()).error).toMatch(/nothing has been removed/i);
+  });
+
   it("an already-cancelled subscription does not block deletion", async () => {
     installSubs();
     subsCancelMock.mockRejectedValue(new Error("No such subscription: sub_saas"));
