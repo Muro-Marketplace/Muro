@@ -18,6 +18,19 @@ import { CustomerRefundConfirmation } from "@/emails/templates/orders/CustomerRe
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
+/**
+ * A book-vs-Stripe mismatch that no code path can repair. Best effort: the
+ * money has already moved, so failing to alert must not also throw.
+ */
+async function alertBookMismatch(key: string, subject: string, summary: string): Promise<void> {
+  try {
+    const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+    await sendAdminAlert({ idempotencyKey: key, subject, summary, metadata: { key } });
+  } catch (alertErr) {
+    console.error("[cancel-refund] mismatch alert failed:", key, alertErr);
+  }
+}
+
 export async function processCancellationRefund(
   db: SupabaseClient,
   args: { refundRequestId: string; orderId: string },
@@ -45,10 +58,22 @@ export async function processCancellationRefund(
       {},
       { idempotencyKey: `cancel:${args.orderId}:reversal:${leg.id}` },
     );
-    await db
+    const { error: legErr } = await db
       .from("stripe_transfers")
       .update({ status: "reversed", updated_at: new Date().toISOString() })
       .eq("id", leg.id);
+    if (legErr) {
+      // Stripe has reversed the transfer but our ledger still calls it paid.
+      // Nothing here can undo the Stripe side, so the only correct move is to
+      // make the mismatch loud rather than let the books drift quietly.
+      await alertBookMismatch(
+        `cancel_reversal_unrecorded:${args.orderId}:${leg.id}`,
+        "Transfer reversed in Stripe but the ledger row did not update",
+        `Order ${args.orderId}: transfer ${leg.stripe_transfer_id} was reversed in Stripe, ` +
+          `but stripe_transfers row ${leg.id} could not be marked reversed (${legErr.message}). ` +
+          `The ledger still reads 'paid', so earnings and reconciliation are overstated until this row is corrected.`,
+      );
+    }
   }
 
   const refund = await stripe.refunds.create(
@@ -56,7 +81,7 @@ export async function processCancellationRefund(
     { idempotencyKey: `cancel:${args.orderId}:refund` },
   );
 
-  await db
+  const { error: reqErr } = await db
     .from("refund_requests")
     .update({
       status: "approved",
@@ -64,6 +89,19 @@ export async function processCancellationRefund(
       processed_at: new Date().toISOString(),
     })
     .eq("id", args.refundRequestId);
+  if (reqErr) {
+    // The buyer HAS been refunded. If this row stays 'pending', the admin
+    // refunds queue shows it as outstanding and a second refund is one click
+    // away, so this failure has to reach a human.
+    await alertBookMismatch(
+      `cancel_refund_unrecorded:${args.orderId}`,
+      "Buyer refunded but the refund request still reads pending",
+      `Order ${args.orderId} was refunded in Stripe (${refund.id}), but refund request ` +
+        `${args.refundRequestId} could not be marked approved (${reqErr.message}). ` +
+        `It will still appear outstanding in the admin refunds queue: do NOT refund it again, ` +
+        `close the row by hand.`,
+    );
+  }
 
   // The sale is undone, so the stock comes back.
   for (const item of ((order.items as Array<{ workId?: string; quantity?: number; qty?: number }>) || [])) {
